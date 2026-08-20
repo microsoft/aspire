@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Aspire.Dashboard.Model.GenAI;
 
@@ -220,16 +221,16 @@ internal sealed class MessagePartConverter : JsonConverter<MessagePart>
 
             return type switch
             {
-                MessagePart.TextType => doc.RootElement.Deserialize<TextPart>(options),
-                MessagePart.ToolCallType => TryParseStringArguments(doc.RootElement.Deserialize<ToolCallRequestPart>(options)),
-                MessagePart.ToolCallResponseType => doc.RootElement.Deserialize<ToolCallResponsePart>(options),
-                MessagePart.BlobType => doc.RootElement.Deserialize<BlobPart>(options),
-                MessagePart.FileType => doc.RootElement.Deserialize<FilePart>(options),
-                MessagePart.UriType => doc.RootElement.Deserialize<UriPart>(options),
-                MessagePart.ReasoningType => doc.RootElement.Deserialize<ReasoningPart>(options),
-                MessagePart.ServerToolCallType => TryParseServerToolCallArguments(doc.RootElement.Deserialize<ServerToolCallPart>(options)),
-                MessagePart.ServerToolCallResponseType => doc.RootElement.Deserialize<ServerToolCallResponsePart>(options),
-                _ => doc.RootElement.Deserialize<GenericPart>(options),
+                MessagePart.TextType => Deserialize<TextPart>(doc.RootElement, options),
+                MessagePart.ToolCallType => TryParseStringArguments(Deserialize<ToolCallRequestPart>(doc.RootElement, options)),
+                MessagePart.ToolCallResponseType => Deserialize<ToolCallResponsePart>(doc.RootElement, options),
+                MessagePart.BlobType => Deserialize<BlobPart>(doc.RootElement, options),
+                MessagePart.FileType => Deserialize<FilePart>(doc.RootElement, options),
+                MessagePart.UriType => Deserialize<UriPart>(doc.RootElement, options),
+                MessagePart.ReasoningType => Deserialize<ReasoningPart>(doc.RootElement, options),
+                MessagePart.ServerToolCallType => TryParseServerToolCallArguments(Deserialize<ServerToolCallPart>(doc.RootElement, options)),
+                MessagePart.ServerToolCallResponseType => Deserialize<ServerToolCallResponsePart>(doc.RootElement, options),
+                _ => Deserialize<GenericPart>(doc.RootElement, options),
             };
         }
         catch (JsonException ex)
@@ -239,7 +240,7 @@ internal sealed class MessagePartConverter : JsonConverter<MessagePart>
             UnexpectedErrorPart? errorPart = null;
             try
             {
-                errorPart = doc.RootElement.Deserialize<UnexpectedErrorPart>(options);
+                errorPart = Deserialize<UnexpectedErrorPart>(doc.RootElement, options);
             }
             catch
             {
@@ -258,7 +259,13 @@ internal sealed class MessagePartConverter : JsonConverter<MessagePart>
 
     public override void Write(Utf8JsonWriter writer, MessagePart value, JsonSerializerOptions options)
     {
-        JsonSerializer.Serialize(writer, (object)value, value.GetType(), options);
+        JsonSerializer.Serialize(writer, value, options.GetTypeInfo(value.GetType()));
+    }
+
+    private static TValue? Deserialize<TValue>(JsonElement element, JsonSerializerOptions options)
+    {
+        var typeInfo = (JsonTypeInfo<TValue>)options.GetTypeInfo(typeof(TValue));
+        return JsonSerializer.Deserialize(element, typeInfo);
     }
 
     /// <summary>

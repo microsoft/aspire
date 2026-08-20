@@ -12,7 +12,7 @@ inputs:
   setupDotNet:
     required: false
     default: 'true'
-    description: 'Whether to bootstrap the .NET SDK (./dotnet.sh --version). Set false when the caller already installed the SDK in the same job. Selection only needs the SDK -- not a full repo restore -- because it builds an MSBuild ProjectGraph, which auto-resolves SDKs.'
+    description: 'Whether to bootstrap the .NET SDK and the runtime required by SelectTests. Set false when the caller already installed the toolchain in the same job. Selection does not require a full repo restore because it builds an MSBuild ProjectGraph, which auto-resolves SDKs.'
   enforce:
     required: false
     default: 'false'
@@ -83,14 +83,23 @@ runs:
       with:
         persist-credentials: false
 
-    # Minimal SDK bootstrap -- not a full ./restore.sh. dotnet.sh -> InitializeDotNetCli installs only
-    # the SDK into repo-local .dotnet (no runtime toolsets, no project restore). SelectTests then builds
-    # its MSBuild ProjectGraph over the solution on this SDK (MSBuild SDKs auto-resolve) -- selection
-    # does not need the repo restored.
-    - name: Install SDK (minimal)
+    # Minimal toolchain bootstrap -- not a full ./restore.sh. The repo SDK is .NET 11 while
+    # SelectTests intentionally targets .NET 10 for its Microsoft.Build ProjectGraph dependency,
+    # so install that one pinned runtime without restoring the rest of the repo toolsets.
+    - name: Install toolchain (minimal)
       if: ${{ inputs.setupDotNet == 'true' }}
       shell: bash
-      run: ./dotnet.sh --version
+      run: |
+        set -euo pipefail
+        ./dotnet.sh --version
+        runtime_version="$(sed -n 's:.*<DotNetRuntimeNet10VersionForTesting>\(.*\)</DotNetRuntimeNet10VersionForTesting>.*:\1:p' eng/Versions.props)"
+        if [ -z "$runtime_version" ]; then
+          echo "::error::Could not read DotNetRuntimeNet10VersionForTesting from eng/Versions.props." >&2
+          exit 1
+        fi
+        ./eng/common/dotnet-install.sh \
+          -runtime dotnet \
+          -version "$runtime_version"
 
     - name: Select relevant tests
       id: select

@@ -327,8 +327,10 @@ public sealed class TelemetryExportService
             ],
             ResourceLogs = ConvertLogsToResourceLogs(logs)
         };
-        var options = indent ? OtlpJsonSerializerContext.IndentedOptions : OtlpJsonSerializerContext.DefaultOptions;
-        return JsonSerializer.Serialize(data, options);
+        var typeInfo = indent
+            ? OtlpJsonSerializerContext.IndentedContext.OtlpTelemetryDataJson
+            : OtlpJsonSerializerContext.DefaultContext.OtlpTelemetryDataJson;
+        return JsonSerializer.Serialize(data, typeInfo);
     }
 
     internal static string ConvertTraceToJson(OtlpTrace trace, IOutgoingPeerResolver[] outgoingPeerResolvers, List<OtlpLogEntry>? logs = null)
@@ -357,7 +359,7 @@ public sealed class TelemetryExportService
             ResourceSpans = spansByResourceAndScope,
             ResourceLogs = ConvertLogsToResourceLogs(logs)
         };
-        return JsonSerializer.Serialize(data, OtlpJsonSerializerContext.IndentedOptions);
+        return JsonSerializer.Serialize(data, OtlpJsonSerializerContext.IndentedContext.OtlpTelemetryDataJson);
     }
 
     internal static string ConvertLogEntryToJson(OtlpLogEntry logEntry)
@@ -380,7 +382,7 @@ public sealed class TelemetryExportService
                 }
             ]
         };
-        return JsonSerializer.Serialize(data, OtlpJsonSerializerContext.IndentedOptions);
+        return JsonSerializer.Serialize(data, OtlpJsonSerializerContext.IndentedContext.OtlpTelemetryDataJson);
     }
 
     private static OtlpSpanJson ConvertSpan(OtlpSpan span, IOutgoingPeerResolver[] outgoingPeerResolvers)
@@ -690,7 +692,7 @@ public sealed class TelemetryExportService
     internal static string ConvertResourceToJson(ResourceViewModel resource, IReadOnlyList<ResourceViewModel> allResources)
     {
         var resourceJson = CreateResourceJson(resource, allResources);
-        return JsonSerializer.Serialize(resourceJson, ResourceJsonSerializerContext.IndentedOptions);
+        return JsonSerializer.Serialize(resourceJson, ResourceJsonSerializerContext.IndentedContext.ResourceJson);
     }
 
     internal static ResourceJson CreateResourceJson(ResourceViewModel resource, IReadOnlyList<ResourceViewModel> allResources)

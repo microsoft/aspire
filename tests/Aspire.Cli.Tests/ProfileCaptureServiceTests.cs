@@ -111,6 +111,38 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StartAsync_UsesBundleLayoutDashboardPath_WhenNativeDashboardIsPresent()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
+        var layoutRoot = workspace.WorkspaceRoot.CreateSubdirectory("bundle");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var dashboardDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.DashboardDirectoryName);
+        var dashboardPath = Path.Combine(dashboardDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
+
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            Layout = new LayoutConfiguration { LayoutPath = layoutRoot.FullName }
+        };
+        var processFactory = CreateRunningProcessFactory();
+        var service = CreateService(
+            fileLoggerProvider,
+            processFactory,
+            new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)),
+            CreateConfiguration(),
+            bundleService);
+
+        await using var session = await service.StartAsync(CreateOptions(workspace), s_testTimeout, s_testPollInterval, CancellationToken.None);
+
+        Assert.Equal(dashboardPath, processFactory.LastFileName);
+        Assert.DoesNotContain("dashboard", Assert.IsType<string[]>(processFactory.LastArguments));
+    }
+
+    [Fact]
     public async Task StartAsync_ThrowsManagedBinaryNotFound_WhenNoManagedBinaryCanBeResolved()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -456,29 +488,28 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveManagedPathOverride_UsesManagedDirectoryContainingExecutable()
+    public void ResolveDashboardPathOverride_UsesDashboardExecutable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var managedDirectory = workspace.WorkspaceRoot.CreateSubdirectory("managed");
-        var managedPath = Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        File.WriteAllText(managedPath, string.Empty);
+        var dashboardPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
 
-        var resolvedPath = ProfileCaptureService.ResolveManagedPathOverride(
-            CreateConfiguration((BundleDiscovery.ManagedPathEnvVar, managedDirectory.FullName)));
+        var resolvedPath = ProfileCaptureService.ResolveDashboardPathOverride(
+            CreateConfiguration((BundleDiscovery.DashboardPathEnvVar, dashboardPath)));
 
-        Assert.Equal(managedPath, resolvedPath);
+        Assert.Equal(dashboardPath, resolvedPath);
     }
 
     [Fact]
-    public void ResolveManagedPathOverride_IgnoresMissingOverrides()
+    public void ResolveDashboardPathOverride_IgnoresMissingOverride()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "missing");
 
-        var resolvedPath = ProfileCaptureService.ResolveManagedPathOverride(
-            CreateConfiguration(
-                (BundleDiscovery.DashboardPathEnvVar, missingPath),
-                (BundleDiscovery.ManagedPathEnvVar, missingPath)));
+        var resolvedPath = ProfileCaptureService.ResolveDashboardPathOverride(
+            CreateConfiguration((BundleDiscovery.DashboardPathEnvVar, missingPath)));
 
         Assert.Null(resolvedPath);
     }

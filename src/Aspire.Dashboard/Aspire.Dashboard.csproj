@@ -2,8 +2,15 @@
 
   <PropertyGroup>
     <!-- This list of runtimes needs to match the set of runtimes specified in eng/workloads/workloads.csproj -->
-    <RuntimeIdentifiers>win-x86;win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
-    <TargetFramework>net9.0</TargetFramework>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <TargetFramework>net11.0</TargetFramework>
+    <PublishAot>true</PublishAot>
+    <Optimize Condition="'$(RuntimeIdentifier)' != ''">true</Optimize>
+    <OptimizationPreference Condition="'$(RuntimeIdentifier)' == 'win-arm64'">Size</OptimizationPreference>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
+    <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
     <!-- Enable System.GC.DynamicAdaptationMode to get a GC that dynamically adapts to the application's memory use. -->
     <GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
     <!--
@@ -11,20 +18,10 @@
       CS8002: Referenced assembly does not have a strong name
     -->
     <NoWarn>$(NoWarn);CS1591;CS8002</NoWarn>
-
-    <!-- This Application is a framework-dependent application that targets .NET 9.0. This means that the
-    application is not able to run if the place where it is deployed does not have the .NET 9.0 runtime installed.
-    Given we want to be able to support people running on environments where they only have a newer SDK/runtime installed,
-    we allow roll-forward to the next major in order to support these customers.-->
-    <RollForward>Major</RollForward>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);ASPDEPR005;BL0011;BL0012;BL0016;CS0618;IL2026;IL2057;IL2062;IL2065;IL2067;IL2072;IL2080;IL2101;IL2104;IL2110;IL2111;IL3002;IL3050;IL3053;SYSLIB0026;SYSLIB0027;SYSLIB0028;SYSLIB0057;SYSLIB0065</WarningsNotAsErrors>
+    <IlcTreatWarningsAsErrors>false</IlcTreatWarningsAsErrors>
 
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD</DefineConstants>
-
-    <!--
-      Enable raw string literals support in Razor. Can remove when target switches to .NET 10+.
-      See https://devblogs.microsoft.com/dotnet/enhancing-razor-productivity-with-new-features/
-    -->
-    <Features>use-roslyn-tokenizer</Features>
 
     <!-- Bundle optimization: disable web.config generation -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
@@ -62,10 +59,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonPreviewVersion)" />
-  </ItemGroup>
+    <TrimmerRootAssembly Include="$(AssemblyName)" />
 
-  <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Components.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Benchmarks" />
@@ -273,6 +268,11 @@
     <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="Utils\IConfigurationExtensions.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Utils\BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Utils\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Utils\ParentProcessLivenessMonitor.cs" />
+    <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Utils\ParentProcessWatchdog.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)KnownResourceNames.cs" Link="Utils\KnownResourceNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
@@ -322,7 +322,5 @@
     <Content Remove="wwwroot\fonts\cascadia-mono-nf\README.md" />
     <None Include="wwwroot\fonts\cascadia-mono-nf\README.md" />
   </ItemGroup>
-
-  <Import Project="BlazorAssets.targets" />
 
 </Project>

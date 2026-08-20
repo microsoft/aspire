@@ -78,30 +78,20 @@ The tool creates the following layout:
 
 ```
 {output}/
-├── aspire[.exe]             # Native AOT CLI executable
-├── runtime/                 # .NET shared runtime
-│   ├── dotnet[.exe]
-│   └── shared/
-│       ├── Microsoft.NETCore.App/{version}/
-│       └── Microsoft.AspNetCore.App/{version}/
-├── dashboard/               # Aspire Dashboard (framework-dependent)
-├── dcp/                     # DCP binaries
-├── aspire-server/           # Pre-built AppHost server (framework-dependent)
-└── tools/
-    ├── aspire-nuget/        # NuGet helper tool
-    └── dev-certs/           # Certificate management
+├── managed/
+│   └── aspire-managed[.exe] # AppHost server, NuGet helper, and terminal host
+├── dashboard/
+│   ├── Aspire.Dashboard[.exe]
+│   └── wwwroot/             # Dashboard static assets
+└── dcp/                     # DCP binaries
 ```
 
 ## How It Works
 
-1. **Copies CLI** - Finds the native AOT compiled CLI from artifacts and copies to root
-2. **Downloads/Copies Runtime** - Either downloads from Microsoft or copies from specified path
-3. **Copies Dashboard** - Copies the published Dashboard output
-4. **Copies DCP** - Finds DCP binaries from NuGet package restore output
-5. **Copies AppHost Server** - Copies the published RemoteHost (server) output
-6. **Copies NuGet Helper** - Copies the published NuGet helper tool
-7. **Copies Dev-certs** - Copies the dev-certs tool from SDK
-8. **Creates Archive** - Optionally creates .zip (Windows) or .tar.gz (Linux/macOS)
+1. **Copies aspire-managed** - Copies the self-contained AppHost server, NuGet helper, and terminal host executable
+2. **Copies Dashboard** - Copies the Native AOT Dashboard executable and `wwwroot` static assets
+3. **Copies DCP** - Finds DCP binaries from NuGet package restore output
+4. **Creates Archive** - Optionally creates .zip (Windows) or .tar.gz (Linux/macOS)
 
 ## Runtime Download
 

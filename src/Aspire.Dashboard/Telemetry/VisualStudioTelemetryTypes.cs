@@ -13,7 +13,7 @@ public class TelemetryEventCorrelation
     public required Guid Id { get; set; }
 
     [JsonPropertyName("eventType")]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<DataModelEventType>))]
     public DataModelEventType EventType { get; set; }
 }
 
