@@ -4,7 +4,22 @@
 const path = require('path');
 
 const { defaultValidationRoot, parseArgs } = require('./lib/options');
-const scenarios = require('./scenarios');
+const { runStarterValidation } = require('./lib/starter-validation');
+
+const templates = [
+  {
+    templateId: 'aspire-ts-starter',
+    projectName: 'AspireCliTsStarterSmoke',
+    expectedResources: ['app', 'frontend'],
+    hasTestProjectPrompt: false
+  },
+  {
+    templateId: 'aspire-starter',
+    projectName: 'AspireCliCsStarterSmoke',
+    expectedResources: ['apiservice'],
+    hasTestProjectPrompt: true
+  }
+];
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -13,17 +28,19 @@ async function main() {
   const aspireCommand = options.aspireCommand || process.env.ASPIRE_SMOKE_ASPIRE_COMMAND || 'aspire';
   const failures = [];
 
-  for (const scenario of scenarios) {
+  for (const template of templates) {
     try {
-      await scenario.run({
-        validationRoot,
-        channel,
-        aspireCommand,
-        maxStartupSeconds: options.maxStartupSeconds,
-        resourceReadyTimeoutSeconds: options.resourceReadyTimeoutSeconds
-      });
+      await runStarterValidation(
+        template,
+        {
+          validationRoot,
+          channel,
+          aspireCommand,
+          maxStartupSeconds: options.maxStartupSeconds,
+          resourceReadyTimeoutSeconds: options.resourceReadyTimeoutSeconds
+        });
     } catch (error) {
-      const message = `${scenario.templateId}: ${error.message}`;
+      const message = `${template.templateId}: ${error.message}`;
       console.warn(message);
       failures.push(message);
     }
