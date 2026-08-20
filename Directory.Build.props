@@ -17,13 +17,6 @@
     <PackageProjectUrl>https://github.com/microsoft/aspire</PackageProjectUrl>
     <WarnOnPackingNonPackableProject>false</WarnOnPackingNonPackableProject>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <!-- TEMPORARY - DO NOT MERGE: revert together with the nuget.org source in NuGet.config.
-         NuGet audit is enabled by default but is a no-op against the dnceng feeds, which do not
-         expose a VulnerabilityInfo resource. Adding nuget.org (which does expose one) supplies a
-         vulnerability database for the first time, so audit begins flagging pre-existing transitive
-         packages, and TreatWarningsAsErrors above promotes NU1901-NU1904 to restore-breaking errors
-         across the whole repo. None of these advisories are related to the Sigstore/Tuf bump. -->
-    <NuGetAudit>false</NuGetAudit>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
