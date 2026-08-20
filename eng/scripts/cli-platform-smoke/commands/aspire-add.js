@@ -2,30 +2,16 @@
 
 const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
-const { createStarterProject } = require('../scriptlets/create-starter-project');
 
 async function runAspireAddInteractive({
   aspireCommand,
-  channel,
   cwd,
   diagnosticsDir,
   integrationFilter,
-  projectRoot,
-  scenarioRoot,
-  template,
   timeoutMs
 }) {
-  await createStarterProject({
-    aspireCommand,
-    channel,
-    diagnosticsDir,
-    projectRoot,
-    scenarioRoot,
-    template
-  });
-
   await runInteractiveCommand({
-    cwd: cwd || projectRoot,
+    cwd,
     diagnosticsDir,
     fileName: 'aspire-add.log',
     command: buildAspireCommand(aspireCommand, ['add']),
@@ -50,14 +36,5 @@ async function runAspireAddInteractive({
 }
 
 module.exports = {
-  id: 'aspire-add',
-  templateIds: ['aspire-ts-starter'],
-  async run(context) {
-    await runAspireAddInteractive({
-      ...context,
-      integrationFilter: 'postgres',
-      timeoutMs: 180_000
-    });
-  },
   runAspireAddInteractive
 };

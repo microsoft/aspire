@@ -53,13 +53,5 @@ async function runAspireNewInteractive({
 }
 
 module.exports = {
-  id: 'aspire-new',
-  templateIds: ['aspire-ts-starter', 'aspire-starter'],
-  async run(context) {
-    await runAspireNewInteractive({
-      ...context,
-      timeoutMs: 180_000
-    });
-  },
   runAspireNewInteractive
 };
