@@ -24,7 +24,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// Verifies that a fresh extraction with a synthetic payload creates a
     /// versioned directory, writes a version marker, and establishes reparse
-    /// points for managed/ and dcp/.
+    /// point access to managed/, dashboard/, and dcp/.
     /// </summary>
     [Fact]
     public async Task ExtractAsync_FreshExtraction_CreatesVersionedLayoutAndLinks()
@@ -63,6 +63,12 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
                 BundleDiscovery.ManagedDirectoryName,
                 BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
             Assert.True(File.Exists(managedExe), $"managed exe should exist at {managedExe}");
+
+            var dashboardExe = Path.Combine(bundleLink,
+                BundleDiscovery.DashboardDirectoryName,
+                BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+            Assert.True(File.Exists(dashboardExe), $"Dashboard exe should exist at {dashboardExe}");
+            Assert.True(File.Exists(Path.Combine(bundleLink, BundleDiscovery.DashboardDirectoryName, "wwwroot", "index.html")));
         }
         finally
         {
@@ -94,6 +100,39 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             // Second extraction without force — should be up to date.
             var result2 = await service.ExtractAsync(layoutRoot, force: false);
             Assert.Equal(BundleExtractResult.AlreadyUpToDate, result2);
+        }
+        finally
+        {
+            CleanupReparsePoints(layoutRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractAsync_MissingDashboardExecutable_RepairsLayout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var payload = CreateFakeBundlePayload();
+        var provider = new TestBundlePayloadProvider(payload);
+        var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
+        var service = CreateService(provider, layoutDiscovery);
+
+        var initialResult = await service.ExtractAsync(layoutRoot, force: true);
+        Assert.Equal(BundleExtractResult.Extracted, initialResult);
+
+        var dashboardExe = Path.Combine(
+            layoutRoot,
+            BundleDiscovery.BundleDirectoryName,
+            BundleDiscovery.DashboardDirectoryName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.Delete(dashboardExe);
+
+        try
+        {
+            var repairResult = await service.ExtractAsync(layoutRoot, force: false);
+
+            Assert.Equal(BundleExtractResult.Extracted, repairResult);
+            Assert.True(File.Exists(dashboardExe));
         }
         finally
         {
@@ -564,6 +603,24 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             };
             tar.WriteEntry(managedEntry);
 
+            // dashboard/ directory, executable, and static assets.
+            tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.DashboardDirectoryName}/"));
+            var dashboardEntry = new PaxTarEntry(
+                TarEntryType.RegularFile,
+                $"aspire-payload/{BundleDiscovery.DashboardDirectoryName}/{BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)}")
+            {
+                DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("native-dashboard"))
+            };
+            tar.WriteEntry(dashboardEntry);
+            tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.DashboardDirectoryName}/wwwroot/"));
+            var dashboardAssetEntry = new PaxTarEntry(
+                TarEntryType.RegularFile,
+                $"aspire-payload/{BundleDiscovery.DashboardDirectoryName}/wwwroot/index.html")
+            {
+                DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("dashboard-static-asset"))
+            };
+            tar.WriteEntry(dashboardAssetEntry);
+
             // dcp/ directory and platform executable.
             tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.DcpDirectoryName}/"));
 
@@ -642,6 +699,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
                 Components = new LayoutComponents
                 {
                     Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                    Dashboard = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName),
                     Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
                 }
             };
@@ -654,6 +712,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             {
                 LayoutComponent.Managed => Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName,
                     BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                LayoutComponent.Dashboard => Path.Combine(bundleDir, BundleDiscovery.DashboardDirectoryName),
                 LayoutComponent.Dcp => Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName),
                 _ => null,
             };

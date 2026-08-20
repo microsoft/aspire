@@ -20,6 +20,7 @@ using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
@@ -226,7 +227,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         ConfigureAuthentication(builder, dashboardOptions);
 
         // Add services to the container.
-        builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+        builder.Services.AddRazorComponents().AddInteractiveServerComponents(options =>
+        {
+    #pragma warning disable FLUENTUI0001 // Fluent UI Native AOT serialization support is experimental.
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+            options.JsonTypeInfoResolvers.Add(FluentUIJsonSerializerContext.Default);
+            options.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
+#pragma warning restore ASPNETCORE9004
+    #pragma warning restore FLUENTUI0001
+        });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -760,8 +769,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
             .AddCertificate(options =>
             {
-                // Bind options to configuration so they can be overridden by environment variables.
-                builder.Configuration.Bind("Dashboard:Otlp:CertificateAuthOptions", options);
+                BindCertificateAuthenticationOptions(
+                    builder.Configuration.GetSection("Dashboard:Otlp:CertificateAuthOptions"),
+                    options);
 
                 options.Events = new CertificateAuthenticationEvents
                 {
@@ -943,6 +953,54 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 _ => CookieAuthenticationDefaults.AuthenticationScheme
             };
         }
+    }
+
+    internal static void BindCertificateAuthenticationOptions(
+        IConfigurationSection configuration,
+        CertificateAuthenticationOptions options)
+    {
+        // The configuration binding generator cannot generate bindings for the certificate collection
+        // and TimeProvider exposed by CertificateAuthenticationOptions. Bind only the scalar settings
+        // that the Dashboard supports overriding rather than falling back to reflection under Native AOT.
+        options.AllowedCertificateTypes = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.AllowedCertificateTypes),
+            options.AllowedCertificateTypes);
+        options.ChainTrustValidationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ChainTrustValidationMode),
+            options.ChainTrustValidationMode);
+        options.RevocationFlag = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationFlag),
+            options.RevocationFlag);
+        options.RevocationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationMode),
+            options.RevocationMode);
+        options.ValidateCertificateUse = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateCertificateUse),
+            options.ValidateCertificateUse);
+        options.ValidateValidityPeriod = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateValidityPeriod),
+            options.ValidateValidityPeriod);
+        options.ClaimsIssuer = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ClaimsIssuer),
+            options.ClaimsIssuer);
+        options.ForwardAuthenticate = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardAuthenticate),
+            options.ForwardAuthenticate);
+        options.ForwardChallenge = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardChallenge),
+            options.ForwardChallenge);
+        options.ForwardDefault = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardDefault),
+            options.ForwardDefault);
+        options.ForwardForbid = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardForbid),
+            options.ForwardForbid);
+        options.ForwardSignIn = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignIn),
+            options.ForwardSignIn);
+        options.ForwardSignOut = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignOut),
+            options.ForwardSignOut);
     }
 
     internal static Action<OpenIdConnectOptions> GetOidcClaimActionConfigure(ClaimAction action)

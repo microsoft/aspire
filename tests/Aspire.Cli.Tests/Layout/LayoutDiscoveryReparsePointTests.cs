@@ -96,12 +96,16 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
 
         var versionsDir = Path.Combine(layoutRoot, "versions", "v1");
         var versionedManaged = Path.Combine(versionsDir, BundleDiscovery.ManagedDirectoryName);
+        var versionedDashboard = Path.Combine(versionsDir, BundleDiscovery.DashboardDirectoryName);
         var versionedDcp = Path.Combine(versionsDir, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(versionedManaged);
+        Directory.CreateDirectory(versionedDashboard);
         Directory.CreateDirectory(versionedDcp);
         File.WriteAllText(
             Path.Combine(versionedManaged, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "stub");
+        var dashboardPath = Path.Combine(versionedDashboard, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, "stub");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(versionedDcp), "stub");
 
         // Create a single bundle/ link pointing at the versioned directory.
@@ -119,6 +123,9 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
 
             Assert.NotNull(layout);
             Assert.Equal(layoutRoot, layout!.LayoutPath);
+            Assert.Equal(
+                Path.Combine(bundleLink, BundleDiscovery.DashboardDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+                layout.GetDashboardPath());
             Assert.True(discovery.IsBundleModeAvailable());
         }
         finally
@@ -244,11 +251,16 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
     {
         var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
         var managedDir = Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName);
+        var dashboardDir = Path.Combine(bundleDir, BundleDiscovery.DashboardDirectoryName);
         var dcpDir = Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(managedDir);
+        Directory.CreateDirectory(dashboardDir);
         Directory.CreateDirectory(dcpDir);
         File.WriteAllText(
             Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "stub");
+        File.WriteAllText(
+            Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
             "stub");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir), "stub");
     }

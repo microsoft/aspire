@@ -451,13 +451,12 @@ public class InputViewModelTests
         var viewModel = new InputViewModel(input);
 
         viewModel.SetFileReferences([
-            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" }
+            new FileReferenceViewModel { Id = "abc123", Name = "résumé<final>.txt" }
         ]);
 
         Assert.Single(viewModel.FileReferences);
-        Assert.Equal("readme.txt", viewModel.FileReferences[0].Name);
-        Assert.Contains("abc123", viewModel.Value);
-        Assert.Contains("readme.txt", viewModel.Value);
+        Assert.Equal("résumé<final>.txt", viewModel.FileReferences[0].Name);
+        Assert.Equal("[{\"Id\":\"abc123\",\"Name\":\"résumé<final>.txt\"}]", viewModel.Value);
     }
 
     [Fact]

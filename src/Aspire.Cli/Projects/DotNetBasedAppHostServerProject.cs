@@ -160,7 +160,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
                     <!-- DCP and Dashboard paths for local development -->
                     <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>
-                    <AspireDashboardDir>{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net8.0/</AspireDashboardDir>
+                    <AspireDashboardDir>{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net11.0/</AspireDashboardDir>
                 </PropertyGroup>
                 <ItemGroup>
                     <PackageReference Include="StreamJsonRpc" />
@@ -243,14 +243,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             doc.Root!.Add(new XElement("Import", new XAttribute("Project", sdkInTargets)));
         }
 
-        // Add Dashboard and RemoteHost project references
-        var dashboardProject = Path.Combine(_repoRoot, "src", "Aspire.Dashboard", "Aspire.Dashboard.csproj");
-        if (File.Exists(dashboardProject))
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                new XElement("ProjectReference", new XAttribute("Include", dashboardProject))));
-        }
-
+        // The Dashboard is a standalone net11 process and isn't loaded by the net10 AppHost scanner.
         var remoteHostProject = Path.Combine(_repoRoot, "src", "Aspire.Hosting.RemoteHost", "Aspire.Hosting.RemoteHost.csproj");
         if (File.Exists(remoteHostProject))
         {

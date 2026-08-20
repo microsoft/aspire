@@ -81,7 +81,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             Assert.Equal(nameof(TelemetryRepository.OnNewTraces), t.Name);
         });
 
-        DisposeComponents();
+        cut.Instance.Dispose();
 
         Assert.Empty(telemetryRepository.TracesSubscriptions);
     }

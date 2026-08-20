@@ -45,7 +45,7 @@ public class TelemetryApiServiceTests
     public async Task FollowLogsAsync_StreamsAllLogs()
     {
         var repository = CreateRepository();
-        AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
+        AddLogs(repository, ["résumé", "log2", "log3", "log4", "log5"]);
 
         var service = CreateService(repository);
 
@@ -60,6 +60,7 @@ public class TelemetryApiServiceTests
         }
 
         Assert.Equal(5, receivedItems.Count);
+        Assert.Contains("résumé", receivedItems[0]);
     }
 
     [Theory]

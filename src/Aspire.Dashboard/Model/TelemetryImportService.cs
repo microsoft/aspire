@@ -116,7 +116,7 @@ public sealed class TelemetryImportService
         OtlpTelemetryDataJson? telemetryData;
         try
         {
-            telemetryData = JsonSerializer.Deserialize<OtlpTelemetryDataJson>(jsonContent, OtlpJsonSerializerContext.DefaultOptions);
+            telemetryData = JsonSerializer.Deserialize(jsonContent, OtlpJsonSerializerContext.DefaultContext.OtlpTelemetryDataJson);
         }
         catch (JsonException ex)
         {

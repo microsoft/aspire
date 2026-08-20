@@ -14,7 +14,8 @@
     <DotNetRuntimeNet10VersionForTesting>10.0.8</DotNetRuntimeNet10VersionForTesting>
     <DotNetSdkNet8VersionForTesting>8.0.415</DotNetSdkNet8VersionForTesting>
     <DotNetSdkNet9VersionForTesting>9.0.306</DotNetSdkNet9VersionForTesting>
-    <DotNetSdkNet11VersionForTesting>11.0.100-preview.6.26359.118</DotNetSdkNet11VersionForTesting>
+    <DotNetSdkNet10VersionForTesting>10.0.400</DotNetSdkNet10VersionForTesting>
+    <DotNetSdkNet11VersionForTesting>11.0.100-rc.1.26419.129</DotNetSdkNet11VersionForTesting>
     <!-- Keep these aliases for global.json and non-template test infrastructure. -->
     <DotNetRuntimePreviousVersionForTesting>$(DotNetRuntimeNet8VersionForTesting)</DotNetRuntimePreviousVersionForTesting>
     <DotNetRuntimeCurrentVersionForTesting>$(DotNetRuntimeNet9VersionForTesting)</DotNetRuntimeCurrentVersionForTesting>
@@ -66,16 +67,13 @@
     <!-- MicroBuild.Core version for VS Code extension signing -->
     <MicrosoftVisualStudioEngMicroBuildCoreVersion>1.0.0</MicrosoftVisualStudioEngMicroBuildCoreVersion>
   </PropertyGroup>
-  <!-- Blazor JS asset package versions — one per supported runtime major version.
-       The dashboard downloads these at build time to extract blazor.web.js for each runtime it may roll-forward to.
-       Versions must be available on the dnceng dotnet-public mirror (originally published to nuget.org). -->
-  <PropertyGroup Label="BlazorAssets">
-    <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
-    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
-  </PropertyGroup>
   <!-- .NET 11.0 Package Versions used by project templates -->
   <PropertyGroup Label="Net11Preview">
-    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreOpenApiNet11Version>
+    <MicrosoftAspNetCoreAuthenticationCertificateNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreAuthenticationCertificateNet11Version>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>
+    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreOpenApiNet11Version>
+    <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.1.26419.129</MicrosoftAspNetCoreTestHostNet11Version>
+    <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.1.26419.129</MicrosoftExtensionsCachingMemoryNet11Version>
   </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">

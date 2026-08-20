@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
@@ -61,20 +60,7 @@ public sealed partial class LogViewer
     [Parameter]
     public string? FilterText { get; set; }
 
-    private Virtualize<LogEntry>? VirtualizeRef
-    {
-        get => field;
-        set
-        {
-            field = value;
-
-            // Set max item count when the Virtualize component is set.
-            if (field != null)
-            {
-                VirtualizeHelper<LogEntry>.TrySetMaxItemCount(field, 10_000);
-            }
-        }
-    }
+    private Virtualize<LogEntry>? VirtualizeRef { get; set; }
 
     public async Task RefreshDataAsync()
     {

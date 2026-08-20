@@ -2827,6 +2827,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         var layoutRoot = workspace.CreateDirectory("layout");
         var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        layoutRoot.CreateSubdirectory(BundleDiscovery.DashboardDirectoryName);
         File.WriteAllText(
             Path.Combine(
                 managedDirectory.FullName,
@@ -2940,6 +2941,43 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         Assert.True(optionIndex >= 0 && optionIndex < arguments.Count - 1, $"Option '{optionName}' was not found.");
         return arguments[optionIndex + 1];
+    }
+
+    [Fact]
+    public void CreateStartInfo_WithNativeDashboard_SetsTerminalHostFromManagedLayout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var dashboardDirectory = Assert.IsType<string>(layout.GetComponentPath(LayoutComponent.Dashboard));
+        var dashboardPath = Path.Combine(
+            dashboardDirectory,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(dashboardPath, startInfo.Environment[BundleDiscovery.DashboardPathEnvVar]);
+        Assert.Equal(layout.GetManagedPath(), startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("terminalhost", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+    }
+
+    [Fact]
+    public void CreateStartInfo_WithTerminalHostOverrides_PreservesOverrides()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var server = CreatePrebuiltAppHostServer(workspace, layout: layout);
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.TerminalHostPathEnvVar] = "custom-terminal-host",
+            [BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "custom-args"
+        };
+
+        var startInfo = server.CreateStartInfo(123, environmentVariables);
+
+        Assert.Equal("custom-terminal-host", startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar]);
+        Assert.Equal("custom-args", startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
     }
 
     [Fact]

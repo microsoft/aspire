@@ -31,10 +31,11 @@ This document specifies the **Aspire Bundle**, a self-contained distribution pac
 The Aspire Bundle is a platform-specific archive containing the Aspire CLI and all runtime components:
 
 - **Aspire CLI** (native AOT executable, includes native certificate management)
-- **Aspire Managed** (unified self-contained binary: Dashboard + AppHost Server + NuGet Helper)
+- **Aspire Managed** (self-contained AppHost Server, NuGet Helper, and Terminal Host)
+- **Aspire Dashboard** (Native AOT executable)
 - **Developer Control Plane (DCP)** (no longer distributed via NuGet)
 
-**Key change**: DCP and Dashboard are now bundled with the CLI installation, not downloaded as NuGet packages. Dashboard, AppHost Server, and NuGet Helper are consolidated into a single `aspire-managed` binary that dispatches via subcommands. Certificate management is handled natively in the CLI (no subprocess needed). This:
+**Key change**: DCP and Dashboard are bundled with the CLI installation, not downloaded on first run. The Dashboard ships as a Native AOT executable, while AppHost Server, NuGet Helper, and Terminal Host share `aspire-managed`. Certificate management is handled natively in the CLI.
 
 - Eliminates large NuGet package downloads on first run
 - Ensures version consistency between CLI and runtime components
@@ -142,7 +143,7 @@ When a user runs `aspire run` with a TypeScript app host:
 4. **CLI generates `appsettings.json`** for the AppHost Server with integration list
 5. **CLI starts AppHost Server** using aspire-managed's server subcommand
 6. **CLI starts guest app host** (TypeScript) which connects via JSON-RPC
-7. **AppHost Server orchestrates** containers, Dashboard (via aspire-managed dashboard), and DCP
+7. **AppHost Server orchestrates** containers, the Native AOT Dashboard, and DCP
 
 ---
 
@@ -156,18 +157,21 @@ aspire-{version}-{platform}/
 ├── aspire[.exe]                        # Native AOT CLI (~25 MB)
 │                                       # (includes native certificate management)
 │
-├── managed/                            # Unified managed binary (~65 MB)
-│   └── aspire-managed[.exe]            # Self-contained single-file executable
-│                                       # Subcommands: dashboard | server | nuget
+├── managed/
+│   └── aspire-managed[.exe]            # Self-contained server/NuGet/terminal executable
+│
+├── dashboard/
+│   ├── Aspire.Dashboard[.exe]          # Native AOT Dashboard
+│   └── wwwroot/                        # Dashboard static assets
 │
 ├── dcp/                                # Developer Control Plane (~127 MB)
 │   ├── dcp[.exe]                       # Native executable
 │   └── ...
 │
-└── (no more runtime/, dashboard/, aspire-server/, tools/ directories)
+└── (no more runtime/, aspire-server/, tools/ directories)
 ```
 
-**Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), `aspire-server/` (~19 MB), `tools/aspire-nuget/` (~5 MB), and `tools/dev-certs/` directories have been consolidated into a single `managed/aspire-managed` self-contained binary. Certificate management has been moved natively into the CLI itself, eliminating the need for a separate dev-certs tool.
+The bundle keeps the Native AOT Dashboard and its static assets separate from the self-contained `aspire-managed` host used for server, NuGet, and terminal operations.
 
 **Total Bundle Size:**
 - **Unzipped:** ~220 MB (down from ~323 MB — eliminated separate runtime)
@@ -295,7 +299,7 @@ The parent directory check supports the installed layout where the CLI binary li
 |----------|-------------|---------|
 | `ASPIRE_LAYOUT_PATH` | Root of the bundle | `/opt/aspire` |
 | `ASPIRE_DCP_PATH` | DCP binaries location | `/opt/aspire/dcp` |
-| `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the dashboard binary (now points to `aspire-managed`) | `/opt/aspire/managed/aspire-managed` |
+| `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the Native AOT Dashboard | `/opt/aspire/dashboard/Aspire.Dashboard` |
 | `ASPIRE_MANAGED_PATH` | CLI-only path for the `aspire-managed` binary | `/opt/aspire/managed/aspire-managed` |
 | `ASPIRE_HOME` | Default Aspire state root and fallback bundle extraction root when no install-route sidecar selects an install-owned location | `/home/user/.aspire` |
 | `ASPIRE_INTEGRATION_LIBS_PATH` | Path to copied project-reference integration DLLs for aspire-server assembly resolution | `/home/user/myapp/.aspire/integrations/apphosts/app-hash/project-layouts/items/fingerprint/libs` |
@@ -720,8 +724,12 @@ The bundle installs components as siblings under `~/.aspire/`, with the CLI bina
 │
 ├── .aspire-bundle-version  # Version marker (hex FNV-1a hash, written after extraction)
 │
-├── managed/                # Unified managed binary (self-contained)
-│   └── aspire-managed      # Subcommands: dashboard | server | nuget
+├── managed/
+│   └── aspire-managed      # Subcommands: server | nuget | terminalhost
+│
+├── dashboard/
+│   ├── Aspire.Dashboard    # Native AOT Dashboard
+│   └── wwwroot/            # Dashboard static assets
 │
 ├── dcp/                    # Developer Control Plane
 │   └── dcp
@@ -737,7 +745,7 @@ The bundle installs components as siblings under `~/.aspire/`, with the CLI bina
 - The CLI lives at `~/.aspire/bin/aspire` regardless of install method
 - With self-extracting binaries, the CLI in `bin/` contains the embedded payload; `aspire setup` extracts siblings
 - `.aspire-bundle-version` tracks the extracted version — extraction is skipped when hash matches
-- `aspire-managed` is a single self-contained binary replacing separate runtime, dashboard, aspire-server, and tools directories
+- `aspire-managed` remains the self-contained server/NuGet/terminal binary; the Dashboard is a separate Native AOT executable
 - Certificate management is native to the CLI (no external tool needed)
 - NuGet hives and settings are preserved across installations and re-extractions
 - `LayoutDiscovery` finds the bundle by checking the CLI's parent directory for components
@@ -825,7 +833,8 @@ AppHost integration restore artifacts are cached under `<workspace>/.aspire/inte
 | Component | On Disk | Zipped |
 |-----------|---------|--------|
 | DCP (platform-specific) | ~286 MB | ~100 MB |
-| Aspire Managed (self-contained: Dashboard + Server + NuGet + .NET Runtime) | ~65 MB | ~25 MB |
+| Aspire Managed (self-contained Server + NuGet + Terminal Host) | ~114 MB | varies |
+| Aspire Dashboard (Native AOT) | ~60 MB | varies |
 | CLI (native AOT, includes certificate management) | ~22 MB | ~10 MB |
 | **Total** | **~373 MB** | **~135 MB** |
 
@@ -1313,11 +1322,12 @@ This section tracks the implementation progress of the bundle feature.
   - `ICertificateToolRunner` abstraction
   - `NativeCertificateToolRunner` - calls `CertificateManager` directly (no subprocess)
   - `CertificateGeneration/` - vendored from aspnetcore, EventSource replaced with ILogger
-- [x] **Aspire Managed unified binary** - `src/Aspire.Managed/`
-  - Self-contained single binary: `aspire-managed dashboard|server|nuget`
-  - Replaces separate runtime, dashboard, aspire-server, and tools directories
+- [x] **Aspire Managed binary** - `src/Aspire.Managed/`
+  - Self-contained binary: `aspire-managed server|nuget|terminalhost`
+- [x] **Native AOT Dashboard** - `src/Aspire.Dashboard/`
 - [x] **Bundle build tooling** - `tools/CreateLayout/`
-  - Builds aspire-managed as self-contained single-file binary
+  - Builds aspire-managed as a self-contained single-file binary
+  - Builds Aspire.Dashboard as a Native AOT executable
   - Copies DCP
   - `--embed-in-cli` option creates self-extracting binary
 - [x] **Installation scripts** - `eng/scripts/get-aspire-cli-pr.sh`, `eng/scripts/get-aspire-cli-pr.ps1`
@@ -1381,13 +1391,11 @@ The bundle is built using the `tools/CreateLayout` tool, which assembles all com
 
 ### Aspire Managed Build
 
-The `aspire-managed` binary is published as a self-contained single-file executable, which includes the .NET runtime. This eliminates the need to separately download and bundle the .NET SDK/runtime.
+The `aspire-managed` binary is published as a self-contained single-file executable. The Dashboard is published separately with Native AOT so Blazor does not expand the reflection and dynamic-code requirements of the server, NuGet, and terminal tools.
 
 ```text
-aspire-managed (self-contained, ~65 MB)
+aspire-managed (self-contained)
 ├── .NET 10 Runtime (embedded)
-├── ASP.NET Core Framework (embedded)
-├── Aspire.Dashboard (embedded)
 ├── Aspire.Hosting.RemoteHost / aspire-server (embedded)
 ├── NuGet Commands (embedded)
 └── All managed dependencies
@@ -1401,10 +1409,11 @@ aspire-managed (self-contained, ~65 MB)
 
 ### Build Steps
 
-1. **Build aspire-managed** as a self-contained single-file binary (includes .NET runtime, Dashboard, AppHost Server, NuGet operations)
-2. **Download and copy DCP** binaries
-3. **Create archive** (tar.gz for Unix, ZIP for Windows) with `COPYFILE_DISABLE=1` to suppress macOS xattr headers
-4. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
+1. **Build aspire-managed** as a self-contained single-file binary
+2. **Build Aspire.Dashboard** as a Native AOT executable
+3. **Download and copy DCP** binaries
+4. **Create archive** with both executables and Dashboard static assets
+5. **Create self-extracting binary** — appends tar.gz payload + 32-byte trailer to native AOT CLI
 
 ### Self-Extracting Binary Build
 

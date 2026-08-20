@@ -35,31 +35,43 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             [showDashboardResourcesKey] = null
         });
 
-        var dashboardPath = Path.GetFullPath("dashboard");
-
-        builder.Services.Configure<DcpOptions>(o =>
+        var dashboardDirectory = Directory.CreateTempSubdirectory();
+        try
         {
-            o.DashboardPath = dashboardPath;
-        });
+            var dashboardPath = Path.Combine(dashboardDirectory.FullName, "dashboard");
+            File.WriteAllText($"{dashboardPath}.dll", string.Empty);
+            File.WriteAllText(
+                $"{dashboardPath}.runtimeconfig.json",
+                """{"runtimeOptions":{"tfm":"net11.0","frameworks":[{"name":"Microsoft.NETCore.App","version":"11.0.0"},{"name":"Microsoft.AspNetCore.App","version":"11.0.0"}]}}""");
 
-        using var app = builder.Build();
+            builder.Services.Configure<DcpOptions>(o =>
+            {
+                o.DashboardPath = dashboardPath;
+            });
 
-        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+            using var app = builder.Build();
 
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
 
-        var dashboard = Assert.Single(model.Resources.OfType<ExecutableResource>());
-        var initialSnapshot = Assert.Single(dashboard.Annotations.OfType<ResourceSnapshotAnnotation>());
-        var hiddenAnnotation = Assert.Single(dashboard.Annotations.OfType<HiddenAnnotation>());
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(dashboard).DefaultTimeout();
+            var dashboard = Assert.Single(model.Resources.OfType<ExecutableResource>());
+            var initialSnapshot = Assert.Single(dashboard.Annotations.OfType<ResourceSnapshotAnnotation>());
+            var hiddenAnnotation = Assert.Single(dashboard.Annotations.OfType<HiddenAnnotation>());
 
-        Assert.NotNull(dashboard);
-        Assert.Equal("aspire-dashboard", dashboard.Name);
-        Assert.Equal("dotnet", dashboard.Command);
-        Assert.Equal(args[3], $"{dashboardPath}.dll");
-        Assert.Equal(HiddenBehavior.Always, hiddenAnnotation.Behavior);
-        Assert.False(initialSnapshot.InitialSnapshot.IsHidden);
+            var args = await ArgumentEvaluator.GetArgumentListAsync(dashboard).DefaultTimeout();
+
+            Assert.NotNull(dashboard);
+            Assert.Equal("aspire-dashboard", dashboard.Name);
+            Assert.Equal("dotnet", dashboard.Command);
+            Assert.Equal(args[3], $"{dashboardPath}.dll");
+            Assert.Equal(HiddenBehavior.Always, hiddenAnnotation.Behavior);
+            Assert.False(initialSnapshot.InitialSnapshot.IsHidden);
+        }
+        finally
+        {
+            dashboardDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -321,7 +333,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             options => options.DisableDashboard = false,
             testOutputHelper: testOutputHelper);
 
-        var dashboardPath = Path.GetFullPath("dashboard.dll");
+        var dashboardPath = typeof(DashboardResourceTests).Assembly.Location;
 
         builder.Services.Configure<DcpOptions>(o =>
         {

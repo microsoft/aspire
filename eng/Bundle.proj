@@ -5,10 +5,11 @@
     Usage: dotnet msbuild eng/Bundle.proj /p:TargetRid=linux-x64 /p:Configuration=Release
 
     This project:
-    1. Publishes the unified managed binary (Aspire.Managed) as self-contained
-    2. Publishes native CLI (unless SkipNativeBuild=true)
-    3. Restores DCP package
-    4. Runs CreateLayout to assemble the bundle
+    1. Publishes Aspire.Managed as self-contained
+    2. Publishes the Dashboard with Native AOT
+    3. Publishes native CLI (unless SkipNativeBuild=true)
+    4. Restores DCP package
+    5. Runs CreateLayout to assemble the bundle
 
     Options:
     - SkipNativeBuild=true: Skip building native CLI (use pre-built from artifacts)
@@ -38,6 +39,7 @@
     <!-- Project paths -->
     <CliProjectPath>$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj</CliProjectPath>
     <ManagedProjectPath>$(RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</ManagedProjectPath>
+    <DashboardProjectPath>$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj</DashboardProjectPath>
     <AppHostProjectPath>$(RepoRoot)src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj</AppHostProjectPath>
     <CreateLayoutProjectPath>$(RepoRoot)tools\CreateLayout\CreateLayout.csproj</CreateLayoutProjectPath>
 
@@ -97,10 +99,13 @@
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
     <PropertyGroup>
       <_ManagedBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishManaged.binlog</_ManagedBinlog>
+      <_DashboardBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishDashboard.binlog</_DashboardBinlog>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
     <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
+    <Message Importance="high" Text="Publishing Aspire Dashboard (Native AOT)..." />
+    <Exec Command="dotnet publish &quot;$(DashboardProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:PublishAot=true /p:PlatformName=$(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_DashboardBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">

@@ -286,7 +286,8 @@ jobs:
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      targets: '[{"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"}]'
+      # Use the newer VS 2026 ARM linker; the VS 2022 image fails on Aspire.Dashboard.obj with LNK1322.
+      targets: '[{"os": "windows-latest", "runner": "windows-11-vs2026-arm", "rids": "win-arm64"}]'
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)

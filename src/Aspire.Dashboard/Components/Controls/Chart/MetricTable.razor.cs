@@ -23,7 +23,6 @@ public partial class MetricTable : ChartBase
     private List<ChartExemplar> _exemplars = [];
     private string _unitColumnHeader = string.Empty;
     private IJSObjectReference? _jsModule;
-    private FluentDataGrid<MetricViewBase> _dataGrid = null!;
 
     private OtlpInstrumentSummary? _instrument;
     private bool _showCount;
@@ -237,13 +236,6 @@ public partial class MetricTable : ChartBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<MetricViewBase>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (firstRender)
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Controls/Chart/MetricTable.razor.js");
