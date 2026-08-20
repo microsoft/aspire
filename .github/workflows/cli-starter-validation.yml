@@ -33,9 +33,9 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner }}
-    # Each starter scenario drives the full command lifecycle. The Windows ARM64 wait budgets can
-    # total 75 minutes across both scenarios before diagnostics are uploaded.
-    timeout-minutes: 85
+    # Each starter scenario drives the full command lifecycle. Their global Windows ARM64 timeout
+    # budgets can total 85 minutes before diagnostics are uploaded.
+    timeout-minutes: 95
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -74,7 +74,7 @@ jobs:
 
       - name: Create starter app and validate startup
         # Leave headroom for both isolated starter scenarios to complete their full command flows.
-        timeout-minutes: 80
+        timeout-minutes: 90
         shell: pwsh
         env:
           PR_NUMBER: ${{ inputs.prNumber }}

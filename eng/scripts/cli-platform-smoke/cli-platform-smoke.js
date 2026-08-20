@@ -6,10 +6,9 @@ const path = require('path');
 
 const { createScenarioContext } = require('./lib/scenario-context');
 const { defaultValidationRoot, parseArgs } = require('./lib/options');
-const scenarios = [
-  require('./scenarios/typescript-starter'),
-  require('./scenarios/dotnet-starter')
-];
+const { runScenario } = require('./lib/run-scenario');
+const { createDotnetStarterScenario } = require('./scenarios/dotnet-starter');
+const { createTypeScriptStarterScenario } = require('./scenarios/typescript-starter');
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -23,6 +22,14 @@ async function main() {
     maxStartupSeconds: options.maxStartupSeconds,
     resourceReadyTimeoutSeconds: options.resourceReadyTimeoutSeconds
   };
+  const scenarioOptions = {
+    maxStartupSeconds: options.maxStartupSeconds,
+    resourceReadyTimeoutSeconds: options.resourceReadyTimeoutSeconds
+  };
+  const scenarios = [
+    createTypeScriptStarterScenario(scenarioOptions),
+    createDotnetStarterScenario(scenarioOptions)
+  ];
   const failures = [];
 
   fs.rmSync(validationRoot, { recursive: true, force: true });
@@ -30,7 +37,7 @@ async function main() {
 
   for (const scenario of scenarios) {
     try {
-      await scenario.run(createScenarioContext(baseContext, scenario));
+      await runScenario(scenario, createScenarioContext(baseContext, scenario));
     } catch (error) {
       const message = `${scenario.id}: ${error.message}`;
       console.warn(message);

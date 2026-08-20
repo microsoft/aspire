@@ -1,22 +1,11 @@
 'use strict';
 
-const { runInteractiveCommand } = require('../lib/run-interactive-command');
-
-async function runAspireNewInteractive({
-  aspireCommand,
-  channel,
-  diagnosticsDir,
-  scenarioRoot,
-  template,
-  timeoutMs
-}) {
-  await runInteractiveCommand({
-    aspireCommand,
-    cwd: scenarioRoot,
-    diagnosticsDir,
-    fileName: 'aspire-new.log',
-    timeoutMs,
-    body: async runAspireCommand => {
+function createAspireNewScenario(template) {
+  return {
+    description: `Create ${template.projectName} with aspire new`,
+    timeoutMs: 180_000,
+    cwd: context => context.scenarioRoot,
+    callback: async ({ channel, runAspireCommand, timeoutMs }) => {
       const run = await runAspireCommand(['new', '--channel', channel]);
 
       await run.waitForText('> Starter App', timeoutMs, 'template selection prompt');
@@ -50,9 +39,9 @@ async function runAspireNewInteractive({
         await run.type('n');
       }
     }
-  });
+  };
 }
 
 module.exports = {
-  runAspireNewInteractive
+  createAspireNewScenario
 };
