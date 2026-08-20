@@ -33,9 +33,9 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner }}
-    # Each starter scenario drives the full command lifecycle. Their global Windows ARM64 timeout
-    # budgets can total 85 minutes before diagnostics are uploaded.
-    timeout-minutes: 95
+    # The scenario budgets can total 85 minutes. Reserve additional time for bounded cleanup,
+    # dependency and CLI setup, diagnostics collection, and artifact upload.
+    timeout-minutes: 110
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -73,8 +73,8 @@ jobs:
           aspire --version
 
       - name: Create starter app and validate startup
-        # Leave headroom for both isolated starter scenarios to complete their full command flows.
-        timeout-minutes: 90
+        # Cleanup can consume an additional 130 seconds per scenario after its global timeout.
+        timeout-minutes: 100
         shell: pwsh
         env:
           PR_NUMBER: ${{ inputs.prNumber }}
