@@ -1,6 +1,5 @@
 'use strict';
 
-const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
 async function runAspireAddInteractive({
@@ -11,12 +10,14 @@ async function runAspireAddInteractive({
   timeoutMs
 }) {
   await runInteractiveCommand({
+    aspireCommand,
     cwd,
     diagnosticsDir,
     fileName: 'aspire-add.log',
-    command: buildAspireCommand(aspireCommand, ['add']),
     timeoutMs,
-    interact: async run => {
+    body: async runAspireCommand => {
+      const run = await runAspireCommand(['add']);
+
       await run.waitForText('Select an integration to add:', timeoutMs, 'integration selection prompt');
       await run.type(integrationFilter);
       await run.enter();

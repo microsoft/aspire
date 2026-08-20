@@ -1,6 +1,5 @@
 'use strict';
 
-const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
 async function runAspireRunInteractive({
@@ -10,12 +9,14 @@ async function runAspireRunInteractive({
   timeoutMs
 }) {
   await runInteractiveCommand({
+    aspireCommand,
     cwd: projectRoot,
     diagnosticsDir,
     fileName: 'aspire-run.log',
-    command: buildAspireCommand(aspireCommand, ['run']),
     timeoutMs,
-    interact: async run => {
+    body: async runAspireCommand => {
+      const run = await runAspireCommand(['run']);
+
       await run.waitForText('Press CTRL+C to stop the AppHost and exit.', timeoutMs, 'run ready banner');
       await run.ctrlC();
     }
