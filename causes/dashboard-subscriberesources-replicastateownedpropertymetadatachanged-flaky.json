@@ -1,0 +1,17 @@
+{
+  "id": "dashboard-subscriberesources-replicastateownedpropertymetadatachanged-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: DashboardClientTests.SubscribeResources_ReplicaStateOwnedPropertyMetadataChanged_EmitsParentChange fails with Assert.True() Failure",
+  "test_name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStateOwnedPropertyMetadataChanged_EmitsParentChange",
+  "error_pattern": "Assert.True() Failure\nExpected: True\nActual:   False\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStateOwnedPropertyMetadataChanged_EmitsParentChange() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 740",
+  "occurrences": [
+    {
+      "run_id": 32327702249,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32327702249",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "pr_number": 19527,
+      "observed_at": "2026-08-20T03:48:56Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19529"
+}

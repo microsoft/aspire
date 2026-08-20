@@ -1,0 +1,38 @@
+{
+  "run_id": 32327702249,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32327702249",
+  "analyzed_at": "2026-08-20T03:48:56Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19527,
+    "title": "[main] Update dependencies from microsoft/dcp",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-61840018-582d-46c6-b2cb-a4de8542d3a0",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19527"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 96302538935,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32327702249/job/96302538935",
+      "classification": "flaky-test",
+      "reason": "Job failed due to a single test assertion failure in Aspire.Dashboard.Tests unrelated to the PR, which only touches eng/Version.Details.xml and eng/Versions.props (dependency version bumps). This matches a known pattern of flaky DashboardClientTests around resource change event ordering/dedup.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStateOwnedPropertyMetadataChanged_EmitsParentChange",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_ReplicaStateOwnedPropertyMetadataChanged_EmitsParentChange() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 740",
+      "classification": "flaky",
+      "reason": "PR only modifies eng/Version.Details.xml and eng/Versions.props (dependency updates), not DashboardClientTests.cs or the dashboard resource-change code it exercises. Other DashboardClientTests.SubscribeResources_* tests have repeatedly shown similar intermittent event-ordering/timing failures in this run history, indicating a pre-existing flaky test area rather than a code issue introduced by this PR."
+    }
+  ],
+  "causes": ["dashboard-subscriberesources-replicastateownedpropertymetadatachanged-flaky"]
+}
