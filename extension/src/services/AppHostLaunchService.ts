@@ -9,7 +9,7 @@ import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { CliPathResolutionTarget, getCliPathTargetForUri, getCliPathTargetKey } from '../utils/cliPathVariables';
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { markAspireDebugConfigurationAsExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
-import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostOperationState, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
+import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostOperationState, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
 import { AppHostLaunchReservations } from './appHostLaunchReservations';
 import { getLaunchTelemetryProperties, isE2eDebugLaunchSuppressed } from './appHostLaunchTelemetry';
 import { isolatedLaunchCapability, isolatedLaunchMinimumVersion, type CapabilityStatus } from '../types/configInfo';
@@ -106,11 +106,19 @@ export class AppHostLaunchService implements vscode.Disposable {
      */
     private readonly _pendingOperationByToken = new Map<number, AppHostOperationState>();
     /**
+     * Operations started from launch.json/F5 never pass through {@link launch}. Their short-lived
+     * reservations cover the gap between debug configuration resolution and the root session start.
+     */
+    private readonly _pendingExternalOperationByReservationId = new Map<string, AppHostOperationState>();
+    private readonly _pendingExternalOperationExpiryByReservationId = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly _restartOperationExpiryByToken = new Map<number, ReturnType<typeof setTimeout>>();
+    /**
      * Durable non-Run operations whose root debug session is running, keyed by that
      * session's ID. Cleared when the session terminates.
      */
     private readonly _activeOperationBySessionId = new Map<string, AppHostOperationState>();
     private _nextLaunchToken = 0;
+    private _nextExternalOperationReservationId = 0;
 
     readonly onDidChangeLaunchingState = this._reservations.onDidChangeLaunchingState;
 
@@ -139,6 +147,17 @@ export class AppHostLaunchService implements vscode.Disposable {
 
             const appHostPath = getDebugConfigurationAppHostPath(session.configuration);
             const reservationId = session.configuration?.[appHostLaunchReservationIdConfigKey];
+            const command = getAspireDebugConfigurationCommand(session.configuration);
+            if (!transferredOperation &&
+                appHostPath &&
+                typeof reservationId === 'string' &&
+                command !== undefined &&
+                command !== 'run') {
+                transferredOperation = this.transferPendingExternalOperationToActiveSession(
+                    reservationId,
+                    appHostPath,
+                    session.id);
+            }
             if (appHostPath && typeof reservationId === 'string') {
                 if (transferredOperation) {
                     // The active operation is now owned by this session. Its temporary launch
@@ -159,12 +178,22 @@ export class AppHostLaunchService implements vscode.Disposable {
         // When a debug session terminates, clear launching state for that AppHost
         // so the tree reverts from "Starting..." if the launch failed or was cancelled.
         const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
-            this._activeRunDebugSessionPaths.delete(session.id);
-            this.clearActiveOperation(session.id);
             const launchToken = session.configuration?.[appHostLaunchTokenConfigKey];
+            const restartSourceSessionId = session.configuration?.[appHostRestartSourceSessionIdConfigKey];
+            const isToolbarRestart = typeof restartSourceSessionId === 'string' &&
+                restartSourceSessionId === session.id;
+            this._activeRunDebugSessionPaths.delete(session.id);
+            if (isToolbarRestart && typeof launchToken === 'number') {
+                this.preserveActiveOperationForRestart(session.id, launchToken);
+            }
+            else {
+                this.clearActiveOperation(session.id);
+            }
             if (typeof launchToken === 'number') {
                 this._pendingRunPathByToken.delete(launchToken);
-                this.clearPendingOperation(launchToken);
+                if (!isToolbarRestart) {
+                    this.clearPendingOperation(launchToken);
+                }
             }
 
             this._appHostDebugSessions.delete(session.id);
@@ -178,9 +207,6 @@ export class AppHostLaunchService implements vscode.Disposable {
                 }
                 const command = getAspireDebugConfigurationCommand(session.configuration);
                 const shouldRequestStopRefresh = command === 'run' && isCurrentGeneration;
-                const restartSourceSessionId = session.configuration[appHostRestartSourceSessionIdConfigKey];
-                const isToolbarRestart = typeof restartSourceSessionId === 'string' &&
-                    restartSourceSessionId === session.id;
                 this._onDidTerminateAppHostDebugSession.fire({
                     appHostPath,
                     command,
@@ -206,6 +232,15 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._activeRunDebugSessionPaths.clear();
         this._pendingRunPathByToken.clear();
         this._pendingOperationByToken.clear();
+        this._pendingExternalOperationByReservationId.clear();
+        for (const expiry of this._pendingExternalOperationExpiryByReservationId.values()) {
+            clearTimeout(expiry);
+        }
+        this._pendingExternalOperationExpiryByReservationId.clear();
+        for (const expiry of this._restartOperationExpiryByToken.values()) {
+            clearTimeout(expiry);
+        }
+        this._restartOperationExpiryByToken.clear();
         this._activeOperationBySessionId.clear();
         this._onDidTerminateAppHostDebugSession.dispose();
         this._onDidRequestLaunch.dispose();
@@ -598,6 +633,65 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._reservations.clearLaunchingForRunningAppHost(appHostPath);
     }
 
+    tryReserveExternalOperation(
+        appHostPath: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+    ): string | false {
+        if (this.hasPendingOrActiveOperationConflict(appHostPath)) {
+            return false;
+        }
+
+        const reservationId = `operation-${++this._nextExternalOperationReservationId}`;
+        this._pendingExternalOperationByReservationId.set(
+            reservationId,
+            { appHostPath, command, noDebug, doStep });
+        this.scheduleExternalOperationExpiry(reservationId);
+        this._onDidChangeOperationState.fire();
+        return reservationId;
+    }
+
+    validateOrReacquireExternalOperationReservation(
+        appHostPath: string,
+        reservationId: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+    ): string | false {
+        const pending = this._pendingExternalOperationByReservationId.get(reservationId);
+        if (pending && compareAppHostIdentity(pending.appHostPath, appHostPath) === 'same') {
+            this._pendingExternalOperationByReservationId.set(
+                reservationId,
+                { appHostPath, command, noDebug, doStep });
+            this.scheduleExternalOperationExpiry(reservationId);
+            return reservationId;
+        }
+
+        return this.tryReserveExternalOperation(appHostPath, command, noDebug, doStep);
+    }
+
+    replaceExternalOperationReservation(
+        previousAppHostPath: string,
+        previousReservationId: string,
+        appHostPath: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+    ): string | false {
+        this.releaseExternalOperationReservation(previousAppHostPath, previousReservationId);
+        return this.tryReserveExternalOperation(appHostPath, command, noDebug, doStep);
+    }
+
+    releaseExternalOperationReservation(appHostPath: string, reservationId: string): void {
+        const pending = this._pendingExternalOperationByReservationId.get(reservationId);
+        if (!pending || compareAppHostIdentity(pending.appHostPath, appHostPath) !== 'same') {
+            return;
+        }
+
+        this.clearExternalOperationReservation(reservationId);
+    }
+
     /**
      * Launches an Aspire debug session for the given AppHost path.
      * Automatically marks the path as "launching" until it either appears
@@ -944,7 +1038,11 @@ export class AppHostLaunchService implements vscode.Disposable {
     }
 
     private getPendingAndActiveOperations(): AppHostOperationState[] {
-        return [...this._pendingOperationByToken.values(), ...this._activeOperationBySessionId.values()];
+        return [
+            ...this._pendingOperationByToken.values(),
+            ...this._pendingExternalOperationByReservationId.values(),
+            ...this._activeOperationBySessionId.values(),
+        ];
     }
 
     private beginPendingOperation(launchToken: number, appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep: string | undefined): void {
@@ -964,6 +1062,7 @@ export class AppHostLaunchService implements vscode.Disposable {
             return false;
         }
 
+        this.clearRestartOperationExpiry(launchToken);
         this._pendingOperationByToken.delete(launchToken);
         this._activeOperationBySessionId.set(sessionId, pending);
         // No state event fires: {@link getActiveOperation} still reports the same operation,
@@ -973,8 +1072,73 @@ export class AppHostLaunchService implements vscode.Disposable {
     }
 
     private clearPendingOperation(launchToken: number): void {
+        this.clearRestartOperationExpiry(launchToken);
         if (this._pendingOperationByToken.delete(launchToken)) {
             this._onDidChangeOperationState.fire();
+        }
+    }
+
+    private transferPendingExternalOperationToActiveSession(
+        reservationId: string,
+        appHostPath: string,
+        sessionId: string,
+    ): boolean {
+        const pending = this._pendingExternalOperationByReservationId.get(reservationId);
+        if (!pending || compareAppHostIdentity(pending.appHostPath, appHostPath) !== 'same') {
+            return false;
+        }
+
+        this.clearExternalOperationExpiry(reservationId);
+        this._pendingExternalOperationByReservationId.delete(reservationId);
+        this._activeOperationBySessionId.set(sessionId, pending);
+        return true;
+    }
+
+    private preserveActiveOperationForRestart(sessionId: string, launchToken: number): void {
+        const active = this._activeOperationBySessionId.get(sessionId);
+        if (!active) {
+            return;
+        }
+
+        this._activeOperationBySessionId.delete(sessionId);
+        this._pendingOperationByToken.set(launchToken, active);
+        this.clearRestartOperationExpiry(launchToken);
+        const expiry = setTimeout(
+            () => this.clearPendingOperation(launchToken),
+            externalLaunchReservationTimeoutMs);
+        expiry.unref?.();
+        this._restartOperationExpiryByToken.set(launchToken, expiry);
+    }
+
+    private scheduleExternalOperationExpiry(reservationId: string): void {
+        this.clearExternalOperationExpiry(reservationId);
+        const expiry = setTimeout(
+            () => this.clearExternalOperationReservation(reservationId),
+            externalLaunchReservationTimeoutMs);
+        expiry.unref?.();
+        this._pendingExternalOperationExpiryByReservationId.set(reservationId, expiry);
+    }
+
+    private clearExternalOperationReservation(reservationId: string): void {
+        this.clearExternalOperationExpiry(reservationId);
+        if (this._pendingExternalOperationByReservationId.delete(reservationId)) {
+            this._onDidChangeOperationState.fire();
+        }
+    }
+
+    private clearExternalOperationExpiry(reservationId: string): void {
+        const expiry = this._pendingExternalOperationExpiryByReservationId.get(reservationId);
+        if (expiry) {
+            clearTimeout(expiry);
+            this._pendingExternalOperationExpiryByReservationId.delete(reservationId);
+        }
+    }
+
+    private clearRestartOperationExpiry(launchToken: number): void {
+        const expiry = this._restartOperationExpiryByToken.get(launchToken);
+        if (expiry) {
+            clearTimeout(expiry);
+            this._restartOperationExpiryByToken.delete(launchToken);
         }
     }
 

@@ -4090,6 +4090,18 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             releaseExternalLaunchReservation: () => {
                 throw new Error('The successful restart should keep its reservation.');
             },
+            tryReserveExternalOperation: () => {
+                throw new Error('The run restart should not reserve an external operation.');
+            },
+            validateOrReacquireExternalOperationReservation: () => {
+                throw new Error('The run restart should not validate an external operation.');
+            },
+            replaceExternalOperationReservation: () => {
+                throw new Error('The run restart should not replace an external operation.');
+            },
+            releaseExternalOperationReservation: () => {
+                throw new Error('The run restart should not release an external operation.');
+            },
             prepareLaunchArguments: async (_appHostPath: string, _command: string, args: string[] | undefined, _token: vscode.CancellationToken, cliPath?: string) => {
                 preparedCliPaths.push(cliPath);
                 return { args };

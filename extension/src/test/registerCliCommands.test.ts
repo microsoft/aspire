@@ -159,7 +159,12 @@ suite('registerCliCommands', () => {
 
         assert.strictEqual(getAppHostPathStub.calledOnce, true);
         assert.ok(resolveCliPathStub.calledOnceWith(target));
-        assert.ok(hasCapabilityStub.calledOnceWith('pipelines', { target, cliPath: '/resolved/aspire', suppressErrors: true }));
+        assert.ok(hasCapabilityStub.calledOnceWith('pipelines', {
+            target,
+            cliPath: '/resolved/aspire',
+            suppressErrors: true,
+            forceRefresh: true,
+        }));
         assert.ok(tryExecuteDoAppHostStub.calledOnceWith(false, undefined, appHostPath, target, '/resolved/aspire'));
     });
 

@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
-import { appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostLaunchReservationIdConfigKey, appHostRestartSourceSessionIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import * as locStrings from '../loc/strings';
 import { appHostLifecycleBusy } from '../loc/strings';
@@ -2445,6 +2445,122 @@ suite('AppHostLaunchService', () => {
 
         assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
         assert.strictEqual(changeCount, 2);
+    });
+
+    test('an external non-Run reservation blocks duplicate operations but not Run', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'deploy', true, 'infra');
+        assert.strictEqual(typeof reservationId, 'string');
+        assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
+            appHostPath,
+            command: 'deploy',
+            noDebug: true,
+            doStep: 'infra',
+        });
+
+        await assert.rejects(
+            service.launch(appHostPath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+        await service.launch(appHostPath, 'run', true);
+
+        const externalConfiguration: AspireExtendedDebugConfiguration = {
+            type: 'aspire',
+            name: 'Deploy AppHost',
+            request: 'launch',
+            program: appHostPath,
+            command: 'deploy',
+            noDebug: true,
+            step: 'infra',
+            [appHostLaunchReservationIdConfigKey]: reservationId,
+        };
+        const externalSession = {
+            id: 'external-deploy',
+            configuration: externalConfiguration,
+        } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(externalSession);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'deploy');
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(externalSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('an abandoned external non-Run reservation expires', () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            const appHostPath = '/repo/AppHost.csproj';
+            let changeCount = 0;
+            service.onDidChangeOperationState(() => { changeCount++; });
+
+            assert.strictEqual(
+                typeof service.tryReserveExternalOperation(appHostPath, 'publish', true),
+                'string');
+            assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+
+            clock.tick(externalLaunchReservationTimeoutMs + 1);
+
+            assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+            assert.strictEqual(changeCount, 2);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('a toolbar restart preserves a durable operation until the replacement terminates', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'do', false, 'test');
+        const configuration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const firstSession = {
+            id: 'first-do',
+            configuration,
+        } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(firstSession);
+
+        configuration[appHostRestartSourceSessionIdConfigKey] = firstSession.id;
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(firstSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'do');
+
+        const replacementSession = {
+            id: 'replacement-do',
+            configuration,
+        } as unknown as vscode.DebugSession;
+        onDidStartDebugSessionCallback(replacementSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'do');
+
+        delete configuration[appHostRestartSourceSessionIdConfigKey];
+        onDidTerminateDebugSessionCallback(replacementSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a durable operation expires when its toolbar restart never starts a replacement', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'do', false, 'test');
+        const configuration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const session = {
+            id: 'do',
+            configuration,
+        } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(session);
+
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            configuration[appHostRestartSourceSessionIdConfigKey] = session.id;
+            assert.ok(onDidTerminateDebugSessionCallback);
+            onDidTerminateDebugSessionCallback(session);
+            assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'do');
+
+            clock.tick(externalLaunchReservationTimeoutMs + 1);
+
+            assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+        }
+        finally {
+            clock.restore();
+        }
     });
 
     test('an active operation matches its AppHost by identity, not just its raw path', async () => {

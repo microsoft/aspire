@@ -32,6 +32,32 @@ export interface ExternalLaunchReservation {
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope?: boolean): string | false;
     /** Releases the reservation only when the path and reservation ID still identify the same launch. */
     releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void;
+    /** Claims a durable non-Run operation started from launch.json/F5. */
+    tryReserveExternalOperation(
+        appHostPath: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+    ): string | false;
+    /** Validates or reacquires a repeated resolver pass for a durable non-Run operation. */
+    validateOrReacquireExternalOperationReservation(
+        appHostPath: string,
+        reservationId: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+    ): string | false;
+    /** Moves a repeated resolver pass to a different AppHost. */
+    replaceExternalOperationReservation(
+        previousAppHostPath: string,
+        previousReservationId: string,
+        appHostPath: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+    ): string | false;
+    /** Releases a pending external operation when debug configuration resolution fails. */
+    releaseExternalOperationReservation(appHostPath: string, reservationId: string): void;
     /** Prepares root Aspire CLI args for the exact executable that will handle this launch. */
     prepareLaunchArguments(
         appHostPath: string,
@@ -142,7 +168,8 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 config,
                 existingExternalReservation.reservationId,
                 existingExternalReservation.appHostPath,
-                existingExternalReservation.isDirectoryScope);
+                existingExternalReservation.isDirectoryScope,
+                existingExternalReservation.kind);
         }
         if (existingExternalReservation) {
             configRecord[appHostLaunchReservationIdConfigKey] = existingExternalReservation.reservationId;
@@ -196,9 +223,16 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 }
                 catch (error) {
                     if (existingExternalReservation) {
-                        this._launchReservation.releaseExternalLaunchReservation(
-                            existingExternalReservation.appHostPath,
-                            existingExternalReservation.reservationId);
+                        if (existingExternalReservation.kind === 'operation') {
+                            this._launchReservation.releaseExternalOperationReservation(
+                                existingExternalReservation.appHostPath,
+                                existingExternalReservation.reservationId);
+                        }
+                        else {
+                            this._launchReservation.releaseExternalLaunchReservation(
+                                existingExternalReservation.appHostPath,
+                                existingExternalReservation.reservationId);
+                        }
                     }
                     throw error;
                 }
@@ -212,15 +246,15 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
             // This is the last hook before VS Code creates the session, and it is the only
             // point a `launch.json`/F5 launch shares with the tool-driven path, which goes
-            // through `AppHostLaunchService`. Claiming here is what stops an agent from
-            // starting a second AppHost in the window before the session exists. Only
-            // `run` claims: publish/deploy/do sessions are not AppHost lifetimes.
+            // through `AppHostLaunchService`. Run uses the launching reservation, while
+            // deploy/publish/do use separate durable-operation ownership so they remain
+            // exclusive with each other without blocking an independent Run.
             //
             // The concrete candidate is claimed in preference to `config.program`: the
             // default `${workspaceFolder}` configuration deliberately leaves `program` as
             // the directory, and a directory is not the same identity as the AppHost inside
             // it, so claiming the directory would leave the tool free to start a duplicate.
-            if (!launchedByExtension && command === 'run') {
+            if (!launchedByExtension && command !== undefined) {
                 const claimedPath = launchTargetPath;
                 if (!claimedPath) {
                     return config;
@@ -229,37 +263,94 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 const isDirectoryScope = telemetryTarget === undefined && isWorkspaceFolderLaunch;
                 let reservationPath = claimedPath;
                 let reservationId: string | false;
-                if (!existingExternalReservation) {
-                    reservationId = this._launchReservation.tryReserveExternalLaunch(claimedPath, isDirectoryScope);
-                }
-                else if (existingExternalReservation.isDirectoryScope === isDirectoryScope &&
-                    compareAppHostIdentity(existingExternalReservation.appHostPath, claimedPath) === 'same') {
-                    reservationId = this._launchReservation.validateOrReacquireExternalLaunchReservation(
-                        existingExternalReservation.appHostPath,
-                        existingExternalReservation.reservationId,
-                        isDirectoryScope);
-                    // Keep the path where the reservation was actually stored. The identity
-                    // can become ambiguous on a later resolver pass if sibling files appear.
-                    reservationPath = existingExternalReservation.appHostPath;
+                if (command === 'run') {
+                    if (!existingExternalReservation) {
+                        reservationId = this._launchReservation.tryReserveExternalLaunch(claimedPath, isDirectoryScope);
+                    }
+                    else if (existingExternalReservation.kind === 'run' &&
+                        existingExternalReservation.isDirectoryScope === isDirectoryScope &&
+                        compareAppHostIdentity(existingExternalReservation.appHostPath, claimedPath) === 'same') {
+                        reservationId = this._launchReservation.validateOrReacquireExternalLaunchReservation(
+                            existingExternalReservation.appHostPath,
+                            existingExternalReservation.reservationId,
+                            isDirectoryScope);
+                        // Keep the path where the reservation was actually stored. The identity
+                        // can become ambiguous on a later resolver pass if sibling files appear.
+                        reservationPath = existingExternalReservation.appHostPath;
+                    }
+                    else {
+                        if (existingExternalReservation.kind === 'operation') {
+                            this._launchReservation.releaseExternalOperationReservation(
+                                existingExternalReservation.appHostPath,
+                                existingExternalReservation.reservationId);
+                            reservationId = this._launchReservation.tryReserveExternalLaunch(claimedPath, isDirectoryScope);
+                        }
+                        else {
+                            reservationId = this._launchReservation.replaceExternalLaunchReservation(
+                                existingExternalReservation.appHostPath,
+                                existingExternalReservation.reservationId,
+                                claimedPath,
+                                isDirectoryScope);
+                        }
+                    }
                 }
                 else {
-                    reservationId = this._launchReservation.replaceExternalLaunchReservation(
-                        existingExternalReservation.appHostPath,
-                        existingExternalReservation.reservationId,
-                        claimedPath,
-                        isDirectoryScope);
+                    const noDebug = config.noDebug === true;
+                    const doStep = typeof config.step === 'string' ? config.step : undefined;
+                    if (!existingExternalReservation) {
+                        reservationId = this._launchReservation.tryReserveExternalOperation(
+                            claimedPath,
+                            command,
+                            noDebug,
+                            doStep);
+                    }
+                    else if (existingExternalReservation.kind === 'operation' &&
+                        compareAppHostIdentity(existingExternalReservation.appHostPath, claimedPath) === 'same') {
+                        reservationId = this._launchReservation.validateOrReacquireExternalOperationReservation(
+                            existingExternalReservation.appHostPath,
+                            existingExternalReservation.reservationId,
+                            command,
+                            noDebug,
+                            doStep);
+                        reservationPath = existingExternalReservation.appHostPath;
+                    }
+                    else {
+                        if (existingExternalReservation.kind === 'run') {
+                            this._launchReservation.releaseExternalLaunchReservation(
+                                existingExternalReservation.appHostPath,
+                                existingExternalReservation.reservationId);
+                            reservationId = this._launchReservation.tryReserveExternalOperation(
+                                claimedPath,
+                                command,
+                                noDebug,
+                                doStep);
+                        }
+                        else {
+                            reservationId = this._launchReservation.replaceExternalOperationReservation(
+                                existingExternalReservation.appHostPath,
+                                existingExternalReservation.reservationId,
+                                claimedPath,
+                                command,
+                                noDebug,
+                                doStep);
+                        }
+                    }
                 }
 
                 if (!reservationId) {
-                    // Another launch or run session already owns this AppHost, so proceeding
-                    // would produce two AppHosts for one project.
-                    // Abort this session and tell the user why rather than starting a second.
+                    // Another launch or operation already owns this AppHost. Abort this session
+                    // rather than starting overlapping work against the same project.
                     void vscode.window.showInformationMessage(appHostLifecycleLaunchAlreadyClaimed);
                     return undefined;
                 }
 
                 config[appHostLaunchReservationIdConfigKey] = reservationId;
-                markAspireDebugConfigurationWithExternalLaunchReservation(config, reservationId, reservationPath, isDirectoryScope);
+                markAspireDebugConfigurationWithExternalLaunchReservation(
+                    config,
+                    reservationId,
+                    reservationPath,
+                    isDirectoryScope,
+                    command === 'run' ? 'run' : 'operation');
             }
         }
 

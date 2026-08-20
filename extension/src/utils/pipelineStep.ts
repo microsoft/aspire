@@ -15,7 +15,12 @@ export async function resolvePipelineStep(
     pipelineInteractionSupported?: boolean,
 ): Promise<string | null | undefined> {
     const isPipelineInteractionSupported = pipelineInteractionSupported
-        ?? await configInfoProvider.hasCapability('pipelines', { target, cliPath, suppressErrors: true });
+        ?? await configInfoProvider.hasCapability('pipelines', {
+            target,
+            cliPath,
+            suppressErrors: true,
+            forceRefresh: true,
+        });
     if (isPipelineInteractionSupported) {
         return null;
     }
