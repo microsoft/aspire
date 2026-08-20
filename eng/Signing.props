@@ -61,13 +61,6 @@
     <FileSignInfo Include="OpenTelemetry.Extensions.Hosting.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.Abstractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.FileSystem.dll" CertificateName="3PartySHA2" />
-    <!--
-      BouncyCastle.Cryptography is a transitive dependency of Sigstore/Tuf and replaced
-      NSec.Cryptography in Sigstore 1.0.0. It is third-party (Legion of the Bouncy Castle Inc.),
-      so it must be signed with 3PartySHA2; without an entry the Arcade SDK tries to sign it with
-      the Microsoft certificate and the internal build fails with SIGN004. See #14915, which added
-      the equivalent entry for NSec.Cryptography for exactly this reason.
-    -->
     <FileSignInfo Include="BouncyCastle.Cryptography.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
