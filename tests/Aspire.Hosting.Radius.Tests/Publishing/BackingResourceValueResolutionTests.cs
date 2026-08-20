@@ -904,7 +904,9 @@ public class BackingResourceValueResolutionTests
             b.AddContainer("api", "myapp/api", "latest").WithReference(db);
         });
 
-        Assert.Single(logger.Matching(LogLevel.Warning, "sql", "does not create databases", "appdb"));
+        // The diagnostic code is pinned alongside the prose so a renumbering is caught here rather
+        // than silently invalidating the README table.
+        Assert.Single(logger.Matching(LogLevel.Warning, "sql", "does not create databases", "appdb", "ASPIRERADIUS080"));
     }
 
     /// <summary>
@@ -959,7 +961,7 @@ public class BackingResourceValueResolutionTests
     {
         var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
         {
-            var pg = b.AddResource(new PostgresServerResource("pg")).WithImage("postgres", "17");
+            var pg = b.AddResource(new PostgresServerResource("pg", [])).WithImage("postgres", "17");
             b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
         }));
 
@@ -968,9 +970,45 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// A connection property that cannot be resolved at publish time fails the publish, unlike the
+    /// same unresolvable value in a container environment variable, which is skipped.
+    /// </summary>
+    /// <remarks>
+    /// This is the opposite half of <see cref="ValueOnlyKnownAfterAnotherDeployment_SkipsJustThatVariable"/>
+    /// and the reason the two paths are separate code. A container env var is a value flowing
+    /// <em>out</em> to a consumer, so dropping one leaves the rest of the artifact valid. A
+    /// connection property feeds a required schema property of the emitted Radius type, so dropping
+    /// it silently would publish an artifact that is either rejected by schema validation or
+    /// deployed with a value describing nothing. Without this test, a regression that turned the
+    /// failure back into a skip would go unnoticed.
+    /// </remarks>
+    [Fact]
+    public void BackingResourceConnectionPropertyOnlyKnownAfterAnotherDeployment_FailsThePublish()
+    {
+        var unresolvable = new ThrowingDeploymentOutput(
+            new InvalidOperationException("The output 'x' does not have a value."));
+
+        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        {
+            var pg = b.AddResource(new PostgresServerResource("pg",
+            [
+                new("username", ReferenceExpression.Create($"app")),
+                new("password", ReferenceExpression.Create($"{unresolvable}")),
+            ])).WithImage("postgres", "17");
+
+            b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
+        }));
+
+        Assert.Contains("ASPIRERADIUS086", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("'password' connection property", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("pg", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A value provider whose resolution fails and which claims no deployment-substituted semantics.
     /// </summary>
-    private sealed class ThrowingValueProvider(Exception exception) : IValueProvider    {
+    private sealed class ThrowingValueProvider(Exception exception) : IValueProvider
+    {
         public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
             => throw exception;
 
@@ -1038,8 +1076,11 @@ public class BackingResourceValueResolutionTests
     /// real type exactly: <c>ResourceTypeMapper</c> keys its mappings on the simple type name.
     /// </para>
     /// </summary>
-    private sealed class PostgresServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
+    private sealed class PostgresServerResource(string name, KeyValuePair<string, ReferenceExpression>[] connectionProperties)
+        : ContainerResource(name), IResourceWithConnectionString
     {
         public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=pg");
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties() => connectionProperties;
     }
 }

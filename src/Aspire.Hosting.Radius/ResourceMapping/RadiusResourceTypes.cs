@@ -102,6 +102,14 @@ internal static class RadiusResourceTypes
 
     public const string LegacyEnvironments = "Applications.Core/environments";
 
+    // LegacyRedisCaches and LegacyRabbitMQQueues are no longer emitted: Radius 0.60 ships UDT
+    // equivalents with published Kubernetes recipes, so ResourceTypeMapper maps Redis and RabbitMQ
+    // straight to Radius.Data/redisCaches and Radius.Messaging/rabbitMQ with no legacy fallback.
+    // They are kept deliberately because the pre-0.60 spellings still appear in artifacts and docs
+    // in the wild, and because LegacyRabbitMQQueues is what distinguishes the legacy portable type
+    // from the UDT in the RabbitMQ remarks above — a distinction that fails type resolution at
+    // deploy time when it is confused. Neither has a row in RadiusBackingConnections.s_schemas,
+    // which ConnectionSchemaTable_DescribesOnlyEmittedBackingTypes enforces.
     public const string LegacyRedisCaches = "Applications.Datastores/redisCaches";
 
     public const string LegacyMongoDatabases = "Applications.Datastores/mongoDatabases";
