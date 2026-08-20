@@ -27,7 +27,7 @@ public class InteractionFileUploadStoreTests
         Assert.NotEmpty(fileId);
         Assert.NotEqual("test.txt", Path.GetFileName(filePath));
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        Assert.Equal("test.txt", Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
+        Assert.Equal("test.txt", Assert.Single(fileUploadStore.GetCompletedFiles(InteractionId, InputName)).Name);
         Assert.True(File.Exists(filePath));
     }
 
@@ -76,7 +76,7 @@ public class InteractionFileUploadStoreTests
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        Assert.Equal("cert.pem", Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
+        Assert.Equal("cert.pem", Assert.Single(fileUploadStore.GetCompletedFiles(InteractionId, InputName)).Name);
     }
 
     [Fact]
@@ -102,8 +102,7 @@ public class InteractionFileUploadStoreTests
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
-        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files);
+        ResolveValidateAndMarkFiles(fileUploadStore, FileReferences(fileId));
         fileUploadStore.CompleteInteraction(InteractionId);
 
         Assert.Throws<InvalidOperationException>(() => fileUploadStore.CreateEntry("other.bin", InteractionId, InputName));
@@ -125,8 +124,7 @@ public class InteractionFileUploadStoreTests
         var (fileId2, filePath2) = fileUploadStore.CreateEntry("file2.bin", InteractionId, InputName);
         fileUploadStore.CompleteUpload(InteractionId, fileId1);
         fileUploadStore.CompleteUpload(InteractionId, fileId2);
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
-        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId1, fileId2), InputName, files);
+        ResolveValidateAndMarkFiles(fileUploadStore, FileReferences(fileId1, fileId2));
         fileUploadStore.CompleteInteraction(InteractionId);
 
         fileUploadStore.RemoveEntry(InteractionId, fileId1);
@@ -152,7 +150,7 @@ public class InteractionFileUploadStoreTests
         var otherInteractionId = InteractionId + 1;
         StartInteraction(fileUploadStore, otherInteractionId);
 
-        Assert.Empty(fileUploadStore.GetFiles(otherInteractionId, InputName));
+        Assert.Empty(fileUploadStore.GetCompletedFiles(otherInteractionId, InputName));
         fileUploadStore.CompleteUpload(otherInteractionId, fileId);
         fileUploadStore.RemoveEntry(otherInteractionId, fileId);
         fileUploadStore.CancelInteraction(InteractionId);
@@ -239,8 +237,7 @@ public class InteractionFileUploadStoreTests
 
         var (fileId, filePath) = CreateEntry(fileUploadStore, "temp.bin");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
-        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files);
+        ResolveValidateAndMarkFiles(fileUploadStore, FileReferences(fileId));
         fileUploadStore.CompleteInteraction(InteractionId);
 
         Assert.Equal(filePath, fileUploadStore.GetFilePath(fileId, InteractionId, InputName));
@@ -255,8 +252,7 @@ public class InteractionFileUploadStoreTests
         var (acceptedFileId, acceptedFilePath) = CreateEntry(fileUploadStore, "accepted.bin");
         var (lateFileId, lateFilePath) = fileUploadStore.CreateEntry("late.bin", InteractionId, InputName);
         fileUploadStore.CompleteUpload(InteractionId, acceptedFileId);
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
-        _ = InteractionFileUploadStore.ValidateFileReferences(FileReferences(acceptedFileId), InputName, files);
+        ResolveValidateAndMarkFiles(fileUploadStore, FileReferences(acceptedFileId));
 
         fileUploadStore.CompleteUpload(InteractionId, lateFileId);
         fileUploadStore.CompleteInteraction(InteractionId);
@@ -299,7 +295,7 @@ public class InteractionFileUploadStoreTests
 
         Assert.NotEqual(maliciousFileName, filePath);
         Assert.NotEqual(expectedLeafName, Path.GetFileName(filePath));
-        Assert.Equal(expectedLeafName, Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
+        Assert.Equal(expectedLeafName, Assert.Single(fileUploadStore.GetCompletedFiles(InteractionId, InputName)).Name);
     }
 
     [Theory]
@@ -317,7 +313,7 @@ public class InteractionFileUploadStoreTests
 
         Assert.True(File.Exists(filePath));
         Assert.NotEqual(originalFileName, Path.GetFileName(filePath));
-        Assert.Equal(originalFileName, Assert.Single(fileUploadStore.GetFiles(InteractionId, InputName)).Name);
+        Assert.Equal(originalFileName, Assert.Single(fileUploadStore.GetCompletedFiles(InteractionId, InputName)).Name);
     }
 
     [Theory]
@@ -391,10 +387,7 @@ public class InteractionFileUploadStoreTests
         fileUploadStore.CompleteUpload(InteractionId, secondFileId);
         fileUploadStore.CompleteUpload(InteractionId, firstFileId);
 
-        var resolvedFiles = InteractionFileUploadStore.ResolveFiles(
-            fileUploadStore,
-            InteractionId,
-            "CertInput");
+        IReadOnlyList<InteractionFileUpload>? resolvedFiles = fileUploadStore.GetCompletedFiles(InteractionId, "CertInput");
         resolvedFiles = InteractionFileUploadStore.ValidateFileReferences(
             FileReferences(secondFileId, firstFileId),
             "CertInput",
@@ -418,14 +411,14 @@ public class InteractionFileUploadStoreTests
     }
 
     [Fact]
-    public void ResolveFiles_UsesStoredFileName()
+    public void GetCompletedFiles_UsesStoredFileName()
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
 
         var (fileId, _) = CreateEntry(fileUploadStore, "../../../cert.pem", "CertInput");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
-        var resolvedFiles = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, "CertInput");
+        IReadOnlyList<InteractionFileUpload>? resolvedFiles = fileUploadStore.GetCompletedFiles(InteractionId, "CertInput");
         InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), "CertInput", resolvedFiles);
 
         var file = Assert.Single(resolvedFiles!);
@@ -441,7 +434,7 @@ public class InteractionFileUploadStoreTests
         var (secondFileId, _) = fileUploadStore.CreateEntry("second.txt", InteractionId, InputName);
         fileUploadStore.CompleteUpload(InteractionId, firstFileId);
         fileUploadStore.CompleteUpload(InteractionId, secondFileId);
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(InteractionId, InputName);
         var mismatchedValues = new[]
         {
             "[]",
@@ -470,7 +463,7 @@ public class InteractionFileUploadStoreTests
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, "OtherFile");
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(InteractionId, "OtherFile");
         var exception = Assert.Throws<InvalidOperationException>(() =>
             InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), "OtherFile", files));
 
@@ -486,7 +479,7 @@ public class InteractionFileUploadStoreTests
         var (fileId, _) = CreateEntry(fileUploadStore, "cert.pem");
         fileUploadStore.CompleteUpload(InteractionId, fileId);
 
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId + 1, InputName);
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(InteractionId + 1, InputName);
         var exception = Assert.Throws<InvalidOperationException>(() =>
             InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files));
 
@@ -500,7 +493,7 @@ public class InteractionFileUploadStoreTests
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
         var (fileId, _) = CreateEntry(fileUploadStore, "file.txt");
 
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(InteractionId, InputName);
         var exception = Assert.Throws<InvalidOperationException>(() =>
             InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files));
 
@@ -559,12 +552,18 @@ public class InteractionFileUploadStoreTests
     private static string FileReferences(params string[] fileIds) =>
         $"[{string.Join(',', fileIds.Select(fileId => $"{{\"Id\":\"{fileId}\"}}"))}]";
 
+    private static void ResolveValidateAndMarkFiles(InteractionFileUploadStore fileUploadStore, string jsonValue)
+    {
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(InteractionId, InputName);
+        files = InteractionFileUploadStore.ValidateFileReferences(jsonValue, InputName, files);
+        fileUploadStore.MarkFilesAccepted(InteractionId, InputName, files!.Select(file => file.Id).ToArray());
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference<InteractionFile> CompleteInteractionWithFile(InteractionFileUploadStore fileUploadStore, string fileId, string filePath)
     {
         var interactionFile = new InteractionFile(fileId, "temp.bin", filePath);
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, InteractionId, InputName);
-        InteractionFileUploadStore.ValidateFileReferences(FileReferences(fileId), InputName, files);
+        ResolveValidateAndMarkFiles(fileUploadStore, FileReferences(fileId));
         fileUploadStore.CompleteInteraction(InteractionId);
         return new WeakReference<InteractionFile>(interactionFile);
     }

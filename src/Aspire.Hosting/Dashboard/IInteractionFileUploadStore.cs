@@ -26,7 +26,12 @@ internal interface IInteractionFileUploadStore
     /// <summary>
     /// Gets the completed uploads for an interaction input.
     /// </summary>
-    IReadOnlyList<InteractionFileUpload> GetFiles(int interactionId, string inputName);
+    IReadOnlyList<InteractionFileUpload> GetCompletedFiles(int interactionId, string inputName);
+
+    /// <summary>
+    /// Marks validated uploads as resolved into the accepted interaction result.
+    /// </summary>
+    void MarkFilesAccepted(int interactionId, string inputName, IReadOnlyList<string> fileIds);
 
     /// <summary>
     /// Removes a file entry from an interaction and cleans up its uploaded content.

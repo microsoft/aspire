@@ -882,7 +882,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, 1, "File"));
         Assert.True(File.Exists(filePath));
         Assert.NotEqual(expectedFileName, Path.GetFileName(filePath));
-        Assert.Equal(expectedFileName, Assert.Single(fileUploadStore.GetFiles(1, "File")).Name);
+        Assert.Equal(expectedFileName, Assert.Single(fileUploadStore.GetCompletedFiles(1, "File")).Name);
     }
 
     [Fact]
@@ -1222,7 +1222,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var uploadResponse = await dashboardService.UploadFile(requestStream, context);
 
         var json = $"[{{\"Id\":\"{uploadResponse.FileId}\"}}]";
-        var resolvedFiles = InteractionFileUploadStore.ResolveFiles(fileUploadStore, 1, "CertInput");
+        var resolvedFiles = fileUploadStore.GetCompletedFiles(1, "CertInput");
         InteractionFileUploadStore.ValidateFileReferences(json, "CertInput", resolvedFiles);
 
         Assert.NotNull(resolvedFiles);
@@ -1241,10 +1241,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         using var fileSystemService = new TestFileSystemService();
         using var fileUploadStore = CreateFileUploadStore(fileSystemService);
-        var result = InteractionFileUploadStore.ResolveFiles(fileUploadStore, 1, "TestInput");
+        var result = fileUploadStore.GetCompletedFiles(1, "TestInput");
         InteractionFileUploadStore.ValidateFileReferences(jsonValue: null, "TestInput", result);
 
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -1256,10 +1256,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var (fileId, _) = fileUploadStore.CreateEntry("file.txt", 1, "File");
         fileUploadStore.CompleteUpload(1, fileId);
 
-        var result = InteractionFileUploadStore.ResolveFiles(fileUploadStore, 1, "OtherFile");
+        var result = fileUploadStore.GetCompletedFiles(1, "OtherFile");
         InteractionFileUploadStore.ValidateFileReferences(jsonValue: null, "OtherFile", result);
 
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     private static DashboardServiceImpl CreateDashboardService(

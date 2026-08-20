@@ -491,7 +491,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
 
         if (matchingInput.InputType == InputType.File)
         {
-            var files = DashboardServiceData.ResolveAndValidateFiles(_fileUploadStore, value, interactionId, matchingInput.Name);
+            var files = DashboardServiceData.GetAcceptedFiles(_fileUploadStore, value, interactionId, matchingInput.Name);
             if (files is not null)
             {
                 return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);

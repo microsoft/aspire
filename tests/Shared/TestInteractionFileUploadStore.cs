@@ -57,24 +57,45 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
         }
     }
 
-    public IReadOnlyList<InteractionFileUpload> GetFiles(int interactionId, string inputName)
+    public IReadOnlyList<InteractionFileUpload> GetCompletedFiles(int interactionId, string inputName)
     {
         var files = new List<InteractionFileUpload>();
         foreach (var (fileId, entry) in _files)
         {
             lock (entry)
             {
-                if (entry.State is FileEntryState.Uploaded or FileEntryState.Resolved &&
+                if (entry.State is FileEntryState.Uploaded or FileEntryState.Accepted &&
                     entry.InteractionId == interactionId &&
                     string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName))
                 {
-                    entry.State = FileEntryState.Resolved;
                     files.Add(new InteractionFileUpload(fileId, entry.OriginalFileName, entry.FilePath));
                 }
             }
         }
 
         return files;
+    }
+
+    public void MarkFilesAccepted(int interactionId, string inputName, IReadOnlyList<string> fileIds)
+    {
+        foreach (var fileId in fileIds)
+        {
+            if (!_files.TryGetValue(fileId, out var entry) || entry.InteractionId != interactionId)
+            {
+                throw new InvalidOperationException($"Submitted files for input '{inputName}' do not match the completed uploads.");
+            }
+
+            lock (entry)
+            {
+                if (entry.State is not (FileEntryState.Uploaded or FileEntryState.Accepted) ||
+                    !string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName))
+                {
+                    throw new InvalidOperationException($"Submitted files for input '{inputName}' do not match the completed uploads.");
+                }
+
+                entry.State = FileEntryState.Accepted;
+            }
+        }
     }
 
     public void RemoveEntry(int interactionId, string fileId)
@@ -124,7 +145,7 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
             lock (entry)
             {
                 removeEntry = entry.InteractionId == interactionId &&
-                    entry.State is FileEntryState.Uploaded or FileEntryState.Resolved;
+                    entry.State is FileEntryState.Uploaded or FileEntryState.Accepted;
                 if (entry.InteractionId == interactionId)
                 {
                     entry.State = FileEntryState.DiscardWhenComplete;
@@ -151,7 +172,7 @@ internal sealed class TestInteractionFileUploadStore : IInteractionFileUploadSto
     {
         Uploading,
         Uploaded,
-        Resolved,
+        Accepted,
         DiscardWhenComplete
     }
 }
@@ -160,7 +181,7 @@ internal static class InteractionFileUploadStoreTestExtensions
 {
     public static string? GetFilePath(this IInteractionFileUploadStore store, string fileId, int interactionId, string inputName)
     {
-        return store.GetFiles(interactionId, inputName).SingleOrDefault(file => file.Id == fileId)?.FilePath;
+        return store.GetCompletedFiles(interactionId, inputName).SingleOrDefault(file => file.Id == fileId)?.FilePath;
     }
 
 }

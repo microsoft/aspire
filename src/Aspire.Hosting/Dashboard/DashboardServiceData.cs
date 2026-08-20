@@ -256,13 +256,13 @@ internal sealed class DashboardServiceData : IDisposable
             if (submittedInputsByName.TryGetValue(input.Name, out var submittedInput))
             {
                 var files = input.InputType == InputType.File
-                    ? ResolveAndValidateFiles(fileUploadStore, submittedInput.Value, interactionId, input.Name)
+                    ? GetAcceptedFiles(fileUploadStore, submittedInput.Value, interactionId, input.Name)
                     : null;
                 inputDtos.Add(new InputDto(input.Name, submittedInput.Value, input.InputType, files));
             }
             else if (input.InputType == InputType.File)
             {
-                var files = ResolveAndValidateFiles(fileUploadStore, jsonValue: null, interactionId, input.Name);
+                var files = GetAcceptedFiles(fileUploadStore, jsonValue: null, interactionId, input.Name);
                 inputDtos.Add(new InputDto(input.Name, input.Value ?? string.Empty, input.InputType, files));
             }
         }
@@ -270,14 +270,31 @@ internal sealed class DashboardServiceData : IDisposable
         return inputDtos;
     }
 
-    internal static IReadOnlyList<InputFileDto>? ResolveAndValidateFiles(
+    internal static IReadOnlyList<InputFileDto>? GetAcceptedFiles(
         IInteractionFileUploadStore fileUploadStore,
         string? jsonValue,
         int interactionId,
         string inputName)
     {
-        var files = InteractionFileUploadStore.ResolveFiles(fileUploadStore, interactionId, inputName);
-        return InteractionFileUploadStore.ValidateFileReferences(jsonValue, inputName, files);
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(interactionId, inputName);
+        if (files.Count == 0)
+        {
+            files = null;
+        }
+        files = InteractionFileUploadStore.ValidateFileReferences(jsonValue, inputName, files);
+        if (files is null)
+        {
+            return null;
+        }
+
+        fileUploadStore.MarkFilesAccepted(interactionId, inputName, files.Select(file => file.Id).ToArray());
+        return files
+            .Select(file => new InputFileDto(
+                file.Id,
+                file.Name,
+                file.FilePath,
+                () => fileUploadStore.RemoveEntry(interactionId, file.Id)))
+            .ToArray();
     }
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)

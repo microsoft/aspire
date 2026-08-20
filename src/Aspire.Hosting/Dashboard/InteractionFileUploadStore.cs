@@ -7,7 +7,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
 namespace Aspire.Hosting.Dashboard;
 
@@ -124,7 +123,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     /// <summary>
     /// Gets the completed uploads for an interaction input.
     /// </summary>
-    public IReadOnlyList<InteractionFileUpload> GetFiles(int interactionId, string inputName)
+    public IReadOnlyList<InteractionFileUpload> GetCompletedFiles(int interactionId, string inputName)
     {
         if (!_interactions.TryGetValue(interactionId, out var interaction))
         {
@@ -136,16 +135,40 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
         {
             lock (entry)
             {
-                if (entry.State is FileEntryState.Uploaded or FileEntryState.Resolved &&
+                if (entry.State is FileEntryState.Uploaded or FileEntryState.Accepted &&
                     string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName))
                 {
-                    entry.State = FileEntryState.Resolved;
                     files.Add(new InteractionFileUpload(fileId, entry.OriginalFileName, entry.TempFile.Path));
                 }
             }
         }
 
         return files;
+    }
+
+    /// <summary>
+    /// Marks validated uploads as accepted into the interaction result.
+    /// </summary>
+    public void MarkFilesAccepted(int interactionId, string inputName, IReadOnlyList<string> fileIds)
+    {
+        foreach (var fileId in fileIds)
+        {
+            if (!TryGetEntry(interactionId, fileId, out var entry))
+            {
+                throw CreateFileMismatchException(inputName);
+            }
+
+            lock (entry)
+            {
+                if (entry.State is not (FileEntryState.Uploaded or FileEntryState.Accepted) ||
+                    !string.Equals(entry.InputName, inputName, StringComparisons.InteractionInputName))
+                {
+                    throw CreateFileMismatchException(inputName);
+                }
+
+                entry.State = FileEntryState.Accepted;
+            }
+        }
     }
 
     /// <summary>
@@ -190,8 +213,8 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             interactionId,
             interaction.Files.Count);
 
-        // Resolved entries belong to the accepted result and remain available for caller disposal. An entry that
-        // became Uploaded after the resolved snapshot was taken was not accepted and is removed. Uploads still being
+        // Accepted entries belong to the result and remain available for caller disposal. An entry that became
+        // Uploaded after the completed-file snapshot was taken was not accepted and is removed. Uploads still being
         // written are marked for deletion after their writer closes the file handle.
         foreach (var (fileId, entry) in interaction.Files)
         {
@@ -240,7 +263,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             bool removeEntry;
             lock (entry)
             {
-                removeEntry = entry.State is FileEntryState.Uploaded or FileEntryState.Resolved;
+                removeEntry = entry.State is FileEntryState.Uploaded or FileEntryState.Accepted;
                 entry.State = FileEntryState.DiscardWhenComplete;
             }
 
@@ -254,25 +277,9 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     }
 
     /// <summary>
-    /// Resolves completed uploads for an interaction input into InputFileDto entries.
+    /// Validates that client-submitted file IDs exactly match the completed files and returns them in client order.
     /// </summary>
-    public static IReadOnlyList<InputFileDto>? ResolveFiles(IInteractionFileUploadStore store, int interactionId, string inputName)
-    {
-        var files = store.GetFiles(interactionId, inputName)
-            .Select(file => new InputFileDto(
-                file.Id,
-                file.Name,
-                file.FilePath,
-                () => store.RemoveEntry(interactionId, file.Id)))
-            .ToArray();
-
-        return files.Length > 0 ? files : null;
-    }
-
-    /// <summary>
-    /// Validates that client-submitted file IDs exactly match the resolved files and returns them in client order.
-    /// </summary>
-    public static IReadOnlyList<InputFileDto>? ValidateFileReferences(string? jsonValue, string inputName, IReadOnlyList<InputFileDto>? files)
+    public static IReadOnlyList<InteractionFileUpload>? ValidateFileReferences(string? jsonValue, string inputName, IReadOnlyList<InteractionFileUpload>? files)
     {
         // Clients submit file selections as: [{"Id":"<upload-id>","Name":"<display-name>"}].
         // Only Id participates in validation; Name is untrusted and resolved metadata remains authoritative.
@@ -294,7 +301,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             throw CreateFileMismatchException(inputName);
         }
 
-        var orderedFiles = new InputFileDto[fileReferences.Length];
+        var orderedFiles = new InteractionFileUpload[fileReferences.Length];
         for (var i = 0; i < fileReferences.Length; i++)
         {
             if (fileReferences[i] is not { Id.Length: > 0 } fileReference)
@@ -396,7 +403,7 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
     {
         Uploading,
         Uploaded,
-        Resolved,
+        Accepted,
         DiscardWhenComplete
     }
 }
