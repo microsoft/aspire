@@ -264,6 +264,7 @@ export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-act
     cliPath: string;
     waitForDeployRequest: () => Promise<void>;
     releaseDeploy: () => void;
+    cleanup: () => void;
 } {
     const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-deploy-action');
     const deployRequestFilePath = path.join(gateDirectory, 'deploy-request');
@@ -277,14 +278,29 @@ export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-act
             publishCommandCapability,
             doCommandCapability,
         ]),
+        deployGateDirectory: gateDirectory,
         deployRequestFilePath,
         deployReleaseFilePath,
     });
+    const scriptPath = path.join(path.dirname(cliPath), `${name}.js`);
 
     return {
         cliPath,
         waitForDeployRequest: () => waitForPath(deployRequestFilePath, 120_000),
         releaseDeploy: () => writeFileWithRetry(deployReleaseFilePath, ''),
+        cleanup: () => {
+            try {
+                removePath(gateDirectory, { recursive: true, force: true });
+            }
+            finally {
+                try {
+                    removePath(cliPath, { force: true });
+                }
+                finally {
+                    removePath(scriptPath, { force: true });
+                }
+            }
+        },
     };
 }
 
@@ -930,6 +946,7 @@ function writeCliWrapper(
         streamedLsRequestFilePath?: string;
         streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
+        deployGateDirectory?: string;
         deployRequestFilePath?: string;
         deployReleaseFilePath?: string;
         invocationLogPath?: string;
@@ -953,9 +970,12 @@ const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
 ${options.invocationLogPath === undefined ? '' : `fs.appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
 
-function waitForReleaseFile(filePath, description) {
-  const deadline = Date.now() + 120000;
+function waitForReleaseFile(filePath, description, timeoutMs = 120000, releaseDirectory) {
+  const deadline = Date.now() + timeoutMs;
   while (!fs.existsSync(filePath)) {
+    if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {
+      return;
+    }
     if (Date.now() >= deadline) {
       console.error(\`Timed out waiting for \${description} release file: \${filePath}\`);
       process.exit(124);
@@ -991,8 +1011,18 @@ ${options.deployReleaseFilePath === undefined
 // blocking here holds the operation open for as long as the test needs. The debug session has
 // already started by then: the launch response is sent before the CLI is awaited.
 if (args[0] === 'deploy') {
-${options.deployRequestFilePath === undefined ? '' : `  fs.writeFileSync(${JSON.stringify(options.deployRequestFilePath)}, '');`}
-  waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy');
+${options.deployRequestFilePath === undefined
+            ? ''
+            : `  try {
+    fs.writeFileSync(${JSON.stringify(options.deployRequestFilePath)}, '');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      throw error;
+    }
+    process.exit(0);
+  }`}
+  // The test owns release timing. This fail-safe only prevents an orphaned CLI if its host crashes.
+  waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});
   process.exit(0);
 }
 

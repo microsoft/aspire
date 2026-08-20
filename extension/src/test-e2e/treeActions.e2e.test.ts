@@ -219,19 +219,19 @@ suite('Aspire tree action command E2E', function () {
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const appHostLabel = getTreeAppHostLabel(discovered.state);
         const gatedCli = writeGatedDeployActionCliWrapper('aspire-gated-deploy-actions');
-        await setE2eCliPathForE2E(gatedCli.cliPath);
-        const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
-        await executeE2eControlCommand({ name: 'refreshAppHosts' });
-        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
-        await waitForRepositoryIdle();
-        await waitForWorkspaceAppHost();
-
-        // A durable operation only exists while a real launch owns the AppHost, so this test
-        // deliberately does not suppress the debug launch. The gated CLI blocks inside `deploy`
-        // until it is released, which holds the operation open without any timing assumption.
-        const launchBefore = getDebugLaunchCount();
-        const deployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
         try {
+            await setE2eCliPathForE2E(gatedCli.cliPath);
+            const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+            await executeE2eControlCommand({ name: 'refreshAppHosts' });
+            await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+            await waitForRepositoryIdle();
+            await waitForWorkspaceAppHost();
+
+            // A durable operation only exists while a real launch owns the AppHost, so this test
+            // deliberately does not suppress the debug launch. The gated CLI blocks inside `deploy`
+            // until it is released, which holds the operation open without any timing assumption.
+            const launchBefore = getDebugLaunchCount();
+            const deployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
             await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath }, { waitFor: 'started' });
             await waitForCommandOutcome('aspire-vscode.deployAppHost', 'success', 120000, deployBefore);
             await gatedCli.waitForDeployRequest();
@@ -245,25 +245,32 @@ suite('Aspire tree action command E2E', function () {
             await executeE2eControlCommand({ name: 'publishAppHostAction', appHostPath });
             await waitForCommandOutcome('aspire-vscode.publishAppHost', 'canceled', 60000, duplicatePublishBefore);
             assert.strictEqual(getDebugLaunchCount(), launchBefore + 1);
+
+            gatedCli.releaseDeploy();
+            await waitForNoDebugSessions(120000);
+
+            // The operation is owned by its session, so a deploy accepted after that session ends
+            // proves the durable state was released rather than leaked onto the AppHost.
+            const releasedDeployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
+            const releasedLaunchBefore = getDebugLaunchCount();
+            await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.deployAppHost', 'success', 120000, releasedDeployBefore);
+            await waitForDebugLaunch(
+                event => event.command === 'deploy',
+                'deploy launch after the durable operation ended',
+                60000,
+                releasedLaunchBefore);
+            await waitForNoDebugSessions(120000);
         }
         finally {
-            gatedCli.releaseDeploy();
+            try {
+                gatedCli.releaseDeploy();
+            }
+            finally {
+                gatedCli.cleanup();
+            }
+            await waitForNoDebugSessions(120000);
         }
-
-        await waitForNoDebugSessions(120000);
-
-        // The operation is owned by its session, so a deploy accepted after that session ends
-        // proves the durable state was released rather than leaked onto the AppHost.
-        const releasedDeployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
-        const releasedLaunchBefore = getDebugLaunchCount();
-        await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath }, { waitFor: 'started' });
-        await waitForCommandOutcome('aspire-vscode.deployAppHost', 'success', 120000, releasedDeployBefore);
-        await waitForDebugLaunch(
-            event => event.command === 'deploy',
-            'deploy launch after the durable operation ended',
-            60000,
-            releasedLaunchBefore);
-        await waitForNoDebugSessions(120000);
     });
 
     test('routes view, copy, endpoint, log, and resource commands through tree handlers', async () => {
