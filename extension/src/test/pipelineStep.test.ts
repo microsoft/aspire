@@ -44,6 +44,25 @@ suite('pipeline step resolution', () => {
         assert.strictEqual(showInputBoxStub.called, false);
     });
 
+    test('known interaction support does not re-probe the CLI', async () => {
+        const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
+
+        const step = await resolvePipelineStep(configInfoProvider, target, cliPath, true);
+
+        assert.strictEqual(step, null);
+        assert.strictEqual(hasCapabilityStub.called, false);
+        assert.strictEqual(showInputBoxStub.called, false);
+    });
+
+    test('known legacy support uses local input without re-probing the CLI', async () => {
+        sandbox.stub(vscode.window, 'showInputBox').resolves('  deploy  ');
+
+        const step = await resolvePipelineStep(configInfoProvider, target, cliPath, false);
+
+        assert.strictEqual(step, 'deploy');
+        assert.strictEqual(hasCapabilityStub.called, false);
+    });
+
     test('legacy CLI trims locally entered pipeline steps', async () => {
         sandbox.stub(vscode.window, 'showInputBox').resolves('  deploy  ');
 

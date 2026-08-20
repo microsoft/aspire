@@ -7,11 +7,13 @@ import { registerTreeViewCommands } from '../activation/registerTreeViewCommands
 import { AppHostDataRepository, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { executeE2eControlCommand } from '../testing/e2eStateFileBridge';
+import { deployCommandCapability, doCommandCapability, pipelineInteractionCapability, publishCommandCapability } from '../types/configInfo';
 import { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import * as workspaceModule from '../utils/workspace';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 
 import { createWorkspaceFolder } from './testHelpers';
@@ -54,8 +56,25 @@ suite('E2E state file bridge', () => {
         // The tree resolves the CLI itself through the canonical resolver, so pin it here rather
         // than letting a CLI installed on the test machine decide what the actions forward.
         sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath, available: true, source: 'configured' });
-        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
+        sandbox.stub(workspaceModule, 'checkCliAvailableOrRedirect').callsFake(
+            async (_operation, _target, options) => ({
+                cliPath: options?.pinnedCliPath ?? cliPath,
+                available: true,
+            }));
         sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getCapabilityStatus').resolves('supported');
+        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            localSettingsPath: '/repo/secondary/aspire.config.json',
+            globalSettingsPath: '/repo/global-aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [
+                deployCommandCapability,
+                publishCommandCapability,
+                doCommandCapability,
+                pipelineInteractionCapability,
+            ],
+        });
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
         const registeredCommands = captureRegisteredTreeCommands(sandbox, provider, repository);
         sandbox.stub(vscode.commands, 'executeCommand').callsFake(async (commandId: string, ...args: unknown[]) => {

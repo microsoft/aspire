@@ -37,9 +37,14 @@ export function registerTreeViewCommands(
   appHostTreeProvider: AspireAppHostTreeProvider,
   dataRepository: AppHostDataRepository,
 ): vscode.Disposable[] {
+  const refreshAppHosts = () => {
+    appHostTreeProvider.refreshActionSupport();
+    dataRepository.refresh();
+  };
+
   return [
-    registerInstrumentedCommand('aspire-vscode.globalRefreshAppHosts', 'tree', () => dataRepository.refresh()),
-    registerInstrumentedCommand('aspire-vscode.refreshAppHosts', 'tree', () => dataRepository.refresh()),
+    registerInstrumentedCommand('aspire-vscode.globalRefreshAppHosts', 'tree', refreshAppHosts),
+    registerInstrumentedCommand('aspire-vscode.refreshAppHosts', 'tree', refreshAppHosts),
     vscode.commands.registerCommand('aspire-vscode.refreshAppHostRuntimeState', () => dataRepository.refreshRuntimeState()),
     registerInstrumentedCommand('aspire-vscode.switchToGlobalView', 'tree', () => dataRepository.setViewMode('global')),
     registerInstrumentedCommand('aspire-vscode.switchToWorkspaceView', 'tree', () => dataRepository.setViewMode('workspace')),

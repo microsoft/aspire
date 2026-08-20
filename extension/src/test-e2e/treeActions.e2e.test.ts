@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeConfigInfoUnsupportedCliWrapper, writeNoCapabilitiesCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeActionCapabilitiesCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
 import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
@@ -40,7 +40,7 @@ suite('Aspire tree action command E2E', function () {
         const primaryFolderPath = path.dirname(primaryAppHostPath);
         const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondaryActions', 'single-file');
         const secondaryFolderPath = path.dirname(secondaryAppHostPath);
-        const secondaryCliPath = writeNoCapabilitiesCliWrapper('aspire-secondary-actions');
+        const secondaryCliPath = writeActionCapabilitiesCliWrapper('aspire-secondary-actions');
 
         await setE2eCliPathForE2E(undefined);
         const workspaceFolders = await setWorkspaceFoldersForE2E([
@@ -101,7 +101,12 @@ suite('Aspire tree action command E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         const appHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
-        await setE2eCliPathForE2E(writeConfigInfoUnsupportedCliWrapper('aspire-legacy-pipeline-actions'));
+        await setE2eCliPathForE2E(writeLegacyPipelineActionCliWrapper('aspire-legacy-pipeline-actions'));
+        const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
         await setDebugLaunchSuppressedForE2E(true);
 
         const validLaunchBefore = getDebugLaunchCount();
@@ -144,6 +149,11 @@ suite('Aspire tree action command E2E', function () {
         await waitForRepositoryIdle();
         const appHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         await restoreE2eCliPathForE2E();
+        const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
 
         const runLaunchBefore = getDebugLaunchCount();
         const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runPipelineStepAppHost');

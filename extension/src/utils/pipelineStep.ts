@@ -12,8 +12,11 @@ export async function resolvePipelineStep(
     configInfoProvider: ConfigInfoProvider,
     target: CliPathResolutionTarget,
     cliPath: string,
+    pipelineInteractionSupported?: boolean,
 ): Promise<string | null | undefined> {
-    if (await configInfoProvider.hasCapability('pipelines', { target, cliPath, suppressErrors: true })) {
+    const isPipelineInteractionSupported = pipelineInteractionSupported
+        ?? await configInfoProvider.hasCapability('pipelines', { target, cliPath, suppressErrors: true });
+    if (isPipelineInteractionSupported) {
         return null;
     }
 

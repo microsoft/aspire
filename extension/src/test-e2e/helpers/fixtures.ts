@@ -2,7 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
-import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
+import {
+    deployCommandCapability,
+    doCommandCapability,
+    lsJsonStreamCapability,
+    publishCommandCapability,
+    type ConfigInfo,
+} from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
@@ -236,6 +242,24 @@ export function removePrimaryAppHostFixture(): void {
 export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
     return writeCliWrapper(name, {
         configInfoJson: createConfigInfo(),
+    });
+}
+
+export function writeActionCapabilitiesCliWrapper(name = 'aspire-action-capabilities'): string {
+    return writeCliWrapper(name, {
+        configInfoJson: createConfigInfo([
+            deployCommandCapability,
+            publishCommandCapability,
+            doCommandCapability,
+        ]),
+    });
+}
+
+export function writeLegacyPipelineActionCliWrapper(name = 'aspire-legacy-pipeline-action'): string {
+    return writeCliWrapper(name, {
+        // The action itself is supported, but omitting `pipelines` keeps the extension-side input
+        // fallback active for CLIs that cannot select a pipeline step through the interaction API.
+        configInfoJson: createConfigInfo([doCommandCapability]),
     });
 }
 

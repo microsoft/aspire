@@ -931,7 +931,7 @@
         },
         {
           "command": "aspire-vscode.viewAppHostSource",
-          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:(hasAppHost|stopping|operating))(:[A-Za-z]+)*$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:[A-Za-z]+)*|workspaceResources:(hasAppHost(:[A-Za-z]+)*|stopping))$/",
           "group": "1_open@2"
         },
         {
