@@ -10,7 +10,7 @@ import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
-import { defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
@@ -264,6 +264,7 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config, undefined);
         assert.strictEqual(launchReservation.reservedOperations.length, 1);
         assert.strictEqual(message.calledOnce, true);
+        assert.strictEqual(message.firstCall.args[0], appHostOperationAlreadyInProgress);
     });
 
     test('claims the concrete AppHost when the workspace-folder launch config leaves program as the directory', async () => {

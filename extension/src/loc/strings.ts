@@ -299,3 +299,4 @@ export const appHostLifecycleBusy = vscode.l10n.t('Another start or stop operati
 export const appHostLifecycleIsolationModeNotSupported = vscode.l10n.t('The selected Aspire CLI does not support the requested isolation mode.');
 export const appHostLifecycleIsolationCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI isolation capability could not be verified.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
+export const appHostOperationAlreadyInProgress = vscode.l10n.t('Another operation is already in progress for this Aspire AppHost. The new operation was cancelled.');

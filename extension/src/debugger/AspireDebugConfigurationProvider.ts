@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { appHostLifecycleLaunchAlreadyClaimed, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
@@ -340,7 +340,10 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 if (!reservationId) {
                     // Another launch or operation already owns this AppHost. Abort this session
                     // rather than starting overlapping work against the same project.
-                    void vscode.window.showInformationMessage(appHostLifecycleLaunchAlreadyClaimed);
+                    void vscode.window.showInformationMessage(
+                        command === 'run'
+                            ? appHostLifecycleLaunchAlreadyClaimed
+                            : appHostOperationAlreadyInProgress);
                     return undefined;
                 }
 

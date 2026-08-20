@@ -694,27 +694,25 @@ const expectedAppHostActionCommandIds = [
     'aspire-vscode.debugPipelineStepAppHost',
 ];
 
-const appHostActionWhenClause = 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)$/';
-
 const expectedAppHostActionMenuItems = [
     {
         command: 'aspire-vscode.deployAppHost',
-        when: appHostActionWhenClause,
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost):canDeploy(:|$)/',
         group: '2_actions@3',
     },
     {
         command: 'aspire-vscode.publishAppHost',
-        when: appHostActionWhenClause,
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)(:canDeploy)?:canPublish(:|$)/',
         group: '2_actions@4',
     },
     {
         command: 'aspire-vscode.runPipelineStepAppHost',
-        when: appHostActionWhenClause,
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)(:canDeploy)?(:canPublish)?:canDo$/',
         group: '2_actions@5',
     },
     {
         command: 'aspire-vscode.debugPipelineStepAppHost',
-        when: appHostActionWhenClause,
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)(:canDeploy)?(:canPublish)?:canDo$/',
         group: '2_actions@6',
     },
 ];

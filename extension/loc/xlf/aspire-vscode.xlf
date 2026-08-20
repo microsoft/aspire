@@ -16,6 +16,9 @@
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostOperationAlreadyInProgress">
+      <source xml:lang="en">Another operation is already in progress for this Aspire AppHost. The new operation was cancelled.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleBusy">
       <source xml:lang="en">Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.</source>
     </trans-unit>
