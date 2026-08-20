@@ -546,6 +546,36 @@ public sealed class ReleasePublishNugetPipelineTests
     }
 
     [Fact]
+    public async Task WinGetPublishingRunsOnlyForStableReleases()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        Assert.Equal("false", FindYamlParameterDefault(pipeline, "SkipWinGetPublish"));
+
+        const string stableReleaseGate = "${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:";
+        Assert.Equal(2, pipeline.Split(stableReleaseGate, StringSplitOptions.None).Length - 1);
+
+        var winGetJob = ExtractSection(
+            pipeline,
+            "# ===== WINGET PUBLISHING =====",
+            "# ===== STAGE 3: GITHUB TASKS =====");
+        Assert.Contains("eq('${{ parameters.SkipWinGetPublish }}', 'false')", winGetJob);
+        Assert.Contains("eq('${{ parameters.IsPrerelease }}', 'false')", winGetJob);
+
+        var releaseSummary = ExtractSection(
+            pipeline,
+            "# ===== SUMMARY =====",
+            "# ===== VS CODE EXTENSION PUBLISHING =====");
+        var winGetSummary = ExtractSection(
+            releaseSummary,
+            """Write-Host "║ WinGet:""",
+            """Write-Host "║ GitHub Tasks:""");
+        Assert.Contains("""if ("${{ parameters.SkipWinGetPublish }}" -eq "true")""", winGetSummary);
+        Assert.Contains("""elseif ("${{ parameters.IsPrerelease }}" -eq "true")""", winGetSummary);
+        Assert.Contains("Write-Host \" (SKIPPED - prerelease)\"", winGetSummary);
+    }
+
+    [Fact]
     public async Task VSCodeExtensionPublishUsesAzureCredential()
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
