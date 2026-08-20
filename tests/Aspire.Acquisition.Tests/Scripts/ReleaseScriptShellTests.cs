@@ -183,6 +183,43 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task ExplicitVersionInstall_WritesSourceOnlySidecar()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+
+        // Exercise main's --version routing while replacing only the network/archive work.
+        // main defaults QUALITY to release even for explicit versions, so this catches that
+        // default accidentally leaking into the install sidecar as channel: stable.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            download_and_install_archive() {
+                mkdir -p "$INSTALL_PATH"
+                printf '#!/bin/sh\nexit 0\n' > "$INSTALL_PATH/aspire"
+                chmod +x "$INSTALL_PATH/aspire"
+            }
+            setup_cli_bundle() { return 0; }
+            main --version '13.2.0-preview.1.25366.3' --install-path '{{installPath}}' --skip-path
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Collection(
+            document.RootElement.EnumerateObject(),
+            property =>
+            {
+                Assert.Equal("source", property.Name);
+                Assert.Equal("script", property.Value.GetString());
+            });
+    }
+
+    [Fact]
     public async Task OsOverride_IsRecognized()
     {
         using var env = new TestEnvironment();

@@ -241,6 +241,49 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task ExplicitVersionInstall_WritesSourceOnlySidecar()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        var archive = await FakeArchiveHelper.CreateFakeArchiveAsync(env.TempDirectory);
+
+        // Pass a non-empty quality deliberately so the test fails if Install-AspireCli stops
+        // giving explicit versions precedence when it chooses the sidecar identity.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            $archiveSource = '{{archive.ArchivePath}}'
+            $checksumSource = '{{archive.ChecksumPath}}'
+            function Invoke-FileDownload {
+                param([string]$Uri, [int]$TimeoutSec, [string]$OutputPath)
+                $source = if ($OutputPath.EndsWith('.sha512')) { $checksumSource } else { $archiveSource }
+                [System.IO.File]::Copy($source, $OutputPath, $true)
+            }
+            Install-AspireCli `
+                -InstallPath '{{installPath}}' `
+                -Version '13.2.0-preview.1.25366.3' `
+                -Quality 'release' `
+                -OS 'linux' `
+                -Architecture 'x64'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Collection(
+            document.RootElement.EnumerateObject(),
+            property =>
+            {
+                Assert.Equal("source", property.Name);
+                Assert.Equal("script", property.Value.GetString());
+            });
+    }
+
+    [Fact]
     public async Task DefaultInstallPath_MentionsAspireDirectory()
     {
         using var env = new TestEnvironment();
