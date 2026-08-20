@@ -6,31 +6,24 @@ const { runInteractiveCommand } = require('../lib/run-interactive-command');
 async function runAspireNewInteractive({
   aspireCommand,
   channel,
-  cwd,
   diagnosticsDir,
-  hasTestProjectPrompt,
-  outputPath,
-  projectName,
-  templateId,
+  scenarioRoot,
+  template,
   timeoutMs
 }) {
   await runInteractiveCommand({
-    cwd,
+    cwd: scenarioRoot,
     diagnosticsDir,
     fileName: 'aspire-new.log',
-    command: buildAspireCommand(
-      aspireCommand,
-      [
-        'new',
-        templateId,
-        '--name', projectName,
-        '--output', outputPath,
-        '--channel', channel
-      ]),
+    command: buildAspireCommand(aspireCommand, ['new', '--channel', channel]),
     timeoutMs,
     interact: async run => {
+      await run.waitForText('> Starter App', timeoutMs, 'template selection prompt');
+      await run.type(template.selectionText);
+      await run.enter();
+
       await run.waitForText('Enter the project name', timeoutMs, 'project name prompt');
-      await run.type(projectName);
+      await run.type(template.projectName);
       await run.enter();
 
       await run.waitForText('Enter the output path', timeoutMs, 'output path prompt');
@@ -42,7 +35,7 @@ async function runAspireNewInteractive({
       await run.waitForText('Use Redis Cache', timeoutMs, 'Redis prompt');
       await run.type('n');
 
-      if (hasTestProjectPrompt) {
+      if (template.hasTestProjectPrompt) {
         await run.waitForText('Do you want to create a test project?', timeoutMs, 'test project prompt');
         await run.enter();
       }
@@ -60,5 +53,13 @@ async function runAspireNewInteractive({
 }
 
 module.exports = {
+  id: 'aspire-new',
+  templateIds: ['aspire-ts-starter', 'aspire-starter'],
+  async run(context) {
+    await runAspireNewInteractive({
+      ...context,
+      timeoutMs: 180_000
+    });
+  },
   runAspireNewInteractive
 };
