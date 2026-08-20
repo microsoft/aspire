@@ -1,0 +1,17 @@
+{
+  "id": "dashboard-subscriberesources-nonprojectedreplicaupdate-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: DashboardClientTests.SubscribeResources_NonProjectedReplicaUpdate_EmitsReplicaOnly fails with replica naming/ordering race condition",
+  "test_name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_NonProjectedReplicaUpdate_EmitsReplicaOnly",
+  "error_pattern": "Assert.Collection() Failure: Item comparison failure (pos 0). Assert.Equal() Failure: Strings differ. Expected: \"syndule-api--0000002\" Actual: \"syndule-api\" at Aspire.Dashboard.Tests.Model.DashboardClientTests.<>c__DisplayClass22_0.<SubscribeResources_NonProjectedReplicaUpdate_EmitsReplicaOnly>b__1(ResourceViewModelChange change)",
+  "occurrences": [
+    {
+      "run_id": 32321999741,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32321999741",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "pr_number": 19506,
+      "observed_at": "2026-08-20T02:36:25Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19526"
+}

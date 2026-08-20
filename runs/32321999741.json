@@ -1,0 +1,38 @@
+{
+  "run_id": 32321999741,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32321999741",
+  "analyzed_at": "2026-08-20T02:36:25Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19506,
+    "title": "Preserve TypeSystem compatibility with older CLIs",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-typesystem-forward-compat",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19506"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 96286242772,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32321999741/job/96286242772",
+      "classification": "flaky-test",
+      "reason": "Failing test is in Aspire.Dashboard.Tests.Model.DashboardClientTests, an area not touched by this PR (PR only changes Aspire.TypeSystem, CodeGeneration.Java/TypeScript). The assertion failure involves resource replica naming/ordering (expected 'syndule-api--0000002', got 'syndule-api'), consistent with a known race condition in DashboardClientTests where duplicate/out-of-order resource change events are emitted.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_NonProjectedReplicaUpdate_EmitsReplicaOnly",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "error": "Assert.Collection() Failure: Item comparison failure at pos 0. Assert.Equal() Failure: Strings differ. Expected: \"syndule-api--0000002\" Actual: \"syndule-api\"",
+      "stack_trace": "at Aspire.Dashboard.Tests.Model.DashboardClientTests.<>c__DisplayClass22_0.<SubscribeResources_NonProjectedReplicaUpdate_EmitsReplicaOnly>b__1(ResourceViewModelChange change) in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 809\n   at Aspire.Dashboard.Tests.Model.DashboardClientTests.SubscribeResources_NonProjectedReplicaUpdate_EmitsReplicaOnly() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardClientTests.cs:line 805",
+      "classification": "flaky",
+      "reason": "The PR does not modify any Dashboard code or tests; failure is a resource replica ordering/naming race condition, similar to the known flaky pattern in DashboardClientTests.SubscribeResources_ReplicaStartedAtChanged_EmitsParentChange (issue #19515) involving duplicate/out-of-order resource change events."
+    }
+  ],
+  "causes": ["dashboard-subscriberesources-nonprojectedreplicaupdate-flaky"]
+}
