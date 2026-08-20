@@ -41,9 +41,9 @@
   </ItemGroup>
 
   <!-- Scripts are file-based C# apps, not part of this library's compilation.
-       C# AppHosts copy the buildTransitive assets to their output directory. Polyglot
-       AppHosts load this assembly directly from lib/<tfm>, so the same assets must also
-       be available beside the assembly for GetScriptPath(). -->
+       C# AppHosts copy the buildTransitive assets to their output directory. Package-backed
+       polyglot AppHosts load this assembly directly from lib/<tfm>, so the same assets must
+       also be available beside the assembly for GetScriptPath(). -->
   <ItemGroup>
     <Compile Remove="Scripts\**" />
     <None Include="Scripts\Gateway.cs.in" />

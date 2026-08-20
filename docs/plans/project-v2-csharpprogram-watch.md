@@ -238,8 +238,8 @@ working through the same generalized helpers unchanged.
   types share one implementation. The new variant supports **run mode**; **publish fails fast** because
   `DotnetProjectResource` is not an `IContainerFilesDestinationResource` (the WASM static-asset merge needs it).
   This lifts once container execution lands for `DotnetProjectResource`. The built-in gateway scripts are packed
-  both as `buildTransitive` assets for C# AppHosts and beside the package assembly for polyglot AppHosts, which
-  load integration assemblies directly without running the package's MSBuild targets.
+  both as `buildTransitive` assets for C# AppHosts and beside the package assembly for package-backed polyglot
+  AppHosts, which load integration assemblies directly without running the package's MSBuild targets.
 - Polyglot SDKs: the `addDotnetProject` export is **additive** in `Aspire.Hosting.Dotnet`; core
   `addCSharpApp` is unchanged. The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
   `DotnetProjectResource` overload with the distinct `withDotnetProjectBlazorClientApp` capability ID while

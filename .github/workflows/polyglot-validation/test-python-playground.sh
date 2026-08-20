@@ -2,7 +2,7 @@
 # Polyglot SDK Validation - Python validation AppHosts
 # Iterates all Python validation AppHosts under tests/PolyglotAppHosts/*/Python,
 # runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
-# compiles each AppHost with the generated Python modules to verify syntax.
+# verifies syntax plus any fixture-owned generated SDK API assertions.
 set -euo pipefail
 
 echo "=== Python Validation AppHost Codegen Validation ==="
@@ -50,6 +50,58 @@ echo ""
 
 FAILED=()
 PASSED=()
+CHANNEL_SETTINGS_PATH=""
+CHANNEL_SETTINGS_BACKUP=""
+
+restore_channel_settings() {
+    if [ -z "$CHANNEL_SETTINGS_PATH" ]; then
+        return
+    fi
+
+    if [ -n "$CHANNEL_SETTINGS_BACKUP" ]; then
+        cp "$CHANNEL_SETTINGS_BACKUP" "$CHANNEL_SETTINGS_PATH"
+        rm -f "$CHANNEL_SETTINGS_BACKUP"
+    else
+        rm -f "$CHANNEL_SETTINGS_PATH"
+    fi
+
+    CHANNEL_SETTINGS_PATH=""
+    CHANNEL_SETTINGS_BACKUP=""
+}
+
+pin_validation_channel() {
+    if [ -z "${ASPIRE_CLI_CHANNEL:-}" ]; then
+        return
+    fi
+
+    local settings_path="$PWD/.aspire/settings.json"
+    local settings_backup=""
+    mkdir -p "$(dirname "$settings_path")"
+
+    if [ -f "$settings_path" ]; then
+        settings_backup="$(mktemp)"
+        cp "$settings_path" "$settings_backup"
+    fi
+
+    CHANNEL_SETTINGS_PATH="$settings_path"
+    CHANNEL_SETTINGS_BACKUP="$settings_backup"
+
+    # Validation jobs install the current build into a local hive. Pin the requested
+    # project channel so package restore uses that exact hive instead of accepting a
+    # newer package version from an ambient daily feed.
+    python3 - "$settings_path" "$ASPIRE_CLI_CHANNEL" <<'INNERPY'
+import json
+import sys
+from pathlib import Path
+
+settings_path = Path(sys.argv[1])
+settings = json.loads(settings_path.read_text(encoding='utf-8')) if settings_path.exists() else {}
+settings['channel'] = sys.argv[2]
+settings_path.write_text(json.dumps(settings, indent=2) + '\n', encoding='utf-8')
+INNERPY
+}
+
+trap restore_channel_settings EXIT
 
 for app_dir in "${APP_DIRS[@]}"; do
     integration_name="$(basename "$(dirname "$app_dir")")"
@@ -59,12 +111,14 @@ for app_dir in "${APP_DIRS[@]}"; do
     echo "----------------------------------------"
 
     cd "$app_dir"
+    pin_validation_channel
 
     echo "  -> aspire restore --apphost apphost.py..."
     if ! aspire restore --non-interactive --apphost apphost.py 2>&1; then
         echo "  ERROR: aspire restore failed for $integration_name"
         FAILED+=("$integration_name (aspire restore)")
         echo ""
+        restore_channel_settings
         continue
     fi
 
@@ -72,6 +126,7 @@ for app_dir in "${APP_DIRS[@]}"; do
         echo "  ERROR: generated .aspire/modules/aspire_app.py missing for $integration_name"
         FAILED+=("$integration_name (missing .aspire/modules/aspire_app.py)")
         echo ""
+        restore_channel_settings
         continue
     fi
 
@@ -80,6 +135,9 @@ for app_dir in "${APP_DIRS[@]}"; do
 from pathlib import Path
 
 files = [Path('apphost.py')]
+validator = Path('validate_generated_sdk.py')
+if validator.exists():
+    files.append(validator)
 files.extend(sorted(Path('.aspire/modules').rglob('*.py')))
 for file in files:
     compile(file.read_text(encoding='utf-8'), str(file), 'exec')
@@ -88,9 +146,22 @@ INNERPY
         echo "  ERROR: python compilation failed for $integration_name"
         FAILED+=("$integration_name (python compile)")
         echo ""
+        restore_channel_settings
         continue
     fi
 
+    if [ -f "validate_generated_sdk.py" ]; then
+        echo "  -> generated SDK API validation..."
+        if ! PYTHONPATH=".aspire/modules" python3 validate_generated_sdk.py; then
+            echo "  ERROR: generated SDK API validation failed for $integration_name"
+            FAILED+=("$integration_name (generated SDK API validation)")
+            echo ""
+            restore_channel_settings
+            continue
+        fi
+    fi
+
+    restore_channel_settings
     echo "  OK: $integration_name passed"
     PASSED+=("$integration_name")
     echo ""

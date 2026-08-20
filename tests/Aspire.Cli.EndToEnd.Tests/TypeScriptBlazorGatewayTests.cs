@@ -102,8 +102,15 @@ public sealed class TypeScriptBlazorGatewayTests(ITestOutputHelper output)
 
             found=false
             for i in $(seq 1 20); do
-                aspire describe gateway --format json > gateway.json
-                GATEWAY_URL=$(jq -r '[.resources[0].urls[]? | select(.name == "http" and .isInternal != true) | .url][0] // empty' gateway.json)
+                if ! aspire describe gateway --format json > gateway.json; then
+                    sleep 2
+                    continue
+                fi
+
+                if ! GATEWAY_URL=$(jq -r '[.resources[0].urls[]? | select(.name == "http" and .isInternal != true) | .url][0] // empty' gateway.json); then
+                    sleep 2
+                    continue
+                fi
 
                 if [ -n "$GATEWAY_URL" ] &&
                    curl --connect-timeout 2 --max-time 5 -fsS "$GATEWAY_URL/client/" -o client-index.html &&
@@ -127,7 +134,7 @@ public sealed class TypeScriptBlazorGatewayTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromMinutes(10));
         }
-        catch
+        catch (InvalidOperationException)
         {
             // RunCommandAsync observes the error prompt before throwing but leaves the sequence counter
             // unchanged. Advance it so TerminalRun can capture diagnostics from the next prompt.
