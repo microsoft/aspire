@@ -2186,9 +2186,8 @@ extends:
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
 
-                  # Azure Identity 4.13.2 depends on @azure/core-process, which is not yet
-                  # available in dotnet-public-npm and requires Node 22. Remove this pin after
-                  # 1.0.0 is mirrored and this job is upgraded to Node 22.
+                  # Pin Azure Identity explicitly so VSCE's transitive dependency graph
+                  # remains stable across npm feed updates.
                   npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
                   vsce --version
                 displayName: 'Install vsce'
