@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
-using System.Net.Http.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Aspire.Hosting;

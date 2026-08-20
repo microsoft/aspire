@@ -27,20 +27,24 @@ public class BlazorAssetsTests
         Assert.True(blazorScriptIndex > imaskScriptIndex, "IMask must load before Blazor renders FluentNumberInput components.");
     }
 
-    [Theory]
-    [InlineData("10")]
-    [InlineData("11")]
-    public void BlazorWebJs_DoesNotSendUnsupportedKeyboardEventProperties(string runtimeMajorVersion)
+    [Fact]
+    public void BlazorScript_UsesTargetFrameworkStaticWebAsset()
     {
-        var blazorWebJsPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "wwwroot", "framework", $"blazor.web.{runtimeMajorVersion}.js");
-        Assert.True(File.Exists(blazorWebJsPath), $"Expected generated Blazor asset at {blazorWebJsPath}");
+        var blazorScriptPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "Components", "BlazorScript.razor");
+        var fluentBootstrapPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "wwwroot", "js", "fluent-ui-blazor-v5-bootstrap.js");
 
-        var blazorWebJs = File.ReadAllText(blazorWebJsPath);
+        var blazorScript = File.ReadAllText(blazorScriptPath).Trim();
+        var fluentBootstrap = File.ReadAllText(fluentBootstrapPath);
 
-        Assert.Contains("keydown", blazorWebJs, StringComparison.Ordinal);
-        Assert.False(
-            blazorWebJs.Contains("isComposing", StringComparison.Ordinal),
-            "The dashboard Blazor script must not emit KeyboardEvent.isComposing because the server event parser rejects the unknown property.");
+        Assert.Equal(
+            """
+            <script src="_framework/blazor.web.js" autostart="false"></script>
+            <script src="js/fluent-ui-blazor-v5-bootstrap.js"></script>
+            """,
+            blazorScript);
+        Assert.Contains("Blazor.registerCustomEventType", fluentBootstrap);
+        Assert.Contains("this.isConnected", fluentBootstrap);
+        Assert.Contains("Blazor.start()", fluentBootstrap);
     }
 
     private static string GetRepoRoot()

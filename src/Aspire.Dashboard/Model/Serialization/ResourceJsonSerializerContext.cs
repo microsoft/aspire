@@ -39,4 +39,9 @@ internal sealed partial class ResourceJsonSerializerContext : JsonSerializerCont
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         TypeInfoResolver = Default
     };
+
+    /// <summary>
+    /// Gets source-generated metadata bound to <see cref="IndentedOptions"/>.
+    /// </summary>
+    public static ResourceJsonSerializerContext IndentedContext { get; } = new(IndentedOptions);
 }
