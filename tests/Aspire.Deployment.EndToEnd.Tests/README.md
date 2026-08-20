@@ -51,6 +51,7 @@ One test intentionally uses another region for a resource-specific requirement:
 |----------|---------------|-------|
 | Resource Groups | 100+ | Each test creates a unique resource group (e.g., `e2e-starter-12345678-1`) |
 | Role Assignments | Default | Tests may create role assignments for managed identities, and `AzureRoleAssignmentRunModeTests` creates them for the ambient deployment principal |
+| PostgreSQL Flexible Servers | Default | `AzurePostgresEntraAuthRunModeTests` provisions one `Standard_B1ms` (Burstable, 32 GB) server per run in `westus3` |
 
 ### Requesting Quota Increases
 
@@ -175,6 +176,7 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureEventHubsDeploymentTests.cs       # Azure Event Hubs resource
 ├── AzureKeyVaultDeploymentTests.cs        # Azure Key Vault resource
 ├── AzureLogAnalyticsDeploymentTests.cs    # Azure Log Analytics resource
+├── AzurePostgresEntraAuthRunModeTests.cs  # Run-mode PostgreSQL Entra administrator (control + data plane)
 ├── AzureRoleAssignmentRunModeTests.cs     # Run-mode role assignments under the ambient credential
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
@@ -216,6 +218,47 @@ deployment — and runs as its own parallel job with its own resource group.
 
 `AzureStorageRunModeTests` deliberately keeps `ClearDefaultRoleAssignments()`: it covers resource
 command metadata, and mixing the RBAC path into it would blur the failure signal.
+
+### PostgreSQL Entra administrator
+
+`AzurePostgresEntraAuthRunModeTests.EntraAdministratorIsUsableByReferencingServiceInRunMode`
+extends that coverage from RBAC role assignments to the `principalName` parameter, which the storage
+template does not declare. It is the only test anywhere in the repository that provisions a real
+Azure PostgreSQL flexible server in run mode — every playground calling
+`AddAzurePostgresFlexibleServer` uses `RunAsContainer()`.
+
+The server is left on its Entra-only default (`activeDirectoryAuth` enabled, `passwordAuth`
+disabled), so the synthesized `pg-roles` deployment carries a
+`Microsoft.DBforPostgreSQL/flexibleServers/administrators` resource whose `principalName` is the
+value inferred from the access token. The test asserts both halves of that contract:
+
+| Half | Assertion |
+|------|-----------|
+| Control plane | The `pg-roles` ARM deployment reaches `Succeeded` with a non-empty `principalName` and a `principalType` matching the ambient credential |
+| Data plane | A referencing service reaches `/dbcheck`, authenticates with `Aspire.Azure.Npgsql`, and reports a `current_user` equal to that `principalName` |
+
+The data-plane half exists because the two sides derive the principal name from different claim
+chains, and nothing forces them to agree:
+
+| Side | Claim chain |
+|------|-------------|
+| Hosting — `DefaultAzurePrincipalProvider` | `upn` → `email` → `app_displayname` (app-only) → `oid` |
+| Client — `ManagedIdentityTokenCredentialHelpers` | `xms_mirid` → `upn` → `preferred_username` → `unique_name` |
+
+For an app-only service principal none of the client's four claims are present (`xms_mirid` is
+managed-identity-only; the other three are user-only), so it cannot infer a username at all.
+
+Notes for anyone editing this test:
+
+- `AddDatabase` is model-only for a flexible server in run mode — it emits no
+  `Microsoft.DBforPostgreSQL/flexibleServers/databases` resource — so the AppHost points at the
+  built-in `postgres` database rather than one nothing would have provisioned.
+- The service binds a fixed loopback port so the probe stays a plain `curl`, and `/dbcheck` reports
+  failures as a 200 with a diagnostic body so the assertion message names the inferred username and
+  the server error instead of surfacing an opaque 500.
+- `Aspire.Azure.Npgsql` is resolved from the ambient feeds rather than the local build. The service
+  is a separate process that only consumes the connection string, so its Aspire version does not
+  need to match the CLI's.
 
 ## Radius deployment coverage
 
