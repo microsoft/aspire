@@ -1,0 +1,16 @@
+{
+  "id": "templates-buildandrunstarter-buildandarchive-exit1",
+  "type": "infra-failure",
+  "title": "Templates-BuildAndRunStarterTemplateBuiltInTest 'Build and archive test project' step fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Build and archive test project step failed; job logs unavailable: 'Failed to fetch logs for job'). PR only modifies Aspire.Hosting.Orchestrator/ParameterProcessor.cs and its unit tests, unrelated to the template build/archive pipeline.",
+  "occurrences": [
+    {
+      "run_id": 32329544217,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32329544217",
+      "job": "Tests / Microsoft.EntityFrameworkCore.SqlServer / Microsoft.EntityFrameworkCore.SqlServer (windows-latest)",
+      "pr_number": 19336,
+      "observed_at": "2026-08-20T04:19:43Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19530"
+}
