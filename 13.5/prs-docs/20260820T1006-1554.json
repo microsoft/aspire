@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #19488 which is in milestone 13.6, not 13.5; no matching changelog entry in this milestone",
+  "mergedAt": "2026-08-20T10:06:01Z",
+  "number": 1554,
+  "runDate": "2026-08-20T12:30:00Z",
+  "status": "excluded",
+  "title": "[docs] Update interaction file upload docs for GetFiles() and upload limits"
+}
