@@ -3,10 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 
-function createScenarioContext(baseContext, scenarioId, template) {
-  const scenarioRoot = path.join(baseContext.validationRoot, template.templateId, scenarioId);
+function createScenarioContext(baseContext, scenario) {
+  const scenarioRoot = path.join(baseContext.validationRoot, scenario.id);
   const diagnosticsDir = path.join(scenarioRoot, 'diagnostics');
-  const projectRoot = path.join(scenarioRoot, template.projectName);
+  const projectRoot = path.join(scenarioRoot, scenario.projectName);
 
   fs.rmSync(scenarioRoot, { recursive: true, force: true });
   fs.mkdirSync(diagnosticsDir, { recursive: true });
@@ -15,8 +15,7 @@ function createScenarioContext(baseContext, scenarioId, template) {
     ...baseContext,
     diagnosticsDir,
     projectRoot,
-    scenarioRoot,
-    template
+    scenarioRoot
   };
 }
 

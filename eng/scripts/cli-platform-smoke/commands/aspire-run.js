@@ -3,26 +3,25 @@
 const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
 
-async function startAppHost({
+async function runAspireRunInteractive({
   aspireCommand,
   diagnosticsDir,
-  maxStartupSeconds,
-  projectRoot
+  projectRoot,
+  timeoutMs
 }) {
-  const timeoutMs = maxStartupSeconds * 1000 + 180_000;
-
   await runInteractiveCommand({
     cwd: projectRoot,
     diagnosticsDir,
-    fileName: 'setup-aspire-start.log',
-    command: buildAspireCommand(aspireCommand, ['start']),
+    fileName: 'aspire-run.log',
+    command: buildAspireCommand(aspireCommand, ['run']),
     timeoutMs,
     interact: async run => {
-      await run.waitForText('AppHost started successfully.', timeoutMs, 'setup AppHost start success');
+      await run.waitForText('Press CTRL+C to stop the AppHost and exit.', timeoutMs, 'run ready banner');
+      await run.ctrlC();
     }
   });
 }
 
 module.exports = {
-  startAppHost
+  runAspireRunInteractive
 };

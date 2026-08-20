@@ -7,31 +7,9 @@ const path = require('path');
 const { createScenarioContext } = require('./lib/scenario-context');
 const { defaultValidationRoot, parseArgs } = require('./lib/options');
 const scenarios = [
-  require('./scenarios/aspire-new'),
-  require('./scenarios/aspire-add'),
-  require('./scenarios/aspire-run'),
-  require('./scenarios/aspire-start'),
-  require('./scenarios/aspire-stop'),
-  require('./scenarios/aspire-resources'),
-  require('./scenarios/aspire-wait')
+  require('./scenarios/typescript-starter'),
+  require('./scenarios/dotnet-starter')
 ];
-
-const templates = new Map([
-  {
-    templateId: 'aspire-ts-starter',
-    projectName: 'AspireCliTsStarterSmoke',
-    selectionText: 'Starter App (Express/React, TypeScript AppHost)',
-    expectedResources: ['app', 'frontend'],
-    hasTestProjectPrompt: false
-  },
-  {
-    templateId: 'aspire-starter',
-    projectName: 'AspireCliCsStarterSmoke',
-    selectionText: 'Starter App (ASP.NET Core/Blazor)',
-    expectedResources: ['apiservice'],
-    hasTestProjectPrompt: true
-  }
-].map(template => [template.templateId, template]));
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -51,19 +29,12 @@ async function main() {
   fs.mkdirSync(validationRoot, { recursive: true });
 
   for (const scenario of scenarios) {
-    for (const templateId of scenario.templateIds) {
-      const template = templates.get(templateId);
-      if (!template) {
-        throw new Error(`Scenario '${scenario.id}' references unknown template '${templateId}'.`);
-      }
-
-      try {
-        await scenario.run(createScenarioContext(baseContext, scenario.id, template));
-      } catch (error) {
-        const message = `${scenario.id} (${templateId}): ${error.message}`;
-        console.warn(message);
-        failures.push(message);
-      }
+    try {
+      await scenario.run(createScenarioContext(baseContext, scenario));
+    } catch (error) {
+      const message = `${scenario.id}: ${error.message}`;
+      console.warn(message);
+      failures.push(message);
     }
   }
 

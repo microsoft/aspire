@@ -33,9 +33,9 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner }}
-    # Each command scenario owns an isolated project, so the slowest matrix entries can create up
-    # to eight projects and perform five AppHost startups before diagnostics are uploaded.
-    timeout-minutes: 70
+    # Each starter scenario drives the full command lifecycle. The Windows ARM64 wait budgets can
+    # total 75 minutes across both scenarios before diagnostics are uploaded.
+    timeout-minutes: 85
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -73,9 +73,8 @@ jobs:
           aspire --version
 
       - name: Create starter app and validate startup
-        # Atomic scenarios trade shared setup for deterministic isolation, so leave enough time for
-        # repeated template restore and startup on the ARM64 runners.
-        timeout-minutes: 65
+        # Leave headroom for both isolated starter scenarios to complete their full command flows.
+        timeout-minutes: 80
         shell: pwsh
         env:
           PR_NUMBER: ${{ inputs.prNumber }}
