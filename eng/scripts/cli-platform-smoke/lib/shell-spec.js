@@ -3,12 +3,21 @@
 function getShellSpec() {
   if (process.platform === 'win32') {
     return {
-      file: 'pwsh',
+      // node-pty's Windows path resolver requires the executable extension.
+      file: 'pwsh.exe',
       args: ['-NoLogo', '-NoProfile'],
       enterKey: '\r',
       quote: quotePowerShell,
       wrapCommand(command, sentinel) {
-        return `${command}; Write-Output ('${sentinel}:' + $LASTEXITCODE)`;
+        // Cmdlets such as the shell readiness probe don't set $LASTEXITCODE, while native
+        // commands do. Normalize both paths so every command emits a numeric completion marker.
+        return [
+          '$LASTEXITCODE = $null',
+          command,
+          '$aspireSmokeSucceeded = $?',
+          '$aspireSmokeExitCode = if ($aspireSmokeSucceeded) { 0 } elseif ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 1 }',
+          `Write-Output ('${sentinel}:' + $aspireSmokeExitCode)`
+        ].join('; ');
       }
     };
   }

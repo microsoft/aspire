@@ -7,6 +7,6 @@
     "smoke": "node ./cli-platform-smoke.js"
   },
   "dependencies": {
-    "node-pty": "1.1.0"
+    "node-pty": "1.2.0-beta.15"
   }
 }

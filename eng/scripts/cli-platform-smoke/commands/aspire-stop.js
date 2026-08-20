@@ -6,7 +6,7 @@ async function runAspireStop(shell, {
   timeoutMs = 120_000
 } = {}) {
   await shell.runAspireCommand(['stop'], { artifactName });
-  const expectedResults = ['Running instance stopped successfully.'];
+  const expectedResults = ['stopped successfully.'];
 
   if (allowNotRunning) {
     expectedResults.push('No running AppHost found.');

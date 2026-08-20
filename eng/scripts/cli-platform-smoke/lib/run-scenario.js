@@ -118,6 +118,10 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
     return getActiveRun().waitForAnyText(texts, waitTimeoutMs, waitDescription);
   }
 
+  function waitForTextOrExit(text, waitDescription, waitTimeoutMs = timeoutMs) {
+    return getActiveRun().waitForTextOrExit(text, waitTimeoutMs, waitDescription);
+  }
+
   function type(text) {
     return getActiveRun().type(text);
   }
@@ -128,10 +132,6 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
 
   function ctrlC() {
     return getActiveRun().ctrlC();
-  }
-
-  function getCommandExitNeedle() {
-    return getActiveRun().exitNeedle;
   }
 
   function getActiveRun() {
@@ -162,11 +162,11 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
     ...context,
     ctrlC,
     enter,
-    getCommandExitNeedle,
     runAspireCommand,
     type,
     waitFor,
     waitForAny,
+    waitForTextOrExit,
     complete: completeActiveRun,
     dispose
   };

@@ -14,6 +14,7 @@ const template = {
   projectName: 'AspireCliTsStarterSmoke',
   selectionText: 'Starter App (Express/React, TypeScript AppHost)',
   expectedResources: ['app', 'frontend'],
+  hasRedisCachePrompt: false,
   hasTestProjectPrompt: false
 };
 

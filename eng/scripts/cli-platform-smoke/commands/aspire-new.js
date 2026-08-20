@@ -16,23 +16,26 @@ async function runAspireNew(shell, { template, timeoutMs = 180_000 }) {
   await shell.waitFor('Enter the output path', 'output path prompt', timeoutMs);
   await shell.enter();
 
-  await shell.waitFor('Use *.dev.localhost URLs', 'URLs prompt', timeoutMs);
+  await shell.waitFor('Use *.dev.localhost URLs [y/N]:', 'URLs prompt', timeoutMs);
   await shell.enter();
 
-  await shell.waitFor('Use Redis Cache', 'Redis prompt', timeoutMs);
-  await shell.type('n');
+  if (template.hasRedisCachePrompt) {
+    await shell.waitFor('Use Redis Cache [Y/n]:', 'Redis prompt', timeoutMs);
+    await shell.type('n');
+  }
 
   if (template.hasTestProjectPrompt) {
-    await shell.waitFor('Do you want to create a test project?', 'test project prompt', timeoutMs);
+    await shell.waitFor('Do you want to create a test project? [y/N]:', 'test project prompt', timeoutMs);
     await shell.enter();
   }
 
-  const nextStep = await shell.waitForAny(
-    ['configure AI agent environments', shell.getCommandExitNeedle()],
+  const agentInitPrompt = 'Would you like to configure AI agent environments for this project? [Y/n]:';
+  const nextStep = await shell.waitForTextOrExit(
+    agentInitPrompt,
     'agent init prompt or command completion',
     timeoutMs);
 
-  if (nextStep === 'configure AI agent environments') {
+  if (nextStep === agentInitPrompt) {
     await shell.type('n');
   }
 }
