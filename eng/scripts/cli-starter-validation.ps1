@@ -81,6 +81,9 @@ function Invoke-DetachedAspireCommand
         [string]$Command,
 
         [Parameter(Mandatory = $true)]
+        [string]$TemplateId,
+
+        [Parameter(Mandatory = $true)]
         [string]$WorkingDirectory,
 
         [Parameter(Mandatory = $true)]
@@ -119,7 +122,7 @@ function Invoke-DetachedAspireCommand
             $process | Stop-Process -Force -ErrorAction SilentlyContinue
         }
 
-        throw "aspire $Command did not exit within $TimeoutSeconds seconds."
+        throw "${TemplateId}: aspire $Command did not exit within $TimeoutSeconds seconds."
     }
 
     $output = Get-CombinedProcessOutput -StdOutPath $stdoutPath -StdErrPath $stderrPath
@@ -127,7 +130,7 @@ function Invoke-DetachedAspireCommand
 
     if ($process.ExitCode -ne 0)
     {
-        throw "aspire $Command failed with exit code $($process.ExitCode)."
+        throw "${TemplateId}: aspire $Command failed with exit code $($process.ExitCode)."
     }
 
     try
@@ -136,7 +139,7 @@ function Invoke-DetachedAspireCommand
     }
     catch
     {
-        throw "aspire $Command did not produce valid JSON. Output: $output"
+        throw "${TemplateId}: aspire $Command did not produce valid JSON. Output: $output"
     }
 
     if ($null -eq $metadata -or
@@ -147,7 +150,7 @@ function Invoke-DetachedAspireCommand
         [string]::IsNullOrWhiteSpace([string]$metadata.appHostPath) -or
         [string]::IsNullOrWhiteSpace([string]$metadata.logFile))
     {
-        throw "aspire $Command did not return the expected detached AppHost metadata. Output: $output"
+        throw "${TemplateId}: aspire $Command did not return the expected detached AppHost metadata. Output: $output"
     }
 
     return (Get-Date) - $startedAt
@@ -202,6 +205,7 @@ foreach ($template in $templates)
 
                 $runElapsed = Invoke-DetachedAspireCommand `
                     -Command run `
+                    -TemplateId $templateId `
                     -WorkingDirectory $projectRoot `
                     -DiagnosticsDirectory $diagnosticsDir `
                     -TimeoutSeconds $MaxStartupSeconds
@@ -233,6 +237,7 @@ foreach ($template in $templates)
 
             $startElapsed = Invoke-DetachedAspireCommand `
                 -Command start `
+                -TemplateId $templateId `
                 -WorkingDirectory $projectRoot `
                 -DiagnosticsDirectory $diagnosticsDir `
                 -TimeoutSeconds $MaxStartupSeconds
