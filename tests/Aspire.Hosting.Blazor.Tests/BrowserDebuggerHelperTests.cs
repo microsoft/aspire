@@ -24,26 +24,16 @@ public class BrowserDebuggerHelperTests
         var commandTarget = new ContainerResource("command-target");
         var debuggerResource = new ContainerResource("debugger");
 
-        using var observationCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        var initialUpdateTask = notificationService.WaitForResourceAsync(
-            commandTarget.Name,
-            evt => evt.Snapshot.State?.Text == KnownResourceStates.Running,
-            observationCts.Token);
         await notificationService.PublishUpdateAsync(
-            commandTarget,
-            snapshot => snapshot with { State = KnownResourceStates.Running }).DefaultTimeout();
-        var initialUpdate = await initialUpdateTask.DefaultTimeout();
-
-        var noOpUpdateTask = notificationService.WaitForResourceAsync(
-            commandTarget.Name,
-            evt => evt.Snapshot.Version > initialUpdate.Snapshot.Version
-                && evt.Snapshot.State?.Text == initialUpdate.Snapshot.State?.Text,
-            observationCts.Token);
+            debuggerResource,
+            snapshot => snapshot with { State = KnownResourceStates.Starting }).DefaultTimeout();
+        var minimumSnapshotVersion = GetCurrentSnapshotVersion(notificationService, debuggerResource);
         var callbackCount = 0;
         var watcherTask = BrowserDebuggerHelper.WatchForDebuggerStopAsync(
             serviceProvider,
             commandTarget,
             debuggerResource,
+            minimumSnapshotVersion,
             CancellationToken.None,
             () => Interlocked.Increment(ref callbackCount));
 
@@ -52,10 +42,8 @@ public class BrowserDebuggerHelperTests
             snapshot => snapshot with { State = terminalState }).DefaultTimeout();
 
         await watcherTask.DefaultTimeout();
-        var noOpUpdate = await noOpUpdateTask.DefaultTimeout();
 
         Assert.Equal(1, callbackCount);
-        Assert.Same(commandTarget, noOpUpdate.Resource);
     }
 
     [Fact]
@@ -71,17 +59,14 @@ public class BrowserDebuggerHelperTests
         await notificationService.PublishUpdateAsync(
             debuggerResource,
             snapshot => snapshot with { State = KnownResourceStates.Starting }).DefaultTimeout();
+        var minimumSnapshotVersion = GetCurrentSnapshotVersion(notificationService, debuggerResource);
 
-        using var observationCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        var commandTargetUpdateTask = notificationService.WaitForResourceAsync(
-            commandTarget.Name,
-            evt => ReferenceEquals(evt.Resource, commandTarget),
-            observationCts.Token);
         var callbackCount = 0;
         var watcherTask = BrowserDebuggerHelper.WatchForDebuggerStopAsync(
             serviceProvider,
             commandTarget,
             debuggerResource,
+            minimumSnapshotVersion,
             CancellationToken.None,
             () => Interlocked.Increment(ref callbackCount));
 
@@ -90,10 +75,43 @@ public class BrowserDebuggerHelperTests
             snapshot => snapshot with { State = KnownResourceStates.NotStarted }).DefaultTimeout();
 
         await watcherTask.DefaultTimeout();
-        var commandTargetUpdate = await commandTargetUpdateTask.DefaultTimeout();
 
         Assert.Equal(1, callbackCount);
-        Assert.Same(commandTarget, commandTargetUpdate.Resource);
+    }
+
+    [Theory]
+    [InlineData("Exited")]
+    [InlineData("Finished")]
+    [InlineData("FailedToStart")]
+    [InlineData("Terminated")]
+    public async Task WatchForDebuggerStopAsync_IgnoresTerminalSnapshotFromPreviousSession(string terminalState)
+    {
+        using var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        using var serviceProvider = new ServiceCollection()
+            .AddSingleton(notificationService)
+            .BuildServiceProvider();
+        var commandTarget = new ContainerResource("command-target");
+        var debuggerResource = new ContainerResource("debugger");
+
+        await notificationService.PublishUpdateAsync(
+            debuggerResource,
+            snapshot => snapshot with { State = terminalState }).DefaultTimeout();
+        var minimumSnapshotVersion = GetCurrentSnapshotVersion(notificationService, debuggerResource);
+
+        using var watcherCts = new CancellationTokenSource();
+        var callbackCount = 0;
+        var watcherTask = BrowserDebuggerHelper.WatchForDebuggerStopAsync(
+            serviceProvider,
+            commandTarget,
+            debuggerResource,
+            minimumSnapshotVersion,
+            watcherCts.Token,
+            () => Interlocked.Increment(ref callbackCount));
+
+        await watcherCts.CancelAsync();
+        await watcherTask.DefaultTimeout();
+
+        Assert.Equal(0, callbackCount);
     }
 
     [Fact]
@@ -111,6 +129,7 @@ public class BrowserDebuggerHelperTests
             serviceProvider,
             commandTarget,
             debuggerResource,
+            0,
             watcherCts.Token,
             () => Interlocked.Increment(ref callbackCount));
 
@@ -118,5 +137,13 @@ public class BrowserDebuggerHelperTests
 
         await watcherTask.DefaultTimeout();
         Assert.Equal(0, callbackCount);
+    }
+
+    private static long GetCurrentSnapshotVersion(
+        ResourceNotificationService notificationService,
+        IResource resource)
+    {
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var currentState));
+        return currentState.Snapshot.Version;
     }
 }

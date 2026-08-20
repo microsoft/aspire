@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Xml.Linq;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -108,9 +109,25 @@ public static class BlazorHostedExtensions
                 // The debug bridge (monovsdbg_wasm) needs the CLIENT project path to resolve
                 // WASM BCL assemblies on disk. Passing the server's path fails because the
                 // server's output doesn't contain browser-wasm BCL DLLs (e.g. mscorlib.dll).
-                var clientProjectPath = ResolveBlazorWasmClientProjectPath(projectMetadata.ProjectPath)
-                    ?? projectMetadata.ProjectPath;
-                AddBrowserDebuggerResource(host, clientProjectPath, relativePath: null, browser: annotation.DebuggerBrowser);
+                // Register the hidden debugger resource now so the app model is complete, but
+                // keep its command hidden until cancellable discovery runs before startup.
+                AddBrowserDebuggerResource(
+                    host,
+                    projectMetadata.ProjectPath,
+                    () => annotation.DebuggerClientProjectPath,
+                    relativePath: null,
+                    browser: annotation.DebuggerBrowser);
+
+                host.ApplicationBuilder.OnBeforeStart(async (beforeStartEvent, cancellationToken) =>
+                {
+                    var logger = beforeStartEvent.Services
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger(typeof(BlazorHostedExtensions));
+                    annotation.DebuggerClientProjectPath = await ResolveBlazorWasmClientProjectPathAsync(
+                        projectMetadata.ProjectPath,
+                        logger,
+                        cancellationToken).ConfigureAwait(false);
+                });
             }
         }
 
@@ -172,47 +189,89 @@ public static class BlazorHostedExtensions
 
     /// <summary>
     /// Resolves the Blazor WebAssembly client project path from the server project's references.
-    /// The server's .csproj contains a ProjectReference to the client which uses
-    /// Microsoft.NET.Sdk.BlazorWebAssembly. We find that reference so the debug bridge
-    /// can locate WASM BCL assemblies in the client's output directory.
+    /// The server project target asks each evaluated project reference whether it is a
+    /// Blazor WebAssembly project and returns the matching project path.
     /// </summary>
-    private static string? ResolveBlazorWasmClientProjectPath(string serverProjectPath)
+    private static async Task<string?> ResolveBlazorWasmClientProjectPathAsync(
+        string serverProjectPath,
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
+        var serverDirectory = Path.GetDirectoryName(serverProjectPath);
+        if (serverDirectory is null)
+        {
+            return null;
+        }
+
+        // ResolveWebAssemblyProjectReferences is temporarily defined by the BlazorHosted sample
+        // because Aspire currently builds with the .NET 10 SDK. The target has moved into the
+        // .NET 11 Static Web Assets SDK, so the sample copy can be removed once Aspire adopts it:
+        // https://github.com/dotnet/sdk/blob/c0fb107a5474a2993546bc574fd7a6daac9fd7aa/src/StaticWebAssetsSdk/Sdk/Sdk.targets
+        //
+        // The target returns each evaluated WASM ProjectReference. An empty collection is valid
+        // and keeps the browser debugging command hidden.
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            serverProjectPath,
+            "msbuild",
+            [
+                "-t:ResolveWebAssemblyProjectReferences",
+                "-getItem:WebAssemblyProjectReference",
+                "-nologo"
+            ],
+            machineReadableOutput: true,
+            cancellationToken).ConfigureAwait(false);
+
+        if (!result.Started)
+        {
+            var message =
+                $"Failed to start '{result.Command}' while discovering the Blazor WebAssembly client project for '{serverProjectPath}'.";
+            throw result.StartException is not null
+                ? new DistributedApplicationException(message, result.StartException)
+                : new DistributedApplicationException(message);
+        }
+
+        if (result.ExitCode != 0)
+        {
+            BlazorGatewayLog.WasmClientDiscoveryFailed(
+                logger,
+                serverProjectPath,
+                result.StandardOutput,
+                result.StandardError);
+            throw new DistributedApplicationException(
+                $"Failed to discover the Blazor WebAssembly client project for '{serverProjectPath}'. " +
+                $"The ResolveWebAssemblyProjectReferences MSBuild target exited with code {result.ExitCode}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(result.StandardOutput))
+        {
+            throw new DistributedApplicationException(
+                $"The ResolveWebAssemblyProjectReferences MSBuild target returned no output for '{serverProjectPath}'.");
+        }
+
         try
         {
-            var serverDir = Path.GetDirectoryName(serverProjectPath);
-            if (serverDir is null)
+            using var output = JsonDocument.Parse(result.StandardOutput);
+
+            // MSBuild emits:
+            // { "Items": { "WebAssemblyProjectReference": [{ "Identity": "/path/Client.csproj" }] } }
+            if (output.RootElement.TryGetProperty("Items", out var items)
+                && items.TryGetProperty("WebAssemblyProjectReference", out var projectReferences))
             {
-                return null;
-            }
-
-            var doc = XDocument.Load(serverProjectPath);
-            var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
-
-            var projectRefs = doc.Descendants(ns + "ProjectReference")
-                .Select(e => e.Attribute("Include")?.Value)
-                .Where(v => v is not null);
-
-            foreach (var relPath in projectRefs)
-            {
-                var fullPath = Path.GetFullPath(Path.Combine(serverDir, relPath!));
-                if (!File.Exists(fullPath))
+                foreach (var projectReference in projectReferences.EnumerateArray())
                 {
-                    continue;
-                }
-
-                // Check if this project uses the BlazorWebAssembly SDK
-                var refDoc = XDocument.Load(fullPath);
-                var sdk = refDoc.Root?.Attribute("Sdk")?.Value;
-                if (string.Equals(sdk, "Microsoft.NET.Sdk.BlazorWebAssembly", StringComparison.OrdinalIgnoreCase))
-                {
-                    return fullPath;
+                    if (projectReference.TryGetProperty("Identity", out var identity)
+                        && identity.GetString() is { Length: > 0 } projectPath)
+                    {
+                        return Path.GetFullPath(projectPath, serverDirectory);
+                    }
                 }
             }
         }
-        catch
+        catch (JsonException ex)
         {
-            // If we can't resolve the client project, fall back to the server path.
+            throw new DistributedApplicationException(
+                $"Failed to parse the ResolveWebAssemblyProjectReferences output for '{serverProjectPath}'.",
+                ex);
         }
 
         return null;
@@ -220,15 +279,19 @@ public static class BlazorHostedExtensions
 
     private static void AddBrowserDebuggerResource(
         IResourceBuilder<ProjectResource> host,
-        string clientProjectPath,
+        string serverProjectPath,
+        Func<string?> clientProjectPathProvider,
         string? relativePath,
         string browser)
     {
+        var workingDirectory = Path.GetDirectoryName(serverProjectPath) ?? serverProjectPath;
+
         BrowserDebuggerHelper.AddBrowserDebuggerResource(
             host.ApplicationBuilder,
             host.Resource,
             host,
-            clientProjectPath,
+            workingDirectory,
+            clientProjectPathProvider,
             relativePath,
             browser: browser);
     }
@@ -244,6 +307,7 @@ internal sealed class HostedClientAnnotation : IResourceAnnotation
     public bool IsInitialized { get; set; }
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
     public string DebuggerBrowser { get; set; } = "msedge";
+    public string? DebuggerClientProjectPath { get; set; }
 }
 
 /// <summary>

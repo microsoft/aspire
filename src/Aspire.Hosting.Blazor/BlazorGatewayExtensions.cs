@@ -256,7 +256,9 @@ public static class BlazorGatewayExtensions
     /// <summary>
     /// Configures the browser launched when starting a debug session for the Blazor WebAssembly app.
     /// The value is read when the debugger is registered on the gateway, so call this before
-    /// <see cref="WithBlazorClientApp"/> attaches the app.
+    /// <see cref="WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>
+    /// or <see cref="WithBlazorClientApp(IResourceBuilder{DotnetProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>
+    /// attaches the app.
     /// </summary>
     /// <param name="wasmApp">The Blazor WebAssembly app resource builder.</param>
     /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>

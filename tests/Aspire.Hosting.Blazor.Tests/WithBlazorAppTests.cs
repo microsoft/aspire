@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREEXTENSION001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -177,10 +176,9 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithClient_WhenWasmDebuggerEnabled_AddsDebuggerResourceAndCommands()
+    public void WithClient_AddsDebuggerResourceAndCommands()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
 
         var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpEndpoint()
@@ -217,28 +215,9 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithClient_WhenWasmDebuggerDisabled_DoesNotAddDebuggerResourceOrCommands()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
-            .WithHttpEndpoint()
-            .WithHttpsEndpoint();
-
-        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
-
-        gateway.WithBlazorClientApp(wasmApp);
-
-        Assert.Empty(builder.Resources.OfType<BrowserDebuggerResource>());
-        Assert.DoesNotContain(wasmApp.Resource.Annotations, annotation => annotation is ResourceCommandAnnotation);
-        Assert.Single(gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>());
-    }
-
-    [Fact]
     public void WithClient_InPublishMode_DoesNotAddDebuggerResourceOrCommands()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
 
         var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpEndpoint()
@@ -260,7 +239,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     public void WithClient_DebuggerCommandsHaveExpectedInitialState(string resourceState, ResourceCommandState expectedDebugState)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+        ConfigureBrowserDebugging(builder, browserCapabilitySupported: true);
 
         var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpsEndpoint();
@@ -276,18 +255,87 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
                 Properties = [],
                 State = resourceState
             },
-            ServiceProvider = new ServiceCollection().BuildServiceProvider()
+            Services = new ServiceCollection().BuildServiceProvider()
         };
 
         Assert.Equal(expectedDebugState, commands["debug-in-browser"].UpdateState(context));
         Assert.Equal(ResourceCommandState.Hidden, commands["stop-browser-debug"].UpdateState(context));
     }
 
-    [Fact]
-    public void WithClient_WhenWasmDebuggerEnabled_CreatesBrowserLaunchConfiguration()
+    [Theory]
+    [InlineData(false, null, ResourceCommandState.Disabled)]
+    [InlineData(true, null, ResourceCommandState.Disabled)]
+    [InlineData(true, false, ResourceCommandState.Disabled)]
+    [InlineData(true, true, ResourceCommandState.Enabled)]
+    public void WithClient_DebugInBrowserCommandRequiresBrowserDebuggingSupport(
+        bool debugSessionActive,
+        bool? browserCapabilitySupported,
+        ResourceCommandState expectedState)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+        builder.Configuration["DEBUG_SESSION_PORT"] = debugSessionActive ? "localhost:1234" : null;
+
+        if (browserCapabilitySupported is not null)
+        {
+            ConfigureBrowserDebugging(builder, browserCapabilitySupported.Value);
+        }
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp);
+
+        var command = Assert.Single(
+            wasmApp.Resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == "debug-in-browser");
+        var context = new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                ResourceType = "BlazorWasmApp",
+                Properties = [],
+                State = KnownResourceStates.Running
+            },
+            Services = new ServiceCollection().BuildServiceProvider()
+        };
+
+        Assert.Equal(expectedState, command.UpdateState(context));
+    }
+
+    [Fact]
+    public async Task WithClient_DebugInBrowserCommandFailsWithoutBrowserDebuggingSupport()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp);
+
+        var command = Assert.Single(
+            wasmApp.Resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == "debug-in-browser");
+        using var services = new ServiceCollection().BuildServiceProvider();
+
+        var result = await command.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = services,
+            ResourceName = wasmApp.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(
+            "Browser debugging requires an active IDE debug session that supports the 'browser' launch configuration.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task WithClient_CreatesBrowserLaunchConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpEndpoint()
@@ -300,7 +348,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         gateway.WithBlazorClientApp(wasmApp);
 
         var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
-        var launchConfiguration = InvokeLaunchConfigurationAnnotator(debuggerResource);
+        var launchConfiguration = await CreateBrowserLaunchConfigurationAsync(debuggerResource);
 
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
         Assert.Equal("https://localhost:7443/store/", launchConfiguration.Url);
@@ -436,17 +484,21 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             name => Assert.Equal("public", name));
     }
 
-    private static BrowserLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<BrowserLaunchConfiguration> CreateBrowserLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+        var launchConfiguration = await resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug);
+        return Assert.IsType<BrowserLaunchConfiguration>(launchConfiguration);
+    }
 
-        var executable = Executable.Create("test", "browser");
-        supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug);
+    private static void ConfigureBrowserDebugging(IDistributedApplicationBuilder builder, bool browserCapabilitySupported)
+    {
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:1234";
 
-        Assert.True(executable.TryGetAnnotationAsObjectList<BrowserLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigurations));
-        return Assert.Single(launchConfigurations);
+        // DEBUG_SESSION_INFO is emitted by the IDE in this shape:
+        // {"protocols_supported":["2024-03-03"],"supported_launch_configurations":["browser"]}
+        builder.Configuration["DEBUG_SESSION_INFO"] = browserCapabilitySupported
+            ? """{"protocols_supported":["2024-03-03"],"supported_launch_configurations":["browser"]}"""
+            : """{"protocols_supported":["2024-03-03"],"supported_launch_configurations":["project"]}""";
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata

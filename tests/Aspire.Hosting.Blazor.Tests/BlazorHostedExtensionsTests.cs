@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIREEXTENSION001, ASPIREFILESYSTEM001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -151,15 +151,17 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ProxyMethods_WhenWasmDebuggerEnabled_AddOneDebuggerResourceAndCommandPair()
+    public void ProxyMethods_AddOneDebuggerResourceAndCommandPair()
     {
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
+        var (serverProjectPath, _) = CreateBlazorHostedProjects(tempDirectory);
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
 
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
         var catalogApi = builder.AddProject<TestProjectMetadata>("catalogapi");
 
-        var host = builder.AddProject<TestProjectMetadata>("blazorapp")
+        var host = builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithBlazorDebuggerBrowser("chrome")
             .ProxyBlazorService(weatherApi)
@@ -187,76 +189,94 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             command => Assert.Equal("stop-browser-debug", command));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    public async Task ProxyMethods_WhenWasmDebuggerNotEnabled_PreserveProxyBehaviorWithoutDebugger(bool? debuggerEnabled)
+    [Fact]
+    public async Task ProxyService_WithWasmClient_UsesResolvedClientProjectAsWebRoot()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        if (debuggerEnabled.HasValue)
-        {
-            builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = debuggerEnabled.Value.ToString();
-        }
-        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
-
-        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
-        var host = builder.AddProject<TestProjectMetadata>("blazorapp")
-            .WithHttpsEndpoint()
-            .ProxyBlazorService(weatherApi)
-            .ProxyBlazorTelemetry();
-
-        var annotation = Assert.Single(host.Resource.Annotations.OfType<HostedClientAnnotation>());
-        Assert.Single(annotation.Services);
-        Assert.True(annotation.ProxyBlazorTelemetry);
-        Assert.NotEmpty(host.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>());
-
-        var env = await GetEnvironmentVariables(host.Resource, builder);
-        Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
-        Assert.Equal("cluster-otlp-dashboard", env["ReverseProxy__Routes__route-otlp__ClusterId"]);
-
-        Assert.Empty(builder.Resources.OfType<BrowserDebuggerResource>());
-        Assert.DoesNotContain(host.Resource.Annotations, annotation => annotation is ResourceCommandAnnotation);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ProxyService_WhenWasmDebuggerEnabled_UsesResolvedClientProjectAsWebRoot(bool hasWasmClient)
-    {
-        using var tempDirectory = new TestTempDirectory();
-        var serverDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Server"));
-        var clientDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Client"));
-        var serverProjectPath = Path.Combine(serverDirectory.FullName, "Server.csproj");
-        var clientProjectPath = Path.Combine(clientDirectory.FullName, "Client.csproj");
-
-        File.WriteAllText(serverProjectPath, hasWasmClient
-            ? """
-                <Project Sdk="Microsoft.NET.Sdk.Web">
-                  <ItemGroup>
-                    <ProjectReference Include="../Client/Client.csproj" />
-                  </ItemGroup>
-                </Project>
-                """
-            : """
-                <Project Sdk="Microsoft.NET.Sdk.Web" />
-                """);
-        File.WriteAllText(clientProjectPath, """
-            <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly" />
-            """);
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
+        var (serverProjectPath, clientProjectPath) = CreateBlazorHostedProjects(tempDirectory);
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        builder.Configuration[KnownConfigNames.WasmDebuggerEnabled] = bool.TrueString;
+        ConfigureBrowserDebugging(builder);
 
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
-        builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+        var host = builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
             .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7443), createIfNotExists: false)
             .ProxyBlazorService(weatherApi);
 
-        var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
-        var launchConfiguration = InvokeLaunchConfigurationAnnotator(debuggerResource);
+        using var app = builder.Build();
+        await PublishBeforeStartEventAsync(builder, app);
 
-        Assert.Equal(hasWasmClient ? clientProjectPath : serverProjectPath, launchConfiguration.WebRoot);
+        var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
+        var launchConfiguration = await CreateBrowserLaunchConfigurationAsync(debuggerResource);
+        var debugCommand = Assert.Single(
+            host.Resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == "debug-in-browser");
+
+        Assert.Equal(clientProjectPath, launchConfiguration.WebRoot);
+        Assert.Equal(ResourceCommandState.Enabled, debugCommand.UpdateState(CreateRunningCommandStateContext()));
+    }
+
+    [Fact]
+    public async Task ProxyService_WithoutWasmClient_HidesDebugCommand()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
+        var serverProjectPath = CreateBlazorHostedServerWithoutClient(tempDirectory);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        ConfigureBrowserDebugging(builder);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+        var host = builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .ProxyBlazorService(weatherApi);
+
+        using var app = builder.Build();
+        await PublishBeforeStartEventAsync(builder, app);
+
+        var debuggerResource = Assert.Single(builder.Resources.OfType<BrowserDebuggerResource>());
+        var debugCommand = Assert.Single(
+            host.Resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == "debug-in-browser");
+
+        Assert.True(debuggerResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+        Assert.Equal(ResourceCommandState.Hidden, debugCommand.UpdateState(CreateRunningCommandStateContext()));
+
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var result = await debugCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = services,
+            ResourceName = host.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.False(result.Success);
+        Assert.Contains("no Blazor WebAssembly client project", result.Message);
+    }
+
+    [Fact]
+    public async Task ProxyService_WhenClientDiscoveryFails_SurfacesFailure()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
+        var serverProjectPath = Path.Combine(tempDirectory.Path, "Server.csproj");
+        File.WriteAllText(serverProjectPath, """<Project Sdk="Microsoft.NET.Sdk.Web" />""");
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+        builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .ProxyBlazorService(weatherApi);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => PublishBeforeStartEventAsync(builder, app));
+
+        Assert.Contains("ResolveWebAssemblyProjectReferences", exception.Message);
     }
 
     [Fact]
@@ -507,17 +527,86 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         return (string)value;
     }
 
-    private static BrowserLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<BrowserLaunchConfiguration> CreateBrowserLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+        var launchConfiguration = await resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug);
+        return Assert.IsType<BrowserLaunchConfiguration>(launchConfiguration);
+    }
 
-        var executable = Executable.Create("test", "browser");
-        supportsDebugging.LaunchConfigurationAnnotator(executable, ExecutableLaunchMode.Debug);
+    private static async Task PublishBeforeStartEventAsync(
+        IDistributedApplicationBuilder builder,
+        DistributedApplication app)
+    {
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+    }
 
-        Assert.True(executable.TryGetAnnotationAsObjectList<BrowserLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigurations));
-        return Assert.Single(launchConfigurations);
+    private static UpdateCommandStateContext CreateRunningCommandStateContext()
+    {
+        return new()
+        {
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                ResourceType = "Project",
+                Properties = [],
+                State = KnownResourceStates.Running
+            },
+            Services = new ServiceCollection().BuildServiceProvider()
+        };
+    }
+
+    private static void ConfigureBrowserDebugging(IDistributedApplicationBuilder builder)
+    {
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:1234";
+        builder.Configuration["DEBUG_SESSION_INFO"] =
+            """{"protocols_supported":["2024-03-03"],"supported_launch_configurations":["browser"]}""";
+    }
+
+    private static (string ServerProjectPath, string ClientProjectPath) CreateBlazorHostedProjects(TempDirectory tempDirectory)
+    {
+        var serverDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Server"));
+        var clientDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "Client"));
+        var serverProjectPath = Path.Combine(serverDirectory.FullName, "Server.csproj");
+        var clientProjectPath = Path.Combine(clientDirectory.FullName, "Client.csproj");
+
+        File.WriteAllText(serverProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk.Web">
+              <ItemGroup>
+                <ProjectReference Include="../Client/Client.csproj" />
+              </ItemGroup>
+              <Target Name="ResolveWebAssemblyProjectReferences">
+                <MSBuild Projects="@(ProjectReference)"
+                         Targets="GetWebAssemblyProjectReference"
+                         BuildInParallel="true"
+                         SkipNonexistentTargets="true">
+                  <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
+                </MSBuild>
+              </Target>
+            </Project>
+            """);
+        File.WriteAllText(clientProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+              <Target Name="GetWebAssemblyProjectReference"
+                      Returns="@(_WebAssemblyProjectReference)">
+                <ItemGroup>
+                  <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
+                </ItemGroup>
+              </Target>
+            </Project>
+            """);
+
+        return (serverProjectPath, clientProjectPath);
+    }
+
+    private static string CreateBlazorHostedServerWithoutClient(TempDirectory tempDirectory)
+    {
+        var serverProjectPath = Path.Combine(tempDirectory.Path, "Server.csproj");
+        File.WriteAllText(serverProjectPath, """
+            <Project Sdk="Microsoft.NET.Sdk.Web">
+              <Target Name="ResolveWebAssemblyProjectReferences" />
+            </Project>
+            """);
+        return serverProjectPath;
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata

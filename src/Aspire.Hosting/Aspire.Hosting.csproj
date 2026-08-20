@@ -132,6 +132,8 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Blazor" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Blazor.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
