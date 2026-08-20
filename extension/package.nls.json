@@ -155,6 +155,7 @@
   "aspire-vscode.strings.configInfoTimedOut": "Aspire config info timed out after {0} seconds.",
   "aspire-vscode.strings.appHostDiscoveryProgress": "Discovering AppHosts...",
   "aspire-vscode.strings.selectDefaultLaunchApphost": "Select the default AppHost to launch when starting an Aspire debug session",
+  "aspire-vscode.strings.selectAppHostToLaunch": "Multiple AppHosts were found. Select the one to launch",
   "aspire-vscode.strings.doYouWantToSetDefaultApphost": "Do you want to set {0} as the default AppHost for this workspace?",
   "aspire-vscode.strings.doYouWantToSelectDefaultApphost": "Do you want to select the default AppHost for this workspace?",
   "aspire-vscode.strings.dontShowAgainLabel": "Don't show again",

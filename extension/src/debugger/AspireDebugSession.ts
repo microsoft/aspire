@@ -36,6 +36,9 @@ import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
 import { hasRootNoLogoOption } from "../utils/cliCompatibility";
+import { AppHostDiscoveryService, formatAppHostLanguage, type CandidateAppHostDisplayInfo } from "../utils/appHostDiscovery";
+import { findWorkspaceDefaultCandidate, sortCandidatesByPath } from "../utils/appHostCandidateSelection";
+import { selectAppHostToLaunch } from "../loc/strings";
 
 export type AppHostDebugSessionTracker = (owner: AspireDebugSession, appHostPath: string, debugSession: AspireResourceDebugSession) => void;
 
@@ -160,6 +163,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private readonly _terminalProvider: AspireTerminalProvider;
   private readonly _trackAppHostDebugSession: AppHostDebugSessionTracker;
   private readonly _removeAspireDebugSession: (session: AspireDebugSession) => void;
+  // Optional so existing constructor callers (including tests) do not need to supply one.
+  // When absent, a directory launch with multiple buildable AppHosts falls back to the prior
+  // behavior of letting the CLI attempt (and fail) to resolve it non-interactively.
+  private readonly _appHostDiscoveryService?: AppHostDiscoveryService;
 
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
@@ -286,7 +293,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     return this._cliProcess?.pid;
   }
 
-  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker = () => { }, debugSessionId: string = generateDcpIdPrefix(), operationKind?: AspireOperationKind) {
+  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker = () => { }, debugSessionId: string = generateDcpIdPrefix(), operationKind?: AspireOperationKind, appHostDiscoveryService?: AppHostDiscoveryService) {
     this._session = session;
     this._rpcServer = rpcServer;
     this._dcpServer = dcpServer;
@@ -295,6 +302,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this._removeAspireDebugSession = removeAspireDebugSession;
     this.configuration = session.configuration as AspireExtendedDebugConfiguration;
     this.operationKind = operationKind ?? getOperationKind(this.configuration.command);
+    this._appHostDiscoveryService = appHostDiscoveryService;
 
     this.debugSessionId = debugSessionId;
   }
@@ -974,14 +982,34 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       command: bucketAspireCommand(command),
     });
 
-    const appHostIsDirectory = await this.isDirectory(appHostPath);
+    let appHostIsDirectory = await this.isDirectory(appHostPath);
     if (this.isShuttingDown) {
       extensionLogOutputChannel.info(`Skipping Aspire CLI launch for disposed or shutting-down debug session ${this.debugSessionId}.`);
       return;
     }
 
+    // `program` points at a workspace-root directory rather than a concrete AppHost. The CLI
+    // can only resolve that non-interactively when the directory has zero or one buildable
+    // AppHost; with two or more and no configured default it fails inside the non-interactive
+    // launch instead of prompting (see #19280). Ask here, before the CLI ever starts, so an
+    // ambiguous directory launches the AppHost the user intended rather than failing.
+    let launchAppHostPath = appHostPath;
+    if (appHostIsDirectory && appHostSelectionOrigin !== 'explicit-cli') {
+      const resolvedAppHostPath = await this.resolveAppHostDirectoryLaunchTarget(appHostPath);
+      if (resolvedAppHostPath === undefined) {
+        extensionLogOutputChannel.info(`AppHost selection cancelled for directory launch ${appHostPath}.`);
+        this.stopDebuggingInBackground('AppHost selection cancelled');
+        return;
+      }
+
+      if (resolvedAppHostPath !== appHostPath) {
+        launchAppHostPath = resolvedAppHostPath;
+        appHostIsDirectory = false;
+      }
+    }
+
     this._appHostIsDirectoryAtLaunch = appHostIsDirectory ? 'true' : 'false';
-    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory, appHostTelemetryTargetPath);
+    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(launchAppHostPath, appHostIsDirectory, appHostTelemetryTargetPath);
 
     // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
     if (!noDebug) {
@@ -1005,7 +1033,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     if (!appHostIsDirectory || appHostSelectionOrigin === 'explicit-cli') {
-      extensionArgs.push('--apphost', appHostPath);
+      extensionArgs.push('--apphost', launchAppHostPath);
     }
 
     const args = buildAspireCommandArgs(command, commandArgs, extensionArgs, this.configuration.step);
@@ -1013,16 +1041,66 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     const sessionType = noDebug ? 'run' : 'debug';
 
     if (appHostIsDirectory) {
-      this.sendMessageWithEmoji("📁", launchingWithDirectory(sessionType, appHostPath));
+      this.sendMessageWithEmoji("📁", launchingWithDirectory(sessionType, launchAppHostPath));
 
-      void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel, this.getAppHostSelectionOriginEnvironment(appHostSelectionOrigin));
+      void this.spawnAspireCommand(args, launchAppHostPath, noDebug, commandLabel, this.getAppHostSelectionOriginEnvironment(appHostSelectionOrigin));
     }
     else {
-      this.sendMessageWithEmoji("📂", launchingWithAppHost(sessionType, appHostPath));
+      this.sendMessageWithEmoji("📂", launchingWithAppHost(sessionType, launchAppHostPath));
 
-      const workspaceFolder = path.dirname(appHostPath);
+      const workspaceFolder = path.dirname(launchAppHostPath);
       void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel, this.getAppHostSelectionOriginEnvironment(appHostSelectionOrigin));
     }
+  }
+
+  /**
+   * Resolves which AppHost to launch when `program` points at a directory rather than a concrete
+   * AppHost file. Returns the directory unchanged when there is nothing ambiguous to resolve (no
+   * discovery service available, the directory isn't part of an open workspace folder, or there
+   * are zero/one buildable candidates, or a single configured/selected default already applies).
+   * Returns a concrete AppHost path when the user picks one from multiple candidates, or
+   * `undefined` when the user cancels the picker.
+   */
+  private async resolveAppHostDirectoryLaunchTarget(appHostPath: string): Promise<string | undefined> {
+    if (!this._appHostDiscoveryService) {
+      return appHostPath;
+    }
+
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(appHostPath));
+    if (!workspaceFolder) {
+      return appHostPath;
+    }
+
+    let candidates: CandidateAppHostDisplayInfo[];
+    try {
+      candidates = await this._appHostDiscoveryService.discover(workspaceFolder);
+    }
+    catch (error) {
+      extensionLogOutputChannel.warn(`Failed to discover AppHost candidates for directory launch ${appHostPath}: ${error}`);
+      return appHostPath;
+    }
+
+    const buildableCandidates = candidates.filter(candidate => candidate.status === 'buildable');
+    if (buildableCandidates.length <= 1 || findWorkspaceDefaultCandidate(candidates)) {
+      // Zero or one buildable candidate, or a single configured/selected default: the CLI
+      // resolves this non-interactively exactly as before.
+      return appHostPath;
+    }
+
+    const items = sortCandidatesByPath(buildableCandidates).map(candidate => ({
+      label: path.relative(workspaceFolder.uri.fsPath, candidate.path),
+      description: candidate.language ? formatAppHostLanguage(candidate.language) : undefined,
+      detail: candidate.path,
+      appHostPath: candidate.path,
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: selectAppHostToLaunch,
+      canPickMany: false,
+      ignoreFocusOut: true,
+    });
+
+    return selected?.appHostPath;
   }
 
   private async isDirectory(pathToCheck: string): Promise<boolean> {
