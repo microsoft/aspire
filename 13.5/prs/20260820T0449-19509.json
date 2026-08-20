@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Release pipeline / WinGet publish infra fix, no direct end-user impact",
+  "mergedAt": "2026-08-20T04:49:50Z",
+  "number": 19509,
+  "runDate": "2026-08-20T06:11:37Z",
+  "status": "excluded",
+  "title": "[release/13.5] fix(release): Restore WinGet publication with .NET 9 wingetcreate"
+}

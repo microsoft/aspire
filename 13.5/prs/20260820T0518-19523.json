@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Engineering/CI variable group cleanup, no user impact",
+  "mergedAt": "2026-08-20T05:18:07Z",
+  "number": 19523,
+  "runDate": "2026-08-20T06:11:37Z",
+  "status": "excluded",
+  "title": "[release/13.5] Remove pipeline-scoped Publish-Build-Assets group"
+}

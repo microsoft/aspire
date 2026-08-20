@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes crash under older CLIs for TypeScript/Java AppHosts",
+  "mergedAt": "2026-08-20T04:39:00Z",
+  "number": 19524,
+  "runDate": "2026-08-20T06:11:37Z",
+  "status": "included",
+  "title": "[release/13.5] Preserve TypeSystem compatibility with older CLIs"
+}

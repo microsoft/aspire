@@ -1,0 +1,9 @@
+{
+  "author": "missymessa",
+  "comment": "Engineering/CI variable group cleanup, no user impact",
+  "mergedAt": "2026-08-20T04:22:20Z",
+  "number": 19163,
+  "runDate": "2026-08-20T06:11:37Z",
+  "status": "excluded",
+  "title": "Remove Publish-Build-Assets variable group from release/13.5"
+}

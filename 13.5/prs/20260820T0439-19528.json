@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Dependency bump backport, no user impact",
+  "mergedAt": "2026-08-20T04:39:13Z",
+  "number": 19528,
+  "runDate": "2026-08-20T06:11:37Z",
+  "status": "excluded",
+  "title": "[release/13.5] [main] Update dependencies from microsoft/dcp"
+}
