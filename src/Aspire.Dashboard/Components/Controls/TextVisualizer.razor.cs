@@ -43,20 +43,7 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
 
     private bool IsUnformatted => DisplayUnformatted || ViewModel.FormatKind is DashboardUIHelpers.PlaintextFormat;
 
-    private Virtualize<StringLogLine>? VirtualizeRef
-    {
-        get => field;
-        set
-        {
-            field = value;
-
-            // Set max item count when the Virtualize component is set.
-            if (field != null)
-            {
-                VirtualizeHelper<StringLogLine>.TrySetMaxItemCount(field, 10_000);
-            }
-        }
-    }
+    private Virtualize<StringLogLine>? VirtualizeRef { get; set; }
 
     protected override async Task OnInitializedAsync()
     {

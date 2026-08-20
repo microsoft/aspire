@@ -1,0 +1,13 @@
+<linker>
+  <!-- IconResolver dynamically resolves resource and command icons at sizes 16, 20, and 24. -->
+  <assembly fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Filled">
+    <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Filled.Size16*" preserve="all" />
+    <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Filled.Size20*" preserve="all" />
+    <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Filled.Size24*" preserve="all" />
+  </assembly>
+  <assembly fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Regular">
+    <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size16*" preserve="all" />
+    <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20*" preserve="all" />
+    <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size24*" preserve="all" />
+  </assembly>
+</linker>

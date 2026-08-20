@@ -140,7 +140,8 @@ public sealed class DashboardTelemetrySender : IDashboardTelemetrySender
         try
         {
             var response = await Client.GetAsync(TelemetryEndpoints.TelemetryEnabled).ConfigureAwait(false);
-            var isTelemetryEnabled = response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<TelemetryEnabledResponse>().ConfigureAwait(false) is { IsEnabled: true };
+            var isTelemetryEnabled = response.IsSuccessStatusCode &&
+                await response.Content.ReadFromJsonAsync(DashboardTelemetryJsonSerializerContext.Default.TelemetryEnabledResponse).ConfigureAwait(false) is { IsEnabled: true };
 
             if (!isTelemetryEnabled)
             {

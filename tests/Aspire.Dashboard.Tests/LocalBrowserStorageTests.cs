@@ -2,11 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Serialization;
+using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -118,12 +123,47 @@ public class LocalBrowserStorageTests
         Assert.Equal("MyKey", args[0]);
     }
 
-    private static LocalBrowserStorage CreateBrowserLocalStorage(TestJSRuntime testJsonRuntime)
+    [Fact]
+    public async Task SetUnprotectedAsync_UsesCircuitOptionsJsonTypeInfoResolvers()
     {
+        var resolver = new TrackingJsonTypeInfoResolver();
+        var circuitOptions = CreateCircuitOptions(resolver);
+        var localStorage = CreateBrowserLocalStorage(new TestJSRuntime(), circuitOptions);
+
+        await localStorage.SetUnprotectedAsync("MyKey", 123).DefaultTimeout();
+
+        Assert.Equal(typeof(int), resolver.RequestedType);
+    }
+
+    private static LocalBrowserStorage CreateBrowserLocalStorage(TestJSRuntime testJsonRuntime, CircuitOptions? circuitOptions = null)
+    {
+        circuitOptions ??= CreateCircuitOptions(DashboardJsonSerializerContext.Default);
+
         return new LocalBrowserStorage(
             testJsonRuntime,
             new ProtectedLocalStorage(testJsonRuntime, new TestDataProtector()),
-            NullLogger<LocalBrowserStorage>.Instance);
+            NullLogger<LocalBrowserStorage>.Instance,
+            Options.Create(circuitOptions));
+    }
+
+            private static CircuitOptions CreateCircuitOptions(IJsonTypeInfoResolver resolver)
+            {
+            var circuitOptions = new CircuitOptions();
+        #pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+            circuitOptions.JsonTypeInfoResolvers.Add(resolver);
+        #pragma warning restore ASPNETCORE9004
+            return circuitOptions;
+            }
+
+    private sealed class TrackingJsonTypeInfoResolver : IJsonTypeInfoResolver
+    {
+        public Type? RequestedType { get; private set; }
+
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            RequestedType = type;
+            return ((IJsonTypeInfoResolver)DashboardJsonSerializerContext.Default).GetTypeInfo(type, options);
+        }
     }
 
     private sealed class TestJSRuntime : IJSRuntime

@@ -11,11 +11,13 @@ namespace Aspire.Cli.Layout;
 public enum LayoutComponent
 {
     /// <summary>CLI executable.</summary>
-    Cli,
+    Cli = 0,
     /// <summary>Developer Control Plane.</summary>
-    Dcp,
-    /// <summary>Unified managed binary (dashboard, server, nuget).</summary>
-    Managed
+    Dcp = 1,
+    /// <summary>Unified managed binary (server, NuGet, terminal host).</summary>
+    Managed = 2,
+    /// <summary>Dashboard executable and static assets.</summary>
+    Dashboard = 3
 }
 
 /// <summary>
@@ -63,6 +65,7 @@ public sealed class LayoutConfiguration
         {
             LayoutComponent.Cli => Components.Cli,
             LayoutComponent.Dcp => Components.Dcp,
+            LayoutComponent.Dashboard => Components.Dashboard,
             LayoutComponent.Managed => Components.Managed,
             _ => null
         };
@@ -89,6 +92,42 @@ public sealed class LayoutConfiguration
 
         return Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
     }
+
+    /// <summary>
+    /// Gets the path to the Native AOT Dashboard executable, falling back to the legacy unified binary.
+    /// </summary>
+    /// <returns>The path to the Dashboard executable.</returns>
+    public string? GetDashboardPath()
+    {
+        // Current bundles keep the Native AOT Dashboard and its static assets isolated from
+        // aspire-managed so each executable can use its own content root.
+        var dashboardDir = GetComponentPath(LayoutComponent.Dashboard);
+        if (dashboardDir is not null)
+        {
+            var dashboardPath = Path.Combine(
+                dashboardDir,
+                BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+            if (File.Exists(dashboardPath))
+            {
+                return dashboardPath;
+            }
+        }
+
+        // Preserve compatibility with bundles created before dashboard/ became a separate
+        // component. Transitional bundles placed Aspire.Dashboard in managed/, while older
+        // bundles dispatch the "dashboard" subcommand through aspire-managed itself.
+        var managedDir = GetComponentPath(LayoutComponent.Managed);
+        if (managedDir is null)
+        {
+            return null;
+        }
+
+        var legacyDashboardPath = Path.Combine(
+            managedDir,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+
+        return File.Exists(legacyDashboardPath) ? legacyDashboardPath : GetManagedPath();
+    }
 }
 
 /// <summary>
@@ -105,6 +144,11 @@ public sealed class LayoutComponents
     /// Path to Developer Control Plane.
     /// </summary>
     public string? Dcp { get; set; } = BundleDiscovery.DcpDirectoryName;
+
+    /// <summary>
+    /// Path to the Dashboard executable and static assets directory.
+    /// </summary>
+    public string? Dashboard { get; set; } = BundleDiscovery.DashboardDirectoryName;
 
     /// <summary>
     /// Path to the unified managed binary directory.

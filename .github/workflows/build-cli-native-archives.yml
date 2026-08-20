@@ -16,12 +16,14 @@ on:
           Defaults to all platforms (linux-x64, linux-arm64, win-x64, win-arm64, osx-arm64).
         required: false
         type: string
+        # Use the VS 2026 ARM preview image for its newer native linker. The VS 2022 ARM image
+        # fails to link Aspire.Dashboard.obj with LNK1322.
         default: >-
           [
             {"os": "ubuntu-latest", "runner": "8-core-ubuntu-latest", "rids": "linux-x64"},
             {"os": "ubuntu-latest", "runner": "ubuntu-24.04-arm", "rids": "linux-arm64"},
             {"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"},
-            {"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"},
+            {"os": "windows-latest", "runner": "windows-11-vs2026-arm", "rids": "win-arm64"},
             {"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}
           ]
 
@@ -98,6 +100,31 @@ jobs:
           /p:ContinuousIntegrationBuild=true
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
+
+      - name: Smoke test Native AOT Dashboard
+        # osx-x64 is cross-compiled on an Apple Silicon runner and cannot be executed there
+        # without introducing an undeclared Rosetta dependency.
+        if: ${{ matrix.targets.rids != 'osx-x64' }}
+        shell: pwsh
+        run: |
+          $extension = if ('${{ runner.os }}' -eq 'Windows') { '.exe' } else { '' }
+          $dashboardPath = (Join-Path '${{ github.workspace }}' 'artifacts/bin/Aspire.Dashboard/${{ matrix.targets.rids }}/${{ inputs.configuration }}/net11.0/${{ matrix.targets.rids }}/publish/Aspire.Dashboard') + $extension
+          ./eng/scripts/test-native-dashboard.ps1 -DashboardPath $dashboardPath
+
+      - name: Test Native AOT Dashboard interactivity
+        if: ${{ matrix.targets.rids == 'win-x64' }}
+        shell: pwsh
+        env:
+          ASPIRE_NATIVE_DASHBOARD_PATH: ${{ github.workspace }}/artifacts/bin/Aspire.Dashboard/win-x64/${{ inputs.configuration }}/net11.0/win-x64/publish/Aspire.Dashboard.exe
+        run: >
+          ./dotnet.cmd test
+          --project tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj
+          -c ${{ inputs.configuration }}
+          --no-launch-profile
+          /p:ContinuousIntegrationBuild=true
+          /p:InstallBrowsersForPlaywright=true
+          --
+          --filter-method "*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors"
 
       - name: Build CLI packages
         run: >

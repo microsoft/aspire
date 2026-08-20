@@ -106,4 +106,14 @@ internal sealed partial class OtlpJsonSerializerContext : JsonSerializerContext
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         TypeInfoResolver = Default
     };
+
+    /// <summary>
+    /// Gets source-generated metadata bound to <see cref="DefaultOptions"/>.
+    /// </summary>
+    public static OtlpJsonSerializerContext DefaultContext { get; } = new(DefaultOptions);
+
+    /// <summary>
+    /// Gets source-generated metadata bound to <see cref="IndentedOptions"/>.
+    /// </summary>
+    public static OtlpJsonSerializerContext IndentedContext { get; } = new(IndentedOptions);
 }
