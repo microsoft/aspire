@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { addCommand } from '../commands/add';
 import { newCommand } from '../commands/new';
 import { initCommand } from '../commands/init';
+import { createWithAspireCommand } from '../commands/createWithAspire';
 import { deployCommand } from '../commands/deploy';
 import { publishCommand } from '../commands/publish';
 import { doCommand } from '../commands/do';
@@ -35,6 +36,10 @@ export function registerCliCommands(
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp, invocation, cliPath) => addCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
   const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', () => tryExecuteCommand('aspire-vscode.new', terminalProvider, (tp, invocation, cliPath) => newCommand(tp, invocation.target, cliPath), selectCommandInvocation));
   const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', () => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), selectCommandInvocation));
+  // Delegates to aspire-vscode.new / aspire-vscode.init above, so it doesn't go
+  // through tryExecuteCommand itself — the delegated-to command owns its own CLI
+  // availability check and telemetry.
+  const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', () => createWithAspireCommand(editorCommandProvider));
   const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
   const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
   const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (tp, invocation, cliPath) => doCommand(tp, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
@@ -56,6 +61,7 @@ export function registerCliCommands(
     cliAddCommandRegistration,
     cliNewCommandRegistration,
     cliInitCommandRegistration,
+    createWithAspireCommandRegistration,
     cliDeployCommandRegistration,
     cliPublishCommandRegistration,
     cliDoCommandRegistration,

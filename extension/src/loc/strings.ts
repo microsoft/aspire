@@ -20,6 +20,11 @@ export const aspireHostingSdkVersion = (version: string) => vscode.l10n.t('Aspir
 export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI Version: {0}.', version);
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
+export const createWithAspirePlaceholder = vscode.l10n.t('Create with Aspire');
+export const createNewAspireAppLabel = vscode.l10n.t('Create a new Aspire app');
+export const createNewAspireAppDescription = vscode.l10n.t('Start a greenfield application in a new directory using an Aspire template.');
+export const addAspireToWorkspaceLabel = vscode.l10n.t('Add Aspire to this workspace');
+export const addAspireToWorkspaceDescription = vscode.l10n.t('Add an AppHost and Aspire configuration alongside applications already in this workspace.');
 export const aspireCliPathEnvironmentDescription = vscode.l10n.t('Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.');
 export const configuredCliPathRejected = (configuredPath: string) => vscode.l10n.t('The configured Aspire CLI path could not be used, so a different Aspire CLI is running instead: {0}. Check that aspire.aspireCliExecutablePath points to the aspire executable itself and that it runs.', configuredPath);
 export const configuredCliPathRejectedOpenSetting = vscode.l10n.t('Open Setting');

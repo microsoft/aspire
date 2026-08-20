@@ -295,6 +295,12 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.createWithAspire",
+        "title": "%command.createWithAspire%",
+        "category": "Aspire",
+        "icon": "$(add)"
+      },
+      {
         "command": "aspire-vscode.publish",
         "enablement": "workspaceFolderCount > 0",
         "title": "%command.publish%",
@@ -752,6 +758,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "aspire-vscode.createWithAspire",
+          "when": "view == 'aspire-vscode.appHosts'",
+          "group": "navigation@-5"
+        },
         {
           "command": "aspire-vscode.switchToGlobalView",
           "when": "view == 'aspire-vscode.appHosts' && aspire.viewMode != 'global'",
