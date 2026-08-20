@@ -3,15 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const {
-  buildAspireCommand,
-  cleanupProject,
-  runAspireAddInteractive,
-  runAspireNewInteractive,
-  runAspireRunInteractive,
-  runSimpleAspireCommand,
-  sanitizeFileName
-} = require('./command-runner');
+const { runAspireAddInteractive } = require('../commands/aspire-add');
+const { runAspireNewInteractive } = require('../commands/aspire-new');
+const { runAspireResources } = require('../commands/aspire-resources');
+const { runAspireRunInteractive } = require('../commands/aspire-run');
+const { runAspireStart } = require('../commands/aspire-start');
+const { cleanupProject, runAspireStop } = require('../commands/aspire-stop');
+const { runAspireWait } = require('../commands/aspire-wait');
 
 async function runStarterScenario(
   {
@@ -35,72 +33,62 @@ async function runStarterScenario(
 
   try {
     await runAspireNewInteractive({
+      aspireCommand,
+      channel,
       cwd: templateRoot,
       diagnosticsDir,
-      command: buildAspireCommand(
-        aspireCommand,
-        [
-          'new',
-          templateId,
-          '--name', projectName,
-          '--output', projectRoot,
-          '--channel', channel
-        ]),
       hasTestProjectPrompt,
+      outputPath: projectRoot,
       projectName,
+      templateId,
       timeoutMs: 180_000
     });
 
     await runAspireAddInteractive({
+      aspireCommand,
       cwd: projectRoot,
       diagnosticsDir,
-      command: buildAspireCommand(aspireCommand, ['add']),
       integrationFilter: 'postgres',
       timeoutMs: 180_000
     });
 
     await runAspireRunInteractive({
+      aspireCommand,
       cwd: projectRoot,
       diagnosticsDir,
-      command: buildAspireCommand(aspireCommand, ['run']),
       timeoutMs: Math.max(maxStartupSeconds, resourceReadyTimeoutSeconds) * 1000 + 180_000
     });
 
-    await runSimpleAspireCommand({
+    await runAspireStart({
+      aspireCommand,
       cwd: projectRoot,
       diagnosticsDir,
-      fileName: 'aspire-start.log',
-      command: buildAspireCommand(aspireCommand, ['start']),
-      waitForTexts: ['AppHost started successfully.'],
       timeoutMs: maxStartupSeconds * 1000 + 180_000
     });
 
-    await runSimpleAspireCommand({
+    await runAspireResources({
+      aspireCommand,
       cwd: projectRoot,
       diagnosticsDir,
-      fileName: 'aspire-resources.log',
-      command: buildAspireCommand(aspireCommand, ['resources']),
-      waitForTexts: expectedResources,
+      expectedResources,
       timeoutMs: 180_000
     });
 
     for (const resourceName of expectedResources) {
-      await runSimpleAspireCommand({
+      await runAspireWait({
+        aspireCommand,
         cwd: projectRoot,
         diagnosticsDir,
-        fileName: `aspire-wait-${sanitizeFileName(resourceName)}.log`,
-        command: buildAspireCommand(aspireCommand, ['wait', resourceName, '--status', 'up', '--timeout', String(resourceReadyTimeoutSeconds)]),
-        waitForTexts: ['is up (running).'],
+        resourceName,
+        resourceReadyTimeoutSeconds,
         timeoutMs: resourceReadyTimeoutSeconds * 1000 + 120_000
       });
     }
 
-    await runSimpleAspireCommand({
+    await runAspireStop({
+      aspireCommand,
       cwd: projectRoot,
       diagnosticsDir,
-      fileName: 'aspire-stop.log',
-      command: buildAspireCommand(aspireCommand, ['stop']),
-      waitForAnyTexts: ['Running instance stopped successfully.', 'No running AppHost found.'],
       timeoutMs: 120_000
     });
   } finally {

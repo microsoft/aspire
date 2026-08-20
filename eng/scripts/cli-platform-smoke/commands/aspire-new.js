@@ -1,0 +1,64 @@
+'use strict';
+
+const { buildAspireCommand } = require('../lib/aspire-command');
+const { runInteractiveCommand } = require('../lib/run-interactive-command');
+
+async function runAspireNewInteractive({
+  aspireCommand,
+  channel,
+  cwd,
+  diagnosticsDir,
+  hasTestProjectPrompt,
+  outputPath,
+  projectName,
+  templateId,
+  timeoutMs
+}) {
+  await runInteractiveCommand({
+    cwd,
+    diagnosticsDir,
+    fileName: 'aspire-new.log',
+    command: buildAspireCommand(
+      aspireCommand,
+      [
+        'new',
+        templateId,
+        '--name', projectName,
+        '--output', outputPath,
+        '--channel', channel
+      ]),
+    timeoutMs,
+    interact: async run => {
+      await run.waitForText('Enter the project name', timeoutMs, 'project name prompt');
+      await run.type(projectName);
+      await run.enter();
+
+      await run.waitForText('Enter the output path', timeoutMs, 'output path prompt');
+      await run.enter();
+
+      await run.waitForText('Use *.dev.localhost URLs', timeoutMs, 'URLs prompt');
+      await run.enter();
+
+      await run.waitForText('Use Redis Cache', timeoutMs, 'Redis prompt');
+      await run.type('n');
+
+      if (hasTestProjectPrompt) {
+        await run.waitForText('Do you want to create a test project?', timeoutMs, 'test project prompt');
+        await run.enter();
+      }
+
+      const nextStep = await run.waitForAnyText(
+        ['configure AI agent environments', run.exitNeedle],
+        timeoutMs,
+        'agent init prompt or command completion');
+
+      if (nextStep === 'configure AI agent environments') {
+        await run.type('n');
+      }
+    }
+  });
+}
+
+module.exports = {
+  runAspireNewInteractive
+};
