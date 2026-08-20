@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure feature (Community section) for whats-new pages, not tied to a product changelog entry",
+  "mergedAt": "2026-08-19T18:33:33Z",
+  "number": 1542,
+  "runDate": "2026-08-20T00:08:18Z",
+  "status": "excluded",
+  "title": "Add a per-release Community section to What's new pages"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure fix (sample image rendering), no matching product changelog entry",
+  "mergedAt": "2026-08-19T14:35:55Z",
+  "number": 1537,
+  "runDate": "2026-08-20T00:08:18Z",
+  "status": "excluded",
+  "title": "Render theme-aware sample images that link to their full-size asset"
+}

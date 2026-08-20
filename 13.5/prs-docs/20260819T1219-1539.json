@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents interaction file upload security guidance; matched to File upload support for Interaction Service (PR 14882)",
+  "mergedAt": "2026-08-19T12:19:34Z",
+  "number": 1539,
+  "runDate": "2026-08-20T00:08:18Z",
+  "status": "included",
+  "title": "Add interaction file upload security guidance"
+}
