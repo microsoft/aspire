@@ -510,8 +510,7 @@ internal sealed class BicepProvisioner(
         var resourceLogger = loggerService.GetLogger(resource);
         var targetScope = BicepUtilities.GetExistingResourceScope(resource);
         var isTenantScoped = targetScope?.IsTenantScope == true;
-        var isSubscriptionScoped = !isTenantScoped &&
-            targetScope is { Subscription: not null, HasResourceGroup: false };
+        var isSubscriptionScoped = !isTenantScoped && targetScope?.IsSubscriptionScope == true;
 
         if (targetScope?.Subscription is { } existingSubscription)
         {

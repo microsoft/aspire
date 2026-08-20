@@ -2991,6 +2991,17 @@ impl CSharpAppResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5833,6 +5844,17 @@ impl ContainerResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -7712,6 +7734,17 @@ impl DotnetToolResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9544,6 +9577,17 @@ impl ExecutableResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("computeEnvironmentResource".to_string(), compute_environment_resource.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
@@ -15418,6 +15462,17 @@ impl ProjectResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17682,6 +17737,17 @@ impl TestDatabaseResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19275,6 +19341,17 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("computeEnvironmentResource".to_string(), compute_environment_resource.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
@@ -20938,6 +21015,17 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("computeEnvironmentResource".to_string(), compute_environment_resource.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures the compute environments that deploy the compute resource.
+    pub fn with_compute_environments(&self, compute_environment_resources: Vec<IComputeEnvironmentResource>) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let handles: Vec<Value> = compute_environment_resources.iter().map(|item| item.handle().to_json()).collect();
+        args.insert("computeEnvironmentResources".to_string(), Value::Array(handles));
+        let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironments", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }

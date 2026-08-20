@@ -117,7 +117,7 @@
             ],
             "properties": {
               "type": {
-                "const": "container.v1"
+                "enum": [ "container.v1", "container.v2" ]
               },
               "image": {
                 "type": "string",
@@ -136,6 +136,21 @@
                     "$ref": "#/definitions/resource.azure.bicep.v1"
                   }
                 ]
+              },
+              "deployments": {
+                "type": "object",
+                "description": "Deployment targets keyed by compute-environment resource name.",
+                "minProperties": 2,
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/resource.azure.bicep.v0"
+                    },
+                    {
+                      "$ref": "#/definitions/resource.azure.bicep.v1"
+                    }
+                  ]
+                }
               },
               "args": {
                 "$ref": "#/definitions/args"
@@ -180,6 +195,37 @@
                 "$ref": "#/definitions/volumes"
               }
             },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "container.v2"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [ "deployments" ],
+                  "not": {
+                    "required": [ "deployment" ]
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "container.v1"
+                    }
+                  }
+                },
+                "then": {
+                  "not": {
+                    "required": [ "deployments" ]
+                  }
+                }
+              }
+            ],
             "additionalProperties": false
           },
           {
@@ -233,7 +279,7 @@
             "required": [ "type", "path" ],
             "properties": {
               "type": {
-                "const": "project.v1"
+                "enum": [ "project.v1", "project.v2" ]
               },
               "path": {
                 "type": "string",
@@ -248,6 +294,21 @@
                     "$ref": "#/definitions/resource.azure.bicep.v1"
                   }
                 ]
+              },
+              "deployments": {
+                "type": "object",
+                "description": "Deployment targets keyed by compute-environment resource name.",
+                "minProperties": 2,
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/resource.azure.bicep.v0"
+                    },
+                    {
+                      "$ref": "#/definitions/resource.azure.bicep.v1"
+                    }
+                  ]
+                }
               },
               "containerFiles": {
                 "type": "object",
@@ -280,6 +341,37 @@
                 "$ref": "#/definitions/bindings"
               }
             },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "project.v2"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [ "deployments" ],
+                  "not": {
+                    "required": [ "deployment" ]
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "project.v1"
+                    }
+                  }
+                },
+                "then": {
+                  "not": {
+                    "required": [ "deployments" ]
+                  }
+                }
+              }
+            ],
             "additionalProperties": false
           },
           {
@@ -583,9 +675,11 @@
                     "annotated.string",
                     "container.v0",
                     "container.v1",
+                    "container.v2",
                     "dockerfile.v0",
                     "project.v0",
                     "project.v1",
+                    "project.v2",
                     "value.v0",
                     "executable.v0",
                     "azure.bicep.v0",
@@ -677,7 +771,7 @@
             },
             "subscription": {
               "type": "string",
-              "description": "The subscription identifier to deploy the resource to."
+              "description": "The subscription identifier to deploy the resource to, or \"current\" for the current subscription."
             },
             "tenant": {
               "type": "string",

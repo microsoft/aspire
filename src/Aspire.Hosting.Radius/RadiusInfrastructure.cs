@@ -70,15 +70,14 @@ internal static class RadiusInfrastructure
 
         foreach (var resource in context.Model.GetComputeResources())
         {
-            var resourceComputeEnvironment = resource.GetComputeEnvironment();
+            var resourceComputeEnvironments = resource.GetComputeEnvironments();
 
             // Skip resources that are explicitly targeted to a different compute environment.
             // ValidateComputeEnvironments (a DependsOn for this step) already fails-fast on
             // untargeted resources when multiple compute environments exist, so a null value
             // here means there's exactly one compute environment in the model — which is us.
-            if (resourceComputeEnvironment is not null &&
-                resourceComputeEnvironment != environment &&
-                resourceComputeEnvironment != environment.OwningComputeEnvironment)
+            if (resourceComputeEnvironments.Count > 0 &&
+                !resourceComputeEnvironments.Any(target => target == environment || target == environment.OwningComputeEnvironment))
             {
                 continue;
             }
@@ -89,7 +88,9 @@ internal static class RadiusInfrastructure
             // matches the DeploymentTargetAnnotation by the resource's ComputeEnvironmentAnnotation,
             // so using the parent here would cause an explicitly-targeted resource to look
             // untargeted. This mirrors KubernetesEnvironmentResource's computeEnvForAnnotation.
-            var computeEnvForAnnotation = resourceComputeEnvironment ?? targetComputeEnvironment;
+            var computeEnvForAnnotation = resourceComputeEnvironments
+                .SingleOrDefault(target => target == environment || target == environment.OwningComputeEnvironment) ??
+                targetComputeEnvironment;
 
             // Skip if a target annotation for this environment already exists. Prepare steps
             // are idempotent so re-execution (e.g. during test composition) does not duplicate.

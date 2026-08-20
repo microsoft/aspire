@@ -321,8 +321,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         foreach (var r in appModel.GetComputeResources())
         {
             // Skip resources that are explicitly targeted to a different compute environment
-            var resourceComputeEnvironment = r.GetComputeEnvironment();
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            var resourceComputeEnvironments = r.GetComputeEnvironments();
+            if (resourceComputeEnvironments.Count > 0 && !resourceComputeEnvironments.Contains(this))
             {
                 continue;
             }

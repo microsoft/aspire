@@ -128,7 +128,7 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         // Fall back to this environment's namespace when the target resolves to no Radius
         // environment: the single-environment and AKS-wrap cases share this environment's
         // namespace, so the fallback is correct there.
-        var targetNamespace = (resource.GetComputeEnvironment() as RadiusEnvironmentResource)?.Namespace ?? Namespace;
+        var targetNamespace = resource.GetComputeEnvironments().OfType<RadiusEnvironmentResource>().SingleOrDefault()?.Namespace ?? Namespace;
 
         // The Radius Kubernetes container recipe names the ClusterIP Service `{name}-{name}` (see
         // RadiusServiceDiscovery), not the bare resource name, so service discovery must address

@@ -460,10 +460,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             // Skip resources that are explicitly targeted to a different compute environment.
             // Also match if the resource targets a parent compute environment (e.g., AKS)
             // that owns this Kubernetes environment.
-            var resourceComputeEnvironment = r.GetComputeEnvironment();
-            if (resourceComputeEnvironment is not null &&
-                resourceComputeEnvironment != this &&
-                resourceComputeEnvironment != OwningComputeEnvironment)
+            var resourceComputeEnvironments = r.GetComputeEnvironments();
+            if (resourceComputeEnvironments.Count > 0 &&
+                !resourceComputeEnvironments.Any(environment => environment == this || environment == OwningComputeEnvironment))
             {
                 continue;
             }
@@ -471,7 +470,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             // Use the resource's actual compute environment (which may be a parent
             // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
             // can match it correctly during publish.
-            var computeEnvForAnnotation = resourceComputeEnvironment ?? targetComputeEnvironment;
+            var computeEnvForAnnotation = resourceComputeEnvironments
+                .SingleOrDefault(environment => environment == this || environment == OwningComputeEnvironment) ??
+                targetComputeEnvironment;
 
             // This step is reachable from two pipeline executions: it is RequiredBy
             // "before-start" (so it runs during AppHost startup) and it is also part of the

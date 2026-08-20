@@ -749,9 +749,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
             {
                 // Skip resources that already have an explicit compute environment binding so we
                 // never override a developer's intentional choice.
-                if (computeResource.GetComputeEnvironment() is null)
+                if (computeResource.GetComputeEnvironments().Count == 0)
                 {
-                    computeResource.Annotations.Add(new ComputeEnvironmentAnnotation(environment));
+                    computeResource.Annotations.Add(new ComputeEnvironmentAnnotation([environment]));
                 }
             }
         }

@@ -4756,8 +4756,102 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(computeEnvironmentResource);
 
-        builder.WithAnnotation(new ComputeEnvironmentAnnotation(computeEnvironmentResource.Resource));
-        return builder;
+        ValidateComputeEnvironmentBuilder(builder, computeEnvironmentResource, nameof(computeEnvironmentResource));
+
+        return builder.WithAnnotation(
+            new ComputeEnvironmentAnnotation([computeEnvironmentResource.Resource]),
+            ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Configures the compute environments that deploy the compute resource.
+    /// </summary>
+    /// <typeparam name="T">The type of compute resource.</typeparam>
+    /// <param name="builder">The compute resource builder.</param>
+    /// <param name="computeEnvironmentResources">The compute environments that deploy the resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// The resource runs once during local development. The selected environments create separate
+    /// deployment targets during publish and deploy.
+    /// </remarks>
+    /// <example>
+    /// Deploy a project to two compute environments:
+    /// <code>
+    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    ///     .WithComputeEnvironments([east, west]);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="computeEnvironmentResources"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when no compute environments are supplied, an environment is repeated, or an environment belongs to another application builder.
+    /// </exception>
+    /// <exception cref="NotSupportedException">
+    /// Thrown when any selected environment does not support multi-target compute resources.
+    /// </exception>
+    [AspireExport]
+    [Experimental("ASPIRECOMPUTE004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<T> WithComputeEnvironments<T>(
+        this IResourceBuilder<T> builder,
+        IReadOnlyList<IResourceBuilder<IComputeEnvironmentResource>> computeEnvironmentResources)
+        where T : IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(computeEnvironmentResources);
+
+        if (computeEnvironmentResources.Count == 0)
+        {
+            throw new ArgumentException("At least one compute environment must be specified.", nameof(computeEnvironmentResources));
+        }
+
+        var environments = new List<IComputeEnvironmentResource>(computeEnvironmentResources.Count);
+        var environmentNames = new HashSet<string>(StringComparers.ResourceName);
+
+        foreach (var computeEnvironmentResource in computeEnvironmentResources)
+        {
+            if (computeEnvironmentResource is null)
+            {
+                throw new ArgumentException("The compute environment list cannot contain null entries.", nameof(computeEnvironmentResources));
+            }
+
+            ValidateComputeEnvironmentBuilder(builder, computeEnvironmentResource, nameof(computeEnvironmentResources));
+
+            if (!environmentNames.Add(computeEnvironmentResource.Resource.Name))
+            {
+                throw new ArgumentException(
+                    $"Compute environment '{computeEnvironmentResource.Resource.Name}' was specified more than once.",
+                    nameof(computeEnvironmentResources));
+            }
+
+            environments.Add(computeEnvironmentResource.Resource);
+        }
+
+        if (environments.Count > 1 &&
+            environments.FirstOrDefault(static environment => environment is not IMultiTargetComputeEnvironmentResource) is { } unsupportedEnvironment)
+        {
+            throw new NotSupportedException(
+                $"Compute environment '{unsupportedEnvironment.Name}' does not support deploying a resource to multiple compute environments.");
+        }
+
+        return builder.WithAnnotation(
+            new ComputeEnvironmentAnnotation(environments),
+            ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    private static void ValidateComputeEnvironmentBuilder<T>(
+        IResourceBuilder<T> builder,
+        IResourceBuilder<IComputeEnvironmentResource> computeEnvironmentResource,
+        string parameterName)
+        where T : IComputeResource
+    {
+        if (!ReferenceEquals(builder.ApplicationBuilder, computeEnvironmentResource.ApplicationBuilder))
+        {
+            throw new ArgumentException(
+                $"Compute environment '{computeEnvironmentResource.Resource.Name}' belongs to a different distributed application builder.",
+                parameterName);
+        }
     }
 
     /// <summary>

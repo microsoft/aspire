@@ -83,27 +83,27 @@ internal static class ComputeEnvironmentEndpointResolver
 
         var owningResource = endpointReferenceExpression.Endpoint.Resource;
 
-        // Resolve the compute environment the owning resource deploys to. A plain resource that is
-        // not deployed anywhere has none, so there is nothing to delegate to and the local lookup
-        // handles it.
-        if (!TryGetEffectiveComputeEnvironment(owningResource, out var owningComputeEnvironment))
+        var owningComputeEnvironments = GetEffectiveComputeEnvironments(owningResource);
+        if (owningComputeEnvironments.Count == 0)
         {
             return false;
         }
 
-        // If the owning resource deploys to one of the current publisher's compute environments, the
-        // endpoint lives in the local endpoint map. Leave resolution to the existing local lookup so
-        // generated artifacts (bicep parameters, helm values, etc.) are unchanged.
-        foreach (var current in currentComputeEnvironments)
+        if (owningComputeEnvironments.Any(owning => currentComputeEnvironments.Any(current => ReferenceEquals(current, owning))))
         {
-            if (ReferenceEquals(current, owningComputeEnvironment))
-            {
-                return false;
-            }
+            return false;
+        }
+
+        if (owningComputeEnvironments.Count > 1)
+        {
+            var names = string.Join("', '", owningComputeEnvironments.Select(static environment => environment.Name));
+            throw new InvalidOperationException(
+                $"Endpoint resource '{owningResource.Name}' targets multiple remote compute environments ('{names}'). " +
+                "The endpoint cannot be resolved without a target compute-environment context.");
         }
 
 #pragma warning disable ASPIRECOMPUTE002 // Experimental: compute environment endpoint expression
-        expression = owningComputeEnvironment.GetEndpointPropertyExpression(endpointReferenceExpression);
+        expression = owningComputeEnvironments[0].GetEndpointPropertyExpression(endpointReferenceExpression);
 #pragma warning restore ASPIRECOMPUTE002
 
         return true;
@@ -127,11 +127,39 @@ internal static class ComputeEnvironmentEndpointResolver
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        // Prefer an explicit compute environment binding, then fall back to the deployment target's
-        // compute environment. This matches how endpoint references are resolved elsewhere
-        // (Azure Front Door origins, Foundry hosted agents) so all call sites agree on "where is
-        // this resource deployed".
-        computeEnvironment = resource.GetComputeEnvironment() ?? resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment;
+        var computeEnvironments = GetEffectiveComputeEnvironments(resource);
+        if (computeEnvironments.Count > 1)
+        {
+            computeEnvironment = null;
+            return false;
+        }
+
+        computeEnvironment = computeEnvironments.SingleOrDefault();
         return computeEnvironment is not null;
+    }
+
+    /// <summary>
+    /// Gets the compute environments that deploy a resource.
+    /// </summary>
+    public static IReadOnlyList<IComputeEnvironmentResource> GetEffectiveComputeEnvironments(IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var explicitlySelected = resource.GetComputeEnvironments();
+        if (explicitlySelected.Count > 0)
+        {
+            return explicitlySelected;
+        }
+
+        var environments = new List<IComputeEnvironmentResource>();
+        foreach (var environment in resource.GetDeploymentTargetAnnotations().Select(static annotation => annotation.ComputeEnvironment).OfType<IComputeEnvironmentResource>())
+        {
+            if (!environments.Any(existing => ReferenceEquals(existing, environment)))
+            {
+                environments.Add(environment);
+            }
+        }
+
+        return environments;
     }
 }

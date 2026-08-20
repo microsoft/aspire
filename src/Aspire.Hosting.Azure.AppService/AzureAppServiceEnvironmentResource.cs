@@ -218,8 +218,8 @@ public class AzureAppServiceEnvironmentResource :
             }
 
             // Skip resources that are explicitly targeted to a different compute environment
-            var resourceComputeEnvironment = resource.GetComputeEnvironment();
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            var resourceComputeEnvironments = resource.GetComputeEnvironments();
+            if (resourceComputeEnvironments.Count > 0 && !resourceComputeEnvironments.Contains(this))
             {
                 continue;
             }

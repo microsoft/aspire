@@ -7548,6 +7548,10 @@ class AbstractComputeResource(AbstractResource):
         """Configures the compute environment for the compute resource."""
 
     @abc.abstractmethod
+    def with_compute_envs(self, compute_env_resources: typing.Iterable[AbstractComputeEnvironmentResource]) -> typing.Self:
+        """Configures the compute environments that deploy the compute resource."""
+
+    @abc.abstractmethod
     def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
         """Adds an asynchronous callback to configure container image push options for the resource."""
 
@@ -8986,6 +8990,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
+    compute_envs: typing.Iterable[AbstractComputeEnvironmentResource]
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
@@ -9643,6 +9648,17 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_compute_envs(self, compute_env_resources: typing.Iterable[AbstractComputeEnvironmentResource]) -> typing.Self:
+        """Configures the compute environments that deploy the compute resource."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['computeEnvironmentResources'] = compute_env_resources
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -10229,6 +10245,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
+        if _compute_envs := kwargs.pop("compute_envs", None):
+            if _validate_type(_compute_envs, typing.Iterable[AbstractComputeEnvironmentResource]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["computeEnvironmentResources"] = typing.cast(typing.Iterable[AbstractComputeEnvironmentResource], _compute_envs)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironments', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'compute_envs'. Expected: Iterable[AbstractComputeEnvironmentResource]")
         if _http_probe := kwargs.pop("http_probe", None):
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10340,6 +10363,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
+    compute_envs: typing.Iterable[AbstractComputeEnvironmentResource]
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
@@ -10785,6 +10809,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_compute_envs(self, compute_env_resources: typing.Iterable[AbstractComputeEnvironmentResource]) -> typing.Self:
+        """Configures the compute environments that deploy the compute resource."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['computeEnvironmentResources'] = compute_env_resources
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -11200,6 +11235,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
+        if _compute_envs := kwargs.pop("compute_envs", None):
+            if _validate_type(_compute_envs, typing.Iterable[AbstractComputeEnvironmentResource]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["computeEnvironmentResources"] = typing.cast(typing.Iterable[AbstractComputeEnvironmentResource], _compute_envs)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironments', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'compute_envs'. Expected: Iterable[AbstractComputeEnvironmentResource]")
         if _http_probe := kwargs.pop("http_probe", None):
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11318,6 +11360,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
+    compute_envs: typing.Iterable[AbstractComputeEnvironmentResource]
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
@@ -11750,6 +11793,17 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_compute_envs(self, compute_env_resources: typing.Iterable[AbstractComputeEnvironmentResource]) -> typing.Self:
+        """Configures the compute environments that deploy the compute resource."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['computeEnvironmentResources'] = compute_env_resources
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12144,6 +12198,13 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
+        if _compute_envs := kwargs.pop("compute_envs", None):
+            if _validate_type(_compute_envs, typing.Iterable[AbstractComputeEnvironmentResource]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["computeEnvironmentResources"] = typing.cast(typing.Iterable[AbstractComputeEnvironmentResource], _compute_envs)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironments', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'compute_envs'. Expected: Iterable[AbstractComputeEnvironmentResource]")
         if _http_probe := kwargs.pop("http_probe", None):
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

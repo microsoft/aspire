@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)AzureDeclaredLocation.cs" LinkBase="Shared\AzureDeclaredLocation.cs" />
     <Compile Include="$(SharedDir)AzurePortalUrls.cs" Link="AzurePortalUrls.cs" />
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared\ComputeEnvironmentEndpointResolver.cs" />

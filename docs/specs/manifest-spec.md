@@ -106,3 +106,44 @@ When ```dotnet run --publisher manifest``` is called on the AppHost project cont
     }
 }
 ```
+
+## Compute resource deployments
+
+Projects and containers without a deployment target use `project.v0` and `container.v0`.
+When a compute resource has one deployment target, it uses `project.v1` or `container.v1`
+and writes that target to the `deployment` property.
+
+A compute resource deployed to more than one compute environment uses `project.v2` or
+`container.v2`. Its `deployments` object is keyed by compute-environment resource name so
+publishers can preserve the environment associated with each target:
+
+```json
+{
+  "resources": {
+    "api": {
+      "type": "project.v2",
+      "path": "api/api.csproj",
+      "deployments": {
+        "east": {
+          "type": "azure.bicep.v0",
+          "path": "api-east-containerapp.module.bicep"
+        },
+        "west": {
+          "type": "azure.bicep.v0",
+          "path": "api-west-containerapp.module.bicep"
+        }
+      }
+    }
+  }
+}
+```
+
+The v2 shape requires at least two entries. Publishers must not emit a singular
+`deployment` fallback for a v2 resource because a consumer could otherwise deploy only
+one target without reporting that the topology was incomplete.
+
+## Azure Bicep scopes
+
+An `azure.bicep.v1` resource can specify a resource group, subscription, or tenant in its
+`scope` object. The value `"current"` in `scope.subscription` selects the current Azure
+subscription. Similarly, `"current"` is the only supported value for `scope.tenant`.

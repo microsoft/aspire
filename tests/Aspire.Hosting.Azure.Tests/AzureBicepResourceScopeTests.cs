@@ -24,6 +24,16 @@ public class AzureBicepResourceScopeTests
     }
 
     [Fact]
+    public void CurrentSubscriptionScopeHasNoExplicitSubscription()
+    {
+        var scope = AzureBicepResourceScope.CreateForSubscription();
+
+        Assert.True(scope.IsSubscriptionScope);
+        Assert.Null(scope.Subscription);
+        Assert.False(scope.HasResourceGroup);
+    }
+
+    [Fact]
     public void ResourceGroupThrowsForTenantScope()
     {
         var scope = AzureBicepResourceScope.CreateForTenant();

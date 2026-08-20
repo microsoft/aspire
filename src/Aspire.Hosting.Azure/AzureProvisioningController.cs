@@ -656,6 +656,7 @@ internal sealed class AzureProvisioningController(
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
+        ThrowIfLocationFixedByApplicationModel(model, resourceName);
         ThrowIfKeyVaultLocationChangeTarget(model, resourceName);
 
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
@@ -718,6 +719,7 @@ internal sealed class AzureProvisioningController(
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentException.ThrowIfNullOrWhiteSpace(location);
 
+        ThrowIfLocationFixedByApplicationModel(model, resourceName);
         ThrowIfKeyVaultLocationChangeTarget(model, resourceName);
 
         location = NormalizeLocation(location, await GetLocationOptionsAsync(cancellationToken).ConfigureAwait(false));
@@ -934,8 +936,9 @@ internal sealed class AzureProvisioningController(
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentNullException.ThrowIfNull(context);
 
+        var model = context.Services.GetRequiredService<DistributedApplicationModel>();
         if (command == AzureResourceCommand.ChangeLocation &&
-            IsKeyVaultTarget(context.Services.GetRequiredService<DistributedApplicationModel>(), resourceName))
+            (IsKeyVaultTarget(model, resourceName) || IsLocationFixedByApplicationModel(model, resourceName)))
         {
             return ResourceCommandState.Hidden;
         }
@@ -1163,11 +1166,17 @@ internal sealed class AzureProvisioningController(
                 continue;
             }
 
-            var currentLocationOverride = preserveOverrides && preserveInferredLocationOverrides
-                ? TryGetCurrentResourceLocationOverride(bicepResource, environmentLocation)
-                : null;
+            var currentLocationOverride = !AzureDeclaredLocation.IsSet(bicepResource) &&
+                preserveOverrides &&
+                preserveInferredLocationOverrides
+                    ? TryGetCurrentResourceLocationOverride(bicepResource, environmentLocation)
+                    : null;
 
-            if (currentLocationOverride is not null)
+            if (AzureDeclaredLocation.IsSet(bicepResource))
+            {
+                // The application model owns this value; reset must preserve it.
+            }
+            else if (currentLocationOverride is not null)
             {
                 // Apply the override before clearing cached state so the next provisioning pass
                 // emits Bicep with the desired per-resource location.
@@ -1331,6 +1340,21 @@ internal sealed class AzureProvisioningController(
     {
         return GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: false)
             .Any(static resource => resource.AzureResource is IAzureKeyVaultResource);
+    }
+
+    private static bool IsLocationFixedByApplicationModel(DistributedApplicationModel model, string resourceName)
+    {
+        return GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: false)
+            .Any(static resource => resource.AzureResource is AzureBicepResource bicepResource && AzureDeclaredLocation.IsSet(bicepResource));
+    }
+
+    private static void ThrowIfLocationFixedByApplicationModel(DistributedApplicationModel model, string resourceName)
+    {
+        if (IsLocationFixedByApplicationModel(model, resourceName))
+        {
+            throw new InvalidOperationException(
+                $"Azure resource '{resourceName}' has a location declared by the application model and cannot be moved with the change-location command.");
+        }
     }
 
     private static void ThrowIfKeyVaultLocationChangeTarget(DistributedApplicationModel model, string resourceName)
@@ -2737,6 +2761,11 @@ internal sealed class AzureProvisioningController(
     private async Task ApplyResourceOverridesAsync(IAzureResource azureResource, CancellationToken cancellationToken)
     {
         if (azureResource is not AzureBicepResource bicepResource)
+        {
+            return;
+        }
+
+        if (AzureDeclaredLocation.IsSet(bicepResource))
         {
             return;
         }

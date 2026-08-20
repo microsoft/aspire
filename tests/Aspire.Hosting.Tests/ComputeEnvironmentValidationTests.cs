@@ -5,6 +5,8 @@ using System.Net.Sockets;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
+#pragma warning disable ASPIRECOMPUTE004
+
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "6")]
@@ -43,6 +45,56 @@ public class ComputeEnvironmentValidationTests
         using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task MultipleComputeEnvironments_WithResourceBoundToAll_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var env1 = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("env1"));
+        var env2 = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("env2"));
+        var api = builder.AddResource(new TestComputeResource("api"))
+            .WithComputeEnvironments([env1, env2]);
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        Assert.Equal([env1.Resource, env2.Resource], api.Resource.GetComputeEnvironments());
+        Assert.Null(api.Resource.GetComputeEnvironment());
+    }
+
+    [Fact]
+    public void WithComputeEnvironment_ReplacesPluralSelection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var env1 = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("env1"));
+        var env2 = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("env2"));
+        var api = builder.AddResource(new TestComputeResource("api"))
+            .WithComputeEnvironments([env1, env2])
+            .WithComputeEnvironment(env1);
+
+        Assert.Equal([env1.Resource], api.Resource.GetComputeEnvironments());
+        Assert.Same(env1.Resource, api.Resource.GetComputeEnvironment());
+    }
+
+    [Fact]
+    public void WithComputeEnvironments_RejectsInvalidSelections()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var otherBuilder = TestDistributedApplicationBuilder.Create();
+
+        var env = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("env"));
+        var unsupported = builder.AddResource(new TestComputeEnvironmentResource("unsupported"));
+        var other = otherBuilder.AddResource(new TestMultiTargetComputeEnvironmentResource("other"));
+        var api = builder.AddResource(new TestComputeResource("api"));
+
+        Assert.Throws<ArgumentException>(() => api.WithComputeEnvironments([]));
+        Assert.Throws<ArgumentException>(() => api.WithComputeEnvironments([env, env]));
+        Assert.Throws<ArgumentException>(() => api.WithComputeEnvironments([env, other]));
+        Assert.Throws<NotSupportedException>(() => api.WithComputeEnvironments([env, unsupported]));
     }
 
     [Fact]
@@ -104,6 +156,14 @@ public class ComputeEnvironmentValidationTests
     }
 
     private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
+    {
+#pragma warning disable ASPIRECOMPUTE002
+        public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
+            ReferenceExpression.Create($"{endpointReference.Resource.Name}.example.com");
+#pragma warning restore ASPIRECOMPUTE002
+    }
+
+    private sealed class TestMultiTargetComputeEnvironmentResource(string name) : Resource(name), IMultiTargetComputeEnvironmentResource
     {
 #pragma warning disable ASPIRECOMPUTE002
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>

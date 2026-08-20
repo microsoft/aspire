@@ -2813,6 +2813,15 @@ public class CSharpAppResource extends ProjectResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Configures the compute environments that deploy the compute resource. */
+    public CSharpAppResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
+    }
+
     /** Adds an HTTP health probe to the resource */
     public CSharpAppResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -6924,6 +6933,15 @@ public class ContainerResource extends ResourceBuilderBase {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Configures the compute environments that deploy the compute resource. */
+    public ContainerResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
+    }
+
     /** Adds an HTTP health probe to the resource */
     public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -9589,6 +9607,15 @@ public class DotnetToolResource extends ExecutableResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Configures the compute environments that deploy the compute resource. */
+    public DotnetToolResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
+    }
+
     /** Adds an HTTP health probe to the resource */
     public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -11909,6 +11936,15 @@ public class ExecutableResource extends ResourceBuilderBase {
 
     public ExecutableResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
+    /** Configures the compute environments that deploy the compute resource. */
+    public ExecutableResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -19905,6 +19941,15 @@ public class ProjectResource extends ResourceBuilderBase {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Configures the compute environments that deploy the compute resource. */
+    public ProjectResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
+    }
+
     /** Adds an HTTP health probe to the resource */
     public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -23286,6 +23331,15 @@ public class TestDatabaseResource extends ContainerResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Configures the compute environments that deploy the compute resource. */
+    public TestDatabaseResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
+    }
+
     /** Adds an HTTP health probe to the resource */
     public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
         var path = optionsBag == null ? null : optionsBag.getPath();
@@ -25482,6 +25536,15 @@ public class TestRedisResource extends ContainerResource {
 
     public TestRedisResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
+    /** Configures the compute environments that deploy the compute resource. */
+    public TestRedisResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -27693,6 +27756,15 @@ public class TestVaultResource extends ContainerResource {
 
     public TestVaultResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
+    /** Configures the compute environments that deploy the compute resource. */
+    public TestVaultResource withComputeEnvironments(IComputeEnvironmentResource[] computeEnvironmentResources) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResources", AspireClient.serializeValue(computeEnvironmentResources));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironments", reqArgs);
+        return this;
     }
 
     /** Adds an HTTP health probe to the resource */

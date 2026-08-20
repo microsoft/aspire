@@ -59,10 +59,10 @@ public partial class AzureKubernetesEnvironmentResource
 
         foreach (var r in appModel.GetComputeResources())
         {
-            var resourceComputeEnvironment = r.GetComputeEnvironment();
+            var resourceComputeEnvironments = r.GetComputeEnvironments();
 
             // Check if this resource targets THIS AKS environment
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            if (resourceComputeEnvironments.Count > 0 && !resourceComputeEnvironments.Contains(this))
             {
                 continue;
             }

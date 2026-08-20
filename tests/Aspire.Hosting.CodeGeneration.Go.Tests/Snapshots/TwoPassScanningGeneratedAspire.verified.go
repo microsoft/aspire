@@ -1445,6 +1445,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithChildRelationship(child Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -2026,6 +2027,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithComputeEnv
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3670,6 +3683,7 @@ type CSharpAppResource interface {
 	WithChildRelationship(child Resource) CSharpAppResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) CSharpAppResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) CSharpAppResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) CSharpAppResource
 	WithConfig(config *TestConfigDto) CSharpAppResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) CSharpAppResource
 	WithContainerRegistry(registry Resource) CSharpAppResource
@@ -4210,6 +4224,18 @@ func (s *cSharpAppResource) WithComputeEnvironment(computeEnvironmentResource Co
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *cSharpAppResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7549,6 +7575,7 @@ type ContainerResource interface {
 	WithChildRelationship(child Resource) ContainerResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) ContainerResource
 	WithConfig(config *TestConfigDto) ContainerResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource
@@ -8129,6 +8156,18 @@ func (s *containerResource) WithComputeEnvironment(computeEnvironmentResource Co
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *containerResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11215,6 +11254,7 @@ type DotnetToolResource interface {
 	WithChildRelationship(child Resource) DotnetToolResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) DotnetToolResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) DotnetToolResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) DotnetToolResource
 	WithConfig(config *TestConfigDto) DotnetToolResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) DotnetToolResource
 	WithContainerRegistry(registry Resource) DotnetToolResource
@@ -11729,6 +11769,18 @@ func (s *dotnetToolResource) WithComputeEnvironment(computeEnvironmentResource C
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *dotnetToolResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14017,6 +14069,7 @@ type ExecutableResource interface {
 	WithChildRelationship(child Resource) ExecutableResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExecutableResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ExecutableResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) ExecutableResource
 	WithConfig(config *TestConfigDto) ExecutableResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExecutableResource
 	WithContainerRegistry(registry Resource) ExecutableResource
@@ -14525,6 +14578,18 @@ func (s *executableResource) WithComputeEnvironment(computeEnvironmentResource C
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *executableResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20406,6 +20471,7 @@ type ProjectResource interface {
 	WithChildRelationship(child Resource) ProjectResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ProjectResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ProjectResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) ProjectResource
 	WithConfig(config *TestConfigDto) ProjectResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ProjectResource
 	WithContainerRegistry(registry Resource) ProjectResource
@@ -20946,6 +21012,18 @@ func (s *projectResource) WithComputeEnvironment(computeEnvironmentResource Comp
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *projectResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23778,6 +23856,7 @@ type TestDatabaseResource interface {
 	WithChildRelationship(child Resource) TestDatabaseResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestDatabaseResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) TestDatabaseResource
 	WithConfig(config *TestConfigDto) TestDatabaseResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestDatabaseResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource
@@ -24358,6 +24437,18 @@ func (s *testDatabaseResource) WithComputeEnvironment(computeEnvironmentResource
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *testDatabaseResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -25997,6 +26088,7 @@ type TestRedisResource interface {
 	WithChildRelationship(child Resource) TestRedisResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestRedisResource
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestRedisResource
+	WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) TestRedisResource
 	WithConfig(config *TestConfigDto) TestRedisResource
 	WithConnectionProperty(name string, value any) TestRedisResource
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
@@ -26740,6 +26832,18 @@ func (s *testRedisResource) WithComputeEnvironment(computeEnvironmentResource Co
 	}
 	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironments configures the compute environments that deploy the compute resource.
+func (s *testRedisResource) WithComputeEnvironments(computeEnvironmentResources []ComputeEnvironmentResource) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if computeEnvironmentResources != nil { reqArgs["computeEnvironmentResources"] = serializeValue(computeEnvironmentResources) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironments", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

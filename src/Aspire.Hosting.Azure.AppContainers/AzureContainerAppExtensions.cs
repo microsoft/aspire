@@ -917,6 +917,68 @@ public static class AzureContainerAppExtensions
     }
 
     /// <summary>
+    /// Configures the Azure location for the Container Apps environment.
+    /// </summary>
+    /// <param name="builder">The Container Apps environment builder.</param>
+    /// <param name="location">The Azure location.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// The declared location is used during publish and deploy and cannot be changed by the
+    /// development-time Azure resource command.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withLocation dispatcher export.")]
+    [Experimental("ASPIREAZURERG001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithLocation(
+        this IResourceBuilder<AzureContainerAppEnvironmentResource> builder,
+        string location)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(location);
+        return WithLocationCore(builder, location);
+    }
+
+    /// <summary>
+    /// Configures the Azure location for the Container Apps environment.
+    /// </summary>
+    /// <param name="builder">The Container Apps environment builder.</param>
+    /// <param name="location">The parameter containing the Azure location.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// The declared location is used during publish and deploy and cannot be changed by the
+    /// development-time Azure resource command.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withLocation dispatcher export.")]
+    [Experimental("ASPIREAZURERG001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithLocation(
+        this IResourceBuilder<AzureContainerAppEnvironmentResource> builder,
+        IResourceBuilder<ParameterResource> location)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        if (!ReferenceEquals(builder.ApplicationBuilder, location.ApplicationBuilder))
+        {
+            throw new ArgumentException(
+                $"Location parameter '{location.Resource.Name}' belongs to a different distributed application builder.",
+                nameof(location));
+        }
+
+        return WithLocationCore(builder, location.Resource);
+    }
+
+    /// <summary>
+    /// Configures the Azure location for the Container Apps environment.
+    /// </summary>
+    [AspireExport("withContainerAppEnvironmentLocation", MethodName = "withLocation")]
+    [Experimental("ASPIREAZURERG001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal static IResourceBuilder<AzureContainerAppEnvironmentResource> WithLocationForPolyglot(
+        this IResourceBuilder<AzureContainerAppEnvironmentResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object location) =>
+        location switch
+        {
+            string literal => builder.WithLocation(literal),
+            IResourceBuilder<ParameterResource> parameter => builder.WithLocation(parameter),
+            _ => throw new ArgumentException("Location must be a string or parameter resource builder.", nameof(location))
+        };
+
+    /// <summary>
     /// Configures the container app environment to use compact resource naming that maximally preserves
     /// the <c>uniqueString</c> suffix for length-constrained Azure resources such as storage accounts.
     /// </summary>
@@ -1194,6 +1256,7 @@ public static class AzureContainerAppExtensions
                             new StringLiteralExpression("-"),
                             new StringLiteralExpression(""));
                     }
+
                 });
         };
 
@@ -1203,5 +1266,15 @@ public static class AzureContainerAppExtensions
             builder.AddResource(resource).WithIconName("Archive");
         }
         return resource;
+    }
+
+    private static IResourceBuilder<AzureContainerAppEnvironmentResource> WithLocationCore(
+        IResourceBuilder<AzureContainerAppEnvironmentResource> builder,
+        object location)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.SetDeclaredLocation(location);
+        return builder;
     }
 }

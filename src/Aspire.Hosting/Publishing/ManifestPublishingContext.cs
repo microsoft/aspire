@@ -181,21 +181,25 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         var relativePathToProjectFile = GetManifestRelativePath(metadata.ProjectPath);
 
-        var deploymentTarget = project.GetDeploymentTargetAnnotation();
-        if (deploymentTarget is not null)
+        var deploymentTargets = project.GetDeploymentTargetAnnotations();
+        var manifestDeploymentTargets = deploymentTargets.Where(HasManifestPublishingCallback).ToArray();
+        Writer.WriteString("type", manifestDeploymentTargets.Length switch
         {
-            Writer.WriteString("type", "project.v1");
-        }
-        else
-        {
-            Writer.WriteString("type", "project.v0");
-        }
+            0 when deploymentTargets.Count == 0 => "project.v0",
+            0 => "project.v1",
+            1 => "project.v1",
+            _ => "project.v2"
+        });
 
         Writer.WriteString("path", relativePathToProjectFile);
 
-        if (deploymentTarget is not null)
+        if (manifestDeploymentTargets.Length == 1)
         {
-            await WriteDeploymentTarget(deploymentTarget).ConfigureAwait(false);
+            await WriteDeploymentTarget("deployment", manifestDeploymentTargets[0]).ConfigureAwait(false);
+        }
+        else if (manifestDeploymentTargets.Length > 1)
+        {
+            await WriteDeploymentTargets(manifestDeploymentTargets).ConfigureAwait(false);
         }
 
         WriteContainerFilesDestination(project);
@@ -207,16 +211,42 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         WriteBindings(project);
     }
 
-    private async Task WriteDeploymentTarget(DeploymentTargetAnnotation deploymentTarget)
+    private async Task WriteDeploymentTarget(string propertyName, DeploymentTargetAnnotation deploymentTarget)
     {
-        if (deploymentTarget.DeploymentTarget.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var manifestPublishingCallbackAnnotation) &&
-            manifestPublishingCallbackAnnotation.Callback is not null)
+        Writer.WriteStartObject(propertyName);
+        await WriteDeploymentTargetBody(deploymentTarget).ConfigureAwait(false);
+        Writer.WriteEndObject();
+    }
+
+    private async Task WriteDeploymentTargets(IReadOnlyList<DeploymentTargetAnnotation> deploymentTargets)
+    {
+        Writer.WriteStartObject("deployments");
+        foreach (var deploymentTarget in deploymentTargets.OrderBy(
+            static target => target.ComputeEnvironment?.Name,
+            StringComparers.ResourceName))
         {
-            Writer.WriteStartObject("deployment");
-            await manifestPublishingCallbackAnnotation.Callback(this).ConfigureAwait(false);
+            var computeEnvironment = deploymentTarget.ComputeEnvironment ??
+                throw new InvalidOperationException("A resource with multiple deployment targets must associate each target with a compute environment.");
+            Writer.WriteStartObject(computeEnvironment.Name);
+            await WriteDeploymentTargetBody(deploymentTarget).ConfigureAwait(false);
             Writer.WriteEndObject();
         }
+        Writer.WriteEndObject();
     }
+
+    private async Task WriteDeploymentTargetBody(DeploymentTargetAnnotation deploymentTarget)
+    {
+        var manifestPublishingCallbackAnnotation = deploymentTarget.DeploymentTarget
+            .Annotations
+            .OfType<ManifestPublishingCallbackAnnotation>()
+            .Last(static annotation => annotation.Callback is not null);
+        await manifestPublishingCallbackAnnotation.Callback!(this).ConfigureAwait(false);
+    }
+
+    private static bool HasManifestPublishingCallback(DeploymentTargetAnnotation deploymentTarget) =>
+        deploymentTarget.DeploymentTarget.Annotations
+            .OfType<ManifestPublishingCallbackAnnotation>()
+            .Any(static annotation => annotation.Callback is not null);
 
     private void WriteContainerFilesDestination(IResource resource)
     {
@@ -314,11 +344,12 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
     public async Task WriteContainerAsync(ContainerResource container)
     {
-        var deploymentTarget = container.GetDeploymentTargetAnnotation();
+        var deploymentTargets = container.GetDeploymentTargetAnnotations();
+        var manifestDeploymentTargets = deploymentTargets.Where(HasManifestPublishingCallback).ToArray();
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
-            Writer.WriteString("type", "container.v1");
+            Writer.WriteString("type", manifestDeploymentTargets.Length > 1 ? "container.v2" : "container.v1");
             WriteConnectionString(container);
             await WriteBuildContextAsync(container).ConfigureAwait(false);
         }
@@ -329,7 +360,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 throw new DistributedApplicationException($"Could not get the container image name for resource '{container.Name}'.");
             }
 
-            if (deploymentTarget is not null)
+            if (manifestDeploymentTargets.Length > 1)
+            {
+                Writer.WriteString("type", "container.v2");
+            }
+            else if (deploymentTargets.Count > 0)
             {
                 Writer.WriteString("type", "container.v1");
             }
@@ -342,9 +377,13 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             Writer.WriteString("image", image);
         }
 
-        if (deploymentTarget is not null)
+        if (manifestDeploymentTargets.Length == 1)
         {
-            await WriteDeploymentTarget(deploymentTarget).ConfigureAwait(false);
+            await WriteDeploymentTarget("deployment", manifestDeploymentTargets[0]).ConfigureAwait(false);
+        }
+        else if (manifestDeploymentTargets.Length > 1)
+        {
+            await WriteDeploymentTargets(manifestDeploymentTargets).ConfigureAwait(false);
         }
 
         if (container.Entrypoint is not null)

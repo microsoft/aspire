@@ -89,6 +89,14 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         {
             ProcessAzureReferences(azureReferences, parameter.Value);
         }
+        if (Scope is { } scope)
+        {
+            if (scope.HasResourceGroup)
+            {
+                ProcessAzureReferences(azureReferences, scope.ResourceGroup);
+            }
+            ProcessAzureReferences(azureReferences, scope.Subscription);
+        }
 
         return azureReferences;
     }
@@ -286,6 +294,10 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
             }
             WriteScopeValue(context, "subscription", Scope.Subscription);
+            if (Scope.IsSubscriptionScope && Scope.Subscription is null)
+            {
+                context.Writer.WriteString("subscription", "current");
+            }
             if (Scope.IsTenantScope)
             {
                 context.Writer.WriteString("tenant", "current");
