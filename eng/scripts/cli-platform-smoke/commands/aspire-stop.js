@@ -5,7 +5,7 @@ async function runAspireStop(shell, {
   artifactName = 'aspire-stop',
   timeoutMs = 120_000
 } = {}) {
-  await shell.runAspireCommand(['stop'], { artifactName });
+  await shell.runAspireCommand(['stop'], { artifactName, timeoutMs });
   const expectedResults = ['stopped successfully.'];
 
   if (allowNotRunning) {

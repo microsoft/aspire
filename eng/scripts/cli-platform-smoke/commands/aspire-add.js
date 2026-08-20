@@ -1,7 +1,7 @@
 'use strict';
 
 async function runAspireAdd(shell, { integrationFilter, timeoutMs = 180_000 }) {
-  await shell.runAspireCommand(['add'], { artifactName: 'aspire-add' });
+  await shell.runAspireCommand(['add'], { artifactName: 'aspire-add', timeoutMs });
 
   await shell.waitFor('Select an integration to add:', 'integration selection prompt', timeoutMs);
   await shell.type(integrationFilter);

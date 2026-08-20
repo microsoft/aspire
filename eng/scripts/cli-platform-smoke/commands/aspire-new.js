@@ -3,7 +3,7 @@
 async function runAspireNew(shell, { template, timeoutMs = 180_000 }) {
   await shell.runAspireCommand(
     ['new', '--channel', shell.channel],
-    { artifactName: 'aspire-new', cwd: shell.scenarioRoot });
+    { artifactName: 'aspire-new', cwd: shell.scenarioRoot, timeoutMs });
 
   await shell.waitFor('> Starter App', 'template selection prompt', timeoutMs);
   await shell.type(template.selectionText);
