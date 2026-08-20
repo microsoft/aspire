@@ -365,8 +365,9 @@ extends:
               # IMPORTANT: This artifact is ALSO consumed by the `template_tests`
               # stage. It must contain every Aspire.* nupkg the templates
               # transitively reference — including per-RID arch-specific
-              # Aspire.Hosting.Orchestration.<rid> and Aspire.Dashboard.Sdk.<rid>
-              # packages produced by the managed build. If a future refactor
+              # Aspire.Hosting.Orchestration.<rid> packages produced by the
+              # managed build. Native Dashboard RID packages are produced by
+              # the matching native jobs. If a future refactor
               # moves any of those out of Shipping/, template_tests will start
               # failing with restore errors.
               - task: 1ES.PublishPipelineArtifact@1
@@ -374,16 +375,6 @@ extends:
                 inputs:
                   path: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping'
                   artifactName: managed_packages_shipping
-
-              # Dashboard runtime zips ship from artifacts/DashboardArtifacts/<config>/<rid>/
-              # (per eng/dashboardpack/Common.projitems) and are picked up by
-              # Publishing.props _DashboardFilesToPublish. They sit outside packages/,
-              # so they need their own pipeline-artifact handoff to assemble.
-              - task: 1ES.PublishPipelineArtifact@1
-                displayName: 🟣Publish dashboard artifacts for assemble
-                inputs:
-                  path: '$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)'
-                  artifactName: managed_dashboard_artifacts
 
       - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
         - template: /eng/common/templates-official/job/onelocbuild.yml@self
@@ -564,7 +555,8 @@ extends:
                     -Project '$(System.TeamProject)' `
                     -BuildId '$(Build.BuildId)' `
                     -ArchivesTargetDir "$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)" `
-                    -NupkgsTargetDir "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
+                    -NupkgsTargetDir "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
+                    -DashboardArtifactsTargetDir "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)"
                 displayName: 🟣Download native archives (parallel)
                 env:
                   SYSTEM_ACCESSTOKEN: $(System.AccessToken)
@@ -652,13 +644,26 @@ extends:
                   artifact: aspire-vscode-extension
                   targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/vscode'
 
-              # Dashboard runtime zips originate at artifacts/DashboardArtifacts/<config>/
-              # and are scanned by _DashboardFilesToPublish at publish time.
-              - task: DownloadPipelineArtifact@2
-                displayName: 🟣Download dashboard artifacts
-                inputs:
-                  artifact: managed_dashboard_artifacts
-                  targetPath: '$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)'
+              # Native jobs package the signed Dashboard executable for their RID.
+              # Stage those nupkgs only after the npm signing pass so Arcade does
+              # not reopen and re-sign their already-signed nested executable.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $sourceRoot = "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
+                  $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  $packages = @(Get-ChildItem -Path $sourceRoot -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File -Recurse)
+                  if ($packages.Count -ne 7) {
+                    throw "Expected 7 Native AOT Dashboard RID packages, found $($packages.Count): $($packages.FullName -join ', ')"
+                  }
+                  foreach ($package in $packages) {
+                    Copy-Item -LiteralPath $package.FullName -Destination $shipping -Force
+                  }
+
+                  $dashboardArchives = @(Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)" -Filter "aspire-dashboard-*.zip" -File -Recurse)
+                  if ($dashboardArchives.Count -ne 7) {
+                    throw "Expected 7 Native AOT Dashboard runtime archives, found $($dashboardArchives.Count): $($dashboardArchives.FullName -join ', ')"
+                  }
+                displayName: 🟣Stage Native AOT Dashboard packages
 
               - pwsh: |
                   Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/packages" -File -Recurse |

@@ -86,7 +86,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Dialogs/InteractionsInputDialog.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Dialogs/InteractionsInputDialog.razor.js"]}");
 
             // Focus the first input when the dialog loads.
             if (_inputDialogInputViewModels.Count > 0 && _elementRefs.TryGetValue(_inputDialogInputViewModels[0], out var firstInputElement))
@@ -225,7 +225,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         // 2. Run submit callback. Sends input values to the server.
         // 3. If validation on the server passes, a completion dialog is send back to the client which closes the dialog.
         // 4. If validation fails, the server sends back validation errors which are displayed in the dialog.
-        if (_editContext.Validate())
+        if (await _editContext.ValidateAsync())
         {
             await Content.OnSubmitCallback(Content.Interaction, false);
         }

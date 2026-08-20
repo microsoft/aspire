@@ -9,3 +9,7 @@ public sealed class IconDto
     public required string Color { get; init; }
     public required string? Tooltip { get; init; }
 }
+
+internal sealed record GraphIconsDto(GraphMenuIconDto Menu);
+
+internal sealed record GraphMenuIconDto(string Path, string LabelFormat);

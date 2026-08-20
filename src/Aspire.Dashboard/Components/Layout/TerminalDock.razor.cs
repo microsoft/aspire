@@ -243,7 +243,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         TelemetryContext?.Dispose();
         TelemetryContext = null;
         _isVisible = false;
-        StateHasChanged();
     }
 
     private void Activate(string terminalId)
@@ -275,14 +274,15 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         ? view.FontSize
         : null;
 
-    private void OnTerminalToolbarStateChanged(TerminalToolbarState state) => StateHasChanged();
+    private static void OnTerminalToolbarStateChanged(TerminalToolbarState _)
+    {
+    }
 
     private void OnWindowsAdopted(string[] keys)
     {
         if (!_disposed)
         {
             _windowTrackingReadyIds.UnionWith(keys);
-            StateHasChanged();
         }
     }
 
@@ -295,7 +295,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 _detachedTerminalIds.Add(key);
                 _recoveringWindowIds.Add(key);
             }
-            StateHasChanged();
         }
     }
 
@@ -329,8 +328,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 _recoveringWindowIds.Remove(terminalId);
             }
         }
-
-        StateHasChanged();
     }
 
     private async Task ReturnToDockAsync(string terminalId)

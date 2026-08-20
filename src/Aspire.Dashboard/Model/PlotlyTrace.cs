@@ -9,8 +9,10 @@ public class PlotlyTrace
     public required List<DateTimeOffset> X { get; init; }
     public required List<double?> Y { get; init; }
     public required List<string?> Tooltips { get; init; }
-    public required List<object?> TraceData { get; init; }
+    public required List<PlotlyTraceData> TraceData { get; init; }
 }
+
+public sealed record PlotlyTraceData(string? TraceId, string? SpanId);
 
 public class PlotlyUserLocale
 {
