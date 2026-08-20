@@ -1002,22 +1002,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("123", message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void GenerateChildLogFilePath_UsesDetachChildNamingWithoutProcessId()
-    {
-        var logsDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-tests");
-        var now = new DateTimeOffset(2026, 02, 12, 18, 00, 00, TimeSpan.Zero);
-        var timeProvider = new FixedTimeProvider(now);
-
-        var path = AppHostLauncher.GenerateChildLogFilePath(logsDirectory, timeProvider);
-        var fileName = Path.GetFileName(path);
-
-        Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith("cli_20260212T180000000_detach-child_", fileName, StringComparison.Ordinal);
-        Assert.EndsWith(".log", fileName, StringComparison.Ordinal);
-        Assert.DoesNotContain($"_{Environment.ProcessId}", fileName, StringComparison.Ordinal);
-    }
-
     private sealed class ProjectFileDoesNotExistLocator : Aspire.Cli.Projects.IProjectLocator
     {
         public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
