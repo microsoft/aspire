@@ -9,6 +9,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
@@ -17,6 +18,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SystemProcess = System.Diagnostics.Process;
@@ -222,7 +224,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="value">The value of the environment variable.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, string? value) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -318,7 +320,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="value">A ReferenceExpression that will be evaluated at runtime.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value)
         where T : IResourceWithEnvironment
     {
@@ -360,7 +362,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, Action<EnvironmentCallbackContext> callback) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -394,7 +396,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="endpointReference">The endpoint from which to extract the url.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, EndpointReference endpointReference)
         where T : IResourceWithEnvironment
     {
@@ -419,7 +421,7 @@ public static class ResourceBuilderExtensions
     /// <param name="externalService">The external service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>Polyglot app hosts use the internal withEnvironment dispatcher export.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ExternalServiceResource> externalService)
         where T : IResourceWithEnvironment
     {
@@ -461,7 +463,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">Name of environment variable.</param>
     /// <param name="parameter">Resource builder for the parameter resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> parameter) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -484,7 +486,7 @@ public static class ResourceBuilderExtensions
     /// <param name="envVarName">The name of the environment variable under which the connection string will be set.</param>
     /// <param name="resource">The resource builder of the referenced service from which to pull the connection string.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
         string envVarName,
@@ -512,7 +514,7 @@ public static class ResourceBuilderExtensions
     /// <param name="value">The value that provides both runtime values and manifest expressions.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>This method is not available in polyglot app hosts. Use the unified <c>withEnvironment</c> overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -595,7 +597,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to annotate. Cannot be null.</param>
     /// <param name="value">The value of the connection property, specified as a reference expression.</param>
     /// <returns>The same resource builder instance with the connection property annotation applied.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withConnectionProperty dispatcher export.")]
     public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value) where T : IResourceWithConnectionString
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -613,7 +615,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add. Cannot be null.</param>
     /// <param name="value">The value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withConnectionProperty dispatcher export.")]
     public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResourceWithConnectionString
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -658,7 +660,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add.</param>
     /// <param name="value">The string value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the unified withConnectionProperty export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the unified withConnectionProperty export.")]
     internal static IResourceBuilder<T> WithConnectionPropertyValueExport<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -735,7 +737,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
     /// <param name="callback">An asynchronous callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withArgsCallback.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withArgsCallback.")]
     public static IResourceBuilder<T> WithArgs<T>(this IResourceBuilder<T> builder, Func<CommandLineArgsCallbackContext, Task> callback) where T : IResourceWithArgs
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -812,7 +814,7 @@ public static class ResourceBuilderExtensions
             // Track per-scheme index for service discovery keys to handle multiple endpoints with the same scheme.
             var schemeIndexTracker = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var endpoint in annotation.Resource.GetEndpoints(annotation.ContextNetworkID))
+            foreach (var endpoint in annotation.Resource.GetEndpoints(annotation.ContextNetworkId))
             {
                 if (specificEndpointName != null && !string.Equals(endpoint.EndpointName, specificEndpointName, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1100,7 +1102,7 @@ public static class ResourceBuilderExtensions
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withReference dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithConnectionString> source, string? connectionName = null, bool optional = false)
         where TDestination : IResourceWithEnvironment
     {
@@ -1197,7 +1199,7 @@ public static class ResourceBuilderExtensions
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithServiceDiscovery> source)
         where TDestination : IResourceWithEnvironment
     {
@@ -1229,7 +1231,7 @@ public static class ResourceBuilderExtensions
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<IResourceWithServiceDiscovery> source, string name)
         where TDestination : IResourceWithEnvironment
     {
@@ -1250,7 +1252,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the service.</param>
     /// <param name="uri">The uri of the service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, string name, Uri uri)
         where TDestination : IResourceWithEnvironment
     {
@@ -1261,11 +1263,6 @@ public static class ResourceBuilderExtensions
         if (!uri.IsAbsoluteUri)
         {
             throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it must be absolute.");
-        }
-
-        if (!uri.AbsolutePath.EndsWith('/'))
-        {
-            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': the absolute path must end with '/'.");
         }
 
         if (!string.IsNullOrEmpty(uri.Fragment))
@@ -1303,7 +1300,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="externalService">The external service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<ExternalServiceResource> externalService)
         where TDestination : IResourceWithEnvironment
     {
@@ -1379,7 +1376,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="endpointReference">The endpoint from which to extract the url.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, EndpointReference endpointReference)
         where TDestination : IResourceWithEnvironment
     {
@@ -1407,7 +1404,7 @@ public static class ResourceBuilderExtensions
             endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints);
             if (builder.Resource.IsContainer())
             {
-                endpointReferenceAnnotation.ContextNetworkID = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
+                endpointReferenceAnnotation.ContextNetworkId = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
             }
             builder.WithAnnotation(endpointReferenceAnnotation);
 
@@ -1459,7 +1456,7 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts. Use the callback-based endpoint mutation export instead.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEndpointCallback export, which exposes EndpointUpdateContext instead of EndpointAnnotation.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEndpointCallback export, which exposes EndpointUpdateContext instead of EndpointAnnotation.")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "<Pending>")]
     public static IResourceBuilder<T> WithEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string endpointName, Action<EndpointAnnotation> callback, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
@@ -1482,7 +1479,7 @@ public static class ResourceBuilderExtensions
             // can also be resolved in the context of container-to-container communication by using the target port
             // and the container name as the host. This is why we only set the context network to localhost,
             // for both container and non-container resources.
-            endpoint = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+            endpoint = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, networkId: KnownNetworkIdentifiers.LocalhostNetwork);
             callback(endpoint);
             builder.Resource.Annotations.Add(endpoint);
         }
@@ -1612,7 +1609,7 @@ public static class ResourceBuilderExtensions
             targetPort: targetPort,
             isExternal: isExternal,
             isProxied: isProxied,
-            networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+            networkId: KnownNetworkIdentifiers.LocalhostNetwork);
 
         ConfigureEndpointEnvironmentVariable(builder, annotation, env);
 
@@ -1885,15 +1882,15 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The the resource builder.</param>
     /// <param name="name">The name of the endpoint.</param>
-    /// <param name="contextNetworkID">The network context in which to resolve the endpoint. If null, localhost (loopback) network context will be used.</param>
+    /// <param name="contextNetworkId">The network context in which to resolve the endpoint. If null, localhost (loopback) network context will be used.</param>
     /// <returns>An <see cref="EndpointReference"/> that can be used to resolve the address of the endpoint after resource allocation has occurred.</returns>
     /// <remarks>This method is not available in polyglot app hosts. Use the overload without NetworkIdentifier instead.</remarks>
     [AspireExportIgnore(Reason = "NetworkIdentifier is not ATS-compatible.")]
-    public static EndpointReference GetEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string name, NetworkIdentifier contextNetworkID) where T : IResourceWithEndpoints
+    public static EndpointReference GetEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string name, NetworkIdentifier contextNetworkId) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.Resource.GetEndpoint(name, contextNetworkID);
+        return builder.Resource.GetEndpoint(name, contextNetworkId);
     }
 
     /// <summary>
@@ -2001,7 +1998,7 @@ public static class ResourceBuilderExtensions
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the synchronous Action<> overload via withUrlsCallback.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withUrlsCallback.")]
     public static IResourceBuilder<T> WithUrls<T>(this IResourceBuilder<T> builder, Func<ResourceUrlsCallbackContext, Task> callback)
         where T : IResource
     {
@@ -2039,7 +2036,7 @@ public static class ResourceBuilderExtensions
     ///                       .WithUrl("/home", "Home");
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withUrl dispatcher export.")]
     public static IResourceBuilder<T> WithUrl<T>(this IResourceBuilder<T> builder, string url, string? displayText = null)
         where T : IResource
     {
@@ -2124,7 +2121,7 @@ public static class ResourceBuilderExtensions
     /// Use this method to add a URL to be displayed for the resource.<br/>
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withUrl dispatcher export.")]
     public static IResourceBuilder<T> WithUrl<T>(this IResourceBuilder<T> builder, ReferenceExpression url, string? displayText = null)
         where T : IResource
     {
@@ -2229,7 +2226,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the Action<ResourceUrlAnnotation> overload for withUrlForEndpoint.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the Action<ResourceUrlAnnotation> overload for withUrlForEndpoint.")]
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Func<EndpointReference, ResourceUrlAnnotation> callback)
         where T : IResourceWithEndpoints
     {
@@ -2363,7 +2360,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitFor dispatcher export.")]
     public static IResourceBuilder<T> WaitFor<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -2423,7 +2420,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitFor dispatcher export.")]
     public static IResourceBuilder<T> WaitFor<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, WaitBehavior waitBehavior) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -2488,7 +2485,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitForStart dispatcher export.")]
     public static IResourceBuilder<T> WaitForStart<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -2546,7 +2543,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal waitForStart dispatcher export.")]
     public static IResourceBuilder<T> WaitForStart<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, WaitBehavior waitBehavior) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -2821,7 +2818,7 @@ public static class ResourceBuilderExtensions
 
         var endpointName = endpoint.EndpointName;
 
-        Uri? uri = null;
+        // Validate that the endpoint exists during allocation to fail fast on misconfiguration.
         builder.OnResourceEndpointsAllocated((_, @event, ct) =>
         {
             if (!endpoint.Exists)
@@ -2829,24 +2826,24 @@ public static class ResourceBuilderExtensions
                 throw new DistributedApplicationException($"The endpoint '{endpointName}' does not exist on the resource '{builder.Resource.Name}'.");
             }
 
-            var baseUri = new Uri(endpoint.Url, UriKind.Absolute);
-            uri = new Uri(baseUri, path);
             return Task.CompletedTask;
         });
 
         var healthCheckKey = $"{builder.Resource.Name}_{endpointName}_{path}_{statusCode}_check";
 
+        builder.ApplicationBuilder.Services.AddHttpClient();
         builder.ApplicationBuilder.Services.SuppressHealthCheckHttpClientLogging(healthCheckKey);
 
-        builder.ApplicationBuilder.Services.AddHealthChecks().AddUrlGroup(options =>
-        {
-            if (uri is null)
-            {
-                throw new DistributedApplicationException($"The URI for the health check on resource '{builder.Resource.Name}' is not set. Ensure that the resource has been allocated before the health check is executed.");
-            }
-
-            options.AddUri(uri, setup => setup.ExpectHttpCode(statusCode ?? 200));
-        }, healthCheckKey);
+        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
+            healthCheckKey,
+            serviceProvider => new EndpointUriHealthCheck(
+                endpoint,
+                path,
+                statusCode.Value,
+                () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(healthCheckKey)),
+            failureStatus: default,
+            tags: default,
+            timeout: default));
 
         builder.WithHealthCheck(healthCheckKey);
 
@@ -2925,7 +2922,6 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(executeCommand);
 
         commandOptions ??= CommandOptions.Default;
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
         ValidateCommandArguments(commandOptions.Arguments);
 
         // Replace existing annotation with the same name.
@@ -2936,9 +2932,8 @@ public static class ResourceBuilderExtensions
         }
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments, commandOptions.Progress));
 #pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
     }
 
     /// <summary>
@@ -3003,19 +2998,32 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-#pragma warning disable ASPIREINTERACTION001 // The obsolete overload still flows the obsolete parameter for compatibility.
         return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, confirmationMessage, iconName, iconVariant, isHighlighted));
-#pragma warning restore ASPIREINTERACTION001
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
     private static void ValidateCommandArguments(IReadOnlyList<InteractionInput> arguments)
     {
         _ = new InteractionInputCollection(arguments);
     }
-#pragma warning restore ASPIREINTERACTION001
 
-    #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
+    private static void ApplyCommandOptions(CommandOptions target, CommandOptions source)
+    {
+#pragma warning disable CS0618 // Parameter is obsolete but still flowed for command option compatibility.
+        target.Description = source.Description;
+        target.Parameter = source.Parameter;
+        target.Arguments = source.Arguments;
+        target.ValidateArguments = source.ValidateArguments;
+        target.Visibility = source.Visibility;
+        target.ConfirmationMessage = source.ConfirmationMessage;
+        target.IconName = source.IconName;
+        target.IconVariant = source.IconVariant;
+        target.IsHighlighted = source.IsHighlighted;
+        target.UpdateState = source.UpdateState;
+        target.Progress = source.Progress;
+#pragma warning restore CS0618
+    }
+
+#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
     /// <summary>
     /// Adds a command to the resource that starts a local process when invoked.
@@ -3043,7 +3051,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Process commands start local processes from AppHost callbacks and cannot be represented in polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Process commands start local processes from AppHost callbacks and cannot be represented in polyglot AppHosts.")]
     public static IResourceBuilder<TResource> WithProcessCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string commandName,
@@ -3107,7 +3115,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot AppHosts.")]
     public static IResourceBuilder<TResource> WithProcessCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string commandName,
@@ -3165,7 +3173,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Process command factories are C# callbacks and cannot be represented in polyglot AppHosts.")]
     public static IResourceBuilder<TResource> WithProcessCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string commandName,
@@ -3221,6 +3229,21 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        if (options.CreateProcessSpec is { } createProcessSpec)
+        {
+            return builder.WithProcessCommand(
+                commandName,
+                displayName,
+                async context =>
+                {
+                    var processCommandSpec = await createProcessSpec(context).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException("The process command specification factory returned null.");
+
+                    return CreateProcessCommandSpec(processCommandSpec);
+                },
+                CreateProcessCommandOptions(options));
+        }
+
         return builder.WithProcessCommand(
             commandName,
             displayName,
@@ -3232,6 +3255,7 @@ public static class ResourceBuilderExtensions
     /// Adds a command to the resource that starts a local process created by a callback when invoked.
     /// </summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Obsolete("Use withProcessCommand with createProcessSpec in the options object instead.")]
     [AspireExport("withProcessCommandFactory")]
     internal static IResourceBuilder<TResource> WithProcessCommandFactoryExport<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -3259,7 +3283,7 @@ public static class ResourceBuilderExtensions
     internal static async Task<ExecuteCommandResult> ExecuteProcessCommandAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessCommandOptions commandOptions)
     {
         var processSpec = CreateProcessSpec(context, processCommandSpec, commandOptions);
-        var processRunner = context.ServiceProvider.GetRequiredService<IProcessRunner>();
+        var processRunner = context.Services.GetRequiredService<IProcessRunner>();
         var (pendingProcessResult, processDisposable) = processRunner.Run(processSpec);
 
         await using (processDisposable.ConfigureAwait(false))
@@ -3297,20 +3321,7 @@ public static class ResourceBuilderExtensions
 
         if (exportOptions.CommandOptions is { } commonOptions)
         {
-#pragma warning disable ASPIREINTERACTION001 // Process command exports reuse command argument metadata.
-#pragma warning disable CS0618 // Parameter is obsolete but still flowed for command option compatibility.
-            commandOptions.Description = commonOptions.Description;
-            commandOptions.Parameter = commonOptions.Parameter;
-            commandOptions.Arguments = commonOptions.Arguments;
-            commandOptions.ValidateArguments = commonOptions.ValidateArguments;
-            commandOptions.Visibility = commonOptions.Visibility;
-            commandOptions.ConfirmationMessage = commonOptions.ConfirmationMessage;
-            commandOptions.IconName = commonOptions.IconName;
-            commandOptions.IconVariant = commonOptions.IconVariant;
-            commandOptions.IsHighlighted = commonOptions.IsHighlighted;
-            commandOptions.UpdateState = commonOptions.UpdateState;
-#pragma warning restore CS0618
-#pragma warning restore ASPIREINTERACTION001
+            ApplyCommandOptions(commandOptions, commonOptions);
         }
 
         if (exportOptions.MaxOutputLineCount is { } maxOutputLineCount)
@@ -3453,10 +3464,11 @@ public static class ResourceBuilderExtensions
         {
             var resultContext = new ProcessCommandResultContext
             {
-                ServiceProvider = context.ServiceProvider,
+                Services = context.Services,
                 ResourceName = context.ResourceName,
                 Logger = context.Logger,
                 CancellationToken = context.CancellationToken,
+                Arguments = context.Arguments,
                 ProcessCommandSpec = processCommandSpec,
                 ExitCode = processResult.ExitCode,
                 Output = processResult.ProcessOutput,
@@ -3501,7 +3513,7 @@ public static class ResourceBuilderExtensions
             : CommandResults.Failure(message, resultData);
     }
 
-    #pragma warning restore ASPIREPROCESSCOMMAND001
+#pragma warning restore ASPIREPROCESSCOMMAND001
 
     /// <summary>
     /// Adds a command to the resource that when invoked sends an HTTP request to the specified endpoint and path.
@@ -3535,8 +3547,9 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// Specifying <see cref="HttpCommandOptions.HttpClientName"/> will use that named <see cref="HttpClient"/> when sending the request. This allows you to configure the <see cref="HttpClient"/>
-    /// instance with a specific handler or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
-    /// If <see cref="HttpCommandOptions.HttpClientName"/> is not specified, the default <see cref="HttpClient"/> will be used.
+    /// instance with a specific handler, timeout, or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
+    /// If <see cref="HttpCommandOptions.HttpClientName"/> is not specified, the default <see cref="HttpClient"/> will be used and its
+    /// <see cref="HttpClient.Timeout"/> will be set to <see cref="Timeout.InfiniteTimeSpan"/>. Specify a named client to preserve its configured timeout.
     /// </para>
     /// <para>
     /// The <see cref="HttpCommandOptions.PrepareRequest"/> callback will be invoked to configure the request before it is sent. This can be used to add headers or a request payload
@@ -3628,8 +3641,9 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// Specifying a <see cref="HttpCommandOptions.HttpClientName"/> will use that named <see cref="HttpClient"/> when sending the request. This allows you to configure the <see cref="HttpClient"/>
-    /// instance with a specific handler or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
-    /// If no <see cref="HttpCommandOptions.HttpClientName"/> is specified, the default <see cref="HttpClient"/> will be used.
+    /// instance with a specific handler, timeout, or other options using <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient(IServiceCollection, string)"/>.
+    /// If <see cref="HttpCommandOptions.HttpClientName"/> is not specified, the default <see cref="HttpClient"/> will be used and its
+    /// <see cref="HttpClient.Timeout"/> will be set to <see cref="Timeout.InfiniteTimeSpan"/>. Specify a named client to preserve its configured timeout.
     /// </para>
     /// <para>
     /// The <see cref="HttpCommandOptions.PrepareRequest"/> callback will be invoked to configure the request before it is sent. This can be used to add headers or a request payload
@@ -3699,17 +3713,25 @@ public static class ResourceBuilderExtensions
                     return new ExecuteCommandResult { Success = false, Message = "Endpoints are not yet allocated." };
                 }
                 var uri = new UriBuilder(endpoint.Url) { Path = path }.Uri;
-                var httpClient = context.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                var httpClient = context.Services.GetRequiredService<IHttpClientFactory>().CreateClient(commandOptions.HttpClientName ?? Options.DefaultName);
+                if (commandOptions.HttpClientName is null)
+                {
+                    // HTTP commands are user-cancelable and may legitimately run longer than HttpClient's 100-second default.
+                    // The unnamed default client therefore has no timeout. A named client selects custom configuration,
+                    // including its configured timeout.
+                    httpClient.Timeout = Timeout.InfiniteTimeSpan;
+                }
                 var request = new HttpRequestMessage(commandOptions.Method, uri);
                 if (commandOptions.PrepareRequest is not null)
                 {
                     var requestContext = new HttpCommandRequestContext
                     {
-                        ServiceProvider = context.ServiceProvider,
+                        Services = context.Services,
                         ResourceName = context.ResourceName,
                         Endpoint = endpoint,
                         CancellationToken = context.CancellationToken,
                         HttpClient = httpClient,
+                        Arguments = context.Arguments,
                         Request = request
                     };
                     await commandOptions.PrepareRequest(requestContext).ConfigureAwait(false);
@@ -3722,17 +3744,22 @@ public static class ResourceBuilderExtensions
                     {
                         var resultContext = new HttpCommandResultContext
                         {
-                            ServiceProvider = context.ServiceProvider,
+                            Services = context.Services,
                             ResourceName = context.ResourceName,
                             Endpoint = endpoint,
                             CancellationToken = context.CancellationToken,
                             HttpClient = httpClient,
+                            Arguments = context.Arguments,
                             Response = response
                         };
                         return await commandOptions.GetCommandResult(resultContext).ConfigureAwait(false);
                     }
 
                     return await GetDefaultHttpCommandResultAsync(response, commandOptions, context.CancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                {
+                    return CommandResults.Canceled();
                 }
                 catch (Exception ex)
                 {
@@ -3772,16 +3799,74 @@ public static class ResourceBuilderExtensions
             return null;
         }
 
-        return new HttpCommandOptions
+        var commandOptions = new HttpCommandOptions();
+        if (exportOptions.CommandOptions is { } commonOptions)
         {
-            Description = exportOptions.Description,
-            ConfirmationMessage = exportOptions.ConfirmationMessage,
-            IconName = exportOptions.IconName,
-            IconVariant = exportOptions.IconVariant,
-            IsHighlighted = exportOptions.IsHighlighted,
-            Method = !string.IsNullOrWhiteSpace(exportOptions.MethodName) ? new HttpMethod(exportOptions.MethodName) : null,
-            ResultMode = exportOptions.ResultMode
-        };
+            ApplyCommandOptions(commandOptions, commonOptions);
+        }
+
+        commandOptions.Description = exportOptions.Description ?? commandOptions.Description;
+        commandOptions.ConfirmationMessage = exportOptions.ConfirmationMessage ?? commandOptions.ConfirmationMessage;
+        commandOptions.IconName = exportOptions.IconName ?? commandOptions.IconName;
+        commandOptions.IconVariant = exportOptions.IconVariant ?? commandOptions.IconVariant;
+        commandOptions.IsHighlighted = exportOptions.IsHighlighted || commandOptions.IsHighlighted;
+        commandOptions.Method = !string.IsNullOrWhiteSpace(exportOptions.MethodName) ? new HttpMethod(exportOptions.MethodName) : null;
+        commandOptions.ResultMode = exportOptions.ResultMode;
+        if (exportOptions.PrepareRequest is { } prepareRequest)
+        {
+            commandOptions.PrepareRequest = async context =>
+            {
+                var requestData = await prepareRequest(new HttpCommandPrepareRequestContext
+                {
+                    ResourceName = context.ResourceName,
+                    Endpoint = context.Endpoint,
+                    CancellationToken = context.CancellationToken,
+                    Arguments = context.Arguments
+                }).ConfigureAwait(false);
+
+                ApplyHttpCommandRequestExportData(context.Request, requestData);
+            };
+        }
+
+        return commandOptions;
+    }
+
+    private static void ApplyHttpCommandRequestExportData(HttpRequestMessage request, HttpCommandRequestExportData requestData)
+    {
+        if (requestData is null)
+        {
+            throw new InvalidOperationException("The HTTP command prepare-request callback returned null.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestData.MethodName))
+        {
+            request.Method = new HttpMethod(requestData.MethodName);
+        }
+
+        if (requestData.Content is not null)
+        {
+            request.Content = !string.IsNullOrWhiteSpace(requestData.ContentType)
+                ? new StringContent(requestData.Content, Encoding.UTF8, requestData.ContentType)
+                : new StringContent(requestData.Content, Encoding.UTF8);
+        }
+        else if (!string.IsNullOrWhiteSpace(requestData.ContentType))
+        {
+            throw new InvalidOperationException("HTTP command request content type cannot be specified without request content.");
+        }
+
+        if (requestData.Headers is null)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in requestData.Headers)
+        {
+            if (!request.Headers.TryAddWithoutValidation(name, value) &&
+                request.Content?.Headers.TryAddWithoutValidation(name, value) != true)
+            {
+                throw new InvalidOperationException($"HTTP command request header '{name}' could not be applied.");
+            }
+        }
     }
 
     internal static async Task<ExecuteCommandResult> GetDefaultHttpCommandResultAsync(HttpResponseMessage response, HttpCommandOptions commandOptions, CancellationToken cancellationToken)
@@ -4188,10 +4273,9 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsCertificateConfigurationCallbackAnnotationContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithHttpsCertificateConfiguration<TResource>(this IResourceBuilder<TResource> builder, Func<HttpsCertificateConfigurationCallbackAnnotationContext, Task> callback)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
     {
@@ -4229,10 +4313,9 @@ public static class ResourceBuilderExtensions
     /// });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "HttpsEndpointUpdateCallbackContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
+    [AspireExport]
     public static IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this IResourceBuilder<TResource> builder, Action<HttpsEndpointUpdateCallbackContext> callback)
         where TResource : IResource
     {
@@ -4653,7 +4736,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(iconName);
 
-        return builder.WithAnnotation(new ResourceIconAnnotation(iconName, iconVariant));
+        return builder.WithAnnotation(new ResourceIconAnnotation(iconName, iconVariant), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
@@ -4678,15 +4761,200 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds support for debugging the resource in VS Code when running in an extension host.
+    /// Declares the resource's <em>launch tool arguments</em>: the tool-invocation prefix that hosts the program,
+    /// for example <c>run ./cmd/api</c> for <c>go</c>, <c>-m flask</c> for <c>python</c>, or
+    /// <c>tool exec &lt;package&gt; --yes --</c> for <c>dotnet</c>.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="launchConfigurationProducer">Launch configuration producer for the resource.</param>
-    /// <param name="launchConfigurationType">The type of the resource.</param>
-    /// <param name="argsCallback">Optional callback to add or modify command line arguments when running in an extension host. Useful if the entrypoint is usually provided as an argument to the resource executable.</param>
+    /// <param name="callback">
+    /// Callback that produces the launch tool arguments. It is invoked with an <em>empty</em>
+    /// <see cref="CommandLineArgsCallbackContext.Args"/> list; everything it adds becomes the leading arguments.
+    /// </param>
+    /// <param name="ownedByLaunchConfigurationType">
+    /// The debug launch configuration type that performs this tool invocation itself, for example "go" or "python"
+    /// — the same value passed to <c>WithDebugSupport</c>. Leave this <see langword="null"/> (the default) when the
+    /// prefix is not a debugging concern and must always be passed to the launched program.
+    /// </param>
+    /// <param name="showInCommandLine">
+    /// Whether these arguments are part of the command line shown for the resource in the dashboard. Pass
+    /// <see langword="false"/> for a prefix that is pure invocation plumbing the user did not write and cannot act on.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// Launch tool arguments are always placed ahead of every argument contributed by <c>WithArgs</c>, no matter when
+    /// this method is called, and no <c>WithArgs</c> callback can observe or modify them. Declaring the tool
+    /// invocation this way therefore avoids any dependency on the order in which resource builder methods are called.
+    /// </para>
+    /// <para>
+    /// When <paramref name="ownedByLaunchConfigurationType"/> is supplied and the resource is launched by an IDE
+    /// using a launch configuration of that type (see <c>WithDebugSupport</c>), the launch configuration already
+    /// carries the tool invocation, so these arguments are not passed to the launched program. In every other case
+    /// — process execution, publish, or when a launch configuration of a different type is active — they are part of
+    /// the resource's command line.
+    /// </para>
+    /// <para>
+    /// This has no effect on a container resource, which invokes its program through the image's <c>ENTRYPOINT</c>
+    /// rather than through a local tool. That matters for executables published as a Dockerfile, because
+    /// <see cref="ExecutableResourceBuilderExtensions.PublishAsDockerFile{T}(IResourceBuilder{T})"/> carries the
+    /// executable's annotations over to the generated container resource.
+    /// </para>
+    /// <para>
+    /// Calling this method more than once is allowed; the most recent declaration wins. It therefore declares a
+    /// single tool invocation rather than accumulating one, which is why it is the integration's own description of
+    /// how it launches the program, not a place for callers to append flags.
+    /// </para>
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithLaunchToolArgs<T>(
+        this IResourceBuilder<T> builder,
+        Action<CommandLineArgsCallbackContext> callback,
+        string? ownedByLaunchConfigurationType = null,
+        bool showInCommandLine = true)
+        where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        if (ownedByLaunchConfigurationType is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(ownedByLaunchConfigurationType);
+        }
+
+        return builder.WithAnnotation(new LaunchToolArgsCallbackAnnotation(
+            ctx =>
+            {
+                callback(ctx);
+                return Task.CompletedTask;
+            },
+            ownedByLaunchConfigurationType,
+            showInCommandLine));
+    }
+
+    /// <summary>
+    /// Adds support for debugging the resource in an IDE or extension host.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationProducer">A callback that receives the launch mode and produces the complete launch configuration handed to the IDE.</param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration sent to the IDE.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException">
+    /// <typeparamref name="TLaunchConfiguration"/> is a <see cref="Task"/> or <see cref="ValueTask"/>. Use an
+    /// asynchronous overload instead so the task result, rather than the task itself, becomes the launch configuration.
+    /// </exception>
+    /// <remarks>
+    /// Registering debug support is synchronous. Aspire invokes <paramref name="launchConfigurationProducer"/>
+    /// later only for executable creations where this debug-support annotation is active, including restarts and replicas.
+    /// The callback does not run for unsupported debug sessions, publish mode, or inactive annotations superseded by
+    /// a later <see cref="SupportsDebuggingAnnotation"/>.
+    /// </remarks>
+    [OverloadResolutionPriority(-1)]
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
-    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this IResourceBuilder<T> builder, Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType, Action<CommandLineArgsCallbackContext>? argsCallback = null)
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(
+        this IResourceBuilder<T> builder,
+        Func<string, TLaunchConfiguration> launchConfigurationProducer,
+        string launchConfigurationType)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
+
+        if (typeof(Task).IsAssignableFrom(typeof(TLaunchConfiguration)) || IsValueTask(typeof(TLaunchConfiguration)))
+        {
+            throw new ArgumentException(
+                $"The launch configuration producer returns '{typeof(TLaunchConfiguration)}'. An asynchronous producer must bind to an asynchronous {nameof(WithDebugSupport)} overload " +
+                $"either by accepting the launch mode and a {nameof(CancellationToken)} or by accepting a {nameof(LaunchConfigurationCallbackContext)}; otherwise the task itself is used as the launch configuration.",
+                nameof(launchConfigurationProducer));
+        }
+
+        return builder.WithDebugSupport(
+            (mode, _) => Task.FromResult(launchConfigurationProducer(mode)),
+            launchConfigurationType);
+
+        static bool IsValueTask(Type type)
+            => type == typeof(ValueTask) || (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>));
+    }
+
+    /// <summary>
+    /// Adds support for asynchronously producing an IDE launch configuration for the resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationProducer">A callback that receives the launch mode and cancellation token.</param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration sent to the IDE.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use this overload when producing the launch configuration requires asynchronous work. Aspire invokes the
+    /// producer after resolving the execution configuration and may invoke it several times for the same resource.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(
+        this IResourceBuilder<T> builder,
+        Func<string, CancellationToken, Task<TLaunchConfiguration>> launchConfigurationProducer,
+        string launchConfigurationType)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(launchConfigurationProducer);
+
+        return builder.WithDebugSupport(
+            context => launchConfigurationProducer(context.Mode, context.CancellationToken),
+            launchConfigurationType);
+    }
+
+    /// <summary>
+    /// Adds support for producing an IDE launch configuration from the resolved executable environment.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TLaunchConfiguration">The launch configuration type produced for the resource, typically derived from <see cref="ExecutableLaunchConfiguration"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationProducer">
+    /// A callback that receives the resolved environment variables and asynchronously produces the complete
+    /// launch configuration handed to the IDE.
+    /// </param>
+    /// <param name="launchConfigurationType">The type tag of the launch configuration sent to the IDE.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Aspire invokes <paramref name="launchConfigurationProducer"/> after resolving the execution configuration for
+    /// each executable creation. A producer that completes synchronously should return its result with
+    /// <see cref="Task.FromResult{TResult}(TResult)"/>. Process execution does not generally require a producer, but
+    /// Aspire can still invoke a supported non-<c>project</c> producer for a process executable so it can contribute
+    /// launch metadata.
+    /// </remarks>
+    /// <example>
+    /// Produce a launch configuration using a resolved environment variable:
+    /// <code language="csharp">
+    /// internal sealed class MyToolLaunchConfiguration() : ExecutableLaunchConfiguration("mytool")
+    /// {
+    ///     public string? TargetDirectory { get; set; }
+    /// }
+    ///
+    /// builder.AddExecutable("tool", "mytool", ".")
+    ///     .WithDebugSupport(
+    ///         context =>
+    ///         {
+    ///             context.EnvironmentVariables.TryGetValue("MYTOOL_TARGET_DIR", out var targetDirectory);
+    ///             return Task.FromResult(new MyToolLaunchConfiguration
+    ///             {
+    ///                 Mode = context.Mode,
+    ///                 TargetDirectory = targetDirectory
+    ///             });
+    ///         },
+    ///         launchConfigurationType: "mytool");
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(
+        this IResourceBuilder<T> builder,
+        Func<LaunchConfigurationCallbackContext, Task<TLaunchConfiguration>> launchConfigurationProducer,
+        string launchConfigurationType)
         where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -4697,18 +4965,10 @@ public static class ResourceBuilderExtensions
             return builder;
         }
 
-        if (builder is IResourceBuilder<IResourceWithArgs> resourceWithArgs)
-        {
-            resourceWithArgs.WithArgs(async ctx =>
-            {
-                if (resourceWithArgs.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out _) && argsCallback is not null)
-                {
-                    argsCallback(ctx);
-                }
-            });
-        }
-
-        return builder.WithAnnotation(SupportsDebuggingAnnotation.Create(launchConfigurationType, launchConfigurationProducer));
+        return builder.WithAnnotation(SupportsDebuggingAnnotation.Create(
+            builder.Resource.Name,
+            launchConfigurationType,
+            launchConfigurationProducer));
     }
 
     /// <summary>
@@ -4888,7 +5148,7 @@ public static class ResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="exitCode">The completion exit code to treat as successful. Defaults to <c>0</c>.</param>
+    /// <param name="exitCode">The completion exit code to treat as successful.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
@@ -4896,7 +5156,7 @@ public static class ResourceBuilderExtensions
     /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
     [AspireExportIgnore(Reason = "Use ATS-friendly overload that supports a single exit code or multiple exit codes.")]
-    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
+    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -4980,7 +5240,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerImagePushOptionsCallbackContext> callback)
@@ -5021,7 +5281,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-[AspireExport]
+    [AspireExport]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)

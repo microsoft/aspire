@@ -14,20 +14,30 @@
     <!-- add missing entry for .msi, this can be removed once aspire uses arcade 10.0 -->
     <FileExtensionSignInfo Include=".msi" CertificateName="MicrosoftDotNet500" Condition="!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))" />
 
-    <!-- We don't need to code sign .js files because they are not used in Windows Script Host. -->
+    <!--
+      JS files in project templates are customer-modifiable: users edit them after project
+      creation. Authenticode signing would append a // SIG // block that is visible to users
+      and breaks on any edit. Instead, we catalog-sign: a .cat file hashes the JS files and
+      carries the signature, leaving the JS content untouched.
+      See GenerateCatalogFiles target in Aspire.ProjectTemplates.csproj.
+    -->
     <FileExtensionSignInfo Update=".js" CertificateName="None" />
+    <!-- Sign the catalog file that covers the template JS files -->
+    <FileExtensionSignInfo Include=".cat" CertificateName="MicrosoftDotNet500" />
     <!-- Remove .py files from being signed. See https://github.com/microsoft/aspire/issues/13004 -->
     <FileExtensionSignInfo Update=".py" CertificateName="None" />
   </ItemGroup>
 
   <ItemGroup>
     <FileSignInfo Include="Fractions.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="Hex1b.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.OidcClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Basic.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Models.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Prometheus.NetStandard.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="QRCoder.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="YamlDotNet.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Grpc.AspNetCore.Server.ClientFactory.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Grpc.AspNetCore.Server.dll" CertificateName="3PartySHA2" />
@@ -66,6 +76,17 @@
 
     <!-- Sign the manifest catalog on Windows -->
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="manifest.cat" CertificateName="MicrosoftDotNet500" />
+
+    <!--
+      npm packages are tarballs, but only the Aspire CLI npm tarballs should get
+      detached signatures. Scope these rules to the npm package ItemsToSign
+      collision id so the global .tgz/.js/native-executable defaults remain
+      unchanged for unrelated artifacts.
+    -->
+    <FileExtensionSignInfo Include=".tgz" CertificateName="LinuxSign500180PGP" CollisionPriorityId="AspireCliNpmPackage" />
+    <FileSignInfo Include="aspire.js" CertificateName="MicrosoftDotNet500" CollisionPriorityId="AspireCliNpmPackage" />
+    <FileSignInfo Include="aspire.exe" CertificateName="None" CollisionPriorityId="AspireCliNpmPackage" />
+    <FileSignInfo Include="aspire" CertificateName="None" CollisionPriorityId="AspireCliNpmPackage" />
   </ItemGroup>
 
   <ItemGroup>
@@ -75,6 +96,7 @@
     <ItemsToSign Include="$(VisualStudioSetupInsertionPath)\**\*.zip" Condition="'$(PostBuildSign)' != 'true'" />
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.zip" />
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.tar.gz" />
+    <ItemsToSign Include="$(ArtifactsShippingPackagesDir)**\microsoft-aspire-cli*.tgz" CollisionPriorityId="AspireCliNpmPackage" />
     <ItemsToSign Include="$(RepoRoot)eng\scripts\get-aspire-cli.ps1" Condition="$([System.OperatingSystem]::IsWindows())" />
 
     <!-- Sign only the final NativeAOT CLI publish output; CLI archives are signed separately. -->

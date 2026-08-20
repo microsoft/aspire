@@ -17,6 +17,11 @@
         <target state="new">No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</target>
         <note>{0} is the AppHost project path.</note>
       </trans-unit>
+      <trans-unit id="AppHostNotRunningInCurrentWorktree">
+        <source>No running AppHost found in the current worktree. Use '--apphost &lt;path&gt;' to target one directly, or '--all' to include AppHosts from other worktrees.</source>
+        <target state="new">No running AppHost found in the current worktree. Use '--apphost &lt;path&gt;' to target one directly, or '--all' to include AppHosts from other worktrees.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="new">Output format for detached AppHost results</target>
@@ -73,13 +78,18 @@
         <note>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</note>
       </trans-unit>
       <trans-unit id="LsStreamOptionDescription">
-        <source>Stream newline-delimited JSON discovery events. Requires --format json</source>
-        <target state="new">Stream newline-delimited JSON discovery events. Requires --format json</target>
+        <source>Output discovered AppHosts as newline-delimited JSON. Requires --format json</source>
+        <target state="new">Output discovered AppHosts as newline-delimited JSON. Requires --format json</target>
         <note />
       </trans-unit>
       <trans-unit id="LsStreamRequiresJson">
         <source>The --stream option requires --format json.</source>
         <target state="new">The --stream option requires --format json.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MultipleAppHostsNonInteractive">
+        <source>Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</source>
+        <target state="new">Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
@@ -136,6 +146,11 @@
         <source>Select an AppHost to {0}:</source>
         <target state="new">Select an AppHost to {0}:</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
+        <source>Unrecognized option '{0}'. Did you mean '{1}'?</source>
+        <target state="new">Unrecognized option '{0}'. Did you mean '{1}'?</target>
+        <note>{0} is the unrecognized option, {1} is the suggested correct option.</note>
       </trans-unit>
       <trans-unit id="UsingAppHost">
         <source>Using AppHost: {0}</source>

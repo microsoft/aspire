@@ -37,7 +37,7 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
         };
     }
 
-    public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
+    public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default)
     {
         var resolvedValidator = validator;
         if (validator is not null && outputPathResolver is not null)

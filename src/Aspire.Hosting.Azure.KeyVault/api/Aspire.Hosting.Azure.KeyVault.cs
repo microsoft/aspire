@@ -10,7 +10,7 @@ namespace Aspire.Hosting
 {
     public static partial class AzureKeyVaultResourceExtensions
     {
-        [AspireExport(Description = "Adds an Azure Key Vault resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> AddAzureKeyVault(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
@@ -31,7 +31,7 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.ReferenceExpression value) { throw null; }
 
-        [AspireExport(Description = "Gets a secret reference from the Azure Key Vault")]
+        [AspireExport]
         public static Azure.IAzureKeyVaultSecretReference GetSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string secretName) { throw null; }
 
         [AspireExportIgnore(Reason = "KeyVaultBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureKeyVaultRole-based overload instead.")]

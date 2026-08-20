@@ -4,9 +4,11 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using DiagnosticsHealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -117,7 +119,7 @@ public sealed class ResourceViewModelTests
             CreatedAt = Timestamp.FromDateTime(s_dateTime),
             Properties =
             {
-                new ResourceProperty { Name = "Property1", Value = Value.ForString("Value1"), IsSensitive = false },
+                new ResourceProperty { Name = "Property1", Value = Value.ForString("Value1"), IsSensitive = false, DisplayName = "Property one", IsHighlighted = true },
                 new ResourceProperty { Name = "Property2", Value = Value.ForString("Value2"), IsSensitive = true }
             }
         };
@@ -135,8 +137,10 @@ public sealed class ResourceViewModelTests
                 Assert.Equal("Property1", p.Key);
                 Assert.Equal("Property1", p.Value.Name);
                 Assert.Equal("Value1", p.Value.Value.StringValue);
-                Assert.Equal(123, p.Value.Priority);
+                Assert.Equal(123, p.Value.SortOrder);
                 Assert.Same(kp, p.Value.KnownProperty);
+                Assert.Equal("Property one", p.Value.DisplayName);
+                Assert.True(p.Value.IsHighlighted);
                 Assert.False(p.Value.IsValueMasked);
                 Assert.False(p.Value.IsValueSensitive);
             },
@@ -145,11 +149,235 @@ public sealed class ResourceViewModelTests
                 Assert.Equal("Property2", p.Key);
                 Assert.Equal("Property2", p.Value.Name);
                 Assert.Equal("Value2", p.Value.Value.StringValue);
-                Assert.Equal(123, p.Value.Priority);
+                Assert.Equal(123, p.Value.SortOrder);
                 Assert.Same(kp, p.Value.KnownProperty);
+                Assert.Null(p.Value.DisplayName);
+                Assert.False(p.Value.IsHighlighted);
                 Assert.True(p.Value.IsValueMasked);
                 Assert.True(p.Value.IsValueSensitive);
             });
+    }
+
+    [Fact]
+    public void WithStateFrom_ClonesProjectedStateOwnedProperties()
+    {
+        var replicaStateProperty = new ResourcePropertyViewModel(
+            KnownProperties.Resource.State,
+            Value.ForString(KnownResourceState.Running.ToString()),
+            isValueSensitive: true,
+            knownProperty: null,
+            sortOrder: 0,
+            displayName: "State",
+            isHighlighted: true)
+        {
+            IsValueMasked = false
+        };
+
+        var parent = ModelTestHelpers.CreateResource(
+            resourceName: "api",
+            state: KnownResourceState.Starting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.State] = new(
+                    KnownProperties.Resource.State,
+                    Value.ForString(KnownResourceState.Starting.ToString()),
+                    isValueSensitive: true,
+                    knownProperty: null,
+                    sortOrder: 0,
+                    displayName: "State",
+                    isHighlighted: true)
+            });
+
+        var replica = ModelTestHelpers.CreateResource(
+            resourceName: "api-a1b2c3",
+            displayName: "api",
+            state: KnownResourceState.Running,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.State] = replicaStateProperty
+            });
+
+        var projectedParent = parent.WithStateFrom(replica);
+        var projectedStateProperty = projectedParent.Properties[KnownProperties.Resource.State];
+
+        Assert.NotSame(replicaStateProperty, projectedStateProperty);
+        Assert.False(projectedStateProperty.IsValueMasked);
+
+        replicaStateProperty.IsValueMasked = true;
+
+        Assert.False(projectedStateProperty.IsValueMasked);
+    }
+
+    [Fact]
+    public void ToViewModel_ProducerSuppliedPropertyMetadata_DoesNotRequireKnownProperty()
+    {
+        // Arrange
+        var resource = new Resource
+        {
+            Name = "container-abc",
+            DisplayName = "container",
+            ResourceType = KnownResourceTypes.Container,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Image,
+                    Value = Value.ForString("redis:latest"),
+                    DisplayName = "Container image",
+                    IsHighlighted = true,
+                    SortOrder = 0
+                }
+            }
+        };
+
+        // Act
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        // Assert
+        var property = vm.Properties[KnownProperties.Container.Image];
+        Assert.Equal("Container image", property.DisplayName);
+        Assert.True(property.IsHighlighted);
+        Assert.Equal(ProducerDefinedDisplaySortOrder(0), property.SortOrder);
+        Assert.Null(property.KnownProperty);
+    }
+
+    [Theory]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, nameof(DashboardResources.ResourcesDetailsContainerImageProperty), 0)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Id, nameof(DashboardResources.ResourcesDetailsContainerIdProperty), 1)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Command, nameof(DashboardResources.ResourcesDetailsContainerCommandProperty), 2)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Args, nameof(DashboardResources.ResourcesDetailsContainerArgumentsProperty), 3)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Ports, nameof(DashboardResources.ResourcesDetailsContainerPortsProperty), 4)]
+    [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Lifetime, nameof(DashboardResources.ResourcesDetailsContainerLifetimeProperty), 5)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Path, nameof(DashboardResources.ResourcesDetailsExecutablePathProperty), 0)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, nameof(DashboardResources.ResourcesDetailsExecutableWorkingDirectoryProperty), 1)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Args, nameof(DashboardResources.ResourcesDetailsExecutableArgumentsProperty), 2)]
+    [InlineData(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), 3)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, nameof(DashboardResources.ResourcesDetailsProjectPathProperty), 0)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, nameof(DashboardResources.ResourcesDetailsProjectLaunchProfileProperty), 1)]
+    [InlineData(KnownResourceTypes.Project, KnownProperties.Executable.Pid, nameof(DashboardResources.ResourcesDetailsExecutableProcessIdProperty), 2)]
+    [InlineData(KnownResourceTypes.Parameter, KnownProperties.Parameter.Value, nameof(DashboardResources.ResourcesDetailsParameterValueProperty), 0)]
+    public void ToViewModel_LegacyBuiltInResourceSpecificPropertyMetadata_AppliesFallback(string resourceType, string propertyName, string expectedDisplayNameResourceName, int expectedProducerSortOrder)
+    {
+        var resource = new Resource
+        {
+            Name = "resource-abc",
+            DisplayName = "resource",
+            ResourceType = resourceType,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = propertyName,
+                    Value = Value.ForString("value")
+                }
+            }
+        };
+
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        var property = vm.Properties[propertyName];
+        Assert.Null(property.DisplayName);
+        Assert.False(property.IsHighlighted);
+        Assert.Equal(ProducerDefinedDisplaySortOrder(expectedProducerSortOrder), property.SortOrder);
+        Assert.NotNull(property.KnownProperty);
+        Assert.Equal(propertyName, property.KnownProperty.Key);
+
+        var displayedProperty = new DisplayedResourcePropertyViewModel(
+            property,
+            new TestStringLocalizer<DashboardResources>(),
+            new BrowserTimeProvider(NullLoggerFactory.Instance));
+        Assert.Equal($"Localized:{expectedDisplayNameResourceName}", displayedProperty.DisplayName);
+    }
+
+    [Fact]
+    public void ToViewModel_LegacyBuiltInPropertyNameOnCustomResource_DoesNotApplyFallback()
+    {
+        var resource = new Resource
+        {
+            Name = "resource-abc",
+            DisplayName = "resource",
+            ResourceType = "custom",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Image,
+                    Value = Value.ForString("redis:latest")
+                }
+            }
+        };
+
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        var property = vm.Properties[KnownProperties.Container.Image];
+        Assert.Null(property.DisplayName);
+        Assert.False(property.IsHighlighted);
+        Assert.Equal(int.MaxValue, property.SortOrder);
+        Assert.Null(property.KnownProperty);
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public void ToViewModel_ProducerMetadataPresent_DisablesLegacyFallbackForResource(bool hasDisplayName, bool isHighlighted, bool hasSortOrder)
+    {
+        var imageProperty = new ResourceProperty
+        {
+            Name = KnownProperties.Container.Image,
+            Value = Value.ForString("redis:latest")
+        };
+        if (hasDisplayName)
+        {
+            imageProperty.DisplayName = "Producer container image";
+        }
+        if (isHighlighted)
+        {
+            imageProperty.IsHighlighted = true;
+        }
+        if (hasSortOrder)
+        {
+            imageProperty.SortOrder = 0;
+        }
+
+        var resource = new Resource
+        {
+            Name = "container-abc",
+            DisplayName = "container",
+            ResourceType = KnownResourceTypes.Container,
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Properties =
+            {
+                imageProperty,
+                new ResourceProperty
+                {
+                    Name = KnownProperties.Container.Id,
+                    Value = Value.ForString("abc123")
+                }
+            }
+        };
+
+        var vm = ToViewModel(resource, new KnownPropertyLookup());
+
+        var image = vm.Properties[KnownProperties.Container.Image];
+        Assert.Equal(hasDisplayName ? "Producer container image" : null, image.DisplayName);
+        Assert.Equal(isHighlighted, image.IsHighlighted);
+        Assert.Equal(hasSortOrder ? ProducerDefinedDisplaySortOrder(0) : int.MaxValue, image.SortOrder);
+        Assert.Null(image.KnownProperty);
+
+        var id = vm.Properties[KnownProperties.Container.Id];
+        Assert.Null(id.DisplayName);
+        Assert.False(id.IsHighlighted);
+        Assert.Equal(int.MaxValue, id.SortOrder);
+        Assert.Null(id.KnownProperty);
+    }
+
+    private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        return KnownResourcePropertySortOrder.ConnectionString + 1 + producerSortOrder;
     }
 
     [Fact]

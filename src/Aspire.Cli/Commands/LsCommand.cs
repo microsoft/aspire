@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -18,7 +17,6 @@ internal sealed class LsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
-    private readonly IInteractionService _interactionService;
     private readonly IProjectLocator _projectLocator;
     private readonly CliExecutionContext _executionContext;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -42,25 +40,20 @@ internal sealed class LsCommand : BaseCommand
     };
 
     public LsCommand(
-        IInteractionService interactionService,
         IProjectLocator projectLocator,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         ICliHostEnvironment hostEnvironment,
         ConsoleEnvironment consoleEnvironment,
-        AspireCliTelemetry telemetry,
         ProfilingTelemetry profilingTelemetry,
-        TimeProvider? timeProvider = null)
-        : base("ls", SharedCommandStrings.LsCommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services,
+        TimeProvider timeProvider)
+        : base("ls", SharedCommandStrings.LsCommandDescription, services)
     {
-        _interactionService = interactionService;
         _projectLocator = projectLocator;
-        _executionContext = executionContext;
+        _executionContext = services.ExecutionContext;
         _hostEnvironment = hostEnvironment;
         _consoleEnvironment = consoleEnvironment;
         _profilingTelemetry = profilingTelemetry;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
 
         Options.Add(s_formatOption);
         Options.Add(s_allOption);
@@ -120,7 +113,7 @@ internal sealed class LsCommand : BaseCommand
             if (format == OutputFormat.Json && !useJsonStream)
             {
                 var json = JsonSerializer.Serialize(appHostInfos, JsonSourceGenerationContext.RelaxedEscaping.ListCandidateAppHostDisplayInfo);
-                _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+                InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
             }
             else if (!useJsonStream)
             {
@@ -128,11 +121,11 @@ internal sealed class LsCommand : BaseCommand
                 // identical: the only difference is whether discovery showed a live spinner status above.
                 if (appHostInfos.Count == 0)
                 {
-                    _interactionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.LsNoCandidateAppHostsFound);
+                    InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.LsNoCandidateAppHostsFound);
                 }
                 else
                 {
-                    _interactionService.DisplayRenderable(BuildTable(appHostInfos, _interactionService.SupportsLinks));
+                    InteractionService.DisplayRenderable(BuildTable(appHostInfos, InteractionService.SupportsLinks));
                 }
             }
 
@@ -142,7 +135,7 @@ internal sealed class LsCommand : BaseCommand
         {
             if (format != OutputFormat.Json || !stream)
             {
-                _interactionService.DisplayCancellationMessage();
+                InteractionService.DisplayCancellationMessage();
             }
 
             return CommandResult.Success();
@@ -153,14 +146,19 @@ internal sealed class LsCommand : BaseCommand
     {
         var appHosts = new List<AppHostProjectCandidate>();
 
+        // `aspire ls --format json --stream` emits each candidate as soon as discovery surfaces
+        // it (arrival order from parallel discovery). The contract is documented in
+        // docs/specs/cli-output-formats.md. Do NOT sort here:
+        // candidates have already been written to stdout via WriteJsonStreamCandidate above, so
+        // any post-loop sort would only reorder this in-memory list — which the caller does not
+        // use for stream output. Pipe to `sort` / `jq -s 'sort_by(.path)'` for ordered output.
+        // See https://github.com/microsoft/aspire/issues/17621.
         await foreach (var candidate in _projectLocator.FindAppHostProjectsStreamAsync(_executionContext.WorkingDirectory, scope, cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
             appHosts.Add(candidate);
             WriteJsonStreamCandidate(CreateDisplayInfo(candidate));
         }
-
-        appHosts.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
         return appHosts;
     }
@@ -194,7 +192,7 @@ internal sealed class LsCommand : BaseCommand
         // but still gives the user a visible heartbeat that work is happening.
         var statusRefreshInterval = TimeSpan.FromSeconds(1);
 
-        await _interactionService.ShowDynamicStatusAsync(
+        await InteractionService.ShowDynamicStatusAsync(
             FormatSearchingStatus(directoriesSearched: 0, appHostsFound: 0),
             async updateStatus =>
             {

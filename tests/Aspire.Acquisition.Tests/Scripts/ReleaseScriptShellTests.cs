@@ -62,6 +62,12 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("download", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("install", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("[DRY RUN]", result.Output);
+        Assert.Contains("[DRY RUN] Would run:", result.Output);
+        Assert.Contains("aspire setup", result.Output);
+        Assert.True(
+            result.Output.IndexOf("route sidecar", StringComparison.OrdinalIgnoreCase) <
+            result.Output.IndexOf("[DRY RUN] Would run:", StringComparison.Ordinal),
+            "Bundle setup should be planned after the install-route sidecar is written.");
     }
 
     [Fact]
@@ -155,6 +161,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aspire setup", result.Output);
     }
 
     [Theory]
@@ -168,6 +175,21 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("--quality dev", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DryRunWithExtension_PlansExtensionBeforeBundleSetup()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--install-extension");
+
+        result.EnsureSuccessful();
+        var extensionIndex = result.Output.IndexOf("Installing VS Code extension", StringComparison.Ordinal);
+        var setupIndex = result.Output.IndexOf("[DRY RUN] Would run:", StringComparison.Ordinal);
+        Assert.True(extensionIndex >= 0, "VS Code extension installation should be planned.");
+        Assert.True(setupIndex > extensionIndex, "Bundle setup should be planned after VS Code extension installation.");
     }
 
     [Theory]

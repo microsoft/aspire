@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
@@ -8,6 +9,7 @@ using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.InternalTesting;
 using Xunit;
+using Struct = Google.Protobuf.WellKnownTypes.Struct;
 using Value = Google.Protobuf.WellKnownTypes.Value;
 
 namespace Aspire.Dashboard.Tests;
@@ -121,6 +123,151 @@ public class ResourceOutgoingPeerResolverTests
         // Act & Assert
         Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "5000")], out var value));
         Assert.Equal("test", value);
+    }
+
+    [Theory]
+    [InlineData("db.namespace", "catalogdb")]
+    [InlineData("db.name", "CATALOGDB")]
+    public void DatabaseAttributeMatchesDatabaseResourceOverContainerResource(string databaseAttribute, string databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=jobsdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new[]
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267"),
+            KeyValuePair.Create(databaseAttribute, databaseName)
+        };
+
+        Assert.True(TryResolvePeerName(resources, attributes, out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributePrefersExactDatabaseNameMatchOverCaseInsensitiveMatch()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["Catalog"] = CreateResourceWithConnectionString("Catalog", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=Catalog", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["catalog"] = CreateResourceWithConnectionString("catalog", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalog", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "50267"), KeyValuePair.Create("db.namespace", "catalog")], out var value));
+        Assert.Equal("catalog", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeMatchesDatabaseResourceAfterAddressTransformationOverExactContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=127.0.0.1;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres"),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new[]
+        {
+            KeyValuePair.Create("server.address", "127.0.0.1"),
+            KeyValuePair.Create("server.port", "50267"),
+            KeyValuePair.Create("db.namespace", "catalogdb")
+        };
+
+        Assert.True(TryResolvePeerName(resources, attributes, out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData(null)]
+    public void DatabaseAttributeDoesNotMatchDatabaseResource_MatchesContainerResource(string? databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["unrelated"] = CreateResource("unrelated", "localhost", 50267),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["postgres-evxqcrgg"] = CreateResourceWithConnectionString("postgres-evxqcrgg", "Host=localhost;Port=50267;Username=postgres;Password=password", resourceType: KnownResourceTypes.Container, displayName: "postgres")
+        };
+        var attributes = new List<KeyValuePair<string, string>>
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267")
+        };
+        if (databaseName is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.namespace", databaseName));
+        }
+
+        Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
+        Assert.Equal("postgres", value);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData(null)]
+    public void DatabaseAttributeDoesNotMatchAndNoContainerResource_MatchesFirstDatabaseResource(string? databaseName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["unrelated"] = CreateResource("unrelated", "localhost", 50267),
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=jobsdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")]),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "Host=localhost;Port=50267;Username=postgres;Password=password;Database=catalogdb", resourceType: "PostgresDatabaseResource", relationships: [new("postgres", "Parent")])
+        };
+        var attributes = new List<KeyValuePair<string, string>>
+        {
+            KeyValuePair.Create("server.address", "localhost"),
+            KeyValuePair.Create("server.port", "50267")
+        };
+        if (databaseName is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.namespace", databaseName));
+        }
+
+        Assert.True(TryResolvePeerName(resources, attributes.ToArray(), out var value));
+        Assert.Equal("jobsdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeMatchesMongoDbUriResourceOverContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["mongodb"] = CreateResourceWithConnectionString("mongodb", "mongodb://localhost:27017", resourceType: KnownResourceTypes.Container),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "mongodb://localhost:27017/catalogdb", resourceType: "MongoDBDatabaseResource", relationships: [new("mongodb", "Parent")])
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "27017"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Theory]
+    [InlineData("DatabaseName")]
+    [InlineData("databaseName")]
+    public void DatabaseAttributeMatchesDatabaseNameConnectionProperty(string databaseNamePropertyName)
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["jobsdb"] = CreateResourceWithConnectionString("jobsdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "jobsdb", databaseNamePropertyName: databaseNamePropertyName),
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "user id=system;password=password;data source=localhost:1521/FREEPDB1", resourceType: "OracleDatabaseResource", databaseName: "catalogdb", databaseNamePropertyName: databaseNamePropertyName)
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("db.namespace", "catalogdb")], out var value));
+        Assert.Equal("catalogdb", value);
+    }
+
+    [Fact]
+    public void DatabaseAttributeDoesNotMatchMongoDbUriResource_MatchesContainerResource()
+    {
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            ["catalogdb"] = CreateResourceWithConnectionString("catalogdb", "mongodb://localhost:27017/catalogdb", resourceType: "MongoDBDatabaseResource", relationships: [new("mongodb", "Parent")]),
+            ["mongodb"] = CreateResourceWithConnectionString("mongodb", "mongodb://localhost:27017", resourceType: KnownResourceTypes.Container)
+        };
+
+        Assert.True(TryResolvePeerName(resources, [KeyValuePair.Create("server.address", "localhost"), KeyValuePair.Create("server.port", "27017"), KeyValuePair.Create("db.namespace", "unknown")], out var value));
+        Assert.Equal("mongodb", value);
     }
 
     [Fact]
@@ -326,7 +473,7 @@ public class ResourceOutgoingPeerResolverTests
         Assert.Equal("key-vault", value);
     }
 
-    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString)
+    private static ResourceViewModel CreateResourceWithConnectionString(string name, string connectionString, string resourceType = KnownResourceTypes.ConnectionString, string? displayName = null, ImmutableArray<RelationshipViewModel>? relationships = null, string? databaseName = null, string databaseNamePropertyName = "DatabaseName")
     {
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
@@ -335,12 +482,30 @@ public class ResourceOutgoingPeerResolverTests
                 value: Value.ForString(connectionString),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
+
+        if (databaseName is not null)
+        {
+            var connectionProperties = new Struct();
+            connectionProperties.Fields[databaseNamePropertyName] = Value.ForString(databaseName);
+            properties[KnownProperties.Resource.ConnectionProperties] = new(
+                name: KnownProperties.Resource.ConnectionProperties,
+                value: new Value { StructValue = connectionProperties },
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false);
+        }
 
         return ModelTestHelpers.CreateResource(
             resourceName: name,
-            resourceType: KnownResourceTypes.ConnectionString,
+            displayName: displayName,
+            resourceType: resourceType,
+            relationships: relationships,
             properties: properties);
     }
 
@@ -353,7 +518,9 @@ public class ResourceOutgoingPeerResolverTests
                 value: Value.ForString(value),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0)
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false)
         };
 
         return ModelTestHelpers.CreateResource(
@@ -414,8 +581,15 @@ public class ResourceOutgoingPeerResolverTests
         public bool IsEnabled => true;
         public Task WhenConnected => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
+        public string? MinRequiredVersion => null;
+        public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
+#pragma warning disable CS0067 // Event is never used - required by interface
+        public event Action<DashboardConnectionState>? ConnectionStateChanged;
+#pragma warning restore CS0067
+        public Task ReconnectAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public ResourceViewModel? GetResource(string resourceName) => null;
         public IReadOnlyList<ResourceViewModel> GetResources() => [];
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();

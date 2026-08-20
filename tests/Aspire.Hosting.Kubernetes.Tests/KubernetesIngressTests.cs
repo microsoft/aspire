@@ -1,17 +1,21 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
-public class KubernetesIngressTests
+public class KubernetesIngressTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddIngress_WithPath_GeneratesIngressYaml()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public")
@@ -27,7 +31,7 @@ public class KubernetesIngressTests
         app.Run();
 
         // Verify ingress YAML was generated
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
@@ -42,8 +46,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_WithHostAndPath_GeneratesHostRule()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -57,7 +61,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
@@ -73,13 +77,13 @@ public class KubernetesIngressTests
         // when the parameter had no value available at publish time. The fix substitutes a
         // Helm template expression and captures the parameter so the deploy-time values
         // override file (and chart values.yaml placeholder) include the entry.
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         // Pipeline:ClearCache=true prevents loading of leaked deployment state from
-        // ~/.aspire/deployments/<sha>/<env>.json (which would otherwise auto-resolve
+        // <ASPIRE_HOME>/deployments/<sha>/<env>.json (which would otherwise auto-resolve
         // parameters from prior test runs and bypass the MissingParameterValueException path).
         var builder = TestDistributedApplicationBuilder.Create(
             "AppHost:Operation=publish",
-            $"Pipeline:OutputPath={tempDir.Path}",
+            $"Pipeline:OutputPath={workspace.Path}",
             "Pipeline:LogLevel=information",
             "Pipeline:Step=publish",
             "Pipeline:ClearCache=true");
@@ -101,14 +105,14 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
         Assert.DoesNotContain("\"{0}\"", content);
         Assert.Contains($"{{{{ .Values.parameters.public.{parameterName} }}}}", content);
 
-        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath), $"Expected values.yaml at {valuesPath}");
 
         var values = await File.ReadAllTextAsync(valuesPath);
@@ -124,8 +128,8 @@ public class KubernetesIngressTests
     {
         // When a parameter has a publish-time default, the resolved value should be inlined
         // into the manifest rather than rendered as a Helm template reference.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var ingressClass = builder.AddParameter("ingressclass", "nginx", publishValueAsDefault: true);
 
@@ -142,7 +146,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         Assert.Contains("ingressClassName: \"nginx\"", content);
@@ -152,8 +156,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_WithTls_GeneratesTlsSection()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -169,7 +173,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         Assert.Contains("my-tls-secret", content);
@@ -180,8 +184,8 @@ public class KubernetesIngressTests
     public async Task AddIngress_WithTls_BeforeWithHostname_HostnameIncludedInTlsHosts()
     {
         // Regression test: WithTls() must not snapshot the hostname list at call time.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -198,7 +202,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         Assert.Contains("my-tls-secret", content);
@@ -210,8 +214,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_WithMultiplePaths_GroupsByHost()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -231,7 +235,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         // Should have one host rule with two paths
@@ -243,8 +247,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_WithAnnotations_GeneratesAnnotations()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public")
@@ -259,7 +263,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         Assert.Contains("nginx.ingress.kubernetes.io/rewrite-target", content);
@@ -268,8 +272,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_WithExactPathType_GeneratesExactPathType()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -283,17 +287,184 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         Assert.Contains("Exact", content);
     }
 
     [Fact]
+    public async Task AddIngress_NoPathsWithTls_DoesNotRegisterTlsBootstrapStep()
+    {
+        // An ingress with no paths and no default backend is skipped during materialization, so
+        // collecting its TLS secret would bootstrap a self-signed cert for an Ingress that is
+        // never created, leaving an orphaned secret in the cluster.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddIngress("empty")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressDir = Path.Combine(workspace.Path, "templates", "empty");
+        Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
+
+        var steps = await PipelineStepTestHelpers.CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Empty(PipelineStepTestHelpers.GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
+    public async Task AddIngress_NoPaths_WarnsThatIngressAndTlsAreSkipped()
+    {
+        // The warning is the only signal a user gets that their Ingress (and its certificate) was
+        // silently dropped, so assert its content rather than just the absence of artifacts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddIngress("empty")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("empty", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Ingress 'empty' has no path rules or default backend configured. The Ingress and its TLS certificate will not be created.",
+            warning.Message);
+    }
+
+    [Fact]
+    public async Task AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap()
+    {
+        // An Ingress can be configured with paths (so it passes the publish-time materialization
+        // check) and still be dropped from the chart when none of its backends resolve to a
+        // deployment target. Bootstrapping its certificate anyway would leave an orphaned secret in
+        // the cluster, so eligibility is re-checked at deploy time.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var otherEnvironment = builder.AddKubernetesEnvironment("other");
+
+        // Assigning the container to a different environment keeps it out of "env"'s deployment
+        // targets, so the Ingress backend cannot be resolved.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(otherEnvironment);
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressDir = Path.Combine(workspace.Path, "templates", "public");
+        Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The secret is still collected, because step factories run before publish populates the
+        // generated objects and therefore cannot know the Ingress will be dropped.
+        var collected = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        var request = Assert.Single(collected);
+        Assert.Same(ingress.Resource, request.Owner);
+
+        // The deploy-time re-check is what prevents the orphaned secret.
+        Assert.False(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
+    }
+
+    [Fact]
+    public async Task AddIngress_ResolvableBackendWithTls_EligibleForTlsBootstrap()
+    {
+        // Positive control for AddIngress_UnresolvableBackendWithTls_NotEligibleForTlsBootstrap:
+        // an Ingress that does render must remain eligible, so the deploy-time re-check cannot
+        // silently suppress every certificate.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var collected = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        var request = Assert.Single(collected);
+        Assert.Same(ingress.Resource, request.Owner);
+        Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(request.Owner));
+    }
+
+    [Fact]
+    public async Task CollectTlsSecrets_BeforePublish_DoesNotDependOnGeneratedIngress()
+    {
+        // Guards the trap that makes this area easy to "fix" incorrectly. In production the pipeline
+        // builds every step before running any of them, so CollectTlsSecrets always executes while
+        // GeneratedIngress is still null. Moving the materialization check into collection would
+        // therefore disable TLS bootstrap for *every* Ingress, yet the other tests here would not
+        // notice, because they inspect collection after app.Run() has already populated it.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret");
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Null(ingress.Resource.GeneratedIngress);
+        var collectedBeforePublish = KubernetesEnvironmentResource.CollectTlsSecrets(model, k8s.Resource);
+        Assert.Same(ingress.Resource, Assert.Single(collectedBeforePublish).Owner);
+
+        // The Ingress does render, so the deploy-time re-check still lets the bootstrap through.
+        app.Run();
+        Assert.NotNull(ingress.Resource.GeneratedIngress);
+        Assert.True(KubernetesEnvironmentResource.OwnerWasMaterialized(ingress.Resource));
+    }
+
+    [Fact]
     public async Task AddIngress_NoPaths_DoesNotGenerateYaml()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         k8s.AddIngress("empty");
@@ -305,15 +476,15 @@ public class KubernetesIngressTests
         app.Run();
 
         // No ingress file should exist for empty ingress
-        var ingressDir = Path.Combine(tempDir.Path, "templates", "empty");
+        var ingressDir = Path.Combine(workspace.Path, "templates", "empty");
         Assert.False(Directory.Exists(ingressDir), $"Ingress directory should not exist at {ingressDir}");
     }
 
     [Fact]
     public async Task AddIngress_BackwardCompatible_NoIngressNoChange()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         // No ingress defined at all - should work as before
         builder.AddKubernetesEnvironment("env");
@@ -325,7 +496,7 @@ public class KubernetesIngressTests
         app.Run();
 
         // Service and deployment should exist but no ingress
-        var templatesDir = Path.Combine(tempDir.Path, "templates", "myapi");
+        var templatesDir = Path.Combine(workspace.Path, "templates", "myapi");
         Assert.True(Directory.Exists(templatesDir));
 
         var files = Directory.GetFiles(templatesDir);
@@ -335,8 +506,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_MultipleIngresses_GeneratesSeparateYaml()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
 
@@ -361,8 +532,8 @@ public class KubernetesIngressTests
         app.Run();
 
         // Both ingresses should have their own template directories
-        var publicPath = Path.Combine(tempDir.Path, "templates", "public-ingress", "public-ingress.yaml");
-        var internalPath = Path.Combine(tempDir.Path, "templates", "internal-ingress", "internal-ingress.yaml");
+        var publicPath = Path.Combine(workspace.Path, "templates", "public-ingress", "public-ingress.yaml");
+        var internalPath = Path.Combine(workspace.Path, "templates", "internal-ingress", "internal-ingress.yaml");
 
         Assert.True(File.Exists(publicPath), $"Public ingress YAML not found at {publicPath}");
         Assert.True(File.Exists(internalPath), $"Internal ingress YAML not found at {internalPath}");
@@ -377,8 +548,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_TlsWithDefaultBackend_AutoGeneratesHostRule()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -396,7 +567,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
@@ -412,8 +583,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_TlsWithExplicitPath_DoesNotDuplicate()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -431,7 +602,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(ingressPath);
 
         // Count occurrences of the host rule ΓÇö should appear exactly once
@@ -481,8 +652,8 @@ public class KubernetesIngressTests
     [Fact]
     public void AddIngress_WithPath_NonExternalEndpoint_ThrowsOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -506,8 +677,8 @@ public class KubernetesIngressTests
     [Fact]
     public void AddIngress_WithDefaultBackend_NonExternalEndpoint_ThrowsOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -529,8 +700,8 @@ public class KubernetesIngressTests
     [Fact]
     public async Task AddIngress_WithPath_ExternalEndpoint_Succeeds()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
@@ -547,7 +718,7 @@ public class KubernetesIngressTests
         var app = builder.Build();
         app.Run();
 
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath));
     }
 }

@@ -14,6 +14,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -73,6 +74,110 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Theory]
+    [MemberData(nameof(LogLevelFilteringData))]
+    public async Task WatchDashboardLogs_AspireDashboardWarningsShown_ThirdPartyWarningsSuppressed(
+        string category, LogLevel logLevel, bool expectLogged, string? expectedCategory)
+    {
+        // Use the real DistributedApplicationBuilder to set up logging filters so the test
+        // exercises the actual production configuration rather than mirroring it.
+        var testSink = new TestSink();
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
+        appBuilder.Services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(testSink));
+        using var app = appBuilder.Build();
+
+        var factory = app.Services.GetRequiredService<ILoggerFactory>();
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+
+        var logChannel = Channel.CreateUnbounded<WriteContext>();
+        testSink.MessageLogged += c => logChannel.Writer.TryWrite(c);
+
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, loggerFactory: factory);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        var resourceId = dashboardResource.GetResolvedResourceNames()[0];
+
+        var timestamp = new DateTime(2001, 12, 29, 23, 59, 59, DateTimeKind.Utc);
+        var message = new DashboardLogMessage
+        {
+            LogLevel = logLevel,
+            Category = category,
+            Message = $"Test message from {category}",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        var dashboardLoggerState = resourceLoggerService.GetResourceLoggerState(resourceId);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, messageJson, isErrorMessage: false), inMemorySource: true);
+
+        // Add a sentinel log that always passes filters (Error level under Aspire.Dashboard.*
+        // routes to Aspire.Hosting.Dashboard.Sentinel, which is above the Warning threshold).
+        // Since logs are processed in order, observing the sentinel in the channel guarantees
+        // that the preceding test log has already been processed (either logged or filtered).
+        const string SentinelMessage = "SENTINEL_LOG_SYNC";
+        var sentinelMessage = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Aspire.Dashboard.Sentinel",
+            Message = SentinelMessage,
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var sentinelJson = JsonSerializer.Serialize(sentinelMessage, DashboardLogMessageContext.Default.DashboardLogMessage);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, sentinelJson, isErrorMessage: false), inMemorySource: true);
+
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
+
+        // Wait for the sentinel to arrive, which confirms all preceding logs have been processed.
+        var logs = new List<WriteContext>();
+        while (true)
+        {
+            var logContext = await logChannel.Reader.ReadAsync().DefaultTimeout();
+            logs.Add(logContext);
+            if (logContext.Message == SentinelMessage)
+            {
+                break;
+            }
+        }
+
+        await hook.DisposeAsync();
+
+        var matchingLogs = logs.Where(l => l.Message == $"Test message from {category}").ToList();
+
+        if (expectLogged)
+        {
+            var matchingLog = Assert.Single(matchingLogs);
+            Assert.Equal(logLevel, matchingLog.LogLevel);
+            Assert.Equal(expectedCategory, matchingLog.LoggerName);
+        }
+        else
+        {
+            Assert.Empty(matchingLogs);
+        }
+    }
+
+    public static IEnumerable<object?[]> LogLevelFilteringData()
+    {
+        // Aspire.Dashboard.* categories: Warning+ should be logged. Prefix is trimmed.
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Warning, true, "Aspire.Hosting.Dashboard.Model.IconResolver"];
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Error, true, "Aspire.Hosting.Dashboard.Model.IconResolver"];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Information, false, null];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Debug, false, null];
+
+        // Third-party categories: only Error+ should be logged. Routed under ThirdParty.
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error, true, "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel"];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Critical, true, "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel"];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Warning, false, null];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Information, false, null];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Warning, false, null];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Error, true, "Aspire.Hosting.Dashboard.ThirdParty.Grpc.AspNetCore.Server"];
+        yield return ["System.Net.Http.HttpClient", LogLevel.Warning, false, null];
+    }
+
     [Fact]
     public async Task BeforeStartAsync_ExcludeLifecycleCommands_CommandsNotAddedToDashboard()
     {
@@ -95,10 +200,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData("localhost:8080", 8080, "1234", "cert", true)]
-    [InlineData("localhost:8080", 8080, "1234", "cert", false)]
-    [InlineData(null, null, null, null, null)]
-    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, bool? telemetryEnabled)
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", true)]
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", false)]
+    [InlineData(null, null, null, null, null, null, null)]
+    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, string? dcpInstanceIdPrefix, string? expectedDcpInstanceId, bool? telemetryEnabled)
     {
         // Arrange
         var resourceLoggerService = new ResourceLoggerService();
@@ -118,6 +223,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         if (debugSessionCert is not null)
         {
             configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>("DEBUG_SESSION_SERVER_CERTIFICATE", debugSessionCert)]);
+        }
+
+        if (dcpInstanceIdPrefix is not null)
+        {
+            configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>(KnownConfigNames.DcpInstanceIdPrefix, dcpInstanceIdPrefix)]);
         }
 
         var configuration = configurationBuilder.Build();
@@ -145,7 +255,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
         {
-            ServiceProvider = new TestServiceProvider().AddService(model)
+            Services = new TestServiceProvider().AddService(model)
         });
         var dashboardEnvironment = await ExecutionConfigurationBuilder.Create(dashboardResource)
             .WithEnvironmentVariablesConfig()
@@ -158,6 +268,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionPortName.EnvVarName));
         Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTokenName.EnvVarName));
         Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName));
+        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName));
         Assert.Equal(telemetryEnabled, bool.TryParse(environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName), out var b) ? b : null);
     }
 
@@ -188,7 +299,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
         {
-            ServiceProvider = new TestServiceProvider().AddService(model)
+            Services = new TestServiceProvider().AddService(model)
         });
         // Act
         await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
@@ -270,6 +381,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedHost, uri.Host);
         Assert.Equal(allocatedPort, uri.Port);
         Assert.Equal(expectedScheme, uri.Scheme);
+
+        var loginLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString() == "Login to the dashboard at {LoginUrl}");
+
+        Assert.NotNull(loginLog);
+        Assert.Equal($"{expectedScheme}://{expectedHost}:{allocatedPort}/login?t=test-token", LogTestHelpers.GetValue(loginLog, "LoginUrl"));
 
         var summaryLog = testSink.Writes.FirstOrDefault(l =>
             LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
@@ -652,7 +769,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             .AddService<IDeveloperCertificateService>(new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
         var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
         {
-            ServiceProvider = executionContextServiceProvider
+            Services = executionContextServiceProvider
         });
 
         return new DashboardEventHandlers(
@@ -675,6 +792,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     public static IEnumerable<object?[]> Data()
     {
         var timestamp = new DateTime(2001, 12, 29, 23, 59, 59, DateTimeKind.Utc);
+
+        // Third-party category (not prefixed with Aspire.Dashboard.) gets routed under ThirdParty.
         var message = new DashboardLogMessage
         {
             LogLevel = LogLevel.Error,
@@ -689,7 +808,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             DateTime.UtcNow,
             messageJson,
             "Hello world",
-            "Aspire.Hosting.Dashboard.TestCategory",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory",
             LogLevel.Error
         };
         yield return new object?[]
@@ -697,10 +816,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             null,
             messageJson,
             "Hello world",
-            "Aspire.Hosting.Dashboard.TestCategory",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory",
             LogLevel.Error
         };
 
+        // Third-party sub-category with exception.
         message = new DashboardLogMessage
         {
             LogLevel = LogLevel.Critical,
@@ -716,8 +836,65 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             null,
             messageJson,
             $"Error message{Environment.NewLine}System.InvalidOperationException: Error!",
-            "Aspire.Hosting.Dashboard.TestCategory.TestSubCategory",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory.TestSubCategory",
             LogLevel.Critical
+        };
+
+        // Aspire.Dashboard category — prefix is trimmed and no ThirdParty segment is added.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Warning,
+            Category = "Aspire.Dashboard.Model.IconResolver",
+            Message = "Icon could not be resolved",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Icon could not be resolved",
+            "Aspire.Hosting.Dashboard.Model.IconResolver",
+            LogLevel.Warning
+        };
+
+        // Aspire.Dashboard top-level category.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Aspire.Dashboard.Components.SomePage",
+            Message = "Component error",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Component error",
+            "Aspire.Hosting.Dashboard.Components.SomePage",
+            LogLevel.Error
+        };
+
+        // Third-party Microsoft.AspNetCore category.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Microsoft.AspNetCore.Server.Kestrel",
+            Message = "Kestrel error",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Kestrel error",
+            "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel",
+            LogLevel.Error
         };
     }
 

@@ -9,6 +9,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Certificates;
 
@@ -42,6 +43,8 @@ internal sealed class EnsureCertificatesTrustedResult
 internal interface ICertificateService
 {
     Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken);
+
+    string? ExportDevCertificatePem(CancellationToken cancellationToken);
 }
 
 internal sealed class CertificateService(
@@ -49,18 +52,20 @@ internal sealed class CertificateService(
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
+    IEnvironment environment,
     CliExecutionContext executionContext,
-    Func<bool>? isLinux = null) : ICertificateService
+    ILogger<CertificateService> logger) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
+    internal string DevCertDirectory => Path.Combine(
+        executionContext.AspireHomeDirectory.FullName, "dev-certs");
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
-        var isLinux = _isLinux();
+        var isLinux = environment.IsLinux();
 
         // In non-interactive environments on macOS and Windows we can't successfully
         // prompt for trust (macOS Keychain password, Windows trust dialog).
@@ -71,7 +76,7 @@ internal sealed class CertificateService(
 
         if (!canPerformTrust)
         {
-            var preCheck = certificateToolRunner.CheckHttpCertificate();
+            var preCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
 
             if (!preCheck.HasCertificates && ShouldGenerateHttpsCertificate())
             {
@@ -92,7 +97,7 @@ internal sealed class CertificateService(
                 if (generateResult is EnsureCertificateResult.Succeeded or EnsureCertificateResult.ValidCertificatePresent)
                 {
                     // Refresh the check so subsequent trust-level logic reflects the newly created cert.
-                    preCheck = certificateToolRunner.CheckHttpCertificate();
+                    preCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
                 }
                 else
                 {
@@ -138,7 +143,7 @@ internal sealed class CertificateService(
             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
         }
 
-        var postTrustCheck = certificateToolRunner.CheckHttpCertificate();
+        var postTrustCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
         if (postTrustCheck.IsPartiallyTrusted && isLinux)
         {
             ConfigureSslCertDir(environmentVariables);
@@ -165,17 +170,17 @@ internal sealed class CertificateService(
     /// </summary>
     private bool ShouldGenerateHttpsCertificate()
     {
-        var value = executionContext.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
+        var value = environment.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
         return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
+    private void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
     {
         // Get the dev-certs trust path (respects DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY override)
-        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
+        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
 
         // Get the current SSL_CERT_DIR value (if any)
-        var currentSslCertDir = Environment.GetEnvironmentVariable(SslCertDirEnvVar);
+        var currentSslCertDir = environment.GetEnvironmentVariable(SslCertDirEnvVar);
 
         // Check if the dev-certs trust path is already included
         if (!string.IsNullOrEmpty(currentSslCertDir))
@@ -197,6 +202,33 @@ internal sealed class CertificateService(
             systemCertDirs.Add(devCertsTrustPath);
 
             environmentVariables[SslCertDirEnvVar] = string.Join(Path.PathSeparator, systemCertDirs);
+        }
+    }
+
+    public string? ExportDevCertificatePem(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = certificateToolRunner.ExportDevCertificatePublicPem(DevCertDirectory, cancellationToken);
+            if (result is not null)
+            {
+                logger.LogDebug("Exported dev certificate public PEM to {Path}", result);
+            }
+            else
+            {
+                logger.LogDebug("No valid dev certificate found to export as PEM");
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to export dev certificate as PEM");
+            return null;
         }
     }
 }

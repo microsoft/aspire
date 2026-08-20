@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Dashboard.Model.Otlp;
 using OpenTelemetry.Proto.Logs.V1;
 using SeverityNumberProto = OpenTelemetry.Proto.Logs.V1.SeverityNumber;
@@ -134,6 +135,7 @@ public class OtlpLogEntry
             KnownStructuredLogFields.CategoryField => log.Scope.Name,
             KnownStructuredLogFields.EventNameField => log.EventName,
             KnownStructuredLogFields.LevelField => log.Severity.ToString(),
+            KnownStructuredLogFields.TimestampField => (log.TimeStamp.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture),
             KnownResourceFields.ServiceNameField => log.ResourceView.Resource.ResourceName,
             _ => log.Attributes.GetValue(field)
         };

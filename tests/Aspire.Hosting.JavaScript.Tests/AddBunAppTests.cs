@@ -4,13 +4,14 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class AddBunAppTests
+public class AddBunAppTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task VerifyManifest()
@@ -30,10 +31,10 @@ public class AddBunAppTests
     [InlineData(false)]
     public async Task VerifyDockerfile(bool includePackageJson)
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         if (includePackageJson)
@@ -43,9 +44,9 @@ public class AddBunAppTests
 
         var bunApp = builder.AddBunApp("js", appDir, "server.ts");
 
-        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(bunApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
         await Verify(dockerfileContents);
 
@@ -58,10 +59,10 @@ public class AddBunAppTests
     [Fact]
     public async Task VerifyDockerfileWithCustomBaseImage()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
@@ -70,29 +71,29 @@ public class AddBunAppTests
         var bunApp = builder.AddBunApp("js", appDir, "server.ts")
             .WithDockerfileBaseImage(customBuildImage, customRuntimeImage);
 
-        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(bunApp.Resource, workspace.Path);
 
-        await Verify(File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile")));
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile")));
     }
 
     [Fact]
     public async Task VerifyDockerfileEmitsPerDockerfileDockerignore()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
         var bunApp = builder.AddBunApp("js", appDir, "server.ts");
 
-        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(bunApp.Resource, workspace.Path);
 
         // The default .dockerignore should be emitted alongside the published Dockerfile using
         // BuildKit's per-Dockerfile convention (<dockerfile-name>.dockerignore), not into the
         // user's source tree.
-        var perDockerfileIgnorePath = Path.Combine(tempDir.Path, "js.Dockerfile.dockerignore");
+        var perDockerfileIgnorePath = Path.Combine(workspace.Path, "js.Dockerfile.dockerignore");
         Assert.True(File.Exists(perDockerfileIgnorePath), $"Expected per-Dockerfile dockerignore at {perDockerfileIgnorePath}");
         var ignoreContents = File.ReadAllText(perDockerfileIgnorePath);
         await Verify(ignoreContents);
@@ -109,18 +110,18 @@ public class AddBunAppTests
     [Fact]
     public async Task VerifyDockerfileSkipsDockerignoreWhenUserAuthoredOneExists()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
         var bunApp = builder.AddBunApp("js", appDir, "server.ts");
 
-        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(bunApp.Resource, workspace.Path);
 
-        var perDockerfileIgnorePath = Path.Combine(tempDir.Path, "js.Dockerfile.dockerignore");
+        var perDockerfileIgnorePath = Path.Combine(workspace.Path, "js.Dockerfile.dockerignore");
         Assert.True(File.Exists(perDockerfileIgnorePath));
 
         // User has authored their own .dockerignore at the context root after a previous publish.
@@ -130,7 +131,7 @@ public class AddBunAppTests
         var userIgnoreContents = "# user-authored\nsecrets/\n";
         File.WriteAllText(userIgnorePath, userIgnoreContents);
 
-        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(bunApp.Resource, workspace.Path);
 
         Assert.False(File.Exists(perDockerfileIgnorePath), "Aspire should not shadow a user-authored context-root .dockerignore.");
 
@@ -141,12 +142,12 @@ public class AddBunAppTests
     [Fact]
     public void AddBunApp_DoesNotAddBunPackageManagerWhenNoPackageJson()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "server.ts"), "console.log('hi');");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "server.ts"), "console.log('hi');");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddBunApp("bunapp", tempDir.Path, "server.ts");
+        builder.AddBunApp("bunapp", workspace.Path, "server.ts");
 
         using var app = builder.Build();
 
@@ -163,12 +164,12 @@ public class AddBunAppTests
     [Fact]
     public void AddBunApp_AddsBunPackageManagerWhenPackageJsonExists()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), "{}");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), "{}");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddBunApp("bunapp", tempDir.Path, "server.ts");
+        builder.AddBunApp("bunapp", workspace.Path, "server.ts");
 
         using var app = builder.Build();
 
@@ -213,10 +214,10 @@ public class AddBunAppTests
     [Fact]
     public void AddBunApp_UsesBunCommand()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = DistributedApplication.CreateBuilder();
-        var bunApp = builder.AddBunApp("bunapp", tempDir.Path, "server.ts");
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts");
 
         Assert.Equal("bun", bunApp.Resource.Command);
     }
@@ -299,4 +300,113 @@ public class AddBunAppTests
         // --use-openssl-ca flag, which Bun reads from NODE_OPTIONS for Node compatibility.
         Assert.Equal("--use-openssl-ca", envVars["NODE_OPTIONS"]);
     }
+
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+
+    [Fact]
+    public void BunApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts");
+
+        var annotation = bunApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("bun", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void BunApp_WithVSCodeDebugging_DoesNotAddAnnotationInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts");
+
+        var annotation = bunApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.Null(annotation);
+    }
+
+    [Fact]
+    public void BunApp_WithRunScript_AddsSupportsDebuggingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts")
+            .WithRunScript("dev");
+
+        var annotation = bunApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("bun", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void BunApp_WithPackageJson_HasPackageManagerAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // AddBunApp automatically calls WithBun() when a package.json exists.
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), "{}");
+
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts")
+            .WithRunScript("dev");
+
+        Assert.True(bunApp.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation));
+        Assert.Equal("bun", pmAnnotation.ExecutableName);
+    }
+
+    [Fact]
+    public async Task BunApp_DirectFile_ProducesBunRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts");
+
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(bunApp.Resource);
+
+        Assert.Equal("bun", launchConfig.Type);
+        Assert.Equal("bun", launchConfig.RuntimeExecutable);
+        Assert.Equal("direct", launchConfig.LaunchMethod);
+        Assert.Equal(Path.GetFullPath("server.ts", workspace.Path), launchConfig.ScriptPath);
+    }
+
+    [Fact]
+    public async Task BunApp_WithRunScriptAndPackageManager_ProducesBunRuntimeExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // AddBunApp automatically calls WithBun() when a package.json exists, which makes the run-script a
+        // package-manager invocation (bun run dev).
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), "{}");
+
+        var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts")
+            .WithRunScript("dev");
+
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(bunApp.Resource);
+
+        Assert.Equal("bun", launchConfig.Type);
+        Assert.Equal("bun", launchConfig.RuntimeExecutable);
+        Assert.Equal("package-manager", launchConfig.LaunchMethod);
+    }
+
+    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "bun");
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
+    }
+
+#pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
 }

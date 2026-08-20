@@ -87,6 +87,7 @@ public static class MongoDBBuilderExtensions
             .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName)
             .WithImage(MongoDBContainerImageTags.Image, MongoDBContainerImageTags.Tag)
             .WithImageRegistry(MongoDBContainerImageTags.Registry)
+            .WithIconName("DatabaseMultiple")
             .WithEnvironment(context =>
             {
                 context.EnvironmentVariables[UserEnvVarName] = mongoDBContainer.UserNameReference;
@@ -139,6 +140,7 @@ public static class MongoDBBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(mongoDBDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey);
     }
 
@@ -165,6 +167,7 @@ public static class MongoDBBuilderExtensions
         var resourceBuilder = builder.ApplicationBuilder.AddResource(mongoExpressContainer)
                                                         .WithImage(MongoDBContainerImageTags.MongoExpressImage, MongoDBContainerImageTags.MongoExpressTag)
                                                         .WithImageRegistry(MongoDBContainerImageTags.MongoExpressRegistry)
+                                                        .WithIconName("WindowDatabase")
                                                         .WithEnvironment(context => ConfigureMongoExpressContainer(context, builder.Resource))
                                                         .WithHttpEndpoint(targetPort: 8081, name: "http")
                                                         .WithParentRelationship(builder)

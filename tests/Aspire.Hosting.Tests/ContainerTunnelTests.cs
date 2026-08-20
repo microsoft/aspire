@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Tests;
 public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task ContainerTunnelWorksWithYarp()
     {
         const string testName = "container-tunnel-works-with-yarp";
@@ -44,7 +44,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task ProxylessEndpointWorksWithContainerTunnel()
     {
         var port = await Helpers.Network.GetAvailablePortAsync();
@@ -83,7 +83,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task WaitingContainersCanUseTunnel()
     {
         const string testName = "waiting-containers-can-use-tunnel";
@@ -119,7 +119,7 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task HostResourceCanWaitForTunnelDependentContainers()
     {
         const string testName = "host-resource-waits-for-tunnel-container";

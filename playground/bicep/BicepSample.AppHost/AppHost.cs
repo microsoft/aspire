@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Azure;
+using Azure.Provisioning;
+using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Sql;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -33,7 +36,34 @@ var blobs = storage.AddBlobs("blob");
 var tables = storage.AddTables("table");
 var queues = storage.AddQueues("queue");
 
-var sqlServer = builder.AddAzureSqlServer("sql").AddDatabase("db");
+var sql = builder.AddAzureSqlServer("sql");
+if (string.Equals(builder.Configuration["Azure:Sql:ClearDefaultRoleAssignments"], bool.TrueString, StringComparison.OrdinalIgnoreCase))
+{
+    // Some policy-restricted subscriptions block Azure deployment scripts because
+    // their backing storage account requires local authentication. Keep the normal
+    // SQL role-assignment behavior by default, but allow this playground to use
+    // the current deployment principal as SQL admin when that script is disabled.
+    sql.ClearDefaultRoleAssignments();
+    sql.ConfigureInfrastructure(infrastructure =>
+    {
+        var sqlAdministratorLogin = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalName, typeof(string));
+        var sqlAdministratorObjectId = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalId, typeof(string));
+        infrastructure.Add(sqlAdministratorLogin);
+        infrastructure.Add(sqlAdministratorObjectId);
+
+        var sqlServer = infrastructure.GetProvisionableResources().OfType<SqlServer>().Single();
+        sqlServer.Administrators = new ServerExternalAdministrator
+        {
+            AdministratorType = SqlAdministratorType.ActiveDirectory,
+            IsAzureADOnlyAuthenticationEnabled = true,
+            Login = sqlAdministratorLogin,
+            Sid = sqlAdministratorObjectId,
+            TenantId = BicepFunction.GetSubscription().TenantId
+        };
+    });
+}
+
+var sqlServer = sql.AddDatabase("db");
 
 var administratorLogin = builder.AddParameter("administratorLogin");
 var administratorLoginPassword = builder.AddParameter("administratorLoginPassword", secret: true);
@@ -50,7 +80,8 @@ var appInsights = builder.AddAzureApplicationInsights("ai", logAnalytics);
 // To verify that AZD will populate the LAW parameter.
 builder.AddAzureApplicationInsights("aiwithoutlaw");
 
-var redis = builder.AddAzureManagedRedis("redis");
+var redis = builder.AddAzureManagedRedis("redis")
+                   .WithAccessKeyAuthentication(kv);
 
 var serviceBus = builder.AddAzureServiceBus("sb");
 

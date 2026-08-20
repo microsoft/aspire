@@ -128,9 +128,14 @@ fi
 
 trap cleanup EXIT
 remove_tap "$TAP_NAME"
+TAP_ROOT="$(brew --repository)/Library/Taps/local/homebrew-aspire"
 brew tap-new --no-git "$TAP_NAME"
 
-TAP_ROOT="$(brew --repository)/Library/Taps/local/homebrew-aspire"
+# Homebrew 6.0.11 creates a README and CI workflows for new taps. Those
+# templates are unrelated to the cask and can fail tap syntax validation
+# independently of it (https://github.com/microsoft/aspire/issues/18818).
+# Keep the temporary tap cask-only while preserving the registered tap root.
+find "$TAP_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 mkdir -p "$TAP_ROOT/Casks"
 TAPPED_CASK_PATH="$TAP_ROOT/Casks/aspire.rb"
 cp "$CASK_FILE" "$TAPPED_CASK_PATH"
@@ -180,7 +185,7 @@ echo ""
 #   * github/gitlab repo probes (e.g. "is microsoft/aspire archived?")
 #   * homepage redirect / 404 detection against aspire.dev
 #   * livecheck strategy resolution
-# All of these run in LiveRelease in `HomebrewValidateJob` for every
+# All of these run in LiveRelease in `homebrew-validate-release.yml` for every
 # released version, so a regression in any of them surfaces there.
 echo "Auditing cask via local tap..."
 audit_args=(--cask --online --signing)

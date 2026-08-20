@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
@@ -41,30 +42,7 @@ internal sealed class ProjectMetadata(string projectPath) : IProjectMetadata
 {
     private string? _resolvedProjectPath;
 
-    public string ProjectPath => _resolvedProjectPath ??= ResolveProjectPath(projectPath);
+    public string ProjectPath => _resolvedProjectPath ??= ProjectPathResolver.ResolveProjectPath(projectPath);
 
     public bool SuppressBuild => false;
-
-    private static string ResolveProjectPath(string path)
-    {
-        if (Directory.Exists(path))
-        {
-            // Path is a directory, assume it's a project directory
-            var projectFiles = Directory.GetFiles(path, "*.csproj", new EnumerationOptions
-            {
-                MatchCasing = MatchCasing.CaseInsensitive,
-                RecurseSubdirectories = false,
-                IgnoreInaccessible = true
-            });
-
-            if (projectFiles.Length != 1)
-            {
-                // No project files found, just let it pass through and be handled later during resource start
-                return path;
-            }
-            return Path.GetFullPath(projectFiles[0]);
-        }
-
-        return path;
-    }
 }

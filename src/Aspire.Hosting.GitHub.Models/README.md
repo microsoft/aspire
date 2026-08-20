@@ -1,6 +1,15 @@
-# Aspire.Hosting.GitHub.Models library
+# GitHub Models hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure GitHub Models.
+> [!WARNING]
+> **This integration is deprecated and no longer supported.**
+> GitHub Models is no longer available to new customers, so the
+> `Aspire.Hosting.GitHub.Models` integration has been sunset. It will not receive
+> further updates (including model-list refreshes) and will be removed in a future
+> release. Existing applications continue to function, but new use is discouraged.
+> See [microsoft/aspire#18402](https://github.com/microsoft/aspire/issues/18402)
+> for details.
+
+Use this integration to model, configure, and orchestrate GitHub Models in an Aspire solution.
 
 ## Getting started
 
@@ -9,17 +18,19 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 - GitHub account with access to GitHub Models
 - GitHub [personal access token](https://docs.github.com/en/github-models/use-github-models/prototyping-with-ai-models#experimenting-with-ai-models-using-the-api) with appropriate permissions (`models: read`)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire GitHub Models Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.GitHub.Models` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.GitHub.Models
+```bash
+aspire add Aspire.Hosting.GitHub.Models
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a GitHub Model resource and consume the connection using the following methods:
+In the AppHost, add a GitHub Model resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -30,14 +41,17 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(chat);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `chat` in the `MyService` project.
+**TypeScript**
 
-In the _Program.cs_ file of `MyService`, the connection can be consumed using a client library like [Aspire.Azure.AI.Inference](https://www.nuget.org/packages/Aspire.Azure.AI.Inference):
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
 
-#### Inference client usage
-```csharp
-builder.AddAzureChatCompletionsClient("chat")
-       .AddChatClient();
+const builder = await createBuilder();
+
+const chat = await builder.addGitHubModelById("chat", "openai/gpt-4o-mini");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(chat);
 ```
 
 ## Configuration
@@ -48,15 +62,10 @@ The GitHub Model resource can be configured with the following options:
 
 The API key can be set as a configuration value using the default name `{resource_name}-gh-apikey` or the `GITHUB_TOKEN` environment variable.
 
-Then in user secrets:
+From your AppHost directory, set the parameter value with `aspire secret set`:
 
-```json
-{
-    "Parameters": 
-    {
-        "chat-gh-apikey": "YOUR_GITHUB_TOKEN_HERE"
-    }
-}
+```bash
+aspire secret set Parameters:chat-gh-apikey "YOUR_GITHUB_TOKEN_HERE"
 ```
 
 Furthermore, the API key can be configured using a custom parameter:
@@ -67,15 +76,10 @@ var chat = builder.AddGitHubModel("chat", "openai/gpt-4o-mini")
                   .WithApiKey(apiKey);
 ```
 
-Then in user secrets:
+From your AppHost directory, set the custom parameter value with `aspire secret set`:
 
-```json
-{
-    "Parameters": 
-    {
-        "my-api-key": "YOUR_GITHUB_TOKEN_HERE"
-    }
-}
+```bash
+aspire secret set Parameters:my-api-key "YOUR_GITHUB_TOKEN_HERE"
 ```
 
 ## Connection Properties
@@ -108,8 +112,9 @@ Check the [GitHub Models documentation](https://docs.github.com/en/github-models
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/ai/github-models/github-models-host/
 * https://docs.github.com/en/github-models
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 

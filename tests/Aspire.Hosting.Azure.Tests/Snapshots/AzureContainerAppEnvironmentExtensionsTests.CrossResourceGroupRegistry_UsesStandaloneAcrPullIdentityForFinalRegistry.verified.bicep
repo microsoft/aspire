@@ -1,0 +1,69 @@
+﻿@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+param userPrincipalId string = ''
+
+param tags object = { }
+
+param env_mi_outputs_id string
+
+resource final_registry 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
+  name: 'myacr'
+  scope: resourceGroup('my-existing-resource-group')
+}
+
+resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
+  name: take('envlaw-${uniqueString(resourceGroup().id)}', 63)
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+  }
+  tags: tags
+}
+
+resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
+  name: take('env${uniqueString(resourceGroup().id)}', 24)
+  location: location
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: env_law.properties.customerId
+        sharedKey: env_law.listKeys().primarySharedKey
+      }
+    }
+    workloadProfiles: [
+      {
+        name: 'consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
+  }
+  tags: tags
+}
+
+resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
+  name: 'aspire-dashboard'
+  properties: {
+    componentType: 'AspireDashboard'
+  }
+  parent: env
+}
+
+output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = env_law.name
+
+output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = env_law.id
+
+output AZURE_CONTAINER_REGISTRY_NAME string = final_registry.name
+
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = final_registry.properties.loginServer
+
+output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env_mi_outputs_id
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = env.name
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.id
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.properties.defaultDomain

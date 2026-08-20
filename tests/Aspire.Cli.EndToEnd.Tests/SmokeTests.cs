@@ -4,7 +4,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -41,8 +40,9 @@ public sealed class SmokeTests(ITestOutputHelper output)
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireStarterApp", counter);
 
-        // Run the project with aspire run
-        await auto.TypeAsync("aspire run");
+        // Run the project with aspire run. Use an explicit AppHost startup budget so a cold daily-feed
+        // restore + build doesn't trip the CLI's default 120s timeout under CI contention.
+        await auto.TypeAsync(CliE2EAutomatorHelpers.GetAspireRunCommand());
         await auto.EnterAsync();
 
         // Regression test for https://github.com/microsoft/aspire/issues/13971
@@ -57,9 +57,51 @@ public sealed class SmokeTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
             return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
-        }, timeout: TimeSpan.FromMinutes(2), description: "Press CTRL+C message (aspire run started)");
+        }, timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout, description: "Press CTRL+C message (aspire run started)");
 
         // Stop the running apphost with Ctrl+C
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task CreateAndRunPolyglotAppHostWithDevLocalhostUrls()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        const string projectName = "PolyglotDevLocalhost";
+        await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.ExpressReact, useDevLocalhost: true);
+
+        await auto.RunCommandAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync("grep -F 'ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL' aspire.config.json && grep -F 'polyglotdevlocalhost.dev.localhost' aspire.config.json", counter);
+
+        await auto.TypeAsync(CliE2EAutomatorHelpers.GetAspireRunCommand());
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Capability Error") ||
+                s.ContainsText("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL must contain a local loopback address"))
+            {
+                throw new InvalidOperationException("Polyglot AppHost failed to start with a *.dev.localhost resource service endpoint.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout, description: "Press CTRL+C message for polyglot AppHost with *.dev.localhost URLs");
+
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
     }
@@ -95,7 +137,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         output.WriteLine($"Stable AppHost SDK version: {appHostSdkVersion}");
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
     }
@@ -132,7 +174,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         output.WriteLine("Stable TypeScript AppHost config verified.");
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
     }

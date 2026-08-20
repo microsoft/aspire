@@ -3,7 +3,6 @@
 
 using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -56,7 +55,7 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
     [Theory]
     [InlineData("Test.sln")]
     [InlineData("Test.slnx")]
-    public async Task AspireInitWithSolutionFileGeneratesAppHostThatBuildsAgainstChannelHive(string solutionFileName)
+    public async Task AspireInit_SolutionFile_BuildsAgainstChannelHive(string solutionFileName)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -104,10 +103,9 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
         // `dotnet build` fails with `error MSB4236: The SDK 'Aspire.AppHost.Sdk/...'
         // could not be found.` 3 minutes is enough headroom for a cold restore + build on
         // CI; the cache-hit case (the template's `restore` post-action already populated
-        // ~/.nuget/packages during init) finishes well under 30 seconds. Using the
-        // fail-fast helper so a build failure surfaces immediately via the shell's
-        // numbered ERR prompt instead of timing out.
-        await auto.RunCommandFailFastAsync(
+        // ~/.nuget/packages during init) finishes well under 30 seconds. A build failure
+        // surfaces immediately via the shell's ERR prompt instead of timing out.
+        await auto.RunCommandAsync(
             "dotnet build Test.AppHost/Test.AppHost.csproj",
             counter,
             TimeSpan.FromMinutes(3));
@@ -128,7 +126,7 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
     /// </remarks>
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task AspireInitWithExistingAppHostDirRecreatesMissingNuGetConfigAndPreservesFiles()
+    public async Task AspireInit_ExistingAppHostDir_RecreatesNuGetConfigKeepsFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

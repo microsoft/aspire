@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Telemetry;
@@ -14,8 +16,8 @@ public class ProfilingTelemetryTests
     public void StartRunCommand_ReturnsInactiveScopeWhenProfilingIsDisabled()
     {
         Activity? startedActivity = null;
-        using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: activity => startedActivity = activity);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -27,10 +29,10 @@ public class ProfilingTelemetryTests
     public void StartRunCommand_UsesDedicatedProfilingActivitySource()
     {
         Activity? startedActivity = null;
-        using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: activity => startedActivity = activity);
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -45,11 +47,11 @@ public class ProfilingTelemetryTests
     [Fact]
     public void ProcessSpansUseConsistentExecutableAndArgumentTags()
     {
-        var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        var startedActivities = new ConcurrentQueue<Activity>();
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         var aspirePath = Path.Combine("tools", "aspire");
         var npmPath = Path.Combine("node", "npm");
         var workingDirectory = Directory.GetCurrentDirectory();
@@ -64,15 +66,16 @@ public class ProfilingTelemetryTests
 
         using (var dotnetActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
         {
-            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost"], msBuildServer: null);
+            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost"], appHostArgumentStartIndex: null, msBuildServer: null);
         }
 
         using (profilingTelemetry.StartGitCommand("ls-files", "git", ["ls-files", "--cached"], new DirectoryInfo(workingDirectory)))
         {
         }
 
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
         Assert.Collection(
-            startedActivities,
+            sessionActivities,
             spawnActivity =>
             {
                 Assert.Equal(ProfilingTelemetry.Activities.Process, spawnActivity.OperationName);
@@ -112,13 +115,59 @@ public class ProfilingTelemetryTests
     }
 
     [Fact]
-    public void StartAddCommand_CreatesAddSpecificSpans()
+    public void ProcessSpansRedactForwardedAppHostArguments()
     {
-        var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        var startedActivities = new ConcurrentQueue<Activity>();
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
+        var aspirePath = Path.Combine("tools", "aspire");
+        var workingDirectory = Directory.GetCurrentDirectory();
+
+        using (profilingTelemetry.StartDetachedSpawnChild(aspirePath, ["run", "--apphost", "AppHost", "--", "--ApiKey", "sk-live-secret"], childCommand: "run"))
+        {
+        }
+
+        using (var dotnetActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
+        {
+            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost", "--", "--ConnectionStrings:db", "Server=db;Password=hunter2"], appHostArgumentStartIndex: null, msBuildServer: null);
+        }
+
+        // A direct AppHost launch has no separator to key off, so the caller supplies the boundary.
+        using (var directActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
+        {
+            directActivity.SetDotNetResolvedExecutable("AppHost", ["--from-msbuild", "value", "--ApiKey", "sk-live-secret"], appHostArgumentStartIndex: 2, msBuildServer: null);
+        }
+
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
+        Assert.Collection(
+            sessionActivities,
+            spawnActivity =>
+            {
+                Assert.Equal(new[] { "run", "--apphost", "AppHost", "--", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(spawnActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(6, spawnActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            dotnetActivity =>
+            {
+                Assert.Equal(new[] { "run", "--project", "AppHost", "--", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(6, dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            directActivity =>
+            {
+                Assert.Equal(new[] { "--from-msbuild", "value", "<redacted>", "<redacted>" }, Assert.IsType<string[]>(directActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(4, directActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            });
+    }
+
+    [Fact]
+    public void StartAddCommand_CreatesAddSpecificSpans()
+    {
+        var startedActivities = new ConcurrentQueue<Activity>();
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
         var appHostProjectFile = new FileInfo(Path.Combine("AppHost", "AppHost.csproj"));
 
         using (var addActivity = profilingTelemetry.StartAddCommand("redis", "13.4.0", "nuget-source", appHostProjectFile))
@@ -164,8 +213,9 @@ public class ProfilingTelemetryTests
             addActivity.SetAddSelectedPackage("Aspire.Hosting.Redis", "13.4.0", "daily");
         }
 
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
         Assert.Collection(
-            startedActivities,
+            sessionActivities,
             addActivity =>
             {
                 Assert.Equal(ProfilingTelemetry.Activities.AddCommand, addActivity.OperationName);
@@ -226,7 +276,7 @@ public class ProfilingTelemetryTests
                 Assert.Equal(true, addPackageActivity.GetTagItem(ProfilingTelemetry.Tags.AddPackageSuccess));
             });
 
-        Assert.All(startedActivities, activity =>
+        Assert.All(sessionActivities, activity =>
         {
             Assert.Equal("session-1", activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
             Assert.Equal("session-1", activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
@@ -236,13 +286,13 @@ public class ProfilingTelemetryTests
     [Fact]
     public void ProfilingSpansReuseSessionFromAmbientActivityBaggage()
     {
-        var startedActivities = new List<Activity>();
-        using var parentListener = CreateActivityListener("test-parent", _ => { });
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        var startedActivities = new ConcurrentQueue<Activity>();
         using var parentSource = new ActivitySource("test-parent");
-        using var parentActivity = parentSource.StartActivity("parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
+        using var parentActivity = parentSource.StartActivity("parent");
         Assert.NotNull(parentActivity);
 
         parentActivity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
@@ -255,8 +305,9 @@ public class ProfilingTelemetryTests
         {
         }
 
-        Assert.Equal(2, startedActivities.Count);
-        Assert.All(startedActivities, activity =>
+        var sessionActivities = GetSessionActivities(startedActivities, "session-1");
+        Assert.Equal(2, sessionActivities.Length);
+        Assert.All(sessionActivities, activity =>
         {
             Assert.Equal("session-1", activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
             Assert.Equal("session-1", activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
@@ -266,15 +317,15 @@ public class ProfilingTelemetryTests
     [Fact]
     public void ProfilingSpansStoreGeneratedSessionOnAmbientAncestorsForSiblings()
     {
-        var startedActivities = new List<Activity>();
-        using var parentListener = CreateActivityListener("test-parent", _ => { });
-        using var diagnosticListener = CreateActivityListener("test-diagnostic", _ => { });
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        var startedActivities = new ConcurrentQueue<Activity>();
         using var parentSource = new ActivitySource("test-parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource);
         using var diagnosticSource = new ActivitySource("test-diagnostic");
-        using var parentActivity = parentSource.StartActivity("parent");
+        using var diagnosticListener = ActivityListenerHelper.Create(diagnosticSource);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Enqueue);
+        using var parentActivity = parentSource.StartActivity("parent");
         Assert.NotNull(parentActivity);
 
         using (diagnosticSource.StartActivity("diagnostic"))
@@ -288,10 +339,11 @@ public class ProfilingTelemetryTests
         {
         }
 
-        Assert.Equal(2, startedActivities.Count);
         var sessionId = parentActivity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId);
         Assert.NotNull(sessionId);
-        Assert.All(startedActivities, activity =>
+        var sessionActivities = GetSessionActivities(startedActivities, sessionId);
+        Assert.Equal(2, sessionActivities.Length);
+        Assert.All(sessionActivities, activity =>
         {
             Assert.Equal(sessionId, activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
             Assert.Equal(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
@@ -301,10 +353,10 @@ public class ProfilingTelemetryTests
     [Fact]
     public void BackchannelTraceContextCarriesActivityBaggage()
     {
-        using var listener = CreateProfilingActivityListener(_ => { });
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         using var activity = profilingTelemetry.StartJsonRpcClientCall("aux", "GetCapabilitiesAsync", streaming: false);
         var traceContext = activity.CreateBackchannelTraceContext();
@@ -313,21 +365,9 @@ public class ProfilingTelemetryTests
         Assert.Equal("session-1", traceContext.Baggage[ProfilingTelemetry.Baggage.SessionId]);
     }
 
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
+    private static Activity[] GetSessionActivities(IEnumerable<Activity> activities, string sessionId)
     {
-        return CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activityStarted);
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
+        return [.. activities.Where(activity => Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId)))];
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)

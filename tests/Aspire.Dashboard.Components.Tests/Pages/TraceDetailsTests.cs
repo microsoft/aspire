@@ -12,6 +12,7 @@ using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -83,6 +84,68 @@ public partial class TraceDetailsTests : DashboardTestContext
         DisposeComponents();
 
         Assert.Empty(telemetryRepository.TracesSubscriptions);
+    }
+
+    [Fact]
+    public void Render_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        SetupTraceDetailsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        var scrollContainer = cut.Find("#traceDetailScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.TraceDetail>>();
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>();
+        var header = cut.Find(".trace-header");
+        var filterGroup = cut.Find(".trace-header-filters");
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        Assert.Equal("tracedetails-grid-container", scrollContainer.GetAttribute("class"));
+        Assert.Null(header.GetAttribute("role"));
+        Assert.Equal("group", filterGroup.GetAttribute("role"));
+        Assert.Equal(controlsLoc[nameof(Dashboard.Resources.ControlsStrings.PageToolbarLandmark)].Value, filterGroup.GetAttribute("aria-label"));
+        Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-details"));
+        Assert.Contains(header.Children, element => element.ClassList.Contains("trace-header-filters"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "traceDetailScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
     }
 
     [Fact]
@@ -449,7 +512,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
         // as ancestors so the matching span remains navigable in the waterfall, even
         // though they don't themselves satisfy the duration filter.
-        var filteredItems = TraceDetail.ApplySpanFilters(
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
             unfilteredData.Items.ToList(),
             filter: string.Empty,
             typeFilter: null,
@@ -474,7 +537,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         // ancestor of 1-3 and 1-5.
         // This is the per-span behavior expected for a "min duration" filter; otherwise
         // a long root span would expose every short descendant in the waterfall.
-        var rootMatchFilteredItems = TraceDetail.ApplySpanFilters(
+        var rootMatchFilteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
             unfilteredData.Items.ToList(),
             filter: string.Empty,
             typeFilter: null,
@@ -568,7 +631,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
-        var filteredItems = TraceDetail.ApplySpanFilters(
+        var filteredItems = TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(
             unfilteredData.Items.ToList(),
             filter: string.Empty,
             typeFilter: null,
@@ -725,7 +788,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // Act - Find the dropdown menu and click Collapse All
         var menuButton = cut.FindComponent<AspireMenuButton>();
-        var collapseAllMenuItem = menuButton.Instance.Items.FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
+        var collapseAllMenuItem = menuButton.Instance.ItemsProvider().FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
         Assert.NotNull(collapseAllMenuItem);
         cut.InvokeAsync(() => collapseAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
 
@@ -800,7 +863,7 @@ public partial class TraceDetailsTests : DashboardTestContext
 
         // First click "Collapse All" to collapse everything
         var menuButton = cut.FindComponent<AspireMenuButton>();
-        var collapseAllMenuItem = menuButton.Instance.Items.FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
+        var collapseAllMenuItem = menuButton.Instance.ItemsProvider().FirstOrDefault(item => item.Text == "Collapse all"); // Locate by text since ID was removed
         Assert.NotNull(collapseAllMenuItem);
         cut.InvokeAsync(() => collapseAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
 
@@ -813,7 +876,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Act - Click "Expand All"
-        var expandAllMenuItem = menuButton.Instance.Items.FirstOrDefault(item => item.Text == "Expand all"); // Locate by text since ID was removed
+        var expandAllMenuItem = menuButton.Instance.ItemsProvider().FirstOrDefault(item => item.Text == "Expand all"); // Locate by text since ID was removed
         Assert.NotNull(expandAllMenuItem);
         cut.InvokeAsync(() => expandAllMenuItem!.OnClick?.Invoke() ?? Task.CompletedTask);
 
@@ -845,7 +908,8 @@ public partial class TraceDetailsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         loggerFactory ??= NullLoggerFactory.Instance;
 

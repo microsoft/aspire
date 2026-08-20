@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.AppService library
+# Azure App Service hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure App Service for the compute resources (like project).
+Use this integration to model, configure, and orchestrate Azure App Service for compute resources in an Aspire solution.
 
 ## Getting started
 
@@ -8,17 +8,17 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription (requires Owner access to the target subscription for role assignments)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Azure App Service Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.AppService` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.AppService
+```bash
+aspire add Aspire.Hosting.Azure.AppService
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an Azure App Service Environment and publish your project as an Azure App Service Web App:
+In the AppHost, add an Azure App Service Environment and publish a compute resource as an Azure App Service Web App:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -49,10 +49,10 @@ When deploying to Azure App Service, the following constraints apply:
 
 ### Publishing compute resources to Azure App Service
 
-The `PublishAsAzureAppServiceWebsite` extension method is used to configure a compute resource (such as a project) to be published as an Azure App Service Web App when deploying to Azure. This method allows you to customize the App Service Web App configuration using the Azure Provisioning SDK.
+The `PublishAsAzureAppServiceWebsite` extension method configures a compute resource to be published as an Azure App Service Web App when deploying to Azure. This method allows you to customize the App Service Web App configuration using the Azure Provisioning SDK.
 
 ```csharp
-builder.AddProject<Projects.MyApi>("api")
+builder.AddProject<Projects.Api>("api")
     .WithHttpEndpoint(targetPort: 8080)
     .WithExternalHttpEndpoints()
     .WithHealthProbe(ProbeType.Liveness, "/health")
@@ -86,6 +86,44 @@ var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
     .WithDashboard(enable: false);
 ```
 
+### Configuring regional virtual network integration
+
+To configure regional virtual network integration for the websites in an Azure App Service environment, add the `Aspire.Hosting.Azure.Network` integration:
+
+```bash
+aspire add Aspire.Hosting.Azure.Network
+```
+
+Then create a subnet and apply it to the environment:
+
+```csharp
+#pragma warning disable ASPIREAZURE003 // Azure Virtual Network APIs are experimental.
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+
+var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
+    .WithDelegatedSubnet(subnet);
+#pragma warning restore ASPIREAZURE003
+```
+
+**TypeScript**
+
+```typescript
+const vnet = await builder.addAzureVirtualNetwork("vnet");
+const subnet = await vnet.addSubnet("app-service-subnet", "10.0.0.0/24");
+
+const appServiceEnvironment = await builder.addAzureAppServiceEnvironment("env")
+    .withDelegatedSubnet(subnet);
+```
+
+`WithDelegatedSubnet` delegates the subnet to `Microsoft.Web/serverFarms` and configures every generated
+website, deployment slot, and the default Aspire Dashboard to use it for regional virtual network integration.
+The subnet must meet the [Azure App Service regional virtual network integration requirements](https://learn.microsoft.com/azure/app-service/overview-vnet-integration).
+
+Regional virtual network integration affects outbound traffic only. It does not make website or dashboard ingress
+private, and it does not enable Route All. Configure private endpoints or access restrictions and Route All
+separately when those behaviors are required.
+
 ### Enabling Application Insights
 
 Application Insights can be enabled for the App Service Environment using the `WithAzureApplicationInsights` extension method. A different location can be specified for Application Insights using the optional location parameter:
@@ -116,6 +154,8 @@ var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-app-service/azure-app-service-host/
 * https://learn.microsoft.com/azure/app-service/
 
 ## Feedback & contributing

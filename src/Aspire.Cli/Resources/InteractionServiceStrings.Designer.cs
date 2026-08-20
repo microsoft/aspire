@@ -70,7 +70,25 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI Version.
+        ///   Looks up a localized string similar to The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost&apos;s Aspire packages to continue..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateAppHost {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue..
+        /// </summary>
+        public static string AppHostNotCompatibleUpdateCli {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version.
         /// </summary>
         public static string AspireCLIVersion {
             get {
@@ -79,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire.Hosting Version.
+        ///   Looks up a localized string similar to Aspire.Hosting version.
         /// </summary>
         public static string AspireHostingSDKVersion {
             get {
@@ -169,7 +187,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the apphost. The apphost possibly crashed before it was available: {0}..
+        ///   Looks up a localized string similar to An error occurred while connecting to the AppHost: {0}.
         /// </summary>
         public static string ErrorConnectingToAppHost {
             get {
@@ -178,7 +196,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the apphost. The apphost possibly crashed before it was available: {0}..
+        ///   Looks up a localized string similar to The connection to the AppHost was lost: {0}.
         /// </summary>
         public static string AppHostConnectionLost {
             get {
@@ -349,16 +367,16 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project argument was not specified and no *.csproj files were detected..
+        ///   Looks up a localized string similar to The --apphost option was not specified and no AppHost project files were detected..
         /// </summary>
-        public static string ProjectOptionNotSpecifiedNoCsprojFound {
+        public static string ProjectOptionNotSpecifiedNoAppHostsFound {
             get {
-                return ResourceManager.GetString("ProjectOptionNotSpecifiedNoCsprojFound", resourceCulture);
+                return ResourceManager.GetString("ProjectOptionNotSpecifiedNoAppHostsFound", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Required Capability.
+        ///   Looks up a localized string similar to Required capability.
         /// </summary>
         public static string RequiredCapability {
             get {

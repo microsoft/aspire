@@ -60,11 +60,20 @@ jobs:
 
       - name: Analyze failed jobs
         id: analyze
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MANUAL_RUN_ID: ${{ inputs.run_id }}
           MANUAL_DRY_RUN: ${{ inputs.dry_run }}
+          # TEMPORARY — FORCE_RERUN_ALL (revert when no longer needed):
+          # Short-circuit the analysis: if a CI run failed and has a currently-open
+          # associated PR, rerun its failed jobs — no job is fetched or classified, and
+          # there is no job-count cap. The "CI failed" and "max 3 reruns" gates come from
+          # the job-level `if` above; the open-PR requirement and the manual-dispatch
+          # attempt cap are preserved. This is a for-now measure until CI auto-rerun
+          # patterns are improved; disable by setting this to 'false' (or removing it) on
+          # both jobs. See docs/ci/auto-rerun-transient-ci-failures.md.
+          FORCE_RERUN_ALL: 'true'
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
@@ -77,6 +86,8 @@ jobs:
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
             const maxRetryableJobs = rerunWorkflow.defaultMaxRetryableJobs;
             const maxJobLogInspectionBytes = 256 * 1024;
+            // FORCE_RERUN_ALL: see env comment above.
+            const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';
 
             async function paginate(route, parameters, selectItems) {
               const items = [];
@@ -224,8 +235,51 @@ jobs:
             });
             core.setOutput('pull_request_numbers', JSON.stringify(pullRequestNumbers));
 
+            // The open-PR requirement applies in all modes: skip runs with no
+            // associated PR. Force mode does not bypass this — there is no value in
+            // spending CI on a run that has no open PR behind it.
             if (pullRequestNumbers.length === 0) {
               console.log('No associated pull request could be resolved for this workflow run. Skipping.');
+              return;
+            }
+
+            // TEMPORARY — FORCE_RERUN_ALL short-circuit (revert when no longer needed):
+            // The run failed (job-level `if`) and has an associated PR (checked above),
+            // so request a rerun without fetching or classifying any jobs. Only the
+            // attempt cap is re-checked here (it matters for the manual-dispatch path,
+            // which bypasses the trigger's run_attempt gate). The retryable_jobs output
+            // stays '[]' on purpose: the rerun job uses GitHub's rerun-failed-jobs API,
+            // which reruns every failed job regardless of this list, and the final
+            // open-PR state is re-checked there. See the JS file-level comment.
+            if (forceRerunAll) {
+              const forceRunAttempt = workflowRun.run_attempt;
+              const forceRerunEligible = rerunWorkflow.computeRerunEligibility({
+                runAttempt: forceRunAttempt,
+                forceRerunAll: true,
+              });
+              const forceRerunExecutionEligible = rerunWorkflow.computeRerunExecutionEligibility({
+                dryRun,
+                runAttempt: forceRunAttempt,
+                forceRerunAll: true,
+              });
+
+              core.setOutput('rerun_eligible', String(forceRerunEligible));
+              core.setOutput('rerun_execution_eligible', String(forceRerunExecutionEligible));
+
+              await rerunWorkflow.writeForceRerunSummary({
+                summary: core.summary,
+                rerunEligible: forceRerunEligible,
+                dryRun,
+                sourceRunUrl,
+                sourceRunAttempt: forceRunAttempt,
+                runAttempt: forceRunAttempt,
+                openPullRequestNumbers: pullRequestNumbers,
+              });
+
+              if (!forceRerunEligible) {
+                console.log(`Force-rerun mode: attempt cap reached (attempt ${forceRunAttempt}). Skipping.`);
+              }
+
               return;
             }
 
@@ -248,7 +302,7 @@ jobs:
               retryPatternsConfig,
             });
 
-            // TRX-based analysis: check test output for transient patterns
+            // TRX-based analysis: check test output for transient patterns.
             let testPatternMatchedTests = [];
             const hasSkippedTestExecJobs = skippedJobs.some(job =>
               rerunWorkflow.hasTestExecutionFailureStep(job.failedSteps)
@@ -388,7 +442,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Rerun matched jobs
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RETRYABLE_JOBS: ${{ needs.analyze-transient-failures.outputs.retryable_jobs }}
           PULL_REQUEST_NUMBERS: ${{ needs.analyze-transient-failures.outputs.pull_request_numbers }}
@@ -396,6 +450,12 @@ jobs:
           SOURCE_RUN_ATTEMPT: ${{ needs.analyze-transient-failures.outputs.source_run_attempt }}
           SOURCE_RUN_URL: ${{ needs.analyze-transient-failures.outputs.source_run_url }}
           TEST_PATTERN_MATCHED_TESTS: ${{ needs.analyze-transient-failures.outputs.test_pattern_matched_tests }}
+          # TEMPORARY — FORCE_RERUN_ALL (revert when no longer needed): in force mode the
+          # analyze step does not enumerate jobs, so RETRYABLE_JOBS is '[]'. This flag tells
+          # the rerun step to proceed anyway (GitHub's rerun-failed-jobs API reruns every
+          # failed job) and to use the short force-mode PR comment / summary wording. Keep
+          # in sync with the analyze step's FORCE_RERUN_ALL.
+          FORCE_RERUN_ALL: 'true'
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
@@ -407,8 +467,13 @@ jobs:
             const sourceRunAttempt = Number(process.env.SOURCE_RUN_ATTEMPT);
             const sourceRunUrl = process.env.SOURCE_RUN_URL;
             const testPatternMatchedTests = JSON.parse(process.env.TEST_PATTERN_MATCHED_TESTS || '[]');
+            // FORCE_RERUN_ALL: see env comment above.
+            const forceRerunAll = String(process.env.FORCE_RERUN_ALL).toLowerCase() === 'true';
 
-            if (retryableJobs.length === 0) {
+            // Normal mode passes the retry-safe job list; an empty list means nothing to
+            // rerun. Force mode intentionally passes an empty list (no enumeration), so it
+            // must proceed to the rerun.
+            if (!forceRerunAll && retryableJobs.length === 0) {
               console.log('No retryable jobs were provided to the rerun job.');
               return;
             }
@@ -424,4 +489,5 @@ jobs:
               sourceRunAttempt,
               sourceRunUrl,
               testPatternMatchedTests,
+              forceRerunAll,
             });

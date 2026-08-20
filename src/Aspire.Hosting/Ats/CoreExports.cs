@@ -108,6 +108,31 @@ internal static class CoreExports
 
     #endregion
 
+    #region Project Configuration
+
+    /// <summary>
+    /// Includes only the specified project endpoint names in environment-variable injection.
+    /// </summary>
+    /// <param name="resource">The project resource builder handle.</param>
+    /// <param name="endpointNames">The endpoint names to include in environment variables.</param>
+    /// <returns>The same project resource builder handle for chaining.</returns>
+    [AspireExport]
+    public static IResourceBuilder<ProjectResource> WithEndpointsInEnvironment(
+        this IResourceBuilder<ProjectResource> resource,
+        string[] endpointNames)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(endpointNames);
+
+        var includedEndpointNames = endpointNames.ToHashSet(StringComparers.EndpointAnnotationName);
+
+        return global::Aspire.Hosting.ProjectResourceBuilderExtensions.WithEndpointsInEnvironment(
+            resource,
+            endpoint => includedEndpointNames.Contains(endpoint.Name));
+    }
+
+    #endregion
+
     #region Parameters
 
     // Note: withDescription is now on ParameterResourceBuilderExtensions.WithDescription

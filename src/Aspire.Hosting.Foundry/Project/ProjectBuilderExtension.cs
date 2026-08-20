@@ -50,7 +50,11 @@ public static class AzureCognitiveServicesProjectExtensions
         builder.ApplicationBuilder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
         var project = builder.ApplicationBuilder.AddResource(new AzureCognitiveServicesProjectResource(name, ConfigureInfrastructure, builder.Resource));
-        project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
+        }
+
         return project;
     }
 
@@ -272,7 +276,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="name">Name to give the model deployment</param>
     /// <param name="model">The <see cref="FoundryModel"/> to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the deployment resource.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -311,7 +315,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <summary>
     /// Adds a model deployment to the parent Microsoft Foundry resource of the Microsoft Foundry project.
     /// </summary>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -322,6 +326,12 @@ public static class AzureCognitiveServicesProjectExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         return builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent).AddDeployment(name, modelName, modelVersion, format);
+    }
+
+    private static bool RequiresContainerRegistryProvisioning(AzureCognitiveServicesProjectResource project)
+    {
+        return project.HasAnnotationOfType<RequiresHostedAgentRegistryAnnotation>()
+            || project.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>();
     }
 
     internal static void ConfigureInfrastructure(AzureResourceInfrastructure infra)
@@ -411,44 +421,47 @@ public static class AzureCognitiveServicesProjectExtensions
         /*
          * Container registry for hosted agents
          *
-         * TODO: only provision if we need to create a Hosted Agent
+         * Only provision registry dependencies when the project will publish a hosted agent
+         * or when the user has explicitly supplied a registry override.
          */
+        if (RequiresContainerRegistryProvisioning(aspireResource))
+        {
+            AzureProvisioningResource? registry = null;
+            if (aspireResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) && registryReferenceAnnotation.Registry is AzureProvisioningResource r)
+            {
+                registry = r;
+            }
+            else if (aspireResource.DefaultContainerRegistry is not null)
+            {
+                registry = aspireResource.DefaultContainerRegistry;
+            }
+            else
+            {
+                throw new InvalidOperationException($"No container registry configured for Azure Cognitive Services project resource '{aspireResource.Name}'. A container registry is required to publish hosted agents.");
+            }
 
-        AzureProvisioningResource? registry = null;
-        if (aspireResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) && registryReferenceAnnotation.Registry is AzureProvisioningResource r)
-        {
-            registry = r;
-        }
-        else if (aspireResource.DefaultContainerRegistry is not null)
-        {
-            registry = aspireResource.DefaultContainerRegistry;
-        }
-        else
-        {
-            throw new InvalidOperationException($"No container registry configured for Azure Cognitive Services project resource '{aspireResource.Name}'. A container registry is required to publish and run hosted agents.");
-        }
-        var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
-        // Why do we need this?
-        infra.Add(containerRegistry);
+            var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
+            infra.Add(containerRegistry);
 
-        // Project needs this to pull hosted agent images and run them
-        var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, RoleManagementPrincipalType.ServicePrincipal, projectPrincipalId);
-        // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
-        pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, project.Id, pullRa.RoleDefinitionId);
-        infra.Add(pullRa);
-        infra.Add(containerRegistry);
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_ENDPOINT", typeof(string))
-        {
-            Value = containerRegistry.LoginServer
-        });
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
-        {
-            Value = containerRegistry.Name
-        });
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
-        {
-            Value = projectPrincipalId
-        });
+            // Project needs this to pull hosted agent images during hosted-agent deployment.
+            var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, RoleManagementPrincipalType.ServicePrincipal, projectPrincipalId);
+            // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
+            pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, project.Id, pullRa.RoleDefinitionId);
+            infra.Add(pullRa);
+            infra.Add(containerRegistry);
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_ENDPOINT", typeof(string))
+            {
+                Value = containerRegistry.LoginServer
+            });
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
+            {
+                Value = containerRegistry.Name
+            });
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
+            {
+                Value = projectPrincipalId
+            });
+        }
 
         // Implicit dependencies for capability hosts
         List<ProvisionableResource> capHostDeps = [];
@@ -694,7 +707,7 @@ public static class AzureCognitiveServicesProjectExtensions
     private static AzureContainerRegistryResource CreateDefaultRegistry(IDistributedApplicationBuilder builder, string name)
     {
         var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
-        builder.AddResource(resource);
+        builder.AddResource(resource).WithIconName("Archive");
         return resource;
     }
 

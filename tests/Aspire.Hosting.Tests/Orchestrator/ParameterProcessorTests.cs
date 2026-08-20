@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Resources;
@@ -14,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+using Microsoft.Extensions.Logging.Testing;
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -260,45 +261,54 @@ public class ParameterProcessorTests
         // Marking them as Running with the provided values
         await updates.MoveNextAsync().DefaultTimeout();
         Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
-        Assert.Equal("value1", updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.Value);
+        AssertParameterValueProperty(updates.Current.Snapshot, "value1", isSensitive: false);
 
         await updates.MoveNextAsync().DefaultTimeout();
         Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
-        Assert.Equal("value2", updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.Value);
+        AssertParameterValueProperty(updates.Current.Snapshot, "value2", isSensitive: false);
 
         await updates.MoveNextAsync().DefaultTimeout();
         Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
-        Assert.Equal("secretValue", updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.Value);
-        Assert.True(updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.IsSensitive ?? false);
+        AssertParameterValueProperty(updates.Current.Snapshot, "secretValue", isSensitive: true);
     }
 
     [Fact]
-    public async Task HandleUnresolvedParametersAsync_WhenUserCancelsInteraction_ParametersRemainUnresolved()
+    public async Task InitializeParametersAsync_WhenUserDismissesNotification_WaitsWithoutShowingNotificationAgain()
     {
         // Arrange
         var testInteractionService = new TestInteractionService();
-        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var notificationDismissed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var testSink = new TestSink();
+        testSink.MessageLogged += context =>
+        {
+            if (context.Message == "Unresolved parameters notification was dismissed. The notification will not be shown again.")
+            {
+                notificationDismissed.TrySetResult();
+            }
+        };
+        var testLogger = new TestLogger<ParameterProcessor>(new TestLoggerFactory(testSink, enabled: true));
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService, logger: testLogger);
         var parameterWithMissingValue = CreateParameterWithMissingValue("missingParam");
 
-        parameterWithMissingValue.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
         // Act - Start handling unresolved parameters
-        _ = parameterProcessor.HandleUnresolvedParametersAsync([parameterWithMissingValue], CancellationToken.None);
+        var initializeTask = parameterProcessor.InitializeParametersAsync([parameterWithMissingValue], waitForResolution: true);
 
         // Wait for the message bar interaction
         var messageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersBarTitle, messageBarInteraction.Title);
 
-        // Complete the message bar interaction with false (user chose not to enter values)
+        // Dismiss the message bar interaction
         messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+        await notificationDismissed.Task.DefaultTimeout();
 
-        // Assert that the message bar will show up again if there are still unresolved parameters
-        var nextMessageBarInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(InteractionStrings.ParametersBarTitle, nextMessageBarInteraction.Title);
-
-        // Assert - Parameter should remain unresolved since user cancelled
+        // Assert - Parameter should remain unresolved without another notification and initialization should keep waiting
         Assert.NotNull(parameterWithMissingValue.WaitForValueTcs);
         Assert.False(parameterWithMissingValue.WaitForValueTcs.Task.IsCompleted);
+        Assert.False(initializeTask.IsCompleted);
+        Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+
+        await parameterProcessor.SetParameterCoreAsync(parameterWithMissingValue, CreateSetParameterArguments("resolvedValue"), CancellationToken.None).DefaultTimeout();
+        await initializeTask.DefaultTimeout();
     }
 
     [Fact]
@@ -788,7 +798,7 @@ public class ParameterProcessorTests
                {
                    // This should not throw InvalidOperationException
                    // when using the proper execution context constructor
-                   var sp = context.ExecutionContext.ServiceProvider;
+                   var sp = context.ExecutionContext.Services;
                    serviceProviderAccessed = sp is not null;
                    context.EnvironmentVariables["TEST_ENV"] = param;
                });
@@ -1176,6 +1186,50 @@ public class ParameterProcessorTests
         Assert.Equal("newValue", savedValueNode?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task InitializeParametersAsync_RecordsResolvedSecretValues_ForRedaction()
+    {
+        // Assignment-time recording (https://github.com/microsoft/aspire/issues/19241): the processor records a
+        // secret's resolved value into the AppHost-scoped redaction history the moment it assigns it, so
+        // aspire describe/watch can redact it even before any backchannel connection has observed the value.
+        var redactionHistory = new SecretRedactionHistory();
+        var parameterProcessor = CreateParameterProcessor(secretRedactionHistory: redactionHistory);
+
+        var secretParam = CreateParameterResource("db-password", "s3cr3t-value", secret: true);
+        var nonSecretParam = CreateParameterResource("region", "public-value", secret: false);
+
+        await parameterProcessor.InitializeParametersAsync([secretParam, nonSecretParam], waitForResolution: true).DefaultTimeout();
+
+        // Only the secret value is recorded; the non-secret value must never enter the redaction set (asserting a
+        // single element proves "public-value" was not recorded).
+        var recorded = redactionHistory.AddValuesAndSnapshot([]);
+        Assert.Equal("s3cr3t-value", Assert.Single(recorded));
+    }
+
+    [Fact]
+    public async Task SetParameterCoreAsync_RecordsReplacedSecretValue_ForRedaction()
+    {
+        // The runtime "Set parameter" path replaces a secret's resolved value in place. Both the original and the
+        // replacement value must stay redactable, because a still-current or lagging snapshot can carry the previous
+        // value. Recording at assignment time accumulates both add-only, independent of any backchannel connection.
+        var redactionHistory = new SecretRedactionHistory();
+        var parameterProcessor = CreateParameterProcessor(secretRedactionHistory: redactionHistory);
+
+        var secretParam = CreateParameterResource("db-password", "initial-secret", secret: true);
+
+        await parameterProcessor.InitializeParametersAsync([secretParam], waitForResolution: true).DefaultTimeout();
+
+        // Recreate the completed TCS the way the runtime does before replacing a resolved value.
+        secretParam.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var result = await parameterProcessor.SetParameterCoreAsync(secretParam, CreateSetParameterArguments("replacement-secret"), CancellationToken.None).DefaultTimeout();
+        Assert.True(result.Success);
+
+        var recorded = redactionHistory.AddValuesAndSnapshot([]);
+        Assert.Contains("initial-secret", recorded);
+        Assert.Contains("replacement-secret", recorded);
+    }
+
     private static InteractionInputCollection CreateSetParameterArguments(string? value, string? saveToUserSecrets = null)
     {
         return new InteractionInputCollection([
@@ -1214,7 +1268,8 @@ public class ParameterProcessorTests
         bool disableDashboard = true,
         DistributedApplicationExecutionContext? executionContext = null,
         IDeploymentStateManager? deploymentStateManager = null,
-        IUserSecretsManager? userSecretsManager = null)
+        IUserSecretsManager? userSecretsManager = null,
+        SecretRedactionHistory? secretRedactionHistory = null)
     {
         return new ParameterProcessor(
             notificationService ?? ResourceNotificationServiceTestHelpers.Create(),
@@ -1223,8 +1278,13 @@ public class ParameterProcessorTests
             logger ?? new NullLogger<ParameterProcessor>(),
             executionContext ?? new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
             deploymentStateManager ?? new MockDeploymentStateManager(),
-            userSecretsManager ?? UserSecrets.NoopUserSecretsManager.Instance
-        );
+            userSecretsManager ?? UserSecrets.NoopUserSecretsManager.Instance)
+        {
+            // Mirror the DI wiring in DistributedApplicationBuilder so tests can observe assignment-time secret
+            // recording. Left null by default (property is a no-op then), matching a processor created outside the
+            // AppHost container.
+            SecretRedactionHistory = secretRedactionHistory
+        };
     }
 
     private static InteractionService CreateInteractionService(bool disableDashboard = false)
@@ -1233,7 +1293,8 @@ public class ParameterProcessorTests
             new NullLogger<InteractionService>(),
             new DistributedApplicationOptions { DisableDashboard = disableDashboard },
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
     }
 
     private sealed class MockDeploymentStateManager : IDeploymentStateManager
@@ -1267,6 +1328,17 @@ public class ParameterProcessorTests
         return new ParameterResource(name, _ => configuration[$"Parameters:{name}"] ?? throw new MissingParameterValueException($"Parameter '{name}' is missing"), secret);
     }
 
+    private static void AssertParameterValueProperty(CustomResourceSnapshot snapshot, string expectedValue, bool isSensitive)
+    {
+        var property = Assert.Single(snapshot.Properties, p => p.Name == KnownProperties.Parameter.Value);
+
+        Assert.Equal(expectedValue, property.Value);
+        Assert.Equal(isSensitive, property.IsSensitive);
+        Assert.Equal(MessageStrings.ResourcePropertyParameterValueDisplayName, property.DisplayName);
+        Assert.True(property.IsHighlighted);
+        Assert.Equal(0, property.SortOrder);
+    }
+
     private static ParameterResource CreateParameterWithMissingValue(string name, bool secret = false)
     {
         return new ParameterResource(name, _ => throw new MissingParameterValueException($"Parameter '{name}' is missing"), secret: secret);
@@ -1292,7 +1364,7 @@ public class ParameterProcessorTests
         var executionContext = new DistributedApplicationExecutionContext(
             new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, "manifest")
             {
-                ServiceProvider = serviceProvider
+                Services = serviceProvider
             });
 
         var parameterProcessor = CreateParameterProcessor(executionContext: executionContext);

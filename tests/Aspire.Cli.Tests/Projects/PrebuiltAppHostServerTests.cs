@@ -8,11 +8,14 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -20,6 +23,341 @@ namespace Aspire.Cli.Tests.Projects;
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+
+    [Fact]
+    public async Task WriteIfChangedAsync_LeavesAnIdenticalFileAlone()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "IntegrationRestore.csproj");
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project />", CancellationToken.None);
+        var firstWrite = File.GetLastWriteTimeUtc(path);
+
+        // MSBuild rebuilds when an input timestamp moves, so an identical rewrite must not touch the file.
+        File.SetLastWriteTimeUtc(path, firstWrite.AddMinutes(-5));
+        var backdated = File.GetLastWriteTimeUtc(path);
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project />", CancellationToken.None);
+
+        Assert.Equal(backdated, File.GetLastWriteTimeUtc(path));
+        Assert.Equal("<Project />", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public async Task WriteIfChangedAsync_WritesWhenContentDiffers()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "IntegrationRestore.csproj");
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project />", CancellationToken.None);
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project Sdk=\"Microsoft.NET.Sdk\" />", CancellationToken.None);
+
+        Assert.Equal("<Project Sdk=\"Microsoft.NET.Sdk\" />", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public async Task WriteIfChangedAsync_RewritesAFileItCannotRead()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Read permission is removed with POSIX file modes.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.WorkspaceRoot.FullName, "IntegrationRestore.csproj");
+        await File.WriteAllTextAsync(path, "<Project />");
+
+        // A generated file the CLI owns but momentarily cannot read -- an antivirus scanner holding it
+        // open on Windows, a mode the user changed on POSIX -- must be rewritten, not turned into a
+        // launch failure. The write below is what surfaces a genuinely unrecoverable error.
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserWrite);
+        }
+
+        await PrebuiltAppHostServer.WriteIfChangedAsync(path, "<Project Sdk=\"Microsoft.NET.Sdk\" />", CancellationToken.None);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Equal("<Project Sdk=\"Microsoft.NET.Sdk\" />", await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenNothingHasBeenRestoredYet()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenTheAssetsAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint", writeAssets: false);
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenTheFingerprintChanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "old-fingerprint");
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "new-fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_SkipsWhenTheFingerprintMatches()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint");
+
+        Assert.True(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenAReferencedProjectChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        // A referenced project bumping its own dependency changes the closure that restore resolves
+        // without changing a byte of the generated project file.
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
+        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenACentrallyManagedVersionChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        // Under central package management the reference carries no version at all: the version lives
+        // in Directory.Packages.props, which MSBuild imports automatically. Bumping it there changes
+        // what restore resolves while every hashed file stays byte-for-byte identical.
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" /></ItemGroup></Project>""");
+        var packagesProps = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props");
+        await File.WriteAllTextAsync(packagesProps, """<Project><ItemGroup><PackageVersion Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        await File.WriteAllTextAsync(packagesProps, """<Project><ItemGroup><PackageVersion Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
+        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenATransitivelyReferencedProjectChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaf = Path.Combine(workspace.WorkspaceRoot.FullName, "Leaf.csproj");
+        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.5.0" /></ItemGroup></Project>""");
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><ProjectReference Include="Leaf.csproj" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var before = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        // Restore resolves the whole graph, not just its first level, so a package bump two hops out
+        // changes the closure exactly as much as one hop out does.
+        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Aspire.Hosting" Version="13.6.0-dev" /></ItemGroup></Project>""");
+        var after = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEqual(before.Fingerprint, after.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenATransitivelyReferencedProjectFloats()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var leaf = Path.Combine(workspace.WorkspaceRoot.FullName, "Leaf.csproj");
+        await File.WriteAllTextAsync(leaf, """<Project><ItemGroup><PackageReference Include="Some.Package" Version="13.4.*" /></ItemGroup></Project>""");
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><ProjectReference Include="Leaf.csproj" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.False(inputs.IsEligibleForSkip);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_ToleratesAProjectReferenceCycle()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var first = Path.Combine(workspace.WorkspaceRoot.FullName, "First.csproj");
+        var second = Path.Combine(workspace.WorkspaceRoot.FullName, "Second.csproj");
+        // MSBuild rejects a cycle, but the fingerprint is computed before anything validates the
+        // graph, so walking it has to terminate on its own rather than hang the launch.
+        await File.WriteAllTextAsync(first, """<Project><ItemGroup><ProjectReference Include="Second.csproj" /></ItemGroup></Project>""");
+        await File.WriteAllTextAsync(second, """<Project><ItemGroup><ProjectReference Include="First.csproj" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("First", first) };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.NotEmpty(inputs.Fingerprint);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_FingerprintIsStableForUnchangedInputs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, "<Project />");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var first = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+        var second = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_IsNotEligibleForSkipWhenAReferencedProjectFloats()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        // The generated project pins exact versions, so the only float is inside the referenced
+        // project. Restore must still run because the feed can resolve it to a different package.
+        await File.WriteAllTextAsync(referencedProject, """<Project><ItemGroup><PackageReference Include="Some.Package" Version="13.4.*" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", [], projectRefs, CancellationToken.None);
+
+        Assert.False(inputs.IsEligibleForSkip);
+    }
+
+    [Fact]
+    public async Task ComputeRestoreInputsAsync_IsEligibleForSkipWhenEveryVersionIsExact()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var referencedProject = Path.Combine(workspace.WorkspaceRoot.FullName, "Aspire.Hosting.Java.csproj");
+        await File.WriteAllTextAsync(referencedProject, """<Project ToolsVersion="4.0"><ItemGroup><PackageReference Include="Some.Package" Version="13.5.0" /></ItemGroup></Project>""");
+        var projectRefs = new List<IntegrationReference> { IntegrationReference.FromProject("Aspire.Hosting.Java", referencedProject) };
+        var packageRefs = new List<IntegrationReference> { IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0") };
+
+        var inputs = await PrebuiltAppHostServer.ComputeRestoreInputsAsync("<Project />", packageRefs, projectRefs, CancellationToken.None);
+
+        Assert.True(inputs.IsEligibleForSkip);
+    }
+
+    [Theory]
+    [InlineData("""<PackageReference Include="A" Version="13.4.*" />""")]
+    [InlineData("""<PackageReference Include="A" Version="[13.4,14)" />""")]
+    [InlineData("""<PackageReference Include="A" Version="(13.4,)" />""")]
+    [InlineData("""<PackageReference Include="A" VersionOverride="13.4.*" />""")]
+    [InlineData("""<PackageReference Include="A" Version = "13.4.*" />""")]
+    public void HasFloatingVersionAttribute_DetectsVersionsThatCanResolveDifferently(string projectText)
+    {
+        Assert.True(PrebuiltAppHostServer.HasFloatingVersionAttribute(projectText));
+    }
+
+    [Theory]
+    [InlineData("""<PackageReference Include="A" Version="13.5.0" />""")]
+    [InlineData("""<PackageReference Include="A" Version="13.5.0-preview.1.25000.1" />""")]
+    // ToolsVersion ends in "Version" but is not a package version; the word boundary must exclude it.
+    [InlineData("""<Project ToolsVersion="4.0,x" />""")]
+    [InlineData("<Project />")]
+    public void HasFloatingVersionAttribute_IsFalseForExactVersions(string projectText)
+    {
+        Assert.False(PrebuiltAppHostServer.HasFloatingVersionAttribute(projectText));
+    }
+
+    [Theory]
+    [InlineData("13.4.*")]
+    [InlineData("[13.4,14)")]
+    [InlineData("(13.4,)")]
+    public void HasFloatingPackageVersion_DetectsVersionsThatCanResolveDifferently(string version)
+    {
+        var packageRefs = new List<IntegrationReference> { IntegrationReference.FromPackage("Aspire.Hosting.Redis", version) };
+
+        Assert.True(PrebuiltAppHostServer.HasFloatingPackageVersion(packageRefs));
+    }
+
+    [Fact]
+    public void HasFloatingPackageVersion_IsFalseForExactVersions()
+    {
+        var packageRefs = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.5.0"),
+            IntegrationReference.FromPackage("Aspire.Hosting.Java", "13.5.0-preview.1.25000.1")
+        };
+
+        Assert.False(PrebuiltAppHostServer.HasFloatingPackageVersion(packageRefs));
+    }
+
+    [Theory]
+    [InlineData("error NETSDK1004: Assets file '/tmp/obj/project.assets.json' not found. Run a NuGet package restore.")]
+    [InlineData("/tmp/obj/project.assets.json' doesn't have a target for 'net10.0'.")]
+    public void ShouldRetryWithRestore_RetriesWhenTheAssetsAreMissingOrStale(string line)
+    {
+        var output = new OutputCollector();
+        output.AppendOutput(line);
+
+        Assert.True(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
+    }
+
+    [Theory]
+    [InlineData("error NETSDK1064: Package Aspire.Hosting.Redis, version 13.5.0 was not found. It might have been deleted since NuGet restore. Otherwise, NuGet restore might have only partially completed, which might have been due to maximum path length restrictions.")]
+    [InlineData("error NU1101: Unable to find package Aspire.Hosting.Java. No packages exist with this id in source(s): dotnet-public")]
+    [InlineData("error NU1102: Unable to find package Aspire.Hosting with version (>= 13.6.0-dev)")]
+    public void ShouldRetryWithRestore_RetriesWhenThePackageCacheIsMissingPackages(string line)
+    {
+        var output = new OutputCollector();
+        output.AppendOutput(line);
+
+        Assert.True(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
+    }
+
+    [Fact]
+    public void ShouldRetryWithRestore_DoesNotRetryAnOrdinaryCompileFailure()
+    {
+        var output = new OutputCollector();
+        output.AppendOutput("Program.cs(3,1): error CS0103: The name 'Foo' does not exist in the current context");
+
+        Assert.False(PrebuiltAppHostServer.ShouldRetryWithRestore(output));
+    }
+
+    [Fact]
+    public void GetIntegrationBuildFailureMessage_ExplainsAPackageDowngrade()
+    {
+        var output = new OutputCollector();
+        // Localized MSBuild output: the error code is the only stable part to match on.
+        output.AppendOutput("IntegrationRestore.csproj : error NU1605: Advertencia como error: Degradación del paquete detectada: Aspire.Hosting de 13.6.0-dev a 13.5.0.");
+
+        var message = PrebuiltAppHostServer.GetIntegrationBuildFailureMessage(output);
+
+        Assert.Contains("aspire.config.json", message, StringComparison.Ordinal);
+        Assert.Contains(VersionHelper.GetDefaultTemplateVersion(), message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetIntegrationBuildFailureMessage_FallsBackForOtherFailures()
+    {
+        var output = new OutputCollector();
+        output.AppendOutput("Program.cs(3,1): error CS0103: The name 'Foo' does not exist in the current context");
+
+        Assert.Equal(ErrorStrings.IntegrationBuildFailed, PrebuiltAppHostServer.GetIntegrationBuildFailureMessage(output));
+    }
+
+    private static void WriteRestoreState(string restoreDir, string fingerprint, bool writeAssets = true)
+    {
+        var objDir = Path.Combine(restoreDir, "obj");
+        Directory.CreateDirectory(objDir);
+        if (writeAssets)
+        {
+            File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
+        }
+
+        File.WriteAllText(Path.Combine(objDir, "aspire-restore.stamp"), fingerprint);
+    }
 
     [Fact]
     public void GenerateIntegrationProjectFile_WithPackagesOnly_ProducesPackageReferences()
@@ -227,20 +565,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Constructor_UsesWorkspaceAspireDirectoryForWorkingDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            appHostDirectory.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace, appPath: appHostDirectory.FullName);
 
         var workingDirectory = Assert.IsType<string>(
             typeof(PrebuiltAppHostServer)
@@ -270,27 +598,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Constructor_UsesDistinctWorkingDirectoriesForMultipleAppHostsInSameWorkspace()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
         var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-
-        PrebuiltAppHostServer CreateServer(string appHostDirectory) => new(
-            appHostDirectory,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        PrebuiltAppHostServer CreateServer(string appHostDirectory) =>
+            CreatePrebuiltAppHostServer(workspace, appPath: appHostDirectory);
 
         var firstServer = CreateServer(firstAppHost.FullName);
         var secondServer = CreateServer(secondAppHost.FullName);
@@ -330,7 +643,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_LocalRequested_ReturnsNull()
     {
         // Locally-built CLI consuming its own local hive — only case the guard should fire.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
@@ -345,7 +658,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         // Locally-built CLI on a project that requested pr-12345 — the project's request wins,
         // PSM must emit (this is the scenario that regressed pre-fix).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
@@ -359,7 +672,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task TryCreateTemporaryNuGetConfig_StableIdentity_StableRequested_EmitsConfig()
     {
         // Stable-channel CLI on a project that requested 'stable' — PSM emits the stable mappings.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("stable");
         var server = CreateServerWithExplicitChannel(workspace, "stable", executionContext);
@@ -374,7 +687,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         // requested=local always returns null regardless of identity: the guard keys on the
         // requested/resolved channel name, not on which CLI is running.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("stable");
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
@@ -389,7 +702,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         // A 'daily' CLI consuming the 'daily' channel must still get a per-channel NuGet config —
         // the guard only fires when the *requested* channel is 'local'.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
         var server = CreateServerWithExplicitChannel(workspace, "daily", executionContext);
@@ -403,7 +716,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task TryCreateTemporaryNuGetConfig_PrIdentity_DifferentPrRequested_EmitsConfig()
     {
         // PR-build CLI installing a different PR's hive — guard does not fire (requested != "local").
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("pr-67890");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
@@ -418,13 +731,18 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         // Pins the rubber-duck finding: dropping the temp config also drops the staging-specific
         // global packages folder. The emitted nuget.config must contain a <config> element with a
-        // globalPackagesFolder setting when the channel was built with configureGlobalPackagesFolder.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        // globalPackagesFolder setting when the channel was built with configureGlobalPackagesFolder,
+        // AND the value must be an absolute path that lives outside the temp config's own directory
+        // so the cached packages survive the temp config's recursive cleanup (otherwise restore
+        // hands BundleNuGetService manifest paths that the temp dispose just deleted, hanging
+        // aspire-managed during DI / assembly loading on macOS osx-arm64 polyglot staging builds).
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var mappings = new[]
         {
-            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+            new PackageMapping(PackageMapping.AllPackages, channelSource)
         };
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -432,6 +750,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             mappings: mappings,
             nuGetPackageCache: new FakeNuGetPackageCache(),
             features: new TestFeatures(),
+            NullLogger.Instance,
             configureGlobalPackagesFolder: true);
         var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
 
@@ -443,7 +762,80 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             .SelectMany(c => c.Elements("add"))
             .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(gpf);
-        Assert.False(string.IsNullOrEmpty(gpf.Attribute("value")?.Value));
+        var gpfValue = gpf.Attribute("value")?.Value;
+        Assert.False(string.IsNullOrEmpty(gpfValue));
+        Assert.True(Path.IsPathFullyQualified(gpfValue), $"globalPackagesFolder value must be an absolute path. Got: {gpfValue}");
+        // The temp config directory is recursively deleted on dispose; the cache must live elsewhere
+        // so manifest paths produced by BundleNuGetService remain valid for the AppHost's lifetime.
+        var tempConfigDir = result.ConfigFile.Directory!.FullName;
+        Assert.False(
+            gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
+            $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+        // The cache subdirectory must be keyed by the resolved feed URL so two different staging
+        // feeds (e.g. two darc builds or an overrideStagingFeed setting) get distinct caches.
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(channelSource);
+        Assert.NotNull(expectedCacheKey);
+        var expectedCachePath = Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
+            expectedCacheKey);
+        Assert.Equal(expectedCachePath, gpfValue);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_StagingRequested_FromRealPackagingService_EmitsStableGlobalPackagesFolderOutsideTempDir()
+    {
+        // End-to-end pin for the staging temp-config hang fix: when the real PackagingService
+        // synthesizes the staging channel (here driven by overrideStagingFeed on a staging
+        // identity so configureGlobalPackagesFolder lands true), the temporary nuget.config used by
+        // PrebuiltAppHostServer must point globalPackagesFolder at an absolute path that survives
+        // the TemporaryNuGetConfig.Dispose recursive delete. Otherwise BundleNuGetService restores
+        // staging assemblies into <temp>/.nugetpackages, bakes those paths into
+        // integration-package-probe-manifest.json, and aspire-managed hangs in DI/assembly loading
+        // when it later probes the (now deleted) paths — observed on macOS osx-arm64.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        const string overrideStagingFeed = "https://pkgs.dev.azure.com/dnceng/internal/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace,
+            identityChannel: PackageChannelNames.Staging);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = overrideStagingFeed
+            })
+            .Build();
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            configuration,
+            NullLogger<PackagingService>.Instance);
+
+        var server = CreateServerWithPackagingService(workspace, packagingService, executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, PackageChannelNames.Staging);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        var gpf = doc.Descendants("config")
+            .SelectMany(c => c.Elements("add"))
+            .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(gpf);
+        var gpfValue = gpf.Attribute("value")?.Value;
+        Assert.False(string.IsNullOrEmpty(gpfValue));
+        Assert.True(Path.IsPathFullyQualified(gpfValue), $"globalPackagesFolder value must be an absolute path. Got: {gpfValue}");
+        var tempConfigDir = result.ConfigFile.Directory!.FullName;
+        Assert.False(
+            gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
+            $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+        // The cache key is derived from the resolved staging feed URL so the same CLI talking to
+        // a different overrideStagingFeed gets a different cache bucket.
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(overrideStagingFeed);
+        Assert.NotNull(expectedCacheKey);
+        var expectedCachePath = Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
+            expectedCacheKey);
+        Assert.Equal(expectedCachePath, gpfValue);
     }
 
     [Theory]
@@ -457,7 +849,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // enumerates HivesDirectory subdirs as explicit channels, so a project requesting "local"
         // resolves to an explicit channel with mappings — but the new guard fires because
         // channel.Name == "local".
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel(identity);
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
@@ -470,7 +862,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         var packagingService = new TestPackagingService
         {
@@ -492,7 +884,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverrideWithoutRequestedChannel_DoesNotMergeExplicitChannelAspireMappings()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var explicitChannel = PackageChannel.CreateExplicitChannel(
@@ -504,7 +896,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
             ],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, explicitChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -522,7 +914,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_PreservesRequestedChannelMappingsAndGlobalPackagesFolder()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -531,8 +923,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             mappings: [new PackageMapping("CommunityToolkit*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
             features: new TestFeatures(),
+            NullLogger.Instance,
             configureGlobalPackagesFolder: true);
-        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+        var executionContext = CreateContextWithIdentityChannel("pr-12345");
+        var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
             server,
@@ -544,15 +938,33 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
         Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, channelSource));
         Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
-        Assert.NotNull(doc.Descendants("config")
+        var gpf = doc.Descendants("config")
             .SelectMany(c => c.Elements("add"))
-            .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase)));
+            .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(gpf);
+        // Same stability requirement as the channel-only branch: the override path must outlive
+        // the temp nuget.config so BundleNuGetService's manifest paths remain valid after dispose.
+        var gpfValue = gpf.Attribute("value")?.Value;
+        Assert.False(string.IsNullOrEmpty(gpfValue));
+        Assert.True(Path.IsPathFullyQualified(gpfValue), $"globalPackagesFolder value must be an absolute path. Got: {gpfValue}");
+        var tempConfigDir = result.ConfigFile.Directory!.FullName;
+        Assert.False(
+            gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
+            $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+        // The cache key is derived from the --source override, not the channel's own mappings,
+        // so users running multiple overrides against the same CLI get distinct cache buckets.
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(packageSourceOverride);
+        Assert.NotNull(expectedCacheKey);
+        var expectedCachePath = Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
+            expectedCacheKey);
+        Assert.Equal(expectedCachePath, gpfValue);
     }
 
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_DropsRequestedChannelAspireMappings()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -560,7 +972,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource), new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -578,7 +990,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_PassesRequestedChannelToPackagingService()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         var packagingService = new TestPackagingService
         {
@@ -598,7 +1010,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_UsesChannelAllPackagesMappingAsFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -606,7 +1018,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping(PackageMapping.AllPackages, channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -624,7 +1036,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_WhenChannelLookupFails_StillCreatesOverrideConfigWithFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         var packagingService = new TestPackagingService
         {
@@ -652,7 +1064,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // CLI args as co-eligible with config mappings, so re-adding the channel's Aspire
         // feed here would silently let Aspire packages resolve from it and defeat the
         // override.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -660,7 +1072,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
@@ -674,7 +1086,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannelNonAspireMapping_KeepsChannelSourceAndAddsNuGetOrgFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -682,7 +1094,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("CommunityToolkit*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
@@ -698,7 +1110,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannelAllPackagesMapping_OmitsNuGetOrgFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -706,7 +1118,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping(PackageMapping.AllPackages, channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
@@ -740,7 +1152,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // refuses to synthesize a 'staging' channel and surfaces the actionable reason. The bundled
         // AppHost restore must not silently fall through to a different feed — it must propagate
         // that reason so the user sees the same message the update/new commands now show.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
         const string unavailableReason =
@@ -755,7 +1167,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TryCreateTemporaryNuGetConfig_StagingRequestedWithSourceOverride_RefusesWhenPackagingServiceReportsUnavailable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
         const string unavailableReason =
@@ -774,7 +1186,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // GetNuGetSourcesAsync's "no match -> all explicit channels" fallback hands the
         // shared daily feed to nuget restore on a daily-identity CLI even though the project
         // pinned channel: staging.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
         const string unavailableReason =
@@ -792,7 +1204,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // Negative control: the staging refusal must only fire for requestedChannel == "staging".
         // A request for any other channel name must continue to resolve normally even when the
         // packaging service is reporting staging-unavailable.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("daily");
         var mappings = new[]
@@ -800,30 +1212,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
         };
         var dailyChannel = PackageChannel.CreateExplicitChannel(
-            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]),
             GetStagingChannelUnavailableReasonCallback = () => "Staging unavailable"
         };
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            executionContext,
-            NullLogger<BundleNuGetService>.Instance);
-
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
 
         var sources = await server.GetNuGetSourcesAsync("daily", packageSourceOverride: null, CancellationToken.None);
 
@@ -845,7 +1241,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
         };
         var dailyChannel = PackageChannel.CreateExplicitChannel(
-            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
         var packagingService = new TestPackagingService
         {
@@ -853,23 +1249,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             GetStagingChannelUnavailableReasonCallback = () => unavailableReason
         };
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            executionContext,
-            NullLogger<BundleNuGetService>.Instance);
-
-        return new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            NullLogger.Instance);
+        return CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
     }
 
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
@@ -880,6 +1260,43 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
             "test.log",
             identityChannel: identityChannel);
+
+    // Builds a PrebuiltAppHostServer with the constant test wiring (socket name, SDK installer, process
+    // execution factory, logger) so individual tests only specify the parameters their scenario exercises.
+    // The execution context defaults to a fresh test context and is shared with the default NuGet service.
+    // Tests that need bundle-layout discovery (FixedLayoutDiscovery) or a custom process runner build their
+    // own BundleNuGetService and pass it via nugetService.
+    private static PrebuiltAppHostServer CreatePrebuiltAppHostServer(
+        TemporaryWorkspace workspace,
+        string? appPath = null,
+        LayoutConfiguration? layout = null,
+        TestDotNetCliRunner? dotNetCliRunner = null,
+        IPackagingService? packagingService = null,
+        CliExecutionContext? executionContext = null,
+        BundleNuGetService? nugetService = null)
+    {
+        executionContext ??= TestExecutionContextFactory.CreateTestContext();
+
+        nugetService ??= new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        return new PrebuiltAppHostServer(
+            appPath ?? workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            layout ?? new LayoutConfiguration(),
+            nugetService,
+            dotNetCliRunner ?? new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService ?? MockPackagingServiceFactory.Create(),
+            executionContext,
+            new TestProcessExecutionFactory(),
+            new TestEnvironment(),
+            NullLogger.Instance);
+    }
 
     private static PrebuiltAppHostServer CreateServerWithExplicitChannel(
         TemporaryWorkspace workspace,
@@ -893,7 +1310,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
         };
         var channel = PackageChannel.CreateExplicitChannel(
-            channelName, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+            channelName, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         return CreateServerWithChannel(workspace, channel, executionContext);
     }
 
@@ -915,24 +1332,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         IPackagingService packagingService,
         CliExecutionContext? executionContext = null)
     {
-        executionContext ??= TestExecutionContextFactory.CreateTestContext();
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            executionContext,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-
-        return new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        return CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
     }
 
     private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -967,7 +1367,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveRequestedChannel_UsesProjectLocalAspireConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(aspireConfigPath, """
@@ -976,17 +1376,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace);
 
         var channel = server.ResolveRequestedChannel();
 
@@ -996,19 +1386,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithNoIntegrations_WritesDefaultAppSettings()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace);
 
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -1034,7 +1414,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithPackageReferences_SetsOnlyPackageProbeManifest()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (server, executionFactory) = CreatePackageReferenceServer(workspace);
         var workingDirectory = GetWorkingDirectory(server);
@@ -1068,7 +1448,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithPackageReferences_UsesPackageSourceOverride()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
         List<string>? restoreArgs = null;
 
@@ -1109,7 +1489,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithPackageSourceOverride_AddsNuGetOrgFallbackSource()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
         List<string>? restoreArgs = null;
 
@@ -1150,7 +1530,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [InlineData("worktree-feature")]
     public async Task PrepareAsync_WithHiveBackedChannel_UsesLocalAspireSourceAsOverride(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packageSource = workspace.CreateDirectory("hive-packages");
         List<string>? restoreArgs = null;
 
@@ -1166,7 +1546,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", packageSource.FullName)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1206,9 +1586,68 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithHiveBackedChannelUsingFileUri_UsesLocalAspireSourceAsOverride()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packageSource = workspace.CreateDirectory("hive-packages");
+        var packageSourceUri = new Uri(packageSource.FullName).AbsoluteUri;
+        List<string>? restoreArgs = null;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "pr-12345"
+            }
+            """);
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "pr-12345",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", packageSourceUri)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Contains(packageSourceUri, GetSourceArguments(restoreArgs!));
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
+            Assert.Contains("--nuget-config", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithExplicitPackageSourceOverride_IgnoresHiveBackedAspireSource()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var explicitPackageSource = workspace.CreateDirectory("explicit-packages");
         var hivePackageSource = workspace.CreateDirectory("hive-packages");
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
@@ -1230,7 +1669,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, channelSource)
             ],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1269,7 +1708,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithHttpBackedChannel_DoesNotUseExactPackageVersions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         List<string>? restoreArgs = null;
 
@@ -1285,7 +1724,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1329,7 +1768,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // OverrideAsync and TryCreateTemporaryNuGetConfigAsync's no-override branch — catch
         // transient exceptions and fall through to "no override discovered" / "no PSM-bearing
         // temp config", matching the defensive catch in GetNuGetSourcesAsync.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelName = "pr-12345";
         List<string>? restoreArgs = null;
 
@@ -1383,7 +1822,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // directory. GetExistingLocalAspirePackageSource skips mappings whose Source does not
         // exist on disk, so auto-discovery returns null and restore falls through to the
         // ambient + channel-source path with no exact-pin.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var missingPackageSource = Path.Combine(workspace.WorkspaceRoot.FullName, "this-hive-was-deleted");
         Assert.False(Directory.Exists(missingPackageSource));
         List<string>? restoreArgs = null;
@@ -1400,7 +1839,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", missingPackageSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1449,7 +1888,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // Aspire* feed remain co-eligible with the override at restore time. The unit-level
         // TryCreateTemporaryNuGetConfig_* cases pin the generator; this case pins that PrepareAsync
         // wires that same temp config through to the actual restore invocation.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
 
@@ -1469,7 +1908,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
             ],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
@@ -1533,7 +1972,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // Pin that --source and the requested channel are present so a failed
         // `aspire new --source <X> --channel <Y>` doesn't require re-running with diagnostic logs
         // just to recover which inputs were in play.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -1577,7 +2016,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // The package preview caps at 5 entries with a "(+N more)" suffix so the error footer
         // doesn't explode for projects with large package counts. Pin the truncation shape so
         // it can't silently regress.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
 
         var (server, executionFactory) = CreatePackageReferenceServer(workspace);
@@ -1621,7 +2060,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // user's ambient nuget.config via <RestoreConfigFile>. The channel sources flow through
         // additively via <RestoreAdditionalProjectSources> so private/internal feeds the user
         // has configured in nuget.config remain reachable for non-Aspire transitives.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         XDocument? generatedProject = null;
 
@@ -1651,28 +2090,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
         };
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
-            NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            dotNetCliRunner,
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            TestExecutionContextFactory.CreateTestContext(),
-            NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            dotNetCliRunner: dotNetCliRunner,
+            packagingService: packagingService);
         var workingDirectory = GetWorkingDirectory(server);
 
         try
@@ -1716,7 +2143,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // catch blocks read the original (unset) `packageSourceOverride` argument and the user
         // saw only the channel name, hiding that a local hive participated in the failed
         // restore.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var localHive = workspace.CreateDirectory("local-aspire-hive").FullName;
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -1731,7 +2158,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", localHive)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([prChannel])
@@ -1780,7 +2207,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesNuGetConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
         XDocument? generatedProject = null;
         bool restoreConfigFileExistedDuringBuild = false;
@@ -1801,22 +2228,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 return 0;
             }
         };
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            dotNetCliRunner,
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace, dotNetCliRunner: dotNetCliRunner);
         var workingDirectory = GetWorkingDirectory(server);
 
         try
@@ -1854,7 +2266,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectDirectory = workspace.CreateDirectory("elsewhere");
         var config = AspireConfigFile.LoadOrCreate(projectDirectory.FullName);
         config.Channel = PackageChannelNames.Staging;
@@ -1885,7 +2297,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -1896,22 +2308,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
             ],
             new FakeNuGetPackageCache(),
-            new TestFeatures());
+            new TestFeatures(),
+            NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel])
         };
 
-        var server = new PrebuiltAppHostServer(
-            projectDirectory.FullName,
-            "test.sock",
-            layout,
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            appPath: projectDirectory.FullName,
+            layout: layout,
+            packagingService: packagingService,
+            executionContext: executionContext,
+            nugetService: nugetService);
         var workingDirectory = GetWorkingDirectory(server);
 
         try
@@ -1939,7 +2349,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithOnlyProjectReferences_SetsOnlyProjectLayout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -1975,7 +2385,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenClosureIsUnchanged()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2008,7 +2418,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_WritesPackageProbeManifestAndCopiesOnlyProjectOutputs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2053,7 +2463,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_WritesPackageResourcesAndNativeAssetsToProbeManifest()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2113,7 +2523,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_CreatesNewProjectLayoutWhenClosureChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2151,7 +2561,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_RecreatesProjectLayoutWhenCachedLayoutIsCorrupt()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2188,7 +2598,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_DoesNotTouchLockedPreviousProjectLayout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2230,7 +2640,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ClosureManifest_WithPackageBackedEntries_ChangesFingerprintWhenPackageSourcePathChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var firstPackageRoot = workspace.WorkspaceRoot.CreateSubdirectory("packages-a");
         var secondPackageRoot = workspace.WorkspaceRoot.CreateSubdirectory("packages-b");
@@ -2274,7 +2684,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ClosureManifest_ProjectLayoutManifestIgnoresPackageBackedEntries()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var firstPackageRoot = workspace.WorkspaceRoot.CreateSubdirectory("packages-a");
         var secondPackageRoot = workspace.WorkspaceRoot.CreateSubdirectory("packages-b");
@@ -2325,7 +2735,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenOnlyPackageTimestampChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2383,17 +2793,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        return new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            layout ?? new LayoutConfiguration(),
-            nugetService,
-            dotNetCliRunner,
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        return CreatePrebuiltAppHostServer(workspace, layout: layout, dotNetCliRunner: dotNetCliRunner);
     }
 
     private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(TemporaryWorkspace workspace)
@@ -2411,19 +2811,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
 
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            layout,
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            layout: layout,
+            packagingService: packagingService,
+            nugetService: nugetService);
 
         return (server, executionFactory);
     }
@@ -2550,26 +2945,21 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateStartInfo_SetsCliLogFilePathEnvironmentVariable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layout = CreateBundleLayout(workspace);
         var executionContext = TestExecutionContextFactory.CreateTestContext();
         var nugetService = new BundleNuGetService(
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            layout,
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            executionContext,
-            NullLogger<PrebuiltAppHostServer>.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            layout: layout,
+            executionContext: executionContext,
+            nugetService: nugetService);
 
         var startInfo = server.CreateStartInfo(123);
 

@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Kubernetes library
+# Azure Kubernetes Service hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure an Azure Kubernetes Service (AKS) environment.
+Use this integration to model, configure, and orchestrate an Azure Kubernetes Service (AKS) environment in an Aspire solution.
 
 ## Getting started
 
@@ -11,17 +11,19 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and any `AddHelmChart(...)` releases, and validates the Helm version up front so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Azure Kubernetes Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Kubernetes` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Kubernetes
+```bash
+aspire add Aspire.Hosting.Azure.Kubernetes
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an AKS environment and deploy services to it:
+In the AppHost, add an AKS environment and deploy services to it:
+
+**C#**
 
 ```csharp
 var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -30,8 +32,43 @@ var myService = builder.AddProject<Projects.MyService>()
     .WithComputeEnvironment(aks);
 ```
 
+**TypeScript**
+
+```typescript
+const aks = await builder.addAzureKubernetesEnvironment("aks");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+    .withComputeEnvironment(aks);
+```
+
+### Persistent volumes
+
+Add a persistent volume to the AKS environment and mount it into a workload:
+
+**C#**
+
+```csharp
+var data = aks.AddPersistentVolume("data")
+    .WithCapacity("20Gi");
+
+myService.WithPersistentVolume(data, "/data");
+```
+
+**TypeScript**
+
+```typescript
+const data = await aks.addPersistentVolume("data");
+await data.withCapacity("20Gi");
+
+await myService.withKubernetesPersistentVolumeMount(data, "/data");
+```
+
+When no storage class is specified, the generated claim uses the cluster's default storage class. A standard AKS cluster dynamically provisions an Azure managed disk. To request Premium SSD storage explicitly, call `WithStorageClass("managed-csi-premium")` in C# or `withStorageClass("managed-csi-premium")` in TypeScript.
+
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/aks/
 * https://learn.microsoft.com/azure/aks/
 
 ## Feedback & contributing

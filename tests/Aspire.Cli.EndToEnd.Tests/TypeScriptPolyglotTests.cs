@@ -4,7 +4,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -133,7 +132,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 7: Run the apphost
         await auto.TypeAsync("aspire run");
@@ -157,7 +156,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task CreateTypeScriptAppHostWithViteApp_AllowsGuestAppPackageManagerToDiffer()
+    public async Task TypeScriptAppHostWithVite_AllowsDifferentGuestPkgManager()
     {
         const string appHostToolchain = "pnpm";
         const string guestToolchain = "npm";
@@ -239,7 +238,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(appHostToolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     [Theory]

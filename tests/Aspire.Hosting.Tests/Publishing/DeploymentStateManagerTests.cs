@@ -16,8 +16,10 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Tests.Pipelines;
 
 [Trait("Partition", "4")]
-public class DeploymentStateManagerTests
+public class DeploymentStateManagerTests : IDisposable
 {
+    private readonly DirectoryInfo _aspireHome = Directory.CreateTempSubdirectory("aspire-deployment-state-tests-");
+
     [Fact]
     public async Task AcquireSectionAsync_ReturnsEmptySection_WhenStateIsNew()
     {
@@ -378,14 +380,54 @@ public class DeploymentStateManagerTests
         }
     }
 
-    private static FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null)
+    [Fact]
+    public void GetStatePath_UsesConfiguredAspireHome()
+    {
+        var sha = Guid.NewGuid().ToString("N");
+        var stateManager = CreateFileDeploymentStateManager(sha);
+
+        Assert.Equal(
+            Path.Combine(_aspireHome.FullName, "deployments", sha, "development.json"),
+            stateManager.StateFilePath);
+    }
+
+    [Fact]
+    public void GetStatePath_UsesDefaultAspireHome_WhenAspireHomeIsNotConfigured()
+    {
+        var sha = Guid.NewGuid().ToString("N");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:PathSha256"] = sha
+            })
+            .Build();
+        var hostEnvironment = new TestHostEnvironment { EnvironmentName = "Development" };
+        var pipelineOptions = Options.Create(new Hosting.Pipelines.PipelineOptions());
+        var stateManager = new FileDeploymentStateManager(
+            NullLogger<FileDeploymentStateManager>.Instance,
+            configuration,
+            hostEnvironment,
+            pipelineOptions);
+
+        Assert.Equal(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".aspire",
+                "deployments",
+                sha,
+                "development.json"),
+            stateManager.StateFilePath);
+    }
+
+    private FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null)
     {
         // Use a unique SHA per test by default to avoid test interference,
         // but allow tests to share state by passing the same SHA
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["AppHost:PathSha256"] = sha ?? Guid.NewGuid().ToString("N")
+                ["AppHost:PathSha256"] = sha ?? Guid.NewGuid().ToString("N"),
+                [KnownConfigNames.AspireHome] = _aspireHome.FullName
             })
             .Build();
 
@@ -397,6 +439,12 @@ public class DeploymentStateManagerTests
             configuration,
             hostEnvironment,
             pipelineOptions);
+    }
+
+    public void Dispose()
+    {
+        _aspireHome.Delete(recursive: true);
+        GC.SuppressFinalize(this);
     }
 
     [Theory]

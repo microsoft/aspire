@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
 
@@ -13,12 +11,6 @@ namespace Aspire.Shared.UserSecrets;
 /// </summary>
 internal sealed class SecretsStore
 {
-    internal static readonly JsonSerializerOptions s_jsonOptions = new()
-    {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
-
     private readonly string _secretsFilePath;
     private readonly Dictionary<string, string> _secrets;
 
@@ -90,7 +82,7 @@ internal sealed class SecretsStore
             obj[key] = value;
         }
 
-        var json = obj.ToJsonString(s_jsonOptions);
+        var json = obj.ToJsonString(UserSecretsJsonOptions.s_instance);
 
         // Unix: write to temp file then move for atomicity (matches aspnetcore pattern)
         if (!OperatingSystem.IsWindows())

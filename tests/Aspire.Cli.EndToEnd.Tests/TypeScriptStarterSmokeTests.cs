@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -84,7 +83,7 @@ public sealed class TypeScriptStarterSmokeTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
+        await auto.RunCommandAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);

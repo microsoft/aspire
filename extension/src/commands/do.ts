@@ -1,15 +1,27 @@
 import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getConfigInfo } from '../utils/configInfoProvider';
-import { enterPipelineStep } from '../loc/strings';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { enterPipelineStep, noAppHostInWorkspace } from '../loc/strings';
+import { CliPathResolutionTarget } from '../utils/cliPathVariables';
 
-export async function doCommand(terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider) {
-    const step = await resolveStep(terminalProvider);
-    if (step === undefined) {
-        return;
+export async function doCommand(
+    terminalProvider: AspireTerminalProvider,
+    editorCommandProvider: AspireEditorCommandProvider,
+    appHostPath: string | undefined,
+    target: CliPathResolutionTarget,
+    cliPath: string,
+) {
+    if (!appHostPath) {
+        vscode.window.showErrorMessage(noAppHostInWorkspace);
+        throw new vscode.CancellationError();
     }
-    await editorCommandProvider.tryExecuteDoAppHost(false, step ?? undefined);
+
+    const step = await resolveStep(terminalProvider, target, cliPath);
+    if (step === undefined) {
+        throw new vscode.CancellationError();
+    }
+    await editorCommandProvider.tryExecuteDoAppHost(false, step ?? undefined, appHostPath, target, cliPath);
 }
 
 /**
@@ -18,9 +30,9 @@ export async function doCommand(terminalProvider: AspireTerminalProvider, editor
  * Returns the user-provided step name if the CLI doesn't support interactive prompting (old CLI).
  * Returns undefined if the user cancels.
  */
-async function resolveStep(terminalProvider: AspireTerminalProvider): Promise<string | null | undefined> {
-    const configInfo = await getConfigInfo(terminalProvider);
-    if (configInfo?.Capabilities?.includes('pipelines')) {
+async function resolveStep(terminalProvider: AspireTerminalProvider, target: CliPathResolutionTarget, cliPath: string): Promise<string | null | undefined> {
+    const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+    if (await configInfoProvider.hasCapability('pipelines', { target, cliPath })) {
         // New CLI: it will prompt for the step via interaction service
         return null;
     }

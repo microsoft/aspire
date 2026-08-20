@@ -22,7 +22,7 @@ public abstract class ConformanceTestsBase<TService, TOptions> : ConformanceTest
 
     protected override string ActivitySourceName => $"Azure.Messaging.EventHubs.{typeof(TService).Name}";
 
-    protected override string[] RequiredLogCategories => ["Azure.Messaging.EventHubs"];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Messaging.EventHubs", AllowPrefixMatch: true)];
 
     protected override string ValidJsonConfig => $$"""
         {

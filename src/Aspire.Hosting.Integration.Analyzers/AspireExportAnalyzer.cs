@@ -3,6 +3,8 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Analyzers.Infrastructure;
 using Microsoft.CodeAnalysis;
@@ -150,16 +152,23 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var generatedMethodNames = new ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>>();
         AnalyzeAssemblyExportedTypes(context.Compilation, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
 
+        // ASPIREEXPORT017: track whether this assembly has any [AspireExport] coverage so the
+        // compilation-end action can require the polyglot opt-in. Seeded from assembly-level and
+        // type-level exports; member-level exports flip it from the symbol actions below.
+        // Writing 'true' from concurrent symbol actions is safe because the value is monotonic.
+        var assemblyHasAspireExport = new StrongBox<bool>(
+            currentAssemblyExportedTypes.Count > 0 || HasAnyAspireExportAttribute(context.Compilation.Assembly, aspireExportAttribute));
+
         context.RegisterSymbolAction(
-            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames),
+            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames, assemblyHasAspireExport),
             SymbolKind.Method);
 
         context.RegisterSymbolAction(
-            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, assemblyHasAspireExport),
             SymbolKind.NamedType);
 
         context.RegisterSymbolAction(
-            c => AnalyzeProperty(c, aspireExportAttribute),
+            c => AnalyzeProperty(c, aspireExportAttribute, assemblyHasAspireExport),
             SymbolKind.Property);
 
         context.RegisterCompilationEndAction(c => ReportAssemblyExportDescriptions(c, aspireExportAttribute));
@@ -169,9 +178,17 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationEndAction(c => ReportDuplicateCapabilityIds(c, capabilityIds));
         context.RegisterCompilationEndAction(c => ReportDuplicateGeneratedMethodNames(c, generatedMethodNames));
 
+        // ASPIREEXPORT017: a project that runs the export analyzer is treated as a polyglot integration
+        // by default. If it has no [AspireExport] coverage it must either add some or acknowledge it is not
+        // a polyglot integration via <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>.
+        context.RegisterCompilationEndAction(c => ReportMissingPolyglotCompatibleMarker(c, assemblyHasAspireExport));
+
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
         // are handled safely by the runtime.
+        // NOTE: This check only covers classic static `this`-parameter extension methods. C# 14 extension
+        // block instance members (method.IsExtensionMethod == false) are not analyzed here yet; missing the
+        // warning is non-blocking and never produces a false positive.
         var inlineDelegateInvocationCache = new ConcurrentDictionary<ISymbol, ImmutableHashSet<int>>(SymbolEqualityComparer.Default);
         context.RegisterOperationBlockStartAction(c =>
         {
@@ -218,7 +235,8 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         HashSet<ITypeSymbol> currentAssemblyExportedTypes,
         ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
-        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        StrongBox<bool> assemblyHasAspireExport)
     {
         var method = (IMethodSymbol)context.Symbol;
 
@@ -267,14 +285,20 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        // ASPIREEXPORT017: this assembly has at least one exported member.
+        assemblyHasAspireExport.Value = true;
+
         var attributeSyntax = exportAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken);
         var location = attributeSyntax?.GetLocation() ?? method.Locations.FirstOrDefault() ?? Location.None;
         AnalyzeExportDescription(context, exportAttribute, location);
 
         var containingTypeExportAttribute = GetContainingTypeAspireExportAttribute(method.ContainingType, aspireExportAttribute);
 
-        // Rule 1: Method must be static
-        if (!method.IsStatic && containingTypeExportAttribute is null)
+        // Rule 1: Method must be static.
+        // C# 14 extension block members (declared inside `extension(receiver) { ... }`) are surfaced
+        // by Roslyn as non-static instance members even though the compiler lowers them to static
+        // extension methods in IL. They are valid [AspireExport] targets, so they must not trip this rule.
+        if (!method.IsStatic && !IsExtensionBlockMember(method) && containingTypeExportAttribute is null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_exportMethodMustBeStatic,
@@ -299,9 +323,17 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var normalizedExportId = isExportIdFormatValid ? exportId : null;
         var effectiveExportId = normalizedExportId ?? derivedExportId;
 
+        // Build the effective parameter list used by the receiver/target-type rules below. For classic
+        // `this`-parameter extension methods (and ordinary methods) this is method.Parameters. For C# 14
+        // extension block instance members the receiver lives on the extension container rather than in
+        // Parameters, so GetEffectiveExportParameters prepends it to produce the same [receiver, ...args]
+        // shape, letting the rules treat both extension syntaxes identically.
+        var effectiveParameters = GetEffectiveExportParameters(method);
+
         // Track the runtime capability ID for static exports. Instance exports are tracked from
         // their containing type so ExposeMethods/ExposeProperties semantics match the scanner.
-        if (method.IsStatic && effectiveExportId is not null)
+        // Extension block instance members are static-equivalent exports, so they are tracked here too.
+        if (IsStaticForExport(method) && effectiveExportId is not null)
         {
             AddCapabilityExport(
                 capabilityIds,
@@ -327,7 +359,7 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // so only the actionable ASPIREEXPORT009 should appear.
         if (isExportIdFormatValid &&
             string.Equals(exportId, derivedExportId, StringComparison.Ordinal) &&
-            !HasConcreteResourceBuilderTargetParameter(method, wellKnownTypes))
+            !HasConcreteResourceBuilderTargetParameter(method, effectiveParameters, wellKnownTypes))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_redundantExportId,
@@ -367,9 +399,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         // Rule 6 (ASPIREEXPORT007): Track export for duplicate detection
-        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && IsExtensionLike(method) && effectiveParameters.Length > 0)
         {
-            var targetType = method.Parameters[0].Type;
+            var targetType = effectiveParameters[0].Type;
             var targetTypeName = targetType.ToDisplayString();
             var key = (effectiveExportId, targetTypeName);
             var bag = exportsByKey.GetOrAdd(key, _ => new ConcurrentBag<(IMethodSymbol, Location)>());
@@ -377,9 +409,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         // Rule 7 (ASPIREEXPORT009): Warn when export name may collide across integrations
-        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && IsExtensionLike(method) && effectiveParameters.Length > 0)
         {
-            AnalyzeExportNameUniqueness(context, method, effectiveExportId, wellKnownTypes, location);
+            AnalyzeExportNameUniqueness(context, method, effectiveParameters, effectiveExportId, wellKnownTypes, location);
         }
 
         // Rule 8 (ASPIREEXPORT012): Check that callback parameter types (Action<T>/Func<T>) have [AspireExport]
@@ -392,7 +424,8 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol aspireExportAttribute,
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
-        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        StrongBox<bool> assemblyHasAspireExport)
     {
         var type = (INamedTypeSymbol)context.Symbol;
         AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
@@ -400,6 +433,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
         if (typeExportAttribute is not null)
         {
+            // ASPIREEXPORT017: a type-level [AspireExport] is export coverage too.
+            assemblyHasAspireExport.Value = true;
+
             var location = GetAttributeLocation(typeExportAttribute, context.CancellationToken) ?? type.Locations.FirstOrDefault() ?? Location.None;
             AnalyzeExportDescription(context, typeExportAttribute, location);
         }
@@ -407,7 +443,7 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
     }
 
-    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute, StrongBox<bool> assemblyHasAspireExport)
     {
         var property = (IPropertySymbol)context.Symbol;
         var propertyExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
@@ -415,6 +451,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         {
             return;
         }
+
+        // ASPIREEXPORT017: a property-level [AspireExport] is export coverage too.
+        assemblyHasAspireExport.Value = true;
 
         var location = GetAttributeLocation(propertyExportAttribute, context.CancellationToken) ?? property.Locations.FirstOrDefault() ?? Location.None;
         AnalyzeExportDescription(context, propertyExportAttribute, location);
@@ -462,6 +501,52 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
             }
         }
+    }
+
+    // ASPIREEXPORT017: a project that runs the export analyzer is a polyglot integration by default and
+    // gets the 'polyglot' NuGet tag so `aspire add` can surface it to non-C# AppHosts. When such a project
+    // has no [AspireExport] surface at all it is almost certainly either missing its exports or is really
+    // infrastructure that should not be discovered, so the build fails unless the author acknowledges that
+    // with <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible> (which also omits the tag).
+    private static void ReportMissingPolyglotCompatibleMarker(CompilationAnalysisContext context, StrongBox<bool> assemblyHasAspireExport)
+    {
+        if (assemblyHasAspireExport.Value)
+        {
+            return;
+        }
+
+        if (IsPolyglotCompatibilityOptedOut(context.Options.AnalyzerConfigOptionsProvider.GlobalOptions))
+        {
+            return;
+        }
+
+        context.ReportDiagnostic(Diagnostic.Create(
+            Diagnostics.s_missingPolyglotCompatibleMarker,
+            Location.None,
+            context.Compilation.Assembly.Identity.Name));
+    }
+
+    private static bool IsPolyglotCompatibilityOptedOut(Microsoft.CodeAnalysis.Diagnostics.AnalyzerConfigOptions options)
+    {
+        // Exposed via <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" /> in the build, surfaced
+        // to analyzers as the 'build_property.<name>' key. Only an explicit 'false' opts out; any other value
+        // (or the property being absent) leaves the project polyglot-compatible by default.
+        return options.TryGetValue("build_property.IsAspirePolyglotCompatible", out var value)
+            && bool.TryParse(value, out var enabled)
+            && !enabled;
+    }
+
+    private static bool HasAnyAspireExportAttribute(IAssemblySymbol assembly, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attribute in assembly.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeAssemblyExportedTypes(
@@ -646,7 +731,12 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol aspireExportAttribute,
         HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
-        // Only check public static extension methods
+        // Only check public static extension methods.
+        // C# 14 extension block instance members are intentionally not covered here yet: they surface as
+        // non-static (IsStatic == false) and IsExtensionMethod == false, so the guard below skips them.
+        // ASPIREEXPORT008 only nudges authors to add a missing [AspireExport], so the gap is non-blocking
+        // (it can cause a missing suggestion, never a false positive). This parallels the ASPIREEXPORT010
+        // limitation; expand coverage here only if extension-block authors need the same nudge.
         if (!method.IsStatic || !method.IsExtensionMethod || method.DeclaredAccessibility != Accessibility.Public)
         {
             return;
@@ -681,21 +771,21 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
     /// <c>IResourceBuilder&lt;ConcreteType&gt;</c> parameter), independently of what the export ID is.
     /// Used to suppress ASPIREEXPORT011 when ASPIREEXPORT009 would fire for the same method.
     /// </summary>
-    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, WellKnownTypes wellKnownTypes)
+    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, ImmutableArray<IParameterSymbol> effectiveParameters, WellKnownTypes wellKnownTypes)
     {
-        if (!method.IsExtensionMethod || method.Parameters.Length < 2)
+        if (!IsExtensionLike(method) || effectiveParameters.Length < 2)
         {
             return false;
         }
 
-        if (!IsOpenGenericResourceBuilder(method.Parameters[0].Type, wellKnownTypes))
+        if (!IsOpenGenericResourceBuilder(effectiveParameters[0].Type, wellKnownTypes))
         {
             return false;
         }
 
-        for (var i = 1; i < method.Parameters.Length; i++)
+        for (var i = 1; i < effectiveParameters.Length; i++)
         {
-            if (GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes) is not null)
+            if (GetConcreteResourceBuilderTypeName(effectiveParameters[i].Type, wellKnownTypes) is not null)
             {
                 return true;
             }
@@ -707,13 +797,14 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeExportNameUniqueness(
         SymbolAnalysisContext context,
         IMethodSymbol method,
+        ImmutableArray<IParameterSymbol> effectiveParameters,
         string exportId,
         WellKnownTypes wellKnownTypes,
         Location location)
     {
         // Only applies to extension methods where the first param is IResourceBuilder<T>
         // with T being an open generic type parameter (constrained to IResource)
-        var firstParamType = method.Parameters[0].Type;
+        var firstParamType = effectiveParameters[0].Type;
         if (!IsOpenGenericResourceBuilder(firstParamType, wellKnownTypes))
         {
             return;
@@ -722,9 +813,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Look for a parameter (beyond the first) that is IResourceBuilder<ConcreteType>
         // where ConcreteType is a specific resource type (not a type parameter)
         string? concreteTargetTypeName = null;
-        for (var i = 1; i < method.Parameters.Length; i++)
+        for (var i = 1; i < effectiveParameters.Length; i++)
         {
-            concreteTargetTypeName = GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes);
+            concreteTargetTypeName = GetConcreteResourceBuilderTypeName(effectiveParameters[i].Type, wellKnownTypes);
             if (concreteTargetTypeName is not null)
             {
                 break;
@@ -1276,12 +1367,13 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static string GetGeneratedTargetTypeName(IMethodSymbol method)
     {
-        if (!method.IsExtensionMethod || method.Parameters.Length == 0)
+        var effectiveParameters = GetEffectiveExportParameters(method);
+        if (!IsExtensionLike(method) || effectiveParameters.Length == 0)
         {
             return "<global>";
         }
 
-        var targetType = method.Parameters[0].Type;
+        var targetType = effectiveParameters[0].Type;
         var targetTypeName = targetType.ToDisplayString();
         if (targetType is not INamedTypeSymbol { IsGenericType: true } namedTargetType)
         {
@@ -1837,6 +1929,118 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         return type.ContainingNamespace.IsGlobalNamespace
             ? assemblyName
             : type.ContainingNamespace.ToDisplayString();
+    }
+
+    // C# 14 introduced "extension blocks" (extension members). A method declared inside an
+    // `extension(receiver) { ... }` block is surfaced by Roslyn as a non-static instance member whose
+    // ContainingType has IsExtension == true and exposes the receiver via ExtensionParameter. These
+    // members are semantically equivalent to classic static `this`-parameter extension methods (the
+    // compiler lowers them to exactly that in IL), so [AspireExport] is valid on them and
+    // ASPIREEXPORT001 ("must be static") must not fire.
+    //
+    // This analyzer compiles against Roslyn 4.8, which predates extension blocks, so
+    // INamedTypeSymbol.IsExtension / INamedTypeSymbol.ExtensionParameter are not available at compile
+    // time. They DO exist at runtime when the analyzer is loaded into a newer Roslyn host
+    // (.NET 10 SDK / VS 17.14+) that is able to compile this syntax in the first place. We therefore
+    // probe for them via reflection and treat their absence as "not an extension" (older hosts can
+    // never produce extension-block members).
+    // See: https://learn.microsoft.com/dotnet/csharp/whats-new/csharp-14#extension-members
+    //
+    // The cached members are MethodInfo getters (not delegates closing over INamedTypeSymbol) so the
+    // analyzer does not store per-compilation symbol data in its fields (RS1008).
+    private static readonly MethodInfo? s_isExtensionGetter = typeof(INamedTypeSymbol).GetProperty("IsExtension")?.GetGetMethod();
+    private static readonly MethodInfo? s_extensionParameterGetter = typeof(INamedTypeSymbol).GetProperty("ExtensionParameter")?.GetGetMethod();
+
+    private static bool IsExtensionContainer(INamedTypeSymbol type)
+    {
+        if (s_isExtensionGetter is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return s_isExtensionGetter.Invoke(type, null) is true;
+        }
+        catch (TargetInvocationException)
+        {
+            return false;
+        }
+    }
+
+    private static IParameterSymbol? GetExtensionParameter(INamedTypeSymbol type)
+    {
+        if (s_extensionParameterGetter is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return s_extensionParameterGetter.Invoke(type, null) as IParameterSymbol;
+        }
+        catch (TargetInvocationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns true when the method is an instance member declared inside a C# 14 extension block
+    /// (e.g. <c>extension(IResourceBuilder&lt;T&gt; builder) { public ... Method(...) { } }</c>).
+    /// Such members are equivalent to classic static extension methods and are valid AspireExport targets.
+    /// </summary>
+    private static bool IsExtensionBlockMember(IMethodSymbol method)
+    {
+        return !method.IsStatic &&
+            method.ContainingType is { } containingType &&
+            IsExtensionContainer(containingType) &&
+            GetExtensionParameter(containingType) is not null;
+    }
+
+    /// <summary>
+    /// True when the method participates in ATS as an extension-style export: either a classic static
+    /// <c>this</c>-parameter extension method, or a C# 14 extension block instance member.
+    /// </summary>
+    private static bool IsExtensionLike(IMethodSymbol method)
+    {
+        return method.IsExtensionMethod || IsExtensionBlockMember(method);
+    }
+
+    /// <summary>
+    /// True when the method is treated as a static export for capability/generated-name tracking.
+    /// Extension block instance members are static-equivalent (lowered to static extension methods in IL).
+    /// </summary>
+    private static bool IsStaticForExport(IMethodSymbol method)
+    {
+        return method.IsStatic || IsExtensionBlockMember(method);
+    }
+
+    /// <summary>
+    /// Returns the parameter list used by the receiver/target-type export rules. For classic extension
+    /// methods and ordinary methods this is <see cref="IMethodSymbol.Parameters"/> (the receiver, if any,
+    /// is the first parameter). For C# 14 extension block instance members the receiver lives on the
+    /// extension container rather than in <c>Parameters</c>, so it is prepended to produce the same
+    /// <c>[receiver, ...declaredParameters]</c> shape as a classic extension method.
+    /// </summary>
+    private static ImmutableArray<IParameterSymbol> GetEffectiveExportParameters(IMethodSymbol method)
+    {
+        if (GetExtensionBlockReceiver(method) is { } receiver)
+        {
+            return method.Parameters.Insert(0, receiver);
+        }
+
+        return method.Parameters;
+    }
+
+    private static IParameterSymbol? GetExtensionBlockReceiver(IMethodSymbol method)
+    {
+        if (method.IsStatic || method.ContainingType is not { } containingType || !IsExtensionContainer(containingType))
+        {
+            return null;
+        }
+
+        return GetExtensionParameter(containingType);
     }
 
     private static string GetMethodDisplayString(IMethodSymbol method)

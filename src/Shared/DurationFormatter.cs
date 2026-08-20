@@ -45,7 +45,7 @@ internal static class DurationFormatter
     public static string FormatDuration(TimeSpan duration, CultureInfo? culture = null, DecimalDurationDisplay decimalDisplay = DecimalDurationDisplay.Optional)
     {
         culture ??= CultureInfo.InvariantCulture;
-        
+
         var (primaryUnit, secondaryUnit) = ResolveUnits(duration.Ticks);
         var ofPrevious = primaryUnit.Ticks / secondaryUnit.Ticks;
         var ticks = (double)duration.Ticks;
@@ -54,8 +54,8 @@ internal static class DurationFormatter
         {
             // If the unit is decimal based, display as a decimal with 2 decimal places for alignment (Fixed)
             // or with optional decimal places (Optional) to avoid trailing zeros
-            var formatString = decimalDisplay == DecimalDurationDisplay.Fixed 
-                ? $"{{0:0.00}}{primaryUnit.Unit}" 
+            var formatString = decimalDisplay == DecimalDurationDisplay.Fixed
+                ? $"{{0:0.00}}{primaryUnit.Unit}"
                 : $"{{0:0.##}}{primaryUnit.Unit}";
             return string.Format(culture, formatString, ticks / primaryUnit.Ticks);
         }

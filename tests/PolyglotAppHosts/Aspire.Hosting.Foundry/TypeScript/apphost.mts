@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, HostedAgentProtocol, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -83,13 +83,7 @@ const builderProjectFoundry = await builder.addFoundry('builder-project-foundry'
 const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', { modelVersion: '1', format: 'Microsoft' });
 const _projectModel = await project.addModelDeployment('project-model', FoundryModels.Microsoft.Phi4);
-const hostedAgent = await builder.addExecutable(
-    'hosted-agent',
-    'node',
-    '.',
-    [
-        '-e',
-        `
+const hostedAgentScript = `
 const http = require('node:http');
 const port = Number(process.env.DEFAULT_AD_PORT ?? '8088');
 const server = http.createServer((req, res) => {
@@ -103,25 +97,39 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
 server.listen(port, '127.0.0.1');
-`
-    ]);
+`;
+const hostedAgent = await builder.addExecutable(
+    'hosted-agent',
+    'node',
+    '.',
+    ['-e', hostedAgentScript]);
 
-await hostedAgent.withComputeEnvironment({
-    project,
-    configure: async (configuration) => {
-        await configuration.description.set('Validation hosted agent');
-        await configuration.cpu.set(1);
-        await configuration.memory.set(2);
-        const metadata = await configuration.metadata();
-        await metadata.set('scenario', 'validation');
-        const environmentVariables = await configuration.environmentVariables();
-        await environmentVariables.set('VALIDATION_MODE', 'true');
-    }
+await hostedAgent.asHostedAgent(project, {
+    description: 'Validation hosted agent',
+    cpu: 1,
+    memory: 2,
+    metadata: { scenario: 'validation' },
+    environmentVariables: { VALIDATION_MODE: 'true' }
 });
+
+const hostedAgentWithProtocol = await builder.addExecutable(
+    'hosted-agent-with-protocol',
+    'node',
+    '.',
+    ['-e', hostedAgentScript]);
+// Both hosted agents run as plain host processes (not containers), so they must not share the
+// default 8088 target port or the second process fails to bind with EADDRINUSE.
+await hostedAgentWithProtocol.withHttpEndpoint({ targetPort: 8089 });
+await hostedAgentWithProtocol.asHostedAgentWithProtocol(project, HostedAgentProtocol.Invocations, '1.0.0');
 
 const api = await builder.addContainer('api', 'nginx');
 await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);

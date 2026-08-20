@@ -31,10 +31,11 @@ internal static class ResourceSnapshotMapper
     /// <param name="snapshots">The resource snapshots to map.</param>
     /// <param name="dashboardBaseUrl">Optional base URL of the Aspire Dashboard for generating resource URLs.</param>
     /// <param name="includeEnvironmentVariableValues">Whether to include environment variable values. Defaults to <c>true</c>. Set to <c>false</c> to exclude values for security reasons.</param>
-    public static List<ResourceJson> MapToResourceJsonList(IEnumerable<ResourceSnapshot> snapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true)
+    /// <param name="includeDisabledCommands">Whether to include disabled commands. Hidden commands are always excluded.</param>
+    public static List<ResourceJson> MapToResourceJsonList(IEnumerable<ResourceSnapshot> snapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true, bool includeDisabledCommands = false)
     {
         var snapshotList = snapshots.ToList();
-        return snapshotList.Select(s => MapToResourceJson(s, snapshotList, dashboardBaseUrl, includeEnvironmentVariableValues)).ToList();
+        return snapshotList.Select(s => MapToResourceJson(s, snapshotList, dashboardBaseUrl, includeEnvironmentVariableValues, includeDisabledCommands)).ToList();
     }
 
     /// <summary>
@@ -44,7 +45,8 @@ internal static class ResourceSnapshotMapper
     /// <param name="allSnapshots">All resource snapshots for resolving relationships.</param>
     /// <param name="dashboardBaseUrl">Optional base URL of the Aspire Dashboard for generating resource URLs.</param>
     /// <param name="includeEnvironmentVariableValues">Whether to include environment variable values. Defaults to <c>true</c>. Set to <c>false</c> to exclude values for security reasons.</param>
-    public static ResourceJson MapToResourceJson(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allSnapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true)
+    /// <param name="includeDisabledCommands">Whether to include disabled commands. Hidden commands are always excluded.</param>
+    public static ResourceJson MapToResourceJson(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allSnapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true, bool includeDisabledCommands = false)
     {
         var urls = snapshot.Urls
             .Select(u => new ResourceUrlJson
@@ -106,19 +108,25 @@ internal static class ResourceSnapshotMapper
             }
         }
 
-        // Only include enabled commands
+        // Include only API-visible enabled commands by default; the include-disabled stream
+        // also surfaces UI-only commands for UI consumers. Hidden commands are never emitted.
+        // Capture each command's index (before filtering) and stamp it as SortOrder so consumers
+        // can sort by (SortOrder, Name).
         var commands = snapshot.Commands
-            .Where(IsCommandAvailableToApi)
-            .OrderBy(c => c.Name)
+            .Select((command, index) => (command, index))
+            .Where(c => IsCommandVisibleForConsumer(c.command.Visibility, includeDisabledCommands) && IsCommandVisibleToConsumer(c.command.State, includeDisabledCommands))
+            .OrderBy(c => c.command.Name)
             .ToDistinctDictionary(
-                c => c.Name,
+                c => c.command.Name,
                 c => new ResourceCommandJson
                 {
-                    DisplayName = string.IsNullOrWhiteSpace(c.DisplayName) ? null : c.DisplayName.Trim(),
-                    Description = c.Description,
-                    Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
-                    ArgumentInputs = c.ArgumentInputs.Length > 0
-                        ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
+                    DisplayName = string.IsNullOrWhiteSpace(c.command.DisplayName) ? null : c.command.DisplayName.Trim(),
+                    Description = c.command.Description,
+                    Visibility = IsDefaultCommandVisibility(c.command.Visibility) ? null : c.command.Visibility,
+                    State = c.command.State,
+                    SortOrder = c.index,
+                    ArgumentInputs = c.command.ArgumentInputs.Length > 0
+                        ? c.command.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
                         : null
                 });
 
@@ -231,6 +239,18 @@ internal static class ResourceSnapshotMapper
         return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
     }
 
+    private static bool IsCommandVisibleForConsumer(string? visibility, bool includeDisabledCommands)
+    {
+        return IsCommandVisibleToApi(visibility)
+            || (includeDisabledCommands && visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.UI, StringComparison.OrdinalIgnoreCase)) is true);
+    }
+
+    private static bool IsCommandVisibleToConsumer(string state, bool includeDisabledCommands)
+    {
+        return string.Equals(state, KnownCommandState.Enabled, StringComparison.OrdinalIgnoreCase)
+            || (includeDisabledCommands && string.Equals(state, KnownCommandState.Disabled, StringComparison.OrdinalIgnoreCase));
+    }
+
     internal static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)
     {
         return new ResourceCommandArgumentJson
@@ -242,13 +262,18 @@ internal static class ResourceSnapshotMapper
             InputType = input.InputType,
             Required = input.Required,
             Placeholder = input.Placeholder,
-            Value = input.Value,
+            Value = IsSecretCommandArgument(input) ? null : input.Value,
             Options = input.Options,
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
             DynamicLoading = MapDynamicLoading(input.DynamicLoading)
         };
+    }
+
+    private static bool IsSecretCommandArgument(ResourceSnapshotCommandArgument input)
+    {
+        return string.Equals(input.InputType, nameof(InputType.SecretText), StringComparison.OrdinalIgnoreCase);
     }
 
     private static ResourceCommandArgumentDynamicLoadingJson? MapDynamicLoading(ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading)

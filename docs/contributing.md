@@ -29,6 +29,7 @@ These instructions will get you ready to contribute to this project. If you just
   - [Native build](#native-build)
   - [Building the VS Code extension](#building-the-vs-code-extension)
 - [Trying your changes locally](#trying-your-changes-locally)
+  - [Running the Aspire CLI from source](#running-the-aspire-cli-from-source)
   - [Generating local NuGet packages](#generating-local-nuget-packages)
   - [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
 - [Tips and known issues](#tips-and-known-issues)
@@ -102,6 +103,8 @@ dotnet test --no-launch-profile -- \
 
 To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
 
+To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
+
 ## Coding Agents
 
 Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.
@@ -172,7 +175,9 @@ Native build can be disabled with `/p:SkipNativeBuild=true`. To build only the n
 
 ### Building the VS Code extension
 
-The Aspire VS Code extension lives under `extension/`. To build the extension through the repo build, make sure Node.js, yarn, and `vsce` are on your PATH, then run:
+The Aspire VS Code extension lives under `extension/`. See [extension/CONTRIBUTING.md](/extension/CONTRIBUTING.md) for the full extension contributor guide, including the extension-only inner loop (no .NET build required), project structure, running tests, and localization rules.
+
+To build the extension through the repo build, make sure Node.js, yarn, and `vsce` are on your PATH, then run:
 
 ```bash
 ./build.sh --build-extension  # macOS/Linux
@@ -192,6 +197,18 @@ yarn compile
 Use `yarn watch` while editing TypeScript. When adding or changing user-facing extension text, keep the strings localized in both `extension/package.nls.json` and `extension/src/loc/strings.ts`. For VSIX signing and release packaging details, see [extension-signing.md](/docs/extension-signing.md).
 
 ## Trying your changes locally
+
+### Running the Aspire CLI from source
+
+For a fast in-repo development loop, use `run-aspire.sh` (macOS and Linux) or `run-aspire.cmd` (Windows). The wrapper runs the CLI from the current worktree without installing it, preserves your current directory, and forwards any Aspire command:
+
+```bash
+cd playground/rust
+../../run-aspire.sh restore
+../../run-aspire.sh run
+```
+
+On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
 
 ### Generating local NuGet packages
 

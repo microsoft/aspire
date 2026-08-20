@@ -25,11 +25,11 @@ public class ConformanceTests : ConformanceTests<QueueServiceClient, AzureStorag
 
     protected override bool CheckOptionClassSealed => false;
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Azure.Core",
-        "Azure.Identity"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Azure.Core"),
+        new("Azure.Identity"),
+    ];
 
     protected override bool SupportsKeyedRegistrations => true;
 

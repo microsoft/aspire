@@ -155,7 +155,7 @@ public static class AzureFrontDoorExtensions
         var resource = new AzureFrontDoorResource(name, configureInfrastructure);
 
         return builder.ExecutionContext.IsPublishMode
-            ? builder.AddResource(resource)
+            ? builder.AddResource(resource).WithIconName("GlobeArrowForward")
             : builder.CreateResourceBuilder(resource);
     }
 
@@ -201,14 +201,9 @@ public static class AzureFrontDoorExtensions
 
     private static IComputeEnvironmentResource GetEffectiveComputeEnvironment(IResource resource)
     {
-        if (resource.GetComputeEnvironment() is { } computeEnvironment)
+        if (ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(resource, out var computeEnvironment))
         {
             return computeEnvironment;
-        }
-
-        if (resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment is { } deploymentComputeEnvironment)
-        {
-            return deploymentComputeEnvironment;
         }
 
         throw new InvalidOperationException(

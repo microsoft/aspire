@@ -217,6 +217,21 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             startInfo.ArgumentList.Add(arg);
         }
 
+        // Strip ASPIRE_CLI_* identity overrides before launching the peer.
+        // These env vars exist so a developer or test bench can coerce the
+        // *current* CLI process into pretending it is a different channel /
+        // version / commit, or to retarget its emitted nuget.config at a
+        // local proxy. Inheriting them into the peer would invert the meaning
+        // of `aspire doctor`: the doctor would observe its own override
+        // applied to every peer it inspects and report a false uniformity
+        // across installs. The peer should reflect what it *is on disk*, not
+        // what the parent process was told to pretend to be. See
+        // docs/specs/cli-identity-sidecar.md.
+        foreach (var envVarName in IdentityResolver.IdentityEnvVarNames)
+        {
+            startInfo.Environment.Remove(envVarName);
+        }
+
         var result = await ProcessCaptureRunner.RunAsync(
             startInfo,
             _timeout,

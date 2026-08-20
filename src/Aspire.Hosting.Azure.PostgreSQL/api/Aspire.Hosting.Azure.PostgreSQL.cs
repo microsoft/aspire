@@ -10,10 +10,10 @@ namespace Aspire.Hosting
 {
     public static partial class AzurePostgresExtensions
     {
-        [AspireExport(Description = "Adds an Azure PostgreSQL Flexible Server resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> AddAzurePostgresFlexibleServer(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure PostgreSQL database")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, string name, string? databaseName = null) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzurePostgresFlexibleServer instead to add an Azure PostgreSQL Flexible Server resource.")]
@@ -22,7 +22,7 @@ namespace Aspire.Hosting
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzurePostgresFlexibleServer instead to add an Azure PostgreSQL Flexible Server resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> PublishAsAzurePostgresFlexibleServer(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure PostgreSQL Flexible Server resource to run locally in a container", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource>>? configureContainer = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
@@ -31,7 +31,7 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> WithPasswordAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
-        [AspireExport(Description = "Adds a Postgres MCP server container", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerDatabaseResource> WithPostgresMcp(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerDatabaseResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PostgresMcpContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
     }

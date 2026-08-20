@@ -226,56 +226,6 @@ internal static class Hex1bTestHelpers
     }
 
     /// <summary>
-    /// Waits for a successful command prompt, but fails fast if an error prompt is detected.
-    /// Unlike <see cref="WaitForSuccessPrompt"/>, this method also watches for error prompts
-    /// (ERR:N pattern) and throws immediately instead of waiting for the full timeout.
-    /// Use this for commands that may fail due to transient errors (e.g., CLI downloads).
-    /// </summary>
-    internal static Hex1bTerminalInputSequenceBuilder WaitForSuccessPromptFailFast(
-        this Hex1bTerminalInputSequenceBuilder builder,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
-        var sawError = false;
-
-        return builder.WaitUntil(snapshot =>
-            {
-                var successSearcher = new CellPatternSearcher()
-                    .FindPattern(counter.Value.ToString())
-                    .RightText(" OK] $ ");
-
-                if (successSearcher.Search(snapshot).Count > 0)
-                {
-                    return true;
-                }
-
-                var errorSearcher = new CellPatternSearcher()
-                    .FindPattern(counter.Value.ToString())
-                    .RightText(" ERR:");
-
-                if (errorSearcher.Search(snapshot).Count > 0)
-                {
-                    sawError = true;
-                    return true;
-                }
-
-                return false;
-            }, effectiveTimeout)
-            .WaitUntil(_ =>
-            {
-                if (sawError)
-                {
-                    throw new InvalidOperationException(
-                        $"Command failed with non-zero exit code (detected ERR prompt at sequence {counter.Value}). Check the terminal recording for details.");
-                }
-
-                counter.Increment();
-                return true;
-            }, TimeSpan.FromSeconds(1));
-    }
-
-    /// <summary>
     /// Increments the sequence counter.
     /// </summary>
     internal static Hex1bTerminalInputSequenceBuilder IncrementSequence(
@@ -562,47 +512,6 @@ internal static class Hex1bTestHelpers
             .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
             .DeclineAgentInitPrompt()
             .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
-    }
-
-    /// <summary>
-    /// Installs the Aspire CLI Bundle from a specific pull request's artifacts.
-    /// The bundle is a self-contained distribution that includes:
-    /// - Native AOT Aspire CLI
-    /// - .NET runtime
-    /// - Dashboard, DCP, AppHost Server (for polyglot apps)
-    /// This is required for polyglot (TypeScript, Python) AppHost scenarios which
-    /// cannot use SDK-based fallback mode.
-    /// </summary>
-    /// <param name="builder">The sequence builder.</param>
-    /// <param name="prNumber">The pull request number to download from.</param>
-    /// <param name="counter">The sequence counter for prompt detection.</param>
-    /// <returns>The builder for chaining.</returns>
-    internal static Hex1bTerminalInputSequenceBuilder InstallAspireBundleFromPullRequest(
-        this Hex1bTerminalInputSequenceBuilder builder,
-        int prNumber,
-        SequenceCounter counter)
-    {
-        // The install script may not be on main yet, so we need to fetch it from the PR's branch.
-        // Use the PR head SHA (not branch ref) to avoid CDN caching on raw.githubusercontent.com
-        // which can serve stale script content for several minutes after a push.
-        string command;
-        if (OperatingSystem.IsWindows())
-        {
-            // PowerShell: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"$ref = (gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha'); " +
-                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
-        }
-        else
-        {
-            // Bash: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && " +
-                      $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
-        }
-
-        return builder
-            .Type(command)
-            .Enter()
-            .WaitForSuccessPromptFailFast(counter, TimeSpan.FromSeconds(300));
     }
 
     /// <summary>

@@ -22,8 +22,6 @@ using ModelContextProtocol.Protocol;
 
 namespace Aspire.Hosting.Backchannel;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInputCollection is used to validate resource command arguments.
-
 /// <summary>
 /// RPC target for the auxiliary backchannel.
 /// </summary>
@@ -52,7 +50,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3]
+            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1]
         });
     }
 
@@ -417,6 +415,213 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
+    /// Returns the discovery info needed to attach to a resource's terminal session(s). For a
+    /// resource configured with <c>WithTerminal()</c>, this enumerates the per-replica
+    /// consumer-side UDS endpoints by asking each per-replica terminal host process over its
+    /// control UDS in parallel. Returns <see cref="GetTerminalInfoResponse.IsAvailable"/> = false
+    /// when the resource has no <see cref="TerminalAnnotation"/>; per-host control RPC failures
+    /// (e.g. host not yet started) degrade to <see cref="TerminalReplicaInfo.IsAlive"/> = false
+    /// for that replica without failing the whole call.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(GetTerminalInfoRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var resource = appModel.Resources.FirstOrDefault(r => string.Equals(r.Name, request.ResourceName, StringComparisons.ResourceName));
+
+        if (resource is null)
+        {
+            logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' not found.", request.ResourceName);
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+        if (terminalAnnotation is null)
+        {
+            logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' has no TerminalAnnotation.", request.ResourceName);
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var (replicas, _) = await CollectReplicaInfosAsync(
+            request.ResourceName,
+            terminalAnnotation,
+            cancellationToken).ConfigureAwait(false);
+
+        return new GetTerminalInfoResponse
+        {
+            IsAvailable = true,
+            Replicas = replicas,
+            Columns = terminalAnnotation.Options.Columns,
+            Rows = terminalAnnotation.Options.Rows,
+        };
+    }
+
+    /// <summary>
+    /// Fans out across each per-replica terminal host's control UDS in parallel and returns
+    /// the assembled per-replica info array plus an aggregate flag indicating whether at
+    /// least one host responded. Per-host failures (host not yet started, control RPC timeout)
+    /// materialize as a <see cref="TerminalReplicaInfo"/> with the AppHost-known consumer UDS
+    /// path and <see cref="TerminalReplicaInfo.IsAlive"/> = false, so callers can always render
+    /// a row per replica even when a host hasn't started.
+    /// </summary>
+    private async Task<(TerminalReplicaInfo[] Replicas, bool AnyHostReachable)> CollectReplicaInfosAsync(
+        string resourceName,
+        TerminalAnnotation terminalAnnotation,
+        CancellationToken cancellationToken)
+    {
+        var hosts = terminalAnnotation.TerminalHosts;
+        var tasks = new Task<(TerminalReplicaInfo Info, bool HostResponded)>[hosts.Count];
+        for (var i = 0; i < hosts.Count; i++)
+        {
+            tasks[i] = QueryReplicaAsync(resourceName, hosts[i], cancellationToken);
+        }
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var replicas = new TerminalReplicaInfo[results.Length];
+        var anyResponded = false;
+        for (var i = 0; i < results.Length; i++)
+        {
+            replicas[i] = results[i].Info;
+            anyResponded |= results[i].HostResponded;
+        }
+        return (replicas, anyResponded);
+    }
+
+    /// <summary>
+    /// Queries a single per-replica host's control UDS and translates the response (or the
+    /// failure) into a <see cref="TerminalReplicaInfo"/>. The AppHost is the source of truth
+    /// for the consumer UDS path and replica index — those come from <see cref="TerminalHostResource.Layout"/>
+    /// rather than from the host's echoed reply. The returned <c>HostResponded</c> flag is true
+    /// only when the control RPC actually succeeded.
+    /// </summary>
+    private async Task<(TerminalReplicaInfo Info, bool HostResponded)> QueryReplicaAsync(
+        string resourceName,
+        TerminalHostResource host,
+        CancellationToken cancellationToken)
+    {
+        var layout = host.Layout;
+        var replicaIndex = layout.ParentReplicaIndex;
+
+        Aspire.Shared.TerminalHost.TerminalHostSessionInfo? session = null;
+        try
+        {
+            session = await TerminalHostControlClient.GetSessionAsync(
+                layout.ControlUdsPath,
+                totalTimeout: TimeSpan.FromSeconds(3),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug(
+                "Terminal host control RPC timed out for resource '{ResourceName}' replica {ReplicaIndex} (control path '{ControlPath}').",
+                resourceName, replicaIndex, layout.ControlUdsPath);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(
+                ex,
+                "Terminal host control RPC failed for resource '{ResourceName}' replica {ReplicaIndex} (control path '{ControlPath}').",
+                resourceName, replicaIndex, layout.ControlUdsPath);
+        }
+
+        var info = new TerminalReplicaInfo
+        {
+            ReplicaIndex = replicaIndex,
+            Label = $"replica {replicaIndex}",
+            ConsumerUdsPath = layout.ConsumerUdsPath,
+            IsAlive = session?.IsAlive ?? false,
+            ExitCode = session?.ExitCode,
+            ProducerConnected = session?.ProducerConnected ?? false,
+            RestartCount = session?.RestartCount ?? 0,
+            CurrentColumns = session?.CurrentColumns,
+            CurrentRows = session?.CurrentRows,
+            AttachedPeerCount = session?.AttachedPeerCount,
+            Peers = ConvertPeers(session?.Peers),
+        };
+        return (info, session is not null);
+    }
+
+    /// <summary>
+    /// Translates a host-side <see cref="Aspire.Shared.TerminalHost.TerminalHostPeerInfo"/> array
+    /// to the wire-facing <see cref="TerminalPeerInfo"/> array that ships over JsonRpc. Returns
+    /// null when the host didn't supply any peer info (older host) so newer clients can detect
+    /// "no info available" vs. "info available, currently empty".
+    /// </summary>
+    private static TerminalPeerInfo[]? ConvertPeers(Aspire.Shared.TerminalHost.TerminalHostPeerInfo[]? hostPeers)
+    {
+        if (hostPeers is null)
+        {
+            return null;
+        }
+        if (hostPeers.Length == 0)
+        {
+            return Array.Empty<TerminalPeerInfo>();
+        }
+        var result = new TerminalPeerInfo[hostPeers.Length];
+        for (var i = 0; i < hostPeers.Length; i++)
+        {
+            result[i] = new TerminalPeerInfo
+            {
+                PeerId = hostPeers[i].PeerId,
+                DisplayName = hostPeers[i].DisplayName,
+            };
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost, with current grid size and
+    /// attached-peer details. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
+    /// independent: a resource whose terminal host hasn't started yet (or whose control RPC times
+    /// out) is reported with <see cref="TerminalSummary.IsHostReachable"/> = false rather than
+    /// failing the whole listing.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(ListTerminalsRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        _ = request;
+
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+
+        var terminals = new List<TerminalSummary>();
+        foreach (var resource in appModel.Resources)
+        {
+            var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+            if (terminalAnnotation is null)
+            {
+                continue;
+            }
+
+            var (replicas, anyHostReachable) = await CollectReplicaInfosAsync(
+                resource.Name,
+                terminalAnnotation,
+                cancellationToken).ConfigureAwait(false);
+
+            terminals.Add(new TerminalSummary
+            {
+                ResourceName = resource.Name,
+                DisplayName = resource.Name,
+                ConfiguredColumns = terminalAnnotation.Options.Columns,
+                ConfiguredRows = terminalAnnotation.Options.Rows,
+                IsHostReachable = anyHostReachable,
+                // Always emit the per-replica array, even when no host is reachable.
+                // CollectReplicaInfosAsync returns one entry per replica with AppHost-known
+                // ReplicaIndex / ConsumerUdsPath populated and IsAlive=false on degraded
+                // entries. Dropping the array on aggregate failure would make `aspire
+                // terminal ps` blanker in the failure case than in the success case —
+                // exactly when users need the diagnostic shape — and would diverge from
+                // GetTerminalInfoAsync, which keeps the degraded per-replica shape.
+                Replicas = replicas,
+            });
+        }
+
+        return new ListTerminalsResponse
+        {
+            Terminals = [.. terminals],
+        };
+    }
+
+    /// <summary>
     /// Waits for a resource to reach a target status.
     /// </summary>
     public async Task<WaitForResourceResponse> WaitForResourceAsync(WaitForResourceRequest request, CancellationToken cancellationToken = default)
@@ -497,7 +702,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var resourceEvent = await WaitForResourceEventAsync(
             notificationService,
             target,
-            re => re.Snapshot.State?.Text == KnownResourceStates.Running || KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text) || re.Snapshot.ExitCode is not null,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Running ||
+                KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text, StringComparers.ResourceState) ||
+                string.Equals(re.Snapshot.State?.Style, KnownResourceStateStyles.Error, StringComparisons.ResourceState) ||
+                re.Snapshot.ExitCode is not null,
             $"Resource '{target.DisplayName}' failed to reach the target state before the operation was cancelled.",
             cancellationToken).ConfigureAwait(false);
 
@@ -669,13 +877,33 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             cliStartedAt = DateTimeOffset.FromUnixTimeSeconds(parsedCliStartedAt);
         }
 
+        // ASPIRE_CLI_STARTED_STABLE is the stable launcher-CLI identity time that current CLIs stamp
+        // alongside the legacy value, in Unix milliseconds. It survives wall-clock steps, so surfacing it
+        // lets the CLI-side orphan collector verify the launching CLI with an exact PID-reuse check
+        // instead of the drift-prone legacy value. Older CLIs do not stamp it, so it stays null for them.
+        DateTimeOffset? cliStableStartedAt = null;
+        var cliStableStartedAtString = configuration[KnownConfigNames.CliProcessStartedStable];
+        if (!string.IsNullOrEmpty(cliStableStartedAtString) && long.TryParse(cliStableStartedAtString, out var parsedCliStableStartedAt))
+        {
+            cliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(parsedCliStableStartedAt);
+        }
+
+        using var currentProcess = Process.GetCurrentProcess();
+
         return Task.FromResult(new AppHostInformation
         {
             AppHostPath = appHostPath,
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
-            StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+
+            // StartedAt is the legacy backchannel field, and released AppHosts populate it from Process.StartTime. 
+            // Keep doing for mixed-version CLI compatibility.
+            // StableStartedAt carries millisecond-precision, stable process identity time for exact reuse checks.
+            StartedAt = new DateTimeOffset(currentProcess.StartTime),
+            StableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(Environment.ProcessId),
             CliStartedAt = cliStartedAt,
+            CliStableStartedAt = cliStableStartedAt,
+
             CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });
     }
@@ -760,6 +988,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
             {
+                // The secret redaction set is resolved per snapshot inside CreateResourceSnapshotFromEventAsync,
+                // not once for the whole batch. Building each snapshot can await MCP tool discovery for up to
+                // s_mcpDiscoveryTimeout, and a parameter can resolve during that window, so a set computed once up
+                // front could miss a secret that a later resource's snapshot already carries and leak it in
+                // plaintext. Resolving per snapshot keeps redaction bound to each snapshot.
                 var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
                 if (snapshot is not null)
                 {
@@ -792,6 +1025,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            // The secret redaction set is resolved per event inside CreateResourceSnapshotFromEventAsync, so a
+            // secret resolved (or replaced, or newly referenced after a resource restart) while the watch is open
+            // is reflected on later events rather than fixed to when the watch started.
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
@@ -875,21 +1111,38 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             })
             .ToArray();
 
-        // Build environment variables
+        // Resolve the secret redaction set for THIS snapshot, after the MCP discovery await above. The snapshot's
+        // environment values were captured before that await, so any secret they carry was already resolved by the
+        // time we get here. Resolving now (rather than once for a whole describe batch) keeps redaction bound to
+        // the snapshot even though building each snapshot can block on MCP discovery for up to s_mcpDiscoveryTimeout,
+        // during which another parameter can resolve. The redaction history is add-only and AppHost-scoped (see
+        // GetResolvedSecretParameterValuesAsync), so resolving per snapshot only ever grows the set and also keeps
+        // redacting a secret whose value has since been replaced or whose owning resource has restarted.
+        var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
+
+        // Build environment variables. Values that match a secret parameter's value are
+        // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
             {
                 Name = e.Name,
-                Value = e.Value,
+                Value = RedactIfSecretValue(e.Value, secretParameterValues),
                 IsFromSpec = e.IsFromSpec
             })
             .ToArray();
 
         // Build properties dictionary from ResourcePropertySnapshot
         // Redact sensitive property values to avoid leaking secrets
+        //
+        // Stamp the per-replica terminal properties (terminal.enabled, terminal.replicaIndex,
+        // terminal.replicaCount) the same way the dashboard gRPC path does so that `aspire describe`
+        // and the VS Code extension can detect terminal availability and target the right replica.
+        // The sensitive terminal.consumerUdsPath is redacted to null below by the IsSensitive check,
+        // which is intentional: the CLI resolves the real socket path via GetTerminalInfoAsync.
+        var stampedProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceEvent.ResourceId, snapshot.Properties);
         var properties = new Dictionary<string, JsonNode?>();
         string[]? waitingFor = null;
-        foreach (var prop in snapshot.Properties)
+        foreach (var prop in stampedProperties)
         {
             // Redact sensitive property values
             if (prop.IsSensitive)
@@ -946,6 +1199,162 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
+    /// <summary>
+    /// Redacts an environment variable value when it matches a secret parameter's resolved value
+    /// so secrets don't leak through clients (e.g. <c>aspire describe --format json</c>).
+    /// </summary>
+    /// <remarks>
+    /// Matching is value-based: a value is redacted only when it is exactly equal to a resolved secret
+    /// parameter value. This has two known limitations:
+    /// <list type="bullet">
+    /// <item>A non-secret value that coincidentally equals a secret value is also redacted (false positive).</item>
+    /// <item>A secret embedded as a substring of a larger composed value (e.g. a connection string) is not
+    /// detected, because only exact-equality matches are redacted.</item>
+    /// </list>
+    /// </remarks>
+    private static string? RedactIfSecretValue(string? value, HashSet<string> secretParameterValues)
+        => value is not null && secretParameterValues.Contains(value) ? null : value;
+
+    /// <summary>
+    /// Collects the resolved values of secret parameters reachable from the application model so they can be
+    /// redacted from data sent to clients. Only values that have already been resolved are included; this never
+    /// blocks waiting for interactive parameter resolution. Resolved values are accumulated add-only in the
+    /// AppHost-scoped <see cref="SecretRedactionHistory"/> (which <c>ParameterProcessor</c> also populates at
+    /// assignment time), so a value a parameter has since been reassigned away from stays redacted while an older
+    /// snapshot can still carry it.
+    /// </summary>
+    private async Task<HashSet<string>> GetResolvedSecretParameterValuesAsync(CancellationToken cancellationToken)
+    {
+        // Resolve the current value of each accumulated secret parameter (peek-only; never blocks on interactive
+        // resolution), then merge into the AppHost-scoped add-only value history below.
+        var resolvedThisPass = new List<string>();
+
+        foreach (var parameter in await GetSecretParametersAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (parameter.WaitForValueTcs is { } waitForValueTcs)
+            {
+                // Run mode: peek at the resolved value without waiting for resolution.
+                if (waitForValueTcs.Task is { IsCompletedSuccessfully: true } valueTask &&
+                    valueTask.Result is { Length: > 0 } value)
+                {
+                    resolvedThisPass.Add(value);
+                }
+            }
+            else
+            {
+                try
+                {
+                    if (parameter.ValueInternal is { Length: > 0 } value)
+                    {
+                        resolvedThisPass.Add(value);
+                    }
+                }
+                catch
+                {
+                    // The parameter's value isn't available (e.g. missing configuration); nothing to redact.
+                }
+            }
+        }
+
+        // Accumulate this pass's resolved secret strings add-only and return everything seen so far. A parameter's
+        // value can be replaced in place (the runtime "Set parameter" path swaps its completed WaitForValueTcs),
+        // so re-resolving a retained parameter later yields only the new value; keeping every value we have ever
+        // resolved ensures a still-current snapshot carrying the previous value is still redacted.
+        return serviceProvider.GetRequiredService<SecretRedactionHistory>().AddValuesAndSnapshot(resolvedThisPass);
+    }
+
+    /// <summary>
+    /// Gets the set of secret <see cref="ParameterResource"/> instances reachable from the application
+    /// model, including parameters that are only referenced by another resource rather than registered
+    /// as a top-level resource.
+    /// </summary>
+    /// <remarks>
+    /// The set includes generated parameters (such as the password created by <c>AddPostgres</c>) that are
+    /// referenced by a resource but never registered in the model, which enumerating
+    /// <c>appModel.Resources.OfType&lt;ParameterResource&gt;()</c> alone would miss and leak in plaintext
+    /// (https://github.com/microsoft/aspire/issues/19241).
+    /// <para>
+    /// Discovery is <em>peek-only</em>: it reads callback results that DCP already resolved and cached while
+    /// starting the resource (<see cref="ResourceDependencyDiscoveryOptions.PeekCachedCallbackResultsOnly"/>) and
+    /// never invokes a callback itself. This matters because <c>aspire describe</c> observes live resource
+    /// snapshots concurrently with DCP's own cache lifecycle: DCP forgets and re-evaluates a resource's callbacks
+    /// on restart (see <c>DcpExecutor.ForgetCachedCallbackResults</c>). Invoking a callback from here would run it
+    /// with the client's cancellation token and could cache a canceled or faulted task that DCP would then reuse on
+    /// the resource's execution path. A running resource can only appear in a snapshot after DCP has resolved and
+    /// cached its values, so peeking still observes every secret that a snapshot could expose.
+    /// </para>
+    /// <para>
+    /// The discovered set is merged into the AppHost-scoped, add-only <see cref="SecretRedactionHistory"/>: it only
+    /// ever grows for the life of the AppHost and is shared across connections. A restart can change which secret a
+    /// resource references, and a still-in-flight snapshot from the prior incarnation can carry the previous value,
+    /// so the redaction set must never shrink or that value would be emitted in plaintext.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
+    {
+        var history = serviceProvider.GetRequiredService<SecretRedactionHistory>();
+
+        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        {
+            // No model resolved yet; return the secrets accumulated so far without adding any.
+            return history.AddParametersAndSnapshot([]);
+        }
+
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        // Peek at the callback results DCP cached while starting each resource; never invoke a callback. This
+        // observes the same referenced resources that produced the running snapshot without racing DCP's cache
+        // lifecycle or running stateful callbacks with the client's cancellation token.
+        var discoveryOptions = new ResourceDependencyDiscoveryOptions
+        {
+            DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
+            PeekCachedCallbackResultsOnly = true
+        };
+
+        // Parameter resources referenced by annotations are not registered in the model, so they are not
+        // subject to its unique-name constraint. Collect by reference to preserve distinct same-named secrets.
+        var secretParameters = new HashSet<ParameterResource>(ReferenceEqualityComparer.Instance);
+
+        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
+        {
+            if (parameter.Secret)
+            {
+                secretParameters.Add(parameter);
+            }
+        }
+
+        // Compute the transitive dependency closure of every resource in a single multi-root walk. It shares
+        // one visited set across all roots, so each resource's (execution-cached) callbacks are read at most
+        // once. Discovering per resource instead would repeat the traversal for every resource and make the
+        // initial WatchAsync stream — which emits one event per resource — do quadratic work.
+        IReadOnlySet<IResource> dependencies;
+        try
+        {
+            dependencies = await ResourceExtensions.GetDependenciesAsync(appModel.Resources, executionContext, discoveryOptions, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Fail closed at this confidentiality boundary. Peek-only discovery does not invoke callbacks, so a
+            // failure here is unexpected; if it does happen the redaction set is incomplete and a snapshot built
+            // from it could expose a secret in plaintext, so propagate instead of continuing with a partial set.
+            // Cancellation is intentionally not caught here so it surfaces as cancellation rather than a leak.
+            logger.LogDebug(ex, "Failed to compute resource dependencies while collecting secret parameters for redaction.");
+            throw;
+        }
+
+        foreach (var parameter in dependencies.OfType<ParameterResource>())
+        {
+            if (parameter.Secret)
+            {
+                secretParameters.Add(parameter);
+            }
+        }
+
+        // Merge this pass's discoveries into the add-only history and return everything seen so far, so a secret
+        // referenced by an earlier incarnation stays redacted even after a restart re-points the resource.
+        return history.AddParametersAndSnapshot(secretParameters);
+    }
+
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
     {
         return new ResourceSnapshotCommandArgument
@@ -985,9 +1394,21 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             float floatValue => JsonValue.Create(floatValue),
             double doubleValue => JsonValue.Create(doubleValue),
             decimal decimalValue => JsonValue.Create(decimalValue),
+            IEnumerable<KeyValuePair<string, string>> properties => ConvertNameValuePropertyToJsonObject(properties),
             System.Collections.IEnumerable enumerable => ConvertEnumerablePropertyValueToJsonArray(enumerable),
             _ => JsonValue.Create(value.ToString())
         };
+    }
+
+    private static JsonObject ConvertNameValuePropertyToJsonObject(IEnumerable<KeyValuePair<string, string>> properties)
+    {
+        var jsonObject = new JsonObject();
+        foreach (var property in properties)
+        {
+            jsonObject[property.Key] = property.Value;
+        }
+
+        return jsonObject;
     }
 
     private static JsonNode? ConvertPropertyValueToLegacyJsonNode(object? value)

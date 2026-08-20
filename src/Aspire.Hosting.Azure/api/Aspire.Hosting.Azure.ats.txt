@@ -12,6 +12,12 @@ Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference [ExposeProperties
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultResource [interface]
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultSecretReference [interface]
 
+# Exported Values
+AzureSubnetServiceDelegations.AppServiceEnvironments: string = "Microsoft.Web/serverFarms" # Delegation for Azure App Service environments.
+AzureSubnetServiceDelegations.ApplicationGatewayForContainers: string = "Microsoft.ServiceNetworking/trafficControllers" # Delegation for Azure Application Gateway for Containers.
+AzureSubnetServiceDelegations.ContainerAppEnvironments: string = "Microsoft.App/environments" # Delegation for Azure Container Apps environments.
+AzureSubnetServiceDelegations.ContainerInstances: string = "Microsoft.ContainerInstance/containerGroups" # Delegation for Azure Container Instances (ACI), which allows container groups to be deployed into the subnet.
+
 # Capabilities
 Aspire.Hosting.Azure/addAzureEnvironment() -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureEnvironmentResource
 Aspire.Hosting.Azure/addAzureInfrastructure(name: string, configureInfrastructure: callback) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureProvisioningResource
@@ -20,6 +26,9 @@ Aspire.Hosting.Azure/addAzureUserAssignedIdentity(name: string) -> Aspire.Hostin
 Aspire.Hosting.Azure/addBicepTemplate(name: string, bicepFile: string) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureBicepResource
 Aspire.Hosting.Azure/addBicepTemplateString(name: string, bicepContent: string) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureBicepResource
 Aspire.Hosting.Azure/asExisting(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup?: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/asExistingInResourceGroup(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/asExistingInSubscription(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/asExistingInTenant(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
 Aspire.Hosting.Azure/BicepOutputReference.name(context: Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference) -> string
 Aspire.Hosting.Azure/BicepOutputReference.value(context: Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference) -> string
 Aspire.Hosting.Azure/BicepOutputReference.valueExpression(context: Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference) -> string
@@ -30,7 +39,13 @@ Aspire.Hosting.Azure/getOutput(name: string) -> Aspire.Hosting.Azure/Aspire.Host
 Aspire.Hosting.Azure/isExisting() -> boolean
 Aspire.Hosting.Azure/publishAsConnectionString() -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
 Aspire.Hosting.Azure/publishAsExisting(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup?: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/publishAsExistingInResourceGroup(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/publishAsExistingInSubscription(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/publishAsExistingInTenant(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
 Aspire.Hosting.Azure/runAsExisting(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup?: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/runAsExistingInResourceGroup(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/runAsExistingInSubscription(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/runAsExistingInTenant(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
 Aspire.Hosting.Azure/withLocation(location: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureEnvironmentResource
 Aspire.Hosting.Azure/withParameter(name: string, value?: string|string[]|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureBicepResource
 Aspire.Hosting.Azure/withResourceGroup(resourceGroup: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureEnvironmentResource

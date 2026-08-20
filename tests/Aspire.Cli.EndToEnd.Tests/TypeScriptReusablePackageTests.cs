@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -73,7 +72,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npx tsc --noEmit");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appDirectory.FullName, workspace)}");
         await auto.EnterAsync();
@@ -86,7 +85,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npx tsc --noEmit");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     private static string GetSdkVersion(DirectoryInfo appDirectory)

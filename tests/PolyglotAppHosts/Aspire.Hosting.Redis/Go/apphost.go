@@ -39,6 +39,13 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	// withModule on RedisResource - well-known and custom module paths
+	cache.WithModule(aspire.RedisModules.Json)
+	cache.WithModule("/opt/redis/custom-module.so")
+	if err = cache.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
 	// withHostPort on cache — stand-alone
 	cache.WithHostPort(6379)
 	if err = cache.Err(); err != nil {

@@ -25,12 +25,33 @@ public interface IDashboardClient : IAsyncDisposable
     bool IsEnabled { get; }
 
     /// <summary>
+    /// Gets the current connection state of the client to the resource service.
+    /// </summary>
+    DashboardConnectionState ConnectionState { get; }
+
+    /// <summary>
+    /// An event raised when the connection state changes. Subscribers receive the new state.
+    /// </summary>
+    event Action<DashboardConnectionState>? ConnectionStateChanged;
+
+    /// <summary>
+    /// Explicitly triggers a reconnection attempt to the resource service.
+    /// </summary>
+    Task ReconnectAsync();
+
+    /// <summary>
     /// Gets the application name advertised by the server.
     /// </summary>
     /// <remarks>
     /// Intended for display in the UI.
     /// </remarks>
     string ApplicationName { get; }
+
+    /// <summary>
+    /// Gets the minimum dashboard version required by the connected AppHost,
+    /// or <see langword="null"/> if not yet known.
+    /// </summary>
+    string? MinRequiredVersion { get; }
 
     /// <summary>
     /// Gets the current set of resources and a stream of updates.
@@ -72,6 +93,8 @@ public interface IDashboardClient : IAsyncDisposable
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
     Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
+
+    Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken);
 }
 
 /// <summary>

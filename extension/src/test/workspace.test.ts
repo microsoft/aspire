@@ -5,9 +5,12 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { yesLabel } from '../loc/strings';
-import { checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
 import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
-
+import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
+import * as cliPathModule from '../utils/cliPath';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 suite('utils/workspace tests', () => {
     let sandbox: sinon.SinonSandbox;
 
@@ -17,6 +20,27 @@ suite('utils/workspace tests', () => {
 
     teardown(() => {
         sandbox.restore();
+    });
+
+    suite('checkCliAvailableOrRedirect', () => {
+        test('forwards the supplied window target to resolveCliPath', async () => {
+            const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+
+            const result = await checkCliAvailableOrRedirect('command_gate', windowCliPathTarget);
+
+            assert.strictEqual(result.available, true);
+            assert.ok(resolveCliPathStub.calledOnceWith(windowCliPathTarget));
+        });
+
+        test('forwards the supplied workspace folder target to resolveCliPath', async () => {
+            const folder = createWorkspaceFolder('a', '/repo/a');
+            const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/repo/a/bin/aspire', available: true, source: 'configured' });
+
+            const result = await checkCliAvailableOrRedirect('debug_gate', workspaceFolderCliPathTarget(folder));
+
+            assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
+            assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        });
     });
 
     test('getCommonExcludeGlob returns valid glob pattern', () => {
@@ -71,8 +95,34 @@ suite('utils/workspace tests', () => {
         // IDE/Tool directories
         assert.ok(glob.includes('**/.vs/**'), 'Should exclude .vs');
         assert.ok(glob.includes('**/.vscode-test/**'), 'Should exclude .vscode-test');
+        assert.ok(glob.includes('**/.worktrees/**'), 'Should exclude git worktrees');
+        assert.ok(glob.includes('**/.claude/**'), 'Should exclude agent worktrees');
+        assert.ok(glob.includes('**/.agents/**'), 'Should exclude agent skills');
+        assert.ok(glob.includes('**/.github/skills/**'), 'Should exclude GitHub agent skills');
+        assert.ok(glob.includes('**/.opencode/skill/**'), 'Should exclude OpenCode agent skills');
         assert.ok(glob.includes('**/.idea/**'), 'Should exclude .idea');
         assert.ok(glob.includes('**/.git/**'), 'Should exclude .git');
+    });
+
+    test('getAppHostDiscoveryExcludeGlob skips user patterns that cannot be safely composed', () => {
+        sandbox.stub(vscode.workspace, 'getConfiguration').callsFake((section?: string) => ({
+            get: () => section === 'files'
+                ? {
+                    '**/safe-generated/**': true,
+                    '**/{generated,tmp}/**': true,
+                }
+                : {
+                    '**/safe-search/**': true,
+                    '**/coverage,dist/**': true,
+                },
+        } as unknown as vscode.WorkspaceConfiguration));
+
+        const glob = getAppHostDiscoveryExcludeGlob();
+
+        assert.ok(glob.includes('**/safe-generated/**'), 'Should include safe files.exclude pattern');
+        assert.ok(glob.includes('**/safe-search/**'), 'Should include safe search.exclude pattern');
+        assert.ok(!glob.includes('**/{generated,tmp}/**'), 'Should skip nested brace pattern');
+        assert.ok(!glob.includes('**/coverage,dist/**'), 'Should skip comma pattern');
     });
 
     test('AppHost selection quick pick shows aspire ls language and status metadata', async () => {
@@ -181,7 +231,7 @@ suite('utils/workspace tests', () => {
                 status: 'buildable',
             });
         } finally {
-            fs.rmSync(workspaceRoot, { recursive: true, force: true });
+            removeDirectorySafely(workspaceRoot);
         }
     });
 });

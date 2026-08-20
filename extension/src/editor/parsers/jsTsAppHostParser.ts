@@ -8,7 +8,7 @@ import { AppHostResourceParser, ParsedResource, registerParser } from './AppHost
  */
 class JsTsAppHostParser implements AppHostResourceParser {
     getSupportedExtensions(): string[] {
-        return ['.ts', '.js'];
+        return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'];
     }
 
     async isAppHostFile(document: vscode.TextDocument): Promise<boolean> {
@@ -92,6 +92,14 @@ class JsTsAppHostParser implements AppHostResourceParser {
         return builderLine;
     }
 
+    async filterActiveOffsets(document: vscode.TextDocument, offsets: readonly number[]): Promise<number[]> {
+        if (offsets.length === 0) {
+            return [];
+        }
+
+        const sourceFile = createSourceFile(document);
+        return offsets.filter(offset => !isInactiveOffset(sourceFile, offset));
+    }
 }
 
 // Self-register on import
@@ -101,14 +109,51 @@ interface ParsedResourceWithStart extends ParsedResource {
     matchStart: number;
 }
 
+/**
+ * Returns true when the offset is inside a comment or a string literal.
+ *
+ * The TypeScript AST does not model comments as nodes: they are leading trivia on the token that
+ * follows them, so the deepest node containing the offset starts *after* it. That gap is what
+ * identifies a comment, and it also covers the whitespace between tokens, which no textual scan can
+ * match anyway.
+ */
+function isInactiveOffset(sourceFile: ts.SourceFile, offset: number): boolean {
+    let node: ts.Node = sourceFile;
+    for (;;) {
+        const child = node.getChildren(sourceFile)
+            .find(candidate => offset >= candidate.getFullStart() && offset < candidate.getEnd());
+        if (!child) {
+            break;
+        }
+
+        node = child;
+    }
+
+    if (offset < node.getStart(sourceFile)) {
+        return true;
+    }
+
+    for (let current: ts.Node | undefined = node; current; current = current.parent) {
+        if (ts.isStringLiteralLike(current) || ts.isTemplateExpression(current) || ts.isRegularExpressionLiteral(current)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function createSourceFile(document: vscode.TextDocument): ts.SourceFile {
     return ts.createSourceFile(
         document.uri.fsPath,
         document.getText(),
         ts.ScriptTarget.Latest,
         true,
-        document.uri.fsPath.endsWith('.js') ? ts.ScriptKind.JS : ts.ScriptKind.TS
+        isJavaScriptFile(document.uri.fsPath) ? ts.ScriptKind.JS : ts.ScriptKind.TS
     );
+}
+
+function isJavaScriptFile(filePath: string): boolean {
+    return filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs');
 }
 
 function visit(node: ts.Node, visitor: (node: ts.Node) => boolean): boolean {

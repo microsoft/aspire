@@ -13,7 +13,7 @@ using System.Text.Json;
 
 namespace Aspire.Hosting.Go.Tests;
 
-public class AddGoAppTests
+public class AddGoAppTests(ITestOutputHelper outputHelper)
 {
     // ---- Manifest: go run . (baseline) ------------------------------------
 
@@ -81,17 +81,18 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_PackagePath_UsedInDockerfileBuildCommand()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path, packagePath: "./cmd/server");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName, packagePath: "./cmd/server");
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -337,7 +338,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -359,58 +360,192 @@ public class AddGoAppTests
     }
 
     [Fact]
-    public void WithDelveServer_RemovesVSCodeDebuggingAnnotation()
+    public async Task VerifyManifest_WithDelveServer_EnableAcceptMultiClient()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer(new DelveServerOptions { AcceptMultiClient = true });
 
-        Assert.DoesNotContain(app.Resource.Annotations, annotation => annotation is SupportsDebuggingAnnotation);
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "--accept-multiclient",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_DisableOnlySameUser()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(new DelveServerOptions { OnlySameUser = false });
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "--only-same-user=false",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_ContinueOnStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(new DelveServerOptions { ContinueOnStart = true });
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "debug",
+                "--continue",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_EnableLog()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(new DelveServerOptions
+            {
+                Log = true,
+                LogOutput = "rpc,dap,debugger"
+            });
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "--log",
+                "--log-output=rpc,dap,debugger",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task WithDelveServer_UsesDelveCommandWhenGoLaunchConfigurationIsSupported()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = ["go"]
+        };
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer();
+        var application = builder.Build();
+
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal("dlv", app.Resource.Command);
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "."], commandArguments);
     }
 
     // ---- VS Code debugging --------------------------------------------------
 
     [Fact]
-    public void WithVSCodeDebugging_PopulatesGoLaunchConfiguration()
+    public async Task WithVSCodeDebugging_PopulatesGoLaunchConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-        using var sourceDir = new TestTempDirectory();
-        var packageDirectory = Path.Combine(sourceDir.Path, "cmd", "server");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var packageDirectory = Path.Combine(sourceDir.FullName, "cmd", "server");
 
-        var app = builder.AddGoApp("api", sourceDir.Path,
+        var app = builder.AddGoApp("api", sourceDir.FullName,
             packagePath: "./cmd/server",
             buildTags: ["integration"],
             gcFlags: "all=-N -l",
             raceDetector: true);
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(app.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
 
         Assert.Equal("go", launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
         Assert.Equal(packageDirectory, launchConfig.Program);
-        Assert.Equal(sourceDir.Path, launchConfig.WorkingDirectory);
+        Assert.Equal(sourceDir.FullName, launchConfig.WorkingDirectory);
         Assert.Equal("-race -tags='integration' -gcflags='all=-N -l'", launchConfig.BuildFlags);
     }
 
     [Fact]
-    public void WithVSCodeDebugging_OmitsBuildFlagsWhenNoneConfigured()
+    public async Task WithVSCodeDebugging_OmitsBuildFlagsWhenNoneConfigured()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-        using var sourceDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
 
-        var app = builder.AddGoApp("api", sourceDir.Path);
+        var app = builder.AddGoApp("api", sourceDir.FullName);
 
-        var launchConfig = InvokeLaunchConfigurationAnnotator(app.Resource);
+        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
 
         Assert.Null(launchConfig.BuildFlags);
     }
 
     [Fact]
-    public async Task WithVSCodeDebugging_RemovesGoToolArguments()
+    public async Task WithVSCodeDebugging_KeepsGoToolArgumentsInTheAppModel()
     {
+        // The `go run [build flags] <pkg>` prefix is declared as launch tool arguments, so it stays part of the
+        // resource's command line even during a debug session. Withholding it from the launched program is a
+        // DCP-level concern (see DcpExecutorTests), which keeps the app model and the dashboard accurate.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var sourceDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -421,7 +556,7 @@ public class AddGoAppTests
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
-        var app = builder.AddGoApp("api", sourceDir.Path,
+        var app = builder.AddGoApp("api", sourceDir.FullName,
                 packagePath: "./cmd/server",
                 buildTags: ["integration"],
                 ldFlags: "-X main.version=1.0.0",
@@ -434,15 +569,50 @@ public class AddGoAppTests
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
         Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("-race", arg),
+            arg => Assert.Equal("-tags=integration", arg),
+            arg => Assert.Equal("-ldflags=-X main.version=1.0.0", arg),
+            arg => Assert.Equal("-gcflags=all=-N -l", arg),
+            arg => Assert.Equal("./cmd/server", arg),
             arg => Assert.Equal("--config", arg),
             arg => Assert.Equal("prod.yaml", arg));
+
+        // The "go" launch configuration owns that prefix, which is what makes DCP withhold it from the debugger.
+        var debugAnnotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Last();
+        Assert.True(app.Resource.HasLaunchToolArgsOwnedBy(debugAnnotation));
+    }
+
+    [Fact]
+    public async Task WithVSCodeDebugging_GoToolArgumentsLeadTheCommandLineRegardlessOfCallOrder()
+    {
+        // Regression coverage for https://github.com/microsoft/aspire/issues/18929: the tool prefix used to be
+        // removed by an ordinary WithArgs callback, which silently no-opped when it ran before the callback that
+        // added the prefix. Arguments added by the user must always land after the prefix, whenever they are added.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+
+        var app = builder.AddGoApp("api", sourceDir.FullName, packagePath: "./cmd/server")
+            .WithArgs("--login", "user");
+
+        var application = builder.Build();
+
+        var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Collection(commandArguments,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("./cmd/server", arg),
+            arg => Assert.Equal("--login", arg),
+            arg => Assert.Equal("user", arg));
     }
 
     [Fact]
     public async Task WithVSCodeDebugging_DoesNotRemoveGoToolArguments_WhenGoLaunchConfigurationUnsupported()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var sourceDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -453,7 +623,7 @@ public class AddGoAppTests
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
-        var app = builder.AddGoApp("api", sourceDir.Path,
+        var app = builder.AddGoApp("api", sourceDir.FullName,
                 packagePath: "./cmd/server",
                 buildTags: ["integration"],
                 raceDetector: true)
@@ -482,7 +652,7 @@ public class AddGoAppTests
         var app = builder.AddGoApp("api", AppContext.BaseDirectory,
                 buildTags: ["netgo"],
                 ldFlags: "-s -w")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -512,7 +682,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory, raceDetector: true)
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -542,7 +712,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory, gcFlags: "all=-N -l")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -573,7 +743,7 @@ public class AddGoAppTests
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
             .WithAppArgs("--port", "9090")
-            .WithDelveServer(port: 2345);
+            .WithDelveServer();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -602,18 +772,19 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_GeneratesDockerfile_WithGoVersionFromGoMod()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.23\n");
-        File.WriteAllText(Path.Combine(sourceDir.Path, "main.go"), "package main\nfunc main() {}");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.23\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "main.go"), "package main\nfunc main() {}");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName);
 
         builder.Build().Run();
 
-        var dockerfilePath = Path.Combine(outputDir.Path, "api.Dockerfile");
+        var dockerfilePath = Path.Combine(outputDir.FullName, "api.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated in publish mode");
 
         var content = await File.ReadAllTextAsync(dockerfilePath);
@@ -624,15 +795,16 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_UsesDefaultGoVersion_WhenGoModAbsent()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName);
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -640,20 +812,21 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_PropagatesBuildFlagsToDockerfile()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.22\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.22\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path,
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName,
             buildTags: ["netgo", "osusergo"],
             ldFlags: "-X main.version=1.0.0",
             raceDetector: true);
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -661,20 +834,21 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_ShellQuote_HandlesEmbeddedSingleQuotes()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
         // ldFlags contains an embedded single quote (e.g. a message string).
         // ShellQuote must escape it using the POSIX '\'' technique so the
         // generated Dockerfile RUN command is valid shell.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path, ldFlags: "-X main.msg=it's alive");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName, ldFlags: "-X main.msg=it's alive");
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -682,14 +856,15 @@ public class AddGoAppTests
     [Fact]
     public void VerifyPublish_SkipsDockerfileGeneration_WhenDockerfileExists()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
         // Pre-existing Dockerfile — generator should leave it alone
-        File.WriteAllText(Path.Combine(sourceDir.Path, "Dockerfile"), "FROM scratch");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "Dockerfile"), "FROM scratch");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        var app = builder.AddGoApp("api", sourceDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        var app = builder.AddGoApp("api", sourceDir.FullName);
 
         Assert.False(app.Resource.TryGetLastAnnotation<DockerfileBuilderCallbackAnnotation>(out _),
             "No DockerfileBuilderCallbackAnnotation should be added when a Dockerfile already exists");
@@ -698,18 +873,19 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_RespectsDockerfileBaseImageAnnotation()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.22\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.22\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName)
                .WithDockerfileBaseImage(buildImage: "golang:1.22-bookworm", runtimeImage: "debian:bookworm-slim");
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -719,18 +895,19 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_WithGoPrivate_GeneratesNetrcAndGoprivate()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName)
                .WithGoPrivate(["github.com/myorg"], "github.com", usernameArgName: "GIT_USER", tokenSecretId: "gittoken");
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -738,18 +915,19 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_WithGoPrivate_CustomTokenSecretId()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName)
                .WithGoPrivate(["gitlab.mycompany.com"], "gitlab.mycompany.com", tokenSecretId: "gl_token");
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -769,10 +947,11 @@ public class AddGoAppTests
     [Fact]
     public void PublishWithContainerFiles_AddsAnnotationToGoResource()
     {
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputDir = workspace.CreateDirectory("output");
         // PublishWithContainerFiles only adds the annotation in publish mode.
         using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+            DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         var source = builder.AddResource(new GoFilesContainer("frontend", "node", "."))
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
@@ -792,13 +971,14 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_ContainerFiles_GeneratesFromAndCopyInstructions()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+            DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // A container resource that exposes static files (e.g. a built frontend).
         var frontend = builder.AddResource(new GoFilesContainer("frontend", "node", "."))
@@ -807,12 +987,12 @@ public class AddGoAppTests
                  .WithImageTag("deterministic-tag"))
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
 
-        var api = builder.AddGoApp("api", sourceDir.Path);
+        var api = builder.AddGoApp("api", sourceDir.FullName);
         api.PublishWithContainerFiles(frontend, "/app/static");
 
         builder.Build().Run();
 
-        var dockerfile = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         // The builder stage ARG + FROM should reference the frontend image.
         Assert.Contains("frontend", dockerfile);
@@ -825,13 +1005,14 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_ContainerFiles_MultipleSourcesAllPresent()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
         using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+            DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         var frontend = builder.AddResource(new GoFilesContainer("frontend", "node", "."))
             .PublishAsDockerFile(c =>
@@ -845,13 +1026,13 @@ public class AddGoAppTests
                  .WithImageTag("assets-tag"))
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/public" });
 
-        var api = builder.AddGoApp("api", sourceDir.Path);
+        var api = builder.AddGoApp("api", sourceDir.FullName);
         api.PublishWithContainerFiles(frontend, "/app/static");
         api.PublishWithContainerFiles(assets, "/app/public");
 
         builder.Build().Run();
 
-        var dockerfile = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         // Both sources should have a FROM stage and COPY instruction.
         Assert.Contains("frontend", dockerfile);
@@ -892,17 +1073,18 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_RaceDetector_NotPropagatedToDockerfile()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path, raceDetector: true);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName, raceDetector: true);
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -965,17 +1147,18 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_RuntimeStage_HasNonRootUser_Alpine()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName);
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
@@ -983,28 +1166,30 @@ public class AddGoAppTests
     [Fact]
     public async Task VerifyPublish_RuntimeStage_HasNonRootUser_NonAlpine()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
 
-        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
-        builder.AddGoApp("api", sourceDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.FullName)
                .WithDockerfileBaseImage(runtimeImage: "debian:bookworm-slim");
 
         builder.Build().Run();
 
-        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.FullName, "api.Dockerfile"));
 
         await Verify(content);
     }
 
-    private static GoLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    private static async Task<GoLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
     {
         Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
 
         var exe = Executable.Create("test", "go");
-        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
+        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
             Executable.LaunchConfigurationsAnnotation,

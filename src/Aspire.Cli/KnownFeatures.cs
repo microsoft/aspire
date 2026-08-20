@@ -13,7 +13,12 @@ namespace Aspire.Cli;
 /// <param name="Name">The feature flag name (without the "features." prefix).</param>
 /// <param name="Description">A description of what the feature does.</param>
 /// <param name="DefaultValue">The default value if not explicitly configured.</param>
-internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue);
+/// <param name="Hidden">
+/// When <c>true</c>, the feature is omitted from user-facing surfaces (the <c>aspire config</c>
+/// available-features listing and <c>aspire config info</c> / its generated VS Code schemas). The
+/// flag still works if set directly in configuration; hiding only removes it from discovery.
+/// </param>
+internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue, bool Hidden = false);
 
 // this is a copy of Shared/KnownResourceNames.cs
 internal static class KnownFeatures
@@ -29,6 +34,9 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
     public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
+    public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
+    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
+    public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -41,37 +49,37 @@ internal static class KnownFeatures
             ShowDeprecatedPackages,
             "Show or hide deprecated packages in 'aspire add' search results",
             DefaultValue: false),
-        
+
         [StagingChannelEnabled] = new(
             StagingChannelEnabled,
             "Enable or disable access to the staging channel for early access to preview features and packages",
             DefaultValue: false),
-        
+
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
             "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
             DefaultValue: false),
-        
+
         [ShowAllTemplates] = new(
             ShowAllTemplates,
             "Show all available templates including experimental ones in 'aspire new' and 'aspire init' commands",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotRust] = new(
             ExperimentalPolyglotRust,
             "Enable or disable experimental Rust language support for polyglot Aspire applications",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotJava] = new(
             ExperimentalPolyglotJava,
             "Enable or disable experimental Java language support for polyglot Aspire applications",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotGo] = new(
             ExperimentalPolyglotGo,
             "Enable or disable experimental Go language support for polyglot Aspire applications",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",
@@ -80,7 +88,26 @@ internal static class KnownFeatures
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
-            DefaultValue: true)
+            DefaultValue: true),
+
+        [AspireSkillsRemoteFetchEnabled] = new(
+            AspireSkillsRemoteFetchEnabled,
+            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+            DefaultValue: false,
+            // Hidden from discovery while the remote-fetch path is preview-only: the CLI ships with a
+            // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
+            // still honored if set directly in config.
+            Hidden: true),
+
+        [TerminalCommandsEnabled] = new(
+            TerminalCommandsEnabled,
+            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+            DefaultValue: false),
+
+        [PolyglotIntegrationFilterEnabled] = new(
+            PolyglotIntegrationFilterEnabled,
+            "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because no remote feed resolves the tag usefully today: Azure DevOps Artifacts feeds ignore 'tags:' query scoping, and nuget.org returns no first-party integrations for it. The filter fails closed, so enabling it against a remote feed hides every integration. Enable it only against a local package source or hive, where the tag is read from the nuspec.",
+            DefaultValue: false)
     };
 
     /// <summary>
