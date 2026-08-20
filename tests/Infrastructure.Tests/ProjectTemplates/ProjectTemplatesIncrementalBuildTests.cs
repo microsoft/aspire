@@ -11,6 +11,7 @@ namespace Infrastructure.Tests;
 public sealed class ProjectTemplatesIncrementalBuildTests : IDisposable
 {
     private const string ReplacementOutputMarker = "Processed:";
+    private const string CatalogFileName = "aspire-templates.cat";
 
     private readonly TemporaryWorkspace _workspace;
     private readonly ITestOutputHelper _output;
@@ -259,10 +260,26 @@ public sealed class ProjectTemplatesIncrementalBuildTests : IDisposable
                 entry => entry.FullName["content/templates/".Length..].Replace('/', Path.DirectorySeparatorChar),
                 StringComparer.Ordinal);
 
-        Assert.Equal(sourceFiles.Length + (OperatingSystem.IsWindows() ? 1 : 0), packagedTemplates.Count);
-        if (OperatingSystem.IsWindows())
+        // GenerateCatalogFiles is Windows-only and additionally skips when makecat.exe is missing,
+        // which is only a hard error for CI/official builds. Deriving the expectation from what the
+        // build actually emitted keeps this assertion exercised on every OS instead of leaving a
+        // Windows-only branch that never runs, and avoids demanding the Windows SDK locally.
+        var generatedCatalogs = Directory.GetFiles(_artifactsPath, CatalogFileName, SearchOption.AllDirectories);
+        Assert.True(
+            generatedCatalogs.Length <= 1,
+            $"Expected at most one generated catalog: {string.Join(", ", generatedCatalogs)}");
+
+        Assert.Equal(sourceFiles.Length + generatedCatalogs.Length, packagedTemplates.Count);
+        foreach (var generatedCatalog in generatedCatalogs)
         {
-            Assert.Contains("aspire-templates.cat", packagedTemplates);
+            Assert.True(
+                packagedTemplates.TryGetValue(CatalogFileName, out var catalogEntry),
+                $"Expected the generated catalog to be packaged: {generatedCatalog}");
+
+            using var catalogStream = catalogEntry!.Open();
+            using var catalogBytes = new MemoryStream();
+            catalogStream.CopyTo(catalogBytes);
+            Assert.Equal(File.ReadAllBytes(generatedCatalog), catalogBytes.ToArray());
         }
 
         foreach (var generatedFile in Directory.GetFiles(generatedRoot, "*", SearchOption.AllDirectories))
