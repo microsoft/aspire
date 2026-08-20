@@ -116,10 +116,8 @@ public sealed class AzurePostgresEntraAuthRunModeTests(ITestOutputHelper output)
             output.WriteLine("Step 5: Writing the referencing service project...");
             WriteServiceProject(workspace.WorkspaceRoot.FullName);
 
-            // The client integration is resolved from the ambient feeds rather than the local build.
-            // That is acceptable here because this PR does not modify Aspire.Azure.Npgsql, and the
-            // service is a separate process that only needs the connection string handed to it by
-            // the AppHost, so its Aspire version does not have to match the CLI's.
+            // The client integration resolves from the local package hive that the CLI install
+            // seeds, so this exercises the current build rather than a released package.
             await auto.RunCommandAsync("dotnet add svc/svc.csproj package Aspire.Azure.Npgsql --prerelease", counter, TimeSpan.FromMinutes(5));
 
             output.WriteLine("Step 6: Modifying apphost.cs to add Azure PostgreSQL and the service...");
@@ -184,6 +182,9 @@ public sealed class AzurePostgresEntraAuthRunModeTests(ITestOutputHelper output)
         {
             output.WriteLine($"Test failed: {ex.Message}");
 
+            // Runs here, before the finally block deletes the group, so the ARM error survives.
+            await CaptureAzureFailureDiagnosticsAsync(resourceGroupName);
+
             DeploymentReporter.ReportDeploymentFailure(
                 nameof(EntraAdministratorIsUsableByReferencingServiceInRunMode),
                 resourceGroupName,
@@ -219,6 +220,64 @@ public sealed class AzurePostgresEntraAuthRunModeTests(ITestOutputHelper output)
 
             output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
             await CleanupResourceGroupAsync(resourceGroupName);
+        }
+    }
+
+    /// <summary>
+    /// Dumps the ARM failure detail for every deployment in the group before the group is deleted.
+    /// </summary>
+    /// <remarks>
+    /// The CLI surfaces run-mode provisioning failures as a bare "Azure deployment failed" state and
+    /// does not log the underlying ARM error, and the <c>finally</c> block deletes the resource group,
+    /// so without this the cause of a failure is unrecoverable and needs a whole second Azure run to
+    /// diagnose. This runs <c>az</c> directly rather than through the terminal automator because the
+    /// terminal may already be wedged at a failed prompt by the time it is needed.
+    /// </remarks>
+    private async Task CaptureAzureFailureDiagnosticsAsync(string resourceGroupName)
+    {
+        // statusMessage carries the real subcode (quota, capacity, zone availability) behind the
+        // generic "OperationFailed" that the deployment itself reports.
+        string[] diagnostics =
+        [
+            $"deployment group list --resource-group {resourceGroupName} --query \"[].{{name:name,state:properties.provisioningState,error:properties.error}}\" -o json",
+            $"deployment operation group list --resource-group {resourceGroupName} --name pg --query \"[?properties.provisioningState=='Failed'].properties.statusMessage\" -o json",
+            $"deployment operation group list --resource-group {resourceGroupName} --name pg-roles --query \"[?properties.provisioningState=='Failed'].properties.statusMessage\" -o json",
+        ];
+
+        foreach (var arguments in diagnostics)
+        {
+            try
+            {
+                using var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "az",
+                        Arguments = arguments,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false
+                    }
+                };
+
+                process.Start();
+                var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                var stderrTask = process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                output.WriteLine($"az {arguments}");
+                output.WriteLine(await stdoutTask);
+
+                var stderr = await stderrTask;
+                if (!string.IsNullOrWhiteSpace(stderr))
+                {
+                    output.WriteLine($"(stderr) {stderr}");
+                }
+            }
+            catch (Exception ex)
+            {
+                output.WriteLine($"Failed to capture diagnostics for 'az {arguments}': {ex.Message}");
+            }
         }
     }
 

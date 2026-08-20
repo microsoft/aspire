@@ -256,9 +256,12 @@ Notes for anyone editing this test:
 - The service binds a fixed loopback port so the probe stays a plain `curl`, and `/dbcheck` reports
   failures as a 200 with a diagnostic body so the assertion message names the inferred username and
   the server error instead of surfacing an opaque 500.
-- `Aspire.Azure.Npgsql` is resolved from the ambient feeds rather than the local build. The service
-  is a separate process that only consumes the connection string, so its Aspire version does not
-  need to match the CLI's.
+- `Aspire.Azure.Npgsql` resolves from the local package hive that the CLI install seeds
+  (`~/.aspire/hives/local/packages`), so the service exercises the current build rather than a
+  released package.
+- On failure the test dumps the ARM error for every deployment in the group before the `finally`
+  block deletes it. Run-mode provisioning failures surface only as `Azure deployment failed` in the
+  CLI log, so without that dump the cause needs a whole second Azure run to recover.
 
 ## Radius deployment coverage
 
