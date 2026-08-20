@@ -1,13 +1,12 @@
 'use strict';
 
-const { runAspireAddInteractive } = require('../commands/aspire-add');
-const { runAspireNewInteractive } = require('../commands/aspire-new');
-const { runAspireResources } = require('../commands/aspire-resources');
-const { runAspireRunInteractive } = require('../commands/aspire-run');
-const { runAspireStart } = require('../commands/aspire-start');
-const { runAspireStop } = require('../commands/aspire-stop');
-const { runAspireWait } = require('../commands/aspire-wait');
-const { stopAppHost } = require('../scriptlets/stop-apphost');
+const { createAspireAddScenario } = require('./aspire-add');
+const { createAspireNewScenario } = require('./aspire-new');
+const { createAspireResourcesScenario } = require('./aspire-resources');
+const { createAspireRunScenario } = require('./aspire-run');
+const { createAspireStartScenario } = require('./aspire-start');
+const { createAspireStopScenario } = require('./aspire-stop');
+const { createAspireWaitScenario } = require('./aspire-wait');
 
 const template = {
   projectName: 'AspireCliCsStarterSmoke',
@@ -16,75 +15,41 @@ const template = {
   hasTestProjectPrompt: true
 };
 
-module.exports = {
-  id: 'dotnet-starter',
-  projectName: template.projectName,
-  async run(context) {
-    const {
-      aspireCommand,
-      channel,
-      diagnosticsDir,
-      maxStartupSeconds,
-      projectRoot,
-      resourceReadyTimeoutSeconds,
-      scenarioRoot
-    } = context;
+function createDotnetStarterScenario({ maxStartupSeconds, resourceReadyTimeoutSeconds }) {
+  const cleanupScenario = createAspireStopScenario({
+    allowNotRunning: true,
+    description: 'Clean up the .NET AppHost',
+    runAfterCancellation: true
+  });
 
-    try {
-      await runAspireNewInteractive({
-        aspireCommand,
-        channel,
-        diagnosticsDir,
-        scenarioRoot,
-        template,
-        timeoutMs: 180_000
-      });
-      await runAspireAddInteractive({
-        aspireCommand,
-        cwd: projectRoot,
-        diagnosticsDir,
-        integrationFilter: 'postgres',
-        timeoutMs: 180_000
-      });
-      await runAspireRunInteractive({
-        aspireCommand,
-        diagnosticsDir,
-        projectRoot,
-        timeoutMs: Math.max(maxStartupSeconds, resourceReadyTimeoutSeconds) * 1000 + 180_000
-      });
-      await runAspireStart({
-        aspireCommand,
-        diagnosticsDir,
-        projectRoot,
-        timeoutMs: maxStartupSeconds * 1000 + 180_000
-      });
-      await runAspireResources({
-        aspireCommand,
-        diagnosticsDir,
-        expectedResources: template.expectedResources,
-        projectRoot,
-        timeoutMs: 180_000
-      });
+  return {
+    id: 'dotnet-starter',
+    description: 'Validate the .NET starter command lifecycle',
+    projectName: template.projectName,
+    timeoutMs: 40 * 60_000,
+    callback: async ({ runScenario }) => {
+      try {
+        await runScenario(createAspireNewScenario(template));
+        await runScenario(createAspireAddScenario('postgres'));
+        await runScenario(createAspireRunScenario(
+          Math.max(maxStartupSeconds, resourceReadyTimeoutSeconds) * 1000 + 180_000));
+        await runScenario(createAspireStartScenario(maxStartupSeconds * 1000 + 180_000));
+        await runScenario(createAspireResourcesScenario(template.expectedResources));
 
-      for (const resourceName of template.expectedResources) {
-        await runAspireWait({
-          aspireCommand,
-          diagnosticsDir,
-          projectRoot,
-          resourceName,
-          resourceReadyTimeoutSeconds,
-          timeoutMs: resourceReadyTimeoutSeconds * 1000 + 120_000
+        for (const resourceName of template.expectedResources) {
+          await runScenario(createAspireWaitScenario(resourceName, resourceReadyTimeoutSeconds));
+        }
+
+        await runScenario(createAspireStopScenario());
+      } finally {
+        await runScenario(cleanupScenario).catch(() => {
+          // Cleanup must not hide the original scenario failure.
         });
       }
-
-      await runAspireStop({
-        aspireCommand,
-        diagnosticsDir,
-        projectRoot,
-        timeoutMs: 120_000
-      });
-    } finally {
-      await stopAppHost({ aspireCommand, diagnosticsDir, projectRoot });
     }
-  }
+  };
+}
+
+module.exports = {
+  createDotnetStarterScenario
 };

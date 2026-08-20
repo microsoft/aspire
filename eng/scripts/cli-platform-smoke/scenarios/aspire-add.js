@@ -1,21 +1,10 @@
 'use strict';
 
-const { runInteractiveCommand } = require('../lib/run-interactive-command');
-
-async function runAspireAddInteractive({
-  aspireCommand,
-  cwd,
-  diagnosticsDir,
-  integrationFilter,
-  timeoutMs
-}) {
-  await runInteractiveCommand({
-    aspireCommand,
-    cwd,
-    diagnosticsDir,
-    fileName: 'aspire-add.log',
-    timeoutMs,
-    body: async runAspireCommand => {
+function createAspireAddScenario(integrationFilter) {
+  return {
+    description: `Add the ${integrationFilter} integration`,
+    timeoutMs: 180_000,
+    callback: async ({ runAspireCommand, timeoutMs }) => {
       const run = await runAspireCommand(['add']);
 
       await run.waitForText('Select an integration to add:', timeoutMs, 'integration selection prompt');
@@ -33,9 +22,9 @@ async function runAspireAddInteractive({
 
       await run.waitForText('was added successfully.', timeoutMs, 'integration add success');
     }
-  });
+  };
 }
 
 module.exports = {
-  runAspireAddInteractive
+  createAspireAddScenario
 };
