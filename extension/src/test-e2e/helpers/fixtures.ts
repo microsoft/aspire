@@ -255,6 +255,39 @@ export function writeActionCapabilitiesCliWrapper(name = 'aspire-action-capabili
     });
 }
 
+/**
+ * A capability-advertising CLI whose `deploy` blocks until the test releases it. The extension
+ * ends a durable non-Run operation when the CLI process exits, so holding the process is what
+ * keeps one deploy observably in flight for the operating row and duplicate-action assertions.
+ */
+export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-action'): {
+    cliPath: string;
+    waitForDeployRequest: () => Promise<void>;
+    releaseDeploy: () => void;
+} {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-deploy-action');
+    const deployRequestFilePath = path.join(gateDirectory, 'deploy-request');
+    const deployReleaseFilePath = path.join(gateDirectory, 'release-deploy');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    const cliPath = writeCliWrapper(name, {
+        configInfoJson: createConfigInfo([
+            deployCommandCapability,
+            publishCommandCapability,
+            doCommandCapability,
+        ]),
+        deployRequestFilePath,
+        deployReleaseFilePath,
+    });
+
+    return {
+        cliPath,
+        waitForDeployRequest: () => waitForPath(deployRequestFilePath, 120_000),
+        releaseDeploy: () => writeFileWithRetry(deployReleaseFilePath, ''),
+    };
+}
+
 export function writeLegacyPipelineActionCliWrapper(name = 'aspire-legacy-pipeline-action'): string {
     return writeCliWrapper(name, {
         // The action itself is supported, but omitting `pipelines` keeps the extension-side input
@@ -897,6 +930,8 @@ function writeCliWrapper(
         streamedLsRequestFilePath?: string;
         streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
+        deployRequestFilePath?: string;
+        deployReleaseFilePath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
         psSnapshotRequestFilePath?: string;
@@ -950,6 +985,18 @@ ${options.configInfoJson === undefined
   process.exit(0);`}
 }
 
+${options.deployReleaseFilePath === undefined
+        ? ''
+        : `// The extension keeps a durable deploy operation in flight until this process exits, so
+// blocking here holds the operation open for as long as the test needs. The debug session has
+// already started by then: the launch response is sent before the CLI is awaited.
+if (args[0] === 'deploy') {
+${options.deployRequestFilePath === undefined ? '' : `  fs.writeFileSync(${JSON.stringify(options.deployRequestFilePath)}, '');`}
+  waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy');
+  process.exit(0);
+}
+
+`}
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {
