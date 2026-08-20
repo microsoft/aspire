@@ -75,10 +75,18 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     /// The administrator user name, written to <c>properties.username</c>. Internal: assigned
     /// through <see cref="SetSchemaProperty"/> so a generic resource-type construct does not pin
     /// three type-specific property names into its public surface — <c>database</c> means nothing
-    /// for a cache or a queue. A <c>ConfigureRadiusInfrastructure</c> callback that needs to set
-    /// one can do so through the type's own recipe parameters.
+    /// for a cache or a queue.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Being internal, this is not assignable from a <c>ConfigureRadiusInfrastructure</c> callback,
+    /// and <see cref="RecipeParameters"/> is not a substitute: it emits under
+    /// <c>properties.recipe.parameters</c>, which is a different location in the resource body from
+    /// the top-level schema property described below. A callback that needs to control the
+    /// credential should supply it in the app model instead — the publisher writes what it resolves
+    /// there into these properties.
+    /// </para>
+    /// <para>
     /// The <c>Radius.*</c> resource-type manifests declare their recipe inputs — <c>username</c>,
     /// <c>password</c>, <c>database</c> — as first-class schema properties on the resource, and the
     /// Kubernetes recipes read them as <c>context.resource.properties.&lt;name&gt;</c>. They are not
@@ -88,6 +96,7 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     /// See <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/postgreSqlDatabases.yaml"/>
     /// and its Kubernetes recipe
     /// <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Data/postgreSqlDatabases/recipes/kubernetes/bicep/kubernetes-postgresql.bicep"/>.
+    /// </para>
     /// </remarks>
     internal BicepValue<object> UserName
     {

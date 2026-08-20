@@ -910,6 +910,25 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// A <c>WithEnvironment</c> callback that composes the database's connection string inline
+    /// records no reference annotation, so the consumer is invisible to the annotation scan. The
+    /// warning is driven off the connection strings actually resolved as well, so this consumer is
+    /// still told the database will not exist.
+    /// </summary>
+    [Fact]
+    public void CallbackOnlySqlDatabaseConsumer_IsReportedAsNotCreatedByTheRecipe()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var db = b.AddSqlServer("sql").AddDatabase("appdb");
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment(ctx => ctx.EnvironmentVariables["CS"] = db.Resource);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "sql", "does not create databases", "appdb", "ASPIRERADIUS080"));
+    }
+
+    /// <summary>
     /// An unreferenced <c>AddDatabase(...)</c> produces no consumer connection string, so it cannot
     /// mislead anyone. Pinned so the warning above cannot become noise on every model that declares
     /// a database it does not use.
