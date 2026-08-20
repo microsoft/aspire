@@ -822,6 +822,9 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded(".gitignore"));                    // repo-ROOT .gitignore (anchored)
         Assert.True(filter.IsExcluded(".github/CODEOWNERS"));
         Assert.True(filter.IsExcluded(".github/ISSUE_TEMPLATE/10_bug_report.yml"));
+        Assert.True(filter.IsExcluded(".github/dependabot.yml"));
+        Assert.True(filter.IsExcluded(".github/policies/labelManagement.prOpened.yml"));
+        Assert.True(filter.IsExcluded(".github/extensions/aspire-team-app/extension.mjs"));
 
         // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
         // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), and

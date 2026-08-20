@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.SelectTests;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Xunit;
 
@@ -302,6 +303,87 @@ public sealed class TestTriggerMapTests
         Assert.True(broken.Count == 0, $"job: targets whose workflow/job no longer exists: {string.Join(", ", broken)}");
     }
 
+    public static TheoryData<string, string[]> AuditedLoosePathCases => new()
+    {
+        {
+            ".github/workflows/prepare-installer-artifacts.yml",
+            ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            ".github/scripts/assert-extension-e2e-bridge-vsix.ps1",
+            ["job:extension-unit"]
+        },
+        {
+            "eng/test-retry-patterns.json",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/aspire-skills-bundle.common.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/generate-catalog.ps1",
+            ["test:Aspire.Templates.Tests"]
+        },
+        {
+            "eng/scripts/smoke-installed-cli.ps1",
+            ["job:winget-installer"]
+        },
+        {
+            "eng/scripts/smoke-installed-cli.sh",
+            ["job:homebrew-installer"]
+        },
+        {
+            "eng/scripts/load-cli-e2e-images.sh",
+            ["test:Aspire.Cli.EndToEnd.Tests"]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(AuditedLoosePathCases))]
+    public void AuditedLoosePathSelectsItsConsumerWithoutRunAllFallback(string path, string[] expectedTargets)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll, $"{path} unexpectedly selected ALL: {result.EscalationReason}");
+        Assert.Empty(result.UnmatchedFiles);
+
+        var actualTargets = result.TestProjects.Select(name => $"test:{name}")
+            .Concat(result.Jobs)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var expectedTarget in expectedTargets)
+        {
+            Assert.Contains(expectedTarget, actualTargets);
+        }
+    }
+
+    [Theory]
+    [InlineData(".gitattributes")]
+    [InlineData("eng/scripts/gha-testreport.ps1")]
+    [InlineData("eng/scripts/split-test-projects-for-ci.ps1")]
+    [InlineData("tools/ExtractTestPartitions/Program.cs")]
+    public void BroadCiInputHasAnExplicitRunAllRule(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Theory]
+    [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
+    [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
+    [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
+    public void UnconditionallyExecutedBaselineScriptDoesNotForceTestSelection(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
     [Fact]
     public void SetupForTestsSelectionOutputsAreConsistentWithMap()
     {
@@ -456,9 +538,10 @@ public sealed class TestTriggerMapTests
         // fallback treats them as owned — they need no curated rule) and non-source build/fixture infra
         // (props/targets/packages/Docker/Playwright/certs -> ALL). A tests/Shared file that is NEITHER a
         // *.cs NOR matched by an ALL path rule NOR a doc (excluded by the prefilter) would silently select
-        // nothing: it is not under a project dir (so directory containment can't attribute a loose file
-        // there) and the run-all fallback is src/-only. Pin the invariant so a new file type added under
-        // tests/Shared can't quietly fall through. (.md files are dropped by the prefilter's **.md.)
+        // no targeted work: it is not under a project dir (so directory containment can't attribute a
+        // loose file there) and would force the run-all fallback. Pin the invariant so a new file type
+        // added under tests/Shared can't quietly expand to ALL. (.md files are dropped by the prefilter's
+        // **.md.)
         var allGlobs = s_map.PathRules
             .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
             .SelectMany(r => r.Paths)
@@ -483,12 +566,11 @@ public sealed class TestTriggerMapTests
     public void EveryLocalActionUsedByAWorkflowIsRoutedToAll()
     {
         // A local composite action (.github/actions/<name>) is not a project, so Layer 1 never attributes
-        // a change to it, and the run-all fallback in TestSelector escalates only src/** files. So a
-        // changed action that no path rule matches selects NOTHING in enforce mode -- a PR editing a
-        // CI-critical action (the skip gate, the macOS keychain unlock, enumerate-tests, ...) would
-        // silently skip all tests. The map routes .github/actions/** -> ALL to cover this; pin the
-        // invariant so a new action referenced from a workflow can't fall through if that rule is ever
-        // narrowed. Failure mode: drop the .github/actions/** ALL rule and this goes red.
+        // a change to it. An action that no path rule matches therefore forces the run-all fallback, but
+        // its CI-wide impact should be explicit rather than appearing as an unattributed audit warning.
+        // The map routes .github/actions/** -> ALL to cover this; pin the invariant so a new action
+        // referenced from a workflow can't lose that explicit ownership if the rule is narrowed.
+        // Failure mode: drop the .github/actions/** ALL rule and this goes red.
         var allGlobs = s_map.PathRules
             .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
             .SelectMany(r => r.Paths)
@@ -519,7 +601,24 @@ public sealed class TestTriggerMapTests
 
         Assert.True(unrouted.Count == 0,
             $"local actions referenced by a workflow but not routed to ALL (a change to them would select " +
-            $"nothing in enforce mode): {string.Join(", ", unrouted)}");
+            $"ALL only through the unattributed fallback): {string.Join(", ", unrouted)}");
+    }
+
+    private static SelectionResult SelectWithRealMap(string path)
+    {
+        var projectPaths = LoadSolutionProjectPaths();
+        var testProjects = projectPaths
+            .Where(projectPath => projectPath.StartsWith("tests/", StringComparison.Ordinal))
+            .Select(projectPath => Path.GetFileNameWithoutExtension(projectPath)!)
+            .Where(name => name.EndsWith(".Tests", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+        var projectDirectories = projectPaths
+            .Select(projectPath => Path.GetDirectoryName(projectPath)!.Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, testProjects, projectDirectories);
+
+        return selector.Select([path], [], new SelectorOptions());
     }
 
     // Text of a top-level tests.yml job block: from "\n  <id>:" up to the next line indented exactly

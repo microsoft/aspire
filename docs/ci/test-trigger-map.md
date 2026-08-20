@@ -43,7 +43,7 @@ paths.
 
 | Section | What it is |
 |---------|------------|
-| `prefilter` | `{ patterns_file, keep_routed }`. Changed files matched by a pattern in `patterns_file` are **dropped before both layers run** (reaching neither Layer 1 nor Layer 2), except those carved out by `keep_routed` (files the selector routes to a target — `.github/workflows/**`, `eng/pipelines/**`, and the patterns file itself → `Infrastructure.Tests`). `patterns_file` is `eng/github-ci/ci-skip-entirely-patterns.txt`, the same list the top-level CI skip gate uses, read at runtime so the two can't drift; its glob syntax is the check-changed-files action's (ported in `ChangedFileFilter`). Why this — not `ignore` — is what stops the `README.md` fan-out: see [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
+| `prefilter` | `{ patterns_file, keep_routed }`. Changed files matched by a pattern in `patterns_file` are **dropped before both layers run** (reaching neither Layer 1 nor Layer 2), except those carved out by `keep_routed` (files the selector routes to a target — `.github/workflows/**`, `eng/pipelines/**`, and the patterns file itself → `Infrastructure.Tests`). `patterns_file` is `eng/github-ci/ci-skip-entirely-patterns.txt`, the same list the top-level CI skip gate uses, read at runtime so the two can't drift; its glob syntax is the check-changed-files action's (ported in `ChangedFileFilter`). It includes documentation and metadata-only paths, plus `.github/extensions/**`, which has its own validation workflow. Why this — not `ignore` — is what stops the `README.md` fan-out: see [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
 | `conventions` | `<name>`-capture pattern → target template, emitted only if the derived test exists (existence guard). Additive. Covers a test's own folder and the Hosting/Components integration dirs as a backstop for non-MSBuild files the graph cannot attribute. |
 | `ignore` | globs Layer 2 accounts for with **no** target, so they do not trip the run-all fallback. Link-compiled `src/Shared` / `tests/Shared` / `Components/Common` files are attributed by Layer 1; the curated entries cover only paths that still need an explicit exemption. See [test-trigger-selector-design.md](./test-trigger-selector-design.md) §Layer 2. |
 | `path_rules` | a path glob set → a target set (`test:` / `job:` / a group / `ALL`). The single general path matcher: catch-all-to-`ALL`, convention misses, non-.NET job loose-file triggers, and loose-file reads all live here under comment headers |
@@ -80,12 +80,13 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:api-diffs` | [`generate-api-diffs.yml`](../../.github/workflows/generate-api-diffs.yml) — *schedule-only today* |
 | `job:ats-diffs` | [`generate-ats-diffs.yml`](../../.github/workflows/generate-ats-diffs.yml) — *schedule-only today* |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
-| `ALL` | full test matrix + all jobs |
+| `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while schedule/outerloop-only targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
 Base builds (packages, CLI native archives, installer artifacts, the CLI E2E
-image) are not modelled as targets. They are upstream `needs:` of the targets
-above and run whenever any dependent target runs.
+image) are not modelled as targets. Package and native archive builds are
+baseline workflow jobs; scripts they always execute need no synthetic test
+target. Gated installer/image jobs run when their downstream target is selected.
 
 Their **workflow files** are in the catch-all `path_rules` entry (target `ALL`)
 because a change to *how* they build can affect every consumer.
@@ -133,9 +134,11 @@ A single `path_rules` entry whose target is `ALL`. Build infrastructure and
 broadly shared code re-run everything. Examples:
 
 ```text
-global.json, NuGet.config, .config/dotnet-tools.json
+global.json, NuGet.config, .gitattributes, .config/dotnet-tools.json
 Directory.Build.*, Directory.Packages.props, Aspire.slnx
 eng/*.props, eng/*.targets, eng/common/**, eng/OuterPreBuild.proj
+eng/scripts/split-test-projects-for-ci.ps1, eng/scripts/gha-testreport.ps1
+tools/ExtractTestPartitions/**
 tests/Shared/**/*.props, tests/Shared/**/*.targets, tests/Shared/Dockerfile*
 .github/workflows/tests.yml, run-tests.yml, build-packages.yml, ...
 ```
@@ -159,6 +162,12 @@ src/Components/Common/**                          # link-compiled into many comp
 src/Vendoring/OpenTelemetry.Instrumentation.*/**  # glob-compiled into Redis/Kafka components; Layer 1 covers
 ```
 
+Scripts already exercised by unconditional baseline jobs also belong here.
+For example, every native CLI archive build runs
+`verify-cli-npm-package.ps1` and `verify-cli-tool-nupkg.ps1`; selecting a test
+project for those files would add no coverage. The stabilization job likewise
+invokes `stabilization-smoke-init-restore.sh` independently of the selector.
+
 ### Path rules (`path_rules`)
 
 The one general path-glob → targets matcher. `targets` may be `test:` / `job:` /
@@ -179,6 +188,8 @@ Highlights:
   because the polyglot playground regenerates and compiles that exported surface
   in every language.
 - **loose-file deps** — `eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
+  installer smoke scripts, the CLI E2E image loader, template catalog
+  generation, transient retry configuration, Aspire skills bundle scripts,
   `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`,
   and `eng/Bundle.proj`.
 
@@ -237,7 +248,9 @@ Steady state:
    - renamed/removed test project, job, or path → fix the name/glob.
 3. Check the selector's audit summary for **unattributed changed files**. A new
    non-.NET job or runtime file read shows up there, prompting a `path_rules`
-   addition.
+   addition. When adding a gated job backed by a reusable workflow, route the
+   reusable workflow file to that job target as well as wiring its `run_*`
+   output.
 
 The hand-owned knowledge (`conventions`, `ignore`, `path_rules`,
 `derived_targets`) encodes dependencies a fresh codebase read cannot recover, so
@@ -261,8 +274,11 @@ carry it forward. Never silently regenerate it.
   the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
   `src` coverage and the convention backstop for non-MSBuild files.
 - **Schedule/outerloop-only targets.** `api-diffs`, `ats-diffs`,
-  `deployment-e2e`, and `Aspire.EndToEnd.Tests` are not in the regular PR matrix
-  today; their rules give the *would-be* trigger paths.
+  `deployment-e2e`, `Aspire.Deployment.EndToEnd.Tests`,
+  `Aspire.EndToEnd.Tests`, and `Aspire.Oracle.EntityFrameworkCore.Tests` are not
+  in the regular PR matrix today; their rules give the *would-be* trigger paths.
+  Comments and job summaries list them separately from work the PR selector can
+  actually run.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files
