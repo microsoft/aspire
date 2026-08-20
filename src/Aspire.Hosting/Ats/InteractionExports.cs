@@ -353,6 +353,20 @@ internal sealed class InteractionInputBuilder
     }
 
     /// <summary>
+    /// Releases uploaded files associated with the input.
+    /// </summary>
+    /// <remarks>
+    /// Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+    /// server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+    /// deleted when the AppHost shuts down.
+    /// </remarks>
+    [AspireExport]
+    public void ReleaseFiles()
+    {
+        Input.GetFiles().Dispose();
+    }
+
+    /// <summary>
     /// Attaches a callback that dynamically loads or updates the input after the prompt starts.
     /// </summary>
     /// <param name="callback">The callback invoked to load the input. Use the supplied context to read other inputs and update this input.</param>

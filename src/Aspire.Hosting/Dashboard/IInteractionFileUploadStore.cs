@@ -39,7 +39,7 @@ internal interface IInteractionFileUploadStore
     void RemoveEntry(int interactionId, string fileId);
 
     /// <summary>
-    /// Marks an interaction as completed.
+    /// Marks an interaction as completed while retaining uploads for the caller to process.
     /// </summary>
     void CompleteInteraction(int interactionId);
 

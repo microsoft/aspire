@@ -1140,11 +1140,9 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(filePath, file.FilePath);
         Assert.True(File.Exists(filePath));
         Assert.Equal("content", Encoding.UTF8.GetString(await file.ReadAllBytesAsync()));
-        await using (var stream = file.OpenRead())
-        using (var reader = new StreamReader(stream))
-        {
-            Assert.Equal("content", await reader.ReadToEndAsync());
-        }
+        await using var stream = file.OpenRead();
+        using var reader = new StreamReader(stream);
+        Assert.Equal("content", await reader.ReadToEndAsync());
 
         files.Dispose();
         files.Dispose();

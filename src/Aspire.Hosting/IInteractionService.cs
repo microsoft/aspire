@@ -456,8 +456,10 @@ public sealed class InteractionInput
     /// A disposable collection of uploaded files. Disposing the collection deletes the uploaded files from disk.
     /// </returns>
     /// <remarks>
-    /// The returned collection is owned by this input. Dispose it when the files are no longer needed. After disposal,
-    /// the file metadata remains available but file content can no longer be opened or read.
+    /// The caller owns the returned collection and must dispose it when the files are no longer needed to delete the
+    /// temporary files before AppHost shutdown. After disposal, the file metadata remains available but new content
+    /// reads cannot be started. Streams opened before disposal remain usable until those streams are disposed. Files
+    /// that are not disposed are deleted when the AppHost shuts down.
     /// </remarks>
     [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
     public InteractionFileCollection GetFiles() => _files;
@@ -468,7 +470,8 @@ public sealed class InteractionInput
 /// </summary>
 /// <remarks>
 /// Dispose the collection when its files are no longer needed. Disposing the collection deletes the uploaded files
-/// from disk. Disposal is idempotent.
+/// from disk and prevents new content reads. Streams opened before disposal remain usable until those streams are
+/// disposed. Disposal is idempotent.
 /// </remarks>
 [AspireExportIgnore(Reason = "InteractionFileCollection owns server-local files and implements IDisposable, which is not ATS-compatible.")]
 public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, IDisposable
@@ -504,7 +507,8 @@ public sealed class InteractionFileCollection : IReadOnlyList<InteractionFile>, 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     /// <summary>
-    /// Deletes the uploaded files from disk.
+    /// Deletes the uploaded files from disk and prevents new content reads. Streams that are already open remain
+    /// usable until those streams are disposed.
     /// </summary>
     public void Dispose()
     {
@@ -556,11 +560,15 @@ public sealed class InteractionFile
     /// Opens a read-only stream for the file content.
     /// </summary>
     /// <returns>A <see cref="Stream"/> for reading the file.</returns>
+    /// <remarks>
+    /// The returned stream remains usable if the owning <see cref="InteractionFileCollection"/> is disposed. Dispose
+    /// the stream when reading is complete so the operating system can finish reclaiming the deleted file.
+    /// </remarks>
     /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
     public Stream OpenRead()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+        return new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 4096, useAsync: true);
     }
 
     /// <summary>

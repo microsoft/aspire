@@ -187,6 +187,10 @@ internal sealed class InteractionFileUploadStore : IInteractionFileUploadStore, 
             interactionId,
             interaction.Files.Count);
 
+        // The interaction completes before the prompt task returns, so its uploads must remain available for the
+        // caller to process. The returned InteractionFileCollection owns their cleanup: .NET callers dispose the
+        // collection from GetFiles(), and ATS callers invoke ReleaseFiles() on the original input builder. Store
+        // disposal at AppHost shutdown is only a fallback for callers that do not release their files earlier.
         foreach (var entry in interaction.Files.Values)
         {
             lock (entry)
