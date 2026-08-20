@@ -83,13 +83,15 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while schedule/outerloop-only targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
-Base builds (packages, CLI native archives, installer artifacts, the CLI E2E
-image) are not modelled as targets. Package and native archive builds are
-baseline workflow jobs; scripts they always execute need no synthetic test
-target. Gated installer/image jobs run when their downstream target is selected.
-
-Their **workflow files** are in the catch-all `path_rules` entry (target `ALL`)
+Package and CLI native archive builds are baseline workflow jobs rather than
+selector targets; scripts they always execute need no synthetic test target.
+Their workflow files are in the catch-all `path_rules` entry (target `ALL`)
 because a change to *how* they build can affect every consumer.
+
+Gated installer artifact jobs and the CLI E2E image build are modelled by the
+targets they implement or serve. `prepare-installer-artifacts.yml` routes to the
+WinGet and Homebrew job targets, while `build-cli-e2e-image.yml` routes to
+`Aspire.Cli.EndToEnd.Tests`.
 
 ## Rule categories
 
@@ -167,6 +169,9 @@ For example, every native CLI archive build runs
 `verify-cli-npm-package.ps1` and `verify-cli-tool-nupkg.ps1`; selecting a test
 project for those files would add no coverage. The stabilization job likewise
 invokes `stabilization-smoke-init-restore.sh` independently of the selector.
+The Windows-only template catalog generator has no GitHub PR-CI consumer, the
+skills bundle updater is schedule/dispatch-only, and the bundle verifier runs
+in its dedicated PR workflow.
 
 ### Path rules (`path_rules`)
 
@@ -188,10 +193,10 @@ Highlights:
   because the polyglot playground regenerates and compiles that exported surface
   in every language.
 - **loose-file deps** — `eng/clipack/**`, `eng/winget/**`, `eng/homebrew/**`,
-  installer smoke scripts, the CLI E2E image loader, template catalog
-  generation, transient retry configuration, Aspire skills bundle scripts,
-  `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`,
-  and `eng/Bundle.proj`.
+  installer smoke scripts, the CLI E2E image loader, transient retry
+  configuration, the shared Aspire skills bundle helper,
+  `src/Aspire.ProjectTemplates/**`, `playground/**`, `.github/workflows/**`, and
+  `eng/Bundle.proj`.
 
 ### Project rules (`affected_project_rules`)
 

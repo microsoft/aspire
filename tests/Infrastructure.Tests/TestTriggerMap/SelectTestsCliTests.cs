@@ -315,7 +315,7 @@ public sealed class SelectTestsCliTests
         }, slnx: slnx, map: map);
     }
 
-    // In audit mode the comment is advisory: the full matrix and all jobs still run, and the lists
+    // In audit mode the comment is advisory: regular PR tests and PR-gated jobs still run, and the lists
     // describe what selective CI WOULD run under enforcement. Pin the "(audit mode)" title qualifier
     // and the explanatory line so the advisory framing can't silently disappear — without it a reader
     // could mistake the selected subset for what actually ran.
@@ -389,6 +389,9 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("- selected PR test projects: 1 / 1", summary);
                 Assert.Contains("- triggered PR jobs: job:extension-e2e", summary);
                 Assert.Contains("- advisory-only targets: test:Aspire.EndToEnd.Tests, job:deployment-e2e", summary);
+                Assert.Contains(
+                    "- mode: audit (advisory: the regular PR test matrix + PR-gated jobs run regardless of the selection below; advisory-only targets do not run on PRs)",
+                    summary);
             }
             finally
             {

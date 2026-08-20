@@ -1094,8 +1094,11 @@ internal static class Selection
         var source = options.ChangedFilesPath is not null
             ? $"changed-files {options.ChangedFilesPath}"
             : $"git diff {options.From}{(options.To is null ? " (working tree)" : $"..{options.To}")}";
+        var mode = options.Enforce
+            ? "enforcing"
+            : "audit (advisory: the regular PR test matrix + PR-gated jobs run regardless of the selection below; advisory-only targets do not run on PRs)";
         sb.AppendLine("### Options");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (advisory: the full matrix + all jobs run regardless of the selection below)")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {mode}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");
         var forceAllDetail = options.ForceAll && options.ForceAllReason is not null
             ? $"True — fail-safe run-all because {options.ForceAllReason}"
