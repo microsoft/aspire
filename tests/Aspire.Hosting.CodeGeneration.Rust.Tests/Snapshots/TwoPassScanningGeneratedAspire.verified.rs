@@ -13288,6 +13288,14 @@ impl InteractionInputBuilder {
         Ok(InteractionInputBuilder::new(handle, self.client.clone()))
     }
 
+    /// Releases uploaded files associated with the input.
+    pub fn release_files(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.Ats/releaseFiles", args)?;
+        Ok(())
+    }
+
     /// Attaches a callback that dynamically loads or updates the input after the prompt starts.
     pub fn with_dynamic_loading(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<DynamicLoadingOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();

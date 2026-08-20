@@ -5801,6 +5801,14 @@ class InteractionInputBuilder:
         )
         return typing.cast(InteractionInputBuilder, result)
 
+    def release_files(self) -> None:
+        """Releases uploaded files associated with the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting.Ats/releaseFiles',
+            rpc_args
+        )
+
     def with_dynamic_loading(self, callback: typing.Callable[[InteractionInputLoadContext], None], *, options: DynamicLoadingOptions | None = None) -> InteractionInputBuilder:
         """Attaches a callback that dynamically loads or updates the input after the prompt starts."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
