@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Clarifies ASPIRE011 run preflight wording, documenting the DNX-related CLI invocation behavior from PR #18850",
+  "mergedAt": "2026-08-20T18:06:19Z",
+  "number": 1534,
+  "runDate": "2026-08-20T18:23:13Z",
+  "status": "included",
+  "title": "Clarify ASPIRE011 run preflight wording"
+}

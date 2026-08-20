@@ -1,0 +1,9 @@
+{
+  "author": "danfiedler-msft",
+  "comment": "Repository engineering maintenance (pinning GitHub Actions to SHAs); not a product changelog item",
+  "mergedAt": "2026-08-20T13:50:57Z",
+  "number": 1482,
+  "runDate": "2026-08-20T18:23:13Z",
+  "status": "excluded",
+  "title": "Pin GitHub Actions to full-length commit SHAs"
+}

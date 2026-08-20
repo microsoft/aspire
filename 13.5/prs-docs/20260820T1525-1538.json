@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-authoring skill for the docs repo; process/tooling only, not a product changelog item",
+  "mergedAt": "2026-08-20T15:25:15Z",
+  "number": 1538,
+  "runDate": "2026-08-20T18:23:13Z",
+  "status": "excluded",
+  "title": "Add /whatsnew release-notes authoring skill"
+}

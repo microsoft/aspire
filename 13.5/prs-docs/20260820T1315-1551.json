@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Doc-only fix for misaligned code line highlights; no associated product changelog entry",
+  "mergedAt": "2026-08-20T13:15:44Z",
+  "number": 1551,
+  "runDate": "2026-08-20T18:23:13Z",
+  "status": "excluded",
+  "title": "Fix misaligned code line highlights in secure communications docs"
+}

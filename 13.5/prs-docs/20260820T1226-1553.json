@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "No matching product changelog entry found; documents dashboard host filtering hardening but no corresponding product PR in this milestone",
+  "mergedAt": "2026-08-20T12:26:02Z",
+  "number": 1553,
+  "runDate": "2026-08-20T18:23:13Z",
+  "status": "excluded",
+  "title": "Document dashboard host filtering"
+}

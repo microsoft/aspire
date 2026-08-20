@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixed a MissingMethodException crash when running TypeScript or Java AppHosts built with 13.5 codegen under an older 13.4.x CLI. Newer codegen now probes for additive TypeSystem capabilities before using them, so older CLIs skip unsupported features instead of crashing.",
-  "docsPrs": [],
+  "docsPrs": [
+    1550
+  ],
   "docsRequired": false,
   "emoji": "🩹",
   "firstMergedAt": "2026-08-20T04:39:00Z",

@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Documents the known-issue section describing mixed 13.4/13.5 package incompatibilities fixed by PR #19524",
+  "mergedAt": "2026-08-20T12:26:44Z",
+  "number": 1550,
+  "runDate": "2026-08-20T18:23:13Z",
+  "status": "included",
+  "title": "Document Aspire 13.5 package compatibility issue"
+}
