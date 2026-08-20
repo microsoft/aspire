@@ -177,7 +177,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
     [InlineData(InteractionHelpers.MaxFileCount + 1, false)]
     public async Task Render_MultipleFileSelection_ValidatesMaximumFileCount(int fileCount, bool expectedAccepted)
     {
-        var cut = SetUpDialog(out var dialogService);
+        var getCut = SetUpDialog(out var dialogService);
         var interaction = new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,
@@ -200,6 +200,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         {
             Title = "Upload"
         });
+        var cut = getCut();
         var files = Enumerable.Range(0, fileCount)
             .Select(i => (IBrowserFile)new TestBrowserFile($"file-{i}.txt"))
             .ToArray();

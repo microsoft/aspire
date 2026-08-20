@@ -67,7 +67,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task RunAsync_TokenCancelled_ShutsDownAndReturnsZero()
     {
-        // The standalone `aspire-managed dashboard` process relies on RunAsync honoring its cancellation
+        // The standalone Dashboard process relies on RunAsync honoring its cancellation
         // token so the parent-liveness watchdog can tear the dashboard down when the launching CLI dies.
         // Verify a running dashboard shuts down gracefully and reports success when the token is cancelled.
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(testOutputHelper);
@@ -295,7 +295,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         }).DefaultTimeout();
 
         // Assert
-        Assert.Contains(fileConfigDirectory, ex.Message);
+        Assert.Contains("The root directory for the FileProvider doesn't exist", ex.Message);
     }
 
     [Fact]

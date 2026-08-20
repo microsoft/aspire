@@ -1,11 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <!--
       CS8002: Referenced assembly does not have a strong name
     -->
     <NoWarn>$(NoWarn);CS8002</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);ASPDEPR004;ASPDEPR008;SYSLIB0057</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
