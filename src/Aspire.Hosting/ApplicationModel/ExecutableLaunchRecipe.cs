@@ -10,30 +10,83 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.ApplicationModel;
 
+/// <summary>
+/// Defines how a resource produces a complete executable launch plan for one start attempt.
+/// </summary>
 internal interface IExecutableLaunchRecipe
 {
+    /// <summary>
+    /// Creates the launch plan from the selected launch mechanism and resolved execution configuration.
+    /// </summary>
+    /// <param name="context">The context for the current resource start attempt.</param>
+    /// <returns>The complete launch plan.</returns>
     Task<ExecutableLaunchPlan> CreateLaunchPlanAsync(ExecutableLaunchContext context);
 }
 
+/// <summary>
+/// Associates a runnable resource with its single executable launch recipe.
+/// </summary>
+/// <param name="recipe">The recipe that creates launch plans for the resource.</param>
 internal sealed class ExecutableLaunchRecipeAnnotation(IExecutableLaunchRecipe recipe) : IResourceAnnotation
 {
+    /// <summary>
+    /// Gets the recipe that creates launch plans for the resource.
+    /// </summary>
     public IExecutableLaunchRecipe Recipe { get; } = recipe ?? throw new ArgumentNullException(nameof(recipe));
 }
 
+/// <summary>
+/// Specifies the mechanism selected to launch an executable resource.
+/// </summary>
 internal enum ExecutableLaunchMechanism
 {
+    /// <summary>
+    /// Launches the executable as a child process managed by DCP.
+    /// </summary>
     Process,
+
+    /// <summary>
+    /// Launches the executable through a connected IDE or extension host.
+    /// </summary>
     Ide
 }
 
+/// <summary>
+/// Identifies the semantic role of an argument in an executable launch plan.
+/// </summary>
 internal enum ExecutableLaunchArgumentRole
 {
+    /// <summary>
+    /// An argument that forms the tool invocation used to host the application.
+    /// </summary>
     LaunchTool,
+
+    /// <summary>
+    /// An application argument materialized from the selected launch profile.
+    /// </summary>
     LaunchProfile,
+
+    /// <summary>
+    /// An argument supplied directly to the launched application.
+    /// </summary>
     Application,
+
+    /// <summary>
+    /// An option applied to the launch tool rather than to the application.
+    /// </summary>
     ToolOption
 }
 
+/// <summary>
+/// Captures the launch mechanism and launch-configuration behavior selected before plan composition.
+/// </summary>
+/// <param name="mechanism">The mechanism selected for the current start attempt.</param>
+/// <param name="launchMode">The mode supplied to the active launch-configuration producer.</param>
+/// <param name="debugSupport">The active debug-support annotation, or <see langword="null"/>.</param>
+/// <param name="useCompatibilityProjectLaunchConfiguration">
+/// Whether to synthesize a project launch configuration for a legacy project without active debug support.
+/// </param>
+/// <param name="projectLaunchMode">The mode used for project launch metadata, or <paramref name="launchMode"/> when omitted.</param>
 internal sealed class ExecutableLaunchDecision(
     ExecutableLaunchMechanism mechanism,
     string launchMode,
@@ -41,17 +94,41 @@ internal sealed class ExecutableLaunchDecision(
     bool useCompatibilityProjectLaunchConfiguration = false,
     string? projectLaunchMode = null)
 {
+    /// <summary>
+    /// Gets the mechanism selected for the current start attempt.
+    /// </summary>
     public ExecutableLaunchMechanism Mechanism { get; } = mechanism;
 
+    /// <summary>
+    /// Gets the mode supplied to the active launch-configuration producer.
+    /// </summary>
     public string LaunchMode { get; } = launchMode ?? throw new ArgumentNullException(nameof(launchMode));
 
+    /// <summary>
+    /// Gets the mode used when producing project launch metadata.
+    /// </summary>
     public string ProjectLaunchMode { get; } = projectLaunchMode ?? launchMode;
 
+    /// <summary>
+    /// Gets the active debug-support annotation, or <see langword="null"/> when no producer is active.
+    /// </summary>
     public SupportsDebuggingAnnotation? DebugSupport { get; } = debugSupport;
 
+    /// <summary>
+    /// Gets a value indicating whether legacy project launch metadata should be synthesized.
+    /// </summary>
     public bool UseCompatibilityProjectLaunchConfiguration { get; } = useCompatibilityProjectLaunchConfiguration;
 }
 
+/// <summary>
+/// Provides the resolved inputs required to create an executable launch plan for one start attempt.
+/// </summary>
+/// <param name="resource">The resource being launched.</param>
+/// <param name="configuration">The AppHost configuration used by launch policy and compatibility behavior.</param>
+/// <param name="distributedApplicationOptions">The options for the distributed application.</param>
+/// <param name="executionConfiguration">The resolved arguments, environment variables, and related launch data.</param>
+/// <param name="decision">The launch decision selected before invoking the recipe.</param>
+/// <param name="cancellationToken">The token that cancels the current start attempt.</param>
 internal sealed class ExecutableLaunchContext(
     IResource resource,
     IConfiguration configuration,
@@ -60,19 +137,49 @@ internal sealed class ExecutableLaunchContext(
     ExecutableLaunchDecision decision,
     CancellationToken cancellationToken)
 {
+    /// <summary>
+    /// Gets the resource being launched.
+    /// </summary>
     public IResource Resource { get; } = resource ?? throw new ArgumentNullException(nameof(resource));
 
+    /// <summary>
+    /// Gets the AppHost configuration used by launch policy and compatibility behavior.
+    /// </summary>
     public IConfiguration Configuration { get; } = configuration ?? throw new ArgumentNullException(nameof(configuration));
 
+    /// <summary>
+    /// Gets the options for the distributed application.
+    /// </summary>
     public DistributedApplicationOptions DistributedApplicationOptions { get; } = distributedApplicationOptions ?? throw new ArgumentNullException(nameof(distributedApplicationOptions));
 
+    /// <summary>
+    /// Gets the resolved arguments, environment variables, and related launch data.
+    /// </summary>
     public IExecutionConfigurationResult ExecutionConfiguration { get; } = executionConfiguration ?? throw new ArgumentNullException(nameof(executionConfiguration));
 
+    /// <summary>
+    /// Gets the launch decision selected for the current start attempt.
+    /// </summary>
     public ExecutableLaunchDecision Decision { get; } = decision ?? throw new ArgumentNullException(nameof(decision));
 
+    /// <summary>
+    /// Gets the token that cancels the current start attempt.
+    /// </summary>
     public CancellationToken CancellationToken { get; } = cancellationToken;
 }
 
+/// <summary>
+/// Represents the immutable executable launch state rendered to DCP for one start attempt.
+/// </summary>
+/// <param name="command">The executable path or command name.</param>
+/// <param name="workingDirectory">The working directory for the executable.</param>
+/// <param name="mechanism">The selected launch mechanism.</param>
+/// <param name="arguments">
+/// The arguments for the selected mechanism, or <see langword="null"/> when an IDE should inherit launch-profile arguments.
+/// </param>
+/// <param name="environmentVariables">The resolved environment variables for the executable.</param>
+/// <param name="launchConfigurations">The serialized launch configurations supplied to an IDE.</param>
+/// <param name="displayArguments">The arguments projected into the dashboard command line.</param>
 internal sealed class ExecutableLaunchPlan(
     string command,
     string workingDirectory,
@@ -82,23 +189,53 @@ internal sealed class ExecutableLaunchPlan(
     IEnumerable<JsonElement> launchConfigurations,
     IEnumerable<ExecutableLaunchArgument> displayArguments)
 {
+    /// <summary>
+    /// Gets the executable path or command name.
+    /// </summary>
     public string Command { get; } = !string.IsNullOrWhiteSpace(command)
         ? command
         : throw new ArgumentException("The executable command cannot be null, empty, or whitespace.", nameof(command));
 
+    /// <summary>
+    /// Gets the working directory for the executable.
+    /// </summary>
     public string WorkingDirectory { get; } = workingDirectory ?? throw new ArgumentNullException(nameof(workingDirectory));
 
+    /// <summary>
+    /// Gets the selected launch mechanism.
+    /// </summary>
     public ExecutableLaunchMechanism Mechanism { get; } = mechanism;
 
+    /// <summary>
+    /// Gets the arguments for the selected mechanism, or <see langword="null"/> when they are inherited by the IDE.
+    /// </summary>
     public IReadOnlyList<string>? Arguments { get; } = arguments?.ToArray();
 
+    /// <summary>
+    /// Gets the resolved environment variables for the executable.
+    /// </summary>
     public IReadOnlyList<KeyValuePair<string, string>> EnvironmentVariables { get; } = environmentVariables.ToArray();
 
+    /// <summary>
+    /// Gets the serialized launch configurations supplied to an IDE.
+    /// </summary>
     public IReadOnlyList<JsonElement> LaunchConfigurations { get; } = launchConfigurations.ToArray();
 
+    /// <summary>
+    /// Gets the arguments projected into the dashboard command line.
+    /// </summary>
     public IReadOnlyList<ExecutableLaunchArgument> DisplayArguments { get; } = displayArguments.ToArray();
 }
 
+/// <summary>
+/// Represents a resolved argument and its execution and dashboard projections.
+/// </summary>
+/// <param name="value">The resolved argument value.</param>
+/// <param name="isSensitive">Whether the argument contains sensitive data.</param>
+/// <param name="executable">Whether the argument is included in the selected invocation.</param>
+/// <param name="display">Whether the argument is included in the dashboard command line.</param>
+/// <param name="effectiveArgumentIndex">The corresponding index in the DCP effective argument list, or <see langword="null"/>.</param>
+/// <param name="role">The semantic role of the argument.</param>
 internal sealed class ExecutableLaunchArgument(
     string value,
     bool isSensitive,
@@ -107,22 +244,48 @@ internal sealed class ExecutableLaunchArgument(
     int? effectiveArgumentIndex,
     ExecutableLaunchArgumentRole role)
 {
+    /// <summary>
+    /// Gets the resolved argument value.
+    /// </summary>
     public string Value { get; } = value ?? throw new ArgumentNullException(nameof(value));
 
+    /// <summary>
+    /// Gets a value indicating whether the argument contains sensitive data.
+    /// </summary>
     public bool IsSensitive { get; } = isSensitive;
 
+    /// <summary>
+    /// Gets a value indicating whether the argument is included in the selected invocation.
+    /// </summary>
     public bool Executable { get; } = executable;
 
+    /// <summary>
+    /// Gets a value indicating whether the argument is included in the dashboard command line.
+    /// </summary>
     public bool Display { get; } = display;
 
+    /// <summary>
+    /// Gets the corresponding index in the DCP effective argument list, or <see langword="null"/>.
+    /// </summary>
     public int? EffectiveArgumentIndex { get; } = effectiveArgumentIndex;
 
+    /// <summary>
+    /// Gets the semantic role of the argument.
+    /// </summary>
     public ExecutableLaunchArgumentRole Role { get; } = role;
 
+    /// <summary>
+    /// Creates a copy of the argument with a different effective argument index.
+    /// </summary>
+    /// <param name="effectiveArgumentIndex">The new effective argument index.</param>
+    /// <returns>The copied argument.</returns>
     public ExecutableLaunchArgument WithEffectiveArgumentIndex(int? effectiveArgumentIndex) =>
         new(Value, IsSensitive, Executable, Display, effectiveArgumentIndex, Role);
 }
 
+/// <summary>
+/// Creates launch plans for ordinary <see cref="ExecutableResource"/> instances.
+/// </summary>
 internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
 {
     public static DirectExecutableLaunchRecipe Instance { get; } = new();
@@ -227,6 +390,9 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
     }
 }
 
+/// <summary>
+/// Creates compatibility launch plans for legacy <see cref="ProjectResource"/> instances.
+/// </summary>
 internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
 {
     public static ProjectExecutableLaunchRecipe Instance { get; } = new();
