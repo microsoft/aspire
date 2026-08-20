@@ -20,6 +20,16 @@ internal static class WebSocketOriginValidator
             return false;
         }
 
+        // This prevents a page on another website from opening a WebSocket to the dashboard because the
+        // browser sends that page's origin, which won't match the dashboard's host.
+        //
+        // Request.Host is client-controlled, so this same-origin check does not prevent DNS rebinding. In
+        // authenticated modes, dashboard cookies are host-scoped and aren't sent to the attacker's host;
+        // authorization remains the security boundary for sensitive data and operations. Deployments using
+        // unsecured mode must rely on network isolation or host filtering to prevent rebinding access.
+        //
+        // The security documentation discusses hardening host access when anonymous access is enabled:
+        // https://aspire.dev/dashboard/security-considerations/
         var expectedHost = context.Request.Host;
         if (!expectedHost.HasValue)
         {
