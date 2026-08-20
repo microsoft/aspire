@@ -461,7 +461,6 @@ public static class AzureCosmosExtensions
     /// <returns>Cosmos emulator resource builder.</returns>
     /// <remarks>
     /// The separate Data Explorer endpoint configured by this method is only available with <see cref="RunAsEmulator(IResourceBuilder{AzureCosmosDBResource}, Action{IResourceBuilder{AzureCosmosDBEmulatorResource}})"/>.
-    /// The classic emulator used by <see cref="RunAsClassicEmulator"/> instead exposes its built-in Data Explorer at <c>/_explorer/index.html</c>.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<AzureCosmosDBEmulatorResource> WithDataExplorer(this IResourceBuilder<AzureCosmosDBEmulatorResource> builder, int? port = null)
