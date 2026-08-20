@@ -219,7 +219,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     private async Task InitializeTerminalCoreAsync(string endpoint)
     {
-        var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "Components/Controls/TerminalView.razor.js");
+        var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), Assets["Components/Controls/TerminalView.razor.js"]);
         _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
         if (_disposed)
         {

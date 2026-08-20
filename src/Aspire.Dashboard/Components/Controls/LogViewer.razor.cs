@@ -6,7 +6,6 @@ using System.Text;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
-using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
@@ -21,10 +20,18 @@ namespace Aspire.Dashboard.Components;
 public sealed partial class LogViewer
 {
     private const string ScrollContainerId = "logScrollContainer";
+    private static readonly IEqualityComparer<LogEntry> s_logEntryComparer = EqualityComparer<LogEntry>.Create(
+        static (x, y) => ReferenceEquals(x, y) ||
+            (x is not null && y is not null && x.Type is not LogEntryType.Pause && x.Type == y.Type && x.LineNumber == y.LineNumber),
+        // Line numbers distinguish identical log messages after insertion. Pause rows don't receive
+        // line numbers, so preserve instance identity for them.
+        static item => item.Type is LogEntryType.Pause
+            ? ReferenceEqualityComparer.Instance.GetHashCode(item)
+            : HashCode.Combine(item.Type, item.LineNumber));
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
+    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private LogEntries? _logEntries;
-    private bool _logsChanged;
 
     private IList<LogEntry>? _visibleEntriesCache;
     private string? _appliedFilterText;
@@ -35,9 +42,6 @@ public sealed partial class LogViewer
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
-
-    [Inject]
-    public required DimensionManager DimensionManager { get; init; }
 
     [Inject]
     public required ILogger<LogViewer> Logger { get; init; }
@@ -69,20 +73,7 @@ public sealed partial class LogViewer
     [Parameter]
     public string? FilterText { get; set; }
 
-    private Virtualize<LogEntry>? VirtualizeRef
-    {
-        get => field;
-        set
-        {
-            field = value;
-
-            // Set max item count when the Virtualize component is set.
-            if (field != null)
-            {
-                VirtualizeHelper<LogEntry>.TrySetMaxItemCount(field, 10_000);
-            }
-        }
-    }
+    private Virtualize<LogEntry>? VirtualizeRef { get; set; }
 
     public async Task RefreshDataAsync()
     {
@@ -110,7 +101,6 @@ public sealed partial class LogViewer
         {
             Logger.LogDebug("Log entries changed.");
 
-            _logsChanged = true;
             _logEntries = LogEntries;
             _visibleEntriesCache = null;
         }
@@ -147,6 +137,12 @@ public sealed partial class LogViewer
     private ValueTask<ItemsProviderResult<LogEntry>> GetItems(ItemsProviderRequest r)
     {
         var entries = GetVisibleEntries();
+
+        if (_endAnchorItemsProviderState.GetInitialResult(r.StartIndex, entries, entries.Count) is { } initialResult)
+        {
+            return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(initialResult.Items, initialResult.TotalItemCount));
+        }
+
         return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(entries.Skip(r.StartIndex).Take(r.Count), entries.Count));
     }
 
@@ -230,11 +226,8 @@ public sealed partial class LogViewer
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_logsChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _logsChanged = false;
-        }
+        var refreshForEndAnchor = _endAnchorItemsProviderState.TryBeginRefresh();
+
         if (_visibleEntriesChanged)
         {
             _visibleEntriesChanged = false;
@@ -245,25 +238,18 @@ public sealed partial class LogViewer
             // force a second full scan of the log buffer.
             await RefreshVirtualizeAsync();
         }
+        else if (refreshForEndAnchor)
+        {
+            await RefreshVirtualizeAsync();
+        }
         if (firstRender)
         {
             Logger.LogDebug("Initializing log viewer.");
 
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
             // Focus the scroll container without showing the focus ring. The container is a large
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
-    }
-
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
     }
 
     private string GetDisplayTimestamp(DateTimeOffset timestamp)
@@ -278,11 +264,4 @@ public sealed partial class LogViewer
         return $"log-container console-container {(NoWrapLogs ? "wrap-log-container" : null)}";
     }
 
-    public ValueTask DisposeAsync()
-    {
-        Logger.LogDebug("Disposing log viewer.");
-
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
-        return ValueTask.CompletedTask;
-    }
 }

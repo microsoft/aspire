@@ -52,7 +52,7 @@ public class LayoutProcessRunnerTests
     [Fact]
     public async Task StartAsync_InjectsOrphanDetectionEnvironment()
     {
-        // StartAsync launches long-lived children (aspire-managed dashboard for `aspire dashboard run`
+        // StartAsync launches long-lived children (the Native AOT Dashboard for `aspire dashboard run`
         // and the profiling collector), so it must stamp the same orphan-detection identity as RunAsync
         // or those children cannot self-terminate when the CLI is hard-killed.
         IDictionary<string, string>? capturedEnv = null;
@@ -231,7 +231,7 @@ public class LayoutProcessRunnerTests
     public async Task StartAsync_WhenKillOnParentExit_DisarmsCooperativeWatchdogOnWindowsOnly()
     {
         // Same mutual-exclusion contract as RunAsync above, for the long-lived StartAsync helpers
-        // (aspire-managed dashboard, profiling collector).
+        // (Dashboard, profiling collector).
         IDictionary<string, string>? capturedEnv = null;
         ProcessInvocationOptions? capturedOptions = null;
         var factory = new TestProcessExecutionFactory

@@ -902,7 +902,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record PendingMetricExemplarAttribute(long ExemplarId, int Ordinal, string Key, string Value);
 
-    private sealed class InsertedMetricExemplarRecord
+    internal sealed class InsertedMetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
         public required long PointId { get; init; }
@@ -937,7 +937,7 @@ public sealed partial class SqliteTelemetryRepository
         public List<Exemplar> Exemplars { get; } = [];
     }
 
-    private sealed class MetricDimensionStateRecord
+    internal sealed class MetricDimensionStateRecord
     {
         public required long DimensionId { get; init; }
         public string? AttributeKey { get; init; }
@@ -951,7 +951,7 @@ public sealed partial class SqliteTelemetryRepository
         public byte[]? HistogramBucketCounts { get; init; }
     }
 
-    private class MetricPointRecord
+    internal class MetricPointRecord
     {
         public required long PointId { get; init; }
         public required int PointType { get; init; }

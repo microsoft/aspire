@@ -64,10 +64,11 @@
                                                 HeaderCellAsButtonWithMenu="true"
                                                 ResizeType="DataGridResizeType.Discrete"
                                                 Virtualize="true"
+                                                AnchorMode="VirtualizeAnchorMode.End"
                                                 RowClass="@GetRowClass"
                                                 GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                                 ItemSize="46"
-                                                OverscanCount="100"
+                                                OverscanCount="50"
                                                 ResizableColumns="true"
                                                 ResizeColumnOnAllRows="false"
                                                 ItemsProvider="@GetData"
@@ -76,6 +77,7 @@
                                                 GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                 ShowHover="true"
                                                 ItemKey="@(r => r.InternalId)"
+                                                ItemComparer="@s_logSummaryComparer"
                                                 OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, focusElementId: ScrollContainerId)))"
                                                 Class="main-grid enable-row-click aspire-scroll-border-grid">
                                     <ChildContent>

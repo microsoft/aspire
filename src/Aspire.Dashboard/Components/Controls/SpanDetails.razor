@@ -84,7 +84,7 @@
                         @if (context.Attributes.Length > 0)
                         {
                             <PropertyGrid TItem="OtlpSpanAttributeItem"
-                                          Items="@context.Attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value)).AsQueryable()"
+                                          Items="@context.Attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value))"
                                           GridTemplateColumns="1fr 2fr"
                                           IsNameSortable="false"
                                           IsValueSortable="false"
@@ -101,7 +101,7 @@
                                 ResizeType="DataGridResizeType.Discrete"
                                 ResizableColumns="true"
                                 TGridItem="SpanLinkViewModel"
-                                Items="@FilteredSpanLinks"
+                                ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredSpanLinks)"
                                 Style="width:100%"
                                 RowSize="DataGridRowSize.Medium"
                                 GridTemplateColumns="4fr 1fr"
@@ -125,7 +125,7 @@
                                 ResizeType="DataGridResizeType.Discrete"
                                 ResizableColumns="true"
                                 TGridItem="SpanLinkViewModel"
-                                Items="@FilteredSpanBacklinks"
+                                ItemsProvider="@EnumerableGridItemsProvider.Create(() => FilteredSpanBacklinks)"
                                 Style="width:100%"
                                 RowSize="DataGridRowSize.Medium"
                                 GridTemplateColumns="4fr 1fr"
@@ -164,7 +164,7 @@
         @if (context.Attributes.Length > 0)
         {
             <PropertyGrid TItem="OtlpSpanAttributeItem"
-                          Items="@context.Attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value)).AsQueryable()"
+                          Items="@context.Attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value))"
                           GridTemplateColumns="1fr 2fr"
                           IsNameSortable="false"
                           IsValueSortable="false"

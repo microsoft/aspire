@@ -33,7 +33,7 @@ public abstract class BrowserStorageBase : IBrowserStorage
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
             return new StorageResult<TValue>(false, default);
         }

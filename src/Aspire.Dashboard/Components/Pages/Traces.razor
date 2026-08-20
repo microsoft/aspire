@@ -101,10 +101,11 @@
                                     HeaderCellAsButtonWithMenu="true"
                                     ResizeType="DataGridResizeType.Discrete"
                                     Virtualize="true"
+                                    AnchorMode="VirtualizeAnchorMode.End"
                                     RowClass="@GetRowClass"
                                     GenerateHeader="DataGridGeneratedHeaderType.Sticky"
                                     ItemSize="46"
-                                    OverscanCount="100"
+                                    OverscanCount="50"
                                     ResizableColumns="true"
                                     ResizeColumnOnAllRows="false"
                                     ItemsProvider="@GetData"
@@ -113,6 +114,7 @@
                                     GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                     ShowHover="true"
                                     ItemKey="@(r => r.TraceId)"
+                                    ItemComparer="@s_traceSummaryComparer"
                                     OnRowClick="@(r => r.ExecuteOnDefault(d => NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(d.TraceId))))"
                                     Class="main-grid enable-row-click aspire-scroll-border-grid">
                         <ChildContent>
