@@ -685,10 +685,21 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // The Deployment spec must not carry the credential in any form. This is the whole point
             // of the secret reference: the spec and its rollout history are readable by anyone with
             // `get deployment` in the namespace.
+            //
+            // Setup and assertion are deliberately separate commands. Bash binds `||` to the entire
+            // preceding `&&` chain, so folding the fetches into the grep would let any setup failure
+            // — a missing deployment, an empty secret, a failed base64 decode — short-circuit
+            // straight to the NOPLAINTEXT_OK marker and report success without ever running the
+            // check. Each setup step is verified by its own success prompt first.
             await auto.TypeAsync(
                 $"kubectl get deployment -n {radiusNamespace} $WEB_DEPLOY -o json > /tmp/webdeploy.json && " +
                 "kubectl get secret -n " + radiusNamespace + " \"$MQ_SECRET\" -o jsonpath='{.data.QUEUE_PASSWORD}' | base64 -d > /tmp/mqpw.txt && " +
-                "MQ_PASSWORD=$(cat /tmp/mqpw.txt) && test -n \"$MQ_PASSWORD\" && " +
+                "MQ_PASSWORD=$(cat /tmp/mqpw.txt) && test -n \"$MQ_PASSWORD\" && echo \"fetched deployment spec and a ${#MQ_PASSWORD}-char password\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+
+            // Only the grep's own result can select a marker here.
+            await auto.TypeAsync(
                 "grep -q -- \"$MQ_PASSWORD\" /tmp/webdeploy.json && echo LEAKED || echo NOPLAINTEXT''_OK");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("NOPLAINTEXT_OK", timeout: TimeSpan.FromSeconds(120));

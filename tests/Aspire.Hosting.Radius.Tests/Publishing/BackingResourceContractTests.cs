@@ -63,6 +63,54 @@ public class BackingResourceContractTests
     }
 
     /// <summary>
+    /// Every backing type the mapper emits must also have a default recipe, and each recipe's
+    /// registry prefix must match its type's namespace.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The recipe table has none of the compile-time protection the schema table has, yet it is the
+    /// table a mapping change is most likely to outrun. A missing entry, or a <c>Radius.*</c> UDT
+    /// pointed at a legacy <c>recipes/local-dev/</c> recipe, surfaces only as a
+    /// <c>RecipeDownloadFailed</c> at <c>rad deploy</c> — in the deploy E2E job or in a user's
+    /// cluster, never at publish time.
+    /// </para>
+    /// <para>
+    /// The prefix half matters as much as the presence half: <c>Radius.*</c> UDT recipes are
+    /// published under <c>kube-recipes/</c>, and only those recipes read the credentials Aspire
+    /// sets from <c>context.resource.properties</c>. Pairing a UDT with a local-dev recipe both
+    /// fails to pull and would ignore those credentials.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryEmittedBackingType_HasADefaultRecipeWithAMatchingPrefix()
+    {
+        const string UdtPrefix = "ghcr.io/radius-project/kube-recipes/";
+        const string LegacyPrefix = "ghcr.io/radius-project/recipes/local-dev/";
+
+        var recipes = RadiusInfrastructureBuilder.DefaultRecipeTemplates;
+
+        var missing = ResourceTypeMapper.GetEmittedBackingTypes()
+            .Where(t => !recipes.ContainsKey(t.EmittedType))
+            .Select(t => $"{t.MappingKey} -> {t.EmittedType}")
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Empty(missing);
+
+        // Checked over the whole table rather than only the emitted types so a row that is dead
+        // today still cannot ship the wrong pairing for the day the legacy fallback is dropped.
+        var mismatched = recipes
+            .Where(kvp => !kvp.Value.StartsWith(
+                kvp.Key.StartsWith("Radius.", StringComparison.Ordinal) ? UdtPrefix : LegacyPrefix,
+                StringComparison.Ordinal))
+            .Select(kvp => $"{kvp.Key} -> {kvp.Value}")
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Empty(mismatched);
+    }
+
+    /// <summary>
     /// The guard applies to every entry point, so a Kubernetes, Azure Container Apps, or Azure App
     /// Service consumer that reaches a Radius-owned backing resource through
     /// <c>ComputeEnvironmentEndpointResolver</c> gets the same accurate failure the Radius publisher

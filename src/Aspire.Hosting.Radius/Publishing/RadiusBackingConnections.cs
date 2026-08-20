@@ -186,7 +186,7 @@ internal static class RadiusBackingConnections
 
         // Deliberately absent: Radius.Data/sqlServerDatabases. The contrib manifest exists, but its
         // Kubernetes recipe is not published (ghcr.io/radius-project/kube-recipes/sqlserverdatabases
-        // returns 403), so ResourceTypeMapper still emits the legacy type above. Adding the row here
+        // does not exist), so ResourceTypeMapper still emits the legacy type above. Adding the row here
         // without a deployable recipe would only make the unreachable path look supported.
 
         // Dapr types are backing resources by classification but are consumed through the Dapr
