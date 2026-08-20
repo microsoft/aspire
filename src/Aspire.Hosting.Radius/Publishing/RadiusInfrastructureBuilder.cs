@@ -104,6 +104,19 @@ internal sealed class RadiusInfrastructureBuilder
     private readonly List<ProjectedEnvValue> _projectedEnvValues = [];
     private readonly List<ProjectedTypeProperty> _projectedTypeProperties = [];
 
+    // Names of resources whose connection string was actually resolved into some *other* resource's
+    // value during this publish. This is the observed counterpart to the annotation-derived
+    // GetReferencedResourceNames: a `WithEnvironment(ctx => ...)` callback that composes a
+    // connection string inline records no ResourceRelationshipAnnotation, so annotations alone
+    // report such a consumer as unreferenced. Populated while environment values are resolved, and
+    // therefore only complete after every container's environment has been built.
+    private readonly HashSet<string> _resolvedConnectionStringConsumption = new(StringComparer.Ordinal);
+
+    // Backing resources whose emitted type cannot create the AddDatabase(...) children the model
+    // declares. Collected while credentials are applied and reported once environment resolution has
+    // finished, so callback-only consumers are seen. See WarnForDatabasesNotCreatedByTheRecipe.
+    private readonly List<(IResource Resource, string RadiusType)> _databasesNotCreatedByTheRecipe = [];
+
     // Radius.Security/secrets resources emitted to carry a credential that a UDT backing resource
     // consumes by resource ID, paired with the resource and property that consume them. Recorded so
     // a ConfigureRadiusInfrastructure callback that renames either side can be repaired — the
@@ -420,6 +433,11 @@ internal sealed class RadiusInfrastructureBuilder
                     ((IBicepValue)kv.Value.Protocol).LiteralValue is string literalProtocol ? literalProtocol : string.Empty),
                 StringComparer.Ordinal);
         }
+
+        // Every container's environment has now been resolved, so consumption of a database child
+        // through a WithEnvironment callback (which records no reference annotation) is finally
+        // visible. Report the databases the recipe cannot create against that complete picture.
+        WarnForDatabasesNotCreatedByTheRecipe(GetReferencedResourceNames());
 
         // A container whose environment carries a credential emits its own Radius.Security/secrets
         // resource, and that is only known once every container's environment has been resolved —
@@ -812,7 +830,8 @@ internal sealed class RadiusInfrastructureBuilder
                     $"Radius resource '{credential.Consumer.BicepIdentifier}' reads its '{credential.PropertyName}' from " +
                     $"the '{RadiusResourceTypes.SecuritySecrets}' resource '{credential.OriginalSecretIdentifier}', but a " +
                     $"ConfigureRadiusInfrastructure callback removed it. The property is required, so the deployment would " +
-                    $"be rejected. Keep the secret, or set '{credential.PropertyName}' explicitly in the callback. " +
+                    $"be rejected. Keep the secret: '{credential.PropertyName}' is a schema property the publisher owns " +
+                    $"and it cannot be assigned from a callback. " +
                     $"Diagnostic: ASPIRERADIUS074.");
             }
 
@@ -1442,7 +1461,7 @@ internal sealed class RadiusInfrastructureBuilder
                     break;
             }
 
-            WarnIfDatabaseIsNotCreatedByTheRecipe(resource, radiusType, referencedResourceNames);
+            RecordIfDatabaseIsNotCreatedByTheRecipe(resource, radiusType);
         }
     }
 
@@ -1538,36 +1557,60 @@ internal sealed class RadiusInfrastructureBuilder
     /// <para>
     /// Scoped to <em>referenced</em> children, matching the <c>ASPIRERADIUS072</c> precedent: an
     /// unreferenced <c>AddDatabase(...)</c> is inert and produces no consumer connection string.
+    /// "Referenced" is the union of two signals, because neither is complete on its own: the
+    /// <see cref="ResourceRelationshipAnnotation"/>s that <c>WithReference</c> records, and the
+    /// consumption actually observed while resolving environment values. A
+    /// <c>WithEnvironment(ctx =&gt; ctx.EnvironmentVariables["CS"] = db)</c> callback builds its
+    /// value inline and records no annotation, so it is invisible to the first signal; the second
+    /// only becomes complete after every container's environment has been resolved, which is why
+    /// this runs as a deferred pass rather than inline with the credential wiring.
+    /// </para>
+    /// <para>
+    /// One narrow gap remains, in both signals: a callback that assigns the child's
+    /// <c>ConnectionStringExpression</c> itself rather than the child. That expression is composed
+    /// from the <em>server's</em> expression plus the database name as a literal, so the child never
+    /// appears as a node while resolving and there is nothing to attribute the use to.
     /// </para>
     /// </remarks>
-    private void WarnIfDatabaseIsNotCreatedByTheRecipe(
-        IResource resource,
-        string radiusType,
-        HashSet<string> referencedResourceNames)
+    private void RecordIfDatabaseIsNotCreatedByTheRecipe(IResource resource, string radiusType)
     {
         if (!string.Equals(radiusType, RadiusResourceTypes.LegacySqlDatabases, StringComparison.Ordinal))
         {
             return;
         }
 
-        var referenced = FindDatabaseChildren(resource)
-            .Where(d => referencedResourceNames.Contains(d.Name))
-            .Select(d => d.Name)
-            .ToList();
+        _databasesNotCreatedByTheRecipe.Add((resource, radiusType));
+    }
 
-        if (referenced.Count == 0)
+    /// <summary>
+    /// Emits the <c>ASPIRERADIUS080</c> warnings recorded by
+    /// <see cref="RecordIfDatabaseIsNotCreatedByTheRecipe"/>, once every consumer of a database
+    /// child is known.
+    /// </summary>
+    private void WarnForDatabasesNotCreatedByTheRecipe(HashSet<string> referencedResourceNames)
+    {
+        foreach (var (resource, radiusType) in _databasesNotCreatedByTheRecipe)
         {
-            return;
-        }
+            var referenced = FindDatabaseChildren(resource)
+                .Where(d => referencedResourceNames.Contains(d.Name) ||
+                            _resolvedConnectionStringConsumption.Contains(d.Name))
+                .Select(d => d.Name)
+                .ToList();
 
-        _logger.LogWarning(
-            "Radius resource '{ResourceName}' is emitted as '{RadiusType}', whose recipe starts a SQL Server but does " +
-            "not create databases. Consumers of '{Databases}' receive a connection string naming a database the " +
-            "deployment will not contain unless the application creates it itself. Have the application create the " +
-            "database on startup, or deploy SQL Server outside the Radius environment. Diagnostic: ASPIRERADIUS080.",
-            resource.Name,
-            radiusType,
-            string.Join("', '", referenced));
+            if (referenced.Count == 0)
+            {
+                continue;
+            }
+
+            _logger.LogWarning(
+                "Radius resource '{ResourceName}' is emitted as '{RadiusType}', whose recipe starts a SQL Server but does " +
+                "not create databases. Consumers of '{Databases}' receive a connection string naming a database the " +
+                "deployment will not contain unless the application creates it itself. Have the application create the " +
+                "database on startup, or deploy SQL Server outside the Radius environment. Diagnostic: ASPIRERADIUS080.",
+                resource.Name,
+                radiusType,
+                string.Join("', '", referenced));
+        }
     }
 
     /// <summary>
@@ -2336,8 +2379,9 @@ internal sealed class RadiusInfrastructureBuilder
                 resource,
                 $"The '{key}' connection property of Radius resource '{resource.Name}' could not be resolved at publish " +
                 $"time: {ex.Message} That value is written onto the emitted Radius type, so it cannot be skipped. " +
-                $"Supply the value with a parameter or a literal, or set it explicitly with " +
-                $"ConfigureRadiusInfrastructure. Diagnostic: ASPIRERADIUS086.",
+                $"Supply the value with a parameter or a literal in the app model — the property is written by the " +
+                $"publisher and cannot be assigned from a ConfigureRadiusInfrastructure callback. " +
+                $"Diagnostic: ASPIRERADIUS086.",
                 ex);
         }
 
@@ -3176,9 +3220,11 @@ internal sealed class RadiusInfrastructureBuilder
                 // exactly the ones the substitution is meant to rewrite, so the referenced resource
                 // becomes the context here — otherwise every consumer of `.WithReference(cache)`
                 // would be reported as an unrelated use of the cache's own password.
+                RecordConnectionStringConsumption(connectionStringReference.Resource, owner);
                 await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, connectionStringReference.Resource, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
+                RecordConnectionStringConsumption(resourceWithConnectionString, owner);
                 await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, resourceWithConnectionString, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case ReferenceExpression referenceExpression:
@@ -3233,6 +3279,28 @@ internal sealed class RadiusInfrastructureBuilder
                 parts.Add(EnvPart.FromLiteral(value.ToString() ?? string.Empty));
                 return;
         }
+    }
+
+    /// <summary>
+    /// Records that <paramref name="consumed"/>'s connection string was resolved into a value
+    /// belonging to some other resource, which is the only signal available for a consumer created
+    /// by a <c>WithEnvironment</c> callback that builds its value inline (no
+    /// <see cref="ResourceRelationshipAnnotation"/> is recorded for one).
+    /// </summary>
+    /// <remarks>
+    /// A resource resolving its own connection string is not consumption: the publisher does that
+    /// itself while wiring credentials onto the emitted Radius type. The parent check covers the
+    /// same case one level up, where a database child's expression is composed from its server's.
+    /// </remarks>
+    private void RecordConnectionStringConsumption(IResourceWithConnectionString consumed, IResource owner)
+    {
+        if (ReferenceEquals(consumed, owner) ||
+            ReferenceEquals(ResolveToParent(consumed), owner))
+        {
+            return;
+        }
+
+        _resolvedConnectionStringConsumption.Add(consumed.Name);
     }
 
     /// <summary>
@@ -3526,10 +3594,11 @@ internal sealed class RadiusInfrastructureBuilder
                 if (!liveInstances.Contains(target))
                 {
                     throw new InvalidOperationException(
-                        $"Recipe parameter '{projected.Key}' on Radius resource '{projected.Owner.BicepIdentifier}' reads " +
+                        $"Connection property '{projected.Key}' on Radius resource '{projected.Owner.BicepIdentifier}' reads " +
                         $"connection information from Radius resource '{target.BicepIdentifier}', but a " +
-                        $"ConfigureRadiusInfrastructure callback removed or replaced that resource. Keep the resource, or " +
-                        $"set '{projected.Key}' explicitly in the callback. Diagnostic: ASPIRERADIUS074.");
+                        $"ConfigureRadiusInfrastructure callback removed or replaced that resource. Keep the resource: " +
+                        $"'{projected.Key}' is a schema property the publisher owns and it cannot be assigned from a " +
+                        $"callback. Diagnostic: ASPIRERADIUS074.");
                 }
 
                 if (!string.Equals(target.BicepIdentifier, originalIdentifier, StringComparison.Ordinal))
