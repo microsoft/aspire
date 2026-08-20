@@ -59,6 +59,12 @@
       package baseline validation), which flags any change to the shipped surface, forcing a
       deliberate decision about whether the change is additive (no bump) or breaking (bump).
 
+      An additive member is not automatically safe for SDK-side codegen that can run against an
+      older CLI bundle with the same frozen identity. Newer codegen must capability-probe the
+      member before invoking it; otherwise the older force-shared contract binds successfully and
+      the direct member call fails with MissingMethodException. See
+      https://github.com/microsoft/aspire/issues/19503.
+
       Only AssemblyVersion is frozen; FileVersion, InformationalVersion, and the NuGet package
       version remain build-derived so diagnostics keep real build identities. Aspire.TypeSystem is
       consumed only via ProjectReference (no PackageReference consumers), so the frozen

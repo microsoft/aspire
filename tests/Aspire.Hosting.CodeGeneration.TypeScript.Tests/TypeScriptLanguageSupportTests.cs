@@ -265,6 +265,18 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public void SetCertificateBundleEnvironmentVariableIfSupported_IgnoresLegacyRuntimeSpec()
+    {
+        var legacyRuntimeSpec = new LegacyRuntimeSpec();
+
+        TypeScriptLanguageSupport.SetCertificateBundleEnvironmentVariableIfSupported(
+            legacyRuntimeSpec,
+            "NODE_EXTRA_CA_CERTS");
+
+        Assert.NotNull(legacyRuntimeSpec);
+    }
+
+    [Fact]
     public void Scaffold_EmitsScaffoldedEslintConfigVerbatim()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -312,5 +324,9 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
     {
         Assert.InRange(port, minInclusive, maxExclusive - 1);
         Assert.True(port < WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
+    }
+
+    private sealed class LegacyRuntimeSpec
+    {
     }
 }
