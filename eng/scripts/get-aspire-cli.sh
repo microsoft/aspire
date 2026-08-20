@@ -531,7 +531,7 @@ write_install_sidecar() {
     local temporary_path
 
     mkdir -p "$install_path"
-    temporary_path=$(mktemp "$sidecar_path.XXXXXXXX.tmp")
+    temporary_path=$(mktemp "$sidecar_path.tmp.XXXXXXXX")
 
     if [[ -n "$quality" ]]; then
         local channel

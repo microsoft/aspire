@@ -665,10 +665,9 @@ internal sealed class UpdateCommand : BaseCommand
 
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
-        // If channel is not specified, prompt the user to select one. The choice
-        // applies only to this self-update invocation; subsequent 'aspire new'
-        // and 'aspire init' commands resolve channel per-project from
-        // aspire.config.json, not from any global setting.
+        // If channel is not specified, prompt the user to select one. Installs with a route
+        // sidecar persist the choice as CLI identity for later implicit updates. This does not
+        // create a global project setting; project channels remain configured in aspire.config.json.
         if (string.IsNullOrEmpty(channel))
         {
             var isStagingEnabled = IsStagingChannelAvailable();

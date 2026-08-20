@@ -210,7 +210,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task WriteInstallSidecar_LegacyPowerShell_CreatesOrReplacesSidecar(bool sidecarExists)
+    public async Task WriteInstallSidecar_WithoutFileMoveOverwrite_CreatesOrReplacesSidecar(bool sidecarExists)
     {
         using var env = new TestEnvironment();
         var installPath = Path.Combine(env.TempDirectory, "install");
@@ -221,11 +221,11 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             await File.WriteAllTextAsync(sidecarPath, """{"source":"old"}""");
         }
 
-        // CI runs these tests with pwsh. Force the legacy branch to exercise the APIs used by
-        // Windows PowerShell 4/5.1 without requiring those hosts on every test platform.
+        // CI runs these tests with PowerShell 7+. Force the compatibility branch used by
+        // PowerShell 6 and Windows PowerShell 4/5.1 without requiring those hosts in CI.
         using var cmd = new ScriptFunctionCommand(
             s_scriptPath,
-            $"$Script:IsModernPowerShell = $false; Write-InstallSidecar -InstallPath '{installPath}' -Quality 'staging'",
+            $"$Script:SupportsFileMoveOverwrite = $false; Write-InstallSidecar -InstallPath '{installPath}' -Quality 'staging'",
             env,
             _testOutput);
 

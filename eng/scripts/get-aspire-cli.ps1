@@ -39,6 +39,7 @@ param(
 # Global constants
 $Script:UserAgent = "get-aspire-cli.ps1/1.0"
 $Script:IsModernPowerShell = $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.PSEdition -eq "Core"
+$Script:SupportsFileMoveOverwrite = $Script:IsModernPowerShell -and $PSVersionTable.PSVersion.Major -ge 7
 $Script:ArchiveDownloadTimeoutSec = 600
 $Script:ChecksumDownloadTimeoutSec = 120
 $Script:ExtensionArtifactName = "aspire-vscode.vsix.zip"
@@ -809,12 +810,13 @@ function Write-InstallSidecar {
     [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
     try {
         [System.IO.File]::WriteAllText($temporaryPath, "$payload`n")
-        if ($Script:IsModernPowerShell) {
+        if ($Script:SupportsFileMoveOverwrite) {
             [System.IO.File]::Move($temporaryPath, $sidecarPath, $true)
         }
         else {
             # File.Move(source, destination, overwrite) was added in .NET Core 3 and is unavailable
-            # to Windows PowerShell 4/5.1. File.Replace provides atomic overwrite on .NET Framework.
+            # to PowerShell 6 and Windows PowerShell 4/5.1. File.Replace provides a compatible
+            # atomic overwrite on those runtimes.
             if ([System.IO.File]::Exists($sidecarPath)) {
                 # PowerShell binds a null backup argument as an empty path for File.Replace, so use
                 # a unique same-directory backup and remove it after the atomic replacement.

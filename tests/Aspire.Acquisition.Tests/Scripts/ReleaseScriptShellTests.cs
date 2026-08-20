@@ -163,6 +163,26 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task WriteInstallSidecar_UsesPortableMktempTemplate()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+
+        // BSD mktemp only expands a trailing X run. Reject non-portable templates even on
+        // GNU mktemp, which also accepts a suffix after the X run.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"mktemp() {{ case \"$1\" in *XXXXXXXX) command mktemp \"$1\" ;; *) return 64 ;; esac; }}; write_install_sidecar '{installPath}' 'staging'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(File.Exists(Path.Combine(installPath, ".aspire-install.json")));
+    }
+
+    [Fact]
     public async Task OsOverride_IsRecognized()
     {
         using var env = new TestEnvironment();
