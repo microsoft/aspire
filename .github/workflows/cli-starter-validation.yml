@@ -57,6 +57,10 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install CLI smoke harness dependencies
+        run: npm ci
+        working-directory: eng/scripts/cli-platform-smoke
+
       - name: Install Aspire CLI from PR dogfood script
         shell: pwsh
         env:
