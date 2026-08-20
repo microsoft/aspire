@@ -33,11 +33,9 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner }}
-    # Shared budget for every caller of this reusable workflow. The validation script can spend
-    # up to four startup waits (run + start for two templates) and three resource waits, which is
-    # 27 minutes on the current Windows ARM64 input set before template creation, package add, log
-    # collection, and artifact upload. Keep the job timeout above that aggregate budget.
-    timeout-minutes: 45
+    # Each command scenario owns an isolated project, so the slowest matrix entries can create up
+    # to eight projects and perform five AppHost startups before diagnostics are uploaded.
+    timeout-minutes: 70
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -75,9 +73,9 @@ jobs:
           aspire --version
 
       - name: Create starter app and validate startup
-        # Leave headroom above the script's aggregate wait budget so slower runs can still finish
-        # template creation, aspire add, and cleanup instead of being cancelled mid-validation.
-        timeout-minutes: 40
+        # Atomic scenarios trade shared setup for deterministic isolation, so leave enough time for
+        # repeated template restore and startup on the ARM64 runners.
+        timeout-minutes: 65
         shell: pwsh
         env:
           PR_NUMBER: ${{ inputs.prNumber }}

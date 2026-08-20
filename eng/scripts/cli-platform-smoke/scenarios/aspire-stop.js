@@ -1,51 +1,58 @@
 'use strict';
 
-const fs = require('fs');
-
 const { buildAspireCommand } = require('../lib/aspire-command');
 const { runInteractiveCommand } = require('../lib/run-interactive-command');
+const { createStarterProject } = require('../scriptlets/create-starter-project');
+const { startAppHost } = require('../scriptlets/start-apphost');
+const { stopAppHost } = require('../scriptlets/stop-apphost');
 
 async function runAspireStop({
   aspireCommand,
-  cwd,
+  channel,
   diagnosticsDir,
-  fileName = 'aspire-stop.log',
+  maxStartupSeconds,
+  projectRoot,
+  scenarioRoot,
+  template,
   timeoutMs
 }) {
-  await runInteractiveCommand({
-    cwd,
+  await createStarterProject({
+    aspireCommand,
+    channel,
     diagnosticsDir,
-    fileName,
-    command: buildAspireCommand(aspireCommand, ['stop']),
-    timeoutMs,
-    interact: async run => {
-      await run.waitForAnyText(
-        ['Running instance stopped successfully.', 'No running AppHost found.'],
-        timeoutMs,
-        'AppHost stop result');
-    }
+    projectRoot,
+    scenarioRoot,
+    template
   });
-}
-
-async function cleanupProject(projectRoot, diagnosticsDir, aspireCommand) {
-  if (!fs.existsSync(projectRoot)) {
-    return;
-  }
-
   try {
-    await runAspireStop({
-      aspireCommand,
+    await startAppHost({ aspireCommand, diagnosticsDir, maxStartupSeconds, projectRoot });
+
+    await runInteractiveCommand({
       cwd: projectRoot,
       diagnosticsDir,
-      fileName: 'aspire-stop-cleanup.log',
-      timeoutMs: 120_000
+      fileName: 'aspire-stop.log',
+      command: buildAspireCommand(aspireCommand, ['stop']),
+      timeoutMs,
+      interact: async run => {
+        await run.waitForAnyText(
+          ['Running instance stopped successfully.', 'No running AppHost found.'],
+          timeoutMs,
+          'AppHost stop result');
+      }
     });
-  } catch {
-    // Best-effort cleanup so a failed proof does not hide the original validation error.
+  } finally {
+    await stopAppHost({ aspireCommand, diagnosticsDir, projectRoot });
   }
 }
 
 module.exports = {
-  cleanupProject,
+  id: 'aspire-stop',
+  templateIds: ['aspire-starter'],
+  async run(context) {
+    await runAspireStop({
+      ...context,
+      timeoutMs: 120_000
+    });
+  },
   runAspireStop
 };
