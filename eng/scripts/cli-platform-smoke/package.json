@@ -1,0 +1,12 @@
+{
+  "name": "cli-platform-smoke",
+  "private": true,
+  "description": "Cross-platform Aspire CLI smoke harness",
+  "license": "MIT",
+  "scripts": {
+    "smoke": "node ./cli-platform-smoke.js"
+  },
+  "dependencies": {
+    "node-pty": "1.1.0"
+  }
+}
