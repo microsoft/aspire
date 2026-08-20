@@ -579,8 +579,20 @@ public sealed class InteractionFile
     /// <exception cref="ObjectDisposedException">The owning <see cref="InteractionFileCollection"/> has been disposed.</exception>
     public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return File.ReadAllBytesAsync(FilePath, cancellationToken);
+        // File.ReadAllBytesAsync opens with FileShare.Read, which can prevent the owning collection from deleting
+        // the temporary file on Windows while a read is in progress. OpenRead also shares deletion.
+        var stream = OpenRead();
+        return ReadAllBytesAsyncCore(stream, cancellationToken);
+    }
+
+    private static async Task<byte[]> ReadAllBytesAsyncCore(Stream stream, CancellationToken cancellationToken)
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            var bytes = new byte[stream.Length];
+            await stream.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+            return bytes;
+        }
     }
 
     internal void MarkDisposed() => _disposed = true;

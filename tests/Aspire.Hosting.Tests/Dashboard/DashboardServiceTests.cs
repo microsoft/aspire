@@ -1143,11 +1143,13 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         await using var stream = file.OpenRead();
         using var reader = new StreamReader(stream);
         Assert.Equal("content", await reader.ReadToEndAsync());
+        var readAllBytesTask = file.ReadAllBytesAsync();
 
         files.Dispose();
         files.Dispose();
 
         Assert.False(File.Exists(filePath));
+        Assert.Equal("content", Encoding.UTF8.GetString(await readAllBytesTask));
         Assert.Null(fileUploadStore.GetFilePath(fileId, interaction.InteractionId, input.Name));
         Assert.Throws<ObjectDisposedException>(file.OpenRead);
         await Assert.ThrowsAsync<ObjectDisposedException>(ReadAllBytesAfterDisposeAsync);
