@@ -21,7 +21,6 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
     [InlineData(true)]
     // [InlineData(false)] // "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820"
     [RequiresFeature(TestFeature.ContainerRuntime)]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/18898")]
     public async Task VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(bool useClassic)
     {
         // Cosmos can be pretty slow to spin up, lets give it plenty of time.
@@ -60,8 +59,8 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
         await app.StopAsync();
     }
 
-    [Theory(Skip = "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820")]
-    [InlineData(true)]
+    [Theory]
+    // [InlineData(true)] // "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820"
     [InlineData(false)]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyCosmosResource(bool useClassic)
