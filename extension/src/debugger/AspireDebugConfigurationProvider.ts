@@ -38,6 +38,7 @@ export interface ExternalLaunchReservation {
         command: Exclude<AspireCommandType, 'run'>,
         noDebug: boolean,
         doStep?: string,
+        isDirectoryScope?: boolean,
     ): string | false;
     /** Validates or reacquires a repeated resolver pass for a durable non-Run operation. */
     validateOrReacquireExternalOperationReservation(
@@ -46,6 +47,7 @@ export interface ExternalLaunchReservation {
         command: Exclude<AspireCommandType, 'run'>,
         noDebug: boolean,
         doStep?: string,
+        isDirectoryScope?: boolean,
     ): string | false;
     /** Moves a repeated resolver pass to a different AppHost. */
     replaceExternalOperationReservation(
@@ -55,6 +57,7 @@ export interface ExternalLaunchReservation {
         command: Exclude<AspireCommandType, 'run'>,
         noDebug: boolean,
         doStep?: string,
+        isDirectoryScope?: boolean,
     ): string | false;
     /** Releases a pending external operation when debug configuration resolution fails. */
     releaseExternalOperationReservation(appHostPath: string, reservationId: string): void;
@@ -302,16 +305,19 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                             claimedPath,
                             command,
                             noDebug,
-                            doStep);
+                            doStep,
+                            isDirectoryScope);
                     }
                     else if (existingExternalReservation.kind === 'operation' &&
+                        existingExternalReservation.isDirectoryScope === isDirectoryScope &&
                         compareAppHostIdentity(existingExternalReservation.appHostPath, claimedPath) === 'same') {
                         reservationId = this._launchReservation.validateOrReacquireExternalOperationReservation(
                             existingExternalReservation.appHostPath,
                             existingExternalReservation.reservationId,
                             command,
                             noDebug,
-                            doStep);
+                            doStep,
+                            isDirectoryScope);
                         reservationPath = existingExternalReservation.appHostPath;
                     }
                     else {
@@ -323,7 +329,8 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                                 claimedPath,
                                 command,
                                 noDebug,
-                                doStep);
+                                doStep,
+                                isDirectoryScope);
                         }
                         else {
                             reservationId = this._launchReservation.replaceExternalOperationReservation(
@@ -332,7 +339,8 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                                 claimedPath,
                                 command,
                                 noDebug,
-                                doStep);
+                                doStep,
+                                isDirectoryScope);
                         }
                     }
                 }

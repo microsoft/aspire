@@ -2761,6 +2761,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
     test('selected AppHost pipeline cancellation returns without launch or error toast', async () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
+        const targetFolder = createWorkspaceFolder('repo', '/repo');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
+        sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+            cliPath: '/repo/tools/aspire',
+            available: true,
+            source: 'configured',
+        });
+        sandbox.stub(workspaceModule, 'checkCliAvailableOrRedirect').callsFake(
+            async (_operation, _target, options) => ({
+                cliPath: options?.pinnedCliPath ?? '/repo/tools/aspire',
+                available: true,
+            }));
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -2782,7 +2794,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const launchService = makeLaunchService();
         const launchStub = sandbox.stub(launchService, 'launch').resolves();
         sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getCapabilityStatus').resolves('supported');
-        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'hasCapability').resolves(false);
+        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            localSettingsPath: '/repo/aspire.config.json',
+            globalSettingsPath: '/repo/global-aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [
+                deployCommandCapability,
+                publishCommandCapability,
+                doCommandCapability,
+            ],
+        });
         sandbox.stub(vscode.window, 'showInputBox').resolves(undefined);
         const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
@@ -2799,6 +2822,18 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
     test('selected AppHost launch errors propagate once without a provider error toast', async () => {
         const launchError = new Error('launch failed');
         const appHostPath = '/repo/AppHost/AppHost.csproj';
+        const targetFolder = createWorkspaceFolder('repo', '/repo');
+        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(targetFolder);
+        sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+            cliPath: '/repo/tools/aspire',
+            available: true,
+            source: 'configured',
+        });
+        sandbox.stub(workspaceModule, 'checkCliAvailableOrRedirect').callsFake(
+            async (_operation, _target, options) => ({
+                cliPath: options?.pinnedCliPath ?? '/repo/tools/aspire',
+                available: true,
+            }));
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,

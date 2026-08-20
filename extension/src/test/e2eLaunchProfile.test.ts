@@ -1063,7 +1063,7 @@ suite('E2E launch profile', () => {
         assert.ok(gatedDeployFixture.includes('removePath(scriptPath, { force: true });'));
         assert.ok(fixtures.includes("waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});"));
         assert.ok(fixtures.includes('if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {'));
-        assert.ok(durableOperationTest.includes(`finally {
+        assert.ok(durableOperationTest.replace(/\r\n/g, '\n').includes(`finally {
             try {
                 gatedCli.releaseDeploy();
             }

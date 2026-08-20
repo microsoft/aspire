@@ -1120,6 +1120,31 @@ suite('AppHostLaunchService', () => {
         void active;
     });
 
+    test('clears a cancelled lifecycle waiter when the active operation settles', async () => {
+        const appHostPath = '/repo/AppHost/AppHost.csproj';
+        let releaseActive: (() => void) | undefined;
+        let signalActiveStarted: (() => void) | undefined;
+        const activeStarted = new Promise<void>(resolve => { signalActiveStarted = resolve; });
+        const active = service.runWithAppHostLifecycleLock(
+            appHostPath,
+            new vscode.CancellationTokenSource().token,
+            () => new Promise<void>(resolve => {
+                releaseActive = resolve;
+                signalActiveStarted?.();
+            }));
+        await activeStarted;
+        const queuedTokenSource = new vscode.CancellationTokenSource();
+        const queued = service.runWithAppHostLifecycleLock(appHostPath, queuedTokenSource.token, async () => undefined);
+        queuedTokenSource.cancel();
+        await assert.rejects(queued, vscode.CancellationError);
+
+        releaseActive?.();
+        await active;
+
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'deploy', true);
+        assert.strictEqual(typeof reservationId, 'string');
+    });
+
     test('bounds lifecycle lock waits when the active operation does not settle', async () => {
         const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
         const clock = sinon.useFakeTimers();
@@ -2484,6 +2509,83 @@ suite('AppHostLaunchService', () => {
         assert.ok(onDidTerminateDebugSessionCallback);
         onDidTerminateDebugSessionCallback(externalSession);
         assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('an external non-Run reservation is rejected while a Run launch is pending', () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        assert.strictEqual(
+            service.tryReserveExternalOperation(appHostPath, 'deploy', true, 'infra'),
+            false);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a directory-scoped external non-Run reservation is rejected while a child AppHost launch is pending', () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        assert.strictEqual(
+            service.tryReserveExternalOperation(directory, 'deploy', true, undefined, true),
+            false);
+        assert.strictEqual(service.getActiveOperation(directory), undefined);
+    });
+
+    test('an external non-Run reservation is rejected while a lifecycle operation owns the AppHost', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        let releaseOperation: (() => void) | undefined;
+        let signalOperationStarted: (() => void) | undefined;
+        const operationStarted = new Promise<void>(resolve => { signalOperationStarted = resolve; });
+        const operation = service.runWithAppHostLifecycleLock(
+            appHostPath,
+            new vscode.CancellationTokenSource().token,
+            () => new Promise<void>(resolve => {
+                releaseOperation = resolve;
+                signalOperationStarted?.();
+            }));
+        await operationStarted;
+
+        assert.strictEqual(
+            service.tryReserveExternalOperation(appHostPath, 'publish', true),
+            false);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+
+        releaseOperation?.();
+        await operation;
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'publish', true);
+        assert.strictEqual(typeof reservationId, 'string');
+        service.releaseExternalOperationReservation(appHostPath, reservationId || '');
+    });
+
+    test('an external non-Run reservation is allowed beside a stable Run', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'run', true);
+        const configuration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({
+            id: 'stable-run',
+            configuration,
+        } as unknown as vscode.DebugSession);
+        service.clearLaunching(appHostPath);
+
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'deploy', true);
+
+        assert.strictEqual(typeof reservationId, 'string');
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'deploy');
+    });
+
+    test('a directory-scoped external non-Run reservation blocks a child AppHost operation', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+        const reservationId = service.tryReserveExternalOperation(directory, 'deploy', true, undefined, true);
+        assert.strictEqual(typeof reservationId, 'string');
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'deploy');
+
+        await assert.rejects(
+            service.launch(appHostPath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+        assert.strictEqual(startDebuggingStub.called, false);
     });
 
     test('an abandoned external non-Run reservation expires', () => {

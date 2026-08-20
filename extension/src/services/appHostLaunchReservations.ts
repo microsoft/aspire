@@ -88,6 +88,14 @@ export class AppHostLaunchReservations implements vscode.Disposable {
             compareAppHostIdentity(launchingPath, appHostPath) !== 'different');
     }
 
+    hasPendingLaunchOrLifecycleConflict(appHostPath: string, isDirectoryScope = false): boolean {
+        return isDirectoryScope
+            ? this.hasLaunchingPathWithinDirectory(appHostPath) ||
+                this._host.hasActiveLifecycleOperationWithinDirectory(appHostPath)
+            : this.isLaunching(appHostPath) ||
+                this._host.hasActiveLifecycleOperation(appHostPath);
+    }
+
     /**
      * Claims the launching slot for an AppHost, or reports that another launch already
      * holds it.
