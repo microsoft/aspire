@@ -29,8 +29,8 @@ import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } f
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
-import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
-import { markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
+import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
@@ -1419,6 +1419,14 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
                 : windowCliPathTarget;
               markAspireDebugConfigurationWithResolvedCliPath(config, config.resolvedCliPath);
               markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(cliPathTarget));
+            }
+            const operationKind = getOperationKind(config.command);
+            if (typeof config[appHostLaunchTokenConfigKey] === 'number' &&
+              (operationKind === 'deploy' || operationKind === 'publish' || operationKind === 'do')) {
+              // The launch service moved this operation back to its token while the old session
+              // stopped. Restore its private ownership proof so the provider does not make the
+              // replacement contend with the operation it is meant to reclaim.
+              markAspireDebugConfigurationAsExtensionOwned(config);
             }
             await vscode.debug.startDebugging(undefined, config);
           }
