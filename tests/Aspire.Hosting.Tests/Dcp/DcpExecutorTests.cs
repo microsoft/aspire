@@ -9904,20 +9904,18 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var appResources = new DcpAppResourceStore();
         var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
-        var executableResourcePreparer = new ExecutableResourcePreparer(nameGenerator, distributedAppModel, appResources);
         var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
         var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
-        var executableLaunchPlanResolver = new ExecutableLaunchPlanResolver(
-            configuration,
-            applicationOptions,
-            executableLaunchPolicy);
-        var dcpExecutableRenderer = new DcpExecutableRenderer(NullLogger<DcpExecutableRenderer>.Instance);
 
         var executableCreator = new ExecutableCreator(
-            executableResourcePreparer,
+            nameGenerator,
+            distributedAppModel,
+            appResources,
             executableConfigurationResolver,
-            executableLaunchPlanResolver,
-            dcpExecutableRenderer);
+            configuration,
+            applicationOptions,
+            executableLaunchPolicy,
+            NullLogger<ExecutableCreator>.Instance);
 
         var containerCreator = new ContainerCreator(
             configuration,

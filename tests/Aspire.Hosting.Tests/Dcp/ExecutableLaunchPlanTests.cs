@@ -26,7 +26,7 @@ public class ExecutableLaunchPlanTests
             resource.Name,
             "test",
             static _ => Task.FromResult(new ExecutableLaunchConfiguration("test"))));
-        var resolver = CreateResolver(
+        var configurationValues =
             new Dictionary<string, string?>
             {
                 [DcpExecutor.DebugSessionPortVar] = "12345",
@@ -35,12 +35,12 @@ public class ExecutableLaunchPlanTests
                     ProtocolsSupported = ["test"],
                     SupportedLaunchConfigurations = ["test"]
                 })
-            });
+            };
         var configuration = CreateExecutionConfiguration(
             [("run", false), ("app-arg", false)],
             launchToolArgumentCount: 1);
 
-        var plan = await resolver.ResolveAsync(resource, configuration, CancellationToken.None);
+        var plan = await ResolveLaunchPlanAsync(resource, configuration, configurationValues);
 
         Assert.Equal(ExecutableLaunchMechanism.Ide, plan.Mechanism);
         Assert.Equal(["app-arg"], plan.Arguments);
@@ -73,7 +73,7 @@ public class ExecutableLaunchPlanTests
             resource.Name,
             "test",
             static _ => Task.FromResult(new ExecutableLaunchConfiguration("test"))));
-        var resolver = CreateResolver(
+        var configurationValues =
             new Dictionary<string, string?>
             {
                 [DcpExecutor.DebugSessionPortVar] = "12345",
@@ -82,12 +82,12 @@ public class ExecutableLaunchPlanTests
                     ProtocolsSupported = ["test"],
                     SupportedLaunchConfigurations = ["other"]
                 })
-            });
+            };
         var configuration = CreateExecutionConfiguration(
             [("run", false), ("app-arg", false)],
             launchToolArgumentCount: 1);
 
-        var plan = await resolver.ResolveAsync(resource, configuration, CancellationToken.None);
+        var plan = await ResolveLaunchPlanAsync(resource, configuration, configurationValues);
 
         Assert.Equal(ExecutableLaunchMechanism.Process, plan.Mechanism);
         Assert.Equal(["run", "app-arg"], plan.Arguments);
@@ -99,12 +99,11 @@ public class ExecutableLaunchPlanTests
     {
         var resource = new ProjectResource("project");
         resource.Annotations.Add(new TestProjectMetadata("/tmp/project.csproj"));
-        var resolver = CreateResolver([]);
 
-        var plan = await resolver.ResolveAsync(
+        var plan = await ResolveLaunchPlanAsync(
             resource,
             CreateExecutionConfiguration([]),
-            CancellationToken.None);
+            []);
 
         Assert.Equal(ExecutableLaunchMechanism.Process, plan.Mechanism);
         Assert.Equal("dotnet", plan.Command);
@@ -132,16 +131,16 @@ public class ExecutableLaunchPlanTests
             resource.Name,
             "custom",
             static _ => Task.FromResult(new ExecutableLaunchConfiguration("custom"))));
-        var resolver = CreateResolver(
+        var configurationValues =
             new Dictionary<string, string?>
             {
                 [DcpExecutor.DebugSessionPortVar] = "12345"
-            });
+            };
         var configuration = CreateExecutionConfiguration(
             [("run", false), ("app-arg", false)],
             launchToolArgumentCount: 1);
 
-        var plan = await resolver.ResolveAsync(resource, configuration, CancellationToken.None);
+        var plan = await ResolveLaunchPlanAsync(resource, configuration, configurationValues);
 
         Assert.Equal(ExecutableLaunchMechanism.Ide, plan.Mechanism);
         Assert.Equal(["run", "app-arg"], plan.Arguments);
@@ -190,9 +189,11 @@ public class ExecutableLaunchPlanTests
                 display: true,
                 effectiveArgumentIndex: 0,
                 role: ExecutableLaunchArgumentRole.Application)]);
-        var renderer = new DcpExecutableRenderer(NullLogger<DcpExecutableRenderer>.Instance);
-
-        renderer.Render(renderedResource, plan, pemCertificates: null);
+        ExecutableCreator.Render(
+            renderedResource,
+            plan,
+            pemCertificates: null,
+            NullLogger<ExecutableCreator>.Instance);
 
         Assert.Equal(ExecutionType.Process, executable.Spec.ExecutionType);
         Assert.Null(executable.Spec.FallbackExecutionTypes);
@@ -212,29 +213,34 @@ public class ExecutableLaunchPlanTests
     {
         var resource = new ExecutableResource("app", "tool", "/tmp");
         resource.Annotations.Add(new ExecutableLaunchRecipeAnnotation(DirectExecutableLaunchRecipe.Instance));
-        var resolver = CreateResolver([]);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => resolver.ResolveAsync(
+            () => ResolveLaunchPlanAsync(
                 resource,
                 CreateExecutionConfiguration([]),
-                CancellationToken.None));
+                []));
 
         Assert.Equal(
             "Resource 'app' must have exactly one executable launch recipe, but 2 were found.",
             exception.Message);
     }
 
-    private static ExecutableLaunchPlanResolver CreateResolver(
-        IEnumerable<KeyValuePair<string, string?>> values)
+    private static Task<ExecutableLaunchPlan> ResolveLaunchPlanAsync(
+        IResource resource,
+        IExecutionConfigurationResult executionConfiguration,
+        IEnumerable<KeyValuePair<string, string?>> configurationValues)
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(values)
+            .AddInMemoryCollection(configurationValues)
             .Build();
-        return new(
+
+        return ExecutableCreator.ResolveLaunchPlanAsync(
+            resource,
+            executionConfiguration,
             configuration,
             new DistributedApplicationOptions(),
-            new ExecutableLaunchPolicy(configuration));
+            new ExecutableLaunchPolicy(configuration),
+            CancellationToken.None);
     }
 
     private static ExecutionConfigurationResult CreateExecutionConfiguration(
