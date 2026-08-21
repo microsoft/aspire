@@ -193,6 +193,68 @@ fluent-drawer-body > [slot="title"] {
     min-width: 32px;
 }
 
+/* Floating scroll-to-bottom button for overflowing live-data regions. Position and visibility
+   classes are managed by app.js so the control can follow Blazor-owned scroll containers. */
+.scroll-buttons {
+    position: fixed;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.scroll-buttons:not(.is-active) {
+    display: none;
+}
+
+.scroll-button {
+    pointer-events: auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 50%;
+    background-color: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(0.25rem);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease, background-color 0.15s ease;
+}
+
+.scroll-button.is-visible {
+    opacity: 0.85;
+    visibility: visible;
+    transform: none;
+}
+
+.scroll-button:hover {
+    opacity: 1;
+    background-color: var(--colorNeutralBackground1Hover);
+}
+
+.scroll-button:focus-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.scroll-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+}
+
+.scroll-button.scroll-to-bottom svg {
+    transform: translateY(1px);
+}
+
 .grid-action-container {
     display: flex;
     align-items: center;
