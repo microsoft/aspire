@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
+using Aspire.Hosting.Radius.Publishing.Constructs;
 using Aspire.Hosting.Radius.ResourceMapping;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -341,5 +342,76 @@ public class ContainerSecretEnvironmentTests
         });
 
         Assert.Contains("secretName: 'my-own-secret'", bicep);
+    }
+
+    /// <summary>
+    /// The <c>value</c> and <c>valueFrom.secretKeyRef</c> forms are mutually exclusive, and
+    /// Kubernetes rejects an environment variable that sets both. All three properties are public,
+    /// so only a post-callback check can enforce it.
+    /// </summary>
+    [Fact]
+    public void CallbackThatSetsBothValueAndSecretReference_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            var password = builder.AddParameter("pw", secret: true);
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PW", password);
+        }, opts => opts.Containers[0].Env["PW"].Value!.Value = "literal"));
+
+        Assert.Contains("ASPIRERADIUS087", ex.Message);
+        Assert.Contains("'PW'", ex.Message);
+    }
+
+    /// <summary>
+    /// A <c>secretKeyRef</c> needs both halves: <c>secretName</c> alone names no data entry. Added
+    /// as a fresh entry, which is how a callback introduces an environment variable of its own.
+    /// </summary>
+    [Fact]
+    public void CallbackThatAddsAnEntryWithOnlyASecretName_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PLAIN", "value");
+        }, opts => opts.Containers[0].Env["ADDED"] = new ContainerEnvVarConstruct { SecretName = "some-secret" }));
+
+        Assert.Contains("ASPIRERADIUS087", ex.Message);
+        Assert.Contains("SecretName is set but SecretKey is not", ex.Message);
+    }
+
+    /// <summary>
+    /// Setting a secret reference on a variable the publisher already emitted as a plain
+    /// <c>value</c> leaves both forms on the entry, which Kubernetes rejects.
+    /// </summary>
+    [Fact]
+    public void CallbackThatAddsASecretReferenceToAPlainValue_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PLAIN", "value");
+        }, opts => opts.Containers[0].Env["PLAIN"].Value!.SecretName = "some-secret"));
+
+        Assert.Contains("ASPIRERADIUS087", ex.Message);
+        Assert.Contains("both a 'value' and a 'valueFrom.secretKeyRef'", ex.Message);
+    }
+
+    /// <summary>
+    /// The mirror of <see cref="CallbackThatAddsAnEntryWithOnlyASecretName_FailsThePublish"/>: a key
+    /// with no secret to read it from. Added as a fresh entry, which is how a callback introduces an
+    /// environment variable of its own.
+    /// </summary>
+    [Fact]
+    public void CallbackThatAddsAnEntryWithOnlyASecretKey_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PLAIN", "value");
+        }, opts => opts.Containers[0].Env["ADDED"] = new ContainerEnvVarConstruct { SecretKey = "some-key" }));
+
+        Assert.Contains("ASPIRERADIUS087", ex.Message);
+        Assert.Contains("SecretKey is set but SecretName is not", ex.Message);
     }
 }
