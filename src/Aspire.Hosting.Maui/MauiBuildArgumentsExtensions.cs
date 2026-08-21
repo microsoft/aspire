@@ -60,6 +60,17 @@ public static class MauiBuildArgumentsExtensions
     /// <c>dotnet build</c> command.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Multiple callbacks can be registered; they are invoked in registration order and share the
+    /// same mutable argument list.
+    /// </remarks>
+    /// <example>
+    /// Add an MSBuild property to the compile:
+    /// <code lang="csharp">
+    /// maui.AddAndroidEmulator("emulator")
+    ///     .WithMauiBuildArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
+    /// </code>
+    /// </example>
     [AspireExportIgnore(Reason = "Convenience overload. Use the asynchronous overload instead.")]
     public static IResourceBuilder<T> WithMauiBuildArguments<T>(
         this IResourceBuilder<T> builder,
@@ -124,6 +135,18 @@ public static class MauiBuildArgumentsExtensions
     /// launch command.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Multiple callbacks can be registered; they are invoked in registration order and share the
+    /// same mutable argument list. Callbacks are applied against the pristine launch arguments on
+    /// every start, so edits do not accumulate across restarts.
+    /// </remarks>
+    /// <example>
+    /// Force a build during launch by overriding the default <c>-p:NoBuild=true</c>:
+    /// <code lang="csharp">
+    /// maui.AddAndroidEmulator("emulator")
+    ///     .WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+    /// </code>
+    /// </example>
     [AspireExportIgnore(Reason = "Convenience overload. Use the asynchronous overload instead.")]
     public static IResourceBuilder<T> WithMauiLaunchArguments<T>(
         this IResourceBuilder<T> builder,
