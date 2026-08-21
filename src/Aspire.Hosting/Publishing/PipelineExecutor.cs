@@ -42,9 +42,9 @@ internal sealed class PipelineExecutor(
                 await backchannelService.BackchannelConnected.ConfigureAwait(false);
             }
 
-            // Step inspection is driven over the backchannel. Return before publishing events or
-            // pipeline resolution can execute user callbacks; the CLI stops the AppHost after it
-            // receives the resolved metadata.
+            // Step inspection is driven over the backchannel. Return before publishing events and
+            // pipeline execution; resolving metadata over the backchannel can still invoke user
+            // step-resolution callbacks before the CLI stops the AppHost.
             if (configuration.GetValue<bool>("Pipeline:ListSteps"))
             {
                 return;

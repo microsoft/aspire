@@ -390,7 +390,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
 
         var operationOverride = commandName == "do" ? string.Empty : " --operation run";
-        var result = command.Parse($"{commandName} --list-steps --format json{operationOverride}");
+        var result = command.Parse($"{commandName} --list-steps --format=json{operationOverride}");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -399,10 +399,15 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedStep, requestedStep);
         Assert.False(publishingActivitiesRequested);
         Assert.NotNull(capturedArgs);
-        Assert.Contains("--list-steps", capturedArgs);
-        var operationIndex = Array.LastIndexOf(capturedArgs, "--operation");
-        Assert.True(operationIndex >= 0 && operationIndex + 1 < capturedArgs.Length);
-        Assert.Equal("inspect", capturedArgs[operationIndex + 1]);
+        Assert.Equal(
+            commandName switch
+            {
+                "do" => ["--operation", "inspect", "--operation", "inspect", "--list-steps", "true"],
+                "publish" => ["--operation", "publish", "--step", "publish", "--operation", "run", "--operation", "inspect", "--list-steps", "true"],
+                "deploy" => ["--operation", "publish", "--step", "deploy", "--operation", "run", "--operation", "inspect", "--list-steps", "true"],
+                _ => throw new InvalidOperationException()
+            },
+            capturedArgs);
         var output = Assert.Single(interactionService.DisplayedRawText);
         Assert.Equal(ConsoleOutput.Standard, output.ConsoleOverride);
         using var document = JsonDocument.Parse(output.Text);
@@ -636,6 +641,35 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoCommandWithListStepsReturnsIncompatibleWhenLegacyAppHostRejectsInspectOperation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, "13.6.0-preview.1.25310.2"),
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    options.StandardErrorCallback?.Invoke("Invalid operation specified. Valid operations are 'publish' or 'run'.");
+                    return Task.FromResult(1);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+    }
+
+    [Fact]
     public async Task DoCommandWithListStepsReturnsIncompatibleWithoutLaunchingLegacyAppHost()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -773,17 +807,65 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DoCommandWithFormatWithoutListStepsReturnsInvalidCommand()
+    public async Task DoCommandForwardsFormatWithoutListStepsToAppHost()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        string[]? capturedArgs = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    capturedArgs = args;
+                    var completed = new TaskCompletionSource();
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = completed
+                    });
+                    await completed.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var exitCode = await command.Parse("do deploy --format json").InvokeAsync().DefaultTimeout();
+        var exitCode = await command.Parse("do deploy --format yaml").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(capturedArgs);
+        Assert.Equal(["--operation", "publish", "--step", "deploy", "--format", "yaml"], capturedArgs);
+    }
+
+    [Theory]
+    [InlineData("do --list-steps --format")]
+    [InlineData("do --list-steps --format=")]
+    [InlineData("do --list-steps --format yaml")]
+    public async Task DoCommandWithListStepsReturnsInvalidCommandForInvalidFormat(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse(commandLine).InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Single(interactionService.DisplayedErrors, "The --format option requires either 'table' or 'json'.");
     }
 
     [Fact]

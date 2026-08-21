@@ -31,7 +31,9 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     private const string CustomChoiceValue = "__CUSTOM_CHOICE";
     private const string ListStepsCapability = "pipeline-steps.v2";
-    private const string ListStepsSentinel = "__aspire_list_steps__";
+    private const string InvalidListStepsFormatMessage = "The --format option requires either 'table' or 'json'.";
+    private const string LegacyInspectOperationError = "Invalid operation specified. Valid operations are 'publish' or 'run'.";
+    private const string ListStepsIncompatibleMessage = "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.";
     private const int MinimumHostingMajorVersionForListSteps = 13;
     private const int MinimumHostingMinorVersionForListSteps = 6;
 
@@ -76,11 +78,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = SharedCommandStrings.PipelineListStepsOptionDescription
     };
 
-    protected static readonly Option<OutputFormat> s_formatOption = new("--format")
-    {
-        Description = SharedCommandStrings.PipelineFormatOptionDescription
-    };
-
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -117,7 +114,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
         Options.Add(s_listStepsOption);
-        Options.Add(s_formatOption);
 
         // In the publish and deploy commands we forward all unrecognized tokens
         // through to the underlying tooling when we launch the app host.
@@ -149,9 +145,25 @@ internal abstract class PipelineCommandBase : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var explicitAppHost = passedAppHostProjectFile is not null;
         var listSteps = parseResult.GetValue(s_listStepsOption);
-        if (!listSteps && parseResult.GetResult(s_formatOption) is { Implicit: false })
+        var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
+        var targetStep = listSteps ? GetTargetStepName(parseResult) : null;
+
+        // With `aspire do --list-steps --format json`, System.CommandLine binds the unregistered
+        // --format token to the optional step argument and leaves json unmatched. Reassemble the
+        // format syntax here so list mode can consume it without changing normal pass-through.
+        var formatTokenParsedAsTarget = listSteps && targetStep is not null && IsFormatToken(targetStep)
+            ? targetStep
+            : null;
+        if (formatTokenParsedAsTarget is not null)
         {
-            return CommandResult.Failure(CliExitCodes.InvalidCommand, SharedCommandStrings.PipelineFormatRequiresListSteps);
+            unmatchedTokens = [formatTokenParsedAsTarget, .. unmatchedTokens];
+            targetStep = null;
+        }
+
+        var outputFormat = OutputFormat.Table;
+        if (listSteps && !TryExtractListStepsFormat(unmatchedTokens, out outputFormat, out unmatchedTokens))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, InvalidListStepsFormatMessage);
         }
 
         if (ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
@@ -202,7 +214,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         PublishContext? publishContext = null;
 
         // Machine-readable output must not contain terminal control sequences.
-        if (!listSteps || parseResult.GetValue(s_formatOption) is not OutputFormat.Json)
+        if (!listSteps || outputFormat is not OutputFormat.Json)
         {
             StartTerminalProgressBar();
         }
@@ -228,7 +240,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 if (IsKnownIncompatibleWithListSteps(aspireHostingVersion))
                 {
                     throw new AppHostIncompatibleException(
-                        "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.",
+                        ListStepsIncompatibleMessage,
                         ListStepsCapability,
                         aspireHostingVersion);
                 }
@@ -255,13 +267,15 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>();
 
-            var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
             var runArguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, parseResult, cancellationToken);
+            if (formatTokenParsedAsTarget is not null)
+            {
+                runArguments = RemoveFormatTokenParsedAsTarget(runArguments, formatTokenParsedAsTarget);
+            }
+
             if (listSteps)
             {
-                // Older AppHosts ignore the inspection flag. Override any real target with an
-                // impossible name so they fail closed instead of racing ahead and executing work.
-                runArguments = [.. runArguments, "--operation", "inspect", "--list-steps", "true", "--step", ListStepsSentinel];
+                runArguments = [.. runArguments, "--operation", "inspect", "--list-steps", "true"];
             }
 
             // Create the publish context and delegate to IAppHostProject
@@ -330,13 +344,12 @@ internal abstract class PipelineCommandBase : BaseCommand
                     if (!capabilities.Contains(ListStepsCapability))
                     {
                         throw new AppHostIncompatibleException(
-                            "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.",
+                            ListStepsIncompatibleMessage,
                             ListStepsCapability);
                     }
 
-                    var targetStep = GetTargetStepName(parseResult);
                     var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
-                    if (parseResult.GetValue(s_formatOption) is OutputFormat.Json)
+                    if (outputFormat is OutputFormat.Json)
                     {
                         var json = JsonSerializer.Serialize(response.Steps, JsonSourceGenerationContext.RelaxedEscaping.PipelineStepInfoArray);
                         InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
@@ -461,6 +474,12 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             return CommandResult.FromExitCode(pendingRun is { } && debugMode ? await pendingRun : CliExitCodes.FailedToBuildArtifacts);
         }
+        catch (Exception ex) when (listSteps && HasLegacyInspectOperationError(publishContext?.OutputCollector))
+        {
+            StopTerminalProgressBar();
+            Telemetry.RecordError($"AppHost is incompatible. Required capability: {ListStepsCapability}", ex);
+            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ListStepsIncompatibleMessage);
+        }
         catch (Exception ex)
         {
             // Send terminal progress bar stop sequence on exception
@@ -488,6 +507,79 @@ internal abstract class PipelineCommandBase : BaseCommand
             (version.Major == MinimumHostingMajorVersionForListSteps &&
              version.Minor < MinimumHostingMinorVersionForListSteps);
     }
+
+    private static bool TryExtractListStepsFormat(
+        IReadOnlyList<string> unmatchedTokens,
+        out OutputFormat format,
+        out string[] remainingTokens)
+    {
+        format = OutputFormat.Table;
+        var remaining = new List<string>(unmatchedTokens.Count);
+
+        for (var i = 0; i < unmatchedTokens.Count; i++)
+        {
+            var token = unmatchedTokens[i];
+            string value;
+
+            if (token == "--format")
+            {
+                if (++i >= unmatchedTokens.Count)
+                {
+                    remainingTokens = [];
+                    return false;
+                }
+
+                value = unmatchedTokens[i];
+            }
+            else if (token.StartsWith("--format=", StringComparison.Ordinal))
+            {
+                value = token["--format=".Length..];
+            }
+            else
+            {
+                remaining.Add(token);
+                continue;
+            }
+
+            if (value.Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                format = OutputFormat.Json;
+            }
+            else if (value.Equals("table", StringComparison.OrdinalIgnoreCase))
+            {
+                format = OutputFormat.Table;
+            }
+            else
+            {
+                remainingTokens = [];
+                return false;
+            }
+        }
+
+        remainingTokens = [.. remaining];
+        return true;
+    }
+
+    private static bool IsFormatToken(string token) =>
+        token == "--format" || token.StartsWith("--format=", StringComparison.Ordinal);
+
+    private static string[] RemoveFormatTokenParsedAsTarget(string[] runArguments, string formatToken)
+    {
+        for (var i = 0; i < runArguments.Length - 1; i++)
+        {
+            if (runArguments[i] == "--step" && runArguments[i + 1] == formatToken)
+            {
+                return [.. runArguments[..i], .. runArguments[(i + 2)..]];
+            }
+        }
+
+        return runArguments;
+    }
+
+    private static bool HasLegacyInspectOperationError(OutputCollector? outputCollector) =>
+        outputCollector?.GetLines().Any(line =>
+            line.Stream == OutputLineStream.StdErr &&
+            line.Line == LegacyInspectOperationError) == true;
 
     /// <summary>
     /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
