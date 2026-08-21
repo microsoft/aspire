@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui;
 using Aspire.Hosting.Maui.Annotations;
+using Aspire.Hosting.Maui.Lifecycle;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
@@ -176,9 +179,70 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Equal(MauiBuildStep.Launch, captured.Step);
     }
 
+    [Fact]
+    public async Task WithMauiLaunchArguments_AppliedToLaunchOverride_DuringBeforeStart()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
+        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+
+        await using var app = appBuilder.Build();
+        await PublishBeforeStartAsync(app);
+
+        // The launch override must reflect the callback edit. DCP reads this annotation when it renders
+        // the launch command, which happens after BeforeStartEvent — so applying it here is what makes
+        // the edit take effect. Applying at BeforeResourceStartedEvent (the previous behavior) would be
+        // too late and this assertion would fail.
+        var launchOverride = Assert.Single(emulator.Resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>());
+        Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:NoBuild=false"], launchOverride.Arguments);
+        Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
+    }
+
+    [Fact]
+    public async Task WithMauiLaunchArguments_MultipleStarts_DoNotAccumulate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
+        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+
+        await using var app = appBuilder.Build();
+
+        // Re-running the BeforeStart application must be idempotent: the edit is applied against the
+        // pristine override each time, so it never accumulates.
+        await PublishBeforeStartAsync(app);
+        await PublishBeforeStartAsync(app);
+
+        var launchOverride = Assert.Single(emulator.Resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>());
+        Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:NoBuild=false"], launchOverride.Arguments);
+    }
+
+    private static async Task PublishBeforeStartAsync(DistributedApplication app)
+    {
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var execContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var subscriber = new MauiBuildQueueEventSubscriber(notificationService, loggerService);
+        await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None);
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+    }
+
     private static IResourceBuilder<MauiAndroidEmulatorResource> CreateAndroidEmulator(ITestOutputHelper outputHelper)
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        // The project file is only read while adding the platform (TFM detection), so the workspace
+        // can be disposed as soon as the builder is returned.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 

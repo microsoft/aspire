@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
@@ -33,12 +32,6 @@ internal class MauiBuildQueueEventSubscriber(
     private static readonly ResourceStateSnapshot s_cancelledState = new(KnownResourceStates.Exited, KnownResourceStateStyles.Warn);
 
     /// <summary>
-    /// Caches the pristine launch-argument-override arguments per resource so that launch callbacks
-    /// are always applied against the original base, preventing edits from accumulating across restarts.
-    /// </summary>
-    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _originalLaunchArgs = new();
-
-    /// <summary>
     /// Maximum time to wait for a <c>dotnet build</c> process before cancelling.
     /// Prevents a hung build from blocking the queue indefinitely.
     /// </summary>
@@ -47,8 +40,22 @@ internal class MauiBuildQueueEventSubscriber(
     /// <inheritdoc/>
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
+        // Launch callbacks must run before DCP renders the executables. DCP reads
+        // ProjectLaunchArgsOverrideAnnotation during PrepareProjectExecutables and bakes the
+        // resulting launch command into the DCP Executable, which happens after BeforeStartEvent
+        // but before BeforeResourceStartedEvent. Applying launch edits at BeforeResourceStartedEvent
+        // would therefore be ignored, so they are applied here instead.
+        eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
         eventing.Subscribe<BeforeResourceStartedEvent>(OnBeforeResourceStartedAsync);
         return Task.CompletedTask;
+    }
+
+    private async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken)
+    {
+        foreach (var resource in @event.Model.Resources.OfType<IMauiPlatformResource>())
+        {
+            await ApplyLaunchArgumentCallbacksAsync(resource, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task OnBeforeResourceStartedAsync(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
@@ -107,10 +114,6 @@ internal class MauiBuildQueueEventSubscriber(
             }).ConfigureAwait(false);
 
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
-
-            // Allow consumers to inspect/modify the launch arguments (dotnet build --no-restore
-            // /t:Run -p:NoBuild=true) before DCP reads the override annotation to start the process.
-            await ApplyLaunchArgumentCallbacksAsync(resource, resourceCts.Token).ConfigureAwait(false);
 
             // Build succeeded. Keep the semaphore held until DCP starts the launch process.
             // After this handler returns, DCP invokes `dotnet build --no-restore /t:Run -p:NoBuild=true`
@@ -262,14 +265,15 @@ internal class MauiBuildQueueEventSubscriber(
 
     /// <summary>
     /// Applies any registered <see cref="MauiBuildStep.Launch"/> callbacks to the resource's
-    /// <see cref="ProjectLaunchArgsOverrideAnnotation"/> before DCP reads it to build the launch command.
+    /// <see cref="ProjectLaunchArgsOverrideAnnotation"/> before DCP renders it into the launch command.
     /// </summary>
     /// <remarks>
-    /// The override annotation's arguments are immutable, so callbacks operate on a copy of the pristine
-    /// base arguments (cached per resource) and the annotation is swapped for one carrying the result.
-    /// Caching the base makes repeated starts idempotent — edits never accumulate across restarts.
+    /// This runs during <see cref="BeforeStartEvent"/> — before DCP's <c>PrepareProjectExecutables</c>
+    /// reads the override annotation and bakes the launch command into the DCP executable. The override
+    /// annotation's arguments are immutable, so callbacks operate on a copy and the annotation is swapped
+    /// for one carrying the result.
     /// </remarks>
-    private async Task ApplyLaunchArgumentCallbacksAsync(IResource resource, CancellationToken cancellationToken)
+    private static async Task ApplyLaunchArgumentCallbacksAsync(IResource resource, CancellationToken cancellationToken)
     {
         var callbacks = resource.Annotations
             .OfType<MauiBuildArgumentsCallbackAnnotation>()
@@ -286,9 +290,7 @@ internal class MauiBuildQueueEventSubscriber(
             return;
         }
 
-        // Apply callbacks against the pristine base arguments so restarts do not accumulate edits.
-        var baseArgs = _originalLaunchArgs.GetOrAdd(resource.Name, _ => launchOverride.Arguments);
-        var arguments = new List<string>(baseArgs);
+        var arguments = new List<string>(launchOverride.Arguments);
 
         var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Launch, arguments, resource, cancellationToken);
 
@@ -298,7 +300,7 @@ internal class MauiBuildQueueEventSubscriber(
         }
 
         // Swap the immutable annotation for one carrying the updated arguments; DCP reads the last
-        // override annotation when it assembles the launch command after this handler returns.
+        // override annotation when it renders the launch command during PrepareProjectExecutables.
         resource.Annotations.Remove(launchOverride);
         resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(arguments, launchOverride.LeadingResourceArgumentToRemove));
     }

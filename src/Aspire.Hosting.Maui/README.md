@@ -211,7 +211,7 @@ When multiple MAUI platform targets reference the same project (e.g., Android, i
 The build queue is implemented via:
 
 - **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
-- **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
+- **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent` to manage the queue, run `dotnet build` as a subprocess, and replace the default Stop command with a queue-aware version. It also subscribes to `BeforeStartEvent` to apply launch-argument callbacks before DCP renders the launch command
 - **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
 - **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:NoBuild=true` for MAUI projects after the serialized build
 
@@ -238,20 +238,31 @@ mauiApp.AddAndroidEmulator()
     .WithMauiBuildArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
 ```
 
+```typescript
+// Add an MSBuild property to the compile
+mauiApp.addAndroidEmulator("emulator")
+    .withMauiBuildArguments(context => { context.arguments.push("-p:MyProperty=Value"); });
+```
+
 ### Launch Arguments
 
-`WithMauiLaunchArguments` runs after the compile succeeds, just before DCP launches the app. Use it to influence the launch command — for example, forcing a build during launch by overriding the default `-p:NoBuild=true`:
+`WithMauiLaunchArguments` runs before the app starts — the launch command is rendered ahead of the first start. Use it to influence the launch command — for example, forcing a build during launch by overriding the default `-p:NoBuild=true`:
 
 ```csharp
 mauiApp.AddAndroidEmulator()
     .WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
 ```
 
+```typescript
+mauiApp.addAndroidEmulator("emulator")
+    .withMauiLaunchArguments(context => { context.arguments.push("-p:NoBuild=false"); });
+```
+
 ### Notes
 
 - Both methods have synchronous and asynchronous (`Func<..., Task>`) overloads.
 - Multiple callbacks can be registered per resource; they run in registration order and share the same mutable argument list.
-- Launch callbacks are applied against the pristine launch arguments on every start, so edits do not accumulate across restarts.
+- Launch callbacks are applied once before the app starts, so edits do not accumulate across restarts.
 
 ## Requirements
 

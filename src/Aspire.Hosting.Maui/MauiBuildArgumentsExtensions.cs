@@ -101,8 +101,8 @@ public static class MauiBuildArgumentsExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// Multiple callbacks can be registered; they are invoked in registration order and share the
-    /// same mutable argument list. Callbacks are applied against the pristine launch arguments on
-    /// every start, so edits do not accumulate across restarts.
+    /// same mutable argument list. Launch callbacks are applied once before the app starts (the launch
+    /// command is rendered ahead of the first start), so edits do not accumulate across restarts.
     /// </remarks>
     /// <example>
     /// Force a build during launch by overriding the default <c>-p:NoBuild=true</c>:
@@ -137,8 +137,8 @@ public static class MauiBuildArgumentsExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// Multiple callbacks can be registered; they are invoked in registration order and share the
-    /// same mutable argument list. Callbacks are applied against the pristine launch arguments on
-    /// every start, so edits do not accumulate across restarts.
+    /// same mutable argument list. Launch callbacks are applied once before the app starts (the launch
+    /// command is rendered ahead of the first start), so edits do not accumulate across restarts.
     /// </remarks>
     /// <example>
     /// Force a build during launch by overriding the default <c>-p:NoBuild=true</c>:
