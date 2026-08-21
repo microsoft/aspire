@@ -16,6 +16,7 @@ const CACHE_ENTRY_GENERATION_DIGITS = 6;
 // The widest generation `CACHE_ENTRY_NAME_PATTERN` can read back. It is comfortably below
 // `Number.MAX_SAFE_INTEGER`, so parsing and incrementing a generation is always exact.
 const MAX_CACHE_ENTRY_GENERATION = 999999999999999;
+const MAX_PUBLISHED_GENERATIONS_PER_GROUP = 2;
 
 // A candidate carries the process id that created it so the sweep can tell an in-flight download
 // from debris without waiting for a timestamp to age out. See isCandidateOwnedByLiveProcess.
@@ -92,7 +93,8 @@ function getDownloadCacheEntryGroupDirectory(cacheRoot, { platform, architecture
  * children are numbered generations (`entry-000001`, `entry-000002`, ...), and a generation is
  * published by renaming a fully populated candidate onto a name that does not exist yet. Readers
  * take the highest generation that validates, so a corrupt entry is stepped over by publishing the
- * next generation beside it instead of being deleted and replaced.
+ * next generation beside it instead of being deleted and replaced. A group stops after two
+ * published generations so repeated validation failures cannot consume unbounded disk space.
  *
  * That is what makes concurrency safe here without a lock: nothing this function deletes is
  * shared. A run only ever removes its own candidate, which has never been visible to anyone else,
@@ -114,7 +116,8 @@ function ensureDownloadCache(options) {
   const groupDirectory = getDownloadCacheEntryGroupDirectory(normalizedOptions.cacheRoot, expectedManifest);
   const cacheRootOptions = { cacheRoot: normalizedOptions.cacheRoot };
 
-  const publishedEntry = selectPublishedCacheEntry(groupDirectory, expectedManifest, { ...cacheRootOptions, warnOnInvalid: true });
+  const group = readCacheEntryGroup(groupDirectory);
+  const publishedEntry = selectValidCacheEntry(groupDirectory, group.entryNames, expectedManifest, { ...cacheRootOptions, warnOnInvalid: true });
   if (publishedEntry) {
     // Sweeping on the hit path as well as the miss path matters: once a key is warm the miss path
     // never runs again, so a candidate abandoned by a crash would otherwise stay forever.
@@ -122,6 +125,7 @@ function ensureDownloadCache(options) {
     return { cacheHit: true, cacheDirectory: publishedEntry.cacheDirectory, manifest: publishedEntry.manifest };
   }
 
+  assertCanPublishAnotherCacheEntry(groupDirectory, group.entryNames);
   const candidateDirectory = createCacheEntryCandidate(normalizedOptions.cacheRoot, groupDirectory);
 
   let publishedCandidate = false;
@@ -174,6 +178,8 @@ function publishCacheEntryCandidate(groupDirectory, candidateDirectory, expected
       return { published: false, ...adoptedEntry };
     }
 
+    assertCanPublishAnotherCacheEntry(groupDirectory, group.entryNames);
+
     let entryDirectory;
     try {
       entryDirectory = path.join(groupDirectory, formatCacheEntryName(group.highestGeneration + 1));
@@ -197,11 +203,6 @@ function publishCacheEntryCandidate(groupDirectory, candidateDirectory, expected
   throw new Error(`Unable to publish an E2E download cache entry under '${groupDirectory}' after ${MAX_PUBLISH_ATTEMPTS} attempts.`);
 }
 
-function selectPublishedCacheEntry(groupDirectory, expectedManifest, { cacheRoot, warnOnInvalid }) {
-  const group = readCacheEntryGroup(groupDirectory);
-  return selectValidCacheEntry(groupDirectory, group.entryNames, expectedManifest, { cacheRoot, warnOnInvalid });
-}
-
 function selectValidCacheEntry(groupDirectory, entryNames, expectedManifest, { cacheRoot, warnOnInvalid }) {
   for (const entryName of entryNames) {
     const cacheDirectory = path.join(groupDirectory, entryName);
@@ -212,6 +213,14 @@ function selectValidCacheEntry(groupDirectory, entryNames, expectedManifest, { c
   }
 
   return null;
+}
+
+function assertCanPublishAnotherCacheEntry(groupDirectory, entryNames) {
+  if (entryNames.length >= MAX_PUBLISHED_GENERATIONS_PER_GROUP) {
+    throw new Error(
+      `E2E download cache group '${groupDirectory}' already contains ${entryNames.length} published generations. ` +
+      `The runner will not publish another. Wait until all E2E processes using this group have stopped, then delete '${groupDirectory}' to clean it up.`);
+  }
 }
 
 /**

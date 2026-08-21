@@ -1130,6 +1130,37 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
     });
 
+    test('fails before population when two published generations are unusable', () => {
+        const root = createTestRoot('generation-limit');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        let populateCalls = 0;
+
+        for (const generation of [1, 2]) {
+            populateFakeDownload(getCacheEntryDirectory(groupDirectory, generation), {
+                platform: 'linux',
+                architecture: 'x64',
+            });
+        }
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            populate() {
+                populateCalls++;
+            },
+        })), (error: unknown) => {
+            if (!(error instanceof Error)) {
+                return false;
+            }
+
+            assert.ok(error.message.includes(groupDirectory));
+            assert.match(error.message, /already contains 2 published generations.*will not publish another/);
+            return true;
+        });
+
+        assert.strictEqual(populateCalls, 0);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+    });
+
     test('recovers from repeated population crashes without wedging the cache entry', () => {
         const root = createTestRoot('crash-resilience');
         const cacheRoot = path.join(root, 'cache');
