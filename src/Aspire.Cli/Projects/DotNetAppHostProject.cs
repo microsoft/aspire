@@ -1488,7 +1488,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
-        var preparationExitCode = await PrepareAppHostAsync(
+        var (preparationExitCode, builtByCli) = await PrepareAppHostAsync(
             context,
             effectiveAppHostFile,
             isSingleFileAppHost,
@@ -1572,7 +1572,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             //
             // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
             var noBuild = !watch || context.NoBuild;
-            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
+            var noRestore = context.NoRestore;
+            if (isSingleFileAppHost && !builtByCli)
+            {
+                // File-based RunCommand metadata is only safe to reuse when the CLI's pre-build
+                // generated it with run-hook suppression. Preserve the extension-owned rebuild
+                // fallback rather than trusting ambient output.
+                noBuild = false;
+                noRestore = false;
+            }
+
+            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, noRestore);
             if (directRun is not null)
             {
                 // The direct command line has no "--" separator, so the forwarded-argument boundary
@@ -1596,7 +1606,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 effectiveAppHostFile,
                 watch,
                 noBuild,
-                context.NoRestore,
+                noRestore,
                 context.UnmatchedTokens,
                 env,
                 backchannelCompletionSource,
@@ -1645,7 +1655,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<int?> PrepareAppHostAsync(
+    private async Task<(int? ExitCode, bool BuiltByCli)> PrepareAppHostAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
@@ -1656,26 +1666,27 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     {
         try
         {
-            var buildExitCode = await BuildAppHostIfNeededAsync(
+            var (buildExitCode, builtByCli) = await BuildAppHostIfNeededAsync(
                 context,
                 effectiveAppHostFile,
+                isSingleFileAppHost,
                 isExtensionHost,
                 extensionBackchannel,
                 buildOutputCollector,
                 cancellationToken);
             if (buildExitCode is not null)
             {
-                return buildExitCode;
+                return (buildExitCode, builtByCli);
             }
 
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
                 context.BuildCompletionSource?.TrySetResult(false);
-                return CliExitCodes.FailedToDotnetRunAppHost;
+                return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli);
             }
 
-            return null;
+            return (null, builtByCli);
         }
         catch
         {
@@ -1687,17 +1698,18 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<int?> BuildAppHostIfNeededAsync(
+    private async Task<(int? ExitCode, bool BuiltByCli)> BuildAppHostIfNeededAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
+        bool isSingleFileAppHost,
         bool isExtensionHost,
         IExtensionBackchannel? extensionBackchannel,
         OutputCollector buildOutputCollector,
         CancellationToken cancellationToken)
     {
-        if (context.NoBuild)
+        if (context.NoBuild && !isSingleFileAppHost)
         {
-            return null;
+            return (null, false);
         }
 
         var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
@@ -1706,10 +1718,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // Older extension hosts own the AppHost build themselves. Building again in the CLI would
             // duplicate work and could race the extension's diagnostics/launch pipeline. Newer hosts
             // opt in with build-dotnet-using-cli when they want the CLI to own this pre-build.
-            return null;
+            return (null, false);
         }
 
-        using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
+        // File-based AppHosts cannot safely reuse ambient RunCommand metadata. The runner previously
+        // rebuilt these even for --no-build; keep that behavior but complete it before the startup budget begins.
+        var noRestore = isSingleFileAppHost && context.NoBuild ? false : context.NoRestore;
+        using var buildActivity = _profilingTelemetry.StartAppHostBuild(noRestore, isExtensionHost, extensionHasBuildCapability);
 
         var buildOptions = new ProcessInvocationOptions
         {
@@ -1717,12 +1732,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
 
-        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, noRestore, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
 
         if (buildExitCode == 0)
         {
-            return null;
+            return (null, true);
         }
 
         // Preserve the build output before signaling failure. RunCommand reads this collector after
@@ -1730,7 +1745,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // generic "project could not be built" message.
         context.OutputCollector = buildOutputCollector;
         context.BuildCompletionSource?.TrySetResult(false);
-        return CliExitCodes.FailedToBuildArtifacts;
+        return (CliExitCodes.FailedToBuildArtifacts, false);
     }
 
     private async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
@@ -2312,8 +2327,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
         }
 
+        var builtByCli = false;
+
         // Build the apphost (unless --no-build is specified)
-        if (!isSingleFileAppHost && !context.NoBuild)
+        if (!context.NoBuild)
         {
             var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
@@ -2340,6 +2357,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     new InvalidOperationException("The app host build failed."));
                 return CliExitCodes.FailedToBuildArtifacts;
             }
+
+            builtByCli = true;
         }
 
         // Create collector and store in context for exception handling
@@ -2359,10 +2378,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ConfigureSingleFilePublishEnvironment(effectiveAppHostFile, env, args: context.Arguments);
         }
 
+        // Single-file RunCommand metadata is safe to reuse only when this invocation generated it
+        // with run-hook suppression. Otherwise preserve the rebuilding fallback used by run.
+        var noBuild = !isSingleFileAppHost || builtByCli;
+
         return await _runner.RunAsync(
             effectiveAppHostFile,
             watch: false,
-            noBuild: true,
+            noBuild,
             noRestore: false,
             context.Arguments,
             env,

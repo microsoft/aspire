@@ -224,6 +224,36 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BuildAsyncSuppressesCliRunHook()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (_, env, _, _) =>
+            {
+                Assert.NotNull(env);
+                Assert.Equal("true", env[KnownConfigNames.SuppressCliRunHook]);
+            },
+            0);
+
+        var exitCode = await runner.BuildAsync(
+            projectFile,
+            noRestore: false,
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public async Task BuildAsyncPassesCurrentAspireCliPathToMSBuild()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1625,7 +1655,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunAsyncDoesNotIncludeNoBuildFlagForSingleFileAppHostWhenNoBuildIsTrue()
+    public async Task RunAsyncIncludesNoBuildFlagForSingleFileAppHostWhenNoBuildIsTrue()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
@@ -1642,12 +1672,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             {
                 Assert.Collection(args,
                     arg => Assert.Equal("run", arg),
-                    arg => Assert.Equal($"/p:{KnownConfigNames.SuppressCliRunHook}=true", arg),
+                    arg => Assert.Equal("--no-build", arg),
                     arg => Assert.Equal("--file", arg),
                     arg => Assert.Equal(appHostFile.FullName, arg),
                     arg => Assert.Equal("--", arg)
                 );
-                Assert.DoesNotContain("--no-build", args);
             },
             0);
 
