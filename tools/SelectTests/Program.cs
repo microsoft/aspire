@@ -139,8 +139,8 @@ internal static class Selection
     private static readonly IReadOnlyDictionary<string, string> s_advisoryJobTargets =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["job:api-diffs"] = "schedule-only",
-            ["job:ats-diffs"] = "schedule-only",
+            ["job:api-diffs"] = "schedule/dispatch-only",
+            ["job:ats-diffs"] = "schedule/dispatch-only",
             ["job:deployment-e2e"] = "schedule/dispatch-only",
         };
 
@@ -740,7 +740,7 @@ internal static class Selection
         {
             // Audit mode runs all regular PR work regardless of the selection. Schedule/outerloop-only
             // targets are reported separately because the PR selector cannot cause them to run.
-            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The PR tests and jobs below are what selective CI **would** run under enforcement. Advisory-only targets show schedule/outerloop impact and do not run on PRs._");
+            sb.AppendLine("_The regular PR test matrix and PR-gated jobs still run in audit mode. The PR tests and jobs below are what selective CI **would** run under enforcement. Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates; independent workflows may still run them for a PR._");
             sb.AppendLine();
         }
 
@@ -811,7 +811,7 @@ internal static class Selection
 
     private static void AppendAdvisoryTargets(StringBuilder sb, IReadOnlyList<AdvisoryTarget> targets)
     {
-        sb.AppendLine(CultureInfo.InvariantCulture, $"### Advisory schedule/outerloop impact ({targets.Count})");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"### Advisory workflow impact ({targets.Count})");
         sb.AppendLine();
         if (targets.Count == 0)
         {
@@ -1096,7 +1096,7 @@ internal static class Selection
             : $"git diff {options.From}{(options.To is null ? " (working tree)" : $"..{options.To}")}";
         var mode = options.Enforce
             ? "enforcing"
-            : "audit (advisory: the regular PR test matrix + PR-gated jobs run regardless of the selection below; advisory-only targets do not run on PRs)";
+            : "audit (advisory: the regular test matrix + selector-gated jobs run regardless of the selection below; advisory-only targets are reported but scheduled independently)";
         sb.AppendLine("### Options");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {mode}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");

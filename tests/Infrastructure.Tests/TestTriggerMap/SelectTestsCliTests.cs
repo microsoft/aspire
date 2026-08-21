@@ -338,7 +338,8 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("**would**", comment);
                 Assert.Contains("under enforcement", comment);
                 Assert.Contains("regular PR test matrix and PR-gated jobs", comment);
-                Assert.Contains("advisory-only targets", comment);
+                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
             {
@@ -381,7 +382,7 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
                 Assert.Contains("### Selected PR jobs (1)", comment);
-                Assert.Contains("### Advisory schedule/outerloop impact (2)", comment);
+                Assert.Contains("### Advisory workflow impact (2)", comment);
                 Assert.Contains("`Aspire.EndToEnd.Tests` *(outerloop-only)*", comment);
                 Assert.Contains("`deployment-e2e` *(schedule/dispatch-only)*", comment);
 
@@ -390,8 +391,50 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("- triggered PR jobs: job:extension-e2e", summary);
                 Assert.Contains("- advisory-only targets: test:Aspire.EndToEnd.Tests, job:deployment-e2e", summary);
                 Assert.Contains(
-                    "- mode: audit (advisory: the regular PR test matrix + PR-gated jobs run regardless of the selection below; advisory-only targets do not run on PRs)",
+                    "- mode: audit (advisory: the regular test matrix + selector-gated jobs run regardless of the selection below; advisory-only targets are reported but scheduled independently)",
                     summary);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
+    [Fact]
+    public void AuditAllCommentKeepsAdvisoryTargetsOutsideRegularGates()
+    {
+        const string slnx = """
+            <Solution>
+              <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
+              <Project Path="tests/Aspire.EndToEnd.Tests/Aspire.EndToEnd.Tests.csproj" />
+            </Solution>
+            """;
+        const string map = """
+            version: 1
+            path_rules:
+              - paths: [trigger.txt]
+                targets: [ALL]
+              - paths: [deployment.txt]
+                targets: [job:deployment-e2e]
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "trigger.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: false));
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("**Selects the full PR test matrix + all PR-gated jobs (ALL)**", comment);
+                Assert.Contains("### Advisory workflow impact (2)", comment);
+                Assert.Contains("Advisory-only targets are reported here but are not scheduled through the regular PR matrix or job gates", comment);
+                Assert.DoesNotContain("do not run on PRs", comment);
             }
             finally
             {
@@ -463,7 +506,7 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.Contains("### Selected PR test projects (1 / 1)", comment);
                 Assert.Contains(
-                    $"### Advisory schedule/outerloop impact ({expectedAdvisoryProjects.Count})",
+                    $"### Advisory workflow impact ({expectedAdvisoryProjects.Count})",
                     comment);
                 foreach (var project in expectedAdvisoryProjects)
                 {
