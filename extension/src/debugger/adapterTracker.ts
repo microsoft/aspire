@@ -100,6 +100,13 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     }
                 },
                 onExit(code: number | undefined) {
+                    // Browser adapters are server-hosted or can disconnect without exiting the
+                    // launched browser. The root VS Code debug session owns their terminal
+                    // notification, so an adapter exit must not report the run a second time.
+                    if (configuration.resourceType === 'browser') {
+                        return;
+                    }
+
                     let exitCode = debuggeeExitCode ?? code;
 
                     // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux

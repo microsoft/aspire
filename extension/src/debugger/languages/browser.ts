@@ -1,16 +1,24 @@
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isBrowserLaunchConfiguration } from "../../dcp/types";
-import { browserDisplayName, browserLabel, invalidLaunchConfiguration, unsupportedBrowserDebugTarget, unsupportedBrowserDebugTargetWithoutUrl } from "../../loc/strings";
+import { browserDisplayName, browserLabel, firefoxDebuggerNotInstalled, invalidLaunchConfiguration, unsupportedBrowserDebugTarget, unsupportedBrowserDebugTargetWithoutUrl } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+import { firefoxDebugAdapterType, isFirefoxDebuggerInstalled, promptToInstallFirefoxDebugger } from "../firefoxDebugger";
+
+const browserRuntimeArgs = [
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-mode'
+];
 
 /**
- * Browsers VS Code's built-in js-debug can debug, mapped to the debug type it registers.
+ * Browsers Aspire can debug, mapped to the debug type registered in VS Code.
  *
  * `WithBrowserDebugger(browser)` on the hosting side accepts an arbitrary string, so an unmapped
  * value would otherwise be forwarded as `pwa-<value>` and fail inside VS Code with an opaque
- * "Configured debug type is not supported" once the session is already starting. js-debug only
- * contributes `pwa-chrome` and `pwa-msedge` for browsers:
+ * "Configured debug type is not supported" once the session is already starting. js-debug
+ * contributes `pwa-chrome` and `pwa-msedge`:
  * https://github.com/microsoft/vscode-js-debug/blob/main/package.json
+ * Firefox is contributed by firefox-devtools.vscode-firefox-debug.
  *
  * A `Map` rather than an object literal because the lookup key is attacker-influenced data from the
  * AppHost: an object literal inherits `Object.prototype`, so `toString`, `constructor`, `__proto__`
@@ -20,6 +28,7 @@ import { ResourceDebuggerExtension } from "../debuggerExtensions";
 const browserDebugTypesByName: ReadonlyMap<string, string> = new Map([
     ['msedge', 'pwa-msedge'],
     ['chrome', 'pwa-chrome'],
+    ['firefox', firefoxDebugAdapterType],
 ]);
 
 export const browserDebuggerExtension: ResourceDebuggerExtension = {
@@ -40,7 +49,7 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
-        // Map browser name to VS Code js-debug adapter type (pwa- prefix required)
+        // Map the browser name to the adapter type registered in VS Code.
         // `??` rather than `||`: only an absent browser (an older AppHost that does not send the
         // field) should fall back to the default. An explicit empty string is a value the caller
         // chose, and it is no more supported than 'safari' would be, so it has to reach the
@@ -48,7 +57,7 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         const browser = launchConfig.browser ?? 'msedge';
         const debugType = browserDebugTypesByName.get(browser);
         if (!debugType) {
-            extensionLogOutputChannel.warn(`No built-in js-debug adapter is registered for browser '${browser}'.`);
+            extensionLogOutputChannel.warn(`No supported debug adapter is registered for browser '${browser}'.`);
             // The toast this becomes only carries the message, and the URL is the one field of a
             // browser launch configuration a user recognises. There is deliberately no run-ID
             // fallback: the DCP `run_session` handler that turns this into an HTTP 500 already
@@ -59,6 +68,11 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(url
                 ? unsupportedBrowserDebugTarget(browser, url, supportedBrowsers)
                 : unsupportedBrowserDebugTargetWithoutUrl(browser, supportedBrowsers));
+        }
+
+        if (debugType === firefoxDebugAdapterType && !isFirefoxDebuggerInstalled()) {
+            promptToInstallFirefoxDebugger();
+            throw new Error(firefoxDebuggerNotInstalled);
         }
 
         debugConfiguration.type = debugType;
@@ -95,9 +109,26 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
 
         debugConfiguration.sourceMaps = true;
         debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
-        // Use an auto-managed temp user data directory so multiple browser debuggers
-        // can run concurrently without conflicting
-        debugConfiguration.userDataDir = true;
+
+        if (debugConfiguration.type === firefoxDebugAdapterType) {
+            // vscode-firefox-debug uses reAttach to decide whether stopping a debug session should
+            // leave Firefox running. Aspire owns this launch, so a workspace setting must not turn
+            // resource termination into an adapter-only disconnect.
+            debugConfiguration.reAttach = false;
+            delete debugConfiguration.runtimeArgs;
+            delete debugConfiguration.userDataDir;
+
+            if (!debugConfiguration.webRoot) {
+                debugConfiguration.pathMappings ??= [];
+            }
+        }
+        else {
+            // Let js-debug create and clean up the isolated profile. A workspace-provided profile
+            // path or command-line override would make Aspire stop a session without necessarily
+            // owning the browser instance that was launched.
+            debugConfiguration.userDataDir = true;
+            debugConfiguration.runtimeArgs = mergeRuntimeArgs(debugConfiguration.runtimeArgs);
+        }
 
         // Remove program/args/cwd since browser debugging doesn't use them
         delete debugConfiguration.program;
@@ -105,3 +136,37 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         delete debugConfiguration.cwd;
     }
 };
+
+function mergeRuntimeArgs(runtimeArgs: unknown): string[] {
+    const existing = (Array.isArray(runtimeArgs) ? runtimeArgs : typeof runtimeArgs === 'string' ? [runtimeArgs] : [])
+        .filter((arg): arg is string => typeof arg === 'string');
+    const merged: string[] = [];
+
+    for (let i = 0; i < existing.length; i++) {
+        const arg = existing[i];
+        if (!isUserDataDirArg(arg)) {
+            merged.push(arg);
+            continue;
+        }
+
+        // Chromium accepts both `--user-data-dir=/path` and
+        // `--user-data-dir /path`; remove the separate value as well.
+        if (!arg.includes('=') && i + 1 < existing.length && !existing[i + 1].startsWith('-')) {
+            i++;
+        }
+    }
+
+    for (const arg of browserRuntimeArgs) {
+        if (!merged.includes(arg)) {
+            merged.push(arg);
+        }
+    }
+
+    return merged;
+}
+
+function isUserDataDirArg(arg: string): boolean {
+    const switchName = arg.split('=', 1)[0].trim();
+
+    return switchName === '--user-data-dir' || switchName === '-user-data-dir';
+}

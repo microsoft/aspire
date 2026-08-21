@@ -90,6 +90,13 @@ export function isBunInstalled() {
     return isExtensionInstalled("oven.bun-vscode");
 }
 
+// The Firefox adapter is contributed by this extension rather than VS Code's built-in js-debug.
+export const firefoxDebuggerExtensionId = "firefox-devtools.vscode-firefox-debug";
+
+export function isFirefoxDebuggerInstalled() {
+    return isExtensionInstalled(firefoxDebuggerExtensionId);
+}
+
 // The Java debug adapter cannot launch anything on its own: it resolves main classes, the
 // classpath and project metadata through the redhat.java language server, which is why
 // vscjava.vscode-java-debug declares redhat.java as an extension dependency and both ship together

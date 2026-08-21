@@ -161,6 +161,8 @@
   "aspire-vscode.strings.yesLabel": "Yes",
   "aspire-vscode.strings.noLabel": "No",
   "aspire-vscode.strings.invalidLaunchConfiguration": "Invalid launch configuration for {0}.",
+  "aspire-vscode.strings.installLabel": "Install",
+  "aspire-vscode.strings.firefoxDebuggerNotInstalled": "Debugging with Firefox requires the Firefox Debugger extension (firefox-devtools.vscode-firefox-debug), which is not installed. Install it and try again.",
   "aspire-vscode.strings.unsupportedBrowserDebugTarget": "Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.",
   "aspire-vscode.strings.unsupportedBrowserDebugTargetWithoutUrl": "Browser '{0}' cannot be debugged. Supported browsers are: {1}.",
   "aspire-vscode.strings.noAppHostInWorkspace": "No AppHost found in the Aspire settings file.",

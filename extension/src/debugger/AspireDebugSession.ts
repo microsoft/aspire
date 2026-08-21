@@ -15,6 +15,7 @@ import { nodeDebuggerExtension } from "./languages/node";
 import { createDefaultRustDebuggerExtension } from "./languages/rust";
 import { javaDebuggerExtension, parseJavaAppHostCommand, resolveJavaClassPaths } from "./languages/java";
 import { cleanupRun } from "./runCleanupRegistry";
+import { BrowserDebugSessionTermination } from "./browserDebugSessionTermination";
 import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
 import { AlreadyStartedResourceDebugSession, createDebugSessionConfiguration } from "./debuggerExtensions";
@@ -1506,6 +1507,16 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         if (session.configuration.runId === debugConfig.runId) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
+          const browserTermination = debugConfig.resourceType === 'browser'
+            ? new BrowserDebugSessionTermination(session, debugConfig.runId, debugConfig.debugSessionId, (runId, dcpId) => {
+              const notification: SessionTerminatedNotification = {
+                notification_type: 'sessionTerminated',
+                session_id: runId,
+                dcp_id: dcpId
+              };
+              this._dcpServer.sendNotification(notification);
+            })
+            : undefined;
 
           let stopSessionPromise: Promise<void> | undefined;
           let runCleanedUp = false;
@@ -1546,10 +1557,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
             }
 
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
-            const stop = Promise.race([
-              Promise.resolve(vscode.debug.stopDebugging(session)),
-              termination,
-            ]);
+            const stop = browserTermination
+              ? Promise.race([browserTermination.stop(), termination])
+              : Promise.race([
+                Promise.resolve(vscode.debug.stopDebugging(session)),
+                termination,
+              ]);
             stopSessionPromise = stop;
 
             // A rejected adapter stop leaves the resource running. Forget only that failed attempt
@@ -1584,6 +1597,11 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           }
 
           this._resourceDebugSessions.push(vsCodeDebugSession);
+          if (browserTermination) {
+            this._disposables.push({
+              dispose: () => browserTermination.stopAndDisposeOnFailure()
+            });
+          }
 
           resolved = true;
           resolve(vsCodeDebugSession);

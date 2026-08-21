@@ -20,7 +20,7 @@ import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliP
 import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
-import { registerRunCleanup } from '../debugger/runCleanupRegistry';
+import { cleanupRun, registerRunCleanup } from '../debugger/runCleanupRegistry';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
 interface RecordedEvent {
@@ -4855,6 +4855,79 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(result, undefined);
         assert.strictEqual(stopSession.calledOnce, true);
+    });
+
+    test('retries a failed resource stop without duplicating concurrent attempts or cleanup', async () => {
+        let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'retry-run',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: '.NET',
+            request: 'launch',
+        } as AspireResourceExtendedDebugConfiguration;
+        const resourceSession = {
+            id: 'resource-session',
+            type: 'coreclr',
+            name: '.NET',
+            configuration: debugConfig as vscode.DebugConfiguration,
+        } as vscode.DebugSession;
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(callback => {
+            startSessionCallback = callback;
+            return { dispose: sinon.stub() };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').callsFake(async () => {
+            startSessionCallback!(resourceSession);
+            return true;
+        });
+        const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging');
+        stopDebugging.onFirstCall().rejects(new Error('stop failed'));
+        stopDebugging.onSecondCall().resolves();
+        const cleanup = sinon.stub();
+        registerRunCleanup(debugConfig.runId, cleanup);
+        const aspireDebugSession = new AspireDebugSession(
+            parentDebugSession as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            terminalProvider as any,
+            () => { });
+
+        const trackedSession = await aspireDebugSession.startAndGetDebugSession(debugConfig);
+        assert.ok(trackedSession);
+
+        const firstStop = trackedSession.stopSession();
+        const concurrentStop = trackedSession.stopSession();
+        await assert.rejects(Promise.resolve(firstStop), /stop failed/);
+        await assert.rejects(Promise.resolve(concurrentStop), /stop failed/);
+
+        assert.strictEqual(stopDebugging.calledOnce, true);
+        assert.strictEqual(cleanup.calledOnce, true);
+
+        await trackedSession.stopSession();
+
+        assert.strictEqual(stopDebugging.callCount, 2);
+        assert.strictEqual(cleanup.calledOnce, true);
+
+        aspireDebugSession.dispose();
+        cleanupRun(debugConfig.runId);
     });
 
     test('retries MAUI resource debug sessions when the first start attempt is canceled', async () => {

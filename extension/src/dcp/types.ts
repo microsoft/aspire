@@ -243,6 +243,7 @@ export interface AspireResourceDebugSession {
 export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugConfiguration {
     runId: string;
     debugSessionId: string | null;
+    resourceType?: string;
     projectFile?: string;
     isApphost?: boolean;
 }
