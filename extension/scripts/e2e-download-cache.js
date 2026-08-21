@@ -109,6 +109,11 @@ function getDownloadCacheEntryGroupDirectory(cacheRoot, { platform, architecture
  * runs cold-start together, which is far cheaper than a lock protocol whose failure modes
  * (abandoned locks, half-released generations) can wedge every later run until a human deletes the
  * cache by hand.
+ *
+ * This machine-local cache assumes cooperative E2E processes do not replace an established
+ * ordinary group directory with a hostile link. Node's path APIs cannot make a trust check and
+ * later pathname operations atomic; defending malicious same-user swaps requires native
+ * handle-relative dirfd/openat operations and is out of scope.
  */
 function ensureDownloadCache(options) {
   const normalizedOptions = normalizeEnsureDownloadCacheOptions(options);
@@ -116,7 +121,7 @@ function ensureDownloadCache(options) {
   const groupDirectory = getDownloadCacheEntryGroupDirectory(normalizedOptions.cacheRoot, expectedManifest);
   const cacheRootOptions = { cacheRoot: normalizedOptions.cacheRoot };
 
-  ensureTrustedCacheEntryGroupDirectory(normalizedOptions.cacheRoot, groupDirectory);
+  const initialGroupReadIsAuthoritative = isTrustedCacheEntryGroupDirectory(normalizedOptions.cacheRoot, groupDirectory);
   const group = readCacheEntryGroup(groupDirectory);
   const publishedEntry = selectValidCacheEntry(groupDirectory, group.entryNames, expectedManifest, { ...cacheRootOptions, warnOnInvalid: true });
   if (publishedEntry) {
@@ -126,7 +131,9 @@ function ensureDownloadCache(options) {
     return { cacheHit: true, cacheDirectory: publishedEntry.cacheDirectory, manifest: publishedEntry.manifest };
   }
 
-  assertCanPublishAnotherCacheEntry(groupDirectory, group.reservedGenerationCount);
+  if (initialGroupReadIsAuthoritative) {
+    assertCanPublishAnotherCacheEntry(groupDirectory, group.reservedGenerationCount);
+  }
   const candidateDirectory = createCacheEntryCandidate(normalizedOptions.cacheRoot, groupDirectory);
 
   let publishedCandidate = false;
@@ -237,10 +244,10 @@ function readCacheEntryGroup(groupDirectory) {
   try {
     dirents = fs.readdirSync(groupDirectory, { withFileTypes: true });
   } catch (error) {
-    // The caller establishes the trust boundary before its initial read, but another process can
-    // still repair or replace the leaf before `readdir` runs. Treat that race as an empty group so
-    // candidate creation can repair or reject the new leaf. A genuine permission problem on a real
-    // directory still surfaces when the candidate is created there.
+    // A group can be missing or unreadable on the initial observation, or disappear before a
+    // publish-time re-read. Treat that as an empty group so candidate creation can repair or reject
+    // the leaf. A genuine permission problem on a real directory still surfaces when the candidate
+    // is created there.
     if (isUnreadableDirectoryError(error)) {
       return { highestGeneration: 0, reservedGenerationCount: 0, entryNames: [] };
     }
@@ -324,6 +331,21 @@ function ensureTrustedCacheEntryGroupDirectory(cacheRoot, groupDirectory) {
   detachUntrustedCacheEntryGroupDirectory(groupDirectory);
   fs.mkdirSync(groupDirectory, { recursive: true });
   assertTrustedCacheEntryDirectory(groupDirectory, cacheRoot);
+}
+
+/**
+ * Reports whether an initial group read can come from an ordinary directory inside the cache root.
+ *
+ * This is deliberately read-only: an untrusted or missing leaf is repaired later, when the miss
+ * path creates a candidate.
+ */
+function isTrustedCacheEntryGroupDirectory(cacheRoot, groupDirectory) {
+  try {
+    assertTrustedCacheEntryDirectory(groupDirectory, cacheRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function detachUntrustedCacheEntryGroupDirectory(groupDirectory) {

@@ -1865,7 +1865,7 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
     });
 
-    test('repairs a symlinked cache entry group before counting its apparent generations', () => {
+    test('observes a symlinked cache entry group without mutating it before miss-path repair', () => {
         const root = createTestRoot('linked-cache-entry');
         const cacheRoot = path.join(root, 'cache');
         const groupDirectory = getDefaultGroupDirectory(cacheRoot);
@@ -1875,7 +1875,7 @@ suite('E2E download cache', () => {
 
         // Candidates are created inside the group with mkdtemp, so a symlinked group would send
         // hundreds of megabytes of downloads outside the cache root. Its apparent generations are
-        // untrusted too, so they must not be validated or counted through the link.
+        // untrusted too, so the initial observation must not make the early cap authoritative.
         const externalEntries = [1, 2].map((generation) => {
             const entryDirectory = getCacheEntryDirectory(externalGroup, generation);
             const markerFileName = `external-generation-${generation}.txt`;
@@ -1898,16 +1898,33 @@ suite('E2E download cache', () => {
         const externalSentinelMetadata = getPathIdentityAndMetadata(externalSentinelPath);
         createDirectoryLink(groupDirectory, externalGroup);
 
-        const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
-            populate(stagingDirectory) {
-                populateCalls++;
-                populateFakeDownload(stagingDirectory, {
-                    platform: 'linux',
-                    architecture: 'x64',
-                });
-            },
-        }));
+        const nodeFs = require('fs') as typeof fs;
+        const realReaddirSync = nodeFs.readdirSync;
+        let groupWasLinkedAtInitialRead: boolean | undefined;
+        let result;
+        try {
+            nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+                if (target === groupDirectory && groupWasLinkedAtInitialRead === undefined) {
+                    groupWasLinkedAtInitialRead = nodeFs.lstatSync(groupDirectory).isSymbolicLink();
+                }
 
+                return (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+            }) as typeof fs.readdirSync;
+
+            result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+                populate(stagingDirectory) {
+                    populateCalls++;
+                    populateFakeDownload(stagingDirectory, {
+                        platform: 'linux',
+                        architecture: 'x64',
+                    });
+                },
+            }));
+        } finally {
+            nodeFs.readdirSync = realReaddirSync;
+        }
+
+        assert.strictEqual(groupWasLinkedAtInitialRead, true);
         assert.strictEqual(populateCalls, 1);
         assert.strictEqual(result.cacheHit, false);
         assert.strictEqual(fs.lstatSync(groupDirectory).isSymbolicLink(), false);
@@ -1927,6 +1944,61 @@ suite('E2E download cache', () => {
             assert.ok(fs.existsSync(path.join(externalEntry.entryDirectory, cache.CACHE_MANIFEST_NAME)));
         }
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1)]);
+    });
+
+    test('does not cap a stale symlink listing after cooperative miss repair', () => {
+        const root = createTestRoot('concurrent-linked-cache-entry-repair');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        const externalGroup = path.join(root, 'external-cache-entry');
+        const externalSentinelPath = path.join(externalGroup, 'external-sentinel.txt');
+        let populateCalls = 0;
+
+        fs.mkdirSync(getCacheEntryDirectory(externalGroup, 1), { recursive: true });
+        fs.mkdirSync(getCacheEntryDirectory(externalGroup, 2), { recursive: true });
+        writeFile(externalSentinelPath, 'leave external entry alone');
+        createDirectoryLink(groupDirectory, externalGroup);
+
+        const nodeFs = require('fs') as typeof fs;
+        const realReaddirSync = nodeFs.readdirSync;
+        let repairedGroup = false;
+        let result;
+        try {
+            nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+                const entries = (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+                if (target === groupDirectory && !repairedGroup) {
+                    repairedGroup = true;
+                    cache.removePathWithoutFollowingLinks(groupDirectory);
+                    nodeFs.mkdirSync(groupDirectory);
+                }
+
+                return entries;
+            }) as typeof fs.readdirSync;
+
+            result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+                populate(stagingDirectory) {
+                    populateCalls++;
+                    populateFakeDownload(stagingDirectory, {
+                        platform: 'linux',
+                        architecture: 'x64',
+                    });
+                },
+            }));
+        } finally {
+            nodeFs.readdirSync = realReaddirSync;
+        }
+
+        assert.strictEqual(repairedGroup, true);
+        assert.strictEqual(populateCalls, 1);
+        assert.strictEqual(result.cacheHit, false);
+        assert.strictEqual(result.cacheDirectory, getCacheEntryDirectory(groupDirectory, 1));
+        assert.strictEqual(fs.readFileSync(externalSentinelPath, 'utf8'), 'leave external entry alone');
+        assert.deepStrictEqual(getGroupChildNames(externalGroup), [
+            getCacheEntryName(1),
+            getCacheEntryName(2),
+            path.basename(externalSentinelPath),
+        ]);
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1)]);
     });
 
