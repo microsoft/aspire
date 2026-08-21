@@ -3,7 +3,6 @@ import { AspireDebugSession, type AppHostDebugSessionTracker } from './AspireDeb
 import AspireDcpServer from '../dcp/AspireDcpServer';
 import AspireRpcServer from '../server/AspireRpcServer';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
 
 export class AspireDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
@@ -13,21 +12,19 @@ export class AspireDebugAdapterDescriptorFactory implements vscode.DebugAdapterD
   private readonly _addAspireDebugSession: (session: AspireDebugSession) => void;
   private readonly _removeAspireDebugSession: (session: AspireDebugSession) => void;
   private readonly _trackAppHostDebugSession: AppHostDebugSessionTracker;
-  private readonly _appHostDiscoveryService: AppHostDiscoveryService;
 
-  constructor(rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, addAspireDebugSession: (session: AspireDebugSession) => void, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker, appHostDiscoveryService: AppHostDiscoveryService) {
+  constructor(rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, addAspireDebugSession: (session: AspireDebugSession) => void, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker) {
     this._rpcServer = rpcServer;
     this._dcpServer = dcpServer;
     this._terminalProvider = terminalProvider;
     this._addAspireDebugSession = addAspireDebugSession;
     this._removeAspireDebugSession = removeAspireDebugSession;
     this._trackAppHostDebugSession = trackAppHostDebugSession;
-    this._appHostDiscoveryService = appHostDiscoveryService;
   }
 
   async createDebugAdapterDescriptor(session: vscode.DebugSession,  executable: vscode.DebugAdapterExecutable | undefined): Promise<vscode.DebugAdapterDescriptor> {
     stripAspireDebugConfigurationProviderInternalProperties(session.configuration);
-    const aspireDebugSession = new AspireDebugSession(session, this._rpcServer, this._dcpServer, this._terminalProvider, this._removeAspireDebugSession, this._trackAppHostDebugSession, undefined, undefined, this._appHostDiscoveryService);
+    const aspireDebugSession = new AspireDebugSession(session, this._rpcServer, this._dcpServer, this._terminalProvider, this._removeAspireDebugSession, this._trackAppHostDebugSession);
     this._addAspireDebugSession(aspireDebugSession);
     return new vscode.DebugAdapterInlineImplementation(aspireDebugSession);
   }
