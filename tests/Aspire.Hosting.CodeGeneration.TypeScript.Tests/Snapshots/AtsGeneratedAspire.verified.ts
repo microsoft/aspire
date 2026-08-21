@@ -55,6 +55,12 @@ import type {
 /** Handle to ITestMarkerResource */
 type ITestMarkerResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMarkerResource'>;
 
+/** Handle to ITestPromiseCollisionResource */
+type ITestPromiseCollisionResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource'>;
+
+/** Handle to ITestPromiseCollisionResourcePromise */
+type ITestPromiseCollisionResourcePromiseHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise'>;
+
 /** Handle to ITestVaultResource */
 type ITestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource'>;
 
@@ -818,7 +824,7 @@ export interface TestDatabaseResource {
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
     /** Adds a dependency from a string or another resource */
@@ -886,7 +892,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
     /** Adds a dependency from a string or another resource */
@@ -1113,7 +1119,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): Promise<TestDatabaseResource> {
+    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestDatabaseResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -1124,7 +1130,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
 
@@ -1422,7 +1428,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
@@ -1491,6 +1497,13 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 export interface TestRedisResource {
     toJSON(): MarshalledHandle;
     /**
+     * Configures a Redis resource with parameter-only resources whose generated names collide.
+     * @param resource The resource whose unused Promise wrapper would collide.
+     * @param resourcePromise The resource whose generated name matches that Promise wrapper.
+     * @returns The Redis resource builder.
+     */
+    withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise;
+    /**
      * Adds a child database to a test Redis resource
      *
      * This method tests the factory method codegen pattern where a method on builder type A
@@ -1536,7 +1549,7 @@ export interface TestRedisResource {
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /** Gets the endpoints */
     getEndpoints(): Promise<string[]>;
     /** Sets connection string using direct interface target */
@@ -1596,6 +1609,13 @@ export interface TestRedisResource {
 
 export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource> {
     /**
+     * Configures a Redis resource with parameter-only resources whose generated names collide.
+     * @param resource The resource whose unused Promise wrapper would collide.
+     * @param resourcePromise The resource whose generated name matches that Promise wrapper.
+     * @returns The Redis resource builder.
+     */
+    withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise;
+    /**
      * Adds a child database to a test Redis resource
      *
      * This method tests the factory method codegen pattern where a method on builder type A
@@ -1641,7 +1661,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /** Gets the endpoints */
     getEndpoints(): Promise<string[]>;
     /** Sets connection string using direct interface target */
@@ -1706,6 +1726,28 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
 class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle> implements TestRedisResource {
     constructor(handle: TestRedisResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withPromiseCollisionResourcesInternal(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): Promise<TestRedisResource> {
+        resource = isPromiseLike(resource) ? await resource : resource;
+        resourcePromise = isPromiseLike(resourcePromise) ? await resourcePromise : resourcePromise;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resource, resourcePromise };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests/withPromiseCollisionResources',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures a Redis resource with parameter-only resources whose generated names collide.
+     * @param resource The resource whose unused Promise wrapper would collide.
+     * @param resourcePromise The resource whose generated name matches that Promise wrapper.
+     * @returns The Redis resource builder.
+     */
+    withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withPromiseCollisionResourcesInternal(resource, resourcePromise), this._client);
     }
 
     /** @internal */
@@ -1962,7 +2004,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): Promise<TestRedisResource> {
+    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestRedisResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -1973,7 +2015,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
 
@@ -2322,6 +2364,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    withPromiseCollisionResources(resource: Awaitable<TestPromiseCollisionResource>, resourcePromise: Awaitable<TestPromiseCollisionResourcePromise>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPromiseCollisionResources(resource, resourcePromise)), this._client);
+    }
+
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(name, options)), this._client);
     }
@@ -2382,7 +2428,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
@@ -2501,7 +2547,7 @@ export interface TestVaultResource {
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
     /** Adds a dependency from a string or another resource */
@@ -2566,7 +2612,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
     /** Adds a dependency from a string or another resource */
@@ -2790,7 +2836,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): Promise<TestVaultResource> {
+    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestVaultResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -2801,7 +2847,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
 
@@ -3094,7 +3140,7 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
@@ -3187,7 +3233,7 @@ export interface Resource {
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
     /** Adds a dependency from a string or another resource */
@@ -3246,7 +3292,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
     /** Adds a dependency from a string or another resource */
@@ -3446,7 +3492,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): Promise<Resource> {
+    private async _testWaitForInternal(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<Resource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -3457,7 +3503,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** Waits for another resource (test version) */
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): ResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
 
@@ -3716,7 +3762,7 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestRedisResource | TestVaultResource>): ResourcePromise {
+    testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestMarkerResource | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
@@ -3991,6 +4037,44 @@ class TestMarkerResourcePromiseImpl implements TestMarkerResourcePromise {
 }
 
 // ============================================================================
+// TestPromiseCollisionResource
+// ============================================================================
+
+export interface TestPromiseCollisionResource {
+    toJSON(): MarshalledHandle;
+}
+
+// ============================================================================
+// TestPromiseCollisionResourceImpl
+// ============================================================================
+
+class TestPromiseCollisionResourceImpl extends ResourceBuilderBase<ITestPromiseCollisionResourceHandle> implements TestPromiseCollisionResource {
+    constructor(handle: ITestPromiseCollisionResourceHandle, client: AspireClientRpc) {
+        super(handle, client);
+    }
+
+}
+
+// ============================================================================
+// TestPromiseCollisionResourcePromise
+// ============================================================================
+
+export interface TestPromiseCollisionResourcePromise {
+    toJSON(): MarshalledHandle;
+}
+
+// ============================================================================
+// TestPromiseCollisionResourcePromiseImpl
+// ============================================================================
+
+class TestPromiseCollisionResourcePromiseImpl extends ResourceBuilderBase<ITestPromiseCollisionResourcePromiseHandle> implements TestPromiseCollisionResourcePromise {
+    constructor(handle: ITestPromiseCollisionResourcePromiseHandle, client: AspireClientRpc) {
+        super(handle, client);
+    }
+
+}
+
+// ============================================================================
 // Connection Helper
 // ============================================================================
 
@@ -4132,4 +4216,6 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource'
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString', (handle, client) => new ResourceWithConnectionStringImpl(handle as IResourceWithConnectionStringHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMarkerResource', (handle, client) => new TestMarkerResourceImpl(handle as ITestMarkerResourceHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource', (handle, client) => new TestPromiseCollisionResourceImpl(handle as ITestPromiseCollisionResourceHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise', (handle, client) => new TestPromiseCollisionResourcePromiseImpl(handle as ITestPromiseCollisionResourcePromiseHandle, client));
 

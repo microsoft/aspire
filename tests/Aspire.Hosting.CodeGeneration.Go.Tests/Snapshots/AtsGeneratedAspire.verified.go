@@ -142,6 +142,18 @@ type TestMarkerResource interface {
 	handleReference
 }
 
+// TestPromiseCollisionResource marks types implementing ITestPromiseCollisionResource.
+// Marker interface.
+type TestPromiseCollisionResource interface {
+	handleReference
+}
+
+// TestPromiseCollisionResourcePromise marks types implementing ITestPromiseCollisionResourcePromise.
+// Marker interface.
+type TestPromiseCollisionResourcePromise interface {
+	handleReference
+}
+
 // TestVaultResource marks types implementing ITestVaultResource.
 // Methods are emitted on concrete impls; this interface is a marker for type assertions.
 type TestVaultResource interface {
@@ -1440,6 +1452,7 @@ type TestRedisResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource
 	WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource
 	WithPersistence(options ...*WithPersistenceOptions) TestRedisResource
+	WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource
 	WithRedisSpecific(option string) TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
@@ -1967,6 +1980,21 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPromiseCollisionResources configures a Redis resource with parameter-only resources whose generated names collide.
+func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
+	if s.err != nil { return s }
+	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resource"] = serializeValue(resource)
+	reqArgs["resourcePromise"] = serializeValue(resourcePromise)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPromiseCollisionResources", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

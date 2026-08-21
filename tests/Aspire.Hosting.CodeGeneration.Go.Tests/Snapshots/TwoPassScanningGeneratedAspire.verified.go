@@ -1247,6 +1247,18 @@ type TestMarkerResource interface {
 	handleReference
 }
 
+// TestPromiseCollisionResource marks types implementing ITestPromiseCollisionResource.
+// Marker interface.
+type TestPromiseCollisionResource interface {
+	handleReference
+}
+
+// TestPromiseCollisionResourcePromise marks types implementing ITestPromiseCollisionResourcePromise.
+// Marker interface.
+type TestPromiseCollisionResourcePromise interface {
+	handleReference
+}
+
 // TestVaultResource marks types implementing ITestVaultResource.
 // Methods are emitted on concrete impls; this interface is a marker for type assertions.
 type TestVaultResource interface {
@@ -26109,6 +26121,7 @@ type TestRedisResource interface {
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestRedisResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestRedisResource
+	WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource
 	WithRedisSpecific(option string) TestRedisResource
 	WithReference(source any, options ...*WithReferenceOptions) TestRedisResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestRedisResource
@@ -28020,6 +28033,21 @@ func (s *testRedisResource) WithProcessCommandFactory(commandName string, displa
 		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPromiseCollisionResources configures a Redis resource with parameter-only resources whose generated names collide.
+func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
+	if s.err != nil { return s }
+	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resource"] = serializeValue(resource)
+	reqArgs["resourcePromise"] = serializeValue(resourcePromise)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPromiseCollisionResources", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

@@ -1539,6 +1539,8 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMarkerResource", (h, c) -> new ITestMarkerResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource", (h, c) -> new ITestPromiseCollisionResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise", (h, c) -> new ITestPromiseCollisionResourcePromise(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", (h, c) -> new TestDatabaseResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", (h, c) -> new TestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", (h, c) -> new ITestVaultResource(h, c));
@@ -16218,6 +16220,34 @@ public class ITestMarkerResource extends ResourceBuilderBase {
 
 }
 
+// ===== aspire/ITestPromiseCollisionResource.java =====
+// ITestPromiseCollisionResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestPromiseCollisionResource extends ResourceBuilderBase {
+    ITestPromiseCollisionResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestPromiseCollisionResourcePromise.java =====
+// ITestPromiseCollisionResourcePromise.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestPromiseCollisionResourcePromise extends ResourceBuilderBase {
+    ITestPromiseCollisionResourcePromise(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
 // ===== aspire/ITestVaultResource.java =====
 // ITestVaultResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -25856,6 +25886,28 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a Redis resource with parameter-only resources whose generated names collide. */
+    public TestRedisResource withPromiseCollisionResources(ITestPromiseCollisionResource resource, ITestPromiseCollisionResourcePromise resourcePromise) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("resourcePromise", AspireClient.serializeValue(resourcePromise));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withPromiseCollisionResources", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ResourceBuilderBase resource, ITestPromiseCollisionResourcePromise resourcePromise) {
+        return withPromiseCollisionResources(new ITestPromiseCollisionResource(resource.getHandle(), resource.getClient()), resourcePromise);
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ITestPromiseCollisionResource resource, ResourceBuilderBase resourcePromise) {
+        return withPromiseCollisionResources(resource, new ITestPromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ResourceBuilderBase resource, ResourceBuilderBase resourcePromise) {
+        return withPromiseCollisionResources(new ITestPromiseCollisionResource(resource.getHandle(), resource.getClient()), new ITestPromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
     public TestDatabaseResource addTestChildDatabase(String name) {
         return addTestChildDatabase(name, null);
     }
@@ -29392,6 +29444,8 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/IResourceWithWaitSupport.java
 .aspire/modules/aspire/IServiceProvider.java
 .aspire/modules/aspire/ITestMarkerResource.java
+.aspire/modules/aspire/ITestPromiseCollisionResource.java
+.aspire/modules/aspire/ITestPromiseCollisionResourcePromise.java
 .aspire/modules/aspire/ITestVaultResource.java
 .aspire/modules/aspire/IUserSecretsManager.java
 .aspire/modules/aspire/IconVariant.java

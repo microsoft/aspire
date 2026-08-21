@@ -12991,6 +12991,58 @@ impl ITestMarkerResource {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource
+pub struct ITestPromiseCollisionResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestPromiseCollisionResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestPromiseCollisionResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise
+pub struct ITestPromiseCollisionResourcePromise {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestPromiseCollisionResourcePromise {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestPromiseCollisionResourcePromise {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
 /// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource
 pub struct ITestVaultResource {
     handle: Handle,
@@ -19570,6 +19622,17 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withContainerBuildOptions", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a Redis resource with parameter-only resources whose generated names collide.
+    pub fn with_promise_collision_resources(&self, resource: &ITestPromiseCollisionResource, resource_promise: &ITestPromiseCollisionResourcePromise) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("resourcePromise".to_string(), resource_promise.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withPromiseCollisionResources", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
     }
 
     /// Adds a child database to a test Redis resource

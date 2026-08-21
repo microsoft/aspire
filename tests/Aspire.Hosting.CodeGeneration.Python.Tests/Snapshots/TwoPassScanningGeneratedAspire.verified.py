@@ -7778,6 +7778,14 @@ class AbstractTestMarkerResource(AbstractResource):
     """Abstract base class for AbstractTestMarkerResource interface."""
 
 
+class AbstractTestPromiseCollisionResource(AbstractResource):
+    """Abstract base class for AbstractTestPromiseCollisionResource interface."""
+
+
+class AbstractTestPromiseCollisionResourcePromise(AbstractResource):
+    """Abstract base class for AbstractTestPromiseCollisionResourcePromise interface."""
+
+
 class AbstractTestVaultResource(AbstractResource):
     """Abstract base class for AbstractTestVaultResource interface."""
 
@@ -12472,6 +12480,7 @@ class TestRedisResourceKwargs(ContainerResourceKwargs, total=False):
 
     connection_property: tuple[str, str | ReferenceExpression]
     on_connection_string_available: typing.Callable[[ConnectionStringAvailableEvent], None]
+    promise_collision_resources: tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise]
     persistence: TestPersistenceMode | typing.Literal[True]
     connection_string: ReferenceExpression
     connection_string_direct: str
@@ -12513,6 +12522,18 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/onConnectionStringAvailable',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_promise_collision_resources(self, resource: AbstractTestPromiseCollisionResource, resource_promise: AbstractTestPromiseCollisionResourcePromise) -> typing.Self:
+        """Configures a Redis resource with parameter-only resources whose generated names collide."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['resourcePromise'] = resource_promise
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -12665,6 +12686,14 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onConnectionStringAvailable', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_connection_string_available'. Expected: Callable[[ConnectionStringAvailableEvent], None]")
+        if _promise_collision_resources := kwargs.pop("promise_collision_resources", None):
+            if _validate_tuple_types(_promise_collision_resources, (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[0]
+                rpc_args["resourcePromise"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'promise_collision_resources'. Expected: (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)")
         if _persistence := kwargs.pop("persistence", None):
             if _validate_type(_persistence, TestPersistenceMode):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

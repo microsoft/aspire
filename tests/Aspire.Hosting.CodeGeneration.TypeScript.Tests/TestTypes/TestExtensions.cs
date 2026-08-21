@@ -70,6 +70,22 @@ public static class TestExtensions
     }
 
     /// <summary>
+    /// Configures a Redis resource with parameter-only resources whose generated names collide.
+    /// </summary>
+    /// <param name="builder">The Redis resource builder.</param>
+    /// <param name="resource">The resource whose unused Promise wrapper would collide.</param>
+    /// <param name="resourcePromise">The resource whose generated name matches that Promise wrapper.</param>
+    /// <returns>The Redis resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<TestRedisResource> WithPromiseCollisionResources(
+        this IResourceBuilder<TestRedisResource> builder,
+        IResourceBuilder<ITestPromiseCollisionResource> resource,
+        IResourceBuilder<ITestPromiseCollisionResourcePromise> resourcePromise)
+    {
+        return builder;
+    }
+
+    /// <summary>
     /// Adds a child database to a Redis server resource (factory method pattern).
     /// </summary>
     /// <remarks>
