@@ -1,0 +1,29 @@
+{
+  "run_id": 32532172260,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32532172260",
+  "analyzed_at": "2026-08-21T22:47:08Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19552,
+    "title": "Simplify and improve Executable launch argument computation",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/executable-arguments",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19552"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "id": 96928497810,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32532172260/job/96928497810",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure in the VS Code extension E2E 'debug-dashboard' shard with no retrievable job logs or TRX test failures. The PR only modifies Aspire.Hosting executable launch argument computation and its own tests (Aspire.Hosting/ApplicationModel, Dcp, and related unit tests); it does not touch the VS Code extension or dashboard debug-configuration code, so this shard's failure is unrelated to the PR changes. This matches a recurring pattern of similarly generic, unrelated VS Code extension E2E shard failures (e.g. apphost-lifecycle-tools, java-apphost, settings-files, apphost-tree, dynamic-debug-configuration, edge-cases) already tracked as flaky.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-linux-debug-dashboard-flaky"]
+}
