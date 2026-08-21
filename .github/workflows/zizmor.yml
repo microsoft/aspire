@@ -1,0 +1,44 @@
+name: Zizmor workflow security analysis
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - '.github/workflows/**'
+      - '.github/zizmor.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/zizmor.yml'
+  schedule:
+    # Daily scan at 06:30 UTC to catch drift
+    - cron: '30 6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: zizmor 🌈
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        run: pip install zizmor
+
+      - name: Run zizmor
+        run: zizmor --format sarif .github/workflows/ > results.sarif
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
+        with:
+          sarif_file: results.sarif
+          category: zizmor
