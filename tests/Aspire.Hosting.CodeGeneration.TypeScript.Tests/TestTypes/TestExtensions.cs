@@ -53,6 +53,23 @@ public static class TestExtensions
     }
 
     /// <summary>
+    /// Adds a resource exposed only through a bare marker interface.
+    /// </summary>
+    // Deliberately returns IResourceBuilder<ITestMarkerResource>: the marker interface contributes
+    // no capabilities of its own, so this export is the reference site that forces
+    // TestMarkerResourcePromise to be emitted in the generated SDK. Kept as a plain comment rather
+    // than <remarks> so this rationale does not land in the generated SDK doc comments. See
+    // GenerateDistributedApplication_EmitsPromiseWrapperForBareMarkerResourceBuilder and
+    // https://github.com/microsoft/aspire/issues/19507.
+    [AspireExport]
+    public static IResourceBuilder<ITestMarkerResource> AddTestMarker(
+        this IDistributedApplicationBuilder builder,
+        string name)
+    {
+        return builder.AddResource(new TestMarkerResource(name));
+    }
+
+    /// <summary>
     /// Adds a child database to a Redis server resource (factory method pattern).
     /// </summary>
     /// <remarks>

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
@@ -1008,7 +1009,10 @@ public class AtsTypeScriptCodeGeneratorTests
         //
         // ComputeEnvironmentResource (from Aspire.Hosting) is a real-world instance of this: it
         // has no capabilities of its own in this test's scanned assemblies, so it previously hit
-        // exactly this gap.
+        // exactly this gap. Note this is incidental coverage - it holds only while that type has
+        // no capabilities of its own, and this test would keep passing (while covering nothing)
+        // if it gained one. GenerateDistributedApplication_EmitsPromiseWrapperForBareMarkerResourceBuilder
+        // owns the durable version of this case via a fixture in TestTypes.
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
@@ -1021,6 +1025,105 @@ public class AtsTypeScriptCodeGeneratorTests
             "class ComputeEnvironmentResourcePromiseImpl implements ComputeEnvironmentResourcePromise",
             aspireTs);
     }
+
+    [Fact]
+    public void GenerateDistributedApplication_EmitsPromiseWrapperForBareMarkerResourceBuilder()
+    {
+        // Durable regression test for https://github.com/microsoft/aspire/issues/19507, using the
+        // ITestMarkerResource fixture rather than an in-the-box type that happens to have zero
+        // capabilities today: an [AspireExport] method returning IResourceBuilder<T> for a bare
+        // marker interface emits "{ClassName}Promise" as its return type (the reference site),
+        // while the wrapper declaration used to be skipped because the builder had no capabilities
+        // of its own - a dangling "Cannot find name '...Promise'" in the generated SDK.
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        // The reference site: the exported entry point returns the Promise wrapper for chaining.
+        Assert.Contains("): TestMarkerResourcePromise {", aspireTs);
+
+        // The declarations that reference requires.
+        Assert.Contains(
+            "export interface TestMarkerResourcePromise extends PromiseLike<TestMarkerResource>",
+            aspireTs);
+        Assert.Contains(
+            "class TestMarkerResourcePromiseImpl implements TestMarkerResourcePromise",
+            aspireTs);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GenerateDistributedApplication_EveryReferencedPromiseWrapperIsDeclared(bool includeHostingAssembly)
+    {
+        // The invariant behind https://github.com/microsoft/aspire/issues/19507, rather than one
+        // instance of it. "{ClassName}Promise" / "{ClassName}PromiseImpl" names are emitted from
+        // several independent reference sites (GenerateBuilderMethod's fluent return, the thenable
+        // forwarding methods, GenerateEntryPointFunction), while the declarations come from
+        // GenerateBuilderPromiseInterface / GenerateThenableClass / GenerateTypeClassInterface.
+        // Any guard that skips a declaration while a reference site still emits the name yields
+        // "TS2552: Cannot find name" in .aspire/modules/aspire.mts, which blocks "aspire run"
+        // entirely. Asserting that every referenced wrapper is declared catches that whole class of
+        // bug - including future reintroductions on paths this file has no explicit test for.
+        //
+        // This also guards the type-class side, where GenerateTypeClassInterface and
+        // GenerateTypeClass keep an analogous "no methods and no getter-only properties" guard.
+        // That guard is currently safe - unlike resource builders, which register a wrapper
+        // unconditionally, type classes are registered via HasChainableMethods, which evaluates the
+        // same predicate - but the predicate is duplicated across the three sites, so the two could
+        // drift apart. Both of its branches are exercised by the scanned fixtures: TestResourceContext
+        // has methods (declared and referenced), while TestEnvironmentContext has only get/set
+        // properties (neither declared nor referenced).
+        var atsContext = includeHostingAssembly ? CreateContextFromBothAssemblies() : CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        // Declarations visible to aspire.mts: its own, plus the hand-written wrappers in the
+        // pass-through modules it builds on (e.g. InteractionInputCollectionPromise in base.mts).
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var source in new[] { aspireTs, EmbeddedResources.Read("base.mts"), EmbeddedResources.Read("transport.mts") })
+        {
+            foreach (Match match in s_promiseDeclarationPattern.Matches(source))
+            {
+                declared.Add(match.Groups[1].Value);
+            }
+        }
+
+        // Scan references with comments stripped so a doc comment mentioning a wrapper name can
+        // never fail the test, and a commented-out declaration can never satisfy it.
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match match in s_promiseReferencePattern.Matches(StripComments(aspireTs)))
+        {
+            referenced.Add(match.Value);
+        }
+
+        // Guard against a vacuous pass if either pattern stops matching the generated shape.
+        Assert.NotEmpty(declared);
+        Assert.NotEmpty(referenced);
+
+        var dangling = referenced.Except(declared).OrderBy(name => name, StringComparer.Ordinal).ToList();
+        Assert.True(
+            dangling.Count == 0,
+            $"Generated aspire.mts references Promise wrapper type(s) that are never declared: {string.Join(", ", dangling)}");
+    }
+
+    // Declarations: "export interface FooPromise extends ...", "class FooPromiseImpl implements ...".
+    private static readonly Regex s_promiseDeclarationPattern =
+        new(@"\b(?:interface|class|type)\s+(\w*Promise(?:Impl)?)\b", RegexOptions.Compiled);
+
+    // Uses of a wrapper type name: return types, "new FooPromiseImpl(", type arguments. Anchored on
+    // a leading capital so "PromiseLike", bare "Promise" and "trackPromise" are not matched.
+    private static readonly Regex s_promiseReferencePattern =
+        new(@"\b[A-Z]\w*Promise(?:Impl)?\b", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Removes line and block comments from generated TypeScript. Deliberately simple: generated
+    /// code has no string literals containing comment delimiters.
+    /// </summary>
+    private static string StripComments(string typeScript) =>
+        Regex.Replace(Regex.Replace(typeScript, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline), @"//[^\n]*", string.Empty);
 
     [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
