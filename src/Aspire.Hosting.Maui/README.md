@@ -213,7 +213,45 @@ The build queue is implemented via:
 - **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
 - **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
 - **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
-- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:NoBuild=true` for MAUI projects after the serialized pre-build
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:NoBuild=true` for MAUI projects after the serialized build
+
+## Customizing Build and Launch Arguments
+
+Each MAUI platform target runs in two phases: a serialized **build** compile (`dotnet build`) followed by a **launch** that starts the already-built app (`dotnet build --no-restore /t:Run -p:NoBuild=true`). You can inspect or modify the arguments for either phase with `WithMauiBuildArguments` and `WithMauiLaunchArguments`.
+
+Both methods register a callback that receives a `MauiBuildArgumentsCallbackContext`. Mutate its `Arguments` list to influence the corresponding command:
+
+| Property | Description |
+|----------|-------------|
+| `Arguments` | The mutable `dotnet` argument list for the current phase. |
+| `Step` | The build step (`Build` or `Launch`) that the callback is running for. |
+| `Resource` | The MAUI platform resource being built or launched. |
+| `CancellationToken` | Signals shutdown or a user-initiated cancel. |
+
+### Build Arguments
+
+`WithMauiBuildArguments` runs before the serialized compile. The argument list contains the full `dotnet build` command (verb, project path, target framework, configuration, and any additional MSBuild properties).
+
+```csharp
+// Add an MSBuild property to the compile
+mauiApp.AddAndroidEmulator()
+    .WithMauiBuildArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
+```
+
+### Launch Arguments
+
+`WithMauiLaunchArguments` runs after the compile succeeds, just before DCP launches the app. Use it to influence the launch command — for example, forcing a build during launch by overriding the default `-p:NoBuild=true`:
+
+```csharp
+mauiApp.AddAndroidEmulator()
+    .WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+```
+
+### Notes
+
+- Both methods have synchronous and asynchronous (`Func<..., Task>`) overloads.
+- Multiple callbacks can be registered per resource; they run in registration order and share the same mutable argument list.
+- Launch callbacks are applied against the pristine launch arguments on every start, so edits do not accumulate across restarts.
 
 ## Requirements
 

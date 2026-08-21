@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
@@ -30,6 +31,12 @@ internal class MauiBuildQueueEventSubscriber(
     private static readonly ResourceStateSnapshot s_queuedState = new("Queued", KnownResourceStateStyles.Info);
     private static readonly ResourceStateSnapshot s_buildingState = new("Building", KnownResourceStateStyles.Info);
     private static readonly ResourceStateSnapshot s_cancelledState = new(KnownResourceStates.Exited, KnownResourceStateStyles.Warn);
+
+    /// <summary>
+    /// Caches the pristine launch-argument-override arguments per resource so that launch callbacks
+    /// are always applied against the original base, preventing edits from accumulating across restarts.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, IReadOnlyList<string>> _originalLaunchArgs = new();
 
     /// <summary>
     /// Maximum time to wait for a <c>dotnet build</c> process before cancelling.
@@ -101,6 +108,10 @@ internal class MauiBuildQueueEventSubscriber(
 
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
 
+            // Allow consumers to inspect/modify the launch arguments (dotnet build --no-restore
+            // /t:Run -p:NoBuild=true) before DCP reads the override annotation to start the process.
+            await ApplyLaunchArgumentCallbacksAsync(resource, resourceCts.Token).ConfigureAwait(false);
+
             // Build succeeded. Keep the semaphore held until DCP starts the launch process.
             // After this handler returns, DCP invokes `dotnet build --no-restore /t:Run -p:NoBuild=true`
             // with the same configuration used here. The no-build/no-restore flags are important:
@@ -159,6 +170,9 @@ internal class MauiBuildQueueEventSubscriber(
         }
 
         args.AddRange(buildInfo.AdditionalBuildArguments);
+
+        // Allow consumers to inspect/modify the compile arguments.
+        await ApplyBuildArgumentCallbacksAsync(resource, args, cancellationToken).ConfigureAwait(false);
 
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -221,6 +235,74 @@ internal class MauiBuildQueueEventSubscriber(
         logger.LogInformation("Build succeeded for resource '{ResourceName}'.", resource.Name);
     }
 
+    /// <summary>
+    /// Invokes any registered <see cref="MauiBuildStep.Build"/> callbacks, letting consumers
+    /// mutate the compile <paramref name="arguments"/> in place.
+    /// </summary>
+    private static async Task ApplyBuildArgumentCallbacksAsync(
+        IResource resource, IList<string> arguments, CancellationToken cancellationToken)
+    {
+        var callbacks = resource.Annotations
+            .OfType<MauiBuildArgumentsCallbackAnnotation>()
+            .Where(a => a.Step == MauiBuildStep.Build)
+            .ToArray();
+
+        if (callbacks.Length == 0)
+        {
+            return;
+        }
+
+        var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Build, arguments, resource, cancellationToken);
+
+        foreach (var callback in callbacks)
+        {
+            await callback.Callback(context).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Applies any registered <see cref="MauiBuildStep.Launch"/> callbacks to the resource's
+    /// <see cref="ProjectLaunchArgsOverrideAnnotation"/> before DCP reads it to build the launch command.
+    /// </summary>
+    /// <remarks>
+    /// The override annotation's arguments are immutable, so callbacks operate on a copy of the pristine
+    /// base arguments (cached per resource) and the annotation is swapped for one carrying the result.
+    /// Caching the base makes repeated starts idempotent — edits never accumulate across restarts.
+    /// </remarks>
+    private async Task ApplyLaunchArgumentCallbacksAsync(IResource resource, CancellationToken cancellationToken)
+    {
+        var callbacks = resource.Annotations
+            .OfType<MauiBuildArgumentsCallbackAnnotation>()
+            .Where(a => a.Step == MauiBuildStep.Launch)
+            .ToArray();
+
+        if (callbacks.Length == 0)
+        {
+            return;
+        }
+
+        if (!resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride))
+        {
+            return;
+        }
+
+        // Apply callbacks against the pristine base arguments so restarts do not accumulate edits.
+        var baseArgs = _originalLaunchArgs.GetOrAdd(resource.Name, _ => launchOverride.Arguments);
+        var arguments = new List<string>(baseArgs);
+
+        var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Launch, arguments, resource, cancellationToken);
+
+        foreach (var callback in callbacks)
+        {
+            await callback.Callback(context).ConfigureAwait(false);
+        }
+
+        // Swap the immutable annotation for one carrying the updated arguments; DCP reads the last
+        // override annotation when it assembles the launch command after this handler returns.
+        resource.Annotations.Remove(launchOverride);
+        resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(arguments, launchOverride.LeadingResourceArgumentToRemove));
+    }
+
     private static async Task PipeOutputAsync(System.IO.StreamReader reader, ILogger logger, LogLevel level, CancellationToken cancellationToken)
     {
         try
@@ -272,7 +354,7 @@ internal class MauiBuildQueueEventSubscriber(
     /// Without this guard a restart could match on a stale snapshot.
     /// </para>
     /// <para>
-    /// Including "Running" in the predicate is intentional: the pre-build step already compiled
+    /// Including "Running" in the predicate is intentional: the build step already compiled
     /// the project for the same configuration that DCP will pass to the launch command, and DCP's
     /// <c>dotnet build --no-restore /t:Run -p:NoBuild=true</c> launch command is configured not to
     /// restore or build. Waiting for a terminal state would hold the semaphore for the entire app
