@@ -2082,6 +2082,25 @@ public class CapabilityDispatcherTests
         Assert.Equal("Host", result.GetValue<string>());
     }
 
+    [Fact]
+    public void Invoke_AddParameter_CanUseBuilderHandleReturnedFromCreateBuilder()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(DistributedApplication).Assembly]);
+
+        var builderHandle = dispatcher.Invoke("Aspire.Hosting/createBuilder", null);
+        Assert.NotNull(builderHandle);
+
+        var result = dispatcher.Invoke("Aspire.Hosting/addParameter", new JsonObject
+        {
+            ["builder"] = builderHandle.DeepClone(),
+            ["name"] = "registry-endpoint"
+        });
+
+        Assert.NotNull(result);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", result["$type"]?.GetValue<string>());
+    }
+
     private static CapabilityDispatcher CreateDispatcher(params System.Reflection.Assembly[] assemblies)
     {
         var handles = new HandleRegistry();
