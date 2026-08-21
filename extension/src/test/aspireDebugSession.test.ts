@@ -321,7 +321,7 @@ suite('AspireDebugSession tests', () => {
             true,
             { forceBuild: false });
 
-        assert.deepStrictEqual(createDebugSessionConfiguration.firstCall.args[2], []);
+        assert.strictEqual(createDebugSessionConfiguration.firstCall.args[2], undefined);
     });
 
     test('forwards the typed launch profile to the AppHost project debugger', async () => {
@@ -347,6 +347,7 @@ suite('AspireDebugSession tests', () => {
         assert.strictEqual(
             (createDebugSessionConfiguration.firstCall.args[1] as ProjectLaunchConfiguration).launch_profile,
             'Development HTTPS');
+        assert.strictEqual(createDebugSessionConfiguration.firstCall.args[2], undefined);
     });
 
     test('forwards the CLI launch profile to the AppHost project debugger', async () => {

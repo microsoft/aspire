@@ -275,10 +275,18 @@ function equalsOrdinalIgnoreCase(left: string, right: string): boolean {
         return false;
     }
 
-    // JavaScript's Unicode case-insensitive regular expressions use simple case folding, avoiding
-    // the multi-character and Turkish-I expansions produced by String.toUpperCase().
-    const escapedLeft = left.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`^(?:${escapedLeft})$`, 'iu').test(right);
+    const toOrdinalUpperCase = (value: string) => Array.from(value, character => {
+        // .NET ordinal casing deliberately excludes the Turkish dotless I and long S mappings.
+        // JavaScript also performs multi-character uppercase expansions that ordinal casing omits.
+        if (character === '\u0131' || character === '\u017F') {
+            return character;
+        }
+
+        const upper = character.toUpperCase();
+        return upper.length === character.length ? upper : character;
+    }).join('');
+
+    return toOrdinalUpperCase(left) === toOrdinalUpperCase(right);
 }
 
 /**
@@ -287,8 +295,9 @@ function equalsOrdinalIgnoreCase(left: string, right: string): boolean {
 export async function readLaunchSettings(projectPath: string): Promise<LaunchSettings | null> {
     try {
         let launchSettingsPath: string;
+        const isFileBasedProject = isFileBasedApp(projectPath);
 
-        if (isFileBasedApp(projectPath)) {
+        if (isFileBasedProject) {
             // Mirror the .NET SDK's launch-settings discovery for `dotnet run` / `dotnet run-api`
             // (LaunchSettings.TryFindLaunchSettingsFile): for a file-based app the SDK looks next to the
             // entry-point `.cs` file and prefers `Properties/launchSettings.json`, only falling back to
@@ -340,7 +349,11 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
 
         extensionLogOutputChannel.debug(`Launch settings file not found at: ${launchSettingsPath}`);
 
-        // Fall back to aspire.config.json profiles
+        if (!isFileBasedProject) {
+            return null;
+        }
+
+        // File-based apps created by older CLI versions stored profiles in aspire.config.json.
         const aspireConfigPath = path.join(path.dirname(projectPath), aspireConfigFileName);
         if (fs.existsSync(aspireConfigPath)) {
             const { value: aspireConfig, normalizedContent } = parseJsonContent<Record<string, unknown>>(

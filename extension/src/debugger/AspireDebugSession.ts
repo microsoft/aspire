@@ -1297,7 +1297,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
-      let appHostArgs: string[];
+      let appHostArgs: string[] | undefined;
       let launchConfig;
 
       if (isNodeAppHost) {
@@ -1344,7 +1344,8 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         // The parent configuration's typed profile has to cross this second launch boundary explicitly;
         // the CLI option itself is one of the root arguments intentionally removed here.
         const separatorIndex = args.indexOf('--');
-        appHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+        const explicitAppHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+        appHostArgs = explicitAppHostArgs.length > 0 ? explicitAppHostArgs : undefined;
         const launchProfileOptions = getAppHostLaunchProfileOptions(
           this.configuration,
           classifyAppHostPath(projectFile) === 'csharp');
@@ -1360,7 +1361,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         } as ProjectLaunchConfiguration;
       }
 
-      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs.length}`);
+      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs?.length ?? 0}`);
 
       const appHostDebugSessionConfiguration = await createDebugSessionConfiguration(
         this.configuration,

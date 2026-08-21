@@ -208,6 +208,42 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result.profileName, 'I');
         });
 
+        test('does not apply Unicode compatibility case folding to profile names', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'K'
+            };
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    '\u212A': { commandName: 'Project' }
+                }
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
+        test('does not apply Unicode long S case folding to profile names', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'S'
+            };
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    '\u017F': { commandName: 'Project' }
+                }
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
         test('returns null when explicit launch profile specified but does not exist', () => {
             const launchConfig: ProjectLaunchConfiguration = {
                 type: 'project',
@@ -960,6 +996,20 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, null);
             assert.deepStrictEqual(Object.keys(result!.profiles), ['selected']);
             assert.deepStrictEqual(result!.profileOrder, ['selected']);
+        });
+
+        test('does not use aspire.config.json profiles for a project AppHost', async () => {
+            fs.writeFileSync(path.join(path.dirname(projectPath), 'aspire.config.json'), JSON.stringify({
+                profiles: {
+                    Development: {
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            }));
+
+            const result = await readLaunchSettings(projectPath);
+
+            assert.strictEqual(result, null);
         });
 
         test('preserves duplicate profile values for SDK default selection', async () => {
