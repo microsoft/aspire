@@ -9,7 +9,7 @@ namespace Aspire.Cli.Tests.Acquisition;
 public class InstallSidecarWriterTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void UpdateForSelfUpdate_UpdatesChannelRemovesExecutableIdentityAndPreservesOtherFields()
+    public void PrepareForSelfUpdate_CommitUpdatesChannelRemovesExecutableIdentityAndPreservesOtherFields()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.Path, InstallSidecarReader.SidecarFileName);
@@ -25,7 +25,15 @@ public class InstallSidecarWriterTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        InstallSidecarWriter.UpdateForSelfUpdate(workspace.Path, "staging");
+        using var update = InstallSidecarWriter.PrepareForSelfUpdate(workspace.Path, "staging");
+
+        Assert.NotNull(update);
+        using (var originalDocument = JsonDocument.Parse(File.ReadAllBytes(sidecarPath)))
+        {
+            Assert.Equal("stable", originalDocument.RootElement.GetProperty("channel").GetString());
+        }
+
+        update.Commit();
 
         using var document = JsonDocument.Parse(File.ReadAllBytes(sidecarPath));
         Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
@@ -33,30 +41,46 @@ public class InstallSidecarWriterTests(ITestOutputHelper outputHelper)
         Assert.False(document.RootElement.TryGetProperty("version", out _));
         Assert.False(document.RootElement.TryGetProperty("commit", out _));
         Assert.True(document.RootElement.GetProperty("futureField").GetProperty("enabled").GetBoolean());
+        Assert.Empty(Directory.GetFiles(workspace.Path, $"{InstallSidecarReader.SidecarFileName}.*.tmp"));
     }
 
     [Fact]
-    public void UpdateForSelfUpdate_WhenSidecarIsMissing_LeavesSidecarAbsent()
+    public void PrepareForSelfUpdate_WhenSidecarIsMissing_LeavesSidecarAbsent()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        InstallSidecarWriter.UpdateForSelfUpdate(workspace.Path, "daily");
+        using var update = InstallSidecarWriter.PrepareForSelfUpdate(workspace.Path, "daily");
 
         var sidecarPath = Path.Combine(workspace.Path, InstallSidecarReader.SidecarFileName);
+        Assert.Null(update);
         Assert.False(File.Exists(sidecarPath));
     }
 
     [Fact]
-    public void UpdateForSelfUpdate_WhenSidecarIsMalformed_PreservesOriginalContent()
+    public void PrepareForSelfUpdate_WhenSidecarIsMalformed_PreservesOriginalContent()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sidecarPath = Path.Combine(workspace.Path, InstallSidecarReader.SidecarFileName);
         const string malformedContent = """{"source":"script","channel":""";
         File.WriteAllText(sidecarPath, malformedContent);
 
-        Assert.ThrowsAny<JsonException>(() => InstallSidecarWriter.UpdateForSelfUpdate(workspace.Path, "staging"));
+        Assert.ThrowsAny<JsonException>(() => InstallSidecarWriter.PrepareForSelfUpdate(workspace.Path, "staging"));
 
         Assert.Equal(malformedContent, File.ReadAllText(sidecarPath));
+        Assert.Empty(Directory.GetFiles(workspace.Path, $"{InstallSidecarReader.SidecarFileName}.*.tmp"));
+    }
+
+    [Fact]
+    public void PrepareForSelfUpdate_DisposeWithoutCommitPreservesOriginalContent()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sidecarPath = Path.Combine(workspace.Path, InstallSidecarReader.SidecarFileName);
+        const string originalContent = """{"source":"script","channel":"stable"}""";
+        File.WriteAllText(sidecarPath, originalContent);
+
+        InstallSidecarWriter.PrepareForSelfUpdate(workspace.Path, "staging")!.Dispose();
+
+        Assert.Equal(originalContent, File.ReadAllText(sidecarPath));
         Assert.Empty(Directory.GetFiles(workspace.Path, $"{InstallSidecarReader.SidecarFileName}.*.tmp"));
     }
 }

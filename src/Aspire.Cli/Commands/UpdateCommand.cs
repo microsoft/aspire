@@ -786,6 +786,12 @@ internal sealed class UpdateCommand : BaseCommand
                 throw new FileNotFoundException($"Extracted CLI executable not found: {newExePath}");
             }
 
+            // Prepare the sidecar before replacing the running single-file executable. JSON
+            // serialization can load framework assemblies lazily, and after replacement the
+            // bundle loader could resolve those assemblies from the new executable instead of
+            // the bundle used by this process.
+            using var sidecarUpdate = InstallSidecarWriter.PrepareForSelfUpdate(installDir, channel);
+
             // Backup current executable if it exists
             var exeDir = Path.GetDirectoryName(targetExePath)!;
             FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);
@@ -836,9 +842,9 @@ internal sealed class UpdateCommand : BaseCommand
                 // as stable. Persist the channel selected by this update so the next invocation keeps
                 // using staging instead of falling back to the binary stamp. Remove any sidecar version
                 // and commit assigned to the previous executable so identity falls back to the replacement
-                // binary's metadata. Write while the executable backup still exists so a sidecar failure
-                // restores the previous CLI.
-                InstallSidecarWriter.UpdateForSelfUpdate(installDir, channel);
+                // binary's metadata. Commit while the executable backup still exists so a sidecar
+                // failure restores the previous CLI.
+                sidecarUpdate?.Commit();
 
                 // If we get here, both the executable and its identity were updated successfully.
                 FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);

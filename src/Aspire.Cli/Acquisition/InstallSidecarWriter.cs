@@ -6,13 +6,13 @@ using System.Text.Json;
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Updates install-route sidecars after executable replacement while preserving
+/// Prepares install-route sidecar updates while preserving
 /// route-specific and forward-compatible fields.
 /// </summary>
 internal static class InstallSidecarWriter
 {
     /// <summary>
-    /// Atomically updates the sidecar next to the CLI binary after a self-update.
+    /// Prepares an atomic sidecar update for a CLI self-update.
     /// The selected channel is written while version and commit are removed so the
     /// replacement binary's assembly metadata supplies those executable-specific values.
     /// A missing sidecar is left absent because the update path cannot infer the original
@@ -20,7 +20,8 @@ internal static class InstallSidecarWriter
     /// </summary>
     /// <param name="binaryDirectory">Directory containing the CLI binary.</param>
     /// <param name="channel">Channel selected for the installed CLI.</param>
-    public static void UpdateForSelfUpdate(string binaryDirectory, string channel)
+    /// <returns>The prepared update, or <see langword="null"/> when no sidecar exists.</returns>
+    internal static PreparedInstallSidecarUpdate? PrepareForSelfUpdate(string binaryDirectory, string channel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(binaryDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(channel);
@@ -28,7 +29,7 @@ internal static class InstallSidecarWriter
         var sidecarPath = Path.Combine(binaryDirectory, InstallSidecarReader.SidecarFileName);
         if (!File.Exists(sidecarPath))
         {
-            return;
+            return null;
         }
 
         using var existingSidecar = ReadExistingSidecar(sidecarPath);
@@ -60,14 +61,16 @@ internal static class InstallSidecarWriter
                 stream.Flush(flushToDisk: true);
             }
 
-            File.Move(temporaryPath, sidecarPath, overwrite: true);
+            return new PreparedInstallSidecarUpdate(temporaryPath, sidecarPath);
         }
-        finally
+        catch
         {
             if (File.Exists(temporaryPath))
             {
                 File.Delete(temporaryPath);
             }
+
+            throw;
         }
     }
 
@@ -89,5 +92,37 @@ internal static class InstallSidecarWriter
         }
 
         return document;
+    }
+}
+
+/// <summary>
+/// Represents a sidecar update that has been fully written and is ready to commit atomically.
+/// </summary>
+internal sealed class PreparedInstallSidecarUpdate(string temporaryPath, string sidecarPath) : IDisposable
+{
+    private string? _temporaryPath = temporaryPath;
+
+    /// <summary>
+    /// Replaces the existing sidecar with the prepared update.
+    /// </summary>
+    internal void Commit()
+    {
+        if (_temporaryPath is null)
+        {
+            throw new InvalidOperationException("The prepared sidecar update has already been committed or disposed.");
+        }
+
+        File.Move(_temporaryPath, sidecarPath, overwrite: true);
+        _temporaryPath = null;
+    }
+
+    public void Dispose()
+    {
+        if (_temporaryPath is not null && File.Exists(_temporaryPath))
+        {
+            File.Delete(_temporaryPath);
+        }
+
+        _temporaryPath = null;
     }
 }

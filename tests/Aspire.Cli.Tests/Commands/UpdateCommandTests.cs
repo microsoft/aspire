@@ -1537,10 +1537,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         SetUnixExecutableMode(processPath);
 
         var sidecarPath = Path.Combine(installDirectory.FullName, InstallSidecarReader.SidecarFileName);
-        const string malformedSidecar = """{"source":"script","channel":""";
-        await File.WriteAllTextAsync(sidecarPath, malformedSidecar);
+        const string originalSidecar = """{"source":"script","channel":"stable"}""";
+        await File.WriteAllTextAsync(sidecarPath, originalSidecar);
 
-        var archivePath = await CreateSelfUpdateArchiveAsync(workspace);
+        // The replacement removes the prepared file during its version probe. This forces the
+        // sidecar commit to fail after executable replacement, exercising the rollback path.
+        var archivePath = await CreateSelfUpdateArchiveAsync(workspace, deletePreparedSidecarDuringVersionProbe: true);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             UseProcessPath(options, processPath);
@@ -1558,7 +1560,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(originalExecutable, await File.ReadAllTextAsync(processPath));
-        Assert.Equal(malformedSidecar, await File.ReadAllTextAsync(sidecarPath));
+        Assert.Equal(originalSidecar, await File.ReadAllTextAsync(sidecarPath));
     }
 
     [Fact]
@@ -3281,15 +3283,21 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         return (exitCode, capturedChannel, promptForSelectionInvoked, interactionService!);
     }
 
-    private static async Task<string> CreateSelfUpdateArchiveAsync(TemporaryWorkspace workspace)
+    private static async Task<string> CreateSelfUpdateArchiveAsync(
+        TemporaryWorkspace workspace,
+        bool deletePreparedSidecarDuringVersionProbe = false)
     {
         var contentDirectory = workspace.CreateDirectory("self-update-content");
         var executablePath = Path.Combine(contentDirectory.FullName, "aspire");
+        var deletePreparedSidecarCommand = deletePreparedSidecarDuringVersionProbe
+            ? """rm -f "$(dirname "$0")"/.aspire-install.json.*.tmp"""
+            : "";
         await File.WriteAllTextAsync(
             executablePath,
-            """
+            $$"""
             #!/bin/sh
             if [ "${1:-}" = "--version" ]; then
+                {{deletePreparedSidecarCommand}}
                 echo "13.5.0"
                 exit 0
             fi
