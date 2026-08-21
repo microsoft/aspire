@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getAppHostTargetVersion, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
+import { getAppHostTargetVersion, requiresLegacyCliPidOnlyOrphanDetection, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
 import { removeDirectorySafely } from './testHelpers';
@@ -44,6 +44,17 @@ suite('appHostTargetVersion', () => {
         writeFileSync(appHostPath, `<Project Sdk="Aspire.AppHost.Sdk/${version}" />`);
         return appHostPath;
     }
+
+    test('identifies only pre-13.5 AppHosts for legacy PID-only orphan detection', () => {
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('8.2.1'), true);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.4.6'), true);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.5.0-preview.1'), true);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.5.0'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('13.5.1-preview.1'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('14.0.0'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection('unknown'), false);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(undefined), false);
+    });
 
     test('summarizes candidate target versions from project files', async () => {
         const dir = makeTempDir();
@@ -191,6 +202,66 @@ suite('appHostTargetVersion', () => {
 `);
 
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.1');
+    });
+
+    test('does not use conditional package references for runtime compatibility', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup Condition="'$(UseCurrentAspire)' == 'true'">
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.5.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseCurrentAspire)' != 'true'">
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        const version = await getAppHostTargetVersion(appHostPath);
+        assert.strictEqual(version, undefined);
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(version), false);
+    });
+
+    test('does not use a package reference with a raw greater-than condition', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup Condition="'$(AspireGeneration)' > '0'">
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('does not choose between conflicting package versions', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.5.0" />
+    <PackageReference Update="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('combines an unversioned package reference with concrete package version metadata', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Update="Aspire.Hosting.AppHost" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.4.6');
     });
 
     test('reads the centrally managed older C# AppHost package reference version', async () => {

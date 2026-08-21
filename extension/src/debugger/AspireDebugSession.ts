@@ -27,7 +27,7 @@ import type { ChildProcessWithoutNullStreams } from "child_process";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } from "../utils/appHostLanguage";
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
-import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
+import { getAppHostTargetVersion, requiresLegacyCliPidOnlyOrphanDetection } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 import { markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
@@ -1354,6 +1354,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         environment,
         { debug, forceBuild: isNodeAppHost ? false : options.forceBuild, runId: '', debugSessionId: this.debugSessionId, isApphost: true, debugSession: this },
         debuggerExtension);
+      await this.usePidOnlyLegacyAppHostOrphanDetection(projectFile, appHostDebugSessionConfiguration);
 
       const appHostDebugSession = await this.startAndGetDebugSession(appHostDebugSessionConfiguration);
 
@@ -1439,6 +1440,58 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       }
       vscode.window.showErrorMessage(errorMessage);
       this.dispose();
+    }
+  }
+
+  private async usePidOnlyLegacyAppHostOrphanDetection(projectFile: string, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> {
+    const environment: NodeJS.ProcessEnv | undefined = debugConfiguration.env;
+    if (process.platform !== 'linux' || environment === undefined) {
+      return;
+    }
+
+    const cliProcess = this._cliProcess;
+    const reportedCliProcessIds = Object.entries(environment)
+      .filter(([name]) => name.toUpperCase() === EnvironmentVariables.ASPIRE_CLI_PID)
+      .map(([, value]) => value);
+    const legacyStartTimeNames = Object.keys(environment)
+      .filter(name => name.toUpperCase() === EnvironmentVariables.ASPIRE_CLI_STARTED);
+
+    if (reportedCliProcessIds.length === 0
+      || legacyStartTimeNames.length === 0) {
+      return;
+    }
+
+    const appHostTargetVersion = await getAppHostTargetVersion(projectFile);
+    if (!requiresLegacyCliPidOnlyOrphanDetection(appHostTargetVersion)) {
+      return;
+    }
+
+    const cliProcessId = this._cliProcess === cliProcess
+      && cliProcess?.exitCode === null
+      && cliProcess.signalCode === null
+      ? cliProcess.pid
+      : undefined;
+    if (cliProcessId === undefined
+      || reportedCliProcessIds.some(reportedProcessId => reportedProcessId !== cliProcessId.toString())) {
+      return;
+    }
+
+    // AppHosts through Aspire 13.4 compare this legacy value with Process.StartTime. Linux derives
+    // that wall-clock value from the current boot-time estimate, so a clock correction can change it
+    // for the same live process and make the AppHost cancel startup. The extension owns the exact CLI
+    // child process and stops the debug session from its exit callback, so positively identified legacy
+    // AppHosts can use their supported PID-only fallback here. Current CLIs also stamp a stable start
+    // time, but AppHosts before 13.5 ignore it, so the legacy value must be disabled regardless of the
+    // CLI version.
+    // See https://github.com/microsoft/aspire/issues/17354.
+    extensionLogOutputChannel.info(
+      `Using PID-only legacy AppHost orphan detection for owned Aspire CLI process ${cliProcessId} on Linux.`);
+    debugConfiguration.env = { ...environment };
+    for (const name of legacyStartTimeNames) {
+      // Debug adapters overlay this object on their inherited environment. An explicit empty value
+      // prevents a stale Extension Host value from reappearing in the AppHost process; legacy
+      // AppHosts treat an empty value as their supported PID-only fallback.
+      debugConfiguration.env[name] = '';
     }
   }
 

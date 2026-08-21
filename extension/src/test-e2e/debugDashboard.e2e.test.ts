@@ -1,13 +1,17 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForBrowserDebugSession, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoBrowserDebugSessions, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath } from './helpers/paths';
+import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForBrowserDebugSession, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoBrowserDebugSessions, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
+import { createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceAppHostConfigForPath, writeWorkspaceSetting } from './helpers/fixtures';
+import { readExtensionLogs } from './helpers/logs';
+import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
+
+    const legacyAppHostProjectName = 'AspireE2E.LegacyAppHost';
+    const legacyAppHostVersion = '13.4.6';
 
     teardown(async () => {
         await runE2eTeardown([
@@ -18,10 +22,13 @@ suite('Aspire debug dashboard E2E', function () {
             () => writeWorkspaceSetting('aspire.enableAspireDashboardAutoLaunch', undefined),
             () => restoreWorkspaceCliPath(),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
+            () => stopAppHostIfRunningIfPresent(legacyAppHostProjectName),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoBrowserDebugSessions(15000).catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
+            () => restoreWorkspaceAppHostConfig(),
+            () => removeAdditionalAppHostCandidate(legacyAppHostProjectName),
         ], 'Debug dashboard E2E teardown failed.');
     });
 
@@ -88,6 +95,50 @@ suite('Aspire debug dashboard E2E', function () {
 
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
+    });
+
+    test('debugs a pre-13.5 AppHost with a stale legacy CLI timestamp on Linux', async function () {
+        if (process.platform !== 'linux') {
+            this.skip();
+        }
+
+        await openAspireView();
+        await waitForRepositoryIdle();
+
+        const appHostPath = createAdditionalAppHostCandidate(
+            legacyAppHostProjectName,
+            'project',
+            legacyAppHostVersion);
+        const launchSettingsDirectory = path.join(path.dirname(appHostPath), 'Properties');
+        fs.mkdirSync(launchSettingsDirectory, { recursive: true });
+        writeFileWithRetry(path.join(launchSettingsDirectory, 'launchSettings.json'), JSON.stringify({
+            profiles: {
+                legacyOrphanDetection: {
+                    commandName: 'Project',
+                    environmentVariables: {
+                        // The legacy AppHost compares this wall-clock value with the live CLI process.
+                        // A stale value deterministically reproduces the Linux clock-correction failure.
+                        ASPIRE_CLI_STARTED: '1',
+                    },
+                },
+            },
+        }, undefined, 2));
+
+        writeWorkspaceAppHostConfigForPath(appHostPath);
+        const beforeRefresh = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, beforeRefresh);
+        await waitForSelectedWorkspaceAppHost(appHostPath);
+
+        const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
+
+        await waitForDebugSessionStartup(appHostPath, 180000);
+        await waitForDebugConsoleOutput('/login?t=', appHostPath, 180000);
+        assert.ok(
+            readExtensionLogs().includes('Using PID-only legacy AppHost orphan detection for owned Aspire CLI process'),
+            'Expected the extension to enable PID-only orphan detection for its live CLI child.');
     });
 
     test('closes the dashboard debug browser when the AppHost debug session stops', async function () {
@@ -271,6 +322,13 @@ suite('Aspire debug dashboard E2E', function () {
         }
     });
 });
+
+async function stopAppHostIfRunningIfPresent(projectName: string): Promise<void> {
+    const appHostPath = path.join(getWorkspaceRoot(), projectName, `${projectName}.csproj`);
+    if (fs.existsSync(appHostPath)) {
+        await stopAppHostIfRunning(appHostPath);
+    }
+}
 
 async function waitForDashboardLoginUrl(appHostPath: string): Promise<string> {
     const loginOutput = await waitForDebugConsoleOutput('/login?t=', appHostPath, 120000);
