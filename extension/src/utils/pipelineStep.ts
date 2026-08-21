@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AppHostCliRunner, parseCliJsonOutput } from '../data/appHostCliRunner';
 import { AspireCliFailedError, AspireCliParseError } from '../data/appHostCliContracts';
-import { enterPipelineStep, loadingPipelineSteps, noPipelineStepsFound, pipelineStepRequired, selectPipelineStep } from '../loc/strings';
+import { enterPipelineStep, loadingPipelineSteps, pipelineStepRequired, selectPipelineStep } from '../loc/strings';
 import { CliPathResolutionTarget } from './cliPathVariables';
 import { ConfigInfoProvider } from './configInfoProvider';
 
@@ -14,7 +14,7 @@ export interface PipelineStepInfo {
 }
 
 interface PipelineStepQuickPickItem extends vscode.QuickPickItem {
-    step: PipelineStepInfo;
+    step?: PipelineStepInfo;
 }
 
 const appHostIncompatibleExitCode = 9;
@@ -44,8 +44,7 @@ export async function selectPipelineStepFromCli(
     const steps = parsePipelineSteps(stdout);
 
     if (steps.length === 0) {
-        await vscode.window.showInformationMessage(noPipelineStepsFound);
-        return undefined;
+        return promptForPipelineStep();
     }
 
     const items: PipelineStepQuickPickItem[] = steps.map(step => ({
@@ -54,13 +53,14 @@ export async function selectPipelineStepFromCli(
         detail: step.resourceName,
         step,
     }));
+    items.push({ label: enterPipelineStep });
     const selected = await vscode.window.showQuickPick(items, {
         placeHolder: selectPipelineStep,
         matchOnDescription: true,
         matchOnDetail: true,
     });
 
-    return selected?.step.name;
+    return selected?.step?.name ?? (selected ? promptForPipelineStep() : undefined);
 }
 
 export function isPipelineStepListUnsupportedError(error: unknown): boolean {
@@ -121,6 +121,10 @@ export async function resolvePipelineStep(
         return null;
     }
 
+    return promptForPipelineStep();
+}
+
+async function promptForPipelineStep(): Promise<string | undefined> {
     const step = await vscode.window.showInputBox({
         prompt: enterPipelineStep,
         placeHolder: 'deploy',
