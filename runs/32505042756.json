@@ -1,0 +1,29 @@
+{
+  "run_id": 32505042756,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32505042756",
+  "analyzed_at": "2026-08-21T17:27:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19510,
+    "title": "Update Cosmos DB emulator defaults",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "UpdateCosmosEmulator",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19510"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 96846544033,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32505042756/job/96846544033",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure with no detailed job logs available and no TRX test failures extracted. The PR only modifies CosmosDB hosting/tests files, none of which touch the VS Code extension (extension/ directory), matching the established pattern of unrelated flaky VS Code extension E2E shard failures seen across many prior runs.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-dynamic-debug-configuration-flaky"]
+}
