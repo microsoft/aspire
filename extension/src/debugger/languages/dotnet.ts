@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -632,6 +632,20 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             } : launchConfig;
 
             const { profile: baseProfile, profileName } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);
+
+            if (launchOptions.isApphost &&
+                effectiveLaunchConfig.disable_launch_profile !== true &&
+                effectiveLaunchConfig.launch_profile &&
+                !baseProfile) {
+                throw new Error(explicitLaunchProfileNotResolved(effectiveLaunchConfig.launch_profile));
+            }
+
+            if (launchOptions.isApphost &&
+                baseProfile &&
+                baseProfile.commandName !== LaunchProfileCommandName.project &&
+                baseProfile.commandName !== LaunchProfileCommandName.executable) {
+                throw new Error(launchProfileUnsupportedCommandName(profileName ?? ''));
+            }
 
             extensionLogOutputChannel.info(profileName
                 ? `Using launch profile '${profileName}' for project: ${projectPath}`

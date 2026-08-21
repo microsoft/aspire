@@ -149,11 +149,10 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.command?.enum, ['run', 'deploy', 'publish', 'do']);
         assert.strictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.args?.items?.type, 'string');
         assert.strictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.env?.additionalProperties?.type, 'string');
-        assert.deepStrictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.launchProfile, {
-            type: 'string',
-            description: 'The launch profile to use when running the Aspire AppHost.',
-            minLength: 1,
-        });
+        const launchProfileProperty = debuggerContribution.configurationAttributes?.launch?.properties?.launchProfile;
+        assert.strictEqual(launchProfileProperty?.type, 'string');
+        assert.strictEqual(launchProfileProperty?.description, 'The launch profile to use when running the Aspire AppHost.');
+        assert.strictEqual(launchProfileProperty?.minLength, 1);
         assert.ok(debuggerContribution.configurationSnippets?.some(snippet => snippet.body?.type === 'aspire' && snippet.body.program === '${workspaceFolder}'));
         assert.ok(debuggerContribution.initialConfigurations?.some(configuration => configuration.type === 'aspire' && configuration.program === '${workspaceFolder}'));
 

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { DebugConfigurationArguments, ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
-import { stripComments, parseTree, findNodeAtLocation } from 'jsonc-parser';
+import { parse, ParseError, parseTree } from 'jsonc-parser';
 import { aspireConfigFileName, AspireConfigProfile } from '../utils/cliTypes';
 
 /*
@@ -93,12 +93,18 @@ export interface LaunchProfileResult {
  * Returns undefined when the content has no `profiles` object so callers can fall back to key order.
  */
 function extractProfileOrder(content: string): string[] | undefined {
-    const root = parseTree(content);
+    const root = parseTree(content, [], { allowTrailingComma: true });
     if (!root) {
         return undefined;
     }
 
-    const profilesNode = findNodeAtLocation(root, ['profiles']);
+    // JSON permits duplicate properties in practice, and both JSON.parse and the SDK use the last
+    // top-level "profiles" value. Preserve the order from that same object.
+    const profileProperties = root.children?.filter(propertyNode =>
+        propertyNode.type === 'property' &&
+        propertyNode.children?.[0]?.value === 'profiles');
+    const profilesProperty = profileProperties?.[profileProperties.length - 1];
+    const profilesNode = profilesProperty?.children?.[1];
     if (profilesNode?.type !== 'object' || !profilesNode.children) {
         return undefined;
     }
@@ -113,6 +119,28 @@ function extractProfileOrder(content: string): string[] | undefined {
     }
 
     return order;
+}
+
+function parseJsonContent<T>(content: string): { value: T; normalizedContent: string } {
+    const normalizedContent = content.charCodeAt(0) === 0xFEFF ? content.slice(1) : content;
+    const errors: ParseError[] = [];
+    const value = parse(normalizedContent, errors, { allowTrailingComma: true }) as T;
+    if (errors.length > 0) {
+        throw new SyntaxError(`Invalid JSON at offset ${errors[0].offset}.`);
+    }
+
+    return { value, normalizedContent };
+}
+
+function equalsOrdinalIgnoreCase(left: string, right: string): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+
+    // JavaScript's Unicode case-insensitive regular expressions use simple case folding, avoiding
+    // the multi-character and Turkish-I expansions produced by String.toUpperCase().
+    const escapedLeft = left.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`^(?:${escapedLeft})$`, 'iu').test(right);
 }
 
 /**
@@ -143,16 +171,29 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
             }
         } else {
             const projectDir = path.dirname(projectPath);
-            launchSettingsPath = path.join(projectDir, 'Properties', 'launchSettings.json');
+            const projectName = path.basename(projectPath, path.extname(projectPath));
+            const launchSettingsDirectory = path.extname(projectPath).toLowerCase() === '.vbproj'
+                ? 'My Project'
+                : 'Properties';
+            const propertiesLaunchSettingsPath = path.join(projectDir, launchSettingsDirectory, 'launchSettings.json');
+            const runJsonPath = path.join(projectDir, `${projectName}.run.json`);
+
+            if (fs.existsSync(propertiesLaunchSettingsPath)) {
+                if (fs.existsSync(runJsonPath)) {
+                    extensionLogOutputChannel.warn(`Both '${propertiesLaunchSettingsPath}' and '${runJsonPath}' exist; using '${propertiesLaunchSettingsPath}' to match 'dotnet run'. '${runJsonPath}' is ignored.`);
+                }
+
+                launchSettingsPath = propertiesLaunchSettingsPath;
+            } else {
+                launchSettingsPath = runJsonPath;
+            }
         }
 
         if (fs.existsSync(launchSettingsPath)) {
-            let content = fs.readFileSync(launchSettingsPath, 'utf8');
-            // We need to strip comments from the JSON file before parsing
-            content = stripComments(content);
-            const launchSettings = JSON.parse(content) as LaunchSettings;
+            const { value: launchSettings, normalizedContent } = parseJsonContent<LaunchSettings>(
+                fs.readFileSync(launchSettingsPath, 'utf8'));
             // Capture the profile order from the file so the default-profile selection matches the SDK.
-            launchSettings.profileOrder = extractProfileOrder(content);
+            launchSettings.profileOrder = extractProfileOrder(normalizedContent);
 
             extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
             return launchSettings;
@@ -163,9 +204,8 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
         // Fall back to aspire.config.json profiles
         const aspireConfigPath = path.join(path.dirname(projectPath), aspireConfigFileName);
         if (fs.existsSync(aspireConfigPath)) {
-            let content = fs.readFileSync(aspireConfigPath, 'utf8');
-            content = stripComments(content);
-            const aspireConfig = JSON.parse(content);
+            const { value: aspireConfig, normalizedContent } = parseJsonContent<Record<string, unknown>>(
+                fs.readFileSync(aspireConfigPath, 'utf8'));
 
             if (aspireConfig?.profiles && typeof aspireConfig.profiles === 'object') {
                 // Convert aspire.config.json profiles to LaunchSettings format
@@ -180,7 +220,7 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
                 }
 
                 extensionLogOutputChannel.debug(`Successfully read launch profiles from: ${aspireConfigPath}`);
-                return { profiles, profileOrder: extractProfileOrder(content) };
+                return { profiles, profileOrder: extractProfileOrder(normalizedContent) };
             }
         }
 
@@ -212,15 +252,9 @@ export function determineBaseLaunchProfile(
     // If launch_profile property is set, check if that profile exists
     if (launchConfig.launch_profile) {
         const profileName = launchConfig.launch_profile;
-        const exactProfile = launchSettings.profiles[profileName];
-        if (exactProfile) {
-            extensionLogOutputChannel.debug(`Using explicit launch profile: ${profileName}`);
-            return { profile: exactProfile, profileName };
-        }
-
-        const matchingProfileNames = Object.keys(launchSettings.profiles)
-            .filter(candidate => candidate.length === profileName.length &&
-                candidate.toUpperCase() === profileName.toUpperCase());
+        const profileNames = launchSettings.profileOrder ?? Object.keys(launchSettings.profiles);
+        const matchingProfileNames = profileNames
+            .filter(candidate => equalsOrdinalIgnoreCase(candidate, profileName));
         if (matchingProfileNames.length === 1) {
             const profile = launchSettings.profiles[matchingProfileNames[0]];
             extensionLogOutputChannel.debug(`Using explicit launch profile: ${profileName}`);

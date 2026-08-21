@@ -2914,6 +2914,72 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
+    test('fails explicit project launch when the selected profile is missing or has an unsupported commandName', async () => {
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        try {
+            const projectDir = path.join(tempDir, 'AppHost');
+            const propertiesDir = path.join(projectDir, 'Properties');
+            fs.mkdirSync(propertiesDir, { recursive: true });
+
+            const projectPath = path.join(projectDir, 'AppHost.csproj');
+            fs.writeFileSync(projectPath, '<Project></Project>');
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
+                profiles: {
+                    invalid: {
+                        commandName: 'project'
+                    }
+                }
+            }, null, 2));
+
+            const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'AppHost.dll');
+            const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const unsupportedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'invalid'
+            };
+            const missingLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'missing'
+            };
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    unsupportedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'invalid' uses a commandName that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    missingLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'missing' could not be uniquely resolved/);
+
+            assert.strictEqual(dotNetService.buildDotNetProjectStub.called, false);
+        } finally {
+            removeDirectorySafely(tempDir);
+        }
+    });
+
     test('expands environment variables in Executable profile executablePath and commandLineArgs', async () => {
         // Executable launch profiles may contain $(VAR) references (e.g. $(HOME)) that
         // VS expands natively but the coreclr debugger does not. The extension must expand

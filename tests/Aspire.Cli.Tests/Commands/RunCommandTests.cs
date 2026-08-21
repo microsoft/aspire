@@ -150,7 +150,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_RejectsMissingExplicitLaunchProfileBeforeBuilding()
+    public async Task RunCommand_MissingExplicitLaunchProfileFallsBackToDotNet()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
@@ -192,11 +192,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.False(buildCalled);
-        Assert.Contains(
-            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotFound, "missing"),
-            interactionService.DisplayedErrors);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled);
     }
 
     [Theory]

@@ -180,7 +180,7 @@ internal sealed class AppHostLauncher(
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
-            if (GetLaunchProfileValidationError(project, effectiveAppHostFile, launchProfile) is { } launchProfileError)
+            if (GetLaunchProfileValidationError(project, launchProfile) is { } launchProfileError)
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, launchProfileError);
             }
@@ -265,7 +265,7 @@ internal sealed class AppHostLauncher(
         return CommandResult.Success();
     }
 
-    internal static string? GetLaunchProfileValidationError(IAppHostProject project, FileInfo appHostFile, string? launchProfile)
+    internal static string? GetLaunchProfileValidationError(IAppHostProject project, string? launchProfile)
     {
         if (string.IsNullOrEmpty(launchProfile))
         {
@@ -277,9 +277,9 @@ internal sealed class AppHostLauncher(
             return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, project.DisplayName);
         }
 
-        return project.GetLaunchProfileMatch(appHostFile, launchProfile) is LaunchProfileMatchResult.NotFound
-            ? string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotFound, launchProfile)
-            : null;
+        // Missing or malformed launch settings must reach `dotnet run`, which owns the authoritative
+        // discovery and diagnostic behavior for explicit profiles.
+        return null;
     }
 
     private async Task StopLaunchedAppHostAsync(LaunchResult result, TimeSpan delay, CancellationToken cancellationToken)

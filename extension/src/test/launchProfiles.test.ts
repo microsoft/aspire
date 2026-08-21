@@ -113,6 +113,63 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result.profileName, null);
         });
 
+        test('does not accept an exact match when another profile differs only by casing', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'E2E'
+            };
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    E2E: { commandName: 'Project' },
+                    e2e: { commandName: 'Project' }
+                }
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
+        test('does not accept duplicate profile names preserved in source order', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'E2E'
+            };
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    E2E: { commandName: 'Project' }
+                },
+                profileOrder: ['E2E', 'E2E']
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
+        test('uses ordinal case matching for Turkish-I profile names', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'I'
+            };
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    I: { commandName: 'Project' },
+                    '\u0131': { commandName: 'Project' }
+                }
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, launchSettings);
+
+            assert.strictEqual(result.profile, launchSettings.profiles.I);
+            assert.strictEqual(result.profileName, 'I');
+        });
+
         test('returns null when explicit launch profile specified but does not exist', () => {
             const launchConfig: ProjectLaunchConfiguration = {
                 type: 'project',
@@ -732,6 +789,43 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result, null);
         });
 
+        test('falls back to <ProjectName>.run.json for a project app', async () => {
+            const runJsonPath = path.join(path.dirname(projectPath), 'TestProject.run.json');
+            fs.writeFileSync(runJsonPath, JSON.stringify({
+                profiles: {
+                    fromRunJson: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            }, null, 2));
+
+            const result = await readLaunchSettings(projectPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['fromRunJson']);
+            assert.strictEqual(result!.profiles['fromRunJson'].applicationUrl, 'https://localhost:7000');
+        });
+
+        test('prefers Properties/launchSettings.json over <ProjectName>.run.json for a project app', async () => {
+            fs.writeFileSync(launchSettingsPath, JSON.stringify({
+                profiles: {
+                    fromProperties: { commandName: 'Project' }
+                }
+            }, null, 2));
+            const runJsonPath = path.join(path.dirname(projectPath), 'TestProject.run.json');
+            fs.writeFileSync(runJsonPath, JSON.stringify({
+                profiles: {
+                    fromRunJson: { commandName: 'Project' }
+                }
+            }, null, 2));
+
+            const result = await readLaunchSettings(projectPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['fromProperties']);
+        });
+
         test('returns null when launch settings file has invalid JSON', async () => {
             fs.writeFileSync(launchSettingsPath, '{ invalid json content');
 
@@ -793,6 +887,41 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result!.profiles['Development'].launchBrowser, true);
             assert.strictEqual(result!.profiles['Development'].launchUrl, 'https://localhost:5001/launch');
             assert.strictEqual(result!.profiles['Production'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Production');
+        });
+
+        test('reads SDK-compatible launch settings with a BOM and trailing commas', async () => {
+            const content = `\uFEFF{
+  "profiles": {
+    "Development": {
+      "commandName": "Project",
+    },
+  },
+}`;
+            fs.writeFileSync(launchSettingsPath, content);
+
+            const result = await readLaunchSettings(projectPath);
+
+            assert.notStrictEqual(result, null);
+            assert.strictEqual(result!.profiles.Development.commandName, 'Project');
+            assert.deepStrictEqual(result!.profileOrder, ['Development']);
+        });
+
+        test('uses the last duplicate top-level profiles object and its source order', async () => {
+            const content = `{
+  "profiles": {
+    "ignored": { "commandName": "Project" }
+  },
+  "profiles": {
+    "selected": { "commandName": "Project" }
+  }
+}`;
+            fs.writeFileSync(launchSettingsPath, content);
+
+            const result = await readLaunchSettings(projectPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['selected']);
+            assert.deepStrictEqual(result!.profileOrder, ['selected']);
         });
 
         test('falls back to aspire.config.json profiles when .run.json does not exist for file-based app', async () => {

@@ -287,7 +287,7 @@ internal sealed class RunCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
-            if (AppHostLauncher.GetLaunchProfileValidationError(project, effectiveAppHostFile, launchProfile) is { } launchProfileError)
+            if (AppHostLauncher.GetLaunchProfileValidationError(project, launchProfile) is { } launchProfileError)
             {
                 return CommandResult.Failure(
                     CliExitCodes.InvalidCommand,
