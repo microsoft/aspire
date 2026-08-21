@@ -78,7 +78,7 @@ internal abstract class BaseCommand : Command
 
             // Route human-readable output to stderr when JSON is requested so
             // that only machine-readable data appears on stdout.
-            if (IsJsonFormatRequested(parseResult))
+            if (_isJsonFormatRequested)
             {
                 InteractionService.Console = ConsoleOutput.Error;
             }
@@ -260,7 +260,7 @@ internal abstract class BaseCommand : Command
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.
     /// </summary>
-    private bool IsJsonFormatRequested(ParseResult parseResult)
+    protected virtual bool IsJsonFormatRequested(ParseResult parseResult)
     {
         foreach (var option in Options)
         {

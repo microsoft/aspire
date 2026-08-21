@@ -121,13 +121,13 @@ internal abstract class PipelineCommandBase : BaseCommand
     }
 
     protected abstract string GetOutputPathDescription();
-    protected abstract Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken);
+    protected abstract Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken);
     protected abstract string GetCanceledMessage();
     protected abstract string GetProgressMessage(ParseResult parseResult);
 
     /// <summary>
-    /// Gets the target pipeline step name for this command, used for --list-steps filtering.
-    /// Returns null to show all steps.
+    /// Gets the target pipeline step name for this invocation.
+    /// In list mode, a null target shows all steps.
     /// </summary>
     protected virtual string? GetTargetStepName(ParseResult parseResult) => null;
 
@@ -138,6 +138,14 @@ internal abstract class PipelineCommandBase : BaseCommand
     /// </summary>
     protected virtual string[] GetCommandArgs(ParseResult parseResult) => [];
 
+    protected override bool IsJsonFormatRequested(ParseResult parseResult)
+    {
+        return base.IsJsonFormatRequested(parseResult) ||
+            (parseResult.GetValue(s_listStepsOption) &&
+             TryResolveListStepsInvocation(parseResult, out var outputFormat, out _, out _) &&
+             outputFormat is OutputFormat.Json);
+    }
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // If running in the extension context (Aspire terminal) without a debug session,
@@ -146,22 +154,9 @@ internal abstract class PipelineCommandBase : BaseCommand
         var explicitAppHost = passedAppHostProjectFile is not null;
         var listSteps = parseResult.GetValue(s_listStepsOption);
         var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
-        var targetStep = listSteps ? GetTargetStepName(parseResult) : null;
-
-        // With `aspire do --list-steps --format json`, System.CommandLine binds the unregistered
-        // --format token to the optional step argument and leaves json unmatched. Reassemble the
-        // format syntax here so list mode can consume it without changing normal pass-through.
-        var formatTokenParsedAsTarget = listSteps && targetStep is not null && IsFormatToken(targetStep)
-            ? targetStep
-            : null;
-        if (formatTokenParsedAsTarget is not null)
-        {
-            unmatchedTokens = [formatTokenParsedAsTarget, .. unmatchedTokens];
-            targetStep = null;
-        }
-
+        var targetStep = GetTargetStepName(parseResult);
         var outputFormat = OutputFormat.Table;
-        if (listSteps && !TryExtractListStepsFormat(unmatchedTokens, out outputFormat, out unmatchedTokens))
+        if (listSteps && !TryResolveListStepsInvocation(parseResult, out outputFormat, out targetStep, out unmatchedTokens))
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, InvalidListStepsFormatMessage);
         }
@@ -267,11 +262,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>();
 
-            var runArguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, parseResult, cancellationToken);
-            if (formatTokenParsedAsTarget is not null)
-            {
-                runArguments = RemoveFormatTokenParsedAsTarget(runArguments, formatTokenParsedAsTarget);
-            }
+            var runArguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, targetStep, parseResult, cancellationToken);
 
             if (listSteps)
             {
@@ -560,20 +551,54 @@ internal abstract class PipelineCommandBase : BaseCommand
         return true;
     }
 
+    private bool TryResolveListStepsInvocation(
+        ParseResult parseResult,
+        out OutputFormat outputFormat,
+        out string? targetStep,
+        out string[] unmatchedTokens)
+    {
+        targetStep = GetTargetStepName(parseResult);
+        unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
+
+        // System.CommandLine can bind the unregistered --format token to `do`'s optional step.
+        // Put it back before parsing the list-only option, then recover the actual positional step
+        // from the tokens that remain after the format pair is removed.
+        var formatTokenParsedAsTarget = targetStep is not null && IsFormatToken(targetStep);
+        if (formatTokenParsedAsTarget)
+        {
+            unmatchedTokens = [targetStep!, .. unmatchedTokens];
+            targetStep = null;
+        }
+
+        if (!TryExtractListStepsFormat(unmatchedTokens, out outputFormat, out unmatchedTokens))
+        {
+            return false;
+        }
+
+        if (formatTokenParsedAsTarget)
+        {
+            targetStep = ExtractPositionalTarget(unmatchedTokens, out unmatchedTokens);
+        }
+
+        return true;
+    }
+
     private static bool IsFormatToken(string token) =>
         token == "--format" || token.StartsWith("--format=", StringComparison.Ordinal);
 
-    private static string[] RemoveFormatTokenParsedAsTarget(string[] runArguments, string formatToken)
+    private static string? ExtractPositionalTarget(string[] tokens, out string[] remainingTokens)
     {
-        for (var i = 0; i < runArguments.Length - 1; i++)
+        for (var i = 0; i < tokens.Length; i++)
         {
-            if (runArguments[i] == "--step" && runArguments[i + 1] == formatToken)
+            if (!tokens[i].StartsWith("-", StringComparison.Ordinal))
             {
-                return [.. runArguments[..i], .. runArguments[(i + 2)..]];
+                remainingTokens = [.. tokens[..i], .. tokens[(i + 1)..]];
+                return tokens[i];
             }
         }
 
-        return runArguments;
+        remainingTokens = tokens;
+        return null;
     }
 
     private static bool HasLegacyInspectOperationError(OutputCollector? outputCollector) =>

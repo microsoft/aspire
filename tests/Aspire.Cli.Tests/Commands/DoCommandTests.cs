@@ -315,10 +315,13 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("do", null)]
-    [InlineData("publish", "publish")]
-    [InlineData("deploy", "deploy")]
-    public async Task PipelineCommandWithListStepsUsesInspectOperation(string commandName, string? expectedStep)
+    [InlineData("do --list-steps --format=json", "do", null)]
+    [InlineData("do --list-steps --format json deploy", "do", "deploy")]
+    [InlineData("do --format json --list-steps deploy", "do", "deploy")]
+    [InlineData("do deploy --list-steps --format json", "do", "deploy")]
+    [InlineData("publish --list-steps --format=json --operation run", "publish", "publish")]
+    [InlineData("deploy --list-steps --format=json --operation run", "deploy", "deploy")]
+    public async Task PipelineCommandWithListStepsUsesInspectOperation(string commandLine, string commandName, string? expectedStep)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
@@ -389,8 +392,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var operationOverride = commandName == "do" ? string.Empty : " --operation run";
-        var result = command.Parse($"{commandName} --list-steps --format=json{operationOverride}");
+        var result = command.Parse(commandLine);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -402,6 +404,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             commandName switch
             {
+                "do" when expectedStep is not null => ["--operation", "inspect", "--step", expectedStep, "--operation", "inspect", "--list-steps", "true"],
                 "do" => ["--operation", "inspect", "--operation", "inspect", "--list-steps", "true"],
                 "publish" => ["--operation", "publish", "--step", "publish", "--operation", "run", "--operation", "inspect", "--list-steps", "true"],
                 "deploy" => ["--operation", "publish", "--step", "deploy", "--operation", "run", "--operation", "inspect", "--list-steps", "true"],

@@ -63,25 +63,24 @@ internal sealed class DoCommand : PipelineCommandBase
         return !string.IsNullOrEmpty(step) ? [step] : [];
     }
 
-    protected override async Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var operation = parseResult.GetValue(s_listStepsOption) ? "inspect" : "publish";
         var baseArgs = new List<string> { "--operation", operation };
 
-        var step = parseResult.GetValue(_stepArgument);
-        if (string.IsNullOrEmpty(step)
+        if (string.IsNullOrEmpty(targetStep)
             && !parseResult.GetValue(s_listStepsOption)
             && ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
-            step = await InteractionService.PromptForStringAsync(
+            targetStep = await InteractionService.PromptForStringAsync(
                 DoCommandStrings.StepArgumentDescription,
                 required: true,
                 cancellationToken: cancellationToken);
         }
 
-        if (!string.IsNullOrEmpty(step))
+        if (!string.IsNullOrEmpty(targetStep))
         {
-            baseArgs.AddRange(["--step", step]);
+            baseArgs.AddRange(["--step", targetStep]);
         }
 
         if (fullyQualifiedOutputPath != null)
