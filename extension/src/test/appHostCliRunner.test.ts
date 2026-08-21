@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 import { AppHostCliRunner, isDescribeUnsupportedOutput, parseCliJsonOutput } from '../data/appHostCliRunner';
+import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as cliModule from '../utils/process/cliProcess';
@@ -54,6 +55,40 @@ suite('data/appHostCliRunner tests', () => {
             subscriptions.forEach(subscription => subscription.dispose());
         });
 
+        test('completes a one-shot command when the direct process exits before close', async () => {
+            const cliProcess = new TestChildProcess();
+            let processExitCallback: ((code: number | null) => void) | undefined;
+            spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
+                processExitCallback = options.processExitCallback;
+                options.stdoutCallback?.('{"resources":[{"name":"api"}]}');
+                options.stderrCallback?.('AppHost diagnostic');
+                return cliProcess;
+            });
+
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                const pending = runner.runCliCommand('describe', ['describe', '--format', 'json']);
+                await waitForCondition(() => processExitCallback !== undefined, 'expected the direct process exit callback');
+
+                cliProcess.exitCode = 0;
+                processExitCallback!(0);
+
+                const result = await pending;
+                assert.deepStrictEqual(result, {
+                    stdout: '{"resources":[{"name":"api"}]}',
+                    stderr: 'AppHost diagnostic',
+                });
+
+                runner.stopOneShotProcesses();
+                assert.strictEqual(terminateStub.callCount, 0, 'the directly-exited process must not be retained');
+            } finally {
+                runner.dispose();
+            }
+
+            assert.strictEqual(terminateStub.callCount, 0, 'disposing the runner must not terminate the directly-exited process');
+            assert.strictEqual(cliProcess.killed, false);
+        });
+
         test('does not track a one-shot process that completes before the spawn returns', async () => {
             const cliProcess = new TestChildProcess();
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
@@ -61,7 +96,7 @@ suite('data/appHostCliRunner tests', () => {
                 // callback runs before the caller ever sees the process handle.
                 options.stdoutCallback?.('{"resources":[]}');
                 cliProcess.exitCode = 0;
-                options.exitCallback?.(0);
+                options.processExitCallback?.(0);
                 return cliProcess;
             });
 
@@ -91,7 +126,7 @@ suite('data/appHostCliRunner tests', () => {
             const cliProcess = new TestChildProcess();
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
                 cliProcess.exitCode = 0;
-                options.exitCallback?.(0);
+                options.processExitCallback?.(0);
                 return cliProcess;
             });
 
@@ -110,7 +145,7 @@ suite('data/appHostCliRunner tests', () => {
             const cliProcess = new TestChildProcess();
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
                 cliProcess.exitCode = 0;
-                options.exitCallback?.(0);
+                options.processExitCallback?.(0);
                 return cliProcess;
             });
 
@@ -152,7 +187,7 @@ suite('data/appHostCliRunner tests', () => {
                     call.args[3].stderrCallback(stderr);
                 }
                 process.exitCode = code;
-                call.args[3].exitCallback(code);
+                call.args[3].processExitCallback(code);
             };
 
             const runner = new AppHostCliRunner(terminalProvider);
@@ -185,24 +220,28 @@ suite('data/appHostCliRunner tests', () => {
 
         test('tracks a one-shot process that is still running so it can be stopped', async () => {
             const cliProcess = new TestChildProcess();
-            let exitCallback: ((code: number | null) => void) | undefined;
+            let processExitCallback: ((code: number | null) => void) | undefined;
             spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
-                exitCallback = options.exitCallback;
+                processExitCallback = options.processExitCallback;
                 return cliProcess;
             });
 
             const runner = new AppHostCliRunner(terminalProvider);
             try {
                 const pending = runner.runCliCommand('describe', ['describe', '--format', 'json']);
-                await waitForCondition(() => exitCallback !== undefined, 'expected the describe command to spawn');
+                await waitForCondition(() => processExitCallback !== undefined, 'expected the describe command to spawn');
 
                 runner.stopOneShotProcesses();
                 assert.strictEqual(terminateStub.callCount, 1, 'a running one-shot process must be terminated');
                 assert.strictEqual(terminateStub.firstCall.args[0], cliProcess);
 
                 cliProcess.exitCode = 1;
-                exitCallback!(1);
-                await assert.rejects(pending);
+                processExitCallback!(1);
+                await assert.rejects(pending, (error: unknown) => {
+                    assert.ok(error instanceof AspireCliFailedError);
+                    assert.strictEqual(error.exitCode, 1);
+                    return true;
+                });
             } finally {
                 runner.dispose();
             }

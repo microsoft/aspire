@@ -145,7 +145,7 @@ export class AppHostCliRunner implements vscode.Disposable {
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
                 stderrCallback: (data) => { stderr.append(data); },
-                exitCallback: (code) => {
+                processExitCallback: (code) => {
                     if (code !== 0) {
                         const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
                         if (retryArgs) {
