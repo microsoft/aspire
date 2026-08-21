@@ -14,7 +14,7 @@
 }
 
 ::deep .trace-id {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground2);
     padding-left: 0.5rem;
     font-size: 12px;
     font-weight: normal;
@@ -49,7 +49,7 @@
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
-    background: var(--fill-color);
+    background: var(--colorNeutralBackground1);
 }
 
 /*
@@ -85,7 +85,7 @@
 
 ::deep .empty-content-cell {
     margin-top: 8px;
-    border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
 }
 
 ::deep .trace-view-grid .column-header {
@@ -146,7 +146,7 @@
 
 ::deep .span-container .span-bar-label {
     font-size: 12px;
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground2);
     padding: 0 0.5em;
     height: min-content;
 }
@@ -168,7 +168,7 @@
 
 ::deep .uninstrumented-peer {
     padding-left: 0.25rem;
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground2);
     font-size: 12px;
 }
 
@@ -187,7 +187,7 @@
 ::deep .selected-row .span-container .span-bar-label,
 ::deep .selected-row .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label,
 ::deep .fluent-data-grid-row:not([row-type='header']):hover .span-container .span-bar-label {
-    color: var(--neutral-foreground-rest);
+    color: var(--colorNeutralForeground1);
 }
 
 ::deep .pane-details-title {
@@ -321,7 +321,7 @@
 }
 
 ::deep .log-tooltip-subtitle {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground2);
     font-size: 12px;
     padding-left: 0.5rem;
 }
@@ -342,18 +342,18 @@
 
 ::deep.log-tooltip-table td.label-column {
     white-space: nowrap;
-    padding-right: calc(var(--design-unit)* 4px);
+    padding-right: var(--spacingHorizontalL);
     width: 20%;
 }
 
 ::deep.log-tooltip-table td {
-    padding: calc((var(--design-unit) + var(--focus-stroke-width) - var(--stroke-width))* 0.7px) 0;
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    padding: 3.5px 0;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
     align-content: start;
     word-break: break-word;
 }
 
 ::deep.log-tooltip-table tr:last-child td {
     border-bottom: none;
-    padding-bottom: calc(var(--design-unit) * 0.5px);
+    padding-bottom: var(--spacingVerticalXXS);
 }

@@ -8,7 +8,7 @@
 }
 
 .trace-id {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground2);
     padding-left: 0.5rem;
     font-size: 12px;
     font-weight: normal;
@@ -34,8 +34,8 @@
     border: 1px solid rgb(217, 217, 217);
     padding: 2px 7px;
     font-size: 12px;
-    background-color: var(--neutral-fill-rest);
-    color: var(--neutral-foreground-rest);
+    background-color: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
 }
 
 .trace-service-tag {

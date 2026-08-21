@@ -61,8 +61,8 @@
             "head head"
             "nav messagebar"
             "nav main";
-        background-color: var(--fill-color);
-        color: var(--neutral-foreground-rest);
+        background-color: var(--colorNeutralBackground1);
+        color: var(--colorNeutralForeground1);
     }
 
     ::deep.layout.nav-collapsed {
@@ -114,7 +114,7 @@
         flex-direction: column;
         width: 100%;
         min-height: 0;
-        background: var(--neutral-layer-4);
+        background: var(--colorNeutralBackground4);
     }
 
     /* Tab list fills the rail and scrolls if it ever overflows; the bottom toggle (a sibling below)
@@ -124,7 +124,7 @@
         width: 100%;
         min-height: 0;
         overflow-y: auto;
-        background: var(--neutral-layer-4);
+        background: var(--colorNeutralBackground4);
     }
 
     ::deep.layout > .desktop-nav-rail .fluent-appbar-item {
@@ -194,15 +194,15 @@
         grid-area: main;
         overflow-x: auto; /* allow horizontal scrolling */
         overflow: auto;
-        border-left: 1px solid var(--neutral-stroke-rest);
+        border-left: 1px solid var(--colorNeutralStroke1);
         display: flex;
         flex: 1;
     }
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        border-top: 1px solid var(--neutral-stroke-rest);
-        border-left: 1px solid var(--neutral-stroke-rest);
+        border-top: 1px solid var(--colorNeutralStroke1);
+        border-left: 1px solid var(--colorNeutralStroke1);
         display: flex;
     }
 
@@ -211,12 +211,12 @@
     }
 
     ::deep.layout > header {
-        background-color: var(--neutral-layer-4);
+        background-color: var(--colorNeutralBackground4);
         margin-bottom: 0;
     }
 
     ::deep.layout > header > .header-gutters > fluent-anchor {
-        font-size: var(--type-ramp-plus-2-font-size);
+        font-size: var(--fontSizeBase500);
     }
 
     /* The Aspire logo now leads the full-width header as a brand mark. Strip the anchor's default
@@ -266,8 +266,8 @@
             "nav-menu nav-menu"
             "messagebar messagebar"
             "main main";
-        background-color: var(--fill-color);
-        color: var(--neutral-foreground-rest);
+        background-color: var(--colorNeutralBackground1);
+        color: var(--colorNeutralForeground1);
     }
 
     ::deep.layout > .aspire-icon {
@@ -275,7 +275,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--neutral-layer-4);
+        background-color: var(--colorNeutralBackground4);
     }
 
     ::deep.layout > header {
@@ -285,20 +285,20 @@
     ::deep.layout > .fluent-appbar {
         grid-area: nav;
         overflow-y: auto;
-        background: var(--neutral-layer-4);
+        background: var(--colorNeutralBackground4);
     }
 
     ::deep.layout > .layout-body-container {
         grid-area: main;
         overflow-x: auto; /* allow horizontal scrolling */
         overflow: auto;
-        border-left: 1px solid var(--neutral-stroke-rest);
+        border-left: 1px solid var(--colorNeutralStroke1);
     }
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        border-top: 1px solid var(--neutral-stroke-rest);
-        border-left: 1px solid var(--neutral-stroke-rest);
+        border-top: 1px solid var(--colorNeutralStroke1);
+        border-left: 1px solid var(--colorNeutralStroke1);
         display: flex;
     }
 
@@ -308,7 +308,7 @@
 
     ::deep.layout > .aspire-icon {
         padding-left: 15px;
-        background-color: var(--neutral-layer-4);
+        background-color: var(--colorNeutralBackground4);
     }
 
     ::deep.layout > .aspire-icon fluent-anchor {
@@ -320,12 +320,12 @@
     }
 
     ::deep.layout > header {
-        background-color: var(--neutral-layer-4);
+        background-color: var(--colorNeutralBackground4);
         margin-bottom: 0;
     }
 
     ::deep.layout > header > .header-gutters > fluent-anchor {
-        font-size: var(--type-ramp-plus-2-font-size);
+        font-size: var(--fontSizeBase500);
     }
 
     ::deep .aspire-icon fluent-anchor.logo::part(control) {
@@ -357,7 +357,7 @@
 ::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth]:not(:hover)::part(control),
 ::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth].logo::part(control),
 ::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
-    background-color: var(--neutral-layer-4);
+    background-color: var(--colorNeutralBackground4);
 }
 
 ::deep .header-gutters .header-button {
@@ -369,7 +369,7 @@
     width: 50px;
     height: 100%;
     border-radius: 0;
-    background-color: var(--neutral-fill-secondary-rest);
+    background-color: var(--colorNeutralBackground1Selected);
 }
 
 #blazor-error-ui {

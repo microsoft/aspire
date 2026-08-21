@@ -5,7 +5,7 @@
         "toolbar"
         "main";
     overflow: auto;
-    gap: calc(var(--design-unit) * 1px);
+    gap: var(--spacingHorizontalXS);
 }
 
 ::deep.structured-log-details-layout > .details-toolbar {

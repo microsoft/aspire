@@ -8,14 +8,14 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--accent-fill-rest);
+    color: var(--colorBrandBackground);
     text-decoration: underline;
     cursor: pointer;
     font: inherit;
 }
 
 ::deep .value-not-set-link:hover {
-    color: var(--accent-fill-hover);
+    color: var(--colorBrandBackgroundHover);
 }
 
 ::deep .unread-logs-errors-link::part(control) {
@@ -99,7 +99,7 @@
     align-items: center;
     justify-content: space-between;
     flex-wrap: nowrap;
-    gap: calc(var(--design-unit) * 1.5px);
+    gap: var(--spacingHorizontalSNudge);
     min-width: 0;
     padding-top: 0.5rem;
     padding-left: var(--layout-left-padding);
@@ -246,5 +246,5 @@
 }
 
 ::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
+    margin-right: var(--spacingHorizontalXS);
 }
