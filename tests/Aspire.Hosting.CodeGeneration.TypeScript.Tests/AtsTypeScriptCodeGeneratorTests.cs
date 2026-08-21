@@ -1085,7 +1085,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var declared = new HashSet<string>(StringComparer.Ordinal);
         foreach (var source in new[] { aspireTs, EmbeddedResources.Read("base.mts"), EmbeddedResources.Read("transport.mts") })
         {
-            foreach (Match match in s_promiseDeclarationPattern.Matches(source))
+            foreach (Match match in s_promiseDeclarationPattern.Matches(StripComments(source)))
             {
                 declared.Add(match.Groups[1].Value);
             }
