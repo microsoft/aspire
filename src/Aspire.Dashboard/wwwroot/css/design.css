@@ -60,7 +60,22 @@
     --console-font-color: var(--console-theme-white);
 }
 
+[data-theme="light"] {
+    color-scheme: light;
+}
+
+#components-reconnect-modal {
+    color: var(--colorNeutralForeground1);
+    background-color: var(--colorNeutralBackground1);
+}
+
+.components-rejoining-animation div {
+    border-color: var(--colorBrandStroke1);
+}
+
 [data-theme="dark"] {
+    color-scheme: dark;
+
     --hljs-default: #f8f8f2;
     --hljs-comment: #d4d0ab;
     --hljs-variable: #ffa07a;
