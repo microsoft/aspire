@@ -655,7 +655,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                     (0, true, "13.6.0-preview.1.25310.2"),
                 RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                 {
-                    options.StandardErrorCallback?.Invoke("Invalid operation specified. Valid operations are 'publish' or 'run'.");
+                    options.StandardErrorCallback?.Invoke("Unhandled exception. Aspire.Hosting.DistributedApplicationException: Invalid operation specified. Valid operations are 'publish' or 'run'.");
                     return Task.FromResult(1);
                 }
             };
@@ -665,6 +665,39 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
 
         var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsReturnsIncompatibleWhenLegacyAppHostFailsBackchannelConnection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostExit = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, "13.6.0-preview.1.25310.2"),
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    options.StandardErrorCallback?.Invoke("Unhandled exception. Aspire.Hosting.DistributedApplicationException: Invalid operation specified. Valid operations are 'publish' or 'run'.");
+                    backchannelCompletionSource!.SetException(
+                        new FailedToConnectBackchannelConnection("The AppHost process exited unexpectedly with exit code 1", new InvalidOperationException()));
+                    return appHostExit.Task;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+        appHostExit.SetResult(1);
 
         Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
     }

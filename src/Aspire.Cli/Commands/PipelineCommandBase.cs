@@ -448,6 +448,12 @@ internal abstract class PipelineCommandBase : BaseCommand
             Telemetry.RecordError($"AppHost is incompatible. Required capability: {ex.RequiredCapability}", ex);
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ex.Message);
         }
+        catch (Exception ex) when (listSteps && HasLegacyInspectOperationError(publishContext?.OutputCollector))
+        {
+            StopTerminalProgressBar();
+            Telemetry.RecordError($"AppHost is incompatible. Required capability: {ListStepsCapability}", ex);
+            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ListStepsIncompatibleMessage);
+        }
         catch (FailedToConnectBackchannelConnection ex)
         {
             // Send terminal progress bar stop sequence on exception
@@ -473,12 +479,6 @@ internal abstract class PipelineCommandBase : BaseCommand
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
             return CommandResult.FromExitCode(pendingRun is { } && debugMode ? await pendingRun : CliExitCodes.FailedToBuildArtifacts);
-        }
-        catch (Exception ex) when (listSteps && HasLegacyInspectOperationError(publishContext?.OutputCollector))
-        {
-            StopTerminalProgressBar();
-            Telemetry.RecordError($"AppHost is incompatible. Required capability: {ListStepsCapability}", ex);
-            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ListStepsIncompatibleMessage);
         }
         catch (Exception ex)
         {
@@ -578,8 +578,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     private static bool HasLegacyInspectOperationError(OutputCollector? outputCollector) =>
         outputCollector?.GetLines().Any(line =>
-            line.Stream == OutputLineStream.StdErr &&
-            line.Line == LegacyInspectOperationError) == true;
+            line.Line.Contains(LegacyInspectOperationError, StringComparison.Ordinal)) == true;
 
     /// <summary>
     /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
