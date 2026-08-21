@@ -221,7 +221,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
         await PublishBeforeStartAsync(app);
 
         var launchOverride = Assert.Single(emulator.Resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>());
-        Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:NoBuild=false"], launchOverride.Arguments);
+        Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:MyProperty=Value"], launchOverride.Arguments);
     }
     [Fact]
     public async Task RunBuildAsync_InvokesBuildCallbackBeforeLaunchingProcess()

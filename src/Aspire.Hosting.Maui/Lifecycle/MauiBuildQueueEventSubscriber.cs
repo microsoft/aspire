@@ -290,7 +290,16 @@ internal class MauiBuildQueueEventSubscriber(
             return;
         }
 
-        var arguments = new List<string>(launchOverride.Arguments);
+        // BeforeStartEvent can run more than once (for example across restarts). Capture the pristine
+        // override arguments on the first pass and always start from that baseline, otherwise each pass
+        // would re-append the callback edits to the already-edited override and accumulate them.
+        if (!resource.TryGetLastAnnotation<MauiLaunchArgsBaselineAnnotation>(out var baseline))
+        {
+            baseline = new MauiLaunchArgsBaselineAnnotation(launchOverride.Arguments);
+            resource.Annotations.Add(baseline);
+        }
+
+        var arguments = new List<string>(baseline.Arguments);
 
         var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Launch, arguments, resource, cancellationToken);
 

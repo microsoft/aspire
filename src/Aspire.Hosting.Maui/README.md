@@ -241,7 +241,10 @@ mauiApp.AddAndroidEmulator()
 ```typescript
 // Add an MSBuild property to the compile
 mauiApp.addAndroidEmulator("emulator")
-    .withMauiBuildArguments(context => { context.arguments.push("-p:MyProperty=Value"); });
+    .withMauiBuildArguments(async context => {
+        const args = await context.arguments();
+        await args.add("-p:MyProperty=Value");
+    });
 ```
 
 ### Launch Arguments
@@ -255,7 +258,10 @@ mauiApp.AddAndroidEmulator()
 
 ```typescript
 mauiApp.addAndroidEmulator("emulator")
-    .withMauiLaunchArguments(context => { context.arguments.push("-p:MyProperty=Value"); });
+    .withMauiLaunchArguments(async context => {
+        const args = await context.arguments();
+        await args.add("-p:MyProperty=Value");
+    });
 ```
 
 ### Notes
