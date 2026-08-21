@@ -10,6 +10,7 @@ using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests.Shared;
 using Bunit;
@@ -25,6 +26,7 @@ namespace Aspire.Dashboard.Components.Tests.Interactions;
 public partial class InteractionsProviderTests : DashboardTestContext
 {
     private readonly ITestOutputHelper _testOutputHelper;
+    private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
 
     public InteractionsProviderTests(ITestOutputHelper testOutputHelper)
     {
@@ -85,10 +87,13 @@ public partial class InteractionsProviderTests : DashboardTestContext
     {
         // Arrange
         var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
 
-        var dialogReference = new DialogReference("abc", null!);
-        var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
-        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.FromResult<IDialogReference>(dialogReference));
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
@@ -115,11 +120,14 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         // Act 2
-        dialogReference.Dismiss(DialogResult.Ok(true));
+        var dashboardDialogReference = instance._interactionDialogReference!.Dialog;
+        await dialogService.LastInstance!.CloseAsync(DialogResult.Ok(true));
+        await sendInteractionUpdatesChannel.Reader.ReadAsync();
+        await dashboardDialogReference.Result.DefaultTimeout();
 
         // Assert 2
         await AsyncTestHelpers.AssertIsTrueRetryAsync(() => instance._interactionDialogReference == null, "Wait for dialog reference dismissed.");
@@ -133,9 +141,8 @@ public partial class InteractionsProviderTests : DashboardTestContext
         // Arrange
         var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
 
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
-        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.FromResult<IDialogReference>(dialogReference));
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
@@ -162,7 +169,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         // Act 2
@@ -186,14 +193,13 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
 
         DialogParameters? dialogParameters = null;
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
         var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
         {
             dialogParameters = parameters;
-            return Task.FromResult<IDialogReference>(dialogReference);
+            return Task.CompletedTask;
         });
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
@@ -221,7 +227,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         // Act 2
@@ -246,15 +252,14 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         InteractionsInputsDialogViewModel? vm = null;
         DialogParameters? dialogParameters = null;
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
         var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
         {
-            vm = (InteractionsInputsDialogViewModel)data;
+            vm = Assert.IsType<InteractionsInputsDialogViewModel>(data);
             dialogParameters = parameters;
-            return Task.FromResult<IDialogReference>(dialogReference);
+            return Task.CompletedTask;
         });
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
@@ -283,7 +288,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         // Act 2
@@ -307,16 +312,10 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
         var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
 
-        var message = new Message();
         var dashboardClient = new TestDashboardClient(isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
-        var messageService = new TestMessageService(options =>
-        {
-            return Task.FromResult(message);
-        });
-
-        SetupInteractionProviderServices(dashboardClient: dashboardClient, messageService: messageService);
+        SetupInteractionProviderServices(dashboardClient: dashboardClient);
 
         // Act 1
         var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
@@ -342,7 +341,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            if (message != reference.Message || reference.InteractionId != 1)
+            if (reference.InteractionId != 1)
             {
                 return false;
             }
@@ -362,7 +361,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            if (message != reference.Message || reference.InteractionId != 1)
+            if (reference.InteractionId != 1)
             {
                 return false;
             }
@@ -380,13 +379,12 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
         var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
 
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
         var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
         {
-            return Task.FromResult<IDialogReference>(dialogReference);
+            return Task.CompletedTask;
         });
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
@@ -415,7 +413,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            if (dialogReference != reference.Dialog || reference.InteractionId != 1)
+            if (dialogService.LastInstance != reference.Dialog.Instance || reference.InteractionId != 1)
             {
                 return false;
             }
@@ -435,7 +433,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            if (dialogReference != reference.Dialog || reference.InteractionId != 1)
+            if (dialogService.LastInstance != reference.Dialog.Instance || reference.InteractionId != 1)
             {
                 return false;
             }
@@ -460,15 +458,14 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         InteractionsInputsDialogViewModel? vm = null;
         DialogParameters? dialogParameters = null;
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
         var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
         {
-            vm = (InteractionsInputsDialogViewModel)data;
+            vm = Assert.IsType<InteractionsInputsDialogViewModel>(data);
             dialogParameters = parameters;
-            return Task.FromResult<IDialogReference>(dialogReference);
+            return Task.CompletedTask;
         });
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
@@ -499,7 +496,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         Assert.NotNull(vm);
@@ -517,14 +514,13 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
 
         DialogParameters? dialogParameters = null;
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true,
             interactionChannelProvider: () => interactionsChannel,
             sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
         var dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
         {
             dialogParameters = parameters;
-            return Task.FromResult<IDialogReference>(dialogReference);
+            return Task.CompletedTask;
         });
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
@@ -553,7 +549,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         // Act 2 - click the cancel button
@@ -577,9 +573,8 @@ public partial class InteractionsProviderTests : DashboardTestContext
         // Arrange
         var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
 
-        var dialogReference = new DialogReference("abc", null!);
         var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
-        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.FromResult<IDialogReference>(dialogReference));
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
 
@@ -606,7 +601,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
                 return false;
             }
 
-            return dialogReference == reference.Dialog && reference.InteractionId == 1;
+            return dialogService.LastInstance == reference.Dialog.Instance && reference.InteractionId == 1;
         }, "Wait for dialog reference created.");
 
         // Act 2 - server completes the interaction
@@ -622,20 +617,26 @@ public partial class InteractionsProviderTests : DashboardTestContext
         await instance.DisposeAsync().DefaultTimeout();
     }
 
-    private void SetupInteractionProviderServices(TestDashboardClient? dashboardClient = null, TestDialogService? dialogService = null, TestMessageService? messageService = null)
+    private void SetupInteractionProviderServices(TestDashboardClient? dashboardClient = null, TestDialogService? dialogService = null)
     {
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
         Services.AddLocalization();
+        Services.AddFluentUIComponents();
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
 
         Services.AddSingleton<IDialogService>(dialogService ?? new TestDialogService());
-        Services.AddSingleton<IMessageService>(messageService ?? new TestMessageService());
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
         Services.AddSingleton<DashboardTelemetryService>();
         Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         Services.AddSingleton<ComponentTelemetryContextProvider>();
         Services.AddSingleton<DimensionManager>();
         Services.AddScoped<DashboardDialogService>();
+        Services.AddScoped<DashboardMessageBarService>();
+
+        _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
+        {
+            builder.Add(p => p.Section, DashboardUIHelpers.MessageBarSection);
+        });
     }
 }

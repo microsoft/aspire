@@ -1,0 +1,63 @@
+.dashboard-message-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    padding: 8px 12px;
+    column-gap: 8px;
+}
+
+.dashboard-message-bar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+}
+
+.dashboard-message-bar-content {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    min-width: 0;
+    column-gap: 6px;
+    row-gap: 2px;
+}
+
+.dashboard-message-bar-message {
+    display: inline;
+}
+
+.dashboard-message-bar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+::deep .dashboard-message-bar-dismiss {
+    flex: 0 0 32px;
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px;
+}
+
+::deep .dashboard-message-bar-dismiss::part(control) {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+}
+
+@media (max-width: 767px) {
+    .dashboard-message-bar {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .dashboard-message-bar-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+    }
+}

@@ -27,7 +27,7 @@
         "main";
 }
 
-::deep .details-container fluent-toolbar {
+::deep .details-container .details-toolbar {
     padding-left: calc(var(--design-unit) * 2px);
 }
 
@@ -53,15 +53,12 @@
         background-color: var(--neutral-layer-2);
     }
 
-    /* Line the flyout's trailing controls up with the page toolbar's right edge. The header
-       (panel-resize + Close buttons) ships a 12px inline padding and the filter toolbar falls back
-       to Fluent's default 8px, so on the desktop split view the Close button and the filter options
-       button stair-step ~4-6px short of the page toolbar's trailing control. Pinning both to the
+    /* Line the flyout's trailing controls up with the page toolbar's right edge. Pinning both to the
        shared page gutter (--layout-right-padding, the same token .main-toolbar uses) collapses that
        ragged edge into one clean vertical line. Desktop-only: below 768px the flyout stacks
        full-width and its header doubles as the page header, which keeps its own inset. */
     ::deep .details-container > header,
-    ::deep .details-container fluent-toolbar {
+    ::deep .details-container .details-toolbar {
         padding-right: var(--layout-right-padding);
     }
 }
@@ -72,6 +69,23 @@
 
 ::deep .details-container > *:last-child {
     grid-row-start: 2;
+}
+
+::deep :is(.resource-details-layout, .structured-log-details-layout, .span-details-layout) {
+    min-height: 0;
+    min-width: 0;
+}
+
+::deep .property-grid-container {
+    grid-area: main;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    width: 100%;
+}
+
+::deep .property-grid-container > fluent-accordion {
+    width: 100%;
 }
 
 ::deep .details-container > header > .details-header-title {

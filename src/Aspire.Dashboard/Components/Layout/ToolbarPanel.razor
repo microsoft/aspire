@@ -1,12 +1,11 @@
-﻿@implements IDialogContentComponent<AspirePageContentLayout.MobileToolbar>
-
+﻿
 <FluentDialogBody>
     <FluentStack Orientation="@Orientation.Vertical">
         @Content.ToolbarSection
     </FluentStack>
 
     <FluentButton Class="mobile-absolute-toolbar mobile-toolbar"
-                  Appearance="@Appearance.Accent"
+                  Appearance="@ButtonAppearance.Primary"
                   Disabled="true">
         @Content.MobileToolbarButtonText
     </FluentButton>

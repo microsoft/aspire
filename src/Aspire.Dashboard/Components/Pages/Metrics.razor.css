@@ -25,13 +25,20 @@
 
 ::deep .metrics-chart {
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
         "header"
         "chart"
         "footer";
+    height: 100%;
+    min-height: 0;
     width: 100%;
     gap: calc(var(--design-unit) * 4px);
+}
+
+::deep .metrics-chart > .fluent-tabs {
+    min-height: 0;
+    overflow: auto;
 }
 
 @media (min-width: 768px) {
@@ -95,6 +102,8 @@
 }
 
 ::deep .metrics-content {
+    height: 100%;
+    min-height: 0;
     /* Match left padding of the page header */
     margin-left: calc(var(--design-unit)* 4.5px);
 }

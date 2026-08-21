@@ -8,7 +8,7 @@
     gap: calc(var(--design-unit) * 1px);
 }
 
-::deep.span-details-layout > fluent-toolbar {
+::deep.span-details-layout > .details-toolbar {
     grid-area: toolbar;
 }
 

@@ -20,6 +20,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private Task? _tickTask;
     private IDisposable? _themeChangedSubscription;
     private int _renderedDimensionsCount;
+    private bool _isDisposing;
     private readonly InstrumentViewModel _instrumentViewModel = new InstrumentViewModel();
 
     [Parameter, EditorRequired]
@@ -78,6 +79,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _isDisposing = true;
         _themeChangedSubscription?.Dispose();
         _tickTimer?.Dispose();
 
@@ -275,13 +277,19 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         return filters;
     }
 
-    private Task OnTabChangeAsync(FluentTab newTab)
+    private Task OnTabChangeAsync(FluentTab? newTab)
     {
-        var id = newTab.Id?.Substring("tab-".Length);
+        if (_isDisposing)
+        {
+            return Task.CompletedTask;
+        }
+
+        var id = newTab?.Id?.Substring("tab-".Length);
 
         if (id is null
             || !Enum.TryParse(typeof(Pages.Metrics.MetricViewKind), id, out var o)
-            || o is not Pages.Metrics.MetricViewKind viewKind)
+            || o is not Pages.Metrics.MetricViewKind viewKind
+            || ActiveView == viewKind)
         {
             return Task.CompletedTask;
         }

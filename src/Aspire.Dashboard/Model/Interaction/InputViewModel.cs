@@ -2,9 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text.Encodings.Web;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Dashboard.Serialization;
 using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model.Interaction;
@@ -15,11 +16,6 @@ public sealed class InputViewModel
     // In practice the server always sends a MaxFileSize value for file inputs,
     // so this constant is only used as a defensive safety net.
     internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024; // 100 MB
-
-    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
 
     public InteractionInput Input { get; private set; } = default!;
 
@@ -59,10 +55,18 @@ public sealed class InputViewModel
             {
                 input.Value = optionsVM[0].Id;
             }
+
+            SelectedOption = SelectOptions.FirstOrDefault(option => option.Id == input.Value);
+            if (SelectedOption is null && input.AllowCustomChoice && !string.IsNullOrEmpty(input.Value))
+            {
+                SelectedOption = new SelectViewModel<string> { Id = input.Value, Name = input.Value };
+            }
         }
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    public SelectViewModel<string>? SelectedOption { get; set; }
 
     /// <summary>
     /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor
@@ -97,10 +101,11 @@ public sealed class InputViewModel
         return filteredValues;
     }
 
-    public string? Value
+    [AllowNull]
+    public string Value
     {
         get => Input.Value;
-        set => Input.Value = value;
+        set => Input.Value = value ?? string.Empty;
     }
 
     // Used when binding to FluentCheckbox.
@@ -110,7 +115,7 @@ public sealed class InputViewModel
         set => Input.Value = value ? "true" : "false";
     }
 
-    // Used when binding to FluentNumberField.
+    // Used when binding to FluentNumberInput.
     public int? NumberValue
     {
         get => int.TryParse(Input.Value, CultureInfo.InvariantCulture, out var result) ? result : null;
@@ -133,7 +138,7 @@ public sealed class InputViewModel
         var successfulRefs = FileReferences.Where(f => f.Id is not null).ToList();
         // Use empty string (not "[]") when no files were accepted, so required-field checks work correctly.
         Input.Value = successfulRefs.Count > 0
-            ? JsonSerializer.Serialize(successfulRefs, s_jsonSerializerOptions)
+            ? JsonSerializer.Serialize(successfulRefs, DashboardJsonSerializerContext.DefaultContext.ListFileReferenceViewModel)
             : string.Empty;
     }
 

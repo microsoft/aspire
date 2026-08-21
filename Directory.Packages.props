@@ -123,8 +123,8 @@
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.17.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.4" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.4" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0-preview.26232.1" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0-rc.5-26219.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />
@@ -309,5 +309,12 @@
     <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion)" />
     <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesPreviewVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientPreviewVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateNet11Version)" />
+    <PackageVersion Update="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version)" />
+    <PackageVersion Update="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiNet11Version)" />
+    <PackageVersion Update="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostNet11Version)" />
+    <PackageVersion Update="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsCachingMemoryNet11Version)" />
   </ItemGroup>
 </Project>

@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
@@ -39,6 +40,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private EventCallback _onToggleCollapseAllCallback;
     private EventCallback _onToggleResourceTypeCallback;
     private bool _hideResourceGraph;
+    private bool _isDisposing;
     private string _collapsedResourceNamesKey = null!;
     private Dictionary<ResourceKey, int>? _resourceUnviewedErrorCounts;
 
@@ -110,7 +112,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private Task? _resourceSubscriptionTask;
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
-    private FluentDataGrid<ResourceGridViewModel> _dataGrid = null!;
+    private AspireFluentDataGrid<ResourceGridViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private int _maxHighlightedCount;
     private readonly List<MenuButtonItem> _resourcesMenuItems = new();
@@ -124,10 +126,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private AspireMenu? _contextMenu;
     private bool _contextMenuOpen;
     private readonly List<MenuButtonItem> _contextMenuItems = new();
-    private TaskCompletionSource? _contextMenuClosedTcs;
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
     private bool _showResourceTypeColumn;
 
     private bool Filter(ResourceViewModel resource) => PageViewModel.Filter(resource);
@@ -186,8 +185,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         TelemetryContextProvider.Initialize(TelemetryContext);
-
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
         _gridColumns = [
             new GridColumn(Name: NameColumn, DesktopWidth: "1.5fr", MobileWidth: "1.5fr"),
@@ -616,9 +613,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task ShowContextMenuAsync(ResourceViewModel resource, int screenWidth, int screenHeight, int clientX, int clientY)
     {
-        // This is called when the browser requests to show the context menu for a resource.
-        // The method doesn't complete until the context menu is closed so the browser can await
-        // it and perform clean up when the context menu is closed.
         if (_contextMenu is { } contextMenu)
         {
             _contextMenuItems.Clear();
@@ -633,16 +627,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 showConsoleLogsItem: true,
                 showUrls: true);
 
-            // The previous context menu should always be closed by this point but complete just in case.
-            _contextMenuClosedTcs?.TrySetResult();
-
-            _contextMenuClosedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
             await contextMenu.OpenAsync(screenWidth, screenHeight, clientX, clientY);
             StateHasChanged();
-
-            // Completed when the overlay closes.
-            await _contextMenuClosedTcs.Task;
         }
     }
 
@@ -833,9 +819,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return HasAnyChildResources() || _resourceByName.Values.Any(r => r.IsResourceHidden(showHiddenResources: false));
     }
 
-    private Task OnTabChangeAsync(FluentTab newTab)
+    private Task OnTabChangeAsync(FluentTab? newTab)
     {
-        var id = newTab.Id?.Substring("tab-".Length);
+        if (_isDisposing)
+        {
+            return Task.CompletedTask;
+        }
+
+        var id = newTab?.Id?.Substring("tab-".Length);
 
         if (id is null
             || !Enum.TryParse(typeof(ResourceViewKind), id, out var o)
@@ -982,7 +973,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     public async ValueTask DisposeAsync()
     {
-        CompleteContextMenuClosed();
+        _isDisposing = true;
 
         _resourcesInteropReference?.Dispose();
         _cts.Cancel();
@@ -993,41 +984,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
     }
 
-    private async Task ContextMenuClosedAsync(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
-    {
-        await CloseContextMenuAsync(closeMenu: true);
-    }
-
     private async Task ContextMenuOpenChangedAsync(bool open)
     {
-        if (open)
-        {
-            _contextMenuOpen = true;
-            return;
-        }
-
-        await CloseContextMenuAsync(closeMenu: false);
-    }
-
-    private async Task CloseContextMenuAsync(bool closeMenu)
-    {
-        _contextMenuOpen = false;
-
-        if (_contextMenu is { } menu)
-        {
-            if (closeMenu)
-            {
-                await menu.CloseAsync();
-            }
-        }
-
-        CompleteContextMenuClosed();
-    }
-
-    private void CompleteContextMenuClosed()
-    {
-        _contextMenuClosedTcs?.TrySetResult();
-        _contextMenuClosedTcs = null;
+        _contextMenuOpen = open;
+        await InvokeAsync(StateHasChanged);
     }
 
     // IComponentWithTelemetry impl
