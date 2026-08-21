@@ -258,6 +258,7 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            useConfiguredGallery: true
           - name: Windows
             shardName: package-surface
             spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
@@ -817,6 +818,7 @@ jobs:
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
           ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}
           ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
+          ASPIRE_EXTENSION_E2E_USE_CONFIGURED_GALLERY: ${{ matrix.useConfiguredGallery }}
           # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
           # and useful for diagnosing timing-sensitive flakes after the fact.
           ASPIRE_EXTENSION_E2E_RECORDING_MODE: ${{ matrix.useXvfb && 'always' || 'off' }}

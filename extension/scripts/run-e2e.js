@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+const { readVSIXPackage } = require('@vscode/vsce/out/zip');
 const {
   ensureDownloadCache,
   projectDownloadCache,
@@ -146,6 +147,20 @@ function prepareRunDirectories() {
   for (const directory of [artifactsDir, resultsDir, diagnosticsStorageRoot, isolatedAspireHome, storageDir, extensionsDir]) {
     fs.mkdirSync(directory, { recursive: true });
   }
+}
+
+function prepareCodeSettings() {
+  const defaultSettingsPath = path.join(extensionRoot, 'test-e2e', 'settings.json');
+  const useConfiguredGallery = process.env.ASPIRE_EXTENSION_E2E_USE_CONFIGURED_GALLERY === 'true';
+  if (!useConfiguredGallery) {
+    return defaultSettingsPath;
+  }
+
+  const settings = JSON.parse(fs.readFileSync(defaultSettingsPath, 'utf8'));
+  settings['extensions.gallery.serviceUrl'] = 'https://example.invalid/extension-gallery';
+  const configuredSettingsPath = path.join(shortRunRoot, 'code-settings.json');
+  fs.writeFileSync(configuredSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  return configuredSettingsPath;
 }
 
 function getRunTestsTimeoutMs() {
@@ -587,6 +602,7 @@ async function main() {
 
     assertSpecMatches(testSpec);
     prepareRunDirectories();
+    const codeSettingsPath = prepareCodeSettings();
     logE2eConfiguration();
 
     const bundledCliPath = resolveCliPath();
@@ -609,6 +625,8 @@ async function main() {
       throw new Error(`VSIX not found at ${vsixPath}`);
     }
     validateVsix(vsixPath);
+    const expectedExtensionChannel = await getVsixChannel(vsixPath);
+    console.log(`VSIX channel from extension.vsixmanifest: ${expectedExtensionChannel}`);
     const azureFunctionsVsixPaths = resolveAzureFunctionsVsixPaths();
     if (enableAzureFunctionsE2E) {
       validateAzureFunctionsCoreTools();
@@ -636,6 +654,7 @@ async function main() {
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
+      ASPIRE_EXTENSION_E2E_EXPECTED_CHANNEL: expectedExtensionChannel,
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
       LC_ALL: 'C.UTF-8',
@@ -689,7 +708,7 @@ async function main() {
     recording = startRecording();
     try {
       logStep('Running VS Code extension E2E tests');
-      const runTestsArgs = [extesterCli, 'run-tests', testSpec, '--storage', storageDir, '--extensions_dir', extensionsDir, '--code_version', vscodeVersion, '--code_settings', path.join(extensionRoot, 'test-e2e', 'settings.json'), '--mocha_config', path.join(extensionRoot, '.mocharc.e2e.js'), '--offline'];
+      const runTestsArgs = [extesterCli, 'run-tests', testSpec, '--storage', storageDir, '--extensions_dir', extensionsDir, '--code_version', vscodeVersion, '--code_settings', codeSettingsPath, '--mocha_config', path.join(extensionRoot, '.mocharc.e2e.js'), '--offline'];
       await runWithProcessTreeTimeout(process.execPath, runTestsArgs, {
         diagnosticsSuffix: ` Diagnostics are under ${path.relative(extensionRoot, resultsDir)} and ${path.relative(extensionRoot, storageDiagnosticsDir)}.`,
         quoteShellArgument: quoteWindowsShellArgument,
@@ -1213,7 +1232,14 @@ function validateAzureFunctionsCoreTools() {
 }
 
 function packageVsix() {
-  run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], { ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: 'true' }, { timeout: 300000 });
+  run(
+    'corepack',
+    ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath],
+    {
+      ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: 'true',
+      ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE: 'true',
+    },
+    { timeout: 300000 });
   return defaultVsixPath;
 }
 
@@ -1235,6 +1261,37 @@ function validateVsix(resolvedVsixPath) {
   if (header.toString('utf8') !== 'PK\u0003\u0004') {
     throw new Error(`VSIX at ${resolvedVsixPath} does not look like a ZIP package.`);
   }
+}
+
+async function getVsixChannel(resolvedVsixPath) {
+  // Use the parser from the pinned vsce dependency so package expectations come from the artifact
+  // installed by this run, without extracting it through a platform-specific command.
+  const { xmlManifest } = await readVSIXPackage(resolvedVsixPath);
+  const metadata = xmlManifest?.PackageManifest?.Metadata;
+  if (!Array.isArray(metadata)) {
+    throw new Error(`VSIX at ${resolvedVsixPath} does not contain PackageManifest.Metadata.`);
+  }
+
+  const properties = metadata
+    .flatMap(entry => entry.Properties ?? [])
+    .flatMap(propertyGroup => propertyGroup.Property ?? []);
+  // vsce records a pre-release package as:
+  //   <Property Id="Microsoft.VisualStudio.Code.PreRelease" Value="true" />
+  // Stable packages omit the property, though accepting an explicit false keeps the reader
+  // compatible with equivalent VSIX producers.
+  const preReleaseProperty = properties
+    .find(property => property?.$?.Id === 'Microsoft.VisualStudio.Code.PreRelease');
+  const preReleaseValue = preReleaseProperty?.$?.Value;
+
+  if (preReleaseValue === undefined || preReleaseValue === 'false') {
+    return 'stable';
+  }
+
+  if (preReleaseValue === 'true') {
+    return 'prerelease';
+  }
+
+  throw new Error(`VSIX at ${resolvedVsixPath} has unsupported Microsoft.VisualStudio.Code.PreRelease value '${preReleaseValue}'.`);
 }
 
 function ensureExtester() {

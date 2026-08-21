@@ -52,6 +52,8 @@
       <_VsixPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).vsix</_VsixPath>
       <_ManifestPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).manifest</_ManifestPath>
       <_VscePackagePreReleaseArg Condition="'$(PackageVSCodeExtensionAsPreRelease)' == 'true'">--pre-release</_VscePackagePreReleaseArg>
+      <_PackagePreReleaseMarker>false</_PackagePreReleaseMarker>
+      <_PackagePreReleaseMarker Condition="'$(PackageVSCodeExtensionAsPreRelease)' == 'true'">true</_PackagePreReleaseMarker>
     </PropertyGroup>
 
     <!-- Override package.json version if ExtensionVersionOverride is set, saving original first -->
@@ -64,13 +66,14 @@
 
     <!-- Install dependencies and compile -->
     <Exec Command="corepack yarn install --frozen-lockfile --non-interactive" WorkingDirectory="$(ExtensionSrcDir)" EnvironmentVariables="COREPACK_HOME=$(_CorepackHome)" IgnoreStandardErrorWarningFormat="true" />
-    <Exec Command="corepack yarn compile" WorkingDirectory="$(ExtensionSrcDir)" EnvironmentVariables="COREPACK_HOME=$(_CorepackHome)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="corepack yarn compile" WorkingDirectory="$(ExtensionSrcDir)" EnvironmentVariables="COREPACK_HOME=$(_CorepackHome);ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE=$(_PackagePreReleaseMarker)" IgnoreStandardErrorWarningFormat="true" />
 
     <!-- Make extension directory -->
     <MakeDir Directories="$(_VscodeOutputDir)" />
 
     <!-- Package extension -->
     <Exec Command="vsce package $(_VscePackagePreReleaseArg) --out $(_VsixPath)"
+          EnvironmentVariables="ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE=$(_PackagePreReleaseMarker)"
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
 

@@ -62,6 +62,14 @@ const extensionConfig = {
       },
     ]
   },
+  plugins: [
+    // VS Code does not surface extension.vsixmanifest pre-release metadata through packageJSON for
+    // offline VSIX installs, so preserve the package channel in the generated extension bundle.
+    new webpack.DefinePlugin({
+      'process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE': JSON.stringify(
+        process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE === 'true' ? 'true' : 'false'),
+    }),
+  ],
   devtool: 'source-map',
   infrastructureLogging: {
     level: "log", // enables logging required for problem matchers
@@ -74,9 +82,12 @@ const extensionConfig = {
 module.exports = (_env, argv) => {
   // A fresh array per call so repeated invocations cannot accumulate plugins on the shared config.
   const shouldStubE2eBridge = argv && argv.mode === 'production' && process.env[e2eBridgeIncludeEnvironmentVariable] !== 'true';
-  const plugins = shouldStubE2eBridge
-    ? [new webpack.NormalModuleReplacementPlugin(e2eBridgeRequestPattern, e2eBridgeProductionStub)]
-    : [];
+  const plugins = [
+    ...extensionConfig.plugins,
+    ...(shouldStubE2eBridge
+      ? [new webpack.NormalModuleReplacementPlugin(e2eBridgeRequestPattern, e2eBridgeProductionStub)]
+      : []),
+  ];
 
   return [ { ...extensionConfig, plugins } ];
 };

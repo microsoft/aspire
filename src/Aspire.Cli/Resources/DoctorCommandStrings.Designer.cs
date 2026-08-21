@@ -168,6 +168,69 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire extension for VS Code {0} is out of date (latest: {1}).
+        /// </summary>
+        public static string VsCodeExtensionOutOfDateMessageFormat {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionOutOfDateMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Update the Aspire extension from the VS Code Marketplace..
+        /// </summary>
+        public static string VsCodeExtensionOutOfDateFix {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionOutOfDateFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not check for Aspire extension updates because the VS Code Marketplace is unavailable..
+        /// </summary>
+        public static string VsCodeExtensionLatestVersionCheckUnavailableDetails {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionLatestVersionCheckUnavailableDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The installed extension channel could not be determined, so the update check was skipped..
+        /// </summary>
+        public static string VsCodeExtensionLatestVersionCheckSkippedUnknownChannelDetails {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionLatestVersionCheckSkippedUnknownChannelDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The active editor is not known to use the Microsoft VS Code Marketplace, so the update check was skipped..
+        /// </summary>
+        public static string VsCodeExtensionLatestVersionCheckSkippedUnknownSourceDetails {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionLatestVersionCheckSkippedUnknownSourceDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The VS Code Marketplace did not report an Aspire extension version for the detected channel..
+        /// </summary>
+        public static string VsCodeExtensionLatestVersionNotFoundDetails {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionLatestVersionNotFoundDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire extension for VS Code is installed, but its version could not be determined.
+        /// </summary>
+        public static string VsCodeExtensionVersionUnknownMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionVersionUnknownMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Summary: {0} passed, {1} warnings, {2} failed.
         /// </summary>
         public static string SummaryFormat {

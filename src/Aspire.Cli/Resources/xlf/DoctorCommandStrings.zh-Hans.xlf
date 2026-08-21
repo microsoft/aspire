@@ -486,6 +486,26 @@ The current layout continues to work — this is a non-blocking warning.</target
         <target state="new">Aspire extension for VS Code is installed</target>
         <note />
       </trans-unit>
+      <trans-unit id="VsCodeExtensionLatestVersionCheckSkippedUnknownChannelDetails">
+        <source>The installed extension channel could not be determined, so the update check was skipped.</source>
+        <target state="new">The installed extension channel could not be determined, so the update check was skipped.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionLatestVersionCheckSkippedUnknownSourceDetails">
+        <source>The active editor is not known to use the Microsoft VS Code Marketplace, so the update check was skipped.</source>
+        <target state="new">The active editor is not known to use the Microsoft VS Code Marketplace, so the update check was skipped.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionLatestVersionCheckUnavailableDetails">
+        <source>Could not check for Aspire extension updates because the VS Code Marketplace is unavailable.</source>
+        <target state="new">Could not check for Aspire extension updates because the VS Code Marketplace is unavailable.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionLatestVersionNotFoundDetails">
+        <source>The VS Code Marketplace did not report an Aspire extension version for the detected channel.</source>
+        <target state="new">The VS Code Marketplace did not report an Aspire extension version for the detected channel.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="VsCodeExtensionMissingFix">
         <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
         <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
@@ -494,6 +514,21 @@ The current layout continues to work — this is a non-blocking warning.</target
       <trans-unit id="VsCodeExtensionMissingMessage">
         <source>VS Code is installed, but the Aspire extension is not installed</source>
         <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionOutOfDateFix">
+        <source>Update the Aspire extension from the VS Code Marketplace.</source>
+        <target state="new">Update the Aspire extension from the VS Code Marketplace.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionOutOfDateMessageFormat">
+        <source>Aspire extension for VS Code {0} is out of date (latest: {1})</source>
+        <target state="new">Aspire extension for VS Code {0} is out of date (latest: {1})</target>
+        <note>{0} is the installed extension version. {1} is the latest extension version.</note>
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionVersionUnknownMessage">
+        <source>Aspire extension for VS Code is installed, but its version could not be determined</source>
+        <target state="new">Aspire extension for VS Code is installed, but its version could not be determined</target>
         <note />
       </trans-unit>
     </body>

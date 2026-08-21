@@ -7,11 +7,16 @@ import * as vscode from 'vscode';
 import { getSupportedCapabilities } from '../capabilities';
 import { AspireDebugSession, getLoggableDebugConfiguration } from '../debugger/AspireDebugSession';
 import * as debuggerExtensionsModule from '../debugger/debuggerExtensions';
-import { getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, getResourceDebuggerExtensions, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { createRustDebuggerExtension, IRustService, RustService } from '../debugger/languages/rust';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, RustLaunchConfiguration } from '../dcp/types';
-import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { rustDebuggerExtensionNotInstalled } from '../loc/strings';
+import {
+    ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR,
+    getAspireExtensionEnvironment,
+} from '../utils/cliPathEnvironment';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 type TestChildProcess = Omit<nodeChildProcess.ChildProcessWithoutNullStreams, 'exitCode' | 'signalCode'> & {
@@ -907,6 +912,95 @@ suite('Rust Debugger Extension Tests', () => {
         assert.ok(Array.isArray(debugConfig.environment));
         assert.ok(rustService.buildStub.calledOnce);
         assert.ok(rustService.getCargoHostTargetStub.notCalled);
+    });
+
+    test('materializes the authoritative AppHost identity for the Rust cppvsdbg adapter', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const { extension } = createExtension(undefined, 'win32');
+        const extensionEnvironment = getAspireExtensionEnvironment({
+            version: '1.18.0',
+            preRelease: true,
+        }, {
+            appName: 'Visual Studio Code - Insiders',
+            uriScheme: 'vscode-insiders',
+        });
+        assert.ok(extensionEnvironment);
+        const debuggerEnvironment = {
+            aspire_vscode_extension_version: 'debugger-version',
+            aspire_vscode_extension_channel: 'stable',
+            aspire_vscode_extension_source: 'other',
+            CALLER_SETTING: 'preserved',
+        };
+
+        try {
+            const configuration = await createDebugSessionConfiguration(
+                {
+                    type: 'aspire',
+                    request: 'launch',
+                    name: 'Aspire',
+                    program: '/workspace/apphost.rs',
+                    debuggers: {
+                        apphost: {
+                            env: debuggerEnvironment,
+                        },
+                    },
+                },
+                createLaunchConfig(
+                    ['build', '--target', 'x86_64-pc-windows-msvc'],
+                    '/workspace/api/target/x86_64-pc-windows-msvc/debug/api.exe'),
+                [],
+                [
+                    { name: 'aspire_vscode_extension_version', value: 'caller-version' },
+                    { name: 'aspire_vscode_extension_channel', value: 'stable' },
+                    { name: 'aspire_vscode_extension_source', value: 'other' },
+                    { name: 'CALLER_SETTING', value: 'preserved' },
+                ],
+                {
+                    debug: true,
+                    runId: 'apphost-run',
+                    debugSessionId: 'aspire-session',
+                    isApphost: true,
+                    debugSession: { aspireExtensionEnvironment: extensionEnvironment } as AspireDebugSession,
+                },
+                extension);
+
+            assert.strictEqual(configuration.env?.[ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR], '1.18.0');
+            assert.strictEqual(configuration.env?.[ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR], 'prerelease');
+            assert.strictEqual(configuration.env?.[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'microsoft-marketplace');
+            assert.strictEqual(configuration.env?.aspire_vscode_extension_version, undefined);
+            assert.strictEqual(configuration.env?.aspire_vscode_extension_channel, undefined);
+            assert.strictEqual(configuration.env?.aspire_vscode_extension_source, undefined);
+
+            const adapterEnvironment = Object.fromEntries(
+                (configuration.environment as { name: string; value: string }[])
+                    .map(({ name, value }) => [name, value]));
+            assert.deepStrictEqual({
+                [ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR]: adapterEnvironment[ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR],
+                [ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR]: adapterEnvironment[ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR],
+                [ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR]: adapterEnvironment[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR],
+                aspire_vscode_extension_version: adapterEnvironment.aspire_vscode_extension_version,
+                aspire_vscode_extension_channel: adapterEnvironment.aspire_vscode_extension_channel,
+                aspire_vscode_extension_source: adapterEnvironment.aspire_vscode_extension_source,
+                CALLER_SETTING: adapterEnvironment.CALLER_SETTING,
+            }, {
+                [ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR]: '1.18.0',
+                [ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR]: 'prerelease',
+                [ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR]: 'microsoft-marketplace',
+                aspire_vscode_extension_version: undefined,
+                aspire_vscode_extension_channel: undefined,
+                aspire_vscode_extension_source: undefined,
+                CALLER_SETTING: 'preserved',
+            });
+            assert.deepStrictEqual(debuggerEnvironment, {
+                aspire_vscode_extension_version: 'debugger-version',
+                aspire_vscode_extension_channel: 'stable',
+                aspire_vscode_extension_source: 'other',
+                CALLER_SETTING: 'preserved',
+            });
+        }
+        finally {
+            platformStub.restore();
+        }
     });
 
     test('does not probe when the executable path contains an MSVC target triple', async () => {

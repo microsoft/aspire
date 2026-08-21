@@ -1,12 +1,5 @@
 import * as vscode from 'vscode';
 
-import type { AspireExtensionContext } from '../AspireExtensionContext';
-import type { AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireExtensionStateSnapshot } from '../types/extensionApi';
-import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import type { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import type { AppHostDataRepository } from '../data/AppHostDataRepository';
-
 /**
  * Build-time replacement for `e2eStateFileBridge.ts` in production bundles.
  *
@@ -25,17 +18,9 @@ import type { AppHostDataRepository } from '../data/AppHostDataRepository';
  * `extension.ts` imports, otherwise the production build breaks at bundle time rather than at
  * runtime - which is the intended failure mode.
  */
-export function createE2eStateFileBridge(
-  _context: vscode.ExtensionContext,
-  _aspireContext: AspireExtensionContext,
-  _dataRepository: AppHostDataRepository,
-  _appHostLaunchService: AppHostLaunchService,
-  _appHostTreeProvider: AspireAppHostTreeProvider,
-  _terminalProvider: AspireTerminalProvider,
-  _onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
-): vscode.Disposable {
+export const createE2eStateFileBridge: typeof import('./e2eStateFileBridge').createE2eStateFileBridge = () => {
   return new vscode.Disposable(() => undefined);
-}
+};
 
 export function isE2eBridgeEnabled(): boolean {
   return false;

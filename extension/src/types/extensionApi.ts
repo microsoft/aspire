@@ -229,6 +229,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
+    | { name: 'getAspireExtensionEnvironment' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
     | { name: 'snapshotClipboard' }

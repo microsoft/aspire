@@ -1,140 +1,244 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
+using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
-/// Recommends installing the Aspire VS Code extension when VS Code is present but the extension is not.
+/// Reports whether the Aspire VS Code extension is installed and current.
 /// </summary>
-/// <remarks>
-/// The check is intentionally silent when VS Code is not detected: there is nothing to recommend
-/// outside of a VS Code environment, so it returns an empty result and no row is rendered.
-/// </remarks>
 internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
 {
     internal const string CheckName = "vscode-extension";
-
-    /// <summary>
-    /// The unique identifier of the Aspire VS Code extension (<c>&lt;publisher&gt;.&lt;name&gt;</c>).
-    /// </summary>
     internal const string ExtensionId = "microsoft-aspire.aspire-vscode";
-
-    /// <summary>
-    /// The marketplace URL used as the fix link when the extension is missing. This is an aka.ms
-    /// redirect so the ultimate destination can be updated without shipping a new CLI build.
-    /// </summary>
     internal const string MarketplaceUrl = "https://aka.ms/aspire/vscode-extension";
+    internal const string ExtensionVersionEnvironmentVariable = "ASPIRE_VSCODE_EXTENSION_VERSION";
+    internal const string ExtensionChannelEnvironmentVariable = "ASPIRE_VSCODE_EXTENSION_CHANNEL";
+    internal const string ExtensionSourceEnvironmentVariable = "ASPIRE_VSCODE_EXTENSION_SOURCE";
 
     private readonly IEnvironment _environment;
     private readonly CliExecutionContext _executionContext;
+    private readonly IVsCodeExtensionMarketplaceClient _marketplaceClient;
+    private readonly ILogger<VsCodeExtensionCheck> _logger;
     private readonly Func<string, string?> _commandResolver;
 
-    public VsCodeExtensionCheck(IEnvironment environment, CliExecutionContext executionContext)
-        : this(environment, executionContext, PathLookupHelper.FindFullPathFromPath)
+    public VsCodeExtensionCheck(
+        IEnvironment environment,
+        CliExecutionContext executionContext,
+        IVsCodeExtensionMarketplaceClient marketplaceClient,
+        ILogger<VsCodeExtensionCheck> logger)
+        : this(environment, executionContext, marketplaceClient, logger, PathLookupHelper.FindFullPathFromPath)
     {
     }
 
-    // Defaults commandResolver to the real PATH lookup; the internal constructor lets tests inject a
-    // deterministic resolver (see the Detect overload below for why the resolver is a seam).
-    internal VsCodeExtensionCheck(IEnvironment environment, CliExecutionContext executionContext, Func<string, string?> commandResolver)
+    internal VsCodeExtensionCheck(
+        IEnvironment environment,
+        CliExecutionContext executionContext,
+        IVsCodeExtensionMarketplaceClient marketplaceClient,
+        ILogger<VsCodeExtensionCheck> logger,
+        Func<string, string?> commandResolver)
     {
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(marketplaceClient);
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(commandResolver);
 
         _environment = environment;
         _executionContext = executionContext;
+        _marketplaceClient = marketplaceClient;
+        _logger = logger;
         _commandResolver = commandResolver;
     }
 
-    // Runs after the fast environment/OS checks; this is a cheap filesystem probe with no process spawn.
     public int Order => 60;
 
-    public Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var detection = Detect(_environment, _executionContext.HomeDirectory, _commandResolver);
-
-        // Nothing to recommend when the user is not running VS Code.
         if (!detection.VsCodeInstalled)
         {
-            return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([]);
+            return [];
         }
 
         var metadata = BuildMetadata(detection);
-
-        // The Aspire extension is installed: report a clean pass with no fix or link.
-        if (detection.ExtensionInstalled)
+        if (!detection.ExtensionInstalled)
         {
-            var pass = new EnvironmentCheckResult
-            {
-                Category = EnvironmentCheckCategories.DevelopmentTools,
-                Name = CheckName,
-                Status = EnvironmentCheckStatus.Pass,
-                Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
-                Metadata = metadata
-            };
-
-            return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([pass]);
+            return
+            [
+                new EnvironmentCheckResult
+                {
+                    Category = EnvironmentCheckCategories.DevelopmentTools,
+                    Name = CheckName,
+                    Status = EnvironmentCheckStatus.Warning,
+                    Message = DoctorCommandStrings.VsCodeExtensionMissingMessage,
+                    Fix = DoctorCommandStrings.VsCodeExtensionMissingFix,
+                    Link = MarketplaceUrl,
+                    Metadata = metadata
+                }
+            ];
         }
 
-        // VS Code is present but the extension is missing: warn and point at the marketplace.
-        var warning = new EnvironmentCheckResult
+        if (!SemVersion.TryParse(detection.ExtensionVersion, SemVersionStyles.Strict, out var installedVersion))
         {
-            Category = EnvironmentCheckCategories.DevelopmentTools,
-            Name = CheckName,
-            Status = EnvironmentCheckStatus.Warning,
-            Message = DoctorCommandStrings.VsCodeExtensionMissingMessage,
-            Fix = DoctorCommandStrings.VsCodeExtensionMissingFix,
-            Link = MarketplaceUrl,
-            Metadata = metadata
-        };
+            metadata["extensionVersionKnown"] = false;
+            return [CreateUnknownVersionResult(metadata)];
+        }
 
-        return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([warning]);
+        metadata["extensionVersionKnown"] = true;
+        metadata["latestVersionKnown"] = false;
+
+        // Disk discovery can identify an installed extension but not whether VS Code selected the
+        // stable or prerelease Marketplace channel. No Marketplace result is actionable without
+        // that channel, so avoid adding network latency or replacing this known limitation with a
+        // misleading connectivity error.
+        if (detection.ReleaseChannel == VsCodeExtensionReleaseChannel.Unknown)
+        {
+            return [CreateUnknownChannelResult(metadata)];
+        }
+
+        // Older extension versions do not report their editor product. Treat the missing source as
+        // unknown rather than assuming Microsoft VS Code, so side-loaded installs in Code - OSS
+        // products never receive an irrelevant Marketplace link.
+        if (detection.ExtensionSource != VsCodeExtensionSource.MicrosoftMarketplace)
+        {
+            return [CreateUnknownSourceResult(metadata)];
+        }
+
+        try
+        {
+            var versions = await _marketplaceClient.GetLatestVersionsAsync(cancellationToken);
+            var (latestVersion, channel) = GetLatestVersion(detection.ReleaseChannel, versions);
+            if (latestVersion is null)
+            {
+                return [CreateLatestVersionNotFoundResult(metadata)];
+            }
+
+            var updateAvailable = SemVersion.ComparePrecedence(installedVersion, latestVersion) < 0;
+            metadata["latestVersion"] = latestVersion.ToString();
+            metadata["latestVersionChannel"] = channel;
+            metadata["latestVersionKnown"] = true;
+            metadata["updateAvailable"] = updateAvailable;
+
+            if (!updateAvailable)
+            {
+                return [CreateInstalledResult(metadata)];
+            }
+
+            return
+            [
+                new EnvironmentCheckResult
+                {
+                    Category = EnvironmentCheckCategories.DevelopmentTools,
+                    Name = CheckName,
+                    Status = EnvironmentCheckStatus.Warning,
+                    Message = string.Format(
+                        CultureInfo.CurrentCulture,
+                        DoctorCommandStrings.VsCodeExtensionOutOfDateMessageFormat,
+                        detection.ExtensionVersion,
+                        latestVersion),
+                    Fix = DoctorCommandStrings.VsCodeExtensionOutOfDateFix,
+                    Link = MarketplaceUrl,
+                    Metadata = metadata
+                }
+            ];
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or HttpRequestException or IOException or JsonException or InvalidDataException)
+        {
+            _logger.LogDebug(exception, "The VS Code Marketplace version check was unavailable.");
+            return [CreateMarketplaceUnavailableResult(metadata)];
+        }
+    }
+
+    private static (SemVersion? Version, string Channel) GetLatestVersion(
+        VsCodeExtensionReleaseChannel installedChannel,
+        VsCodeExtensionMarketplaceVersions versions)
+    {
+        if (installedChannel == VsCodeExtensionReleaseChannel.Unknown)
+        {
+            return (null, "unknown");
+        }
+
+        if (installedChannel == VsCodeExtensionReleaseChannel.Stable)
+        {
+            return (versions.StableVersion, "stable");
+        }
+
+        return (versions.PreReleaseVersion, "prerelease");
     }
 
     internal static VsCodeExtensionDetection Detect(IEnvironment environment, DirectoryInfo homeDirectory)
         => Detect(environment, homeDirectory, PathLookupHelper.FindFullPathFromPath);
 
-    // The command resolver is injected so tests can exercise the PATH-based detection fallback
-    // deterministically; PathLookupHelper.FindFullPathFromPath reads the real process PATH, which
-    // cannot be mocked via IEnvironment and would otherwise leave that branch untested (and flaky
-    // on machines that happen to have "code" on PATH).
-    internal static VsCodeExtensionDetection Detect(IEnvironment environment, DirectoryInfo homeDirectory, Func<string, string?> commandResolver)
+    internal static VsCodeExtensionDetection Detect(
+        IEnvironment environment,
+        DirectoryInfo homeDirectory,
+        Func<string, string?> commandResolver)
     {
-        var vsCodeInstalled = IsVsCodeInstalled(environment, commandResolver);
-        if (!vsCodeInstalled)
+        var reportedVersion = environment.GetEnvironmentVariable(ExtensionVersionEnvironmentVariable)?.Trim();
+        if (!string.IsNullOrEmpty(reportedVersion))
         {
-            return new VsCodeExtensionDetection(VsCodeInstalled: false, ExtensionInstalled: false);
+            return new VsCodeExtensionDetection(
+                true,
+                true,
+                reportedVersion,
+                ParseReleaseChannel(environment.GetEnvironmentVariable(ExtensionChannelEnvironmentVariable)),
+                ParseExtensionSource(environment.GetEnvironmentVariable(ExtensionSourceEnvironmentVariable)));
         }
 
-        var extensionInstalled = IsExtensionInstalled(environment, homeDirectory);
-        return new VsCodeExtensionDetection(VsCodeInstalled: true, ExtensionInstalled: extensionInstalled);
+        var vsCodeInstalled = IsVsCodeInstalled(environment, homeDirectory, commandResolver);
+        if (!vsCodeInstalled)
+        {
+            return new VsCodeExtensionDetection(false, false);
+        }
+
+        var extension = FindExtension(environment, homeDirectory);
+        return new VsCodeExtensionDetection(
+            true,
+            extension.Found,
+            extension.Version,
+            VsCodeExtensionReleaseChannel.Unknown);
     }
 
-    private static bool IsVsCodeInstalled(IEnvironment environment, Func<string, string?> commandResolver)
+    private static bool IsVsCodeInstalled(
+        IEnvironment environment,
+        DirectoryInfo homeDirectory,
+        Func<string, string?> commandResolver)
     {
-        // When doctor is invoked from an integrated terminal, VS Code advertises itself via TERM_PROGRAM.
-        // See https://code.visualstudio.com/docs/terminal/shell-integration.
         if (string.Equals(environment.GetEnvironmentVariable("TERM_PROGRAM"), "vscode", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        // Otherwise fall back to probing for the CLI launchers on PATH (stable and Insiders).
-        return commandResolver("code") is not null
-            || commandResolver("code-insiders") is not null;
+        // VS Code's macOS application does not install the `code` shell launcher unless the user
+        // explicitly requests it, so also probe the standard system and per-user application roots.
+        if (environment.IsMacOS() && IsMacOsApplicationInstalled(homeDirectory))
+        {
+            return true;
+        }
+
+        return commandResolver("code") is not null ||
+            commandResolver("code-insiders") is not null;
     }
 
-    private static bool IsExtensionInstalled(IEnvironment environment, DirectoryInfo homeDirectory)
+    private static bool IsMacOsApplicationInstalled(DirectoryInfo homeDirectory)
     {
-        foreach (var extensionsDirectory in GetExtensionDirectories(environment, homeDirectory))
+        foreach (var applicationName in new[] { "Visual Studio Code.app", "Visual Studio Code - Insiders.app" })
         {
-            if (DirectoryContainsExtension(extensionsDirectory))
+            if (Directory.Exists(Path.Combine("/Applications", applicationName)) ||
+                Directory.Exists(Path.Combine(homeDirectory.FullName, "Applications", applicationName)))
             {
                 return true;
             }
@@ -143,12 +247,29 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
         return false;
     }
 
+    private static (bool Found, string? Version, SemVersion? ParsedVersion) FindExtension(
+        IEnvironment environment,
+        DirectoryInfo homeDirectory)
+    {
+        var selected = (Found: false, Version: (string?)null, ParsedVersion: (SemVersion?)null);
+        foreach (var extensionsDirectory in GetExtensionDirectories(environment, homeDirectory))
+        {
+            var candidate = FindExtension(extensionsDirectory);
+            if (candidate.Found &&
+                (!selected.Found ||
+                    candidate.ParsedVersion is not null &&
+                    (selected.ParsedVersion is null ||
+                        SemVersion.ComparePrecedence(candidate.ParsedVersion, selected.ParsedVersion) > 0)))
+            {
+                selected = candidate;
+            }
+        }
+
+        return selected;
+    }
+
     private static IEnumerable<string> GetExtensionDirectories(IEnvironment environment, DirectoryInfo homeDirectory)
     {
-        // VSCODE_EXTENSIONS overrides the default extensions location entirely: when it is set,
-        // VS Code loads extensions only from that directory, so we must probe only it. Falling through
-        // to the default roots here could report the Aspire extension as installed from ~/.vscode even
-        // though the running VS Code instance (using the override) would not load it — a false "pass".
         var overrideDirectory = environment.GetEnvironmentVariable("VSCODE_EXTENSIONS");
         if (!string.IsNullOrWhiteSpace(overrideDirectory))
         {
@@ -157,76 +278,237 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
         }
 
         var home = homeDirectory.FullName;
-
-        // Default extension roots for desktop (stable/Insiders) and remote/server installs.
         yield return Path.Combine(home, ".vscode", "extensions");
         yield return Path.Combine(home, ".vscode-insiders", "extensions");
         yield return Path.Combine(home, ".vscode-server", "extensions");
         yield return Path.Combine(home, ".vscode-server-insiders", "extensions");
     }
 
-    private static bool DirectoryContainsExtension(string extensionsDirectory)
+    private static (bool Found, string? Version, SemVersion? ParsedVersion) FindExtension(string extensionsDirectory)
     {
         if (!Directory.Exists(extensionsDirectory))
         {
-            return false;
+            return (false, null, null);
         }
 
         try
         {
-            // IgnoreInaccessible lets the probe skip an unreadable extension folder and keep scanning
-            // the rest, instead of throwing and reporting the whole extensions root as "not found" (a
-            // false warning even when the Aspire extension is installed alongside an inaccessible one).
-            // The parameterless EnumerateDirectories overload uses legacy behavior that throws instead.
-            // AttributesToSkip is reset to None (the default EnumerationOptions skips Hidden/System) so an
-            // extension folder is never silently ignored because of an unexpected attribute.
+            var selected = (Found: false, Version: (string?)null, ParsedVersion: (SemVersion?)null);
             var enumerationOptions = new EnumerationOptions
             {
                 IgnoreInaccessible = true,
                 AttributesToSkip = FileAttributes.None
             };
 
-            // Installed extensions live in per-version folders named "<publisher>.<name>-<version>",
-            // lowercased by VS Code, for example "microsoft-aspire.aspire-vscode-1.2.3".
             foreach (var directory in Directory.EnumerateDirectories(extensionsDirectory, "*", enumerationOptions))
             {
-                if (IsVersionedExtensionFolder(Path.GetFileName(directory)))
+                var folderName = Path.GetFileName(directory);
+                if (!IsVersionedExtensionFolder(folderName))
                 {
-                    return true;
+                    continue;
+                }
+
+                var version = ReadExtensionVersion(directory);
+                SemVersion.TryParse(version, SemVersionStyles.Strict, out var parsedVersion);
+                if (!selected.Found ||
+                    parsedVersion is not null &&
+                    (selected.ParsedVersion is null ||
+                        SemVersion.ComparePrecedence(parsedVersion, selected.ParsedVersion) > 0))
+                {
+                    selected = (true, version, parsedVersion);
+                }
+            }
+
+            return selected;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return (false, null, null);
+        }
+    }
+
+    private static string? ReadExtensionVersion(string extensionDirectory)
+    {
+        try
+        {
+            var manifestPath = Path.Combine(extensionDirectory, "package.json");
+            if (File.Exists(manifestPath))
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+                if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                    document.RootElement.TryGetProperty("version", out var version) &&
+                    version.ValueKind == JsonValueKind.String &&
+                    SemVersion.TryParse(version.GetString(), SemVersionStyles.Strict, out _))
+                {
+                    return version.GetString();
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
-            // Treat an unreadable extensions directory as "not found" rather than failing the whole doctor run.
-            return false;
+            // Fall back to the version encoded in the extension directory.
         }
 
-        return false;
+        const string prefix = ExtensionId + "-";
+        var folderVersion = Path.GetFileName(extensionDirectory)[prefix.Length..];
+        return SemVersion.TryParse(folderVersion, SemVersionStyles.Strict, out _)
+            ? folderVersion
+            : null;
     }
 
-    // Matches an extension folder name against the Aspire extension id. A case-insensitive prefix match
-    // tolerates any installed version without spawning the VS Code CLI. Requiring a digit immediately
-    // after the trailing '-' pins the match to the version segment so a different extension whose id
-    // starts with ours (e.g. "microsoft-aspire.aspire-vscode-extras-1.0.0") is not treated as a match.
     private static bool IsVersionedExtensionFolder(string folderName)
     {
         const string prefix = ExtensionId + "-";
-        return folderName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-            && folderName.Length > prefix.Length
-            && char.IsAsciiDigit(folderName[prefix.Length]);
+        return folderName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+            folderName.Length > prefix.Length &&
+            char.IsAsciiDigit(folderName[prefix.Length]);
+    }
+
+    private static VsCodeExtensionReleaseChannel ParseReleaseChannel(string? channel)
+        => channel?.Trim() switch
+        {
+            var value when string.Equals(value, "stable", StringComparison.OrdinalIgnoreCase)
+                => VsCodeExtensionReleaseChannel.Stable,
+            var value when string.Equals(value, "prerelease", StringComparison.OrdinalIgnoreCase)
+                => VsCodeExtensionReleaseChannel.PreRelease,
+            _ => VsCodeExtensionReleaseChannel.Unknown
+        };
+
+    private static VsCodeExtensionSource ParseExtensionSource(string? source)
+        => source?.Trim() switch
+        {
+            var value when string.Equals(value, "microsoft-marketplace", StringComparison.OrdinalIgnoreCase)
+                => VsCodeExtensionSource.MicrosoftMarketplace,
+            var value when string.Equals(value, "other", StringComparison.OrdinalIgnoreCase)
+                => VsCodeExtensionSource.Other,
+            _ => VsCodeExtensionSource.Unknown
+        };
+
+    private static EnvironmentCheckResult CreateInstalledResult(JsonObject metadata)
+        => new()
+        {
+            Category = EnvironmentCheckCategories.DevelopmentTools,
+            Name = CheckName,
+            Status = EnvironmentCheckStatus.Pass,
+            Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
+            Metadata = metadata
+        };
+
+    private static EnvironmentCheckResult CreateUnknownVersionResult(JsonObject metadata)
+        => new()
+        {
+            Category = EnvironmentCheckCategories.DevelopmentTools,
+            Name = CheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.VsCodeExtensionVersionUnknownMessage,
+            Metadata = metadata
+        };
+
+    private static EnvironmentCheckResult CreateUnknownChannelResult(JsonObject metadata)
+        => new()
+        {
+            Category = EnvironmentCheckCategories.DevelopmentTools,
+            Name = CheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
+            Details = DoctorCommandStrings.VsCodeExtensionLatestVersionCheckSkippedUnknownChannelDetails,
+            Metadata = metadata
+        };
+
+    private static EnvironmentCheckResult CreateUnknownSourceResult(JsonObject metadata)
+        => new()
+        {
+            Category = EnvironmentCheckCategories.DevelopmentTools,
+            Name = CheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
+            Details = DoctorCommandStrings.VsCodeExtensionLatestVersionCheckSkippedUnknownSourceDetails,
+            Metadata = metadata
+        };
+
+    private static EnvironmentCheckResult CreateLatestVersionNotFoundResult(JsonObject metadata)
+        => new()
+        {
+            Category = EnvironmentCheckCategories.DevelopmentTools,
+            Name = CheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
+            Details = DoctorCommandStrings.VsCodeExtensionLatestVersionNotFoundDetails,
+            Metadata = metadata
+        };
+
+    private static EnvironmentCheckResult CreateMarketplaceUnavailableResult(JsonObject metadata)
+    {
+        metadata["latestVersionKnown"] = false;
+        metadata["latestVersionError"] = "unavailable";
+
+        return new()
+        {
+            Category = EnvironmentCheckCategories.DevelopmentTools,
+            Name = CheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
+            Details = DoctorCommandStrings.VsCodeExtensionLatestVersionCheckUnavailableDetails,
+            Metadata = metadata
+        };
     }
 
     private static JsonObject BuildMetadata(VsCodeExtensionDetection detection)
-        => new()
+    {
+        var metadata = new JsonObject
         {
             ["vsCodeInstalled"] = detection.VsCodeInstalled,
             ["extensionInstalled"] = detection.ExtensionInstalled,
             ["extensionId"] = ExtensionId
         };
+
+        if (detection.ExtensionVersion is not null)
+        {
+            metadata["extensionVersion"] = detection.ExtensionVersion;
+            metadata["extensionChannel"] = detection.ReleaseChannel switch
+            {
+                VsCodeExtensionReleaseChannel.Stable => "stable",
+                VsCodeExtensionReleaseChannel.PreRelease => "prerelease",
+                _ => "unknown"
+            };
+            metadata["extensionSource"] = detection.ExtensionSource switch
+            {
+                VsCodeExtensionSource.MicrosoftMarketplace => "microsoft-marketplace",
+                VsCodeExtensionSource.Other => "other",
+                _ => "unknown"
+            };
+        }
+
+        return metadata;
+    }
 }
 
 /// <summary>
-/// Captures whether VS Code and the Aspire VS Code extension were detected.
+/// The Marketplace release channel tracked by an Aspire VS Code extension installation.
 /// </summary>
-internal sealed record VsCodeExtensionDetection(bool VsCodeInstalled, bool ExtensionInstalled);
+internal enum VsCodeExtensionReleaseChannel
+{
+    Unknown,
+    Stable,
+    PreRelease
+}
+
+/// <summary>
+/// The extension gallery source inferred from the active editor product.
+/// </summary>
+internal enum VsCodeExtensionSource
+{
+    Unknown,
+    MicrosoftMarketplace,
+    Other
+}
+
+/// <summary>
+/// The detected VS Code and Aspire extension state.
+/// </summary>
+internal sealed record VsCodeExtensionDetection(
+    bool VsCodeInstalled,
+    bool ExtensionInstalled,
+    string? ExtensionVersion = null,
+    VsCodeExtensionReleaseChannel ReleaseChannel = VsCodeExtensionReleaseChannel.Unknown,
+    VsCodeExtensionSource ExtensionSource = VsCodeExtensionSource.Unknown);

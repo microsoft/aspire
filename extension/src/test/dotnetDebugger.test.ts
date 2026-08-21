@@ -9,6 +9,7 @@ import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfigurat
 import * as io from '../utils/io';
 import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
+import { createFakeAspireDebugSession } from './helpers/aspireDebugSession';
 import * as hotReload from '../debugger/hotReload';
 import * as cliPathModule from '../utils/cliPath';
 import * as cliPathEnvironmentModule from '../utils/cliPathEnvironment';
@@ -392,7 +393,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -428,7 +429,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await projectDebuggerExtension.createDebugSessionConfigurationCallback!(
             launchConfig,
@@ -478,7 +479,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await projectDebuggerExtension.createDebugSessionConfigurationCallback!(
             launchConfig,
@@ -553,7 +554,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -623,7 +624,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             launchConfig,
             [],
             [],
-            { debug, runId: debugConfig.runId, debugSessionId: options.debugSessionId ?? '1', isApphost: options.isApphost ?? false, debugSession: options.debugSession ?? sinon.createStubInstance(AspireDebugSession) },
+            { debug, runId: debugConfig.runId, debugSessionId: options.debugSessionId ?? '1', isApphost: options.isApphost ?? false, debugSession: options.debugSession ?? createFakeAspireDebugSession() },
             debugConfig);
 
         // Restored so a caller can build a second configuration in the same test; sinon refuses to
@@ -731,7 +732,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                     }
                 }
             };
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
             fakeAspireDebugSession.configuration = debugSessionConfig;
 
             const debugConfig = await createDebugSessionConfiguration(
@@ -845,7 +846,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                     }
                 }
             };
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
             fakeAspireDebugSession.configuration = debugSessionConfig;
 
             const debugConfig = await createDebugSessionConfiguration(
@@ -895,7 +896,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 name: 'Aspire',
                 program: projectPath
             };
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
             fakeAspireDebugSession.configuration = debugSessionConfig;
 
             const debugConfig = await createDebugSessionConfiguration(
@@ -986,7 +987,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                     }
                 }
             };
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
             fakeAspireDebugSession.configuration = debugSessionConfig;
 
             const debugConfig = await createDebugSessionConfiguration(
@@ -1057,7 +1058,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                     }
                 }
             };
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
             fakeAspireDebugSession.configuration = debugSessionConfig;
 
             const debugConfig = await createDebugSessionConfiguration(
@@ -1123,7 +1124,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             project_path: '/tmp/apphost.cs'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         const createDebugConfig = (): AspireResourceExtendedDebugConfiguration => ({
             runId: '1',
@@ -1193,7 +1194,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             name: 'Test Debug Config',
             request: 'launch'
         };
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(
             launchConfig,
@@ -1238,7 +1239,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch',
                 launchProfile: 'tool'
             };
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(
                 launchConfig,
@@ -1284,7 +1285,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1335,7 +1336,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1376,7 +1377,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, ['--message', 'hello'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1423,7 +1424,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, forceBuild: false, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1479,7 +1480,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1536,7 +1537,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             // No run session arguments (undefined) so the launch profile's arguments are the ones used.
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
@@ -1602,7 +1603,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1666,7 +1667,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             // No run session arguments (undefined) so the launch profile's arguments are the ones used.
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
@@ -1734,7 +1735,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1804,7 +1805,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1893,7 +1894,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -1954,7 +1955,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             // No run session args (undefined): the selected profile's commandLineArgs are appended after `--`.
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
@@ -2022,7 +2023,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2113,7 +2114,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2186,7 +2187,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2219,7 +2220,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             noDebug: true
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: false, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2261,7 +2262,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, ['--message', 'hello world'], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2317,7 +2318,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
             const forwardedArgs = ['--custom', `$(${spacesEnvVarName})`, '', 'literal "quote"', `$(${pathEnvVarName})`];
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, forwardedArgs, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
@@ -2375,7 +2376,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2430,7 +2431,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2474,7 +2475,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await assert.rejects(
                 extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig),
@@ -2519,7 +2520,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2584,7 +2585,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, runEnv, { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2659,7 +2660,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 }
             }
         };
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         const debugConfig = await createDebugSessionConfiguration(
             debugSessionConfig,
@@ -2715,7 +2716,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             name: 'Aspire.Dashboard',
             request: 'launch'
         };
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(
             launchConfig,
@@ -2779,7 +2780,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 
@@ -2846,7 +2847,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await assert.rejects(
                 extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig),
@@ -2902,7 +2903,7 @@ suite('Dotnet Debugger Extension Tests', () => {
                 request: 'launch'
             };
 
-            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+            const fakeAspireDebugSession = createFakeAspireDebugSession();
 
             await assert.rejects(
                 extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig),
@@ -2965,7 +2966,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             request: 'launch'
         };
 
-        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+        const fakeAspireDebugSession = createFakeAspireDebugSession();
 
         await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
 

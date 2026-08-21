@@ -48,14 +48,29 @@ public sealed class ExtensionE2eWorkflowTests
     }
 
     [Fact]
+    public void ProductionVsixUsesPrereleaseIdentityWithoutE2eBridge()
+    {
+        var jobs = LoadCallerWorkflowJobs();
+        var extensionUnitJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_tests_win")];
+        if (extensionUnitJob.Children.TryGetValue(new YamlScalarNode("env"), out var jobEnvironmentNode))
+        {
+            var jobEnvironment = Assert.IsType<YamlMappingNode>(jobEnvironmentNode);
+            Assert.False(jobEnvironment.Children.ContainsKey(new YamlScalarNode("ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE")));
+        }
+
+        var steps = ((YamlSequenceNode)extensionUnitJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
+        var packageStep = Assert.Single(steps, step => Scalar(step, "name") == "Package production VSIX");
+
+        Assert.True(packageStep.Children.TryGetValue(new YamlScalarNode("env"), out var environmentNode));
+        var environment = Assert.IsType<YamlMappingNode>(environmentNode);
+        Assert.Equal("true", Scalar(environment, "ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE"));
+        Assert.False(environment.Children.ContainsKey(new YamlScalarNode("ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE")));
+    }
+
+    [Fact]
     public void SelectedExtensionE2eWorkflowMustRun()
     {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, CallerWorkflowRelativePath)));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var jobs = LoadCallerWorkflowJobs();
         var extensionE2eJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_e2e_tests")];
 
         // The condition is a folded block, so compare on collapsed whitespace rather than the layout.
@@ -93,6 +108,16 @@ public sealed class ExtensionE2eWorkflowTests
         var condition = Scalar(failureStep, "if");
         const string unexpectedSkipCheck = "needs.extension_e2e_tests.result == 'skipped'";
         Assert.Equal(2, condition?.Split(unexpectedSkipCheck, StringSplitOptions.None).Length - 1);
+    }
+
+    private static YamlMappingNode LoadCallerWorkflowJobs()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, CallerWorkflowRelativePath)));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        return (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
     }
 
     private static YamlMappingNode LoadExtensionE2eJob() => ExtensionE2eWorkflow.Job();

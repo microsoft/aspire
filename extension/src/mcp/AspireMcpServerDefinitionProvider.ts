@@ -5,6 +5,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { getCmdShimSpawnCommandWithoutVerbatimArguments, shouldWrapWithCmd } from '../utils/cmdShim';
 import { getRegisterMcpServerInWorkspace, registerMcpServerInWorkspaceSetting } from '../utils/settings';
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableResolvedAspireCliPath, ResolvedCliPathDependencies } from '../utils/cliPathEnvironment';
+import type { AspireExtensionEnvironment } from '../utils/cliPathEnvironment';
 
 const mcpServerLabel = 'Aspire';
 const mcpServerArgs = ['agent', 'mcp'];
@@ -20,6 +21,7 @@ const aspireCliExecutablePathSetting = 'aspire.aspireCliExecutablePath';
  */
 export function createAspireMcpServerDefinition(
     cliPath: string,
+    extensionEnvironment: AspireExtensionEnvironment | undefined,
     label = mcpServerLabel,
     cwd?: vscode.Uri,
     deps?: ResolvedCliPathDependencies,
@@ -32,7 +34,17 @@ export function createAspireMcpServerDefinition(
     const forwardableCliPath = deps === undefined
         ? getForwardableResolvedAspireCliPath(cliPath)
         : getForwardableResolvedAspireCliPath(cliPath, deps);
-    const env = forwardableCliPath === undefined ? undefined : { [ASPIRE_CLI_PATH_ENV_VAR]: forwardableCliPath };
+    // The CLI path and the extension identity are independent contributions to the same
+    // environment: the identity names are ASPIRE_VSCODE_EXTENSION_* and never collide with
+    // ASPIRE_CLI_PATH, so both can be applied without either shadowing the other.
+    const environment = createAspireMcpServerEnvironment(extensionEnvironment);
+    if (forwardableCliPath !== undefined) {
+        environment[ASPIRE_CLI_PATH_ENV_VAR] = forwardableCliPath;
+    }
+
+    // VS Code treats an empty map and an absent map differently only in that the empty map still
+    // clones process.env, so keep passing undefined when there is nothing to override.
+    const env = Object.keys(environment).length === 0 ? undefined : environment;
     let definition: vscode.McpStdioServerDefinition;
     if (!shouldWrapWithCmd(cliPath)) {
         definition = new vscode.McpStdioServerDefinition(label, cliPath, [...mcpServerArgs], env);
@@ -43,6 +55,36 @@ export function createAspireMcpServerDefinition(
     }
     definition.cwd = cwd;
     return definition;
+}
+
+function createAspireMcpServerEnvironment(
+    extensionEnvironment: AspireExtensionEnvironment | undefined,
+    inheritedEnvironment: NodeJS.ProcessEnv = process.env,
+    platform: NodeJS.Platform = process.platform,
+): Record<string, string | number | null> {
+    if (extensionEnvironment === undefined) {
+        return {};
+    }
+
+    // VS Code clones process.env before applying this map and appends any explicit PATH value.
+    // Passing only overrides avoids caching unrelated credentials and duplicating PATH.
+    // See https://github.com/microsoft/vscode/blob/1.132.0/src/vs/workbench/api/node/extHostMcpNode.ts#L55-L76.
+    const environment: Record<string, string | number | null> = { ...extensionEnvironment };
+    if (platform !== 'win32') {
+        return environment;
+    }
+
+    for (const identityName of Object.keys(extensionEnvironment)) {
+        for (const inheritedName of Object.keys(inheritedEnvironment)) {
+            if (inheritedName !== identityName && inheritedName.toLowerCase() === identityName.toLowerCase()) {
+                // A null override removes the inherited case-insensitive alias before VS Code
+                // spawns the server, while the canonical key above carries the active identity.
+                environment[inheritedName] = null;
+            }
+        }
+    }
+
+    return environment;
 }
 
 /**
@@ -61,7 +103,10 @@ export class AspireMcpServerDefinitionProvider implements vscode.McpServerDefini
     private _workspaceTrustGrantDisposable: vscode.Disposable | undefined;
     private _cliPathForwardingChangeDisposable: vscode.Disposable | undefined;
 
-    constructor(private readonly _resolver: CliPathResolver = cliPathResolver) {
+    constructor(
+        private readonly _extensionEnvironment: AspireExtensionEnvironment | undefined,
+        private readonly _resolver: CliPathResolver = cliPathResolver,
+    ) {
         // Re-evaluate when the setting changes
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(registerMcpServerInWorkspaceSetting)
@@ -124,7 +169,7 @@ export class AspireMcpServerDefinitionProvider implements vscode.McpServerDefini
 
             const folder = workspaceFolders[index];
             const label = workspaceFolders.length === 1 ? mcpServerLabel : `${mcpServerLabel} (${folderLabels[index]})`;
-            return [createAspireMcpServerDefinition(result.cliPath, label, folder.uri)];
+            return [createAspireMcpServerDefinition(result.cliPath, this._extensionEnvironment, label, folder.uri)];
         });
         const changed = !areMcpDefinitionsEqual(this._definitions, definitions);
         this._definitions = definitions;

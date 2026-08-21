@@ -7,7 +7,8 @@ import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
 import { CliPathResolver, resolveCliPath } from './cliPath';
-import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath } from './cliPathEnvironment';
+import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath, overlayAspireExtensionEnvironment } from './cliPathEnvironment';
+import type { AspireExtensionEnvironment } from './cliPathEnvironment';
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
 import path from 'path';
 import { assertNoTerminalControlCharacters } from './cmdShim';
@@ -129,6 +130,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         subscriptions: vscode.Disposable[],
         private readonly _isPowerShell7Available = isPowerShell7Available,
         private readonly _cliPathResolver?: CliPathResolver,
+        private readonly _aspireExtensionEnvironment?: AspireExtensionEnvironment,
     ) {
         subscriptions.push(vscode.window.onDidCloseTerminal(closedTerminal => {
             this._invalidatedSharedTerminals.delete(closedTerminal);
@@ -139,6 +141,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
                 }
             }
         }));
+    }
+
+    get aspireExtensionEnvironment(): AspireExtensionEnvironment | undefined {
+        return this._aspireExtensionEnvironment;
     }
 
     get rpcServerConnectionInfo() {
@@ -391,6 +397,8 @@ export class AspireTerminalProvider implements vscode.Disposable {
         if (debugSessionId) {
             this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
         }
+
+        overlayAspireExtensionEnvironment(env, this._aspireExtensionEnvironment);
 
         return env;
     }

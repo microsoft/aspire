@@ -11,6 +11,12 @@ import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
+import {
+    ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR,
+    type AspireExtensionEnvironment,
+} from '../utils/cliPathEnvironment';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
@@ -835,6 +841,52 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
+        });
+
+        test('replaces stale Windows identity aliases with canonical extension values', () => {
+            const rpcServerConnectionInfo = terminalProvider.rpcServerConnectionInfo;
+            const dcpServerConnectionInfo = terminalProvider.dcpServerConnectionInfo;
+            const inheritedEnvironment: NodeJS.ProcessEnv = {
+                aspire_vscode_extension_version: 'stale-version',
+                aspire_vscode_extension_channel: 'stable',
+                aspire_vscode_extension_source: 'other',
+            };
+            const originalEnvironment = { ...inheritedEnvironment };
+            const extensionEnvironment: AspireExtensionEnvironment = {
+                [ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR]: '1.18.0',
+                [ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR]: 'prerelease',
+                [ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR]: 'microsoft-marketplace',
+            };
+            let platformStub: sinon.SinonStub | undefined;
+            let environmentStub: sinon.SinonStub | undefined;
+            let provider: AspireTerminalProvider | undefined;
+
+            try {
+                platformStub = sinon.stub(process, 'platform').value('win32');
+                environmentStub = sinon.stub(process, 'env').value(inheritedEnvironment);
+                provider = new AspireTerminalProvider(subscriptions, undefined, undefined, extensionEnvironment);
+                provider.rpcServerConnectionInfo = rpcServerConnectionInfo;
+                provider.dcpServerConnectionInfo = dcpServerConnectionInfo;
+
+                const env = provider.createEnvironment();
+
+                assert.deepStrictEqual(
+                    Object.keys(env).filter(name => name.toLowerCase().startsWith('aspire_vscode_extension_')).sort(),
+                    [
+                        ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR,
+                        ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR,
+                        ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR,
+                    ].sort());
+                assert.strictEqual(env[ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR], '1.18.0');
+                assert.strictEqual(env[ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR], 'prerelease');
+                assert.strictEqual(env[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'microsoft-marketplace');
+                assert.deepStrictEqual(process.env, originalEnvironment);
+            }
+            finally {
+                provider?.dispose();
+                environmentStub?.restore();
+                platformStub?.restore();
+            }
         });
 
         test('uses a longer AppHost startup timeout for extension-managed debug sessions', () => {

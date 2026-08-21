@@ -446,6 +446,31 @@ suite('E2E launch profile', () => {
         assert.ok(!workflow.includes('registry=https://'));
     });
 
+    test('proves configured extension gallery identity in one package-surface Extension Host', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const runnerCode = stripComments(runner);
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const packageSurfaceTest = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'packageSurface.e2e.test.ts'), 'utf8');
+        const packageSurfaceIdentityTest = stripComments(getTestBlock(
+            packageSurfaceTest,
+            'keeps contributed package commands, views, settings, schemas, walkthroughs, and debug type registered'));
+        const configuredGalleryRows = workflow.match(/useConfiguredGallery: true/g) ?? [];
+        const configuredGalleryRowIndex = workflow.indexOf('useConfiguredGallery: true');
+        const configuredGalleryRowStart = workflow.lastIndexOf('          - name:', configuredGalleryRowIndex);
+        const configuredGalleryRowEnd = workflow.indexOf('          - name:', configuredGalleryRowIndex);
+        const configuredGalleryRow = workflow.slice(configuredGalleryRowStart, configuredGalleryRowEnd);
+
+        assert.ok(runnerCode.includes("process.env.ASPIRE_EXTENSION_E2E_USE_CONFIGURED_GALLERY === 'true'"));
+        assert.ok(runnerCode.includes("settings['extensions.gallery.serviceUrl'] = 'https://example.invalid/extension-gallery';"));
+        assert.ok(runnerCode.includes("'--code_settings', codeSettingsPath"));
+        assert.strictEqual(configuredGalleryRows.length, 1);
+        assert.ok(configuredGalleryRow.includes('shardName: package-surface'));
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_USE_CONFIGURED_GALLERY: ${{ matrix.useConfiguredGallery }}'));
+        assert.ok(packageSurfaceIdentityTest.includes("process.env.ASPIRE_EXTENSION_E2E_USE_CONFIGURED_GALLERY === 'true'"));
+        assert.ok(packageSurfaceIdentityTest.includes('assert.strictEqual(hasConfiguredExtensionGallery, true);'));
+    });
+
     test('defaults to the newest VS Code with the legacy macOS executable path while the internal feed lacks newer ExTester', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');

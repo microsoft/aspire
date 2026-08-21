@@ -15,6 +15,11 @@ import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import {
+  ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR,
+  ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR,
+  ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR,
+} from '../utils/cliPathEnvironment';
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -747,6 +752,16 @@ async function executeE2eControlCommand(
     case 'getExtensionPackageJson': {
       markStarted();
       return context.extension.packageJSON;
+    }
+    case 'getAspireExtensionEnvironment': {
+      markStarted();
+      return {
+        version: context.environmentVariableCollection.get(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR)?.value,
+        channel: context.environmentVariableCollection.get(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR)?.value,
+        source: context.environmentVariableCollection.get(ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR)?.value,
+        hasConfiguredExtensionGallery: Boolean(
+          vscode.workspace.getConfiguration().get<unknown>('extensions.gallery.serviceUrl')),
+      };
     }
     case 'getExtensionFileStatus': {
       markStarted();

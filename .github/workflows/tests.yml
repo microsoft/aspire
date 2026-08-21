@@ -650,18 +650,21 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
+          ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE: 'true'
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
       - name: Assert E2E VSIX contains bridge
         if: ${{ !cancelled() }}
         run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
       # Packaged separately (not reusing out/aspire-extension.vsix) because the step above already
       # proved that VSIX contains the bridge on purpose; asserting Absent against it would be
-      # self-contradictory. No env override here is the point: webpack.config.js only stubs the
-      # bridge in `--mode production` when ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE isn't 'true', and
-      # GitHub Actions step `env:` blocks don't leak into later steps, so this reproduces exactly
-      # what Extension.proj's shipping build packages, with no ability to inherit the opt-in above.
+      # self-contradictory. No bridge env override here is the point: webpack.config.js only stubs
+      # the bridge in `--mode production` when ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE isn't 'true',
+      # and GitHub Actions step `env:` blocks don't leak into later steps. The separate prerelease
+      # marker keeps the compiled extension identity aligned with the prerelease VSIX manifest.
       - name: Package production VSIX
         if: ${{ !cancelled() }}
+        env:
+          ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE: "true"
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
       - name: Assert production VSIX excludes bridge
         if: ${{ !cancelled() }}

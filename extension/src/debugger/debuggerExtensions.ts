@@ -16,6 +16,7 @@ import { javaDebuggerExtension } from "./languages/java";
 import { mauiDebuggerExtension } from "./languages/maui";
 import { isDirectory } from "../utils/io";
 import { waitForRunStartIdle } from "./runStartRegistry";
+import { overlayAspireExtensionEnvironment } from "../utils/cliPathEnvironment";
 
 // Represents a resource-specific debugger extension for when the default session configuration is not sufficient to launch the resource.
 export interface ResourceDebuggerExtension {
@@ -80,9 +81,28 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
     }
 
 
+    if (launchOptions.isApphost) {
+        // Some adapters materialize their own environment shape inside the callback. Apply the
+        // authoritative identity first so those derived values do not capture stale caller data.
+        // Debugger settings belong to the parent session and are reused, so clone before mutating.
+        configuration.env = { ...(configuration.env ?? {}) };
+        overlayAspireExtensionEnvironment(
+            configuration.env,
+            launchOptions.debugSession.aspireExtensionEnvironment);
+    }
+
     let alreadyStartedSession: AlreadyStartedResourceDebugSession | undefined;
     if (debuggerExtension.createDebugSessionConfigurationCallback) {
         alreadyStartedSession = await debuggerExtension.createDebugSessionConfigurationCallback(launchConfig, args, env, launchOptions, configuration) ?? undefined;
+    }
+
+    if (launchOptions.isApphost) {
+        // AppHosts are launched directly by the debugger instead of inheriting the Aspire CLI's
+        // environment. Reapply after the callback because these values identify the extension
+        // itself and callbacks are not allowed to replace them.
+        overlayAspireExtensionEnvironment(
+            configuration.env ??= {},
+            launchOptions.debugSession.aspireExtensionEnvironment);
     }
 
     return {

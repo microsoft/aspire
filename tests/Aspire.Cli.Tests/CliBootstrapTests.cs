@@ -6,6 +6,7 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -94,6 +95,28 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         Assert.True(reader.TryReadChannel(out var channel, out _));
         Assert.Equal(channel, context.IdentityChannel);
+    }
+
+    [Fact]
+    public async Task BuildApplication_RegistersMarketplaceClientAsSingleton()
+    {
+        using var host = await BuildHostAsync();
+
+        var marketplaceClient = host.Services.GetRequiredService<IVsCodeExtensionMarketplaceClient>();
+        var sameMarketplaceClient = host.Services.GetRequiredService<IVsCodeExtensionMarketplaceClient>();
+
+        Assert.Same(marketplaceClient, sameMarketplaceClient);
+    }
+
+    [Fact]
+    public async Task BuildApplication_ConfiguresMarketplaceHttpClientTimeout()
+    {
+        using var host = await BuildHostAsync();
+        var factory = host.Services.GetRequiredService<IHttpClientFactory>();
+
+        using var httpClient = factory.CreateClient(VsCodeExtensionMarketplaceClient.HttpClientName);
+
+        Assert.Equal(TimeSpan.FromSeconds(5), httpClient.Timeout);
     }
 
     [Fact]

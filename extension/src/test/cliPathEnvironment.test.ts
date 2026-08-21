@@ -5,10 +5,14 @@ import * as path from 'path';
 import { createWorkspaceFolder } from './testHelpers';
 import {
     ASPIRE_CLI_PATH_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR,
+    ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR,
     CliPathEnvironmentCollection,
     CliPathEnvironmentDependencies,
     ResolvedCliPathDependencies,
     createAspireCliPathProcessEnvironment,
+    getAspireExtensionEnvironment,
     createResolvedAspireCliPathProcessEnvironment,
     CliPathEnvironmentSynchronizer,
     CliPathEnvironmentSynchronizerDependencies,
@@ -17,6 +21,7 @@ import {
     initializeCliPathEnvironmentSync,
     registerCliPathEnvironmentSync,
     syncAspireCliPathEnvironment,
+    syncAspireExtensionEnvironment,
 } from '../utils/cliPathEnvironment';
 import {
     CliPathDependencies,
@@ -41,6 +46,22 @@ function createFakeCollection(): CliPathEnvironmentCollection & { entries: Map<s
     };
 }
 
+function withPackagePreReleaseMarker(value: string, action: () => void): void {
+    const originalValue = process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE;
+    process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE = value;
+    try {
+        action();
+    }
+    finally {
+        if (originalValue === undefined) {
+            delete process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE;
+        }
+        else {
+            process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE = originalValue;
+        }
+    }
+}
+
 function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliPathEnvironmentDependencies {
     return {
         getConfiguredPath: () => '',
@@ -57,6 +78,148 @@ function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliP
 function normalizeCandidate(candidate: string): string {
     return candidate.replace(/\\/g, '/');
 }
+
+suite('cliPathEnvironment.syncAspireExtensionEnvironment tests', () => {
+    test('contributes stable Marketplace metadata when the pre-release flag is absent', () => {
+        withPackagePreReleaseMarker('false', () => {
+            const collection = createFakeCollection();
+
+            syncAspireExtensionEnvironment(collection, getAspireExtensionEnvironment({
+                version: '1.16.0',
+            }, {
+                appName: 'Visual Studio Code',
+                uriScheme: 'vscode',
+            }));
+
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR), '1.16.0');
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR), 'stable');
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR), 'microsoft-marketplace');
+        });
+    });
+
+    test('contributes the production Marketplace pre-release metadata', () => {
+        withPackagePreReleaseMarker('false', () => {
+            const collection = createFakeCollection();
+
+            syncAspireExtensionEnvironment(collection, getAspireExtensionEnvironment({
+                version: '1.17.0',
+                preRelease: true,
+            }, {
+                appName: 'Visual Studio Code',
+                uriScheme: 'vscode',
+            }));
+
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR), '1.17.0');
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR), 'prerelease');
+        });
+    });
+
+    test('contributes the package-time pre-release marker for an offline VSIX install', () => {
+        withPackagePreReleaseMarker('true', () => {
+            const collection = createFakeCollection();
+
+            syncAspireExtensionEnvironment(collection, getAspireExtensionEnvironment({
+                version: '1.17.0',
+                preRelease: false,
+            }, {
+                appName: 'Visual Studio Code',
+                uriScheme: 'vscode',
+            }));
+
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR), '1.17.0');
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR), 'prerelease');
+        });
+    });
+
+    test('contributes the stable channel when no pre-release signal is present', () => {
+        withPackagePreReleaseMarker('false', () => {
+            const collection = createFakeCollection();
+
+            syncAspireExtensionEnvironment(collection, getAspireExtensionEnvironment({
+                version: '1.17.0',
+                preRelease: false,
+            }, {
+                appName: 'Visual Studio Code',
+                uriScheme: 'vscode',
+            }));
+
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR), '1.17.0');
+            assert.strictEqual(collection.entries.get(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR), 'stable');
+        });
+    });
+
+    test('clears stale extension signals when the manifest version is unavailable', () => {
+        const collection = createFakeCollection();
+        collection.entries.set(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR, '1.16.0');
+        collection.entries.set(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR, 'stable');
+        collection.entries.set(ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR, 'microsoft-marketplace');
+
+        syncAspireExtensionEnvironment(collection, undefined);
+
+        assert.strictEqual(collection.entries.has(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR), false);
+        assert.strictEqual(collection.entries.has(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR), false);
+        assert.strictEqual(collection.entries.has(ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR), false);
+    });
+
+    test('marks non-Microsoft editor products as another extension source', () => {
+        const extensionEnvironment = getAspireExtensionEnvironment({
+            version: '1.16.0',
+        }, {
+            appName: 'VSCodium',
+            uriScheme: 'vscodium',
+        });
+
+        assert.strictEqual(extensionEnvironment?.[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'other');
+    });
+
+    test('marks official VS Code with a configured gallery as another extension source', () => {
+        const extensionEnvironment = getAspireExtensionEnvironment({
+            version: '1.16.0',
+        }, {
+            appName: 'Visual Studio Code',
+            uriScheme: 'vscode',
+            extensionGalleryServiceUrl: 'https://marketplace.example.test/manifest',
+        });
+
+        assert.strictEqual(extensionEnvironment?.[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'other');
+    });
+
+    test('marks official VS Code Insiders with a configured gallery as another extension source', () => {
+        const extensionEnvironment = getAspireExtensionEnvironment({
+            version: '1.16.0',
+        }, {
+            appName: 'Visual Studio Code - Insiders',
+            uriScheme: 'vscode-insiders',
+            extensionGalleryServiceUrl: 'https://marketplace.example.test/manifest',
+        });
+
+        assert.strictEqual(extensionEnvironment?.[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'other');
+    });
+
+    test('marks whitespace in the configured gallery setting as another extension source', () => {
+        const extensionEnvironment = getAspireExtensionEnvironment({
+            version: '1.16.0',
+        }, {
+            appName: 'Visual Studio Code',
+            uriScheme: 'vscode',
+            extensionGalleryServiceUrl: '   ',
+        });
+
+        assert.strictEqual(extensionEnvironment?.[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'other');
+    });
+
+    test('marks truthy malformed gallery settings as another extension source', () => {
+        const extensionEnvironment = getAspireExtensionEnvironment({
+            version: '1.16.0',
+        }, {
+            appName: 'Visual Studio Code',
+            uriScheme: 'vscode',
+            extensionGalleryServiceUrl: { serviceUrl: 'malformed' },
+        });
+
+        assert.strictEqual(extensionEnvironment?.[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR], 'other');
+    });
+});
 
 suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
     test('returns the configured path when it is absolute and exists', () => {

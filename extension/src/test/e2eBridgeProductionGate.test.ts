@@ -44,14 +44,35 @@ suite('E2E bridge production gate', () => {
         assert.ok(bridge.includes("if ('environmentVariables' in copy)"));
     });
 
+    test('reads extension identity from the synchronized VS Code environment collection', () => {
+        const bridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const extensionSource = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+
+        for (const variableName of [
+            'ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR',
+            'ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR',
+            'ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR',
+        ]) {
+            assert.ok(
+                bridge.includes(`context.environmentVariableCollection.get(${variableName})?.value`),
+                `The E2E identity command must observe the synchronized ${variableName} contribution.`);
+        }
+        const bridgeFactoryCall = /createE2eStateFileBridge\(([^;]*)\)/s.exec(extensionSource);
+        assert.ok(bridgeFactoryCall, 'Expected extension.ts to create the E2E state file bridge.');
+        assert.doesNotMatch(
+            bridgeFactoryCall[1],
+            /\bextensionEnvironment\b/,
+            'The E2E bridge must observe synchronized identity instead of receiving activation-local identity.');
+    });
+
     test('replaces the E2E bridge in production builds', () => {
         const configure = loadWebpackConfig();
 
         withEnvironmentVariable(configure.e2eBridgeIncludeEnvironmentVariable, undefined, () => {
             const [productionConfig] = configure({}, { mode: 'production' });
+            const pluginNames = productionConfig.plugins.map(plugin => (plugin as object).constructor.name);
 
-            assert.strictEqual(productionConfig.plugins.length, 1);
-            assert.strictEqual((productionConfig.plugins[0] as object).constructor.name, 'NormalModuleReplacementPlugin');
+            assert.deepStrictEqual(pluginNames, ['DefinePlugin', 'NormalModuleReplacementPlugin']);
         });
     });
 
@@ -59,8 +80,12 @@ suite('E2E bridge production gate', () => {
         const configure = loadWebpackConfig();
 
         // `yarn compile` passes no mode, so local development bundles keep driving the real bridge.
-        assert.deepStrictEqual(configure({}, {}).map(config => config.plugins), [[]]);
-        assert.deepStrictEqual(configure({}, { mode: 'none' }).map(config => config.plugins), [[]]);
+        assert.deepStrictEqual(
+            configure({}, {}).map(config => config.plugins.map(plugin => (plugin as object).constructor.name)),
+            [['DefinePlugin']]);
+        assert.deepStrictEqual(
+            configure({}, { mode: 'none' }).map(config => config.plugins.map(plugin => (plugin as object).constructor.name)),
+            [['DefinePlugin']]);
     });
 
     test('keeps the E2E bridge in production mode when the E2E VSIX build opts in', () => {
@@ -68,8 +93,8 @@ suite('E2E bridge production gate', () => {
 
         withEnvironmentVariable(configure.e2eBridgeIncludeEnvironmentVariable, 'true', () => {
             assert.deepStrictEqual(
-                configure({}, { mode: 'production' }).map(config => config.plugins),
-                [[]],
+                configure({}, { mode: 'production' }).map(config => config.plugins.map(plugin => (plugin as object).constructor.name)),
+                [['DefinePlugin']],
                 'The E2E VSIX build packages through vscode:prepublish, so its explicit bridge opt-in must override the production stub replacement.');
         });
     });
@@ -85,12 +110,21 @@ suite('E2E bridge production gate', () => {
             'The E2E VSIX package step must assert the emitted VSIX still contains the real bridge.');
     });
 
-    test('packages the local E2E VSIX with the bridge opt-in', () => {
+    test('packages the local E2E VSIX with the bridge opt-in and pre-release marker', () => {
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const packageVsixBody = /function packageVsix\(\) \{([\s\S]*?)\n\}/.exec(runner)?.[1];
 
         assert.ok(
-            runner.includes("run('corepack', ['yarn@1.22.22', 'run', 'vsce', 'package', '--pre-release', '-o', defaultVsixPath], { ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: 'true' }, { timeout: 300000 });"),
+            runner.includes("ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: 'true'"),
             'The local E2E runner packages in production mode, so it must opt into bundling the real bridge.');
+        assert.ok(packageVsixBody, 'Expected the local E2E runner to define packageVsix.');
+        assert.match(
+            packageVsixBody,
+            /['"]vsce['"]\s*,\s*['"]package['"]\s*,\s*['"]--pre-release['"]/,
+            'The local E2E runner must pass --pre-release to vsce package.');
+        assert.ok(
+            runner.includes("ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE: 'true'"),
+            'The local E2E runner packages a pre-release VSIX, so the generated bundle must preserve that channel.');
     });
 
     /**
@@ -117,7 +151,8 @@ suite('E2E bridge production gate', () => {
         withEnvironmentVariable(configure.e2eBridgeIncludeEnvironmentVariable, undefined, () => {
             configure({}, { mode: 'production' });
 
-            assert.strictEqual(configure({}, { mode: 'production' })[0].plugins.length, 1);
+            const pluginNames = configure({}, { mode: 'production' })[0].plugins.map(plugin => (plugin as object).constructor.name);
+            assert.deepStrictEqual(pluginNames, ['DefinePlugin', 'NormalModuleReplacementPlugin']);
         });
     });
 
@@ -143,7 +178,7 @@ suite('E2E bridge production gate', () => {
 
         assert.ok(importedNames.length > 0, 'Expected extension.ts to import named bindings from the bridge.');
         assert.deepStrictEqual(
-            importedNames.filter(name => !new RegExp(`export function ${name}\\b`).test(stubSource)),
+            importedNames.filter(name => !new RegExp(`export (?:const|function) ${name}\\b`).test(stubSource)),
             [],
             'The production stub must export every binding extension.ts imports, or the production build breaks.');
     });

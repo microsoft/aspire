@@ -94,6 +94,28 @@
   <data name="VsCodeExtensionMissingFix" xml:space="preserve">
     <value>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</value>
   </data>
+  <data name="VsCodeExtensionOutOfDateMessageFormat" xml:space="preserve">
+    <value>Aspire extension for VS Code {0} is out of date (latest: {1})</value>
+    <comment>{0} is the installed extension version. {1} is the latest extension version.</comment>
+  </data>
+  <data name="VsCodeExtensionOutOfDateFix" xml:space="preserve">
+    <value>Update the Aspire extension from the VS Code Marketplace.</value>
+  </data>
+  <data name="VsCodeExtensionLatestVersionCheckUnavailableDetails" xml:space="preserve">
+    <value>Could not check for Aspire extension updates because the VS Code Marketplace is unavailable.</value>
+  </data>
+  <data name="VsCodeExtensionLatestVersionCheckSkippedUnknownChannelDetails" xml:space="preserve">
+    <value>The installed extension channel could not be determined, so the update check was skipped.</value>
+  </data>
+  <data name="VsCodeExtensionLatestVersionCheckSkippedUnknownSourceDetails" xml:space="preserve">
+    <value>The active editor is not known to use the Microsoft VS Code Marketplace, so the update check was skipped.</value>
+  </data>
+  <data name="VsCodeExtensionLatestVersionNotFoundDetails" xml:space="preserve">
+    <value>The VS Code Marketplace did not report an Aspire extension version for the detected channel.</value>
+  </data>
+  <data name="VsCodeExtensionVersionUnknownMessage" xml:space="preserve">
+    <value>Aspire extension for VS Code is installed, but its version could not be determined</value>
+  </data>
   <data name="SummaryFormat" xml:space="preserve">
     <value>Summary: {0} passed, {1} warnings, {2} failed</value>
   </data>

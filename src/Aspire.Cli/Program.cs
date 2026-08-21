@@ -594,6 +594,11 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
+        builder.Services.AddHttpClient(VsCodeExtensionMarketplaceClient.HttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(5);
+        });
+        builder.Services.AddSingleton<IVsCodeExtensionMarketplaceClient, VsCodeExtensionMarketplaceClient>();
         builder.Services.AddSingleton<IEnvironmentCheck, VsCodeExtensionCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 

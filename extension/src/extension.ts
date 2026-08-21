@@ -29,7 +29,7 @@ import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './exten
 import { createE2eStateFileBridge } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
-import { CliPathEnvironmentSynchronizer } from './utils/cliPathEnvironment';
+import { CliPathEnvironmentSynchronizer, getAspireExtensionEnvironment, syncAspireExtensionEnvironment } from './utils/cliPathEnvironment';
 import { CliPathRejectionNotifier } from './utils/cliPathRejectionNotifier';
 import { cliPathResolver } from './utils/cliPath';
 import { AppHostLifecycleToolService, registerAppHostLifecycleTools } from './lm/appHostLifecycleTools';
@@ -51,7 +51,12 @@ export async function activate(context: vscode.ExtensionContext) {
     workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
   });
 
-  const terminalProvider = new AspireTerminalProvider(context.subscriptions, undefined, cliPathResolver);
+  const extensionEnvironment = getAspireExtensionEnvironment(context.extension.packageJSON, {
+    appName: vscode.env.appName,
+    uriScheme: vscode.env.uriScheme,
+    extensionGalleryServiceUrl: vscode.workspace.getConfiguration().get<unknown>('extensions.gallery.serviceUrl'),
+  });
+  const terminalProvider = new AspireTerminalProvider(context.subscriptions, undefined, cliPathResolver, extensionEnvironment);
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
@@ -72,6 +77,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const cliPathEnvironmentInitialization = cliPathEnvironmentSynchronizer.initialize().catch(error => {
     extensionLogOutputChannel.warn(`Initial Aspire CLI path resolution failed: ${String(error)}`);
   });
+  syncAspireExtensionEnvironment(
+    context.environmentVariableCollection,
+    extensionEnvironment);
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
@@ -201,7 +209,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register Aspire MCP server definition provider so the Aspire MCP server
   // appears automatically in VS Code's MCP tools list for Aspire workspaces.
-  const mcpProvider = new AspireMcpServerDefinitionProvider(cliPathResolver);
+  const mcpProvider = new AspireMcpServerDefinitionProvider(extensionEnvironment);
   if (typeof vscode.lm?.registerMcpServerDefinitionProvider === 'function') {
     context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('aspire-mcp-server', mcpProvider));
     context.subscriptions.push(mcpProvider);

@@ -30,6 +30,21 @@ import { aspireCliPathEnvironmentDescription } from '../loc/strings';
  * the configured CLI's bundle.
  */
 export const ASPIRE_CLI_PATH_ENV_VAR = 'AspireCliPath';
+export const ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR = 'ASPIRE_VSCODE_EXTENSION_VERSION';
+export const ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR = 'ASPIRE_VSCODE_EXTENSION_CHANNEL';
+export const ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR = 'ASPIRE_VSCODE_EXTENSION_SOURCE';
+
+export type AspireExtensionEnvironment = Readonly<{
+    [ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR]: string;
+    [ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR]: 'stable' | 'prerelease';
+    [ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR]: 'microsoft-marketplace' | 'other';
+}>;
+
+export interface VsCodeProductIdentity {
+    appName: string;
+    uriScheme: string;
+    extensionGalleryServiceUrl?: unknown;
+}
 
 /**
  * Configuration key under the `aspire` namespace whose value the user-facing
@@ -55,6 +70,11 @@ export interface ResolvedCliPathDependencies {
 
 export interface ForwardableCliPathDependencies extends ResolvedCliPathDependencies {
     isRejectedForForwarding: (cliPath: string) => boolean;
+}
+
+interface ExtensionPackageJson {
+    version?: unknown;
+    preRelease?: unknown;
 }
 
 /**
@@ -502,6 +522,104 @@ export function syncAspireCliPathEnvironment(
     collection.replace(ASPIRE_CLI_PATH_ENV_VAR, forwardablePath);
     deps.log?.(`Forwarding ${ASPIRE_CLI_PATH_ENV_VAR}=${forwardablePath} to terminals, tasks, and debug processes.`);
     return forwardablePath;
+}
+
+/**
+ * Derives the running extension's version, release channel, and editor source once so every
+ * child-process boundary forwards the same identity. `aspire doctor` relies on the active
+ * extension host because several desktop and remote extension roots can coexist on disk.
+ */
+export function getAspireExtensionEnvironment(
+    packageJson: ExtensionPackageJson | undefined,
+    productIdentity: VsCodeProductIdentity,
+): AspireExtensionEnvironment | undefined {
+    const trimmedVersion = typeof packageJson?.version === 'string'
+        ? packageJson.version.trim()
+        : undefined;
+    if (trimmedVersion === undefined || trimmedVersion.length === 0) {
+        return undefined;
+    }
+
+    // Marketplace installs synthesize packageJSON.preRelease, but VS Code reports false for a
+    // pre-release VSIX installed from disk. Webpack replaces this package-time value in the
+    // extension bundle so the artifact retains its channel regardless of how it was installed.
+    const isPreRelease = packageJson?.preRelease === true
+        || process.env.ASPIRE_VSCODE_EXTENSION_PACKAGE_PRERELEASE === 'true';
+
+    return {
+        [ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR]: trimmedVersion,
+        [ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR]: isPreRelease ? 'prerelease' : 'stable',
+        [ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR]: isMicrosoftVsCodeProduct(productIdentity)
+            ? 'microsoft-marketplace'
+            : 'other',
+    };
+}
+
+function isMicrosoftVsCodeProduct(productIdentity: VsCodeProductIdentity): boolean {
+    const appName = productIdentity.appName.trim();
+    const uriScheme = productIdentity.uriScheme.trim();
+
+    // VS Code uses raw JavaScript truthiness to decide whether a configured gallery replaces the
+    // product's default Marketplace manifest after restart. Match that behavior even when manually
+    // supplied settings do not conform to the declared string schema.
+    // See https://github.com/microsoft/vscode/blob/main/src/vs/workbench/services/extensionManagement/electron-browser/extensionGalleryManifestService.ts.
+    if (productIdentity.extensionGalleryServiceUrl) {
+        return false;
+    }
+
+    // Require the matching Microsoft product name and URI scheme so forks and side-loaded
+    // Code - OSS builds do not direct users to the Microsoft Marketplace.
+    return appName === 'Visual Studio Code' && uriScheme === 'vscode'
+        || appName === 'Visual Studio Code - Insiders' && uriScheme === 'vscode-insiders';
+}
+
+export function overlayAspireExtensionEnvironment(
+    target: Record<string, string | undefined>,
+    extensionEnvironment: AspireExtensionEnvironment | undefined,
+    platform: NodeJS.Platform = process.platform,
+): void {
+    if (extensionEnvironment === undefined) {
+        return;
+    }
+
+    for (const [name, value] of Object.entries(extensionEnvironment)) {
+        if (platform === 'win32') {
+            // Windows environment variables are case-insensitive, and Node keeps only one
+            // casing when spawning. Remove stale aliases before writing the authoritative identity.
+            for (const existingName of Object.keys(target)) {
+                if (existingName !== name && existingName.toLowerCase() === name.toLowerCase()) {
+                    delete target[existingName];
+                }
+            }
+        }
+
+        target[name] = value;
+    }
+}
+
+/**
+ * Contributes the package-derived identity to terminals and tasks created by VS Code.
+ */
+export function syncAspireExtensionEnvironment(
+    collection: CliPathEnvironmentCollection,
+    extensionEnvironment: AspireExtensionEnvironment | undefined,
+): void {
+    if (extensionEnvironment === undefined) {
+        collection.delete(ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR);
+        collection.delete(ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR);
+        collection.delete(ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR);
+        return;
+    }
+
+    collection.replace(
+        ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR,
+        extensionEnvironment[ASPIRE_VSCODE_EXTENSION_VERSION_ENV_VAR]);
+    collection.replace(
+        ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR,
+        extensionEnvironment[ASPIRE_VSCODE_EXTENSION_CHANNEL_ENV_VAR]);
+    collection.replace(
+        ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR,
+        extensionEnvironment[ASPIRE_VSCODE_EXTENSION_SOURCE_ENV_VAR]);
 }
 
 /**
