@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "General container-images reference component spanning many existing integrations, not tied to a single changelog entry",
+  "mergedAt": "2026-08-21T14:55:09Z",
+  "number": 1545,
+  "runDate": "2026-08-21T18:11:16Z",
+  "status": "excluded",
+  "title": "Add ContainerImages component and surface container images across hosting docs"
+}

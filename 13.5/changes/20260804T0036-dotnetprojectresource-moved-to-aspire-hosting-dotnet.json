@@ -1,16 +1,17 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": false,
   "breaking": true,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "DotnetProjectResource has been moved from the shared ApplicationModel namespace to Aspire.Hosting.Dotnet and marked with the ASPIREDOTNETPROJECT001 experimental diagnostic, aligning it with Go, Python, and JavaScript resource APIs.",
   "docsPrs": [
-    1473
+    1473,
+    1557
   ],
   "docsRequired": true,
-  "emoji": "🔧",
+  "emoji": "\ud83d\udd27",
   "firstMergedAt": "2026-08-04T00:36:02Z",
   "lastMergedAt": "2026-08-04T00:36:02Z",
   "name": "DotnetProjectResource moved to Aspire.Hosting.Dotnet namespace",

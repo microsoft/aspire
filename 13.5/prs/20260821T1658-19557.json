@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #19554 (excludes unused hex1bpty.exe from published CLI archives); user-facing size/quality fix",
+  "mergedAt": "2026-08-21T16:58:04Z",
+  "number": 19557,
+  "runDate": "2026-08-21T18:11:51Z",
+  "status": "included",
+  "title": "[release/13.5] Exclude unused hex1bpty.exe from published CLI archives"
+}

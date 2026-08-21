@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -8,10 +8,11 @@
   "description": "AppHost authors can now call WithTerminal() on a resource to enable interactive terminal sessions. The dashboard and CLI can attach to and detach from the session at will, enabling interactive use of REPLs, shells, and other terminal programs running as Aspire resources.",
   "docsPrs": [
     1244,
-    1329
+    1329,
+    1557
   ],
   "docsRequired": true,
-  "emoji": "🖥️",
+  "emoji": "\ud83d\udda5\ufe0f",
   "firstMergedAt": "2026-06-10T07:23:45Z",
   "lastMergedAt": "2026-06-10T07:23:45Z",
   "name": "Interactive terminal sessions with WithTerminal()",

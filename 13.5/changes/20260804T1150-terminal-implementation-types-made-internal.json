@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": true,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The experimental terminal implementation types `TerminalAnnotation`, `TerminalHostResource`, and `TerminalHostLayout` are no longer part of the public API. Terminal configuration remains available through `WithTerminal()` and `TerminalOptions`, which carry the `ASPIRETERMINAL001` experimental diagnostic.",
-  "docsPrs": [],
+  "docsPrs": [
+    1557
+  ],
   "docsRequired": true,
-  "emoji": "🔒",
+  "emoji": "\ud83d\udd12",
   "firstMergedAt": "2026-08-04T11:50:12Z",
   "lastMergedAt": "2026-08-04T11:50:12Z",
   "name": "Terminal implementation types made internal",

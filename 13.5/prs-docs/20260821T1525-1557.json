@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Adds diagnostics pages for ASPIREDOTNETPROJECT001 (DotnetProjectResource move), ASPIRETERMINAL001 (WithTerminal / terminal internal types), and ASPIRERADIUS003/004/057 (Radius integration preview)",
+  "mergedAt": "2026-08-21T15:25:54Z",
+  "number": 1557,
+  "runDate": "2026-08-21T18:11:31Z",
+  "status": "included",
+  "title": "docs(diagnostics): add 9 missing ASPIRE diagnostics pages and migrate ASPIREDOTNETTOOL to ASPIREDOTNETTOOL001"
+}

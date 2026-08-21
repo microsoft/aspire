@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Windows CLI archives and aspire.exe no longer bundle the unused hex1bpty.exe PTY host, shrinking each Windows download by ~5 MB and avoiding unnecessary WinGet submission scrutiny of an unexecuted binary.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-08-21T16:58:04Z",
+  "lastMergedAt": "2026-08-21T16:58:04Z",
+  "name": "Removed unused hex1bpty.exe from Windows CLI archives",
+  "owner": "mitchdenny",
+  "prs": [
+    19557
+  ]
+}
