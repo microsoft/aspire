@@ -11,8 +11,8 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 /// </summary>
 /// <remarks>
 /// This is the shape that regressed in https://github.com/microsoft/aspire/issues/19507: a builder
-/// for such a type is still registered as needing a Promise wrapper, so every reference site emits
-/// <c>{ClassName}Promise</c>, and the wrapper declaration must therefore always be emitted too.
+/// for such a type that is returned directly by an export needs a Promise wrapper even though it
+/// has no chainable members of its own.
 /// The fixture lives here, rather than relying on an in-the-box type that happens to have zero
 /// capabilities today, so the coverage cannot silently disappear when that type gains a capability.
 /// </remarks>

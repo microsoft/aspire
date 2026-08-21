@@ -115,7 +115,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private readonly Dictionary<string, string> _wrapperClassNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AtsTypeRef> _typeRefsById = new(StringComparer.Ordinal);
 
-    // Set of type IDs that have Promise wrappers (types with chainable methods)
+    // Set of type IDs that have Promise wrappers (types with chainable methods or resource
+    // builders returned directly by capabilities)
     // Used to determine return types for methods
     private readonly HashSet<string> _typesWithPromiseWrappers = new(StringComparer.Ordinal);
 
@@ -964,6 +965,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // 2. Type classes: everything else (context types, wrapper types)
         var resourceBuilders = builders.Where(b => b.TargetType?.IsResourceBuilder == true).ToList();
         var typeClasses = builders.Where(b => b.TargetType?.IsResourceBuilder != true).ToList();
+        var returnedBuilderTypeIds = capabilities
+            .Where(capability => capability.ReturnsBuilder)
+            .Select(capability => capability.ReturnType.TypeId)
+            .ToHashSet(StringComparer.Ordinal);
 
         // Build wrapper class name mapping before DTO generation so callback
         // properties can reference wrapper classes instead of raw handle aliases.
@@ -996,8 +1001,15 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 _typeRefsById[builder.TypeId] = targetType;
             }
-            // All resource builders get Promise wrappers
-            _typesWithPromiseWrappers.Add(builder.TypeId);
+            // A builder with chainable members needs a thenable wrapper for fluent calls. A builder
+            // returned directly by a capability also needs one even when it has no members of its
+            // own, as in a third-party factory returning IResourceBuilder<IResourceWithServiceDiscovery>.
+            // Do not generate wrappers for zero-capability types that are only referenced as
+            // parameters: Foo's FooPromise wrapper would collide with a real FooPromise resource.
+            if (HasChainableMethods(builder) || returnedBuilderTypeIds.Contains(builder.TypeId))
+            {
+                _typesWithPromiseWrappers.Add(builder.TypeId);
+            }
         }
         foreach (var typeClass in typeClasses)
         {
@@ -1867,6 +1879,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private void GenerateBuilderPromiseInterface(BuilderModel builder)
     {
+        if (!_typesWithPromiseWrappers.Contains(builder.TypeId))
+        {
+            return;
+        }
+
         var capabilities = builder.Capabilities.Where(c =>
             c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
             c.CapabilityKind != AtsCapabilityKind.PropertySetter).ToList();
@@ -1876,12 +1893,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             .Where(p => IsGetterOnlyProperty(p.Getter, p.Setter))
             .ToList();
 
-        // Every resource builder is registered in _typesWithPromiseWrappers (see
-        // GenerateAspireModule), so its Promise wrapper pair must always be emitted here and in
-        // GenerateThenableClass, even when the builder itself adds no capabilities beyond the base
-        // fluent chain (e.g. a bare marker interface like IResourceWithServiceDiscovery). Skipping
-        // emission in that case would leave dangling references to an undeclared *Promise type
-        // wherever another exported method returns this builder for chaining.
         var interfaceName = GetInterfaceName(builder.BuilderClassName);
         var promiseInterfaceName = GetPromiseInterfaceName(builder.BuilderClassName);
 
@@ -2619,6 +2630,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// </remarks>
     private void GenerateThenableClass(BuilderModel builder)
     {
+        if (!_typesWithPromiseWrappers.Contains(builder.TypeId))
+        {
+            return;
+        }
+
         var capabilities = builder.Capabilities.Where(c =>
             c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
             c.CapabilityKind != AtsCapabilityKind.PropertySetter).ToList();
@@ -2628,11 +2644,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             .Where(p => IsGetterOnlyProperty(p.Getter, p.Setter))
             .ToList();
 
-        // See the matching comment in GenerateBuilderPromiseInterface: the *PromiseImpl class must
-        // be emitted for every resource builder, even one with no capabilities of its own, since
-        // GenerateBuilderMethod's fluent-return path always references "{ClassName}Promise" for any
-        // exported method that returns this builder, regardless of what it adds beyond the base
-        // fluent chain.
         var promiseClass = $"{builder.BuilderClassName}Promise";
         var promiseImplementationClass = GetImplementationPromiseClassName(builder.BuilderClassName);
 

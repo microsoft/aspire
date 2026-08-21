@@ -56789,9 +56789,6 @@ export interface ComputeEnvironmentResource {
     toJSON(): MarshalledHandle;
 }
 
-export interface ComputeEnvironmentResourcePromise extends PromiseLike<ComputeEnvironmentResource> {
-}
-
 // ============================================================================
 // ComputeEnvironmentResourceImpl
 // ============================================================================
@@ -56799,25 +56796,6 @@ export interface ComputeEnvironmentResourcePromise extends PromiseLike<ComputeEn
 class ComputeEnvironmentResourceImpl extends ResourceBuilderBase<IComputeEnvironmentResourceHandle> implements ComputeEnvironmentResource {
     constructor(handle: IComputeEnvironmentResourceHandle, client: AspireClientRpc) {
         super(handle, client);
-    }
-
-}
-
-/**
- * Thenable wrapper for ComputeEnvironmentResource that enables fluent chaining.
- * @example
- * await builder.addSomething().withX().withY();
- */
-class ComputeEnvironmentResourcePromiseImpl implements ComputeEnvironmentResourcePromise {
-    constructor(private _promise: Promise<ComputeEnvironmentResource>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = ComputeEnvironmentResource, TResult2 = never>(
-        onfulfilled?: ((value: ComputeEnvironmentResource) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
     }
 
 }

@@ -996,37 +996,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void GenerateDistributedApplication_EmitsPromiseWrapperForZeroCapabilityResourceBuilder()
-    {
-        // Regression test for https://github.com/microsoft/aspire/issues/19507: an exported
-        // method returning IResourceBuilder<T> for a bare interface/class with no capabilities
-        // of its own beyond the base fluent chain (e.g. IComputeEnvironmentResource, or a
-        // third-party integration's IResourceBuilder<IResourceWithServiceDiscovery> export) was
-        // always registered as needing a Promise wrapper, so every reference to
-        // "{ClassName}Promise" was still generated - but the wrapper declaration itself was
-        // skipped whenever the builder had zero of its own capabilities, producing a dangling
-        // reference ("Cannot find name '...Promise'") in the generated TypeScript SDK.
-        //
-        // ComputeEnvironmentResource (from Aspire.Hosting) is a real-world instance of this: it
-        // has no capabilities of its own in this test's scanned assemblies, so it previously hit
-        // exactly this gap. Note this is incidental coverage - it holds only while that type has
-        // no capabilities of its own, and this test would keep passing (while covering nothing)
-        // if it gained one. GenerateDistributedApplication_EmitsPromiseWrapperForBareMarkerResourceBuilder
-        // owns the durable version of this case via a fixture in TestTypes.
-        var atsContext = CreateContextFromBothAssemblies();
-
-        var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.mts"];
-
-        Assert.Contains(
-            "export interface ComputeEnvironmentResourcePromise extends PromiseLike<ComputeEnvironmentResource>",
-            aspireTs);
-        Assert.Contains(
-            "class ComputeEnvironmentResourcePromiseImpl implements ComputeEnvironmentResourcePromise",
-            aspireTs);
-    }
-
-    [Fact]
     public void GenerateDistributedApplication_EmitsPromiseWrapperForBareMarkerResourceBuilder()
     {
         // Durable regression test for https://github.com/microsoft/aspire/issues/19507, using the
@@ -1067,14 +1036,9 @@ public class AtsTypeScriptCodeGeneratorTests
         // entirely. Asserting that every referenced wrapper is declared catches that whole class of
         // bug - including future reintroductions on paths this file has no explicit test for.
         //
-        // This also guards the type-class side, where GenerateTypeClassInterface and
-        // GenerateTypeClass keep an analogous "no methods and no getter-only properties" guard.
-        // That guard is currently safe - unlike resource builders, which register a wrapper
-        // unconditionally, type classes are registered via HasChainableMethods, which evaluates the
-        // same predicate - but the predicate is duplicated across the three sites, so the two could
-        // drift apart. Both of its branches are exercised by the scanned fixtures: TestResourceContext
-        // has methods (declared and referenced), while TestEnvironmentContext has only get/set
-        // properties (neither declared nor referenced).
+        // This also guards registration of wrappers for both resource builders and type classes.
+        // Resource builders are registered when they have chainable members or are returned directly
+        // by a capability; type classes are registered when they have chainable members.
         var atsContext = includeHostingAssembly ? CreateContextFromBothAssemblies() : CreateContextFromTestAssembly();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
@@ -1920,6 +1884,48 @@ public class AtsTypeScriptCodeGeneratorTests
         // Also verify the Promise wrapper interface is not duplicated.
         var promiseCount = CountOccurrences(code, "export interface TestVaultResourcePromise ");
         Assert.Equal(1, promiseCount);
+    }
+
+    [Fact]
+    public void Generate_ResourceAndResourceNamedPromise_NoDuplicateDeclarations()
+    {
+        // A zero-capability resource named Foo does not need a Promise wrapper when it is only
+        // referenced as a parameter. Generating one would collide with a real FooPromise resource.
+        var resourceType = new AtsTypeRef
+        {
+            TypeId = GetAtsTypeId(typeof(TestPromiseNameCollisionResource)),
+            ClrType = typeof(TestPromiseNameCollisionResource),
+            Category = AtsTypeCategory.Handle
+        };
+        var promiseResourceType = new AtsTypeRef
+        {
+            TypeId = GetAtsTypeId(typeof(TestPromiseNameCollisionResourcePromise)),
+            ClrType = typeof(TestPromiseNameCollisionResourcePromise),
+            Category = AtsTypeCategory.Handle
+        };
+        var collisionCapability = new AtsCapabilityInfo
+        {
+            CapabilityId = "Aspire.Hosting.CodeGeneration.TypeScript.Tests/inspectPromiseNameCollision",
+            MethodName = "inspectPromiseNameCollision",
+            Parameters =
+            [
+                new AtsParameterInfo { Name = "resource", Type = resourceType },
+                new AtsParameterInfo { Name = "promiseResource", Type = promiseResourceType }
+            ],
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            },
+            CapabilityKind = AtsCapabilityKind.Method
+        };
+        var atsContext = WithAdditionalCapabilities(CreateContextFromTestAssembly(), collisionCapability);
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var code = files["aspire.mts"];
+
+        Assert.Equal(1, CountOccurrences(code, "export interface TestPromiseNameCollisionResourcePromise "));
+        Assert.Equal(1, CountOccurrences(code, "class TestPromiseNameCollisionResourcePromiseImpl "));
     }
 
     // ===== Options Interface Merging Tests =====
