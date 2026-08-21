@@ -373,7 +373,7 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/generate-catalog.ps1")]
     [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
     [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
-    public void PathWithoutPrConsumerDoesNotForceTestSelection(string path)
+    public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
         var result = SelectWithRealMap(path);
 
@@ -414,10 +414,23 @@ public sealed class TestTriggerMapTests
             .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
             .Select(t => "run_" + t["job:".Length..].Replace('-', '_'))
             .ToHashSet(StringComparer.Ordinal);
+        var expectedAdvisoryJobs = s_map.AllReferencedTargets()
+            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
+            .Where(t => !declared.Contains("run_" + t["job:".Length..].Replace('-', '_')))
+            .ToHashSet(StringComparer.Ordinal);
+        var advisoryJobField = typeof(Selection).GetField(
+            "s_advisoryJobTargets",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(advisoryJobField);
+        var configuredAdvisoryJobs = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(
+            advisoryJobField.GetValue(null));
 
         // Sanity: the regexes actually matched, so a pattern slip can't make the asserts vacuously pass.
         Assert.Contains("run_winget_installer", declared);
         Assert.Contains("run_winget_installer", consumed);
+        Assert.Equal(
+            expectedAdvisoryJobs.Order(StringComparer.Ordinal),
+            configuredAdvisoryJobs.Keys.Order(StringComparer.Ordinal));
 
         // Finding 1: every unpacked output is a key the tool emits. A typo'd fromJSON property or a
         // renamed/removed map token leaves the output permanently empty (job silently skipped).

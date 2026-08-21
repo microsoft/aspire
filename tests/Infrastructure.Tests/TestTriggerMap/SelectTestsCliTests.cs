@@ -390,6 +390,8 @@ public sealed class SelectTestsCliTests
                 Assert.Contains("- selected PR test projects: 1 / 1", summary);
                 Assert.Contains("- triggered PR jobs: job:extension-e2e", summary);
                 Assert.Contains("- advisory-only targets: test:Aspire.EndToEnd.Tests, job:deployment-e2e", summary);
+                Assert.Contains("<details><summary>Advisory test projects (1)</summary>", summary);
+                Assert.DoesNotContain("Advisory outerloop test projects", summary);
                 Assert.Contains(
                     "- mode: audit (advisory: the regular test matrix + selector-gated jobs run regardless of the selection below; advisory-only targets are reported but scheduled independently)",
                     summary);
@@ -444,7 +446,7 @@ public sealed class SelectTestsCliTests
     }
 
     [Fact]
-    public void AdvisoryClassificationIncludesEveryTestProjectExcludedFromRegularPrRunsheets()
+    public void AdvisoryTestClassificationMatchesProjectsExcludedFromRegularPrRunsheets()
     {
         var solution = File.ReadAllText(Path.Combine(RepoRoot.Path, "Aspire.slnx"));
         var testProjectPaths = System.Text.RegularExpressions.Regex
@@ -476,6 +478,9 @@ public sealed class SelectTestsCliTests
         Assert.Contains("Aspire.EndToEnd.Tests", expectedAdvisoryProjects);
         Assert.Contains("Aspire.Oracle.EntityFrameworkCore.Tests", expectedAdvisoryProjects);
         Assert.Contains("Aspire.Deployment.EndToEnd.Tests", expectedAdvisoryProjects);
+        Assert.Equal(
+            expectedAdvisoryProjects.Order(StringComparer.Ordinal),
+            GetSelectionTargetKeys("s_advisoryTestTargets").Order(StringComparer.Ordinal));
 
         var slnx = "<Solution>\n"
             + "  <Project Path=\"tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj\" />\n"
@@ -518,6 +523,17 @@ public sealed class SelectTestsCliTests
                 Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
             }
         }, slnx: slnx, map: map);
+    }
+
+    private static IReadOnlyList<string> GetSelectionTargetKeys(string fieldName)
+    {
+        var field = typeof(Selection).GetField(
+            fieldName,
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+
+        var targets = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(field.GetValue(null));
+        return targets.Keys.ToList();
     }
 
     // The JSON selection artifact (SELECT_TESTS_JSON_FILE) is the durable, machine-readable record of a

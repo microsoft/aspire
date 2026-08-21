@@ -139,8 +139,6 @@ internal static class Selection
     private static readonly IReadOnlyDictionary<string, string> s_advisoryJobTargets =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["job:api-diffs"] = "schedule/dispatch-only",
-            ["job:ats-diffs"] = "schedule/dispatch-only",
             ["job:deployment-e2e"] = "schedule/dispatch-only",
         };
 
@@ -1199,7 +1197,7 @@ internal static class Selection
             result.JobCauses);
         AppendCauseList(
             sb,
-            "Advisory outerloop test projects",
+            "Advisory test projects",
             selected.Where(s_advisoryTestTargets.ContainsKey).ToList(),
             p => p,
             result.TestCauses);
