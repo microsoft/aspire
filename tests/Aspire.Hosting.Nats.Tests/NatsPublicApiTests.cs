@@ -182,4 +182,38 @@ public class NatsPublicApiTests(ITestOutputHelper testOutputHelper)
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
     }
+
+    [Fact]
+    public void WithClusterShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<NatsServerResource> builder = null!;
+
+        var action = () => builder.WithCluster(() => []);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithClusterShouldThrowWhenRoutesLocatorIsNull()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddNats("nats");
+
+        var action = () => builder.WithCluster(null!);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal("routesLocator", exception.ParamName);
+    }
+
+    [Fact]
+    public void WithServerNameShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<NatsServerResource> builder = null!;
+
+        var action = () => builder.WithServerName();
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
 }

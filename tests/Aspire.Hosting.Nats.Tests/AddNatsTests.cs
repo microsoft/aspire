@@ -307,4 +307,51 @@ public class AddNatsTests(ITestOutputHelper testOutputHelper)
             """;
         Assert.Equal(expectedManifest, manifest.ToString());
     }
+
+    [Fact]
+    public async Task WithServerNameWithNameOmittedAddsResourceNameAsServerName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddNats("nats")
+            .WithServerName();
+
+        var singleNodeArgs = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
+        Assert.Contains("--server_name", singleNodeArgs);
+        Assert.Contains("nats", singleNodeArgs);
+    }
+
+    [Fact]
+    public async Task WithServerNameWithNameSpecifiedAddsCustomNameAsServerName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddNats("nats")
+            .WithServerName("custom_name");
+
+        var singleNodeArgs = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
+        Assert.Contains("--server_name", singleNodeArgs);
+        Assert.Contains("custom_name", singleNodeArgs);
+    }
+
+    // [Fact]
+    // public async Task WithClusterAddsCorrectAnnotation()
+    // {
+    //     IResourceBuilder<NatsServerResource> builder = null!;
+
+    //     var action = () => builder.WithCluster(() => []);
+
+    //     var exception = Assert.Throws<ArgumentNullException>(action);
+    //     Assert.Equal(nameof(builder), exception.ParamName);
+    // }
+
+    // [Fact]
+    // public async Task WithClusterShouldThrowWhenRoutesLocatorIsNull()
+    // {
+    //     var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+    //         .AddNats("nats");
+
+    //     var action = () => builder.WithCluster(null!);
+
+    //     var exception = Assert.Throws<ArgumentNullException>(action);
+    //     Assert.Equal(nameof(builder), exception.ParamName);
+    // }
 }
