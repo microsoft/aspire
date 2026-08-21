@@ -1,0 +1,65 @@
+:root {
+    /* Highlight.js palette. */
+    --hljs-default: #545454;
+    --hljs-comment: #696969;
+    --hljs-variable: #d91e18;
+    --hljs-literal: #aa5d00;
+    --hljs-attribute: #aa5d00;
+    --hljs-string: green;
+    --hljs-section: #00779f;
+    --hljs-keyword: #7928a1;
+
+    /* Stable resource and telemetry palette used by ColorGenerator. */
+    --accent-teal: #14959B;
+    --accent-marigold: #E9C877;
+    --accent-brass: #9F724F;
+    --accent-peach: #F39E67;
+    --accent-coral: #E1694E;
+    --accent-royal-blue: #5F79DE;
+    --accent-orchid: #C764BA;
+    --accent-brand-blue: #0E62AD;
+    --accent-seafoam: #55BFA9;
+    --accent-mink: #9C9587;
+    --accent-cyan: #0E858B;
+    --accent-gold: #D7A763;
+    --accent-bronze: #7B4F2E;
+    --accent-orange: #F57D1A;
+    --accent-rust: #E0522A;
+    --accent-navy: #1B3A70;
+    --accent-berry: #C239B3;
+    --accent-ocean: #0E5E77;
+    --accent-jade: #3BAB8E;
+    --accent-olive: #6F6652;
+}
+
+[data-theme="dark"] {
+    --hljs-default: #f8f8f2;
+    --hljs-comment: #d4d0ab;
+    --hljs-variable: #ffa07a;
+    --hljs-literal: #f5ab35;
+    --hljs-attribute: gold;
+    --hljs-string: #abe338;
+    --hljs-section: #00e0e0;
+    --hljs-keyword: #dcc6e0;
+
+    --accent-teal: #2CB7BD;
+    --accent-marigold: #F3D58E;
+    --accent-brass: #BF8B64;
+    --accent-peach: #FFC18F;
+    --accent-coral: #F89170;
+    --accent-royal-blue: #88A1F0;
+    --accent-orchid: #E19AD4;
+    --accent-brand-blue: #1A7ECF;
+    --accent-seafoam: #74D6C6;
+    --accent-mink: #B9B2A4;
+    --accent-cyan: #17A0A6;
+    --accent-gold: #E3BA7A;
+    --accent-bronze: #8E6038;
+    --accent-orange: #FFA44A;
+    --accent-rust: #EA6A3E;
+    --accent-navy: #2A4C8A;
+    --accent-berry: #D150C3;
+    --accent-ocean: #16728F;
+    --accent-jade: #51C0A5;
+    --accent-olive: #847B63;
+}
