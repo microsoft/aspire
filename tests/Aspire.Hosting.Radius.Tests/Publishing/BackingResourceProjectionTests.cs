@@ -173,7 +173,7 @@ public class BackingResourceProjectionTests
 
         // The concrete type matters: the publisher's env-var loop skips values that raise
         // RadiusUnresolvableValueException, so this must not be one of those.
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => context.GenerateBicep(model));
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => context.GenerateBicep(model));
         Assert.Equal("cache", ex.Resource.Name);
         Assert.Contains("same Radius environment", ex.Message, StringComparison.Ordinal);
         Assert.Contains("ASPIRERADIUS069", ex.Message, StringComparison.Ordinal);

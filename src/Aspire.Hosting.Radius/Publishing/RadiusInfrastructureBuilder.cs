@@ -117,6 +117,11 @@ internal sealed class RadiusInfrastructureBuilder
     // finished, so callback-only consumers are seen. See WarnForDatabasesNotCreatedByTheRecipe.
     private readonly List<(IResource Resource, string RadiusType)> _databasesNotCreatedByTheRecipe = [];
 
+    // Manifest expressions of the database children in _databasesNotCreatedByTheRecipe, keyed to the
+    // child's name. Built on first use, after backing resources are wired and before any container
+    // environment is resolved. See RecordConnectionStringExpressionConsumption.
+    private Dictionary<string, string>? _databaseChildConnectionStringExpressions;
+
     // Radius.Security/secrets resources emitted to carry a credential that a UDT backing resource
     // consumes by resource ID, paired with the resource and property that consume them. Recorded so
     // a ConfigureRadiusInfrastructure callback that renames either side can be repaired — the
@@ -1427,7 +1432,7 @@ internal sealed class RadiusInfrastructureBuilder
             // to the run-mode password.
             if (RadiusBackingConnections.GetSchema(radiusType) is not { } schema)
             {
-                throw new RadiusBackingResourceEndpointException(
+                throw new RadiusBackingResourceProjectionException(
                     resource,
                     $"Resource '{resource.Name}' is emitted as Radius type '{radiusType}', for which Aspire has no " +
                     $"connection schema, so its recipe-generated credentials cannot be projected to consumers. Map the " +
@@ -1573,10 +1578,12 @@ internal sealed class RadiusInfrastructureBuilder
     /// this runs as a deferred pass rather than inline with the credential wiring.
     /// </para>
     /// <para>
-    /// One narrow gap remains, in both signals: a callback that assigns the child's
-    /// <c>ConnectionStringExpression</c> itself rather than the child. That expression is composed
-    /// from the <em>server's</em> expression plus the database name as a literal, so the child never
-    /// appears as a node while resolving and there is nothing to attribute the use to.
+    /// A callback that assigns the child's <c>ConnectionStringExpression</c> itself rather than the
+    /// child leaves the child absent from both signals — that expression is composed from the
+    /// <em>server's</em> expression plus the database name as a literal, so the child never appears
+    /// as a node while resolving, and no annotation is recorded either. It is recovered by
+    /// <see cref="RecordConnectionStringExpressionConsumption"/>, which matches the resolved
+    /// expression against each child's own, and feeds the same consumption signal.
     /// </para>
     /// </remarks>
     private void RecordIfDatabaseIsNotCreatedByTheRecipe(IResource resource, string radiusType)
@@ -1747,7 +1754,7 @@ internal sealed class RadiusInfrastructureBuilder
         {
             if (construct.GetSchemaProperty(requiredProperty) is null)
             {
-                throw new RadiusBackingResourceEndpointException(
+                throw new RadiusBackingResourceProjectionException(
                     resource,
                     $"Resource '{resource.Name}' is emitted as a Radius type that requires '{requiredProperty}' as a " +
                     $"schema property, but '{resource.Name}' exposes no '{requiredProperty}' connection property for " +
@@ -1887,7 +1894,7 @@ internal sealed class RadiusInfrastructureBuilder
         // assert it rather than emitting a secret Radius would reject for a missing required scope.
         if (envConstruct is null)
         {
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"Resource '{resource.Name}' is emitted as a Radius type whose credential requires a " +
                 $"'{RadiusResourceTypes.SecuritySecrets}' resource, but no Radius environment was emitted to scope it to. " +
@@ -1912,7 +1919,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         if (secretValue is null)
         {
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"Resource '{resource.Name}' is emitted as a Radius type that requires '{propertyName}', but " +
                 $"'{resource.Name}' exposes no '{propertyName}' connection property for Aspire to supply it, so the " +
@@ -1981,7 +1988,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         if (construct.GetSchemaProperty("username") is null)
         {
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"Resource '{resource.Name}' is emitted as a Radius type that requires 'username' as a schema property, " +
                 $"but '{resource.Name}' exposes no 'username' connection property for Aspire to supply it, so the " +
@@ -2006,7 +2013,7 @@ internal sealed class RadiusInfrastructureBuilder
         if (construct.GetSchemaProperty("username") is { } emittedUserName &&
             RenderBicepValue(emittedUserName) is "'guest'")
         {
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"Resource '{resource.Name}' would be deployed with the user name 'guest', which RabbitMQ restricts to " +
                 $"loopback connections — the deployed broker would reject every workload that connects to it. Supply an " +
@@ -2396,7 +2403,7 @@ internal sealed class RadiusInfrastructureBuilder
         }
         catch (RadiusUnresolvableValueException ex)
         {
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"The '{key}' connection property of Radius resource '{resource.Name}' could not be resolved at publish " +
                 $"time: {ex.Message} That value is written onto the emitted Radius type, so it cannot be skipped. " +
@@ -2482,7 +2489,7 @@ internal sealed class RadiusInfrastructureBuilder
             // The resource is a backing resource but this environment did not emit it — it belongs
             // to a different Radius environment. There is no construct to project from, and the
             // recipe outputs of another environment's deployment are not reachable from this Bicep.
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"Resource '{resource.Name}' is deployed by a Radius recipe in a different environment than '{_environment.Name}', " +
                 $"so its address cannot be resolved here. Deploy the consumer and '{resource.Name}' to the same Radius environment. " +
@@ -2491,7 +2498,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         if (RadiusBackingConnections.GetSchema(radiusType) is not { } schema)
         {
-            throw new RadiusBackingResourceEndpointException(
+            throw new RadiusBackingResourceProjectionException(
                 resource,
                 $"Resource '{resource.Name}' maps to Radius type '{radiusType}', which does not expose an address Aspire can " +
                 $"project. Remove the reference, or map the resource to a Radius type that publishes host/port outputs. " +
@@ -2530,7 +2537,7 @@ internal sealed class RadiusInfrastructureBuilder
                 parts.Add(EnvPart.FromLiteral(endpointReference.EndpointAnnotation.TlsEnabled ? bool.TrueString : bool.FalseString));
                 return true;
             default:
-                throw new RadiusBackingResourceEndpointException(
+                throw new RadiusBackingResourceProjectionException(
                     resource,
                     $"The endpoint property '{property}' is not supported for Radius backing resource '{resource.Name}'. " +
                     $"Diagnostic: ASPIRERADIUS077.");
@@ -2543,7 +2550,7 @@ internal sealed class RadiusInfrastructureBuilder
             string radiusType) =>
             schema.HostProperty is { } hostProperty
                 ? new ProjectedValue(construct, hostProperty, IsSecret: false, IsNumeric: false)
-                : throw new RadiusBackingResourceEndpointException(
+                : throw new RadiusBackingResourceProjectionException(
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a host output, " +
                     $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS079.");
@@ -2557,7 +2564,7 @@ internal sealed class RadiusInfrastructureBuilder
                 // Radius types the port output as an int, so it needs an explicit string()
                 // conversion when it lands in an env var on its own.
                 ? new ProjectedValue(construct, portProperty, IsSecret: false, IsNumeric: true)
-                : throw new RadiusBackingResourceEndpointException(
+                : throw new RadiusBackingResourceProjectionException(
                     resource,
                     $"Radius type '{radiusType}' used for resource '{resource.Name}' does not publish a port output, " +
                     $"so consumers cannot be given its address. Diagnostic: ASPIRERADIUS079.");
@@ -2600,7 +2607,7 @@ internal sealed class RadiusInfrastructureBuilder
             return;
         }
 
-        throw new RadiusBackingResourceEndpointException(
+        throw new RadiusBackingResourceProjectionException(
             resource,
             $"Endpoint '{endpointReference.EndpointName}' of resource '{resource.Name}' is TLS-enabled, but the Radius " +
             $"type '{radiusType}' that provisions it publishes no transport-security output, so '{property}' would " +
@@ -2636,7 +2643,7 @@ internal sealed class RadiusInfrastructureBuilder
             return;
         }
 
-        throw new RadiusBackingResourceEndpointException(
+        throw new RadiusBackingResourceProjectionException(
             resource,
             $"Resource '{resource.Name}' is provisioned by a Radius recipe as '{radiusType}', which publishes a single " +
             $"address — that of its '{endpoints[0].Name}' endpoint. The reference to its '{endpointReference.EndpointName}' " +
@@ -3272,6 +3279,7 @@ internal sealed class RadiusInfrastructureBuilder
                 await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, ResolveToParent(resourceWithConnectionString), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case ReferenceExpression referenceExpression:
+                RecordConnectionStringExpressionConsumption(referenceExpression, owner);
                 await ResolveReferenceExpressionPartsAsync(referenceExpression, owner, parts, referencedResource, allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IFormattable formattable:
@@ -3345,6 +3353,65 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         _resolvedConnectionStringConsumption.Add(consumed.Name);
+    }
+
+    /// <summary>
+    /// Records consumption of a database child whose <c>ConnectionStringExpression</c> was assigned
+    /// directly (<c>ctx.EnvironmentVariables["CS"] = db.Resource.ConnectionStringExpression</c>)
+    /// rather than the child resource itself.
+    /// </summary>
+    /// <remarks>
+    /// That form reaches environment resolution as a bare <see cref="ReferenceExpression"/>: the
+    /// child is not a node in the value (its expression is composed from the <em>server's</em>
+    /// expression plus the database name as a literal), and no
+    /// <see cref="ResourceRelationshipAnnotation"/> is recorded either, so both of
+    /// <see cref="WarnForDatabasesNotCreatedByTheRecipe"/>'s signals miss it and a consumer of a
+    /// database the recipe never creates receives no diagnostic at all.
+    /// <para>
+    /// Matching on the manifest expression is sound evidence <em>here</em>, unlike in
+    /// <see cref="ResolveEnvValueProvenance"/> where provenance decides whether a credential the
+    /// author owns was silently replaced. <c>ASPIRERADIUS080</c> is a statement about the value:
+    /// this string names a database the deployment will not contain. An author who hand-composed
+    /// the identical string has the identical problem, so attributing it to the child is correct
+    /// regardless of how the value was built.
+    /// </para>
+    /// </remarks>
+    private void RecordConnectionStringExpressionConsumption(ReferenceExpression expression, IResource owner)
+    {
+        // Built lazily rather than in the constructor: _databasesNotCreatedByTheRecipe is filled
+        // while backing resources are wired, which runs before any container environment is
+        // resolved, so the first lookup from this path already sees the complete set.
+        _databaseChildConnectionStringExpressions ??= BuildDatabaseChildConnectionStringExpressions();
+
+        if (_databaseChildConnectionStringExpressions.Count == 0 ||
+            !_databaseChildConnectionStringExpressions.TryGetValue(expression.ValueExpression, out var childName))
+        {
+            return;
+        }
+
+        // A database child resolving its own connection string is the publisher wiring the resource,
+        // not a consumer being handed an unusable value.
+        if (string.Equals(owner.Name, childName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _resolvedConnectionStringConsumption.Add(childName);
+    }
+
+    private Dictionary<string, string> BuildDatabaseChildConnectionStringExpressions()
+    {
+        var expressions = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (resource, _) in _databasesNotCreatedByTheRecipe)
+        {
+            foreach (var child in FindDatabaseChildren(resource))
+            {
+                expressions[child.ConnectionStringExpression.ValueExpression] = child.Name;
+            }
+        }
+
+        return expressions;
     }
 
     /// <summary>

@@ -133,7 +133,7 @@ public class BackingResourceContractTests
         var (environment, cache) = CreateRadiusOwnedRedis();
         var endpoint = cache.GetEndpoint("tcp");
 
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(
             () => ((IComputeEnvironmentResource)environment).GetEndpointPropertyExpression(endpoint.Property(property)));
 
         Assert.Same(cache.Resource, ex.Resource);
@@ -151,9 +151,9 @@ public class BackingResourceContractTests
     {
         var (environment, cache) = CreateRadiusOwnedRedis();
 
-        var direct = Assert.Throws<RadiusBackingResourceEndpointException>(
+        var direct = Assert.Throws<RadiusBackingResourceProjectionException>(
             () => environment.GetHostAddressExpression(cache.GetEndpoint("tcp")));
-        var viaInterface = Assert.Throws<RadiusBackingResourceEndpointException>(
+        var viaInterface = Assert.Throws<RadiusBackingResourceProjectionException>(
             () => ((IComputeEnvironmentResource)environment)
                 .GetEndpointPropertyExpression(cache.GetEndpoint("tcp").Property(EndpointProperty.Host)));
 
@@ -172,7 +172,7 @@ public class BackingResourceContractTests
         var pg = builder.AddPostgres("pg");
         pg.AddDatabase("pgdb");
 
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(
             () => environment.GetHostAddressExpression(pg.GetEndpoint("tcp")));
 
         Assert.Equal("pg", ex.Resource.Name);

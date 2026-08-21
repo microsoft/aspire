@@ -327,7 +327,7 @@ public class BackingResourceValueResolutionTests
     [Fact]
     public void SecondaryEndpointOfABackingResource_FailsThePublish()
     {
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
         {
             var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser")).WithManagementPlugin();
 
@@ -492,7 +492,7 @@ public class BackingResourceValueResolutionTests
     [Fact]
     public void DefaultRabbitMqUserName_FailsThePublishBecauseGuestIsLoopbackOnly()
     {
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
         {
             var rabbit = b.AddRabbitMQ("rabbit");
             b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
@@ -654,7 +654,7 @@ public class BackingResourceValueResolutionTests
     [Fact]
     public void TlsEnabledBackingEndpoint_FailsThePublish()
     {
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
         {
             var cache = b.AddRedis("cache").WithEndpoint("tcp", e => e.TlsEnabled = true);
 
@@ -933,6 +933,25 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// A callback that assigns the child's <c>ConnectionStringExpression</c> directly, rather than
+    /// the child resource, records no reference annotation and puts no child node in the resolved
+    /// value. The expression is matched against the child's own so this consumer is still told the
+    /// database will not exist.
+    /// </summary>
+    [Fact]
+    public void CallbackAssigningSqlDatabaseConnectionStringExpression_IsReportedAsNotCreatedByTheRecipe()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var db = b.AddSqlServer("sql").AddDatabase("appdb");
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment(ctx => ctx.EnvironmentVariables["CS"] = db.Resource.ConnectionStringExpression);
+        });
+
+        Assert.Single(logger.Matching(LogLevel.Warning, "sql", "does not create databases", "appdb", "ASPIRERADIUS080"));
+    }
+
+    /// <summary>
     /// An unreferenced <c>AddDatabase(...)</c> produces no consumer connection string, so it cannot
     /// mislead anyone. Pinned so the warning above cannot become noise on every model that declares
     /// a database it does not use.
@@ -982,7 +1001,7 @@ public class BackingResourceValueResolutionTests
     [Fact]
     public void BackingResourceMissingARequiredSchemaProperty_FailsThePublish()
     {
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
         {
             var pg = b.AddResource(new PostgresServerResource("pg", [])).WithImage("postgres", "17");
             b.AddContainer("api", "myapp/api", "latest").WithReference(pg);
@@ -1011,7 +1030,7 @@ public class BackingResourceValueResolutionTests
         var unresolvable = new ThrowingDeploymentOutput(
             new InvalidOperationException("The output 'x' does not have a value."));
 
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
         {
             var pg = b.AddResource(new PostgresServerResource("pg",
             [
@@ -1064,7 +1083,7 @@ public class BackingResourceValueResolutionTests
     [Fact]
     public void BackingResourceWithNoAddressOutput_FailsThePublish()
     {
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => GenerateBicep(b =>
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
         {
             var store = b.AddResource(new DaprStateStoreResource("statestore"))
                 .WithImage("daprio/dapr", "1.14")

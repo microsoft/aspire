@@ -236,7 +236,7 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             return;
         }
 
-        throw new RadiusBackingResourceEndpointException(
+        throw new RadiusBackingResourceProjectionException(
             resource,
             $"Endpoint '{endpointReference.EndpointName}' of resource '{resource.Name}' is TLS-enabled, but the Radius " +
             $"type '{radiusType}' that provisions it publishes no transport-security output, so '{property}' would " +
@@ -278,7 +278,7 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             return;
         }
 
-        throw new RadiusBackingResourceEndpointException(
+        throw new RadiusBackingResourceProjectionException(
             resource,
             $"Endpoints of '{resource.Name}' cannot be resolved because it is provisioned by a Radius recipe rather " +
             $"than deployed as a container. The recipe owns its Kubernetes Service and its credentials, so no address " +
