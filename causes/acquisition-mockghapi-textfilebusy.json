@@ -1,9 +1,9 @@
 {
   "id": "acquisition-mockghapi-textfilebusy",
   "type": "flaky-test",
-  "title": "Flaky: PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly fails with 'Text file busy' race condition",
-  "test_name": "Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly",
-  "error_pattern": "System.ComponentModel.Win32Exception : An error occurred trying to start process '/tmp/aspire-test-.../mock-bin/gh' ... Text file busy\n   at System.Diagnostics.Process.ForkAndExecProcess\n   at Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly()",
+  "title": "Flaky: PRScriptShellTests tests fail with 'Text file busy' race condition on mock gh binary",
+  "test_name": "Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.BooleanFlags_AreAccepted",
+  "error_pattern": "Aspire.Templates.Tests.ToolCommandException : Expected 0 exit code but got 1: bash get-aspire-cli-pr.sh ... Error: GitHub CLI (gh) command failed: /tmp/aspire-test-.../mock-bin/gh: /bin/bash: bad interpreter: Text file busy",
   "occurrences": [
     {
       "run_id": 29122927133,
@@ -11,6 +11,13 @@
       "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
       "pr_number": 18692,
       "observed_at": "2026-07-11T01:07:00Z"
+    },
+    {
+      "run_id": 32529484553,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32529484553",
+      "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "pr_number": 19559,
+      "observed_at": "2026-08-21T22:10:08Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18732"

@@ -1,0 +1,47 @@
+{
+  "run_id": 32529484553,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32529484553",
+  "analyzed_at": "2026-08-21T22:10:08Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19559,
+    "title": "Fix dashboard browser launch blocking AppHost startup",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-fix-shard-failures",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19559"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "id": 96918912348,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32529484553/job/96918912348",
+      "classification": "flaky-test",
+      "reason": "Failing test Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.BooleanFlags_AreAccepted fails due to a known 'Text file busy' race condition when re-executing the mock gh binary, matching prior recurring cause acquisition-mockghapi-textfilebusy. Not related to any PR-changed files (PR only touches extension/ files, unrelated to acquisition test scripts).",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "id": 96920713820,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32529484553/job/96920713820",
+      "classification": "code-issue",
+      "reason": "The PR directly modifies extension/src/debugger/session/dashboardLauncher.ts and extension/src/test-e2e/debugDashboard.e2e.test.ts. This job runs the 'debug-dashboard' E2E test scenario, which exercises exactly the code the PR changed. Job logs were unavailable, but the direct overlap between the failing job scope and PR-changed files strongly indicates the failure is caused by the PR's changes rather than an unrelated flaky/infra issue.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.BooleanFlags_AreAccepted(flag: \"--keep-archive\")",
+      "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "error": "Aspire.Templates.Tests.ToolCommandException :  Expected 0 exit code but got 1: bash \"/home/runner/work/aspire/aspire/eng/scripts/get-aspire-cli-pr.sh\" 12345 --dry-run --skip-path --keep-archive\nStandard Output:\nError: GitHub CLI (gh) command failed: /home/runner/work/aspire/aspire/eng/scripts/get-aspire-cli-pr.sh: /tmp/aspire-test-ipiLbt/mock-bin/gh: /bin/bash: bad interpreter: Text file busy",
+      "stack_trace": "at Aspire.Templates.Tests.CommandResult.EnsureExitCode(Int32 expectedExitCode, String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 36\n   at Aspire.Templates.Tests.CommandResult.EnsureSuccessful(String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 20\n   at Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.BooleanFlags_AreAccepted(String flag) in /_/tests/Aspire.Acquisition.Tests/Scripts/PRScriptShellTests.cs:line 342",
+      "classification": "flaky",
+      "reason": "'Text file busy' when re-invoking the mock gh shell script is a known OS-level race condition (concurrent exec of a script still being written/closed), unrelated to PR changes which only touch VS Code extension files. Matches prior recurring cause acquisition-mockghapi-textfilebusy."
+    }
+  ],
+  "causes": ["acquisition-mockghapi-textfilebusy"]
+}
