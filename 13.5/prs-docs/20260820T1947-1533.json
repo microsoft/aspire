@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents PR #17094 (ArgumentException on interface/abstract Subscribe), which shipped in the 13.4 milestone, not 13.5",
+  "mergedAt": "2026-08-20T19:47:09Z",
+  "number": 1533,
+  "runDate": "2026-08-21T06:18:27Z",
+  "status": "excluded",
+  "title": "[docs] Document concrete Eventing.Subscribe<T> requirement"
+}
