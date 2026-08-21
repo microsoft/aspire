@@ -9,8 +9,11 @@ using Aspire.Hosting.ApplicationModel;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting;
+
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 /// <summary>
 /// Provides extension methods for adding SQL Server resources to the application model.
@@ -50,7 +53,7 @@ public static partial class SqlServerBuilderExtensions
         var healthCheckKey = $"{name}_check";
         builder.Services.AddHealthChecks().AddSqlServer(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey);
 
-        return builder.AddResource(sqlServer)
+        var sqlBuilder = builder.AddResource(sqlServer)
                       .WithEndpoint(port: port, targetPort: 1433, name: SqlServerServerResource.PrimaryEndpointName)
                       .WithImage(SqlServerContainerImageTags.Image, SqlServerContainerImageTags.Tag)
                       .WithImageRegistry(SqlServerContainerImageTags.Registry)
@@ -90,6 +93,70 @@ public static partial class SqlServerBuilderExtensions
                               await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
                           }
                       });
+
+        return sqlBuilder
+            .SubscribeHttpsEndpointsUpdate(ctx => 
+            {
+                var executionContext = ctx.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+                var devCertService = ctx.Services.GetRequiredService<IDeveloperCertificateService>();
+                ctx.Resource.TryGetLastAnnotation<HttpsCertificateAnnotation>(out var certAnnotation);
+
+                var useDeveloperCertificate = certAnnotation?.UseDeveloperCertificate.GetValueOrDefault(devCertService.UseForHttps) ?? devCertService.UseForHttps;
+                var useCustomCertificate = certAnnotation?.Certificate is not null;
+
+                if (!useDeveloperCertificate && !useCustomCertificate)
+                {
+                    return;
+                }
+
+                if (executionContext.IsRunMode && useDeveloperCertificate)
+                {
+                    var cert = devCertService.Certificates.FirstOrDefault();
+                    if (cert is null)
+                    {
+                        // Without an available developer certificate there is nothing to mount into SQL Server,
+                        // so keep TLS disabled and allow clients to use TrustServerCertificate.
+                        sqlBuilder.WithEndpoint(SqlServerServerResource.PrimaryEndpointName, x => x.TlsEnabled = false);
+                        return;
+                    }
+
+                    if (cert.GetCertificateVersion() < 6)
+                    {
+                        // Older dev certs are injected into SQL Server but do not include 127.0.0.1 in the SAN,
+                        // so client connections fall back to TrustServerCertificate.
+                        sqlBuilder.WithEndpoint(SqlServerServerResource.PrimaryEndpointName, x => x.TlsEnabled = false);
+                        return;
+                    }
+                }
+
+                sqlBuilder.WithEndpoint(SqlServerServerResource.PrimaryEndpointName, x => x.TlsEnabled = true);
+            })
+            .WithContainerFiles("/var/opt/mssql/", async (ctx, ct) =>
+            {
+                var certContext = ctx.HttpsCertificateContext;
+
+                if (certContext is null)
+                {
+                    return [];
+                }
+
+                var forceEncryption = sqlBuilder.Resource.PrimaryEndpoint.TlsEnabled ? 1 : 0;
+
+                var config = $"""
+                    [network]
+                    tlscert = {await certContext.CertificatePath.GetValueAsync(ct).ConfigureAwait(false)}
+                    tlskey = {await certContext.KeyPath.GetValueAsync(ct).ConfigureAwait(false)}
+                    forceencryption = {forceEncryption}
+                    """;
+
+                return [
+                    new ContainerFile
+                    {
+                        Name = "mssql.conf",
+                        Contents = config
+                    }
+                ];
+            });
     }
 
     /// <summary>
