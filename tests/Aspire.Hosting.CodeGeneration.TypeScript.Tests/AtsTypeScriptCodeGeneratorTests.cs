@@ -1089,6 +1089,21 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal(1, CountOccurrences(
             aspireTs,
             "class TestVaultResourcePromiseImpl implements TestVaultResourcePromise"));
+        Assert.Contains(
+            """
+                async _addTestVaultInternal(name: string): Promise<TestVaultResource> {
+                    const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+                    const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+                        'Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestVault',
+                        rpcArgs
+                    );
+                    return new TestVaultResourceImpl(result, this._client);
+                }
+            """,
+            aspireTs);
+        Assert.Equal(0, CountOccurrences(
+            aspireTs,
+            "invokeCapability<ITestVaultResourceHandle>"));
     }
 
     [Theory]

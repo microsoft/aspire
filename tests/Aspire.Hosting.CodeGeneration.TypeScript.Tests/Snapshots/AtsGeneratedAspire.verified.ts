@@ -762,7 +762,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /** @internal */
     async _addTestVaultInternal(name: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        const result = await this._client.invokeCapability<ITestVaultResourceHandle>(
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestVault',
             rpcArgs
         );
