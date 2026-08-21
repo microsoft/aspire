@@ -91,6 +91,14 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
             store))
         {
             store.Name = NameOutputReference.AsProvisioningParameter(infra);
+            if (infra.AspireResource.Scope is not null &&
+                (Scope is null || !ScopeEquals(Scope, infra.AspireResource.Scope)))
+            {
+                var registryScope = Scope ??
+                    throw new InvalidOperationException(
+                        $"Azure Container Registry '{Name}' cannot be referenced from another resource group because its Azure scope is unavailable.");
+                SetScopeProperty(store, CreateScopeExpression(registryScope, infra));
+            }
         }
 
         infra.Add(store);

@@ -521,6 +521,134 @@ public class SchemaTests
     }
 
     [Fact]
+    public void ManifestWithPluralContainerDeploymentsIsAccepted()
+    {
+        var manifestText = """
+            {
+              "resources": {
+                "api": {
+                  "type": "container.v2",
+                  "image": "myimage:latest",
+                  "deployments": {
+                    "east": {
+                      "type": "azure.bicep.v0",
+                      "path": "api-east.module.bicep"
+                    },
+                    "west": {
+                      "type": "azure.bicep.v0",
+                      "path": "api-west.module.bicep"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        AssertValid(manifestText);
+    }
+
+    [Fact]
+    public void ManifestWithPluralProjectDeploymentsIsAccepted()
+    {
+        var manifestText = """
+            {
+              "resources": {
+                "api": {
+                  "type": "project.v2",
+                  "path": "api/api.csproj",
+                  "deployments": {
+                    "east": {
+                      "type": "azure.bicep.v0",
+                      "path": "api-east.module.bicep"
+                    },
+                    "west": {
+                      "type": "azure.bicep.v1",
+                      "path": "api-west.module.bicep",
+                      "scope": {
+                        "resourceGroup": "api-west-rg"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        AssertValid(manifestText);
+    }
+
+    [Fact]
+    public void ManifestWithOnlyOnePluralDeploymentIsRejected()
+    {
+        var manifestText = """
+            {
+              "resources": {
+                "api": {
+                  "type": "project.v2",
+                  "path": "api/api.csproj",
+                  "deployments": {
+                    "east": {
+                      "type": "azure.bicep.v0",
+                      "path": "api-east.module.bicep"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        AssertInvalid(manifestText);
+    }
+
+    [Fact]
+    public void ManifestV2WithSingularDeploymentIsRejected()
+    {
+        var manifestText = """
+            {
+              "resources": {
+                "api": {
+                  "type": "project.v2",
+                  "path": "api/api.csproj",
+                  "deployment": {
+                    "type": "azure.bicep.v0",
+                    "path": "api.module.bicep"
+                  }
+                }
+              }
+            }
+            """;
+
+        AssertInvalid(manifestText);
+    }
+
+    [Fact]
+    public void ManifestV1WithPluralDeploymentsIsRejected()
+    {
+        var manifestText = """
+            {
+              "resources": {
+                "api": {
+                  "type": "container.v1",
+                  "image": "myimage:latest",
+                  "deployments": {
+                    "east": {
+                      "type": "azure.bicep.v0",
+                      "path": "api-east.module.bicep"
+                    },
+                    "west": {
+                      "type": "azure.bicep.v0",
+                      "path": "api-west.module.bicep"
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        AssertInvalid(manifestText);
+    }
+
+    [Fact]
     public void BicepManifestIsAccepted()
     {
         // The reason this large test is here is that when submitting the positive test cases to SchemaStore.org

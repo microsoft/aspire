@@ -76,8 +76,9 @@ public static class AzureFrontDoorExtensions
             };
             infrastructure.Add(profile);
 
-            // Create a separate endpoint → origin group → origin → route per WithOrigin call.
-            // This gives each backend app its own Front Door hostname.
+            // Create a separate endpoint → origin group → route per WithOrigin call.
+            // A logical resource deployed to multiple environments contributes one origin per
+            // environment to the shared group, giving the app one global Front Door hostname.
             var originAnnotations = azureResource.Annotations.OfType<AzureFrontDoorOriginAnnotation>().ToList();
             foreach (var originAnnotation in originAnnotations)
             {
@@ -89,10 +90,7 @@ public static class AzureFrontDoorExtensions
                 // Use health probe settings from the resource's probe annotations if available
                 var (probePath, probeProtocol) = GetProbeSettings(originResource);
 
-                // Resolve the hostname via the origin resource's compute environment
-                var computeEnv = GetEffectiveComputeEnvironment(originResource);
-                var hostExpression = computeEnv.GetHostAddressExpression(endpointReference);
-                var hostParam = hostExpression.AsProvisioningParameter(infrastructure, $"{originBicepId}_host");
+                var computeEnvironments = GetEffectiveComputeEnvironments(originResource);
 
                 // Endpoint
                 var endpoint = new FrontDoorEndpoint($"{originBicepId}Endpoint")
@@ -120,14 +118,34 @@ public static class AzureFrontDoorExtensions
                 };
                 infrastructure.Add(originGroup);
 
-                // Origin
-                var origin = new FrontDoorOrigin($"{originBicepId}Origin")
+                var origins = new List<FrontDoorOrigin>(computeEnvironments.Count);
+                foreach (var computeEnvironment in computeEnvironments)
                 {
-                    Parent = originGroup,
-                    HostName = hostParam,
-                    OriginHostHeader = hostParam
-                };
-                infrastructure.Add(origin);
+                    var environmentBicepId = Infrastructure.NormalizeBicepIdentifier(computeEnvironment.Name);
+                    var hostParameterName = computeEnvironments.Count == 1
+                        ? $"{originBicepId}_host"
+                        : $"{originBicepId}_{environmentBicepId}_host";
+                    var originIdentifier = computeEnvironments.Count == 1
+                        ? $"{originBicepId}Origin"
+                        : $"{originBicepId}_{environmentBicepId}Origin";
+                    var hostExpression = computeEnvironment.GetHostAddressExpression(endpointReference);
+                    var hostParameter = hostExpression.AsProvisioningParameter(infrastructure, hostParameterName);
+
+                    var origin = new FrontDoorOrigin(originIdentifier)
+                    {
+                        Parent = originGroup,
+                        HostName = hostParameter,
+                        OriginHostHeader = hostParameter
+                    };
+                    if (computeEnvironments.Count > 1)
+                    {
+                        origin.EnabledState = EnabledState.Enabled;
+                        origin.Priority = 1;
+                        origin.Weight = 1000;
+                    }
+                    infrastructure.Add(origin);
+                    origins.Add(origin);
+                }
 
                 // Route
                 var route = new FrontDoorRoute($"{originBicepId}Route")
@@ -139,9 +157,12 @@ public static class AzureFrontDoorExtensions
                     LinkToDefaultDomain = LinkToDefaultDomain.Enabled,
                     HttpsRedirect = HttpsRedirect.Enabled
                 };
-                // Route must wait for origin to be created — without this, ARM deploys
-                // the route in parallel and fails because the origin group has no origins yet.
-                route.DependsOn.Add(origin);
+                // Route must wait for every origin to be created — without this, ARM can deploy
+                // the route in parallel and fail because the origin group has no origins yet.
+                foreach (var origin in origins)
+                {
+                    route.DependsOn.Add(origin);
+                }
                 infrastructure.Add(route);
 
                 // Output the endpoint URL for this origin
@@ -160,9 +181,10 @@ public static class AzureFrontDoorExtensions
     }
 
     /// <summary>
-    /// Adds an origin (backend) to the Azure Front Door resource.
-    /// Each origin gets its own Front Door endpoint with a distinct <c>*.azurefd.net</c> hostname,
-    /// its own origin group, and a default route.
+    /// Adds a logical origin (backend) to the Azure Front Door resource.
+    /// Each logical origin gets its own Front Door endpoint with a distinct <c>*.azurefd.net</c>
+    /// hostname, origin group, and default route. When the resource targets multiple compute
+    /// environments, the origin group contains one equal-priority, equal-weight origin per environment.
     /// </summary>
     /// <typeparam name="T">The type of the resource with endpoints.</typeparam>
     /// <param name="builder">The Azure Front Door resource builder.</param>
@@ -199,11 +221,12 @@ public static class AzureFrontDoorExtensions
         return builder.WithAnnotation(new AzureFrontDoorOriginAnnotation(resource.Resource));
     }
 
-    private static IComputeEnvironmentResource GetEffectiveComputeEnvironment(IResource resource)
+    private static IReadOnlyList<IComputeEnvironmentResource> GetEffectiveComputeEnvironments(IResource resource)
     {
-        if (ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(resource, out var computeEnvironment))
+        var computeEnvironments = ComputeEnvironmentEndpointResolver.GetEffectiveComputeEnvironments(resource);
+        if (computeEnvironments.Count > 0)
         {
-            return computeEnvironment;
+            return computeEnvironments;
         }
 
         throw new InvalidOperationException(

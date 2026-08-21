@@ -35,12 +35,19 @@ public sealed class AzureBicepResourceScope
 
     private AzureBicepResourceScope(ScopeKind scopeKind)
     {
-        if (scopeKind is not ScopeKind.Tenant)
+        if (scopeKind is ScopeKind.Tenant)
         {
-            throw new ArgumentOutOfRangeException(nameof(scopeKind));
+            IsTenantScope = true;
+            return;
         }
 
-        IsTenantScope = true;
+        if (scopeKind is ScopeKind.Subscription)
+        {
+            IsSubscriptionScope = true;
+            return;
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(scopeKind));
     }
 
     private AzureBicepResourceScope(ScopeKind scopeKind, object subscription)
@@ -53,6 +60,16 @@ public sealed class AzureBicepResourceScope
         ArgumentNullException.ThrowIfNull(subscription);
 
         Subscription = subscription;
+        IsSubscriptionScope = true;
+    }
+
+    /// <summary>
+    /// Creates a scope for subscription-level resources in the current subscription.
+    /// </summary>
+    /// <returns>A new <see cref="AzureBicepResourceScope"/> scoped to the current subscription.</returns>
+    public static AzureBicepResourceScope CreateForSubscription()
+    {
+        return new AzureBicepResourceScope(ScopeKind.Subscription);
     }
 
     /// <summary>
@@ -91,6 +108,11 @@ public sealed class AzureBicepResourceScope
     /// Gets a value indicating whether the scope targets the current tenant.
     /// </summary>
     public bool IsTenantScope { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the scope targets a subscription.
+    /// </summary>
+    public bool IsSubscriptionScope { get; }
 
     /// <summary>
     /// Gets a value indicating whether the scope targets a resource group.

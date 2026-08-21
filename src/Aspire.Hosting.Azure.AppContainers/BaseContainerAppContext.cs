@@ -4,11 +4,12 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.AppContainers;
+using Aspire.Hosting.Azure.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Resources;
-using Aspire.Hosting.Azure.Utils;
 
 namespace Aspire.Hosting.Azure;
 
@@ -222,6 +223,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
+            ValidateRemoteInternalContainerAppEndpoint(ep);
+
             // The referenced endpoint may belong to a resource deployed to a different compute
             // environment (for example a Foundry hosted agent). In that case delegate to the owning
             // compute environment instead of looking it up in this environment's local endpoint map.
@@ -283,6 +286,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            ValidateRemoteInternalContainerAppEndpoint(epExpr.Endpoint);
+
             if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
                 epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
             {
@@ -382,6 +387,24 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         }
 
         throw new NotSupportedException("Unsupported value type " + value.GetType());
+    }
+
+    private void ValidateRemoteInternalContainerAppEndpoint(EndpointReference endpointReference)
+    {
+        if (endpointReference.EndpointAnnotation.IsExternal)
+        {
+            return;
+        }
+
+        var owningEnvironments = ComputeEnvironmentEndpointResolver.GetEffectiveComputeEnvironments(endpointReference.Resource);
+        if (owningEnvironments.OfType<AzureContainerAppEnvironmentResource>().Any() &&
+            !owningEnvironments.Contains(_containerAppEnvironmentContext.Environment))
+        {
+            throw new InvalidOperationException(
+                $"Internal endpoint '{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}' " +
+                $"is not reachable from Azure Container Apps environment '{_containerAppEnvironmentContext.Environment.Name}'. " +
+                "Deploy the referenced resource to the same environment or expose an external endpoint.");
+        }
     }
 
     private BicepValue<string> AllocateKeyVaultSecretUriReference(IAzureKeyVaultSecretReference secretOutputReference)

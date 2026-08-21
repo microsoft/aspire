@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREAZURERG001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -46,7 +47,13 @@ internal static class CrossScopeAcrPullIdentityPreparer
     {
         builder.WithAnnotation(new PipelineStepAnnotation(context =>
         {
-            if (!ShouldPrepareIdentity(context.PipelineContext.ExecutionContext, builder.Resource))
+            if (!context.PipelineContext.ExecutionContext.IsPublishMode)
+            {
+                return [];
+            }
+
+            PrepareRegistryScope(builder);
+            if (!ShouldPrepareIdentity(context.PipelineContext.ExecutionContext, builder))
             {
                 return [];
             }
@@ -72,9 +79,11 @@ internal static class CrossScopeAcrPullIdentityPreparer
 
     private static bool ShouldPrepareIdentity<TEnvironment>(
         DistributedApplicationExecutionContext executionContext,
-        TEnvironment environment)
+        IResourceBuilder<TEnvironment> builder)
         where TEnvironment : IResource, IAzureComputeEnvironmentResource
     {
+        var environment = builder.Resource;
+
         // Run mode does not emit the environment Bicep that contains the problematic role assignment.
         // Adding a standalone Azure identity there would unnecessarily change the local application model.
         if (!executionContext.IsPublishMode)
@@ -89,15 +98,21 @@ internal static class CrossScopeAcrPullIdentityPreparer
         }
 
         // ContainerRegistry is evaluated late so registry replacement APIs have already selected the final registry.
-        if (environment.ContainerRegistry is not AzureContainerRegistryResource registry ||
-            !registry.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingRegistry))
+        if (environment.ContainerRegistry is not AzureContainerRegistryResource registry)
         {
             return false;
         }
 
-        // An existing registry without an explicit scope resolves in the deployment's resource group and
-        // subscription, where the current inline identity and role assignment remain valid.
-        return existingRegistry.ResourceGroup is not null || existingRegistry.Subscription is not null;
+        // An environment module in an explicit resource group cannot emit an inline role assignment
+        // against the primary-group registry. Promote the identity so a separately scoped module can
+        // create the assignment.
+        if (environment is AzureBicepResource { Scope: not null })
+        {
+            return true;
+        }
+
+        return registry.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingRegistry) &&
+            (existingRegistry.ResourceGroup is not null || existingRegistry.Subscription is not null);
     }
 
     private static void PrepareIdentity<TEnvironment>(
@@ -107,7 +122,8 @@ internal static class CrossScopeAcrPullIdentityPreparer
         Action<IResourceBuilder<AzureUserAssignedIdentityResource>>? configureIdentity)
         where TEnvironment : IResource, IAzureComputeEnvironmentResource
     {
-        if (!ShouldPrepareIdentity(context.ExecutionContext, builder.Resource) ||
+        PrepareRegistryScope(builder);
+        if (!ShouldPrepareIdentity(context.ExecutionContext, builder) ||
             builder.Resource.ContainerRegistry is not AzureContainerRegistryResource registry)
         {
             return;
@@ -124,6 +140,24 @@ internal static class CrossScopeAcrPullIdentityPreparer
         }
 
         var identity = new AzureUserAssignedIdentityResource(identityName);
+        if (builder.Resource is AzureBicepResource environmentResource)
+        {
+            identity.Scope = environmentResource.Scope;
+            foreach (var parameter in environmentResource.Parameters.Where(static parameter =>
+                parameter.Value is BicepOutputReference { Resource: AzureResourceGroupResource }))
+            {
+                identity.Parameters[parameter.Key] = parameter.Value;
+            }
+            foreach (var resourceGroup in environmentResource.References.OfType<AzureResourceGroupResource>())
+            {
+                identity.References.Add(resourceGroup);
+            }
+            if (environmentResource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) &&
+                location is not null)
+            {
+                AzureDeclaredLocation.Set(identity, location);
+            }
+        }
         var identityBuilder = builder.ApplicationBuilder.CreateResourceBuilder(identity);
         identityBuilder.ConfigureInfrastructure(infrastructure =>
         {
@@ -149,5 +183,22 @@ internal static class CrossScopeAcrPullIdentityPreparer
         {
             environment.References.Add(identity);
         }
+    }
+
+    private static void PrepareRegistryScope<TEnvironment>(IResourceBuilder<TEnvironment> builder)
+        where TEnvironment : IResource, IAzureComputeEnvironmentResource
+    {
+        if (builder.Resource is not AzureBicepResource { Scope: not null } ||
+            builder.Resource.ContainerRegistry is not AzureContainerRegistryResource registry ||
+            registry.HasAnnotationOfType<ExistingAzureResourceAnnotation>() ||
+            registry.Scope is not null)
+        {
+            return;
+        }
+
+        var azureEnvironment = builder.ApplicationBuilder.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault() ??
+            throw new DistributedApplicationException(
+                $"Cannot configure cross-resource-group access to Azure Container Registry '{registry.Name}' because the application model does not contain an Azure environment.");
+        registry.Scope = new AzureBicepResourceScope(azureEnvironment.ResourceGroupName);
     }
 }

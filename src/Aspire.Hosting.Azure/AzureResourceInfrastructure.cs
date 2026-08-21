@@ -3,6 +3,7 @@
 
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning;
+using Azure.Provisioning.Primitives;
 
 namespace Aspire.Hosting.Azure;
 
@@ -17,14 +18,23 @@ public sealed class AzureResourceInfrastructure : Infrastructure
     {
         AspireResource = resource;
 
+        if (resource.IsSubscriptionScopedInfrastructure)
+        {
+            TargetScope = DeploymentScope.Subscription;
+        }
+
         // Always add a default location parameter.
         // azd assumes there will be a location parameter for every module.
         // The Infrastructure location resolver will resolve unset Location properties to this parameter.
-        Add(new ProvisioningParameter("location", typeof(string))
+        var location = new ProvisioningParameter("location", typeof(string))
         {
-            Description = "The location for the resource(s) to be deployed.",
-            Value = BicepFunction.GetResourceGroup().Location
-        });
+            Description = "The location for the resource(s) to be deployed."
+        };
+        if (!resource.IsSubscriptionScopedInfrastructure)
+        {
+            location.Value = BicepFunction.GetResourceGroup().Location;
+        }
+        Add(location);
     }
 
     /// <summary>

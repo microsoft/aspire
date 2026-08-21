@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
+#pragma warning disable ASPIRECOMPUTE004
+
 public class ComputeEnvironmentEndpointResolverTests
 {
     [Fact]
@@ -126,35 +128,79 @@ public class ComputeEnvironmentEndpointResolverTests
     }
 
     [Fact]
-    public void OwningResourceUnboundWithMultipleDeploymentTargets_Throws()
+    public void OwningResourceUnboundWithCurrentDeploymentTarget_ReturnsFalse()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var currentEnv = builder.AddResource(new TestComputeEnvironmentResource("current"));
         var otherEnv = builder.AddResource(new TestComputeEnvironmentResource("other"));
-        // No binding: an unbound resource with more than one deployment target is ambiguous.
-        // TryGetEffectiveComputeEnvironment falls back to the parameterless GetDeploymentTargetAnnotation()
-        // which throws. This documents that the resolver does not swallow that ambiguity; the pipeline
-        // rejects this configuration earlier in practice.
         var agent = builder.AddResource(new TestComputeResource("agent"));
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(currentEnv.Resource) { ComputeEnvironment = currentEnv.Resource });
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(otherEnv.Resource) { ComputeEnvironment = otherEnv.Resource });
         var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out _));
+        var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
+
+        Assert.False(resolved);
+        Assert.Null(expression);
     }
 
-    private static EndpointReference AddHttpEndpoint(TestComputeResource resource, int? port, int? targetPort)
+    [Fact]
+    public void OwningResourceHasMultipleRemoteDeploymentTargets_Throws()
     {
-        var endpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http", port: port, targetPort: targetPort);
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var currentEnv = builder.AddResource(new TestComputeEnvironmentResource("current"));
+        var eastEnv = builder.AddResource(new TestComputeEnvironmentResource("east"));
+        var westEnv = builder.AddResource(new TestComputeEnvironmentResource("west"));
+        var agent = builder.AddResource(new TestComputeResource("agent"));
+        agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(eastEnv.Resource) { ComputeEnvironment = eastEnv.Resource });
+        agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(westEnv.Resource) { ComputeEnvironment = westEnv.Resource });
+        var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out _));
+
+        Assert.Contains("'east', 'west'", exception.Message);
+    }
+
+    [Fact]
+    public void OwningResourceExplicitlyTargetsCurrentAndOtherEnvironment_ReturnsFalse()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var currentEnv = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("current"));
+        var otherEnv = builder.AddResource(new TestMultiTargetComputeEnvironmentResource("other"));
+        var agent = builder.AddResource(new TestComputeResource("agent"))
+            .WithComputeEnvironments([currentEnv, otherEnv]);
+        var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
+
+        var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
+
+        Assert.False(resolved);
+        Assert.Null(expression);
+    }
+
+    private static EndpointReference AddHttpEndpoint(TestComputeResource resource, int? port, int? targetPort, bool isExternal = true)
+    {
+        var endpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http", port: port, targetPort: targetPort, isExternal: isExternal);
         resource.Annotations.Add(endpoint);
 
         return new EndpointReference(resource, endpoint);
     }
 
     private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
+    {
+#pragma warning disable ASPIRECOMPUTE002
+        public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
+            ReferenceExpression.Create($"{endpointReference.Resource.Name}.example.com");
+#pragma warning restore ASPIRECOMPUTE002
+    }
+
+    private sealed class TestMultiTargetComputeEnvironmentResource(string name) : Resource(name), IMultiTargetComputeEnvironmentResource
     {
 #pragma warning disable ASPIRECOMPUTE002
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>

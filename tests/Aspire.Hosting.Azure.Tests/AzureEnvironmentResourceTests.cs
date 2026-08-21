@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE003 // Container registry targeting is experimental.
+#pragma warning disable ASPIRECOMPUTE004 // Multi-target compute environments are experimental.
+#pragma warning disable ASPIREAZURERG001 // Owned Azure resource groups are experimental.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -43,6 +46,43 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             .AppendContentAsFile(envBicep, "bicep");
 
         workspace.Delete(recursive: true);
+    }
+
+    [Fact]
+    public void MultiEnvironmentTargetWritesUniqueDeploymentModules()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var eastGroup = builder.AddAzureResourceGroup("east-rg", "eastus2");
+        var westGroup = builder.AddAzureResourceGroup("west-rg", "westus3");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithLocation("eastus2")
+            .WithResourceGroup(eastGroup)
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithLocation("westus3")
+            .WithResourceGroup(westGroup)
+            .WithAzureContainerRegistry(registry);
+        builder.AddContainer("api", "my-api-image:latest")
+            .WithContainerRegistry(registry)
+            .WithHttpEndpoint()
+            .WithComputeEnvironments([east, west]);
+
+        using var app = builder.Build();
+        app.Run();
+
+        Assert.True(File.Exists(Path.Combine(workspace.Path, "api-east-containerapp", "api-east-containerapp.bicep")));
+        Assert.True(File.Exists(Path.Combine(workspace.Path, "api-west-containerapp", "api-west-containerapp.bicep")));
+
+        var mainBicep = File.ReadAllText(Path.Combine(workspace.Path, "main.bicep"));
+        Assert.Contains("module east_rg 'east-rg/east-rg.bicep'", mainBicep);
+        Assert.Contains("module west_rg 'west-rg/west-rg.bicep'", mainBicep);
+        Assert.Contains("scope: resourceGroup('${resourceGroupName}-east-rg')", mainBicep);
+        Assert.Contains("scope: resourceGroup('${resourceGroupName}-west-rg')", mainBicep);
+        Assert.Contains("east_rg_resourceGroupDependency: east_rg.outputs.name", mainBicep);
+        Assert.Contains("west_rg_resourceGroupDependency: west_rg.outputs.name", mainBicep);
     }
 
     [Fact]

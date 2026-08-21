@@ -266,11 +266,22 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         continue;
                     }
 
-                    // Skip if resource has a deployment target with a ContainerRegistry set
-                    var deploymentTargetAnnotation = resource.GetDeploymentTargetAnnotation();
-                    if (deploymentTargetAnnotation?.ContainerRegistry is not null)
+                    // Skip if every deployment target that declares a registry resolves to the same registry.
+                    var deploymentTargetRegistries = resource.GetDeploymentTargetAnnotations()
+                        .Select(static annotation => annotation.ContainerRegistry)
+                        .OfType<IContainerRegistry>()
+                        .Distinct()
+                        .ToArray();
+                    if (deploymentTargetRegistries.Length == 1)
                     {
                         continue;
+                    }
+                    if (deploymentTargetRegistries.Length > 1)
+                    {
+                        var names = string.Join(", ", deploymentTargetRegistries.Select(static registry => registry is IResource resource ? resource.Name : registry.ToString()));
+                        throw new InvalidOperationException(
+                            $"Resource '{resource.Name}' has deployment targets that use different container registries - '{names}'. " +
+                            $"Please specify one registry with '.WithContainerRegistry(registryBuilder)'.");
                     }
 
                     // Check for RegistryTargetAnnotations (automatically added via BeforeStartEvent)
@@ -396,7 +407,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var unboundResources = model.Resources
             .OfType<IComputeResource>()
-            .Where(resource => resource.GetComputeEnvironment() is null)
+            .Where(resource => resource.GetComputeEnvironments().Count == 0)
             .ToList();
 
         if (unboundResources.Count == 0)
@@ -408,7 +419,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         var environmentNames = string.Join("', '", computeEnvironments.Select(environment => environment.Name));
         throw new InvalidOperationException(
             $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple compute environments ('{environmentNames}'). " +
-            $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder.");
+            $"Specify which environment or environments each resource should target by calling 'WithComputeEnvironment' or 'WithComputeEnvironments' on the resource builder.");
     }
 
     private static void ValidateBuildOnlyContainerReferences(DistributedApplicationModel model)

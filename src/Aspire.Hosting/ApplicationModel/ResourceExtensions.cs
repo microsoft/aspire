@@ -1032,6 +1032,21 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Gets the compute environments that the resource is explicitly bound to.
+    /// </summary>
+    /// <param name="resource">The resource to get the compute environments for.</param>
+    /// <returns>The explicitly selected compute environments, or an empty list when the resource is unbound.</returns>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
+    public static IReadOnlyList<IComputeEnvironmentResource> GetComputeEnvironments(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation)
+            ? computeEnvironmentAnnotation.ComputeEnvironments
+            : [];
+    }
+
+    /// <summary>
     /// Gets the compute environment that the resource is explicitly bound to, if any.
     /// </summary>
     /// <param name="resource">The resource to get the compute environment for.</param>
@@ -1039,11 +1054,23 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
     public static IComputeEnvironmentResource? GetComputeEnvironment(this IResource resource)
     {
-        if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
-        {
-            return computeEnvironmentAnnotation.ComputeEnvironment;
-        }
-        return null;
+        var computeEnvironments = resource.GetComputeEnvironments();
+        return computeEnvironments.Count == 1 ? computeEnvironments[0] : null;
+    }
+
+    /// <summary>
+    /// Gets all deployment targets associated with the resource.
+    /// </summary>
+    /// <param name="resource">The resource to get deployment targets for.</param>
+    /// <returns>The deployment target annotations associated with the resource.</returns>
+    [AspireExportIgnore(Reason = "Deployment-target inspection helper — not part of the ATS surface.")]
+    public static IReadOnlyList<DeploymentTargetAnnotation> GetDeploymentTargetAnnotations(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource.TryGetAnnotationsOfType<DeploymentTargetAnnotation>(out var annotations)
+            ? annotations.ToArray()
+            : [];
     }
 
     /// <summary>
@@ -1053,47 +1080,38 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Deployment target inspection helper — not part of the ATS surface.")]
     public static DeploymentTargetAnnotation? GetDeploymentTargetAnnotation(this IResource resource, IComputeEnvironmentResource? targetComputeEnvironment = null)
     {
-        IComputeEnvironmentResource? selectedComputeEnvironment = null;
-        if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
-        {
-            // If you have a ComputeEnvironmentAnnotation, it means the resource is bound to a specific compute environment.
-            // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
-            if (targetComputeEnvironment is not null && targetComputeEnvironment != computeEnvironmentAnnotation.ComputeEnvironment)
-            {
-                return null;
-            }
+        ArgumentNullException.ThrowIfNull(resource);
 
-            // If the resource is bound to a specific compute environment, use that one.
-            selectedComputeEnvironment = computeEnvironmentAnnotation.ComputeEnvironment;
+        var computeEnvironments = resource.GetComputeEnvironments();
+        if (targetComputeEnvironment is not null &&
+            computeEnvironments.Count > 0 &&
+            !computeEnvironments.Contains(targetComputeEnvironment))
+        {
+            return null;
         }
 
-        if (resource.TryGetAnnotationsOfType<DeploymentTargetAnnotation>(out var deploymentTargetAnnotations))
+        var deploymentTargetAnnotations = resource.GetDeploymentTargetAnnotations();
+        if (targetComputeEnvironment is not null)
         {
-            var annotations = deploymentTargetAnnotations.ToArray();
-
-            if (selectedComputeEnvironment is not null)
-            {
-                return annotations.SingleOrDefault(a => a.ComputeEnvironment == selectedComputeEnvironment);
-            }
-
-            if (annotations.Length > 1)
-            {
-                var computeEnvironmentNames = string.Join(", ", annotations.Select(a => a.ComputeEnvironment?.Name));
-                throw new InvalidOperationException($"Resource '{resource.Name}' has multiple compute environments - '{computeEnvironmentNames}'. Please specify a single compute environment using 'WithComputeEnvironment'.");
-            }
-
-            var deploymentTargetAnnotation = annotations[0];
-
-            // If you have a DeploymentTargetAnnotation, it means the resource is bound to a specific compute environment.
-            // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
-            if (targetComputeEnvironment is not null && targetComputeEnvironment != deploymentTargetAnnotation.ComputeEnvironment)
-            {
-                return null;
-            }
-
-            return deploymentTargetAnnotation;
+            return deploymentTargetAnnotations.SingleOrDefault(annotation => annotation.ComputeEnvironment == targetComputeEnvironment);
         }
-        return null;
+
+        if (computeEnvironments.Count == 1)
+        {
+            return deploymentTargetAnnotations.SingleOrDefault(annotation => annotation.ComputeEnvironment == computeEnvironments[0]);
+        }
+
+        if (computeEnvironments.Count > 1 || deploymentTargetAnnotations.Count > 1)
+        {
+            var names = computeEnvironments.Count > 1
+                ? computeEnvironments.Select(static environment => environment.Name)
+                : deploymentTargetAnnotations.Select(static annotation => annotation.ComputeEnvironment?.Name ?? "<unknown>");
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' has multiple compute environments ('{string.Join("', '", names)}'). " +
+                "Specify the compute environment when retrieving its deployment target.");
+        }
+
+        return deploymentTargetAnnotations.SingleOrDefault();
     }
 
     /// <summary>
@@ -1366,11 +1384,22 @@ public static class ResourceExtensions
             return registryAnnotation.Registry;
         }
 
-        // Try to get the container registry from DeploymentTargetAnnotation first
-        var deploymentTarget = resource.GetDeploymentTargetAnnotation();
-        if (deploymentTarget?.ContainerRegistry is not null)
+        // Try to get a common container registry from deployment targets.
+        var deploymentTargetRegistries = resource.GetDeploymentTargetAnnotations()
+            .Select(static annotation => annotation.ContainerRegistry)
+            .OfType<IContainerRegistry>()
+            .Distinct()
+            .ToArray();
+        if (deploymentTargetRegistries.Length == 1)
         {
-            return deploymentTarget.ContainerRegistry;
+            return deploymentTargetRegistries[0];
+        }
+        if (deploymentTargetRegistries.Length > 1)
+        {
+            var names = string.Join(", ", deploymentTargetRegistries.Select(static registry => registry is IResource resource ? resource.Name : registry.ToString()));
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' has deployment targets that use different container registries - '{names}'. " +
+                $"Please specify one registry with '.WithContainerRegistry(registryBuilder)'.");
         }
 
         // Fall back to RegistryTargetAnnotation (added automatically via BeforeStartEvent)

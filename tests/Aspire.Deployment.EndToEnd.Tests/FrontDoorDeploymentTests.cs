@@ -13,22 +13,21 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
 {
-    // Timeout set to 40 minutes to allow for Azure Front Door and ACA provisioning.
-    // Full deployments can take up to 30 minutes if Azure infrastructure is backed up.
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
+    // Two regional ACA environments plus Front Door can take longer to converge under Azure load.
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(90);
 
     [Fact]
-    public async Task DeployReactTemplateWithFrontDoor()
+    public async Task DeployReactTemplateWithRegionalFrontDoor()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
 
-        await DeployReactTemplateWithFrontDoorCore(cancellationToken);
+        await DeployReactTemplateWithRegionalFrontDoorCore(cancellationToken);
     }
 
-    private async Task DeployReactTemplateWithFrontDoorCore(CancellationToken cancellationToken)
+    private async Task DeployReactTemplateWithRegionalFrontDoorCore(CancellationToken cancellationToken)
     {
         // Validate prerequisites
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
@@ -53,9 +52,11 @@ public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("frontdoor");
+        var eastResourceGroupName = $"{resourceGroupName}-east";
+        var westResourceGroupName = $"{resourceGroupName}-west";
         var projectName = "FrontDoorApp";
 
-        output.WriteLine($"Test: {nameof(DeployReactTemplateWithFrontDoor)}");
+        output.WriteLine($"Test: {nameof(DeployReactTemplateWithRegionalFrontDoor)}");
         output.WriteLine($"Project Name: {projectName}");
         output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
@@ -106,7 +107,12 @@ public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
 
-            // Step 6: Modify AppHost.cs to add Azure Container App Environment and Front Door
+            output.WriteLine("Step 5c: Adding Azure Container Registry hosting package...");
+            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerRegistry");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
+
+            // Step 6: Modify AppHost.cs to add two regional environments and one global Front Door endpoint.
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
@@ -117,11 +123,26 @@ public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
 
             // Insert Azure infrastructure before builder.Build().Run();
             var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
-// Add Azure Container App Environment for deployment
-builder.AddAzureContainerAppEnvironment("aca");
+            var replacement = $$"""
+var registry = builder.AddAzureContainerRegistry("registry");
 
-// Add Azure Front Door in front of the server
+var eastGroup = builder.AddAzureResourceGroup("east-rg", "eastus2")
+    .WithResourceGroupName("{{eastResourceGroupName}}");
+var westGroup = builder.AddAzureResourceGroup("west-rg", "westus3")
+    .WithResourceGroupName("{{westResourceGroupName}}");
+
+var east = builder.AddAzureContainerAppEnvironment("east")
+    .WithLocation("eastus2")
+    .WithResourceGroup(eastGroup)
+    .WithAzureContainerRegistry(registry);
+var west = builder.AddAzureContainerAppEnvironment("west")
+    .WithLocation("westus3")
+    .WithResourceGroup(westGroup)
+    .WithAzureContainerRegistry(registry);
+
+server.WithContainerRegistry(registry)
+    .WithComputeEnvironments([east, west]);
+
 builder.AddAzureFrontDoor("frontdoor")
     .WithOrigin(server);
 
@@ -129,6 +150,7 @@ builder.Build().Run();
 """;
 
             content = content.Replace(buildRunPattern, replacement);
+            content = "#pragma warning disable ASPIRECOMPUTE003\n#pragma warning disable ASPIRECOMPUTE004\n#pragma warning disable ASPIREAZURERG001\n" + content;
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
@@ -148,25 +170,19 @@ builder.Build().Run();
             output.WriteLine("Step 9: Starting Azure deployment with Front Door...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(45));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Front Door provisioning is covered by the successful deployment above. Do not query it
-            // through `az afd` here: recent Azure CLI versions dynamically install the `cdn` extension,
-            // which can block this interactive terminal waiting for installation confirmation. Front Door
-            // HTTP checks are also intentionally skipped because DNS propagation can take 5-15 minutes.
-            output.WriteLine("Step 10: Verifying deployed ACA endpoints...");
-            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
-                  "echo \"Resource group: $RG_NAME\" && " +
-                  "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
-                  // Check ACA endpoints (exclude internal endpoints)
-                  "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
-                  "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found\"; exit 1; fi && " +
+            // Use generic `az resource` queries rather than `az afd`; the latter may block while
+            // dynamically installing the CDN extension in the interactive test terminal.
+            output.WriteLine("Step 10: Verifying regional ACA endpoints and global Front Door...");
+            await auto.TypeAsync($"PRIMARY_RG=\"{resourceGroupName}\" && EAST_RG=\"{eastResourceGroupName}\" && WEST_RG=\"{westResourceGroupName}\" && " +
+                  "for rg in \"$PRIMARY_RG\" \"$EAST_RG\" \"$WEST_RG\"; do if ! az group show -n \"$rg\" &>/dev/null; then echo \"❌ Resource group $rg not found\"; exit 1; fi; done && " +
                   "failed=0 && " +
-                  // Share a single deadline across every endpoint (see the rationale comment below the
-                  // command) so the whole loop stays bounded no matter how many endpoints are returned.
                   "deadline=$(( $(date +%s) + 660 )) && " +
-                  // Verify ACA endpoints
+                  "for rg in \"$EAST_RG\" \"$WEST_RG\"; do " +
+                  "urls=$(az containerapp list -g \"$rg\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
+                  "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found in $rg\"; exit 1; fi; " +
                   "for url in $urls; do " +
                   "echo \"Checking ACA https://$url...\"; " +
                   "success=0; " +
@@ -177,21 +193,26 @@ builder.Build().Run();
                   "echo \"  $STATUS, retrying in 10s...\"; sleep 10; " +
                   "done; " +
                   "if [ \"$success\" -eq 0 ]; then echo \"  ❌ $url not reachable before deadline\"; failed=1; fi; " +
-                  "done && " +
-                  "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+                  "done; done && " +
+                  "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more regional endpoint checks failed\"; exit 1; fi && " +
+                  "origin_count=$(az resource list -g \"$PRIMARY_RG\" --resource-type \"Microsoft.Cdn/profiles/originGroups/origins\" --query \"length(@)\" -o tsv) && " +
+                  "if [ \"$origin_count\" -lt 2 ]; then echo \"❌ Expected two Front Door origins, found $origin_count\"; exit 1; fi && " +
+                  "fd_host=$(az resource list -g \"$PRIMARY_RG\" --resource-type \"Microsoft.Cdn/profiles/afdEndpoints\" --query \"[0].properties.hostName\" -o tsv) && " +
+                  "if [ -z \"$fd_host\" ]; then echo \"❌ Front Door endpoint not found\"; exit 1; fi && " +
+                  "echo \"Checking Front Door https://$fd_host...\" && success=0 && deadline=$(( $(date +%s) + 900 )) && " +
+                  "while true; do STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$fd_host\" --max-time 30 2>/dev/null); " +
+                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS\"; success=1; break; fi; " +
+                  "if [ \"$(date +%s)\" -ge \"$deadline\" ]; then break; fi; echo \"  $STATUS, retrying in 15s...\"; sleep 15; done && " +
+                  "if [ \"$success\" -eq 0 ]; then echo \"❌ Front Door endpoint did not become healthy\"; exit 1; fi");
             await auto.EnterAsync();
-            // The in-terminal verification loop above checks every external ACA endpoint, retrying each
-            // with `curl --max-time 30` + `sleep 10`. `urls` can contain more than one endpoint (for
-            // example the workload plus the Aspire dashboard), and the endpoints are checked
-            // sequentially, so a per-endpoint retry budget would let the total runtime grow with the
-            // number of endpoints. Instead the loop shares a single ~11-minute deadline across all
-            // endpoints (each still gets at least one attempt), which keeps the worst case bounded.
-            // The outer success-prompt wait must exceed that deadline plus the final in-flight
-            // `curl --max-time 30`, so 15 minutes covers it; a shorter wait would abandon a
-            // still-running (and often eventually-successful) loop and fail an otherwise healthy deploy.
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
+            // Regional checks share an 11-minute deadline, then Front Door gets a separate 15-minute
+            // DNS/probe convergence budget. The outer wait covers both bounded phases.
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(30));
 
-            // Step 11: Exit terminal
+            // Step 11: Verify Aspire-owned primary and regional groups are all cleaned up.
+            await auto.AspireDestroyAsync(counter);
+
+            // Step 12: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
@@ -201,7 +222,7 @@ builder.Build().Run();
             output.WriteLine($"Deployment completed in {duration}");
 
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployReactTemplateWithFrontDoor),
+                nameof(DeployReactTemplateWithRegionalFrontDoor),
                 resourceGroupName,
                 deploymentUrls,
                 duration);
@@ -214,7 +235,7 @@ builder.Build().Run();
             output.WriteLine($"❌ Test failed after {duration}: {ex.Message}");
 
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployReactTemplateWithFrontDoor),
+                nameof(DeployReactTemplateWithRegionalFrontDoor),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
@@ -225,6 +246,8 @@ builder.Build().Run();
         {
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
             TriggerCleanupResourceGroup(resourceGroupName, output);
+            TriggerCleanupResourceGroup(eastResourceGroupName, output);
+            TriggerCleanupResourceGroup(westResourceGroupName, output);
             DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
     }

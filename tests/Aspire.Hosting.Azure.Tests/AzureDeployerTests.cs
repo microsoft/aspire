@@ -8,6 +8,7 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURERG001 // Owned Azure resource groups are experimental.
 
 using System.Text.Json.Nodes;
 using Azure.Core;
@@ -2005,6 +2006,73 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         // Verify the resource group was actually deleted via ARM
         Assert.True(testResourceGroup.WasDeleteCalled, "DeleteAsync should have been called on the resource group");
         Assert.True(testResourceGroup.WasGetResourcesCalled, "GetResourcesAsync should have been called to enumerate resources before deletion");
+    }
+
+    [Fact]
+    public async Task DestroyAsync_WithOwnedRegionalResourceGroup_DeletesAllResourceGroups()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Destroy);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "rg-test-destroy",
+            ["SubscriptionId"] = "12345678-1234-1234-1234-123456789012",
+            ["Location"] = "westus2"
+        });
+        stateManager.SetSection("Azure:Deployments:regional-rg", new JsonObject
+        {
+            [BicepUtilities.DeploymentStateOutputsKey] = """{"name":{"value":"rg-test-regional"}}"""
+        });
+
+        var testResourceGroup = new TestResourceGroupResource("rg-test-destroy");
+        var armClientProvider = new TestArmClientProvider(testResourceGroup);
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        ConfigureTestServices(
+            builder,
+            bicepProvisioner: new NoOpBicepProvisioner(),
+            armClientProvider: armClientProvider,
+            activityReporter: mockActivityReporter,
+            deploymentStateManager: stateManager,
+            setDefaultProvisioningOptions: false);
+        builder.Services.Configure<PipelineOptions>(options => options.SkipConfirmation = true);
+
+        builder.AddAzureResourceGroup("regional-rg", "eastus2");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(2, testResourceGroup.DeleteCallCount);
+    }
+
+    [Fact]
+    public async Task DestroyAsync_WithConfiguredRegionalResourceGroupName_DoesNotRequireDeploymentOutput()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Destroy);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "rg-test-destroy",
+            ["SubscriptionId"] = "12345678-1234-1234-1234-123456789012",
+            ["Location"] = "westus2"
+        });
+
+        var testResourceGroup = new TestResourceGroupResource("rg-test-destroy");
+        var armClientProvider = new TestArmClientProvider(testResourceGroup);
+        ConfigureTestServices(
+            builder,
+            bicepProvisioner: new NoOpBicepProvisioner(),
+            armClientProvider: armClientProvider,
+            deploymentStateManager: stateManager,
+            setDefaultProvisioningOptions: false);
+        builder.Services.Configure<PipelineOptions>(options => options.SkipConfirmation = true);
+
+        builder.AddAzureResourceGroup("regional-rg", "eastus2")
+            .WithResourceGroupName("rg-test-regional");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(2, testResourceGroup.DeleteCallCount);
     }
 
     [Fact]

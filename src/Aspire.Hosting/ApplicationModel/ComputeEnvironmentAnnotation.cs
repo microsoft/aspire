@@ -3,7 +3,7 @@
 
 namespace Aspire.Hosting.ApplicationModel;
 
-internal sealed class ComputeEnvironmentAnnotation(IComputeEnvironmentResource computeEnvironment) : IResourceAnnotation
+internal sealed class ComputeEnvironmentAnnotation(IReadOnlyList<IComputeEnvironmentResource> computeEnvironments) : IResourceAnnotation
 {
-    public IComputeEnvironmentResource ComputeEnvironment { get; } = computeEnvironment;
+    public IReadOnlyList<IComputeEnvironmentResource> ComputeEnvironments { get; } = computeEnvironments;
 }

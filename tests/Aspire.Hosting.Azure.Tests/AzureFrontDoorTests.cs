@@ -2,10 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
+#pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIRECOMPUTE004
+#pragma warning disable ASPIREAZURERG001
 #pragma warning disable ASPIREPROBES001
+#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -109,6 +115,102 @@ public class AzureFrontDoorTests
         var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
 
         await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureFrontDoorWithReplicatedOriginGeneratesBicep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var eastGroup = builder.AddAzureResourceGroup("east-rg", "eastus2");
+        var westGroup = builder.AddAzureResourceGroup("west-rg", "westus3");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithLocation("eastus2")
+            .WithResourceGroup(eastGroup)
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithLocation("westus3")
+            .WithResourceGroup(westGroup)
+            .WithAzureContainerRegistry(registry);
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithContainerRegistry(registry)
+            .WithComputeEnvironments([east, west]);
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ReplicatedOriginMakesFrontDoorProvisioningDependOnEveryTarget()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var eastGroup = builder.AddAzureResourceGroup("east-rg", "eastus2");
+        var westGroup = builder.AddAzureResourceGroup("west-rg", "westus3");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithResourceGroup(eastGroup)
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithResourceGroup(westGroup)
+            .WithAzureContainerRegistry(registry);
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithContainerRegistry(registry)
+            .WithComputeEnvironments([east, west]);
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var targets = api.Resource.GetDeploymentTargetAnnotations()
+            .Select(static annotation => Assert.IsAssignableFrom<AzureBicepResource>(annotation.DeploymentTarget))
+            .ToArray();
+        var frontDoorProvision = CreateProvisionStep("provision-frontdoor", frontDoor.Resource);
+        var eastProvision = CreateProvisionStep("provision-api-east", targets[0]);
+        var westProvision = CreateProvisionStep("provision-api-west", targets[1]);
+        var summary = new PipelineStep
+        {
+            Name = "print-frontdoor",
+            Resource = frontDoor.Resource,
+            Tags = ["print-summary"],
+            Action = static _ => Task.CompletedTask
+        };
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var context = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Model = model,
+            Steps = [frontDoorProvision, eastProvision, westProvision, summary]
+        };
+
+        foreach (var annotation in frontDoor.Resource.Annotations.OfType<PipelineConfigurationAnnotation>())
+        {
+            await annotation.Callback(context);
+        }
+
+        Assert.Contains(eastProvision.Name, frontDoorProvision.DependsOnSteps);
+        Assert.Contains(westProvision.Name, frontDoorProvision.DependsOnSteps);
+
+        static PipelineStep CreateProvisionStep(string name, IResource resource) => new()
+        {
+            Name = name,
+            Resource = resource,
+            Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
+            Action = static _ => Task.CompletedTask
+        };
     }
 
     [Fact]

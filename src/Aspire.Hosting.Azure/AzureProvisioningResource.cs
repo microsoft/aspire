@@ -18,6 +18,8 @@ namespace Aspire.Hosting.Azure;
 public class AzureProvisioningResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureBicepResource(name, templateFile: $"{name}.module.bicep")
 {
+    internal virtual bool IsSubscriptionScopedInfrastructure => false;
+
     /// <summary>
     /// Callback for configuring the Azure resources.
     /// </summary>
@@ -195,13 +197,14 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         return true;
     }
 
-    private static bool ScopeEquals(AzureBicepResourceScope expected, AzureBicepResourceScope? actual)
+    internal static bool ScopeEquals(AzureBicepResourceScope expected, AzureBicepResourceScope? actual)
     {
         return actual is not null &&
             expected.HasResourceGroup == actual.HasResourceGroup &&
             (!expected.HasResourceGroup || ScopeValueEquals(expected.ResourceGroup, actual.ResourceGroup)) &&
             ScopeValueEquals(expected.Subscription, actual.Subscription) &&
-            expected.IsTenantScope == actual.IsTenantScope;
+            expected.IsTenantScope == actual.IsTenantScope &&
+            expected.IsSubscriptionScope == actual.IsSubscriptionScope;
     }
 
     private static bool ScopeValueEquals(object? left, object? right)
@@ -214,49 +217,53 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         return left.GetType() == right.GetType() && left.Equals(right);
     }
 
-    private static BicepValue<string> CreateScopeExpression(AzureBicepResourceScope scope, AzureResourceInfrastructure infra)
+    internal static BicepValue<string> CreateScopeExpression(AzureBicepResourceScope scope, AzureResourceInfrastructure infra)
     {
+        static BicepValue<string> GetScopeValue(object value, AzureResourceInfrastructure infrastructure) =>
+            value switch
+            {
+                string literal => literal,
+                ParameterResource parameter => parameter.AsProvisioningParameter(infrastructure),
+                BicepOutputReference output => output.AsProvisioningParameter(infrastructure),
+                _ => throw new NotSupportedException($"Scope value type '{value.GetType()}' is not supported.")
+            };
+
         if (scope.IsTenantScope)
         {
             return new FunctionCallExpression(new IdentifierExpression("tenant"));
         }
 
+        if (scope.IsSubscriptionScope && scope.Subscription is null)
+        {
+            return new FunctionCallExpression(new IdentifierExpression("subscription"));
+        }
+
         if (scope.HasResourceGroup && scope.Subscription is not null)
         {
-            return (scope.Subscription, scope.ResourceGroup) switch
-            {
-                (string subscription, string resourceGroup) => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(subscription), new StringLiteralExpression(resourceGroup)),
-                (string subscription, ParameterResource resourceGroup) => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(subscription), resourceGroup.AsProvisioningParameter(infra).Value.Compile()),
-                (ParameterResource subscription, string resourceGroup) => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), subscription.AsProvisioningParameter(infra).Value.Compile(), new StringLiteralExpression(resourceGroup)),
-                (ParameterResource subscription, ParameterResource resourceGroup) => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), subscription.AsProvisioningParameter(infra).Value.Compile(), resourceGroup.AsProvisioningParameter(infra).Value.Compile()),
-                _ => throw new NotSupportedException($"Scope value types '{scope.Subscription.GetType()}' and '{scope.ResourceGroup.GetType()}' are not supported.")
-            };
+            return new FunctionCallExpression(
+                new IdentifierExpression("resourceGroup"),
+                GetScopeValue(scope.Subscription, infra).Compile(),
+                GetScopeValue(scope.ResourceGroup, infra).Compile());
         }
 
         if (scope.HasResourceGroup)
         {
-            return scope.ResourceGroup switch
-            {
-                string resourceGroup => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(resourceGroup)),
-                ParameterResource resourceGroup => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), resourceGroup.AsProvisioningParameter(infra).Value.Compile()),
-                _ => throw new NotSupportedException($"Resource group type '{scope.ResourceGroup.GetType()}' is not supported.")
-            };
+            return new FunctionCallExpression(
+                new IdentifierExpression("resourceGroup"),
+                GetScopeValue(scope.ResourceGroup, infra).Compile());
         }
 
         if (scope.Subscription is not null)
         {
-            return scope.Subscription switch
-            {
-                string subscription => new FunctionCallExpression(new IdentifierExpression("subscription"), new StringLiteralExpression(subscription)),
-                ParameterResource subscription => new FunctionCallExpression(new IdentifierExpression("subscription"), subscription.AsProvisioningParameter(infra).Value.Compile()),
-                _ => throw new NotSupportedException($"Subscription type '{scope.Subscription.GetType()}' is not supported.")
-            };
+            return new FunctionCallExpression(
+                new IdentifierExpression("subscription"),
+                GetScopeValue(scope.Subscription, infra).Compile());
         }
 
         throw new InvalidOperationException("The Azure Bicep resource scope must specify a resource group, subscription, or tenant scope.");
     }
 
-    private static void SetScopeProperty(ProvisionableResource provisionableResource, BicepValue<string> scope)
+    internal static void SetScopeProperty(ProvisionableResource provisionableResource, BicepValue<string> scope)
     {
         // HACK: This is a dance we do to set extra properties using Azure.Provisioning
         // will be resolved if we ever get https://github.com/Azure/azure-sdk-for-net/issues/47980

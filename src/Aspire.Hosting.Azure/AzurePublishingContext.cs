@@ -267,10 +267,19 @@ public sealed class AzurePublishingContext(
             }
 
             var scope = resource.Scope;
+            if (scope.HasResourceGroup && ReferenceEquals(scope.ResourceGroup, environment.ResourceGroupName))
+            {
+                return new IdentifierExpression(rg.BicepIdentifier);
+            }
 
             if (scope.IsTenantScope)
             {
                 return new FunctionCallExpression(new IdentifierExpression("tenant"));
+            }
+
+            if (scope.IsSubscriptionScope && scope.Subscription is null)
+            {
+                return new FunctionCallExpression(new IdentifierExpression("subscription"));
             }
 
             if (scope.HasResourceGroup && scope.Subscription is not null)
@@ -316,10 +325,19 @@ public sealed class AzurePublishingContext(
 
             var module = moduleMap[resource];
             module.Scope = GetScopeExpression(resource);
-            module.Parameters.Add("location", locationParam);
+            var configuredLocation = resource.Parameters.GetValueOrDefault(AzureBicepResource.KnownParameters.Location);
+            var moduleLocation = configuredLocation is not null
+                    ? ResolveValue(Eval(configuredLocation))
+                    : locationParam;
+            module.Parameters.Add(AzureBicepResource.KnownParameters.Location, moduleLocation);
 
             foreach (var parameter in resource.Parameters)
             {
+                if (parameter.Key == AzureBicepResource.KnownParameters.Location)
+                {
+                    continue;
+                }
+
                 if (parameter.Key == AzureBicepResource.KnownParameters.UserPrincipalId && parameter.Value is null)
                 {
                     module.Parameters.Add(parameter.Key, principalId);
@@ -373,7 +391,11 @@ public sealed class AzurePublishingContext(
         // These include DeploymentTarget resources and any other resources that have parameters that reference bicep outputs.
         foreach (var resource in model.Resources)
         {
-            if (resource.GetDeploymentTargetAnnotation() is { } annotation && annotation.DeploymentTarget is AzureBicepResource br)
+            var deploymentTargets = resource.GetDeploymentTargetAnnotations()
+                .Select(static annotation => annotation.DeploymentTarget)
+                .OfType<AzureBicepResource>()
+                .ToArray();
+            if (deploymentTargets.Length > 0)
             {
                 // Materialize Dockerfile factory if present
                 if (resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) &&
@@ -391,26 +413,27 @@ public sealed class AzurePublishingContext(
                     await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(context, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
-                var task = await step.CreateTaskAsync(
-                    $"Processing deployment target {resource.Name}",
-                    cancellationToken: default
-                )
-                .ConfigureAwait(false);
+                foreach (var deploymentTarget in deploymentTargets)
+                {
+                    var task = await step.CreateTaskAsync(
+                        $"Processing deployment target {deploymentTarget.Name}",
+                        cancellationToken: default
+                    )
+                    .ConfigureAwait(false);
 
-                var moduleDirectory = outputDirectory.CreateSubdirectory(resource.Name);
+                    var artifactName = deploymentTargets.Length == 1 ? resource.Name : deploymentTarget.Name;
+                    var moduleDirectory = outputDirectory.CreateSubdirectory(artifactName);
+                    var modulePath = Path.Combine(moduleDirectory.FullName, $"{artifactName}.bicep");
+                    var file = deploymentTarget.GetBicepTemplateFile(tempDirectory);
 
-                var modulePath = Path.Combine(moduleDirectory.FullName, $"{resource.Name}.bicep");
+                    File.Copy(file.Path, modulePath, true);
+                    CaptureBicepOutputsFromParameters(deploymentTarget);
 
-                var file = br.GetBicepTemplateFile(tempDirectory);
-
-                File.Copy(file.Path, modulePath, true);
-
-                CaptureBicepOutputsFromParameters(br);
-
-                await task.SucceedAsync(
-                    $"Wrote bicep module for deployment target {resource.Name} to {modulePath}",
-                    cancellationToken: default
-                ).ConfigureAwait(false);
+                    await task.SucceedAsync(
+                        $"Wrote bicep module for deployment target {deploymentTarget.Name} to {modulePath}",
+                        cancellationToken: default
+                    ).ConfigureAwait(false);
+                }
             }
             else if (resource is IResourceWithParameters rwp && !bicepResourcesToPublish.Contains(resource))
             {

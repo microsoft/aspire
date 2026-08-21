@@ -17229,6 +17229,15 @@ export interface ContainerResource {
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ContainerResourcePromise;
     /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ContainerResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
      */
@@ -18037,6 +18046,15 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ContainerResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ContainerResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -20111,6 +20129,28 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -21275,6 +21315,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -21888,6 +21932,15 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): CSharpAppResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): CSharpAppResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -22512,6 +22565,15 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): CSharpAppResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): CSharpAppResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -24149,6 +24211,28 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -25233,6 +25317,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -25874,6 +25962,15 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): DotnetToolResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -26520,6 +26617,15 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): DotnetToolResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): DotnetToolResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -28241,6 +28347,28 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -29326,6 +29454,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -29937,6 +30069,15 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ExecutableResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -30550,6 +30691,15 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ExecutableResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -32167,6 +32317,28 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -33226,6 +33398,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
+    }
+
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
     }
 
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise {
@@ -38270,6 +38446,15 @@ export interface ProjectResource {
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ProjectResourcePromise;
     /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ProjectResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
      */
@@ -38893,6 +39078,15 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ProjectResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ProjectResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -40531,6 +40725,28 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -41615,6 +41831,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -42405,6 +42625,15 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): TestDatabaseResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestDatabaseResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -43214,6 +43443,15 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): TestDatabaseResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestDatabaseResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -45287,6 +45525,28 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -46451,6 +46711,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -47257,6 +47521,15 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): TestRedisResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestRedisResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -48130,6 +48403,15 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): TestRedisResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestRedisResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -50287,6 +50569,28 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -51670,6 +51974,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -52513,6 +52821,15 @@ export interface TestVaultResource {
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): TestVaultResourcePromise;
     /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestVaultResourcePromise;
+    /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
      */
@@ -53323,6 +53640,15 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): TestVaultResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestVaultResourcePromise;
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
@@ -55398,6 +55724,28 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
+    }
+
+    /** @internal */
     private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
@@ -56577,6 +56925,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
     }
 
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
+    }
+
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHttpProbe(probeType, options)), this._client);
     }
@@ -56789,6 +57141,15 @@ export interface ComputeResource {
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ComputeResourcePromise;
     /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ComputeResourcePromise;
+    /**
      * Adds an asynchronous callback to configure container image push options for the resource.
      *
      * This method allows customization of how container images are named and tagged when pushed to a registry using an asynchronous callback.
@@ -56827,6 +57188,15 @@ export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
      * @returns The resource builder.
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ComputeResourcePromise;
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ComputeResourcePromise;
     /**
      * Adds an asynchronous callback to configure container image push options for the resource.
      *
@@ -56886,6 +57256,28 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
      */
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._withComputeEnvironmentInternal(computeEnvironmentResource), this._client);
+    }
+
+    /** @internal */
+    private async _withComputeEnvironmentsInternal(computeEnvironmentResources: ComputeEnvironmentResource[]): Promise<ComputeResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, computeEnvironmentResources };
+        const result = await this._client.invokeCapability<IComputeResourceHandle>(
+            'Aspire.Hosting/withComputeEnvironments',
+            rpcArgs
+        );
+        return new ComputeResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the compute environments that deploy the compute resource.
+     *
+     * The resource runs once during local development. The selected environments create separate
+     * deployment targets during publish and deploy.
+     * @param computeEnvironmentResources The compute environments that deploy the resource.
+     * @returns The resource builder.
+     */
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ComputeResourcePromise {
+        return new ComputeResourcePromiseImpl(this._withComputeEnvironmentsInternal(computeEnvironmentResources), this._client);
     }
 
     /** @internal */
@@ -56981,6 +57373,10 @@ class ComputeResourcePromiseImpl implements ComputeResourcePromise {
 
     withComputeEnvironment(computeEnvironmentResource: Awaitable<ComputeEnvironmentResource>): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironment(computeEnvironmentResource)), this._client);
+    }
+
+    withComputeEnvironments(computeEnvironmentResources: ComputeEnvironmentResource[]): ComputeResourcePromise {
+        return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withComputeEnvironments(computeEnvironmentResources)), this._client);
     }
 
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {

@@ -23,15 +23,29 @@ public class AzureContainerAppResource : AzureProvisioningResource
     /// <param name="configureInfrastructure">Callback to configure the Azure resources.</param>
     /// <param name="targetResource">The target compute resource that this Azure Container App is being created for.</param>
     public AzureContainerAppResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure, IResource targetResource)
+        : this(name, configureInfrastructure, targetResource, computeEnvironment: null)
+    {
+    }
+
+    internal AzureContainerAppResource(
+        string name,
+        Action<AzureResourceInfrastructure> configureInfrastructure,
+        IResource targetResource,
+        AzureContainerAppEnvironmentResource? computeEnvironment)
         : base(name, configureInfrastructure)
     {
         TargetResource = targetResource;
+        ComputeEnvironment = computeEnvironment;
+        var isMultiTarget = targetResource.GetComputeEnvironments().Count > 1;
+        var pipelineTargetName = isMultiTarget ? name : targetResource.Name;
 
         // Add pipeline step annotation for deploy
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
             // Get the deployment target annotation
-            var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation();
+            var deploymentTargetAnnotation = computeEnvironment is null
+                ? targetResource.GetDeploymentTargetAnnotation()
+                : targetResource.GetDeploymentTargetAnnotation(computeEnvironment);
             if (deploymentTargetAnnotation is null)
             {
                 return [];
@@ -41,11 +55,16 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
             var printResourceSummary = new PipelineStep
             {
-                Name = $"print-{targetResource.Name}-summary",
-                Description = $"Prints the deployment summary and URL for {targetResource.Name}.",
+                Name = $"print-{pipelineTargetName}-summary",
+                Description = isMultiTarget
+                    ? $"Prints the deployment summary and URL for {targetResource.Name} in {deploymentTargetAnnotation.ComputeEnvironment?.Name}."
+                    : $"Prints the deployment summary and URL for {targetResource.Name}.",
                 Action = async ctx =>
                 {
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
+                    var summaryKey = isMultiTarget
+                        ? $"{targetResource.Name} ({containerAppEnv.Name})"
+                        : targetResource.Name;
 
                     var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
                     var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, targetResource.Name.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
@@ -56,14 +75,14 @@ public class AzureContainerAppResource : AzureProvisioningResource
                         var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
 
                         ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));
-                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
+                        ctx.Summary.Add(summaryKey, new MarkdownString(summaryValue));
                     }
                     else
                     {
                         var summaryValue = $"No public endpoints ({portalLink})";
 
                         ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. {summaryValue}"));
-                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
+                        ctx.Summary.Add(summaryKey, new MarkdownString(summaryValue));
                     }
                 },
                 Tags = ["print-summary"],
@@ -72,8 +91,10 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
             var deployStep = new PipelineStep
             {
-                Name = $"deploy-{targetResource.Name}",
-                Description = $"Aggregation step for deploying {targetResource.Name} to Azure Container Apps.",
+                Name = $"deploy-{pipelineTargetName}",
+                Description = isMultiTarget
+                    ? $"Aggregation step for deploying {targetResource.Name} to Azure Container Apps environment {deploymentTargetAnnotation.ComputeEnvironment?.Name}."
+                    : $"Aggregation step for deploying {targetResource.Name} to Azure Container Apps.",
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.DeployCompute]
             };
@@ -104,4 +125,15 @@ public class AzureContainerAppResource : AzureProvisioningResource
     /// Gets the target resource that this Azure Container App is being created for.
     /// </summary>
     public IResource TargetResource { get; }
+
+    internal AzureContainerAppEnvironmentResource? ComputeEnvironment { get; }
+
+    internal void ApplyEnvironmentSettings(AzureContainerAppEnvironmentResource environment)
+    {
+        Scope = environment.Scope;
+        if (environment.DeclaredLocationValue is { } declaredLocation)
+        {
+            AzureDeclaredLocation.Set(this, declaredLocation);
+        }
+    }
 }

@@ -91,6 +91,10 @@ internal static class BicepUtilities
             await SetScopeValueAsync(scope, "resourceGroup", targetScope.ResourceGroup, cancellationToken).ConfigureAwait(false);
         }
         await SetScopeValueAsync(scope, "subscription", targetScope.Subscription, cancellationToken).ConfigureAwait(false);
+        if (targetScope.IsSubscriptionScope && targetScope.Subscription is null)
+        {
+            scope["subscription"] = "current";
+        }
         if (targetScope.IsTenantScope)
         {
             scope["tenant"] = "current";

@@ -2,6 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE003 // Container registry targeting is experimental.
+#pragma warning disable ASPIRECOMPUTE004 // Multi-target compute environments are experimental.
+#pragma warning disable ASPIREAZURE003 // Azure role-assignment resources are experimental.
+#pragma warning disable ASPIREAZURERG001 // Owned Azure resource groups are experimental.
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -165,6 +169,33 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task InternalEndpointCannotBeReferencedAcrossContainerAppEnvironments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var east = builder.AddAzureContainerAppEnvironment("east");
+        var west = builder.AddAzureContainerAppEnvironment("west");
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithComputeEnvironment(east);
+        var web = builder.AddProject<Project>("web", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithComputeEnvironment(west)
+            .WithReference(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = Assert.IsAssignableFrom<AzureProvisioningResource>(
+            web.Resource.GetDeploymentTargetAnnotation(west.Resource)?.DeploymentTarget);
+        var exception = Assert.Throws<InvalidOperationException>(target.GetBicepTemplateString);
+
+        Assert.Contains("Internal endpoint 'http' on resource 'api'", exception.Message);
+        Assert.Contains("not reachable from Azure Container Apps environment 'west'", exception.Message);
     }
 
     private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
@@ -1888,6 +1919,239 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await app.RunAsync();
 
         await VerifyFile(Path.Combine(workspace.Path, "aspire-manifest.json"));
+    }
+
+    [Fact]
+    public async Task LocationAndOwnedResourceGroupPropagateToContainerAppTarget()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resourceGroup = builder.AddAzureResourceGroup("east-rg", "eastus2");
+        var environment = builder.AddAzureContainerAppEnvironment("east")
+            .WithLocation("eastus2")
+            .WithResourceGroup(resourceGroup);
+        var api = builder.AddContainer("api", "myimage")
+            .WithComputeEnvironment(environment);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Equal("eastus2", environment.Resource.Parameters[AzureBicepResource.KnownParameters.Location]);
+        Assert.Same(resourceGroup.Resource.ResourceGroupName, environment.Resource.Scope?.ResourceGroup);
+
+        var annotation = Assert.IsType<DeploymentTargetAnnotation>(api.Resource.GetDeploymentTargetAnnotation(environment.Resource));
+        var target = Assert.IsType<AzureContainerAppResource>(annotation.DeploymentTarget);
+        Assert.Equal("eastus2", target.Parameters[AzureBicepResource.KnownParameters.Location]);
+        Assert.Same(resourceGroup.Resource.ResourceGroupName, target.Scope?.ResourceGroup);
+    }
+
+    [Fact]
+    public async Task OwnedResourceGroupLocationIsTheDefaultContainerAppLocation()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resourceGroup = builder.AddAzureResourceGroup("east-rg", "eastus2");
+        var environment = builder.AddAzureContainerAppEnvironment("east")
+            .WithResourceGroup(resourceGroup);
+        var api = builder.AddContainer("api", "myimage")
+            .WithComputeEnvironment(environment);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var environmentLocation = Assert.IsType<BicepOutputReference>(
+            environment.Resource.Parameters[AzureBicepResource.KnownParameters.Location]);
+        Assert.Same(resourceGroup.Resource, environmentLocation.Resource);
+
+        var target = Assert.IsType<AzureContainerAppResource>(
+            api.Resource.GetDeploymentTargetAnnotation(environment.Resource)?.DeploymentTarget);
+        var targetLocation = Assert.IsType<BicepOutputReference>(
+            target.Parameters[AzureBicepResource.KnownParameters.Location]);
+        Assert.Same(resourceGroup.Resource, targetLocation.Resource);
+    }
+
+    [Fact]
+    public async Task OneLogicalResourceCreatesContainerAppTargetPerEnvironment()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var eastGroup = builder.AddAzureResourceGroup("east-rg", "eastus2");
+        var westGroup = builder.AddAzureResourceGroup("west-rg", "westus3");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithLocation("eastus2")
+            .WithResourceGroup(eastGroup)
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithLocation("westus3")
+            .WithResourceGroup(westGroup)
+            .WithAzureContainerRegistry(registry);
+        var api = builder.AddContainer("api", "myimage")
+            .WithContainerRegistry(registry)
+            .WithComputeEnvironments([east, west]);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var annotations = api.Resource.GetDeploymentTargetAnnotations();
+        Assert.Equal(2, annotations.Count);
+
+        var eastTarget = Assert.IsType<AzureContainerAppResource>(
+            Assert.Single(annotations, annotation => annotation.ComputeEnvironment == east.Resource).DeploymentTarget);
+        var westTarget = Assert.IsType<AzureContainerAppResource>(
+            Assert.Single(annotations, annotation => annotation.ComputeEnvironment == west.Resource).DeploymentTarget);
+
+        Assert.Equal("api-east-containerapp", eastTarget.Name);
+        Assert.Equal("api-west-containerapp", westTarget.Name);
+        Assert.Equal("eastus2", eastTarget.Parameters[AzureBicepResource.KnownParameters.Location]);
+        Assert.Equal("westus3", westTarget.Parameters[AzureBicepResource.KnownParameters.Location]);
+
+        var eastBicep = eastTarget.GetBicepTemplateString();
+        var westBicep = westTarget.GetBicepTemplateString();
+        Assert.Contains("name: 'api'", eastBicep);
+        Assert.Contains("name: 'api'", westBicep);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var eastIdentity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), identity => identity.Name == "east-mi");
+        var westIdentity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), identity => identity.Name == "west-mi");
+        Assert.Same(eastGroup.Resource.ResourceGroupName, eastIdentity.Scope?.ResourceGroup);
+        Assert.Same(westGroup.Resource.ResourceGroupName, westIdentity.Scope?.ResourceGroup);
+        Assert.Contains(model.Resources.OfType<AzureRoleAssignmentResource>(), roleAssignment => roleAssignment.Name == "east-mi-roles-registry");
+        Assert.Contains(model.Resources.OfType<AzureRoleAssignmentResource>(), roleAssignment => roleAssignment.Name == "west-mi-roles-registry");
+
+        var eastEnvironmentBicep = east.Resource.GetBicepTemplateString();
+        Assert.Contains("param resourceGroupName string", eastEnvironmentBicep);
+        Assert.Contains("scope: resourceGroup(resourceGroupName)", eastEnvironmentBicep);
+
+        var manifest = await ManifestUtils.GetManifest(api.Resource);
+        Assert.Equal("container.v2", manifest["type"]!.GetValue<string>());
+        var deployments = Assert.IsType<JsonObject>(manifest["deployments"]);
+        Assert.Equal("api-east-containerapp.module.bicep", deployments["east"]!["path"]!.GetValue<string>());
+        Assert.Equal("api-west-containerapp.module.bicep", deployments["west"]!["path"]!.GetValue<string>());
+        Assert.Null(manifest["deployment"]);
+    }
+
+    [Fact]
+    public async Task MultiEnvironmentResourceRequiresExplicitSharedRegistry()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var east = builder.AddAzureContainerAppEnvironment("east");
+        var west = builder.AddAzureContainerAppEnvironment("west");
+        builder.AddContainer("api", "myimage")
+            .WithComputeEnvironments([east, west]);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("must select one shared registry", exception.Message);
+    }
+
+    [Fact]
+    public async Task MultiEnvironmentResourceRejectsDifferentEnvironmentRegistry()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var otherRegistry = builder.AddAzureContainerRegistry("other-registry");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithAzureContainerRegistry(otherRegistry);
+        builder.AddContainer("api", "myimage")
+            .WithContainerRegistry(registry)
+            .WithComputeEnvironments([east, west]);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("environment 'west' does not use the same explicitly configured registry", exception.Message);
+    }
+
+    [Fact]
+    public async Task MultiEnvironmentResourceRequiresDistinctResourceGroups()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithAzureContainerRegistry(registry);
+        builder.AddContainer("api", "myimage")
+            .WithContainerRegistry(registry)
+            .WithComputeEnvironments([east, west]);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("use a distinct resource group for each", exception.Message);
+    }
+
+    [Fact]
+    public async Task ProjectWithMultipleEnvironmentTargetsUsesProjectV2Manifest()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var eastGroup = builder.AddAzureResourceGroup("project-east-rg", "eastus2");
+        var westGroup = builder.AddAzureResourceGroup("project-west-rg", "westus3");
+        var east = builder.AddAzureContainerAppEnvironment("east")
+            .WithResourceGroup(eastGroup)
+            .WithAzureContainerRegistry(registry);
+        var west = builder.AddAzureContainerAppEnvironment("west")
+            .WithResourceGroup(westGroup)
+            .WithAzureContainerRegistry(registry);
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithContainerRegistry(registry)
+            .WithComputeEnvironments([east, west]);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var manifest = await ManifestUtils.GetManifest(api.Resource);
+        Assert.Equal("project.v2", manifest["type"]!.GetValue<string>());
+        var deployments = Assert.IsType<JsonObject>(manifest["deployments"]);
+        Assert.Equal(2, deployments.Count);
+        Assert.NotNull(deployments["east"]);
+        Assert.NotNull(deployments["west"]);
+    }
+
+    [Fact]
+    public void WithLocationSupportsParameterResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var location = builder.AddParameter("east-location");
+        var environment = builder.AddAzureContainerAppEnvironment("east")
+            .WithLocation(location);
+
+        Assert.Same(location.Resource, environment.Resource.Parameters[AzureBicepResource.KnownParameters.Location]);
+    }
+
+    [Fact]
+    public async Task DeclaredLocationCannotBeChangedByProvisioningCommand()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("east")
+            .WithLocation("eastus2");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => controller.ChangeResourceLocationAsync(model, environment.Resource.Name));
+
+        Assert.Contains("location declared by the application model", exception.Message);
     }
 
     [Fact]

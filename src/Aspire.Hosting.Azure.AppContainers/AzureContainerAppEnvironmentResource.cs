@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE004 // Multi-target compute environments are experimental.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -23,7 +24,7 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource, IMultiTargetComputeEnvironmentResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
@@ -206,11 +207,13 @@ public class AzureContainerAppEnvironmentResource :
         foreach (var r in appModel.GetComputeResources())
         {
             // Skip resources that are explicitly targeted to a different compute environment
-            var resourceComputeEnvironment = r.GetComputeEnvironment();
-            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            var resourceComputeEnvironments = r.GetComputeEnvironments();
+            if (resourceComputeEnvironments.Count > 0 && !resourceComputeEnvironments.Contains(this))
             {
                 continue;
             }
+
+            ValidateMultiTargetRegistry(r, resourceComputeEnvironments);
 
             // This step is reachable from two pipeline executions: it is RequiredBy "before-start"
             // (so it runs during AppHost startup) and it is also part of the publish/deploy DAG.
@@ -239,11 +242,67 @@ public class AzureContainerAppEnvironmentResource :
         containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
     }
 
+    private static void ValidateMultiTargetRegistry(IResource resource, IReadOnlyList<IComputeEnvironmentResource> computeEnvironments)
+    {
+        if (computeEnvironments.Count <= 1)
+        {
+            return;
+        }
+
+        if (!resource.TryGetAnnotationsIncludingAncestorsOfType<ContainerRegistryReferenceAnnotation>(out var resourceRegistryAnnotations) ||
+            resourceRegistryAnnotations.LastOrDefault() is not { } resourceRegistry)
+        {
+            throw new DistributedApplicationException(
+                $"Resource '{resource.Name}' targets multiple Azure Container Apps environments and must select one shared registry with '.WithContainerRegistry(registryBuilder)'.");
+        }
+
+        foreach (var environment in computeEnvironments.OfType<AzureContainerAppEnvironmentResource>())
+        {
+            if (!environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var environmentRegistry) ||
+                !ReferenceEquals(environmentRegistry.Registry, resourceRegistry.Registry))
+            {
+                throw new DistributedApplicationException(
+                    $"Resource '{resource.Name}' targets multiple Azure Container Apps environments, but environment '{environment.Name}' does not use the same explicitly configured registry. " +
+                    "Call '.WithAzureContainerRegistry(registryBuilder)' on every environment.");
+            }
+        }
+
+        var resourceGroupScopes = computeEnvironments
+            .OfType<AzureContainerAppEnvironmentResource>()
+            .Select(static environment => environment.Scope is { HasResourceGroup: true } scope
+                ? scope.ResourceGroup switch
+                {
+                    string literal => $"literal:{literal}",
+                    IManifestExpressionProvider expression => expression.ValueExpression,
+                    _ => null
+                }
+                : null)
+            .ToArray();
+        if (resourceGroupScopes.Length != computeEnvironments.Count ||
+            resourceGroupScopes.Any(static scope => scope is null) ||
+            resourceGroupScopes.Distinct(StringComparer.Ordinal).Count() != resourceGroupScopes.Length)
+        {
+            throw new DistributedApplicationException(
+                $"Resource '{resource.Name}' targets multiple Azure Container Apps environments whose container apps would share a physical name. " +
+                "Call '.WithResourceGroup(resourceGroupBuilder)' on every environment and use a distinct resource group for each.");
+        }
+    }
+
     internal bool UseAzdNamingConvention { get; set; }
 
     internal bool UseCompactResourceNaming { get; set; }
 
     internal bool UseUniqueResourceNaming { get; set; }
+
+    internal object? DeclaredLocationValue =>
+        AzureDeclaredLocation.IsSet(this)
+            ? Parameters[KnownParameters.Location]
+            : null;
+
+    internal void SetDeclaredLocation(object location)
+    {
+        AzureDeclaredLocation.Set(this, location);
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
