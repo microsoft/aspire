@@ -40,8 +40,22 @@ internal class MauiBuildQueueEventSubscriber(
     /// <inheritdoc/>
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
+        // Launch callbacks must run before DCP renders the executables. DCP reads
+        // ProjectLaunchArgsOverrideAnnotation during PrepareProjectExecutables and bakes the
+        // resulting launch command into the DCP Executable, which happens after BeforeStartEvent
+        // but before BeforeResourceStartedEvent. Applying launch edits at BeforeResourceStartedEvent
+        // would therefore be ignored, so they are applied here instead.
+        eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
         eventing.Subscribe<BeforeResourceStartedEvent>(OnBeforeResourceStartedAsync);
         return Task.CompletedTask;
+    }
+
+    private async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken)
+    {
+        foreach (var resource in @event.Model.Resources.OfType<IMauiPlatformResource>())
+        {
+            await ApplyLaunchArgumentCallbacksAsync(resource, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task OnBeforeResourceStartedAsync(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
@@ -160,6 +174,9 @@ internal class MauiBuildQueueEventSubscriber(
 
         args.AddRange(buildInfo.AdditionalBuildArguments);
 
+        // Allow consumers to inspect/modify the compile arguments.
+        var callbackContext = await ApplyBuildArgumentCallbacksAsync(resource, args, cancellationToken).ConfigureAwait(false);
+
         var psi = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = buildInfo.WorkingDirectory,
@@ -174,7 +191,10 @@ internal class MauiBuildQueueEventSubscriber(
             psi.ArgumentList.Add(arg);
         }
 
-        logger.LogInformation("Running: dotnet {Arguments}", string.Join(" ", args));
+        // Redact any arguments the callback marked sensitive so signing passwords and similar secrets
+        // do not leak into the resource logs. The process itself still receives the real values.
+        var displayArgs = callbackContext?.GetRedactedArguments() ?? args;
+        logger.LogInformation("Running: dotnet {Arguments}", string.Join(" ", displayArgs));
 
         // Apply a timeout so that a hung build does not block the queue forever.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -219,6 +239,88 @@ internal class MauiBuildQueueEventSubscriber(
         }
 
         logger.LogInformation("Build succeeded for resource '{ResourceName}'.", resource.Name);
+    }
+
+    /// <summary>
+    /// Invokes any registered <see cref="MauiBuildStep.Build"/> callbacks, letting consumers
+    /// mutate the compile <paramref name="arguments"/> in place.
+    /// </summary>
+    /// <returns>
+    /// The context the callbacks ran against (used to redact sensitive arguments from logs), or
+    /// <see langword="null"/> when no build callbacks are registered.
+    /// </returns>
+    private static async Task<MauiBuildArgumentsCallbackContext?> ApplyBuildArgumentCallbacksAsync(
+        IResource resource, IList<string> arguments, CancellationToken cancellationToken)
+    {
+        var callbacks = resource.Annotations
+            .OfType<MauiBuildArgumentsCallbackAnnotation>()
+            .Where(a => a.Step == MauiBuildStep.Build)
+            .ToArray();
+
+        if (callbacks.Length == 0)
+        {
+            return null;
+        }
+
+        var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Build, arguments, resource, cancellationToken);
+
+        foreach (var callback in callbacks)
+        {
+            await callback.Callback(context).ConfigureAwait(false);
+        }
+
+        return context;
+    }
+
+    /// <summary>
+    /// Applies any registered <see cref="MauiBuildStep.Launch"/> callbacks to the resource's
+    /// <see cref="ProjectLaunchArgsOverrideAnnotation"/> before DCP renders it into the launch command.
+    /// </summary>
+    /// <remarks>
+    /// This runs during <see cref="BeforeStartEvent"/> — before DCP's <c>PrepareProjectExecutables</c>
+    /// reads the override annotation and bakes the launch command into the DCP executable. The override
+    /// annotation's arguments are immutable, so callbacks operate on a copy and the annotation is swapped
+    /// for one carrying the result.
+    /// </remarks>
+    private static async Task ApplyLaunchArgumentCallbacksAsync(IResource resource, CancellationToken cancellationToken)
+    {
+        var callbacks = resource.Annotations
+            .OfType<MauiBuildArgumentsCallbackAnnotation>()
+            .Where(a => a.Step == MauiBuildStep.Launch)
+            .ToArray();
+
+        if (callbacks.Length == 0)
+        {
+            return;
+        }
+
+        if (!resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride))
+        {
+            return;
+        }
+
+        // BeforeStartEvent can run more than once (for example across restarts). Capture the pristine
+        // override arguments on the first pass and always start from that baseline, otherwise each pass
+        // would re-append the callback edits to the already-edited override and accumulate them.
+        if (!resource.TryGetLastAnnotation<MauiLaunchArgsBaselineAnnotation>(out var baseline))
+        {
+            baseline = new MauiLaunchArgsBaselineAnnotation(launchOverride.Arguments);
+            resource.Annotations.Add(baseline);
+        }
+
+        var arguments = new List<string>(baseline.Arguments);
+
+        var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Launch, arguments, resource, cancellationToken);
+
+        foreach (var callback in callbacks)
+        {
+            await callback.Callback(context).ConfigureAwait(false);
+        }
+
+        // Swap the immutable annotation for one carrying the updated arguments; DCP reads the last
+        // override annotation when it renders the launch command during PrepareProjectExecutables.
+        resource.Annotations.Remove(launchOverride);
+        resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(arguments, launchOverride.LeadingResourceArgumentToRemove));
     }
 
     private static async Task PipeOutputAsync(System.IO.StreamReader reader, ILogger logger, LogLevel level, CancellationToken cancellationToken)
@@ -272,7 +374,7 @@ internal class MauiBuildQueueEventSubscriber(
     /// Without this guard a restart could match on a stale snapshot.
     /// </para>
     /// <para>
-    /// Including "Running" in the predicate is intentional: the pre-build step already compiled
+    /// Including "Running" in the predicate is intentional: the build step already compiled
     /// the project for the same configuration that DCP will pass to the launch command, and DCP's
     /// <c>dotnet build --no-restore /t:Run -p:NoBuild=true</c> launch command is configured not to
     /// restore or build. Waiting for a terminal state would hold the semaphore for the entire app
