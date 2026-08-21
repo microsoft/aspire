@@ -837,7 +837,11 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private static bool NeedsPublicPort(IResource resource, EndpointAnnotation endpoint)
     {
-        return !endpoint.IsProxied && !TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts: false, out _);
+        // Only compute resources have a DCP workload that can listen on an allocated port. Non-compute
+        // resources can publish endpoints later through integration-specific lifecycle logic.
+        return resource is IComputeResource &&
+            !endpoint.IsProxied &&
+            !TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts: false, out _);
     }
 
     private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)

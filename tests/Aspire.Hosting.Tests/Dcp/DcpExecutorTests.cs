@@ -19,6 +19,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
@@ -1049,6 +1050,44 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "NO_PORT_NO_TARGET_PORT").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Equal(allocatedPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task ProxylessPortAllocatorOnlyAllocatesPortsForComputeResources()
+    {
+        var (rangeStart, rangeEnd) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        var compute = builder.AddExecutable("compute", "compute", Environment.CurrentDirectory)
+            .WithEndpoint(name: "tcp", isProxied: false);
+        var target = builder.AddExecutable("target", "target", Environment.CurrentDirectory)
+            .WithHttpEndpoint(targetPort: 8000, name: "http");
+        builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = rangeStart,
+            ProxylessEndpointPortRangeEnd = rangeEnd
+        };
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var tunnelPort = Assert.Single(distributedAppModel.Resources.OfType<DevTunnelPortResource>());
+        var computeEndpoint = compute.GetEndpoint("tcp").EndpointAnnotation;
+        var tunnelEndpoint = Assert.Single(tunnelPort.Annotations.OfType<EndpointAnnotation>());
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.NotNull(computeEndpoint.AllocatedEndpoint);
+        var computePort = Assert.IsType<int>(computeEndpoint.Port);
+        Assert.InRange(computePort, rangeStart, rangeEnd);
+        Assert.Equal(computePort, computeEndpoint.TargetPort);
+        Assert.Null(tunnelEndpoint.Port);
+        Assert.Null(tunnelEndpoint.TargetPort);
+        Assert.Null(tunnelEndpoint.AllocatedEndpoint);
     }
 
     [Fact]
