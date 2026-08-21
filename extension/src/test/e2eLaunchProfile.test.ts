@@ -320,6 +320,31 @@ suite('E2E launch profile', () => {
         assert.ok(openFolderIndex > clearControlFileIndex);
     });
 
+    test('reloads outside the extension host and waits for the fresh workbench', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const previousSessionIndex = fixtures.indexOf('const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;');
+        const clearControlFileIndex = fixtures.indexOf('fs.rmSync(controlFilePath, { force: true });');
+        const reloadWindowIndex = fixtures.indexOf('await reloadWindow();');
+        const waitForSessionIndex = fixtures.indexOf('file => file.extensionHostSessionId !== previousExtensionHostSessionId');
+        const waitForWorkbenchIndex = fixtures.indexOf('VSBrowser.instance.waitForWorkbench');
+
+        assert.ok(apiTypes.includes('extensionHostSessionId: string;'));
+        assert.strictEqual(apiTypes.includes("{ name: 'reloadWindow' }"), false);
+        assert.ok(e2eStateFileBridge.includes('const extensionHostSessionId = randomUUID();'));
+        assert.ok(e2eStateFileBridge.includes('extensionHostSessionId,'));
+        assert.strictEqual(e2eStateFileBridge.includes("case 'reloadWindow'"), false);
+        assert.ok(vscodeHelpers.includes("new Workbench().executeCommand('Developer: Reload Window')"));
+        assert.ok(previousSessionIndex >= 0);
+        assert.ok(clearControlFileIndex > previousSessionIndex);
+        assert.ok(reloadWindowIndex > clearControlFileIndex);
+        assert.ok(waitForSessionIndex > reloadWindowIndex);
+        assert.ok(waitForWorkbenchIndex > waitForSessionIndex);
+    });
+
     test('validates explicit workspace folder before reporting bridge command start', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
@@ -475,25 +500,55 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const appHostLifecycleTools = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostLifecycleTools.e2e.test.ts'), 'utf8');
+        const dotnetRuntimeInstallIndex = runner.indexOf("displayName: '.NET Install Tool'");
+        const csharpInstallIndex = runner.indexOf("displayName: 'C#'");
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
         const functionsInstallIndex = runner.indexOf("displayName: 'Azure Functions'");
+        const dotNetSetupIndex = workflow.indexOf('name: Setup .NET');
+        const azureFunctionsPrerequisitesIndex = workflow.indexOf('name: Install Azure Functions E2E prerequisites');
         const runStepIndex = workflow.indexOf('- name: Run extension E2E tests');
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
         const runStep = workflow.slice(runStepIndex, uploadStepIndex);
+        // Generated project files embed their target framework as:
+        //   <TargetFramework>net10.0</TargetFramework>
+        const runnerTargetFrameworks = [...runner.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]);
+        const fixtureTargetFrameworks = [fixtures, appHostLifecycleTools]
+            .flatMap(source => [...source.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]));
 
         assert.ok(workflow.includes('shardName: azure-functions'));
         assert.ok(workflow.includes('installAzureFunctions: true'));
+        assert.ok(dotNetSetupIndex >= 0);
+        assert.ok(dotNetSetupIndex < azureFunctionsPrerequisitesIndex);
+        assert.ok(workflow.includes('global-json-file: global.json'));
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
+        assert.ok(workflow.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
+        assert.ok(workflow.includes('8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a'));
+        assert.ok(workflow.includes('csharp/2.148.23/vspackage?targetPlatform=linux-x64'));
+        assert.ok(workflow.includes('18b503e614a979212762683b35a4fa1806688ba773d5fe93bf62c9f9346db23f'));
         assert.ok(workflow.includes('vscode-azureresourcegroups/0.12.7/vspackage'));
         assert.ok(workflow.includes('e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a'));
         assert.ok(workflow.includes('vscode-azurefunctions/1.22.0/vspackage'));
         assert.ok(workflow.includes('146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2'));
         assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'));
-        assert.ok(resourceGroupsInstallIndex >= 0);
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnet_runtime_vsix'));
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix'));
+        assert.ok(dotnetRuntimeInstallIndex >= 0);
+        assert.ok(csharpInstallIndex > dotnetRuntimeInstallIndex);
+        assert.ok(resourceGroupsInstallIndex > csharpInstallIndex);
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(runner.includes("const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;"));
+        assert.ok(runner.includes("const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];"));
+        assert.ok(runner.includes("const certificatePassword = String.raw`Aspire E2E p@ss'\\word`;"));
+        assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
     });
@@ -510,6 +565,24 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('completed test failures tracked by ${advisoryIssue}. Diagnostics were uploaded for investigation.'));
         assert.strictEqual(runner.includes('ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE'), false);
         assert.strictEqual(runner.includes('completedTests'), false);
+    });
+
+    test('reloads the generated Azure Functions workspace before reopening the Aspire view', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'azureFunctions.e2e.test.ts'), 'utf8');
+        const firstOpenIndex = spec.indexOf('await openAspireView();');
+        const initialWorkspaceLoadedIndex = spec.indexOf('await waitForWorkspaceAppHost();');
+        const reloadWorkspaceIndex = spec.indexOf('await reloadWorkspaceForE2E();');
+        const reloadedWorkspaceIndex = spec.indexOf('await waitForWorkspaceAppHost();', initialWorkspaceLoadedIndex + 1);
+        const reopenedViewIndex = spec.indexOf('await openAspireView();', firstOpenIndex + 1);
+        const runAppHostIndex = spec.indexOf("name: 'runAppHost'");
+
+        assert.ok(firstOpenIndex >= 0);
+        assert.ok(initialWorkspaceLoadedIndex > firstOpenIndex);
+        assert.ok(reloadWorkspaceIndex > initialWorkspaceLoadedIndex);
+        assert.ok(reloadedWorkspaceIndex > reloadWorkspaceIndex);
+        assert.ok(reopenedViewIndex > reloadedWorkspaceIndex);
+        assert.ok(runAppHostIndex > reopenedViewIndex);
     });
 
     test('keeps Linux E2E recordings for successful runs by default', () => {
@@ -842,6 +915,35 @@ suite('E2E launch profile', () => {
         assert.ok(releaseLsIndex > runningTreeTextIndex, 'The slow workspace candidate must remain gated until the running AppHost is rendered.');
         assert.ok(cleanup.includes('await runE2eTeardown(['), 'Every cleanup must run even when another cleanup fails.');
         assert.ok(cleanup.includes('() => cancelAppHostsSectionTextTransition()'), 'The transition tracker must be disposed even when the E2E fails before observing the rendered row.');
+    });
+
+    test('derives AppHost tree cold-start budgets from the effective CLI startup timeout', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+
+        assert.ok(runner.includes("ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300'"));
+        assert.ok(appHostTree.includes('const cliStartupTimeoutMs = getCliStartupTimeoutMs();'));
+        assert.ok(appHostTree.includes('const configuredSeconds = Number(process.env.ASPIRE_CLI_START_TIMEOUT);'));
+        assert.ok(appHostTree.includes('this.timeout(cliStartupTimeoutMs * 2);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('waitForRunningAppHost(cliStartupTimeoutMs)'));
+        assert.ok(!appHostTree.includes('this.timeout(600000);'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForRunningAppHost(300000)'));
+    });
+
+    test('starts the running-before-discovery scenario through the deterministic control bridge', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+
+        assert.ok(runningBeforeDiscoveryTest.includes('const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();'));
+        assert.ok(runningBeforeDiscoveryTest.includes("const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');"));
+        assert.ok(runningBeforeDiscoveryTest.includes("await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });"));
+        assert.ok(runningBeforeDiscoveryTest.includes("await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);"));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForTreeItem('));
+        assert.ok(!runningBeforeDiscoveryTest.includes('.expand()'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('clickTreeItem('));
     });
 
     test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {

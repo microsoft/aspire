@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
@@ -27,6 +27,12 @@ suite('Aspire Azure Functions E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
+        await reloadWorkspaceForE2E();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        // Reloading the window restarts the extension host and returns VS Code to Explorer.
+        // Reopen the Aspire view so its visibility-driven runtime state polling observes the AppHost.
+        await openAspireView();
 
         const appHostPath = getPrimaryAppHostProjectPath();
         const taskSequenceBeforeRun = getTaskProcessEventCount();

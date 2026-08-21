@@ -227,15 +227,12 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             : Loc[nameof(Resources.Dialogs.InteractionFilePlaceholder)];
     }
 
-    // Maximum number of files that can be selected in a single file input change event.
-    private const int MaxFileCount = 100;
-
     private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)
     {
         var maxFileSize = GetMaxFileSize(inputModel);
         var fileReferences = new List<FileReferenceViewModel>();
 
-        foreach (var file in args.GetMultipleFiles(MaxFileCount))
+        foreach (var file in args.GetMultipleFiles(InteractionHelpers.MaxFileCount))
         {
             if (file.Size > maxFileSize)
             {

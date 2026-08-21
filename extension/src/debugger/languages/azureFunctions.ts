@@ -8,6 +8,7 @@ import {
     azureFunctionsCmdDelayedExpansion,
     azureFunctionsCmdPercentArgument,
     azureFunctionsHostStartupTimedOut,
+    azureFunctionsInvalidProcessId,
     azureFunctionsTaskExitedBeforeStartup,
     azureFunctionsUnsupportedTaskShell,
     azureFunctionsWorkerStartupTimedOut,
@@ -28,6 +29,9 @@ const REQUEST_TIMEOUT_MS = 1_000;
 const TASK_SHUTDOWN_TIMEOUT_MS = 30_000;
 const TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS = 30_000;
 const TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS = 100;
+// Node validates process IDs by signed 32-bit coercion before dispatching to the OS.
+// Keep debugger attach within that same supported range.
+const MAX_WORKER_PROCESS_ID = 0x7fffffff;
 const TEMP_DIRECTORY_CLEANUP_MAX_ATTEMPTS =
     TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS / TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS;
 
@@ -492,17 +496,31 @@ function readWorkerProcessId(discovery: WorkerProcessIdDiscovery): number | unde
             continue;
         }
 
+        let parsed: unknown;
         try {
-            const event = JSON.parse(line) as { name?: unknown; workerProcessId?: unknown };
-            if (event.name === 'dotnet-worker-startup' &&
-                typeof event.workerProcessId === 'number' &&
-                Number.isInteger(event.workerProcessId) &&
-                event.workerProcessId > 0) {
-                workerProcessId = event.workerProcessId;
-            }
+            parsed = JSON.parse(line) as unknown;
         } catch {
             // The final NDJSON line may still be in flight.
+            continue;
         }
+
+        if (typeof parsed !== 'object' || parsed === null) {
+            continue;
+        }
+
+        const event = parsed as { name?: unknown; workerProcessId?: unknown };
+        if (event.name !== 'dotnet-worker-startup') {
+            continue;
+        }
+
+        if (typeof event.workerProcessId !== 'number' ||
+            !Number.isInteger(event.workerProcessId) ||
+            event.workerProcessId <= 0 ||
+            event.workerProcessId > MAX_WORKER_PROCESS_ID) {
+            throw new Error(azureFunctionsInvalidProcessId(String(event.workerProcessId)));
+        }
+
+        workerProcessId = event.workerProcessId;
     }
 
     return workerProcessId;
@@ -620,7 +638,7 @@ function classifyFuncHostTaskShell(profile: TerminalProfileConfiguration | undef
     }
 
     if (identity.includes('git bash') || identity.includes('wsl') || identity.includes('cygwin') || identity.includes('msys') ||
-        /(?:^|[\\/\s])(ba|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
+        /(?:^|[\\/\s])(ba|da|a|z|fi|k)?sh(?:\.exe)?(?:$|\s)/.test(identity)) {
         return 'posix';
     }
 
@@ -654,6 +672,11 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
+        const rawArgs = [...(args ?? [])];
+        // Validate caller-provided arguments before building the project. The final
+        // argument list is quoted again after generated Core Tools flags are appended.
+        quoteFuncHostArguments(rawArgs);
+
         const runId = debugConfiguration.runId;
         const projectPath = launchConfig.project_path;
         const dotNetService = new DotNetService(launchOptions.debugSession);
@@ -679,7 +702,6 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         registerRunCleanup(runId, () => {
             void cleanupFuncRun(state);
         });
-        const rawArgs = [...(args ?? [])];
         const jsonOutputFileArgument = getJsonOutputFileArgument(rawArgs);
         let workerProcessIdDiscovery: WorkerProcessIdDiscovery;
         let ownedJsonOutputFileArgument: string | undefined;

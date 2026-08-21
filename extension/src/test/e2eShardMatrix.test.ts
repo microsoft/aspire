@@ -20,7 +20,6 @@ suite('E2E shard matrix', () => {
     const expectedAdvisoryRows = new Map<string, string>([
         ['Linux|apphost-tree|out/test-e2e/test-e2e/appHostTree.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
         ['Windows|discovery-configuration|out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
-        ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19151'],
         ['Windows|debug-dashboard|out/test-e2e/test-e2e/debugDashboard.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
     ]);
 
