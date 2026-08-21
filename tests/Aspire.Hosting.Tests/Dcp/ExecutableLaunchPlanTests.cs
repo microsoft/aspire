@@ -97,8 +97,9 @@ public class ExecutableLaunchPlanTests
     [Fact]
     public async Task LegacyProjectRecipeProducesCompleteProcessInvocation()
     {
+        var projectPath = Path.Combine("tmp", "project.csproj");
         var resource = new ProjectResource("project");
-        resource.Annotations.Add(new TestProjectMetadata("/tmp/project.csproj"));
+        resource.Annotations.Add(new TestProjectMetadata(projectPath));
 
         var plan = await ResolveLaunchPlanAsync(
             resource,
@@ -107,8 +108,8 @@ public class ExecutableLaunchPlanTests
 
         Assert.Equal(ExecutableLaunchMechanism.Process, plan.Mechanism);
         Assert.Equal("dotnet", plan.Command);
-        Assert.Equal("/tmp", plan.WorkingDirectory);
-        var expectedArguments = new List<string> { "run", "--project", "/tmp/project.csproj" };
+        Assert.Equal(Path.GetDirectoryName(projectPath), plan.WorkingDirectory);
+        var expectedArguments = new List<string> { "run", "--project", projectPath };
         if (new DistributedApplicationOptions().Configuration is { } configuration)
         {
             expectedArguments.AddRange(["--configuration", configuration]);

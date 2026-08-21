@@ -402,6 +402,8 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
                 context.CancellationToken);
             var launchConfiguration = await debugSupport.LaunchConfigurationProducer(callbackContext).ConfigureAwait(false);
 
+            // The producer result is boxed as object. Serialize its runtime type so integration-specific
+            // properties are included rather than emitting only the members declared on System.Object.
             return JsonSerializer.SerializeToElement(launchConfiguration, launchConfiguration.GetType());
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)

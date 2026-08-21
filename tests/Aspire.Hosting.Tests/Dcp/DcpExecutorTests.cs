@@ -7244,6 +7244,40 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task FileBasedProjectResource_InDebugSession_UsesIdeWithoutProcessFallback()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectPath = Path.Combine("src", "app.cs");
+        builder.AddResource(new ProjectResource("file-project"))
+            .WithAnnotation(new TestFileBasedProject(projectPath));
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "file-project");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        // File-based projects used to keep a `dotnet run --file` candidate for Process fallback.
+        // IDE-only launch is now intentional, so no second command remains in the rendered spec.
+        Assert.Null(exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var launchConfiguration));
+        Assert.Equal(projectPath, launchConfiguration.ProjectPath);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfiguration.Type);
+    }
+
+    [Fact]
     public async Task ProjectExecutable_AsyncLaunchConfigurationProducer_IsAwaitedDuringCreate()
     {
         // Project launch configuration producers run after the execution configuration has been resolved.
@@ -10201,6 +10235,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "TestProject";
+        public LaunchSettings LaunchSettings { get; } = new();
+    }
+
+    private sealed class TestFileBasedProject(string projectPath) : IProjectMetadata
+    {
+        public string ProjectPath { get; } = projectPath;
         public LaunchSettings LaunchSettings { get; } = new();
     }
 
