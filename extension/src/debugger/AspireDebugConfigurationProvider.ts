@@ -154,9 +154,16 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             const resolvedProgram = await this.resolveDefaultDiscoveryTarget(aspireConfig, program, folder, token);
             if (resolvedProgram === undefined) {
                 if (existingExternalReservation) {
-                    this._launchReservation.releaseExternalLaunchReservation(
-                        existingExternalReservation.appHostPath,
-                        existingExternalReservation.reservationId);
+                    if (existingExternalReservation.kind === 'operation') {
+                        this._launchReservation.releaseExternalOperationReservation(
+                            existingExternalReservation.appHostPath,
+                            existingExternalReservation.reservationId);
+                    }
+                    else {
+                        this._launchReservation.releaseExternalLaunchReservation(
+                            existingExternalReservation.appHostPath,
+                            existingExternalReservation.reservationId);
+                    }
                 }
                 return undefined;
             }

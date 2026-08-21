@@ -1066,6 +1066,45 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(launchReservation.activeReservations.size, 0);
     });
 
+    test('releases a carried directory operation when repeated discovery becomes ambiguous and the picker is dismissed', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([]);
+        discoverStub.onSecondCall().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Deploy AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'deploy',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+        assert.ok(firstPass);
+
+        const secondPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, firstPass);
+
+        assert.strictEqual(secondPass, undefined);
+        assert.deepStrictEqual(launchReservation.releasedOperations, [{
+            appHostPath: folder.uri.fsPath,
+            reservationId: 'operation-1',
+        }]);
+        assert.deepStrictEqual(launchReservation.released, []);
+    });
+
     test('does not discover or prompt for an explicit nested directory launch', async () => {
         const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
         const nestedDirectory = path.join(folder.uri.fsPath, 'Nested');
