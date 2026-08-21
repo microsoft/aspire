@@ -263,10 +263,11 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void EveryJobTargetMapsToAnExistingWorkflowOrJob()
     {
-        // The job: vocabulary is small and curated. Each one resolves either to a standalone
-        // workflow file or to job id(s) in tests.yml (see the Target vocabulary table in
-        // test-trigger-map.md). Assert the map references only known jobs, and that the thing
-        // each one points at still exists — so a renamed/removed workflow or job fails loudly.
+        // The job: vocabulary is small and curated, and must exactly match the targets referenced by
+        // the map. Each token resolves either to a standalone workflow file or to job id(s) in
+        // tests.yml (see the Target vocabulary table in test-trigger-map.md). Assert the map references
+        // only known jobs, and that the thing each one points at still exists — so a renamed/removed
+        // workflow or job fails loudly.
         var workflowsDir = Path.Combine(RepoRoot.Path, ".github", "workflows");
         var testsYml = File.ReadAllText(Path.Combine(workflowsDir, "tests.yml"));
 
@@ -285,22 +286,47 @@ public sealed class TestTriggerMapTests
             ["job:winget-installer"] = () => JobExists("prepare_winget_installer_artifacts"),
             ["job:homebrew-installer"] = () => JobExists("prepare_homebrew_installer_artifacts"),
             ["job:nix-package"] = () => JobExists("nix_package"),
-            ["job:api-diffs"] = () => WorkflowExists("generate-api-diffs.yml"),
-            ["job:ats-diffs"] = () => WorkflowExists("generate-ats-diffs.yml"),
             ["job:deployment-e2e"] = () => WorkflowExists("deployment-tests.yml"),
         };
 
         var referenced = s_map.AllReferencedTargets()
             .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+            .ToHashSet(StringComparer.Ordinal);
 
         var unknown = referenced.Where(j => !expected.ContainsKey(j)).Order(StringComparer.Ordinal).ToList();
         Assert.True(unknown.Count == 0, $"job: targets not in the known vocabulary: {string.Join(", ", unknown)}");
 
+        var unreferenced = expected.Keys.Except(referenced).Order(StringComparer.Ordinal).ToList();
+        Assert.True(unreferenced.Count == 0, $"known job: targets not referenced by the map: {string.Join(", ", unreferenced)}");
+
         var broken = expected.Where(kvp => referenced.Contains(kvp.Key) && !kvp.Value())
             .Select(kvp => kvp.Key).Order(StringComparer.Ordinal).ToList();
         Assert.True(broken.Count == 0, $"job: targets whose workflow/job no longer exists: {string.Join(", ", broken)}");
+    }
+
+    [Fact]
+    public void DocumentedJobTargetVocabularyMatchesReferencedMapJobs()
+    {
+        var referenced = s_map.AllReferencedTargets()
+            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var documentation = File.ReadAllText(Path.Combine(RepoRoot.Path, "docs", "ci", "test-trigger-map.md"));
+        var targetVocabulary = TextBetween(documentation, "## Target vocabulary", "## Rule categories");
+        var documented = System.Text.RegularExpressions.Regex
+            .Matches(targetVocabulary, @"^\| `(job:[a-z0-9-]+)` \|", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var map = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml"));
+        var mapVocabulary = TextBetween(map, "# Target vocabulary:", "version: 1");
+        var documentedInMap = System.Text.RegularExpressions.Regex
+            .Matches(mapVocabulary, @"^#\s+(job:[a-z0-9-]+)\s+", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(referenced.Order(StringComparer.Ordinal), documented.Order(StringComparer.Ordinal));
+        Assert.Equal(referenced.Order(StringComparer.Ordinal), documentedInMap.Order(StringComparer.Ordinal));
     }
 
     public static TheoryData<string, string[]> AuditedLoosePathCases => new()
@@ -631,6 +657,17 @@ public sealed class TestTriggerMapTests
         var selector = new TestSelector(mapPath, testProjects, projectDirectories);
 
         return selector.Select([path], [], new SelectorOptions());
+    }
+
+    private static string TextBetween(string text, string startMarker, string endMarker)
+    {
+        var start = text.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Start marker not found: {startMarker}");
+
+        var end = text.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(end >= 0, $"End marker not found after {startMarker}: {endMarker}");
+
+        return text[start..end];
     }
 
     // Text of a top-level tests.yml job block: from "\n  <id>:" up to the next line indented exactly

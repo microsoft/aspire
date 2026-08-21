@@ -240,7 +240,7 @@ load-bearing at the design level:
   Layer 2 run-all fallback, while Layer 1 still attributes an `ignore`d file.
 - **`affected_project_rules`** matches Layer 1's affected **production** project
   names only; affected matrix *test* projects are filtered out first, so a
-  test-only change cannot fire production jobs (`ats-diffs`, `extension-e2e`, …)
+  test-only change cannot fire production jobs (`typescript-api-compat`, `extension-e2e`, …)
   through a glob like `Aspire.Hosting*`.
 
 ## The tool (`tools/SelectTests`)

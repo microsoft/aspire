@@ -77,8 +77,6 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:nix-package` | `tests.yml` `nix_package` |
-| `job:api-diffs` | [`generate-api-diffs.yml`](../../.github/workflows/generate-api-diffs.yml) — *schedule/dispatch-only today* |
-| `job:ats-diffs` | [`generate-ats-diffs.yml`](../../.github/workflows/generate-ats-diffs.yml) — *schedule/dispatch-only today* |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
 | `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while independently scheduled, dispatched, or outerloop targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
@@ -171,7 +169,10 @@ project for those files would add no coverage. The stabilization job likewise
 invokes `stabilization-smoke-init-restore.sh` independently of the selector.
 The Windows-only template catalog generator has no GitHub PR-CI consumer, the
 skills bundle updater is schedule/dispatch-only, and the bundle verifier runs
-in its dedicated PR workflow.
+in its dedicated PR workflow. The API/ATS baseline regeneration workflows are
+also schedule/dispatch-only and have no `job:api-diffs` or `job:ats-diffs`
+selector outputs. Changes to those workflow files can still select
+`Infrastructure.Tests` through the generic workflow-validation rule.
 
 ### Path rules (`path_rules`)
 
@@ -278,13 +279,14 @@ carry it forward. Never silently regenerate it.
 - **Safety vs. selectivity.** The catch-all `ALL` rule, the run-all fallback, and
   the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
   `src` coverage and the convention backstop for non-MSBuild files.
-- **Independent workflow targets.** `api-diffs`, `ats-diffs`,
-  `deployment-e2e`, `Aspire.Deployment.EndToEnd.Tests`,
-  `Aspire.EndToEnd.Tests`, and `Aspire.Oracle.EntityFrameworkCore.Tests` are not
-  in the regular PR matrix today; their rules give the *would-be* trigger paths.
-  Their own schedules, dispatches, or narrow PR workflow triggers decide whether
-  they run. Comments and job summaries list them separately from work the PR
-  selector can actually run.
+- **Independent workflow targets.** `deployment-e2e`,
+  `Aspire.Deployment.EndToEnd.Tests`, `Aspire.EndToEnd.Tests`, and
+  `Aspire.Oracle.EntityFrameworkCore.Tests` are not in the regular PR matrix
+  today; their rules give the *would-be* trigger paths. Their own schedules,
+  dispatches, or narrow PR workflow triggers decide whether they run. Comments
+  and job summaries list them separately from work the PR selector can actually
+  run. The API/ATS baseline regeneration workflows are independently scheduled
+  or dispatched and ignored as selector targets, as described in `ignore` above.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files

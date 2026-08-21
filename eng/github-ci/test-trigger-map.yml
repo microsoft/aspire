@@ -23,8 +23,6 @@
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:nix-package            tests.yml nix_package
-#   job:api-diffs              generate-api-diffs.yml    (schedule/dispatch-only today)
-#   job:ats-diffs              generate-ats-diffs.yml    (schedule/dispatch-only today)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
 #   ALL                        full test matrix + all jobs
 #   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
@@ -88,7 +86,7 @@ ignore:
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
   - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
   - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
-  # Schedule-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
+  # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
   - .github/workflows/generate-api-diffs.yml
   - .github/workflows/generate-ats-diffs.yml
   # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes

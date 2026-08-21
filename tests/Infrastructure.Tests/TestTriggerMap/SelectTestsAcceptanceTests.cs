@@ -771,7 +771,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     // projects. affected_project_rules key off project NAME globs and must match only PRODUCTION names.
     // A matrix test project ("Aspire.Hosting.Foo.Tests") matches a production glob ("Aspire.Hosting*"),
     // so without the production-only filter a TEST-ONLY change would spuriously fire that rule's
-    // production jobs (ats-diffs / extension-e2e / typescript-api-compat / deployment-e2e).
+    // production jobs (extension-e2e / typescript-api-compat / deployment-e2e).
     [Fact]
     public void AffectedProjectRulesMatchProductionProjectsNotTestProjects()
     {
