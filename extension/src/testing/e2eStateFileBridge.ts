@@ -588,7 +588,14 @@ async function executeE2eControlCommand(
         throw new Error('Aspire extension E2E startDebugging requires an open workspace folder.');
       }
 
-      const commandPromise = vscode.debug.startDebugging(workspaceFolder, command.configurationName);
+      // Passing a name only searches launch.json. Resolve a matching dynamic configuration first so
+      // the control command can await the same provider pipeline that VS Code's debug picker starts.
+      const dynamicConfigurations = await aspireContext.debugConfigProvider?.provideDebugConfigurations(workspaceFolder);
+      const configuration = dynamicConfigurations?.find(configuration =>
+        configuration.name === command.configurationName ||
+        configuration.name.startsWith(`${command.configurationName} (`))
+        ?? command.configurationName;
+      const commandPromise = vscode.debug.startDebugging(workspaceFolder, configuration);
       markStarted();
       return await commandPromise;
     }

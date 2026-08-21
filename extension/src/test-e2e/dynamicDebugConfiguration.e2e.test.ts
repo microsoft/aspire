@@ -119,13 +119,16 @@ suite('Aspire dynamic debug configuration E2E', function () {
         await openAmbiguousWorkspace();
 
         const beforeLaunch = getDebugConsoleOutputCount();
-        await invokeDefaultAspireDebugConfiguration();
+        const startDebugging = executeE2eControlCommand({
+            name: 'startDebugging',
+            configurationName: 'Aspire: Launch default AppHost',
+        });
         await waitForAmbiguousAppHostQuickPick();
         await cancelActiveInput();
-        await waitForNoDebugSessions();
-        await delay(1000);
+        const startStatus = await startDebugging;
         const stateFile = await waitForNoDebugSessions();
 
+        assert.strictEqual(startStatus.result, false);
         assert.strictEqual(
             stateFile.debugConsoleOutputs.some(event =>
                 event.sequence > beforeLaunch &&
