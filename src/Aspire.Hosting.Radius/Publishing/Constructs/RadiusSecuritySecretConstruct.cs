@@ -64,10 +64,11 @@ public sealed class RadiusSecuritySecretDataEntryConstruct : ProvisionableConstr
 /// its own value.
 /// </para>
 /// <para>
-/// This construct is the canonical secret primitive for the <c>Radius.*</c> surface. It is used
-/// today to hold credentials that a UDT backing resource consumes by resource ID (for example
-/// the RabbitMQ <c>properties.password</c>), and is intended to be reused rather than duplicated
-/// by later work that needs to hand a secret to a container env var.
+/// This construct is the canonical secret primitive for the <c>Radius.*</c> surface, used for
+/// both kinds of secret the publisher emits: credentials a UDT backing resource consumes by
+/// resource ID (for example the RabbitMQ <c>properties.password</c>), and credential-bearing
+/// container environment variables, which are written here and referenced from the container's
+/// <c>env</c> block so the resolved value never reaches the Deployment spec.
 /// </para>
 /// </remarks>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]

@@ -907,6 +907,10 @@ public class BackingResourceValueResolutionTests
         // The diagnostic code is pinned alongside the prose so a renumbering is caught here rather
         // than silently invalidating the README table.
         Assert.Single(logger.Matching(LogLevel.Warning, "sql", "does not create databases", "appdb", "ASPIRERADIUS080"));
+        // The database's connection string and its splatted properties both carry the server's
+        // credential, which is legitimate provenance rather than an unrelated use, so ASPIRERADIUS070
+        // must stay silent here — otherwise every ordinary `AddDatabase(...)` reference reports it.
+        Assert.Empty(logger.Matching(LogLevel.Warning, "ASPIRERADIUS070"));
     }
 
     /// <summary>
