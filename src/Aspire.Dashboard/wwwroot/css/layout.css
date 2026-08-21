@@ -35,6 +35,49 @@ body {
     display: none !important;
 }
 
+/* Fluent renders each bar between two sibling panes. Match a collapsed pane immediately before
+   the bar with the adjacent-sibling selector, or immediately after it via :has(). */
+.fluent-multi-splitter > .fluent-multi-splitter-pane[status="collapsed"] + .fluent-multi-splitter-bar,
+.fluent-multi-splitter > .fluent-multi-splitter-bar:has(+ .fluent-multi-splitter-pane[status="collapsed"]) {
+    display: none;
+}
+
+body .fluent-multi-splitter > .fluent-multi-splitter-bar {
+    background-color: transparent;
+    z-index: 1;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
+    display: none;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--fluent-multi-splitter-background-color);
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar::before {
+    inset-block: 0;
+    width: 1px;
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-inline: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar::before {
+    inset-inline: 0;
+    height: 1px;
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-block: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
 fluent-button {
     min-width: 32px;
 }
