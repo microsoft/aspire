@@ -188,7 +188,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
 
         var appBuilder = DistributedApplication.CreateBuilder();
         var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
-        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
 
         await using var app = appBuilder.Build();
         await PublishBeforeStartAsync(app);
@@ -198,7 +198,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
         // the edit take effect. Applying at BeforeResourceStartedEvent (the previous behavior) would be
         // too late and this assertion would fail.
         var launchOverride = Assert.Single(emulator.Resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>());
-        Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:NoBuild=false"], launchOverride.Arguments);
+        Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:MyProperty=Value"], launchOverride.Arguments);
         Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
     }
 
@@ -211,7 +211,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
 
         var appBuilder = DistributedApplication.CreateBuilder();
         var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
-        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
 
         await using var app = appBuilder.Build();
 
@@ -223,7 +223,33 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
         var launchOverride = Assert.Single(emulator.Resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>());
         Assert.Equal(["build", "--no-restore", "/t:Run", "-p:NoBuild=true", "-p:NoBuild=false"], launchOverride.Arguments);
     }
+    [Fact]
+    public async Task RunBuildAsync_InvokesBuildCallbackBeforeLaunchingProcess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
+
+        // A sentinel thrown from the build callback proves RunBuildAsync applies the Build-step
+        // callbacks before it launches the dotnet process. If the production build-callback call were
+        // removed — or wired to the Launch step — RunBuildAsync would spawn dotnet instead of throwing
+        // here, so the sentinel would never surface.
+        var sentinel = new InvalidOperationException("maui-build-callback-sentinel");
+        emulator.WithMauiBuildArguments(_ => throw sentinel);
+
+        await using var app = appBuilder.Build();
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var subscriber = new MauiBuildQueueEventSubscriber(notificationService, loggerService);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => subscriber.RunBuildAsync(emulator.Resource, loggerService.GetLogger(emulator.Resource), CancellationToken.None));
+
+        Assert.Same(sentinel, ex);
+    }
     private static async Task PublishBeforeStartAsync(DistributedApplication app)
     {
         var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();

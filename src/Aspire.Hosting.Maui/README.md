@@ -246,16 +246,16 @@ mauiApp.addAndroidEmulator("emulator")
 
 ### Launch Arguments
 
-`WithMauiLaunchArguments` runs before the app starts — the launch command is rendered ahead of the first start. Use it to influence the launch command — for example, forcing a build during launch by overriding the default `-p:NoBuild=true`:
+`WithMauiLaunchArguments` runs before the app starts — the launch command is rendered ahead of the first start. Use it to add or adjust MSBuild properties on the launch command:
 
 ```csharp
 mauiApp.AddAndroidEmulator()
-    .WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+    .WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
 ```
 
 ```typescript
 mauiApp.addAndroidEmulator("emulator")
-    .withMauiLaunchArguments(context => { context.arguments.push("-p:NoBuild=false"); });
+    .withMauiLaunchArguments(context => { context.arguments.push("-p:MyProperty=Value"); });
 ```
 
 ### Notes

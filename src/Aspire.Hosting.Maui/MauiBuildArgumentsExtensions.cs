@@ -105,10 +105,10 @@ public static class MauiBuildArgumentsExtensions
     /// command is rendered ahead of the first start), so edits do not accumulate across restarts.
     /// </remarks>
     /// <example>
-    /// Force a build during launch by overriding the default <c>-p:NoBuild=true</c>:
+    /// Add an MSBuild property to the launch command:
     /// <code lang="csharp">
     /// maui.AddAndroidEmulator("emulator")
-    ///     .WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+    ///     .WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
     /// </code>
     /// </example>
     [AspireExport]
@@ -141,10 +141,10 @@ public static class MauiBuildArgumentsExtensions
     /// command is rendered ahead of the first start), so edits do not accumulate across restarts.
     /// </remarks>
     /// <example>
-    /// Force a build during launch by overriding the default <c>-p:NoBuild=true</c>:
+    /// Add an MSBuild property to the launch command:
     /// <code lang="csharp">
     /// maui.AddAndroidEmulator("emulator")
-    ///     .WithMauiLaunchArguments(context => context.Arguments.Add("-p:NoBuild=false"));
+    ///     .WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "Convenience overload. Use the asynchronous overload instead.")]
