@@ -158,7 +158,7 @@ suite('Aspire tree action command E2E', function () {
         const runLaunchBefore = getDebugLaunchCount();
         const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runPipelineStepAppHost');
         await executeE2eControlCommand({ name: 'runPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
-        await chooseActiveQuickPick('e2e-run-action-step', 120000);
+        await answerActiveInput('e2e-run-action-step', 'Select a pipeline step to execute', 120000);
         await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'success', 60000, runInvocationBefore);
         const runLaunch = await waitForDebugLaunch(
             event => event.command === 'do' && event.noDebug && event.doStep === 'e2e-run-action-step',
@@ -172,7 +172,7 @@ suite('Aspire tree action command E2E', function () {
         const debugLaunchBefore = getDebugLaunchCount();
         const debugInvocationBefore = getCommandInvocationCount('aspire-vscode.debugPipelineStepAppHost');
         await executeE2eControlCommand({ name: 'debugPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
-        await chooseActiveQuickPick('e2e-debug-action-step', 120000);
+        await answerActiveInput('e2e-debug-action-step', 'Select a pipeline step to execute', 120000);
         await waitForCommandOutcome('aspire-vscode.debugPipelineStepAppHost', 'success', 60000, debugInvocationBefore);
         const debugLaunch = await waitForDebugLaunch(
             event => event.command === 'do' && !event.noDebug && event.doStep === 'e2e-debug-action-step',
@@ -187,10 +187,10 @@ suite('Aspire tree action command E2E', function () {
             .split(/\r?\n/)
             .filter(line => line.includes('Spawning Aspire CLI process:') && line.includes(` do `) && line.includes(`--apphost ${appHostPath}`));
         assert.ok(
-            spawnLines.some(line => line.includes(' do --nologo ') && !line.includes('--start-debug-session')),
+            spawnLines.some(line => line.includes(' do e2e-run-action-step --nologo ') && !line.includes('--start-debug-session')),
             `Expected run pipeline args without --start-debug-session. Spawn lines: ${JSON.stringify(spawnLines)}`);
         assert.ok(
-            spawnLines.some(line => line.includes(' do --start-debug-session --nologo ')),
+            spawnLines.some(line => line.includes(' do e2e-debug-action-step --start-debug-session --nologo ')),
             `Expected debug pipeline args with --start-debug-session. Spawn lines: ${JSON.stringify(spawnLines)}`);
     });
 
