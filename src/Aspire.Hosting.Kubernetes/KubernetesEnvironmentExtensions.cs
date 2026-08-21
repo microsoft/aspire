@@ -134,9 +134,18 @@ public static class KubernetesEnvironmentExtensions
                 // directory. A project or executable bound to a publish-only volume consumes no local
                 // backing store in run mode, so it cannot conflict with a container's named volume.
                 // Rejecting it would break AppHosts that predate the environment-path feature.
+                //
+                // The env can arrive two ways. The WithPersistentVolume(volume, path, env) overload
+                // records it on the binding. The name-match composition instead spells it on a separate
+                // mount - .WithVolume("data", "/srv/data", env: "DATA_PATH").WithPersistentVolume(pv) -
+                // which leaves the binding's own EnvironmentVariableName null even though the volume
+                // resolver still hands that mount the persistent volume's store path. Checking the
+                // resource's annotations covers both, and is order-independent because it runs here
+                // rather than when either builder method was called.
                 var hostProcesses = volumeGroup.Where(item =>
                     item.Resource is ProjectResource or ExecutableResource &&
-                    item.Annotation.EnvironmentVariableName is not null).ToArray();
+                    (item.Annotation.EnvironmentVariableName is not null ||
+                     ResolvesVolumePathLocally(item.Resource, item.Annotation.Volume.Name))).ToArray();
 
                 if (containers.Length > 0 && hostProcesses.Length > 0)
                 {
@@ -148,6 +157,17 @@ public static class KubernetesEnvironmentExtensions
                 }
             }
         }
+    }
+
+    private static bool ResolvesVolumePathLocally(IResource resource, string volumeName)
+    {
+        // The persistent volume's run-mode resolver is registered under the volume's own name, and the
+        // env callback looks it up by the mount name, so the two only connect when those names match.
+        // A mount bound to some other volume resolves an unrelated local directory and is not a
+        // conflict for this persistent volume.
+        return resource.Annotations
+            .OfType<VolumeEnvironmentVariableAnnotation>()
+            .Any(annotation => string.Equals(annotation.VolumeName, volumeName, StringComparison.Ordinal));
     }
 
     private static void ApplyRunModeContainerVolumeNames(PersistentVolumeBinding[] bindings)

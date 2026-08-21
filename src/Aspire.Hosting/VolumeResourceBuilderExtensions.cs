@@ -90,6 +90,14 @@ public static class VolumeResourceBuilderExtensions
 
         if (env is not null)
         {
+            if (name is not null)
+            {
+                // Restate the env binding declaratively. The callback below captures env in a closure,
+                // so a compute environment inspecting the model afterwards cannot otherwise tell that
+                // this mount resolves a local path in run mode.
+                builder.WithAnnotation(new VolumeEnvironmentVariableAnnotation(name, env));
+            }
+
             builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
             {
                 context.EnvironmentVariables[env] = GetEffectiveVolumePath(context, name, target, env);

@@ -588,7 +588,11 @@ public class AtsPythonCodeGeneratorTests
         // by its declaring namespace. Snapshot coverage cannot reach this: the shipped volume
         // capabilities happen to emit in the opposite order.
         var files = _generator.GenerateDistributedApplication(CreateContextWithCollidingParameterMappings());
-        var aspirePy = files["aspire_app.py"];
+
+        // The generator composes output with StringBuilder.AppendLine, which writes Environment.NewLine,
+        // so the raw text is CRLF on Windows and LF elsewhere. Normalize before matching the multi-line
+        // expectations below, which assert exact field order and so cannot be collapsed to single lines.
+        var aspirePy = files["aspire_app.py"].ReplaceLineEndings("\n");
 
         Assert.Contains("class VolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: typing.Required[str]\n    env: typing.Required[str]\n    is_read_only: bool", aspirePy);
         Assert.Contains("class TestsBetaVolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: str\n    is_read_only: bool", aspirePy);

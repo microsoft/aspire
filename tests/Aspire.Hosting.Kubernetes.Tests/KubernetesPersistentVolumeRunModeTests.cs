@@ -290,6 +290,62 @@ public class KubernetesPersistentVolumeRunModeTests
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NameMatchBindingWithEnvVolumeConflictsWithContainerConsumer(bool bindBeforeVolume)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        // The env lives on the mount rather than the binding here, so the conflict is only visible by
+        // inspecting the resource. Both orders must detect it.
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null);
+        if (bindBeforeVolume)
+        {
+            project.WithPersistentVolume(volume)
+                .WithVolume("data", "/srv/data", env: "DATA_PATH");
+        }
+        else
+        {
+            project.WithVolume("data", "/srv/data", env: "DATA_PATH")
+                .WithPersistentVolume(volume);
+        }
+
+        builder.AddContainer("container", "image")
+            .WithVolume("data", "/srv/data")
+            .WithPersistentVolume(volume);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+
+        Assert.Contains("both local container and host-process resources", exception.Message);
+        Assert.Contains("project", exception.Message);
+        Assert.Contains("container", exception.Message);
+    }
+
+    [Fact]
+    public async Task EnvVolumeForDifferentNameDoesNotConflictWithContainerConsumer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        // The env mount names a different volume, so it resolves an unrelated local directory and
+        // never touches this persistent volume's store path.
+        builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithVolume("scratch", "/srv/scratch", env: "SCRATCH_PATH")
+            .WithPersistentVolume(volume);
+        builder.AddContainer("container", "image")
+            .WithVolume("data", "/srv/data")
+            .WithPersistentVolume(volume);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(
         DistributedApplication app,
