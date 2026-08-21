@@ -16,6 +16,7 @@ public class CommandPathResolverTests
     [InlineData("bun.cmd", "bun is not installed or not found in PATH. Please install Bun and try again.")]
     [InlineData("yarn", "yarn is not installed or not found in PATH. Please install Yarn and try again.")]
     [InlineData("pnpm", "pnpm is not installed or not found in PATH. Please install pnpm and try again.")]
+    [InlineData("deno", "deno is not installed or not found in PATH. Please install Deno and try again.")]
     public void TryResolveCommand_WhenJavaScriptCommandIsMissing_ReturnsToolSpecificInstallMessage(string command, string expectedMessage)
     {
         static string? MissingCommandResolver(string _) => null;
@@ -57,6 +58,7 @@ public class CommandPathResolverTests
     [InlineData("bun", "https://bun.sh/docs/installation")]
     [InlineData("yarn", "https://yarnpkg.com/getting-started/install")]
     [InlineData("pnpm", "https://pnpm.io/installation")]
+    [InlineData("deno", "https://docs.deno.com/runtime/getting_started/installation/")]
     public void GetInstallationLink_WhenJavaScriptCommandKnown_ReturnsExpectedLink(string command, string expectedLink)
     {
         Assert.Equal(expectedLink, CommandPathResolver.GetInstallationLink(command));

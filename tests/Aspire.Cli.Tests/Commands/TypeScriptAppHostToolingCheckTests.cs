@@ -25,6 +25,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [InlineData("bun@1.2.0", nameof(TypeScriptAppHostToolchain.Bun))]
     [InlineData("yarn@4.14.1", nameof(TypeScriptAppHostToolchain.Yarn))]
     [InlineData("pnpm@10.12.1", nameof(TypeScriptAppHostToolchain.Pnpm))]
+    [InlineData("deno@2.9.0", nameof(TypeScriptAppHostToolchain.Deno))]
     public async Task CheckAsync_ReturnsPass_WhenConfiguredToolchainIsAvailable(string packageManagerSpec, string toolchainName)
     {
         var toolchain = Enum.Parse<TypeScriptAppHostToolchain>(toolchainName);
@@ -54,6 +55,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [InlineData("bun@1.2.0", nameof(TypeScriptAppHostToolchain.Bun), "Bun", "https://bun.sh/docs/installation")]
     [InlineData("yarn@4.14.1", nameof(TypeScriptAppHostToolchain.Yarn), "Yarn", "https://yarnpkg.com/getting-started/install")]
     [InlineData("pnpm@10.12.1", nameof(TypeScriptAppHostToolchain.Pnpm), "pnpm", "https://pnpm.io/installation")]
+    [InlineData("deno@2.9.0", nameof(TypeScriptAppHostToolchain.Deno), "Deno", "https://docs.deno.com/runtime/getting_started/installation/")]
     public async Task CheckAsync_ReturnsFail_WhenConfiguredToolchainIsMissing(
         string packageManagerSpec,
         string toolchainName,
