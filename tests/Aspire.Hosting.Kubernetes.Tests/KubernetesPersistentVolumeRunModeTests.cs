@@ -346,8 +346,60 @@ public class KubernetesPersistentVolumeRunModeTests
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task NameMatchBindingRejectsUnsupportedResourceResolvingLocalPath(bool bindBeforeVolume)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        // A custom compute resource still resolves the persistent volume's local store path, because
+        // only containers short-circuit to the declared mount path. The env is spelled on the mount
+        // here, so the binding itself carries none and both builder orders must still be rejected.
+        var custom = builder.AddResource(new TestComputeResource("custom"));
+        if (bindBeforeVolume)
+        {
+            custom.WithPersistentVolume(volume)
+                .WithVolume("data", "/srv/data", env: "DATA_PATH");
+        }
+        else
+        {
+            custom.WithVolume("data", "/srv/data", env: "DATA_PATH")
+                .WithPersistentVolume(volume);
+        }
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+
+        Assert.Contains("custom", exception.Message);
+        Assert.Contains("DATA_PATH", exception.Message);
+        Assert.Contains("Only project, executable, and container resources are supported", exception.Message);
+    }
+
+    [Fact]
+    public async Task NameMatchBindingAllowsUnsupportedResourceWithoutLocalPath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+
+        // The env mount names an unrelated volume, so this binding never resolves the persistent
+        // volume's store path and stays publish-only.
+        builder.AddResource(new TestComputeResource("custom"))
+            .WithVolume("scratch", "/srv/scratch", env: "SCRATCH_PATH")
+            .WithPersistentVolume(volume);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(
         DistributedApplication app,
         CancellationToken cancellationToken);
+
+    private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment;
 }

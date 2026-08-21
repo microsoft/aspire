@@ -104,11 +104,17 @@ public static class KubernetesEnvironmentExtensions
     {
         foreach (var (resource, annotation) in bindings)
         {
-            if (annotation.EnvironmentVariableName is not null &&
+            // The env can be spelled on the binding or on a separate name-matched mount, and both make
+            // the resource resolve the same local store path, so an unsupported resource shape has to
+            // be rejected for either spelling. Without this, a custom compute resource still receives
+            // the store path while the compatibility check below treats it as publish-only.
+            var environmentVariableName = GetLocalPathEnvironmentVariableName(resource, annotation);
+
+            if (environmentVariableName is not null &&
                 resource is not ProjectResource and not ExecutableResource and not ContainerResource)
             {
                 throw new DistributedApplicationException(
-                    $"Resource '{resource.Name}' cannot resolve the '{annotation.EnvironmentVariableName}' persistent-volume path in run mode. " +
+                    $"Resource '{resource.Name}' cannot resolve the '{environmentVariableName}' persistent-volume path in run mode. " +
                     $"Only project, executable, and container resources are supported.");
             }
         }
@@ -135,17 +141,11 @@ public static class KubernetesEnvironmentExtensions
                 // backing store in run mode, so it cannot conflict with a container's named volume.
                 // Rejecting it would break AppHosts that predate the environment-path feature.
                 //
-                // The env can arrive two ways. The WithPersistentVolume(volume, path, env) overload
-                // records it on the binding. The name-match composition instead spells it on a separate
-                // mount - .WithVolume("data", "/srv/data", env: "DATA_PATH").WithPersistentVolume(pv) -
-                // which leaves the binding's own EnvironmentVariableName null even though the volume
-                // resolver still hands that mount the persistent volume's store path. Checking the
-                // resource's annotations covers both, and is order-independent because it runs here
-                // rather than when either builder method was called.
+                // Resolving the env name covers both spellings, and is order-independent because it
+                // runs here rather than when either builder method was called.
                 var hostProcesses = volumeGroup.Where(item =>
                     item.Resource is ProjectResource or ExecutableResource &&
-                    (item.Annotation.EnvironmentVariableName is not null ||
-                     ResolvesVolumePathLocally(item.Resource, item.Annotation.Volume.Name))).ToArray();
+                    GetLocalPathEnvironmentVariableName(item.Resource, item.Annotation) is not null).ToArray();
 
                 if (containers.Length > 0 && hostProcesses.Length > 0)
                 {
@@ -159,15 +159,27 @@ public static class KubernetesEnvironmentExtensions
         }
     }
 
-    private static bool ResolvesVolumePathLocally(IResource resource, string volumeName)
+    private static string? GetLocalPathEnvironmentVariableName(
+        IResource resource,
+        KubernetesPersistentVolumeBindingAnnotation annotation)
     {
-        // The persistent volume's run-mode resolver is registered under the volume's own name, and the
+        // WithPersistentVolume(volume, mountPath, env) records the env on the binding itself.
+        if (annotation.EnvironmentVariableName is not null)
+        {
+            return annotation.EnvironmentVariableName;
+        }
+
+        // The name-match composition spells it on a separate mount instead:
+        //   .WithVolume("data", "/srv/data", env: "DATA_PATH").WithPersistentVolume(pv)
+        // The persistent volume's run-mode resolver is registered under the volume's own name and the
         // env callback looks it up by the mount name, so the two only connect when those names match.
-        // A mount bound to some other volume resolves an unrelated local directory and is not a
-        // conflict for this persistent volume.
+        // A mount bound to some other volume resolves an unrelated local directory and does not make
+        // this binding resolve locally. LastOrDefault mirrors the resolver lookup, where the last
+        // matching mount wins.
         return resource.Annotations
             .OfType<VolumeEnvironmentVariableAnnotation>()
-            .Any(annotation => string.Equals(annotation.VolumeName, volumeName, StringComparison.Ordinal));
+            .LastOrDefault(item => string.Equals(item.VolumeName, annotation.Volume.Name, StringComparison.Ordinal))
+            ?.EnvironmentVariableName;
     }
 
     private static void ApplyRunModeContainerVolumeNames(PersistentVolumeBinding[] bindings)
