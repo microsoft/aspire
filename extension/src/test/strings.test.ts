@@ -86,14 +86,14 @@ suite('utils/strings tests', () => {
         }
     });
 
-    test('Create with Aspire picker loc strings are present in runtime exports, package.nls.json, and the generated XLF catalog', () => {
+    test('Set up Aspire loc strings are present in runtime exports, package.nls.json, and the generated XLF catalog', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
         const xlf = fs.readFileSync(path.join(extensionRoot, 'loc', 'xlf', 'aspire-vscode.xlf'), 'utf8');
         const runtimeStrings = locStrings as Record<string, unknown>;
 
         const expectedStrings = {
-            createWithAspirePlaceholder: 'Create with Aspire',
+            createWithAspirePlaceholder: 'Choose how to set up Aspire',
             createNewAspireAppLabel: 'Create a new Aspire app',
             createNewAspireAppDescription: 'Start a greenfield application in a new directory using an Aspire template.',
             addAspireToWorkspaceLabel: 'Add Aspire to this workspace',
@@ -105,6 +105,11 @@ suite('utils/strings tests', () => {
             assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
             assert.ok(xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`), `Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding ${name}.`);
         }
+
+        assert.strictEqual(packageNls['command.createWithAspire'], 'Set up Aspire');
+        assert.strictEqual(
+            packageNls['views.appHosts.welcome'],
+            'No Aspire AppHosts detected in this workspace.\n[Set up Aspire](command:aspire-vscode.createWithAspire)');
     });
 
     test('Rust loc strings are present in package.nls.json and the generated XLF catalog', () => {

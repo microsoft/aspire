@@ -10,7 +10,6 @@ import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvid
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
-import { extensionLogOutputChannel } from '../utils/logging';
 
 import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
@@ -200,117 +199,6 @@ suite('AspireEditorCommandProvider', () => {
         }
     });
 
-    test('getWorkspaceFoldersWithoutAppHosts returns an empty array when no workspace is open', async () => {
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(path.join(tempDir, 'unused.csproj')), createLaunchService());
-        try {
-            workspaceFoldersStub.value(undefined);
-            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
-        }
-        finally {
-            provider.dispose();
-        }
-    });
-
-    test('getWorkspaceFoldersWithoutAppHosts returns an empty array when the only folder has one AppHost candidate', async () => {
-        const appHostPath = path.join(tempDir, 'AppHost.csproj');
-        fs.writeFileSync(appHostPath, '<Project Sdk="Microsoft.NET.Sdk" />');
-        const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
-        workspaceFoldersStub.value([folder]);
-
-        const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), createLaunchService());
-        try {
-            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
-        }
-        finally {
-            provider.dispose();
-        }
-    });
-
-    test('getWorkspaceFoldersWithoutAppHosts returns an empty array for multiple AppHost candidates without showing selection UI', async () => {
-        const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
-        const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
-        workspaceFoldersStub.value([folder]);
-
-        const discoveryService = createAppHostDiscoveryService(path.join(tempDir, 'FirstAppHost.csproj'));
-        sinon.stub(discoveryService, 'discover').resolves([
-            { path: path.join(tempDir, 'FirstAppHost.csproj'), language: 'csharp', status: 'buildable' },
-            { path: path.join(tempDir, 'SecondAppHost.csproj'), language: 'csharp', status: 'buildable' },
-        ]);
-
-        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
-        try {
-            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
-            assert.strictEqual(showQuickPickStub.called, false);
-        }
-        finally {
-            provider.dispose();
-            showQuickPickStub.restore();
-        }
-    });
-
-    test('getWorkspaceFoldersWithoutAppHosts returns the folder when it has no AppHost candidates', async () => {
-        const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
-        workspaceFoldersStub.value([folder]);
-
-        const emptyDiscoveryService = {
-            onDidChangeCandidates: () => ({ dispose: () => { } }),
-            tryFindCandidateForEditorFile: async () => undefined,
-            discover: async () => [],
-        } as unknown as AppHostDiscoveryService;
-
-        const provider = new AspireEditorCommandProvider(emptyDiscoveryService, createLaunchService());
-        try {
-            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), [folder]);
-        }
-        finally {
-            provider.dispose();
-        }
-    });
-
-    test('getWorkspaceFoldersWithoutAppHosts treats discovery failures as ineligible', async () => {
-        const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
-        workspaceFoldersStub.value([folder]);
-        const warningLogStub = sinon.stub(extensionLogOutputChannel, 'warn');
-
-        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), createLaunchService());
-        try {
-            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
-            assert.ok(warningLogStub.calledOnceWithExactly(`Failed to discover AppHost candidates for workspace ${folder.uri.fsPath}: Error: discovery failed`));
-        }
-        finally {
-            provider.dispose();
-            warningLogStub.restore();
-        }
-    });
-
-    test('getWorkspaceFoldersWithoutAppHosts returns only empty folders from a multi-root workspace', async () => {
-        const withAppHostDir = path.join(tempDir, 'WithAppHost');
-        const withoutAppHostDir = path.join(tempDir, 'WithoutAppHost');
-        fs.mkdirSync(withAppHostDir);
-        fs.mkdirSync(withoutAppHostDir);
-        const appHostPath = path.join(withAppHostDir, 'AppHost.csproj');
-        fs.writeFileSync(appHostPath, '<Project Sdk="Microsoft.NET.Sdk" />');
-
-        const withAppHostFolder = { uri: vscode.Uri.file(withAppHostDir), name: 'with', index: 0 };
-        const withoutAppHostFolder = { uri: vscode.Uri.file(withoutAppHostDir), name: 'without', index: 1 };
-        workspaceFoldersStub.value([withAppHostFolder, withoutAppHostFolder]);
-
-        const discoveryService = {
-            onDidChangeCandidates: () => ({ dispose: () => { } }),
-            tryFindCandidateForEditorFile: async () => undefined,
-            discover: async (folder: vscode.WorkspaceFolder) => folder.uri.toString() === withAppHostFolder.uri.toString()
-                ? [{ path: appHostPath, language: 'csharp', status: 'buildable' }]
-                : [],
-        } as unknown as AppHostDiscoveryService;
-
-        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
-        try {
-            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), [withoutAppHostFolder]);
-        }
-        finally {
-            provider.dispose();
-        }
-    });
 });
 
 function createAppHostDiscoveryService(resolvedPath: string, language = 'csharp'): AppHostDiscoveryService {

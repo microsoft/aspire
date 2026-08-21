@@ -39,7 +39,7 @@ suite('Workspace target proof E2E', function () {
         await addWorkspaceFolder(folderB.folderPath);
         await setE2eCliPathForE2E(undefined);
 
-        await invokeCreateWithAspireInitForFolder('folder-b', folderB, ['folder-a', 'folder-b']);
+        await invokeCreateWithAspireInitForFolder('folder-b', folderB, [path.basename(workspaceRoot), 'folder-a', 'folder-b']);
         await invokeCreateWithAspireNewForFolder('folder-a', folderA);
         await invokeNewForFolder('folder-b', folderB);
 
@@ -139,7 +139,7 @@ async function invokeNewForFolder(folderLabel: string, fixture: FolderFixture): 
 async function invokeCreateWithAspireInitForFolder(
     folderLabel: string,
     fixture: FolderFixture,
-    expectedEligibleFolderLabels: readonly string[],
+    expectedWorkspaceFolderLabels: readonly string[],
 ): Promise<void> {
     const beforeCreateInvocation = getCommandInvocationCount('aspire-vscode.createWithAspire');
     const beforeInitInvocation = getCommandInvocationCount('aspire-vscode.init');
@@ -154,14 +154,14 @@ async function invokeCreateWithAspireInitForFolder(
         'The Create with Aspire action picker should preserve its action order.');
     await chooseActiveQuickPick('Add Aspire to this workspace');
 
-    const eligibleFolderLabels = await waitForQuickPickLabels(expectedEligibleFolderLabels);
+    const workspaceFolderLabels = await waitForQuickPickLabels(expectedWorkspaceFolderLabels);
     assert.deepStrictEqual(
-        eligibleFolderLabels,
-        expectedEligibleFolderLabels,
-        'The eligible workspace folders should preserve their workspace order.');
+        workspaceFolderLabels,
+        expectedWorkspaceFolderLabels,
+        'The workspace folders should preserve their workspace order.');
     assert.ok(
-        !eligibleFolderLabels.includes(path.basename(getWorkspaceRoot())),
-        'The folder picker should exclude the primary workspace folder because it contains an AppHost.');
+        workspaceFolderLabels.includes(path.basename(getWorkspaceRoot())),
+        'The folder picker should include the primary workspace folder even though it contains an AppHost.');
     await chooseActiveQuickPick(folderLabel);
 
     await waitForCommandOutcome('aspire-vscode.init', 'success', 60000, beforeInitInvocation);
