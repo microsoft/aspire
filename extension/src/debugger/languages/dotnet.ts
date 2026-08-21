@@ -28,6 +28,7 @@ import { resolveCliPath } from '../../utils/cliPath';
 import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
 import { deleteEnvironmentVariable, getEnvironmentWithoutE2EBridgeVariables, setEnvironmentVariable } from '../../utils/environment';
+import { getAppHostLaunchProfileOptions } from '../../utils/launchProfile';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -618,16 +619,16 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
             // AppHost-specific launch profile settings override generic project settings. prepareDebugSession
             // applies resource-type settings last, so resolve these directly from launch.json instead.
-            const projectDebuggerSettings = launchOptions.debugSession.configuration?.debuggers?.['project'];
-            const appHostDebuggerSettings = launchOptions.debugSession.configuration?.debuggers?.['apphost'];
+            const appHostLaunchProfileOptions = getAppHostLaunchProfileOptions(
+                launchOptions.debugSession.configuration,
+                true);
             const effectiveLaunchConfig: ProjectLaunchConfiguration = launchOptions.isApphost ? {
                 ...launchConfig,
-                disable_launch_profile: appHostDebuggerSettings?.disableLaunchProfile
-                    ?? projectDebuggerSettings?.disableLaunchProfile
+                disable_launch_profile: appHostLaunchProfileOptions.disableLaunchProfile
                     ?? debugConfiguration.disableLaunchProfile,
-                launch_profile: appHostDebuggerSettings?.launchProfile
-                    ?? projectDebuggerSettings?.launchProfile
+                launch_profile: appHostLaunchProfileOptions.launchProfile
                     ?? debugConfiguration.launchProfile
+                    ?? launchConfig.launch_profile
             } : launchConfig;
 
             const { profile: baseProfile, profileName } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);

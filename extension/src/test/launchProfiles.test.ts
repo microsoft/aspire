@@ -81,6 +81,38 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result.profile?.environmentVariables?.ASPNETCORE_ENVIRONMENT, 'Development');
         });
 
+        test('matches an explicit launch profile case-insensitively while preserving requested casing', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'development'
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, sampleLaunchSettings);
+
+            assert.strictEqual(result.profileName, 'development');
+            assert.strictEqual(result.profile?.environmentVariables?.ASPNETCORE_ENVIRONMENT, 'Development');
+        });
+
+        test('does not choose between ambiguous case-insensitive launch profile matches', () => {
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: '/test/project.csproj',
+                launch_profile: 'development'
+            };
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    Development: { commandName: 'Project' },
+                    DEVELOPMENT: { commandName: 'Project' }
+                }
+            };
+
+            const result = determineBaseLaunchProfile(launchConfig, launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
         test('returns null when explicit launch profile specified but does not exist', () => {
             const launchConfig: ProjectLaunchConfiguration = {
                 type: 'project',

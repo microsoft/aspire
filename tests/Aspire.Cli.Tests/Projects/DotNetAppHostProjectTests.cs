@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Projects;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -1072,6 +1073,32 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void GetLaunchProfileMatch_DistinguishesMissingUniqueAndAmbiguousProfiles()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+
+        Assert.Equal(LaunchProfileMatchResult.NotFound, project.GetLaunchProfileMatch(appHostFile, "missing"));
+
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "container": { "commandName": "Executable", "executablePath": "custom-tool" },
+                "malformed": true,
+                "E2E": { "commandName": "Project" },
+                "e2e": { "commandName": "Project" }
+              }
+            }
+            """);
+
+        Assert.Equal(LaunchProfileMatchResult.Found, project.GetLaunchProfileMatch(appHostFile, "CONTAINER"));
+        Assert.Equal(LaunchProfileMatchResult.Found, project.GetLaunchProfileMatch(appHostFile, "malformed"));
+        Assert.Equal(LaunchProfileMatchResult.NotFound, project.GetLaunchProfileMatch(appHostFile, "missing"));
+        Assert.Equal(LaunchProfileMatchResult.Ambiguous, project.GetLaunchProfileMatch(appHostFile, "e2e"));
+    }
+
+    [Fact]
     public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile()
     {
         var appHostFile = CreateProjectAppHost();
@@ -1108,6 +1135,20 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("dotnet run should not be used for a selected Project launch profile.")
         };
         var project = CreateDotNetAppHostProject(runner);
+        var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var rootCommand = provider.GetRequiredService<RootCommand>();
+        var parseResult = rootCommand.Parse(
+        [
+            "run",
+            "--non-interactive",
+            "--apphost", appHostFile.FullName,
+            "--log-file", Path.Combine(_workspace.WorkspaceRoot.FullName, "child.log"),
+            "--launch-profile=e2e"
+        ]);
+
+        Assert.Empty(parseResult.Errors);
+        Assert.Empty(parseResult.UnmatchedTokens);
 
         runner.RunAppHostCommandAsyncCallback = (_, command, _, args, env, _, options, _) =>
         {
@@ -1115,7 +1156,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal("e2e", options.LaunchProfile);
             Assert.Equal(["--from-profile", "E2E"], args);
             Assert.NotNull(env);
-            Assert.Equal("E2E", env["DOTNET_LAUNCH_PROFILE"]);
+            Assert.Equal("e2e", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("http://localhost:16000", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal("from-context", env["SELECTED_PROFILE"]);
             Assert.Equal("E2E", env["PROFILE_ONLY"]);
@@ -1125,9 +1166,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var exitCode = await project.RunAsync(new AppHostProjectContext
         {
             AppHostFile = appHostFile,
-            LaunchProfile = "e2e",
+            LaunchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption),
             NoBuild = false,
             NoRestore = false,
+            UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>
             {

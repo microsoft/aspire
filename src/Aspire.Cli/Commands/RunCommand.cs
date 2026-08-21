@@ -287,11 +287,11 @@ internal sealed class RunCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
-            if (!string.IsNullOrEmpty(launchProfile) && !project.SupportsLaunchProfiles)
+            if (AppHostLauncher.GetLaunchProfileValidationError(project, effectiveAppHostFile, launchProfile) is { } launchProfileError)
             {
                 return CommandResult.Failure(
                     CliExitCodes.InvalidCommand,
-                    string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, project.DisplayName));
+                    launchProfileError);
             }
 
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
@@ -1221,8 +1221,7 @@ internal sealed class RunCommand : BaseCommand
 
         if (!string.IsNullOrEmpty(launchProfile))
         {
-            additionalArgs.Add(AppHostLauncher.s_launchProfileOption.Name);
-            additionalArgs.Add(launchProfile);
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
         }
 
         if (appHostArgs.Count > 0)
@@ -1235,6 +1234,7 @@ internal sealed class RunCommand : BaseCommand
             passedAppHostProjectFile,
             format,
             isolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

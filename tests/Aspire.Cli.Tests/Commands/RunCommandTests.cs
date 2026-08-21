@@ -21,6 +21,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Shared.UserSecrets;
@@ -102,6 +103,145 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, projectFactory.DisplayName),
             interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_DetachedRejectsLaunchProfileForUnsupportedAppHostBeforeStoppingOrLaunching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var interactionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            DisplayName = "TypeScript (Node.js)",
+            SupportsLaunchProfiles = false
+        };
+        var processFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = CliExitCodes.FailedToDotnetRunAppHost
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+        using var provider = services.BuildServiceProvider();
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var socketPath = CreateMatchingSocketFile(appHostFile, executionContext.HomeDirectory);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--detach", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.True(File.Exists(socketPath), "Validation should happen before existing AppHost instances are stopped.");
+        Assert.Equal(0, processFactory.AttemptCount);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, projectFactory.DisplayName),
+            interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_RejectsMissingExplicitLaunchProfileBeforeBuilding()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"), """
+            {
+              "profiles": {
+                "playwright": {
+                  "commandName": "Project"
+                }
+              }
+            }
+            """);
+        var interactionService = new TestInteractionService();
+        var buildCalled = false;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) =>
+            {
+                buildCalled = true;
+                return 1;
+            }
+        };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => runner;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "missing"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(buildCalled);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotFound, "missing"),
+            interactionService.DisplayedErrors);
+    }
+
+    [Theory]
+    [InlineData("""{ "commandName": "Executable", "executablePath": "custom-tool" }""")]
+    [InlineData("true")]
+    public async Task RunCommand_ExistingUnsupportedOrMalformedLaunchProfileFallsBackToDotNet(string profile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"), $$"""
+            {
+              "profiles": {
+                "container": {{profile}}
+              }
+            }
+            """);
+        var buildCalled = false;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) =>
+            {
+                buildCalled = true;
+                return 1;
+            }
+        };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => runner;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "container"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled);
     }
 
     [Fact]
@@ -1013,11 +1153,23 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(cliPrefetchStarted);
     }
 
-    [Fact]
-    public async Task RunCommand_DetachedChild_PreservesAppHostArgumentsAfterSingleSeparator()
+    [Theory]
+    [InlineData("--launch-profile")]
+    [InlineData("-lp")]
+    public async Task RunCommand_DetachedChild_PreservesOptionShapedLaunchProfileAndAppHostArguments(string launchProfileOption)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
+        var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"), """
+            {
+              "profiles": {
+                "--no-build": {
+                  "commandName": "Project"
+                }
+              }
+            }
+            """);
         var expectedAppHostArguments = new[] { "true", "false", string.Empty, "--detach", "--option-shaped" };
         var projectLocator = new TestProjectLocator
         {
@@ -1043,7 +1195,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--detach",
             "--apphost", appHostFile.FullName,
             "--no-build",
-            "--launch-profile", "E2E",
+            $"{launchProfileOption}=--no-build",
             "--",
             .. expectedAppHostArguments
         ]);
@@ -1051,7 +1203,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.Errors);
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
 
-        AssertDetachedChildArguments(command, processFactory.LastArguments, "E2E", expectedAppHostArguments);
+        AssertDetachedChildArguments(command, processFactory.LastArguments, "--no-build", expectedAppHostArguments);
     }
 
     [Fact]
@@ -4193,6 +4345,21 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         return appHostFile;
     }
 
+    private static string CreateMatchingSocketFile(FileInfo appHostFile, DirectoryInfo homeDirectory)
+    {
+        var backchannelsDirectory = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDirectory);
+
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostFile.FullName);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDirectory,
+            $"{appHostId}a1b2C3d4.{(int.MaxValue - 1).ToString(CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
+    }
+
     private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string expectedLaunchProfile, string[] expectedAppHostArguments)
     {
         var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(childArguments));
@@ -4203,9 +4370,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", "--launch-profile", expectedLaunchProfile, "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
-        var childParseResult = command.Parse(["run", .. forwardedArguments[noBuildIndex..]]);
+        var childParseResult = command.Parse(forwardedArguments);
 
         Assert.Empty(childParseResult.Errors);
         Assert.Equal(expectedLaunchProfile, childParseResult.GetValue(AppHostLauncher.s_launchProfileOption));

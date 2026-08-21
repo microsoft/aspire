@@ -212,15 +212,23 @@ export function determineBaseLaunchProfile(
     // If launch_profile property is set, check if that profile exists
     if (launchConfig.launch_profile) {
         const profileName = launchConfig.launch_profile;
-        const profile = launchSettings.profiles[profileName];
+        const exactProfile = launchSettings.profiles[profileName];
+        if (exactProfile) {
+            extensionLogOutputChannel.debug(`Using explicit launch profile: ${profileName}`);
+            return { profile: exactProfile, profileName };
+        }
 
-        if (profile) {
+        const matchingProfileNames = Object.keys(launchSettings.profiles)
+            .filter(candidate => candidate.length === profileName.length &&
+                candidate.toUpperCase() === profileName.toUpperCase());
+        if (matchingProfileNames.length === 1) {
+            const profile = launchSettings.profiles[matchingProfileNames[0]];
             extensionLogOutputChannel.debug(`Using explicit launch profile: ${profileName}`);
             return { profile, profileName };
-        } else {
-            extensionLogOutputChannel.debug(`Explicit launch profile '${profileName}' not found in launch settings`);
-            return { profile: null, profileName: null };
         }
+
+        extensionLogOutputChannel.debug(`Explicit launch profile '${profileName}' not found uniquely in launch settings`);
+        return { profile: null, profileName: null };
     }
 
     // If launch_profile is absent, fall back to the profile that `dotnet run` applies by default.

@@ -109,8 +109,7 @@ internal sealed class StartCommand : BaseCommand
 
         if (!string.IsNullOrEmpty(launchProfile))
         {
-            additionalArgs.Add(AppHostLauncher.s_launchProfileOption.Name);
-            additionalArgs.Add(launchProfile);
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
         }
 
         if (appHostArgs.Count > 0)
@@ -128,6 +127,7 @@ internal sealed class StartCommand : BaseCommand
             passedAppHostProjectFile,
             format,
             explicitIsolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

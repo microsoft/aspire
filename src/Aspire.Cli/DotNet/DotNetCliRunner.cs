@@ -912,7 +912,7 @@ internal sealed class DotNetCliRunner(
         var noProfileSwitch = options.NoLaunchProfile ? "--no-launch-profile" : string.Empty;
         var launchProfile = options.NoLaunchProfile ? null : options.LaunchProfile;
         string[] launchProfileSwitch = !string.IsNullOrEmpty(launchProfile)
-            ? ["--launch-profile", launchProfile]
+            ? [$"--launch-profile={launchProfile}"]
             : [];
         var suppressCliRunHookProperty = $"/p:{KnownConfigNames.SuppressCliRunHook}=true";
         // Add --non-interactive flag when using watch to prevent interactive prompts during automation

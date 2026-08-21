@@ -52,6 +52,11 @@
         <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
         <note />
       </trans-unit>
+      <trans-unit id="LaunchProfileNotFound">
+        <source>The launch profile '{0}' was not found in the AppHost project.</source>
+        <target state="new">The launch profile '{0}' was not found in the AppHost project.</target>
+        <note>{0} is the requested launch profile name.</note>
+      </trans-unit>
       <trans-unit id="LaunchProfileNotSupported">
         <source>The --launch-profile option is not supported for {0} AppHosts.</source>
         <target state="new">The --launch-profile option is not supported for {0} AppHosts.</target>

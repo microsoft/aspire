@@ -57,6 +57,9 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string? AppHostFileName => "apphost.mts";
 
+    public LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName)
+        => LaunchProfileMatchResult.Unknown;
+
     public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<string[]>(["apphost.mts", "apphost.ts"]);

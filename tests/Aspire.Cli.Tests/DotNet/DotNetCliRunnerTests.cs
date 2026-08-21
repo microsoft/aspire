@@ -104,10 +104,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, _, _, _) =>
             {
                 string[] expectedArgs = appHostFile.Extension == ".cs"
-                    ? ["run", "--launch-profile", "E2E", $"/p:{KnownConfigNames.SuppressCliRunHook}=true", "--file", appHostFile.FullName, "--"]
+                    ? ["run", "--launch-profile=--no-build", $"/p:{KnownConfigNames.SuppressCliRunHook}=true", "--file", appHostFile.FullName, "--"]
                     : watch
-                        ? ["watch", "--non-interactive", "--launch-profile", "E2E", "--project", appHostFile.FullName, "--"]
-                        : ["run", "--launch-profile", "E2E", "--project", appHostFile.FullName, "--"];
+                        ? ["watch", "--non-interactive", "--launch-profile=--no-build", "--project", appHostFile.FullName, "--"]
+                        : ["run", "--launch-profile=--no-build", "--project", appHostFile.FullName, "--"];
                 Assert.Equal(expectedArgs, args);
             },
             42);
@@ -120,7 +120,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             args: [],
             env: null,
             backchannelCompletionSource: null,
-            new ProcessInvocationOptions { LaunchProfile = "E2E" },
+            new ProcessInvocationOptions { LaunchProfile = "--no-build" },
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(42, exitCode);

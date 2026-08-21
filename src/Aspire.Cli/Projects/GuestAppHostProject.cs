@@ -124,6 +124,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// <inheritdoc />
     public bool SupportsLaunchProfiles => false;
 
+    /// <inheritdoc />
+    public LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName)
+        => LaunchProfileMatchResult.Unknown;
+
     /// <summary>
     /// Gets the effective SDK version from configuration (inherits from parent directories)
     /// or falls back to the default SDK version.

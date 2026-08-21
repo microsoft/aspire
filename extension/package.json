@@ -92,6 +92,12 @@
             "isolated": {
               "type": "boolean",
               "description": "%languageModelTool.aspireAppHostStart.isolated.description%"
+            },
+            "launchProfile": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "%languageModelTool.aspireAppHostStart.launchProfile.description%"
             }
           },
           "required": [
@@ -209,6 +215,11 @@
                   "do"
                 ],
                 "default": "run"
+              },
+              "launchProfile": {
+                "type": "string",
+                "description": "%extension.debug.launchProfile%",
+                "minLength": 1
               },
               "step": {
                 "type": "string",

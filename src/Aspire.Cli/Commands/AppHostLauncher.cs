@@ -29,6 +29,7 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AppHostLauncher(
     IProjectLocator projectLocator,
+    IAppHostProjectFactory projectFactory,
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     IAuxiliaryBackchannelMonitor backchannelMonitor,
@@ -122,6 +123,7 @@ internal sealed class AppHostLauncher(
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
     /// <param name="format">The output format (JSON or table).</param>
     /// <param name="isolated">The explicitly supplied isolated option value, or <see langword="null"/> when omitted.</param>
+    /// <param name="launchProfile">The explicitly selected launch profile, or <see langword="null"/> when omitted.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
@@ -134,6 +136,7 @@ internal sealed class AppHostLauncher(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
         bool? isolated,
+        string? launchProfile,
         bool isExtensionHost,
         bool waitForDebugger,
         int timeoutSeconds,
@@ -167,6 +170,20 @@ internal sealed class AppHostLauncher(
         if (effectiveAppHostFile is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject);
+        }
+
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            var project = projectFactory.TryGetProject(effectiveAppHostFile);
+            if (project is null)
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
+            }
+
+            if (GetLaunchProfileValidationError(project, effectiveAppHostFile, launchProfile) is { } launchProfileError)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, launchProfileError);
+            }
         }
 
         // The detached child receives the selected file rather than the directory that caused the
@@ -246,6 +263,23 @@ internal sealed class AppHostLauncher(
         }
 
         return CommandResult.Success();
+    }
+
+    internal static string? GetLaunchProfileValidationError(IAppHostProject project, FileInfo appHostFile, string? launchProfile)
+    {
+        if (string.IsNullOrEmpty(launchProfile))
+        {
+            return null;
+        }
+
+        if (!project.SupportsLaunchProfiles)
+        {
+            return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, project.DisplayName);
+        }
+
+        return project.GetLaunchProfileMatch(appHostFile, launchProfile) is LaunchProfileMatchResult.NotFound
+            ? string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotFound, launchProfile)
+            : null;
     }
 
     private async Task StopLaunchedAppHostAsync(LaunchResult result, TimeSpan delay, CancellationToken cancellationToken)

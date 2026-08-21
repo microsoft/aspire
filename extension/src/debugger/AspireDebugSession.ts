@@ -32,6 +32,7 @@ import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 import { markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
+import { getAppHostLaunchProfileOptions, getRootLaunchProfileCliArg } from "../utils/launchProfile";
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
@@ -1340,9 +1341,23 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       else {
         // The CLI sends the full dotnet CLI args (e.g., ["run", "--no-build", "--project", "...", "--", ...appHostArgs]).
         // Since we launch the apphost directly via the debugger (not via dotnet run), extract only the args after "--".
+        // The parent configuration's typed profile has to cross this second launch boundary explicitly;
+        // the CLI option itself is one of the root arguments intentionally removed here.
         const separatorIndex = args.indexOf('--');
         appHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
-        launchConfig = { project_path: projectFile, type: 'project' } as ProjectLaunchConfiguration;
+        const launchProfileOptions = getAppHostLaunchProfileOptions(
+          this.configuration,
+          classifyAppHostPath(projectFile) === 'csharp');
+        const launchProfile = launchProfileOptions.disableLaunchProfile === true
+          ? undefined
+          : launchProfileOptions.launchProfile ?? getRootLaunchProfileCliArg(args);
+        launchConfig = {
+          project_path: projectFile,
+          type: 'project',
+          ...(launchProfile !== undefined
+            ? { launch_profile: launchProfile }
+            : {})
+        } as ProjectLaunchConfiguration;
       }
 
       extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs.length}`);

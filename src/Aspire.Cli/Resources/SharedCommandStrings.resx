@@ -186,6 +186,10 @@
     <value>The --launch-profile option is not supported for {0} AppHosts.</value>
     <comment>{0} is the AppHost project type display name.</comment>
   </data>
+  <data name="LaunchProfileNotFound" xml:space="preserve">
+    <value>The launch profile '{0}' was not found in the AppHost project.</value>
+    <comment>{0} is the requested launch profile name.</comment>
+  </data>
   <data name="UsingAppHost" xml:space="preserve">
     <value>Using AppHost: {0}</value>
   </data>
