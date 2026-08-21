@@ -117,7 +117,6 @@
     <PackageVersion Include="Hex1b.Tool" Version="0.165.0" />
     <PackageVersion Include="Humanizer.Core" Version="3.0.10" />
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
-    <PackageVersion Include="JsonPatch.Net" Version="5.0.3" />
     <PackageVersion Include="Markdig" Version="1.3.2" />
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="1.1.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.17.0" />
