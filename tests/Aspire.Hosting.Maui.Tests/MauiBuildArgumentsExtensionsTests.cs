@@ -110,7 +110,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
     public async Task WithMauiBuildArguments_SyncCallback_MutatesArguments()
     {
         var emulator = CreateAndroidEmulator(outputHelper);
-        emulator.WithMauiBuildArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
+        emulator.WithMauiBuildArguments(context => context.AddArgument("-p:MyProperty=Value"));
 
         var arguments = new List<string>();
         await InvokeCallbacksAsync(emulator.Resource, MauiBuildStep.Build, arguments);
@@ -124,7 +124,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
         var emulator = CreateAndroidEmulator(outputHelper);
         emulator.WithMauiBuildArguments(context =>
         {
-            context.Arguments.Add("-p:AsyncProperty=Value");
+            context.AddArgument("-p:AsyncProperty=Value");
             return Task.CompletedTask;
         });
 
@@ -138,9 +138,9 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
     public async Task MultipleCallbacks_InvokedInRegistrationOrder()
     {
         var emulator = CreateAndroidEmulator(outputHelper);
-        emulator.WithMauiBuildArguments(context => context.Arguments.Add("first"));
-        emulator.WithMauiBuildArguments(context => context.Arguments.Add("second"));
-        emulator.WithMauiBuildArguments(context => context.Arguments.Add("third"));
+        emulator.WithMauiBuildArguments(context => context.AddArgument("first"));
+        emulator.WithMauiBuildArguments(context => context.AddArgument("second"));
+        emulator.WithMauiBuildArguments(context => context.AddArgument("third"));
 
         var arguments = new List<string>();
         await InvokeCallbacksAsync(emulator.Resource, MauiBuildStep.Build, arguments);
@@ -152,8 +152,8 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
     public async Task BuildAndLaunchCallbacks_AreScopedToTheirOwnStep()
     {
         var emulator = CreateAndroidEmulator(outputHelper);
-        emulator.WithMauiBuildArguments(context => context.Arguments.Add("build-only"));
-        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("launch-only"));
+        emulator.WithMauiBuildArguments(context => context.AddArgument("build-only"));
+        emulator.WithMauiLaunchArguments(context => context.AddArgument("launch-only"));
 
         var buildArgs = new List<string>();
         await InvokeCallbacksAsync(emulator.Resource, MauiBuildStep.Build, buildArgs);
@@ -188,7 +188,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
 
         var appBuilder = DistributedApplication.CreateBuilder();
         var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
-        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
+        emulator.WithMauiLaunchArguments(context => context.AddArgument("-p:MyProperty=Value"));
 
         await using var app = appBuilder.Build();
         await PublishBeforeStartAsync(app);
@@ -211,7 +211,7 @@ public class MauiBuildArgumentsExtensionsTests(ITestOutputHelper outputHelper)
 
         var appBuilder = DistributedApplication.CreateBuilder();
         var emulator = appBuilder.AddMauiProject("mauiapp", tempFile).AddAndroidEmulator("emulator");
-        emulator.WithMauiLaunchArguments(context => context.Arguments.Add("-p:MyProperty=Value"));
+        emulator.WithMauiLaunchArguments(context => context.AddArgument("-p:MyProperty=Value"));
 
         await using var app = appBuilder.Build();
 

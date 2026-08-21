@@ -240,7 +240,7 @@ mauiApp.AddAndroidEmulator()
 
 ```typescript
 // Add an MSBuild property to the compile
-mauiApp.addAndroidEmulator("emulator")
+await mauiApp.addAndroidEmulator("emulator")
     .withMauiBuildArguments(async context => {
         const args = await context.arguments();
         await args.add("-p:MyProperty=Value");
@@ -257,10 +257,26 @@ mauiApp.AddAndroidEmulator()
 ```
 
 ```typescript
-mauiApp.addAndroidEmulator("emulator")
+await mauiApp.addAndroidEmulator("emulator")
     .withMauiLaunchArguments(async context => {
         const args = await context.arguments();
         await args.add("-p:MyProperty=Value");
+    });
+```
+
+### Sensitive Arguments
+
+MSBuild properties can carry secrets (for example a signing key password). Add those with `AddSensitiveArgument` instead of `Arguments.Add`. The value is still passed to `dotnet` verbatim, but the build pipeline redacts it from the arguments it writes to the resource logs. Launch-step arguments are additionally masked by the dashboard's command-line display.
+
+```csharp
+mauiApp.AddAndroidEmulator()
+    .WithMauiBuildArguments(context => context.AddSensitiveArgument($"-p:AndroidSigningKeyPass={keyPassword}"));
+```
+
+```typescript
+await mauiApp.addAndroidEmulator("emulator")
+    .withMauiBuildArguments(async context => {
+        await context.addSensitiveArgument(`-p:AndroidSigningKeyPass=${keyPassword}`);
     });
 ```
 
@@ -269,6 +285,7 @@ mauiApp.addAndroidEmulator("emulator")
 - Both methods have synchronous and asynchronous (`Func<..., Task>`) overloads.
 - Multiple callbacks can be registered per resource; they run in registration order and share the same mutable argument list.
 - Launch callbacks are applied once before the app starts, so edits do not accumulate across restarts.
+- Use `AddSensitiveArgument` for any argument containing a secret so its value is redacted from the resource logs.
 
 ## Requirements
 

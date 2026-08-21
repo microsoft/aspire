@@ -175,7 +175,7 @@ internal class MauiBuildQueueEventSubscriber(
         args.AddRange(buildInfo.AdditionalBuildArguments);
 
         // Allow consumers to inspect/modify the compile arguments.
-        await ApplyBuildArgumentCallbacksAsync(resource, args, cancellationToken).ConfigureAwait(false);
+        var callbackContext = await ApplyBuildArgumentCallbacksAsync(resource, args, cancellationToken).ConfigureAwait(false);
 
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -191,7 +191,10 @@ internal class MauiBuildQueueEventSubscriber(
             psi.ArgumentList.Add(arg);
         }
 
-        logger.LogInformation("Running: dotnet {Arguments}", string.Join(" ", args));
+        // Redact any arguments the callback marked sensitive so signing passwords and similar secrets
+        // do not leak into the resource logs. The process itself still receives the real values.
+        var displayArgs = callbackContext?.GetRedactedArguments() ?? args;
+        logger.LogInformation("Running: dotnet {Arguments}", string.Join(" ", displayArgs));
 
         // Apply a timeout so that a hung build does not block the queue forever.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -242,7 +245,11 @@ internal class MauiBuildQueueEventSubscriber(
     /// Invokes any registered <see cref="MauiBuildStep.Build"/> callbacks, letting consumers
     /// mutate the compile <paramref name="arguments"/> in place.
     /// </summary>
-    private static async Task ApplyBuildArgumentCallbacksAsync(
+    /// <returns>
+    /// The context the callbacks ran against (used to redact sensitive arguments from logs), or
+    /// <see langword="null"/> when no build callbacks are registered.
+    /// </returns>
+    private static async Task<MauiBuildArgumentsCallbackContext?> ApplyBuildArgumentCallbacksAsync(
         IResource resource, IList<string> arguments, CancellationToken cancellationToken)
     {
         var callbacks = resource.Annotations
@@ -252,7 +259,7 @@ internal class MauiBuildQueueEventSubscriber(
 
         if (callbacks.Length == 0)
         {
-            return;
+            return null;
         }
 
         var context = new MauiBuildArgumentsCallbackContext(MauiBuildStep.Build, arguments, resource, cancellationToken);
@@ -261,6 +268,8 @@ internal class MauiBuildQueueEventSubscriber(
         {
             await callback.Callback(context).ConfigureAwait(false);
         }
+
+        return context;
     }
 
     /// <summary>
