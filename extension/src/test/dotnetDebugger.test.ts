@@ -663,7 +663,8 @@ suite('Dotnet Debugger Extension Tests', () => {
             AMBIENT_ONLY: process.env.AMBIENT_ONLY,
             CLI_PRECEDENCE: process.env.CLI_PRECEDENCE,
             DEFAULT_PROFILE_ONLY: process.env.DEFAULT_PROFILE_ONLY,
-            DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT
+            DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT,
+            PROFILE_ROOT: process.env.PROFILE_ROOT
         };
 
         process.env.mode = 'ambient-h1';
@@ -674,6 +675,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         process.env.CLI_PRECEDENCE = 'from-process';
         process.env.DEFAULT_PROFILE_ONLY = 'from-process';
         process.env.DEFAULT_PROFILE_EXPLICIT = 'from-process';
+        process.env.PROFILE_ROOT = '/profile/root';
 
         try {
             const projectPath = nodePath.join(projectDir, 'AppHost.csproj');
@@ -704,8 +706,10 @@ suite('Dotnet Debugger Extension Tests', () => {
                     },
                     h3: {
                         commandName: 'Project',
+                        commandLineArgs: '--profile-root %PROFILE_ROOT%',
                         environmentVariables: {
-                            UNSELECTED_ONLY: 'from-h3'
+                            UNSELECTED_ONLY: 'from-h3',
+                            PROFILE_PATH: '%PROFILE_ROOT%/config'
                         }
                     }
                 }
@@ -800,6 +804,39 @@ suite('Dotnet Debugger Extension Tests', () => {
                 extension);
 
             assert.strictEqual(ambientUrlDebugConfig.env.ASPNETCORE_URLS, 'http://localhost:14000');
+
+            const cliSelectedDebugSessionConfig: AspireExtendedDebugConfiguration = {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: projectPath
+            };
+            fakeAspireDebugSession.configuration = cliSelectedDebugSessionConfig;
+            const cliSelectedLaunchConfig: ProjectLaunchConfiguration = {
+                ...launchConfig,
+                launch_profile: 'h3'
+            };
+            const cliSelectedDebugConfig = await createDebugSessionConfiguration(
+                cliSelectedDebugSessionConfig,
+                cliSelectedLaunchConfig,
+                undefined,
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                extension);
+
+            assert.strictEqual(cliSelectedDebugConfig.args, '--profile-root /profile/root');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_PATH, '/profile/root/config');
+
+            const forwardedArguments = ['--literal', '%PROFILE_ROOT%'];
+            const explicitArgumentsDebugConfig = await createDebugSessionConfiguration(
+                cliSelectedDebugSessionConfig,
+                cliSelectedLaunchConfig,
+                forwardedArguments,
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                extension);
+
+            assert.deepStrictEqual(explicitArgumentsDebugConfig.args, forwardedArguments);
         } finally {
             platformStub.restore();
             for (const [name, value] of Object.entries(inheritedEnvironment)) {

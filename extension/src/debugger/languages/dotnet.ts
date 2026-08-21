@@ -532,7 +532,12 @@ function createProjectEnvironment(
     if (baseProfile?.applicationUrl) {
         setEnvironmentVariable(environment, 'ASPNETCORE_URLS', baseProfile.applicationUrl);
     }
-    applyEnvironmentVariables(environment, baseProfile?.environmentVariables);
+    applyEnvironmentVariables(
+        environment,
+        baseProfile?.environmentVariables,
+        undefined,
+        undefined,
+        baseProfile?.commandName === LaunchProfileCommandName.project);
     applyEnvironmentVariables(environment, launchOptions.debugSession.configuration?.debuggers?.['project']?.env);
 
     // The AppHost uses DOTNET_LAUNCH_PROFILE to determine which launch profile to use for project resources.
@@ -551,11 +556,12 @@ function applyEnvironmentVariables(
     environment: NodeJS.ProcessEnv,
     variables: { [key: string]: string } | undefined,
     defaultProfile?: LaunchProfile | null,
-    defaultProfileName?: string | null
+    defaultProfileName?: string | null,
+    expandValues: boolean = false
 ): void {
     for (const [name, value] of Object.entries(variables ?? {})) {
         if (!isDefaultLaunchProfileEnvironmentVariable(name, value, defaultProfile, defaultProfileName)) {
-            setEnvironmentVariable(environment, name, value);
+            setEnvironmentVariable(environment, name, expandValues ? expandEnvironmentVariables(value) : value);
         }
     }
 }
@@ -669,7 +675,10 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             const workingDirectoryProfile = shouldApplyProfileWorkingDirectory &&
                 typeof baseProfile?.workingDirectory === 'string' ? baseProfile : null;
             debugConfiguration.cwd = determineWorkingDirectory(projectPath, workingDirectoryProfile);
-            let resolvedArguments = determineArguments(baseProfile?.commandLineArgs, args);
+            const profileCommandLineArgs = isAppHostProjectProfile && baseProfile.commandLineArgs
+                ? expandEnvironmentVariables(baseProfile.commandLineArgs)
+                : baseProfile?.commandLineArgs;
+            let resolvedArguments = determineArguments(profileCommandLineArgs, args);
             debugConfiguration.args = resolvedArguments;
             debugConfiguration.executablePath = launchOptions.isApphost
                 ? baseProfile?.commandName === LaunchProfileCommandName.executable ? baseProfile.executablePath : undefined
@@ -749,7 +758,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
                     configureDotNetRunDebugConfiguration(
                         debugConfiguration,
-                        createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args),
+                        createDotNetRunArguments(projectPath, profileCommandLineArgs, args),
                         createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions));
                 } else {
                     debugConfiguration.program = outputPath;
@@ -797,7 +806,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         debugConfiguration,
                         createDotNetRunArguments(
                             projectPath,
-                            baseProfile?.commandLineArgs,
+                            profileCommandLineArgs,
                             args,
                             /* fileBased */ true,
                             /* skipBuild */ !shouldBuildProject,
