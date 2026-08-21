@@ -50,6 +50,26 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	// Test 11: Test WithBindIpAll
+	builder.AddMongoDB("mongo-bind-all").WithBindIpAll()
+
+	// Test 12: Test WithReplicaSet with WithKeyFile, WithTlsMode and WithTlsAllowInvalidCertificates
+	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("my-secret-key")})
+	mongoRsMember := builder.AddMongoDB("mongo-rs-member").WithReplicaSet("rs0").WithKeyFile(keyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")}).WithTlsMode().WithTlsAllowInvalidCertificates()
+	if err = mongoRsMember.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// Test 13: Test AddMongoDBReplicaSet with WithMember
+	rsKeyFileParam := builder.AddParameter("rs-shared-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("replica-set-key")})
+	mongo1 := builder.AddMongoDB("mongo-rs-1").WithKeyFile(rsKeyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")})
+	mongo2 := builder.AddMongoDB("mongo-rs-2").WithKeyFile(rsKeyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")})
+
+	replicaSet := builder.AddMongoDBReplicaSet("rs0").WithMember(mongo1).WithMember(mongo2)
+	if err = replicaSet.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
 	_ = mongo.PrimaryEndpoint()
 	_ = mongo.Host()
 	_ = mongo.Port()
