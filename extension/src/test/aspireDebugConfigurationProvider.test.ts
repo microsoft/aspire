@@ -24,6 +24,7 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
     readonly validations: { appHostPath: string; reservationId: string; isDirectoryScope: boolean }[] = [];
     readonly released: { appHostPath: string; reservationId: string }[] = [];
     readonly prepared: { appHostPath: string; command: string; args: string[] | undefined; cliPath: string | undefined }[] = [];
+    readonly activeReservations = new Map<string, string>();
     /** When set, the claim is refused as if a lifecycle-owned launch already held it. */
     claimedByLifecycle = false;
     validationResult: string | false | undefined;
@@ -35,11 +36,20 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
         if (isDirectoryScope) {
             this.directoryScoped.push(appHostPath);
         }
-        return this.claimedByLifecycle ? false : `reservation-${this.reserved.length}`;
+        if (this.claimedByLifecycle) {
+            return false;
+        }
+
+        const reservationId = `reservation-${this.reserved.length}`;
+        this.activeReservations.set(appHostPath, reservationId);
+        return reservationId;
     }
 
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope = false): string | false {
         this.replacements.push({ previousAppHostPath, previousReservationId, appHostPath });
+        if (this.activeReservations.get(previousAppHostPath) === previousReservationId) {
+            this.activeReservations.delete(previousAppHostPath);
+        }
         return this.tryReserveExternalLaunch(appHostPath, isDirectoryScope);
     }
 
@@ -50,6 +60,9 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
 
     releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void {
         this.released.push({ appHostPath, reservationId });
+        if (this.activeReservations.get(appHostPath) === reservationId) {
+            this.activeReservations.delete(appHostPath);
+        }
     }
 
     async prepareLaunchArguments(
@@ -853,6 +866,44 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(quickPickStub.calledOnce, true);
         assert.strictEqual(config, undefined);
         assert.deepStrictEqual(launchReservation.reserved, []);
+    });
+
+    test('releases a carried directory reservation when repeated discovery becomes ambiguous and the picker is dismissed', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([]);
+        discoverStub.onSecondCall().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+        assert.ok(firstPass);
+
+        const secondPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, firstPass);
+
+        assert.strictEqual(secondPass, undefined);
+        assert.deepStrictEqual(launchReservation.released, [{
+            appHostPath: folder.uri.fsPath,
+            reservationId: 'reservation-1',
+        }]);
+        assert.strictEqual(launchReservation.activeReservations.size, 0);
     });
 
     test('does not discover or prompt for an explicit nested directory launch', async () => {

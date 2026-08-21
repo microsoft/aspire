@@ -115,6 +115,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
         const aspireConfig = config as AspireExtendedDebugConfiguration;
         this.ensureAppHostSelectionOrigin(aspireConfig);
+        const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
         if (typeof config.program === 'string') {
             const program = config.program;
             if (aspireConfig[appHostSelectionOriginConfigKey] === 'explicit-launch-configuration' && this.isWorkspaceFolderRoot(program, folder)) {
@@ -123,6 +124,11 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
             const resolvedProgram = await this.resolveDefaultDiscoveryTarget(aspireConfig, program, folder, token);
             if (resolvedProgram === undefined) {
+                if (existingExternalReservation) {
+                    this._launchReservation.releaseExternalLaunchReservation(
+                        existingExternalReservation.appHostPath,
+                        existingExternalReservation.reservationId);
+                }
                 return undefined;
             }
 
@@ -148,7 +154,6 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         else if (!launchedByExtension) {
             delete aspireConfig.resolvedCliPath;
         }
-        const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
         if (launchedByExtension) {
             markAspireDebugConfigurationAsExtensionOwned(config);
         }
