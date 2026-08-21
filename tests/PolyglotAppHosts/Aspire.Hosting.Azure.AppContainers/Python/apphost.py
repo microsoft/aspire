@@ -11,15 +11,15 @@ def configure_container_app(_infrastructure, app):
 
 with create_builder() as builder:
     # Test addAzureContainerAppEnvironment factory method
-    env = builder.add_azure_container_app_environment("resource")
+    env = builder.add_azure_container_app_env("resource")
     # Test withDashboard with no args (uses default)
-    env2 = builder.add_azure_container_app_environment("resource")
+    env2 = builder.add_azure_container_app_env("resource")
     env2.with_dashboard()
     # Test withHttpsUpgrade with no args (uses default)
     env2.with_https_upgrade()
     # Test withAzureLogAnalyticsWorkspace with a Log Analytics Workspace resource
     laws = builder.add_azure_log_analytics_workspace("resource")
-    env3 = builder.add_azure_container_app_environment("resource")
+    env3 = builder.add_azure_container_app_env("resource")
     env3.with_azure_log_analytics_workspace(laws)
     custom_domain = builder.add_parameter("parameter")
     certificate_name = builder.add_parameter("parameter")
@@ -37,8 +37,8 @@ with create_builder() as builder:
     processor.publish_as_azure_container_app_job()
     # Test publishAsScheduledAzureContainerAppJob (simple - no callback)
     scheduler = builder.add_container("resource", "image")
-    scheduler.publish_as_scheduled_azure_container_app_job()
+    scheduler.publish_as_scheduled_azure_container_app_job("0 * * * *")
     # Test publishAsScheduledAzureContainerAppJob (with callback)
     reporter = builder.add_container("resource", "image")
-    reporter.publish_as_scheduled_azure_container_app_job()
+    reporter.publish_as_scheduled_azure_container_app_job("0 0 * * *", configure=configure_container_app)
     builder.run()

@@ -5,10 +5,10 @@ from aspire_app import create_builder
 
 
 with create_builder() as builder:
-    compose = builder.add_docker_compose_environment("compose")
+    compose = builder.add_docker_compose_env("compose")
     container_name = builder.add_parameter("container-name")
     api = builder.add_container("api", "nginx:alpine")
-    api.with_compute_environment(compose)
+    api.with_compute_env(compose)
     api.with_bind_mount("/host/path/data", "/container/data")
     api.with_http_endpoint(name="http", target_port=80)
     api_endpoint = api.get_endpoint("http")
@@ -49,7 +49,7 @@ with create_builder() as builder:
         compose_api.add_volume("validation-data", "/container/compose-data", is_read_only=True)
 
     def configure_service(compose_service, service):
-        service.set_container_name(container_name.as_environment_placeholder(compose_service))
+        service.set_container_name(container_name.as_env_placeholder(compose_service))
         service.set_restart("unless-stopped")
         compose_service.name()
         compose_service.parent().name()
@@ -62,7 +62,7 @@ with create_builder() as builder:
     compose.configure_compose_file(configure_compose_file)
     compose.with_dashboard()
     compose.with_dashboard()
-    compose.configure_dashboard()
+    compose.configure_dashboard(lambda _dashboard: None)
     api.publish_as_docker_compose_service(configure_service)
     _resolved_default_network_name = compose.default_network_name
     _resolved_dashboard_enabled = compose.dashboard_enabled

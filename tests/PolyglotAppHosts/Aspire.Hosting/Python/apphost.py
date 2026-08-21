@@ -1,7 +1,21 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import AksNodeVmSizes, AzureServiceTags, ReferenceExpression, WellKnownPipelineSteps, WellKnownPipelineTags, create_builder
+from aspire_app import (
+    AksNodeVmSizes,
+    AzureServiceTags,
+    CertificateTrustScope,
+    CertificateTrustExecutionConfigurationContext,
+    ExecuteCommandContext,
+    ExecuteCommandResult,
+    HealthCheckResult,
+    HttpsCertificateExecutionConfigurationContext,
+    HttpsCertificateInfo,
+    ReferenceExpression,
+    WellKnownPipelineSteps,
+    WellKnownPipelineTags,
+    create_builder,
+)
 
 
 with create_builder() as builder:
@@ -109,7 +123,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     project = builder.add_project("resource", ".", launch_profile_or_options="default")
     project.with_endpoints_in_env(["https"])
 
-    def custom_health_check():
+    def custom_health_check() -> HealthCheckResult:
         return {
             "Status": "Healthy",
             "Description": "custom health check",
@@ -186,7 +200,6 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     env_connection_string = builder.add_connection_string("env-connection-string")
     expression_connection_string = builder.add_connection_string("expression-connection-string", env_var_name_or_expression=expr)
     built_connection_string.with_connection_property("Key", "Value")
-    built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)
     container.with_reference("https://example.com/", name="external-uri")
     external_service = builder.add_external_service("external-service", "https://example.com")
@@ -196,7 +209,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     subnet = vnet.add_subnet("web", "10.0.1.0/24")
     subnet.allow_inbound(port="443", from_=AzureServiceTags.AzureLoadBalancer)
     subnet.deny_inbound(from_=AzureServiceTags.Internet)
-    aks = builder.add_azure_kubernetes_environment("aks")
+    aks = builder.add_azure_kubernetes_env("aks")
     aks.add_node_pool("system", vm_size=AksNodeVmSizes.StandardDSv5.StandardD2sV5)
     # builder-level pipeline APIs
     pipeline = builder.pipeline
@@ -239,19 +252,19 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         _resource_steps = list(config_pipeline.steps())
         _tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
     # withEnvironment - EndpointReference
-    container.with_environment("MY_ENDPOINT", endpoint)
+    container.with_env("MY_ENDPOINT", endpoint)
     # withEnvironment - ParameterResource
-    container.with_environment("MY_PARAM", builder.add_parameter("param"))
+    container.with_env("MY_PARAM", builder.add_parameter("param"))
     # withEnvironment - endpoint property expression
-    container.with_environment("MY_ENDPOINT_URL", endpoint_url)
+    container.with_env("MY_ENDPOINT_URL", endpoint_url)
     # withEnvironment - connection string resource
-    container.with_environment("MY_CONN", env_connection_string)
-    container.with_environment("MY_EXPR_CONN", expression_connection_string)
+    container.with_env("MY_CONN", env_connection_string)
+    container.with_env("MY_EXPR_CONN", expression_connection_string)
     # withEnvironment - external service resource
-    container.with_environment("MY_EXTERNAL_SERVICE", external_service)
+    container.with_env("MY_EXTERNAL_SERVICE", external_service)
     container.with_env_callback(configure_environment_callback)
     container.with_args_callback(configure_args_callback)
-    container.with_urls_callback(configure_urls_callback)
+    container.with_urls(configure_urls_callback)
     # withConnectionProperty — with ReferenceExpression
     built_connection_string.with_connection_property("Endpoint", expr)
     # withConnectionProperty — with string
@@ -261,25 +274,25 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # excludeFromMcp
     container.exclude_from_mcp()
     # waitForCompletion (pre-existing)
-    container.wait_for_completion()
+    container.wait_for_completion(tool)
     # withDeveloperCertificateTrust
-    container.with_developer_certificate_trust()
+    container.with_developer_certificate_trust(True)
     # withCertificateTrustScope
-    container.with_certificate_trust_scope()
+    container.with_certificate_trust_scope("Append")
     # withHttpsDeveloperCertificate
     container.with_https_developer_certificate()
     # withoutHttpsCertificate
     container.without_https_certificate()
     # withChildRelationship
-    container.with_child_relationship()
+    container.with_child_relationship(tool)
     # withIconName
-    container.with_icon_name()
+    container.with_icon_name("Cloud")
     # withHttpProbe
-    container.with_http_probe("liveness")
+    container.with_http_probe("Liveness")
     # withRemoteImageName
-    container.with_remote_image_name()
+    container.with_remote_image_name("validation/app")
     # withRemoteImageTag
-    container.with_remote_image_tag()
+    container.with_remote_image_tag("latest")
     # withImagePushOptions
     def configure_image_push_options(context):
         options = context.options
@@ -306,15 +319,15 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # withToolIgnoreFailedSources
     tool.with_tool_ignore_failed_sources()
     # withToolPackage
-    tool.with_tool_package()
+    tool.with_tool_package("dotnet-ef")
     # withToolPrerelease
     tool.with_tool_prerelease()
     # withToolSource
-    tool.with_tool_source()
+    tool.with_tool_source("validation-source")
     # withToolVersion
-    tool.with_tool_version()
+    tool.with_tool_version("10.0.0")
     # publishAsDockerFile
-    tool.publish_as_docker_file()
+    tool.publish_as_docker_file(lambda _container: None)
     # ===================================================================
     container.with_pipeline_step_factory(
         "custom-build-step",
@@ -324,21 +337,21 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         tags=[WellKnownPipelineTags.BuildCompute],
         description="Custom pipeline step",
     )
-    container.with_pipeline_configuration(configure_resource_pipeline)
-    container.with_pipeline_configuration(capture_resource_pipeline)
+    container.with_pipeline_config(configure_resource_pipeline)
+    container.with_pipeline_config(capture_resource_pipeline)
     # ===================================================================
     _app_host_directory = builder.app_host_dir
     host_environment = builder.env
     _is_development = host_environment.is_development()
     _is_production = host_environment.is_production()
     _is_staging = host_environment.is_staging()
-    _is_specific_environment = host_environment.is_environment()
-    builder_configuration = builder.get_configuration()
-    _config_value = builder_configuration.get_config_value()
-    _connection_string = builder_configuration.get_connection_string()
-    _config_section = builder_configuration.get_section()
+    _is_specific_environment = host_environment.is_env("Development")
+    builder_configuration = builder.get_config()
+    _config_value = builder_configuration.get_config_value("Validation:Value")
+    _connection_string = builder_configuration.get_connection_string("validation")
+    _config_section = builder_configuration.get_section("Validation")
     _config_children = builder_configuration.get_children()
-    _config_exists = builder_configuration.exists()
+    _config_exists = builder_configuration.exists("Validation")
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
@@ -380,7 +393,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
 
     container.with_args(["--validation"])
 
-    def configure_certificate_trust(requested_trust_scope):
+    def configure_certificate_trust(
+        requested_trust_scope: CertificateTrustScope,
+    ) -> CertificateTrustExecutionConfigurationContext:
         _requested_trust_scope = requested_trust_scope
         return {
             "CertificateBundlePath": ReferenceExpression.format_string("/etc/ssl/certs/custom-bundle.pem"),
@@ -389,7 +404,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "IsContainer": True,
         }
 
-    def configure_https_certificate(certificate_info):
+    def configure_https_certificate(
+        certificate_info: HttpsCertificateInfo,
+    ) -> HttpsCertificateExecutionConfigurationContext:
         _certificate_subject = certificate_info.get("Subject")
         _certificate_thumbprint = certificate_info.get("Thumbprint")
         return {
@@ -422,7 +439,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.on_resource_endpoints_allocated(lambda *_args, **_kwargs: None)
     container.on_resource_ready(lambda *_args, **_kwargs: None)
     # withEnvironment
-    container.with_environment("KEY", "value")
+    container.with_env("KEY", "value")
     # withEndpoint
     container.with_endpoint()
     container.with_endpoint(name="callback-endpoint")
@@ -442,9 +459,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # asHttp2Service
     container.as_http2_service()
     # withArgs
-    container.with_args()
+    container.with_args([])
     # withParentRelationship
-    container.with_parent_relationship()
+    container.with_parent_relationship(tool)
     # withExplicitStart
     container.with_explicit_start()
     # withUrl
@@ -464,13 +481,13 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         update_state_logger.log_information("UpdateCommandState services")
         return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
 
-    def echo_command(ctx):
+    def echo_command(ctx: ExecuteCommandContext) -> ExecuteCommandResult:
         message = ctx.arguments.value("message")
         echo_services = ctx.services
         echo_logger_factory = echo_services.get_logger_factory()
         echo_logger = echo_logger_factory.create_logger("ValidationAppHost.EchoCommand")
         echo_logger.log_information("Echo command services")
-        return {"success": message == "hello"}
+        return {"Success": message == "hello"}
 
     def validate_command_arguments(ctx):
         validation_services = ctx.services
@@ -479,10 +496,13 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         validation_logger.log_information("Validate command arguments services")
         return None
 
+    def noop_command(_ctx: ExecuteCommandContext) -> ExecuteCommandResult:
+        return {"Success": True}
+
     container.with_command(
         "noop",
         "Noop",
-        lambda *_args, **_kwargs: {"success": True},
+        noop_command,
         command_options={"UpdateState": update_command_state}
     )
 
@@ -540,10 +560,10 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # loads the available zones for that region into a second choice input. Reached via the command's
     # service provider (services.get_interaction_service()), which only prompts when the
     # interaction service is available (the interactive dashboard path).
-    def pick_zone_command(ctx):
+    def pick_zone_command(ctx: ExecuteCommandContext) -> ExecuteCommandResult:
         interaction_service = ctx.services.get_interaction_service()
         if not interaction_service.is_available():
-            return {"success": True, "message": "Interaction service is not available."}
+            return {"Success": True, "Message": "Interaction service is not available."}
 
         region_input = interaction_service.create_choice_input(
             "region",
@@ -564,17 +584,17 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             "Choose a region, then pick a zone from the dynamically loaded options.",
             [region_input, zone_input]
         )
-        canceled = result.canceled()
-        return {"success": not canceled, "canceled": canceled}
+        canceled = result.canceled
+        return {"Success": not canceled, "Canceled": canceled}
 
     container.with_command("pick-zone", "Pick Zone", pick_zone_command)
     # Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
     # exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
     # the dynamic-loading context accessors/setters, and the option/result DTO fields.
-    def interaction_showcase_command(ctx):
+    def interaction_showcase_command(ctx: ExecuteCommandContext) -> ExecuteCommandResult:
         interaction_service = ctx.services.get_interaction_service()
         if not interaction_service.is_available():
-            return {"success": True, "message": "Interaction service is not available."}
+            return {"Success": True, "Message": "Interaction service is not available."}
 
         confirmation = interaction_service.prompt_confirmation(
             "Confirm",
@@ -681,10 +701,10 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True, "ValidationCallback": validate_form},
         )
 
-        selected_color = multi.inputs().value("color")
+        selected_color = multi.inputs.value("color")
         solo_value = (single.get("Input") or {}).get("Value")
 
-        multi_canceled = multi.canceled()
+        multi_canceled = multi.canceled
         success = (not confirmation.get("Canceled", False)
                    and confirmation.get("Value", False)
                    and not message_box.get("Canceled", False)
@@ -694,9 +714,9 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
                    and not multi_canceled)
 
         return {
-            "success": bool(success),
-            "canceled": multi_canceled,
-            "message": f"color={selected_color or ''} solo={solo_value or ''}",
+            "Success": bool(success),
+            "Canceled": multi_canceled,
+            "Message": f"color={selected_color or ''} solo={solo_value or ''}",
         }
 
     container.with_command("interaction-showcase", "Interaction Showcase", interaction_showcase_command)
@@ -704,7 +724,4 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})
     app = builder.build()
-    _distributed_app_connection_string = app.get_connection_string()
-    _distributed_app_endpoint = app.get_endpoint("default")
-    _distributed_app_endpoint_for_network = app.get_endpoint_for_network("resource")
     builder.run()

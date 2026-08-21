@@ -2,7 +2,7 @@
 # Polyglot SDK Validation - Python validation AppHosts
 # Iterates all Python validation AppHosts under tests/PolyglotAppHosts/*/Python,
 # runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
-# verifies syntax plus any fixture-owned generated SDK API assertions.
+# type-checks each AppHost against the generated SDK API surface.
 set -euo pipefail
 
 echo "=== Python Validation AppHost Codegen Validation ==="
@@ -14,6 +14,11 @@ fi
 
 if ! command -v python3 &> /dev/null; then
     echo "ERROR: python3 not found in PATH"
+    exit 1
+fi
+
+if ! command -v pyright &> /dev/null; then
+    echo "ERROR: pyright not found in PATH"
     exit 1
 fi
 
@@ -135,9 +140,6 @@ for app_dir in "${APP_DIRS[@]}"; do
 from pathlib import Path
 
 files = [Path('apphost.py')]
-validator = Path('validate_generated_sdk.py')
-if validator.exists():
-    files.append(validator)
 files.extend(sorted(Path('.aspire/modules').rglob('*.py')))
 for file in files:
     compile(file.read_text(encoding='utf-8'), str(file), 'exec')
@@ -150,15 +152,17 @@ INNERPY
         continue
     fi
 
-    if [ -f "validate_generated_sdk.py" ]; then
-        echo "  -> generated SDK API validation..."
-        if ! PYTHONPATH=".aspire/modules" python3 validate_generated_sdk.py; then
-            echo "  ERROR: generated SDK API validation failed for $integration_name"
-            FAILED+=("$integration_name (generated SDK API validation)")
-            echo ""
-            restore_channel_settings
-            continue
-        fi
+    echo "  -> generated SDK type validation..."
+    if ! PYTHONPATH="$PWD/.aspire/modules${PYTHONPATH:+:$PYTHONPATH}" \
+        pyright \
+            --project "$SCRIPT_DIR/pyrightconfig.json" \
+            --pythonpath "$(command -v python3)" \
+            apphost.py; then
+        echo "  ERROR: generated SDK type validation failed for $integration_name"
+        FAILED+=("$integration_name (generated SDK type validation)")
+        echo ""
+        restore_channel_settings
+        continue
     fi
 
     restore_channel_settings
