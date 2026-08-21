@@ -705,7 +705,7 @@ function normalizeEnsureDownloadCacheOptions(options) {
   // Validate the VS Code layout up front so unsupported combinations fail before
   // populate() starts an expensive download into a staging directory.
   getVsCodeDirectoryName(platform, architecture);
-  getVsCodeExecutableRelativePaths(platform, architecture, options.extesterVersion);
+  getVsCodeExecutableRelativePaths(platform, architecture);
 
   return {
     cacheRoot: path.resolve(options.cacheRoot),
@@ -1170,9 +1170,9 @@ function isPathContainedWithin(rootPath, candidatePath) {
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
-function discoverCacheArtifacts(rootDirectory, platform, architecture, extesterVersion, realRootDirectory = resolveRealPath(rootDirectory)) {
+function discoverCacheArtifacts(rootDirectory, platform, architecture, _extesterVersion, realRootDirectory = resolveRealPath(rootDirectory)) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
-  const vscodeExecutableRelativePaths = getVsCodeExecutableRelativePaths(platform, architecture, extesterVersion);
+  const vscodeExecutableRelativePaths = getVsCodeExecutableRelativePaths(platform, architecture);
   const vscodeExecutableRelativePath = vscodeExecutableRelativePaths.find(
     relativePath => pathExistsWithoutFollowingLinks(path.join(rootDirectory, relativePath)));
   const chromeDriverBinaryName = getChromeDriverBinaryName(platform);
@@ -1235,23 +1235,14 @@ function getVsCodeDirectoryName(platform, architecture) {
   }
 }
 
-function getVsCodeExecutableRelativePaths(platform, architecture, extesterVersion) {
+function getVsCodeExecutableRelativePaths(platform, architecture) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
 
   switch (platform) {
     case 'darwin':
-      // VS Code 1.131 removes the legacy Contents/MacOS/Electron -> Code compatibility symlink. The
-      // cache key includes ExTester because 8.23 can launch only Electron while 8.24 falls back to
-      // Code. Validate against the executable that keyed dependency can actually launch rather than
-      // publishing a cache entry that will fail later in install-vsix or run-tests.
-      const legacyExecutable = path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
-      if (!isConcreteVersionAtLeast(extesterVersion, '8.24.0')) {
-        return [legacyExecutable];
-      }
-
       return [
         path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code'),
-        legacyExecutable,
+        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron'),
       ];
     case 'linux':
       return [path.join(vscodeDirectory, 'code')];
@@ -1455,12 +1446,52 @@ function encodePathSegment(value) {
  */
 function projectDownloadCache(result, storageDirectory) {
   fs.mkdirSync(storageDirectory, { recursive: true });
-  projectCacheEntry(
-    path.join(result.cacheDirectory, result.manifest.vscodeDirectory),
-    path.join(storageDirectory, result.manifest.vscodeDirectory));
+  const cachedVsCodeDirectory = path.join(result.cacheDirectory, result.manifest.vscodeDirectory);
+  const projectedVsCodeDirectory = path.join(storageDirectory, result.manifest.vscodeDirectory);
+  const cachedMacOsDirectory = path.join(cachedVsCodeDirectory, 'Contents', 'MacOS');
+  const cachedCode = path.join(cachedMacOsDirectory, 'Code');
+  const cachedElectron = path.join(cachedMacOsDirectory, 'Electron');
+  const needsLegacyMacOsProjection =
+    result.manifest.platform === 'darwin' &&
+    !isConcreteVersionAtLeast(result.manifest.extesterVersion, '8.24.0') &&
+    pathExistsWithoutFollowingLinks(cachedCode) &&
+    !pathExistsWithoutFollowingLinks(cachedElectron);
+
+  if (needsLegacyMacOsProjection) {
+    removePathWithoutFollowingLinks(projectedVsCodeDirectory);
+    fs.mkdirSync(projectedVsCodeDirectory);
+    projectDirectoryChildren(cachedVsCodeDirectory, projectedVsCodeDirectory, 'Contents');
+
+    const cachedContentsDirectory = path.join(cachedVsCodeDirectory, 'Contents');
+    const projectedContentsDirectory = path.join(projectedVsCodeDirectory, 'Contents');
+    fs.mkdirSync(projectedContentsDirectory);
+    projectDirectoryChildren(cachedContentsDirectory, projectedContentsDirectory, 'MacOS');
+
+    const projectedMacOsDirectory = path.join(projectedContentsDirectory, 'MacOS');
+    // Keep MacOS run-local so ExTester compatibility cleanup or replacement cannot mutate the
+    // shared immutable generation through a projected directory.
+    fs.mkdirSync(projectedMacOsDirectory);
+    projectDirectoryChildren(cachedMacOsDirectory, projectedMacOsDirectory);
+    fs.symlinkSync('Code', path.join(projectedMacOsDirectory, 'Electron'), 'file');
+  } else {
+    projectCacheEntry(cachedVsCodeDirectory, projectedVsCodeDirectory);
+  }
+
   projectCacheEntry(
     path.join(result.cacheDirectory, result.manifest.chromeDriverEntry),
     path.join(storageDirectory, result.manifest.chromeDriverEntry));
+}
+
+function projectDirectoryChildren(sourceDirectory, destinationDirectory, excludedName) {
+  for (const childName of fs.readdirSync(sourceDirectory)) {
+    if (childName === excludedName) {
+      continue;
+    }
+
+    projectCacheEntry(
+      path.join(sourceDirectory, childName),
+      path.join(destinationDirectory, childName));
+  }
 }
 
 function projectCacheEntry(sourcePath, destinationPath) {

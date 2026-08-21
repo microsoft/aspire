@@ -2228,18 +2228,46 @@ suite('E2E download cache', () => {
         assert.strictEqual(reused.cacheHit, true);
     });
 
-    test('rejects Code-only macOS bundles when ExTester still requires Electron', () => {
-        const root = createTestRoot('darwin-code-with-legacy-extester');
+    test('projects a Code-only macOS bundle for legacy ExTester without mutating the shared cache', () => {
+        const root = createTestRoot('darwin-code-projection-with-legacy-extester');
+        const cacheRoot = path.join(root, 'cache');
+        const runRoot = path.join(root, 'run');
+        const storageDirectory = path.join(runRoot, 'storage');
         const bundle = 'Visual Studio Code.app';
+        const codeRelativePath = path.join(bundle, 'Contents', 'MacOS', 'Code');
+        const electronRelativePath = path.join(bundle, 'Contents', 'MacOS', 'Electron');
 
-        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
+        const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
             platform: 'darwin',
             architecture: 'arm64',
             populate(stagingDirectory) {
-                writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'vscode binary');
+                writeFile(path.join(stagingDirectory, codeRelativePath), 'fake Code binary');
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
             },
-        })), /vscodeExecutable points to missing paths: 'Visual Studio Code\.app[\\/]Contents[\\/]MacOS[\\/]Electron'/);
+        }));
+
+        cache.projectDownloadCache(result, storageDirectory);
+
+        const sharedElectron = path.join(result.cacheDirectory, electronRelativePath);
+        const projectedElectron = path.join(storageDirectory, electronRelativePath);
+        assert.strictEqual(fs.existsSync(sharedElectron), false);
+        assert.strictEqual(fs.lstatSync(projectedElectron).isSymbolicLink(), true);
+        assert.strictEqual(fs.readFileSync(projectedElectron, 'utf8'), 'fake Code binary');
+
+        fs.unlinkSync(projectedElectron);
+        cache.removePathWithoutFollowingLinks(runRoot);
+        assert.strictEqual(fs.existsSync(runRoot), false);
+
+        const reused = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            platform: 'darwin',
+            architecture: 'arm64',
+            populate() {
+                throw new Error('populate must not run when the cached bundle is valid.');
+            },
+        }));
+
+        assert.strictEqual(reused.cacheHit, true);
+        assert.strictEqual(reused.cacheDirectory, result.cacheDirectory);
     });
 
     test('accepts a legacy internal Electron symlink in older macOS bundles', () => {
