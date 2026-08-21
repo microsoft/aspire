@@ -118,6 +118,10 @@
     justify-content: flex-end;
 }
 
+::deep .resources-filter-popup::part(dialog) {
+    transform: translateX(calc(-100% + 32px));
+}
+
 @container (max-width: 500px) {
     ::deep .resource-tabs-toolbar {
         min-width: 0;

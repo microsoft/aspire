@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public void UnanchoredAspireMenu_RendersFluentMenu()
+    public async Task UnanchoredAspireMenu_RendersFluentMenuAtCursor()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -28,8 +28,17 @@ public class AspireMenuTests : DashboardTestContext
         });
 
         var menu = Assert.Single(menuHost.FindComponents<FluentMenu>()).Instance;
-        Assert.Null(menu.Trigger);
+        Assert.Equal("menu-anchor", menu.Trigger);
         Assert.Single(menuHost.FindComponents<FluentMenuList>());
+        var cursorAnchor = menuHost.Find("#menu-anchor");
+        Assert.Contains("position: fixed", cursorAnchor.GetAttribute("style"));
+        Assert.Contains("anchor-name: --anchor-menu-anchor", cursorAnchor.GetAttribute("style"));
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(123, 456));
+
+        cursorAnchor = menuHost.Find("#menu-anchor");
+        Assert.Contains("left: 123px", cursorAnchor.GetAttribute("style"));
+        Assert.Contains("top: 456px", cursorAnchor.GetAttribute("style"));
     }
 
     [Fact]
@@ -84,7 +93,7 @@ public class AspireMenuTests : DashboardTestContext
         });
         Assert.Single(menuHost.FindComponents<FluentMenu>());
 
-        await menuHost.InvokeAsync(() => menuHost.FindComponent<AspireMenu>().Instance.OpenAsync(1920, 1080, 10, 10));
+        await menuHost.InvokeAsync(() => menuHost.FindComponent<AspireMenu>().Instance.OpenAsync(10, 10));
 
         menuHost.SetParametersAndRender(builder =>
         {

@@ -9,6 +9,16 @@ body {
     overflow: hidden;
 }
 
+/* Fluent menu item content otherwise occupies only a fixed 20px grid track, so the fixed-position
+   menu resolves to its 160px minimum instead of sizing to its labels. Include the adjacent auto
+   track while leaving submenu items unchanged because they use it for the submenu glyph. */
+.aspire-menu-container:not(.mobile-nav-menu) fluent-menu-item:not(:state(submenu))::part(content) {
+    grid-column-end: span 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .aspire-menu-container fluent-menu-list[slot="submenu"] {
     /* At least one side of the anchor has half the viewport available. Keeping the submenu below
        that height lets Fluent's position fallback move command-heavy menus left and above/below. */
@@ -23,6 +33,10 @@ body {
 
 [hidden] {
     display: none !important;
+}
+
+fluent-button {
+    min-width: 32px;
 }
 
 .datagrid-overflow-area,
@@ -129,11 +143,9 @@ fluent-drawer-body > [slot="title"] {
     gap: inherit;
 }
 
-/* Fluent UI v5 gives buttons a 96px minimum width, including icon-only toolbar actions. */
 .filter-toolbar > fluent-button,
 .filter-toolbar > .toolbar-end > fluent-button {
     width: auto;
-    min-width: 32px;
 }
 
 .filter-toolbar > fluent-button:not(.clear-button),
@@ -190,7 +202,6 @@ fluent-drawer-body > [slot="title"] {
 
 .details-toolbar > .toolbar-end > fluent-button {
     width: 32px;
-    min-width: 32px;
 }
 
 /* Floating scroll-to-bottom button for overflowing live-data regions. Position and visibility
@@ -261,10 +272,6 @@ fluent-drawer-body > [slot="title"] {
     justify-content: center;
     width: 100%;
     height: 100%;
-}
-
-.grid-action-container fluent-button {
-    min-width: 32px !important;
 }
 
 .col-long-content {

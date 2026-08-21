@@ -20,8 +20,8 @@ public partial class AspireMenu : FluentComponentBase
     private IReadOnlyList<MenuButtonItem>? _renderedItems;
     private bool _refreshMenuAfterRender;
     private bool? _appliedOpen;
-    private int _targetOffsetLeft;
-    private int _targetOffsetTop;
+    private int _cursorLeft;
+    private int _cursorTop;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -32,17 +32,11 @@ public partial class AspireMenu : FluentComponentBase
     [Parameter]
     public bool Anchored { get; set; } = true;
 
-    [Parameter]
-    public int? VerticalThreshold { get; set; }
-
     /// <summary>
     /// Raised when the <see cref="Open"/> property changed.
     /// </summary>
     [Parameter]
     public EventCallback<bool> OpenChanged { get; set; }
-
-    [Parameter]
-    public EventCallback OnRenderComplete { get; set; }
 
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
@@ -60,10 +54,15 @@ public partial class AspireMenu : FluentComponentBase
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
-    private const int EstimatedItemHeight = 32;
-    private const int MenuVerticalPadding = 16;
-    private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
+    private string? CursorAnchorStyle => new StyleBuilder()
+        .AddStyle("position", "fixed")
+        .AddStyle("left", $"{_cursorLeft}px")
+        .AddStyle("top", $"{_cursorTop}px")
+        .AddStyle("width", "0")
+        .AddStyle("height", "0")
+        .AddStyle("anchor-name", $"--anchor-{Anchor}")
+        .AddStyle("pointer-events", "none")
+        .Build();
 
     protected override void OnParametersSet()
     {
@@ -81,11 +80,6 @@ public partial class AspireMenu : FluentComponentBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && OnRenderComplete.HasDelegate)
-        {
-            await OnRenderComplete.InvokeAsync();
-        }
-
         if (_refreshMenuAfterRender)
         {
             _refreshMenuAfterRender = false;
@@ -94,16 +88,9 @@ public partial class AspireMenu : FluentComponentBase
             {
                 if (Open)
                 {
-                    if (Anchored)
-                    {
-                        // Trigger already identifies the anchor. The parameterless path leaves placement
-                        // to Fluent's CSS anchor positioning, including block and inline viewport fallbacks.
-                        await _menu.OpenMenuAsync();
-                    }
-                    else
-                    {
-                        await _menu.OpenMenuAsync(Anchor, _targetOffsetLeft, _targetOffsetTop);
-                    }
+                    // Trigger identifies either the button anchor or the cursor anchor. The parameterless
+                    // path leaves placement to Fluent's CSS anchor positioning and viewport fallbacks.
+                    await _menu.OpenMenuAsync();
                 }
                 else
                 {
@@ -120,20 +107,12 @@ public partial class AspireMenu : FluentComponentBase
         await SetOpenAsync(false);
     }
 
-    public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
+    public async Task OpenAsync(int clientX, int clientY)
     {
         if (_menu is not null)
         {
-            // Calculate the position to display the context menu using the cursor position (clientX, clientY)
-            // together with the screen width and height.
-            // The menu may need to be displayed above or left of the cursor to fit in the screen.
-            const int estimatedMenuWidth = 200;
-            _targetOffsetLeft = clientX + estimatedMenuWidth > screenWidth
-                ? Math.Max(0, clientX - estimatedMenuWidth)
-                : clientX;
-            _targetOffsetTop = clientY + CalculatedVerticalThreshold > screenHeight
-                ? Math.Max(0, clientY - CalculatedVerticalThreshold)
-                : clientY;
+            _cursorLeft = clientX;
+            _cursorTop = clientY;
 
             Style = new StyleBuilder()
                 .AddStyle("max-width", "368px")

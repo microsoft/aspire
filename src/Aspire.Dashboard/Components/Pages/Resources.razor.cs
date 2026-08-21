@@ -420,13 +420,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         [JSInvokable]
-        public async Task ResourceContextMenu(string id, int screenWidth, int screenHeight, int clientX, int clientY)
+        public async Task ResourceContextMenu(string id, int clientX, int clientY)
         {
             if (resources._resourceByName.TryGetValue(id, out var resource))
             {
                 await resources.InvokeAsync(async () =>
                 {
-                    await resources.ShowContextMenuAsync(resource, screenWidth, screenHeight, clientX, clientY);
+                    await resources.ShowContextMenuAsync(resource, clientX, clientY);
                 });
             }
         }
@@ -611,7 +611,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return false;
     }
 
-    private async Task ShowContextMenuAsync(ResourceViewModel resource, int screenWidth, int screenHeight, int clientX, int clientY)
+    private async Task ShowContextMenuAsync(ResourceViewModel resource, int clientX, int clientY)
     {
         if (_contextMenu is { } contextMenu)
         {
@@ -627,7 +627,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 showConsoleLogsItem: true,
                 showUrls: true);
 
-            await contextMenu.OpenAsync(screenWidth, screenHeight, clientX, clientY);
+            await contextMenu.OpenAsync(clientX, clientY);
             StateHasChanged();
         }
     }

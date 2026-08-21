@@ -180,18 +180,9 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
     }
 
-    public static void SetupFluentUIComponents(TestContext context, bool setupAspireMenuButtonModule = true)
+    public static void SetupFluentUIComponents(TestContext context)
     {
         context.Services.AddFluentUIComponents();
-
-        if (setupAspireMenuButtonModule)
-        {
-            var menuButtonModule = context.JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
-            menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
-            menuButtonModule.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
-            menuButtonModule.SetupVoid("cancelFluentMenuInitialization", _ => true).SetVoidResult();
-        }
-
     }
 
     public static void SetupDialogInfrastructure(

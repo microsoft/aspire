@@ -252,7 +252,7 @@ public partial class ResourcesTests : DashboardTestContext
         var showContextMenuAsync = typeof(Components.Pages.Resources)
             .GetMethod("ShowContextMenuAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        await cut.InvokeAsync(() => (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 1024, 768, 20, 20])!);
+        await cut.InvokeAsync(() => (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 20, 20])!);
         cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));
 
         var contextMenu = cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored);

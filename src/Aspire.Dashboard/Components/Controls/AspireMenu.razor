@@ -2,10 +2,15 @@
 @using System.Collections.Immutable
 @inherits FluentComponentBase
 
+@if (!Anchored)
+{
+    <span id="@Anchor" aria-hidden="true" style="@CursorAnchorStyle"></span>
+}
+
 @* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
 <FluentMenu Class="aspire-menu-container"
             @ref="_menu"
-            Trigger="@(Anchored ? Anchor : null)"
+            Trigger="@Anchor"
             OpenedChanged="OnOpenChanged"
             Style="@Style"
             PersistOnItemClick="true">

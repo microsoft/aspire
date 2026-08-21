@@ -541,7 +541,7 @@ class ResourceGraph {
         // Prevent default browser context menu.
         event.preventDefault();
 
-        this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', data.id, window.innerWidth, window.innerHeight, event.clientX, event.clientY);
+        this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', data.id, event.clientX, event.clientY);
     };
 
     selectNode = (event) => {
