@@ -2210,19 +2210,33 @@ internal sealed class RadiusInfrastructureBuilder
 
         foreach (var (credentialOwner, _) in _recipeCredentialOwners.Values)
         {
-            if (ReferenceEquals(credentialOwner, resource) ||
-                credentialOwner is not IResourceWithConnectionString withConnectionString ||
-                !referencePrefixes.TryGetValue(credentialOwner, out var prefixes))
+            if (ReferenceEquals(credentialOwner, resource))
             {
                 continue;
             }
 
-            foreach (var (propertyName, connectionProperty) in withConnectionString.GetConnectionProperties())
+            // A reference can target the backing server itself or one of its database children
+            // (`AddSqlServer("sql").AddDatabase("appdb")`). The recipe credential is registered
+            // against the server, but the splat used the referenced resource's own name for the
+            // prefix and its own connection properties for the values — a child exposes properties
+            // the server does not (`APPDB_URI`) while still embedding the server's credential — so
+            // each referenced resource is matched with its own properties and then attributed to
+            // the server that owns the credential.
+            foreach (var (referenced, prefixes) in referencePrefixes)
             {
-                if (KeyMatchesSplattedProperty(key, propertyName, prefixes) &&
-                    string.Equals(connectionProperty.ValueExpression, valueExpression, StringComparison.Ordinal))
+                if (referenced is not IResourceWithConnectionString withConnectionString ||
+                    !ReferenceEquals(ResolveToParent(referenced), credentialOwner))
                 {
-                    return credentialOwner;
+                    continue;
+                }
+
+                foreach (var (propertyName, connectionProperty) in withConnectionString.GetConnectionProperties())
+                {
+                    if (KeyMatchesSplattedProperty(key, propertyName, prefixes) &&
+                        string.Equals(connectionProperty.ValueExpression, valueExpression, StringComparison.Ordinal))
+                    {
+                        return credentialOwner;
+                    }
                 }
             }
         }
@@ -3245,13 +3259,17 @@ internal sealed class RadiusInfrastructureBuilder
                 // The credential parameters inside a backing resource's own connection string are
                 // exactly the ones the substitution is meant to rewrite, so the referenced resource
                 // becomes the context here — otherwise every consumer of `.WithReference(cache)`
-                // would be reported as an unrelated use of the cache's own password.
+                // would be reported as an unrelated use of the cache's own password. A database
+                // child (`AddSqlServer("sql").AddDatabase("appdb")`) composes its connection string
+                // from its server's credential, which is registered against the server, so the
+                // context is canonicalized to the parent — otherwise `ConnectionStrings__appdb`
+                // would report the server's own password as an unrelated use.
                 RecordConnectionStringConsumption(connectionStringReference.Resource, owner);
-                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, connectionStringReference.Resource, allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
                 RecordConnectionStringConsumption(resourceWithConnectionString, owner);
-                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, resourceWithConnectionString, allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, ResolveToParent(resourceWithConnectionString), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case ReferenceExpression referenceExpression:
                 await ResolveReferenceExpressionPartsAsync(referenceExpression, owner, parts, referencedResource, allowRecipeSubstitutions).ConfigureAwait(false);
