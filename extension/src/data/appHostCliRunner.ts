@@ -139,28 +139,31 @@ export class AppHostCliRunner implements vscode.Disposable {
                 settle(() => reject(new vscode.CancellationError()));
             });
 
+            const completionCallback = (code: number | null) => {
+                if (code !== 0) {
+                    const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
+                    if (retryArgs) {
+                        settle(() => {
+                            this.runCliCommand(command, retryArgs, options).then(resolve, reject);
+                        });
+                        return;
+                    }
+
+                    settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
+                    return;
+                }
+
+                settle(() => resolve({ stdout: stdout.value, stderr: stderr.value }));
+            };
+
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
                 createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
                 stderrCallback: (data) => { stderr.append(data); },
-                processExitCallback: (code) => {
-                    if (code !== 0) {
-                        const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
-                        if (retryArgs) {
-                            settle(() => {
-                                this.runCliCommand(command, retryArgs, options).then(resolve, reject);
-                            });
-                            return;
-                        }
-
-                        settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
-                        return;
-                    }
-
-                    settle(() => resolve({ stdout: stdout.value, stderr: stderr.value }));
-                },
+                processExitCallback: completionCallback,
+                exitCallback: completionCallback,
                 errorCallback: (error) => {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
                 },
