@@ -7,13 +7,13 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from '../debugger/AspireDebugConfigurationProvider';
-import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
-import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
 import { removeDirectorySafely } from './testHelpers';
 /** Captures the AppHost paths the provider claims for `launch.json`/F5 launches. */
@@ -787,6 +787,143 @@ suite('AspireDebugConfigurationProvider', () => {
 
         assert.strictEqual(config?.program, programPath);
     });
+
+    test('selects a concrete AppHost before reserving an ambiguous default-discovery directory', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async (items: any) => {
+            const resolvedItems = await items;
+            return resolvedItems[1];
+        });
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+
+        assert.strictEqual(discoverStub.calledOnce, true);
+        assert.strictEqual(quickPickStub.calledOnce, true);
+        assert.strictEqual(config?.program, secondAppHostPath);
+        assert.strictEqual(config?.[appHostSelectionOriginConfigKey], 'user-selection');
+        assert.strictEqual(config?.[appHostTelemetryTargetPathConfigKey], undefined);
+        assert.deepStrictEqual(launchReservation.reserved, [secondAppHostPath]);
+    });
+
+    test('cancels an ambiguous default-discovery directory when the AppHost picker is dismissed', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+
+        assert.strictEqual(discoverStub.calledOnce, true);
+        assert.strictEqual(quickPickStub.calledOnce, true);
+        assert.strictEqual(config, undefined);
+        assert.deepStrictEqual(launchReservation.reserved, []);
+    });
+
+    test('does not discover or prompt for an explicit nested directory launch', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        const nestedDirectory = path.join(folder.uri.fsPath, 'Nested');
+        fs.mkdirSync(nestedDirectory, { recursive: true });
+        const discoverStub = sinon.stub().resolves([
+            { path: path.join(nestedDirectory, 'AppHost.csproj'), language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: nestedDirectory,
+            [appHostSelectionOriginConfigKey]: 'explicit-launch-configuration',
+        });
+
+        assert.strictEqual(config?.program, nestedDirectory);
+        assert.strictEqual(config?.[appHostSelectionOriginConfigKey], 'explicit-launch-configuration');
+        assert.strictEqual(discoverStub.called, false);
+        assert.strictEqual(quickPickStub.called, false);
+    });
+
+    for (const testCase of [
+        {
+            name: 'one buildable candidate',
+            candidates: (folder: vscode.WorkspaceFolder): CandidateAppHostDisplayInfo[] => [
+                { path: path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj'), language: 'csharp', status: 'buildable' },
+            ],
+        },
+        {
+            name: 'a selected default',
+            candidates: (folder: vscode.WorkspaceFolder): CandidateAppHostDisplayInfo[] => [
+                { path: path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj'), language: 'csharp', status: 'buildable', selected: true },
+                { path: path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj'), language: 'csharp', status: 'buildable' },
+            ],
+        },
+    ]) {
+        test(`leaves a default-discovery directory unchanged without prompting when discovery has ${testCase.name}`, async () => {
+            const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+            fs.mkdirSync(folder.uri.fsPath);
+            const candidates = testCase.candidates(folder);
+            const defaultCandidate = candidates.find(candidate => candidate.selected) ?? (candidates.length === 1 ? candidates[0] : undefined);
+            const discoveryService = {
+                discover: sinon.stub().resolves(candidates),
+                resolveDebugTarget: async (filePath: string) => filePath,
+                tryFindWorkspaceDefaultCandidate: async () => defaultCandidate,
+            } as unknown as AppHostDiscoveryService;
+            const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+            const provider = createProvider(discoveryService, launchReservation);
+
+            const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+                name: 'Debug AppHost',
+                type: 'aspire',
+                request: 'launch',
+                program: folder.uri.fsPath,
+                [appHostSelectionOriginConfigKey]: 'default-discovery',
+            });
+
+            assert.strictEqual(config?.program, folder.uri.fsPath);
+            assert.strictEqual(quickPickStub.called, false);
+        });
+    }
 
     test('leaves workspace folder launch target unchanged and records AppHost telemetry target', async () => {
         const folder = createWorkspaceFolder(tempDir);
