@@ -1624,6 +1624,16 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(TestRedisResource, result)
 
+    def add_test_marker(self, name: str) -> AbstractTestMarkerResource:
+        """Adds a resource exposed only through a bare marker interface."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/addTestMarker',
+            rpc_args,
+        )
+        return typing.cast(AbstractTestMarkerResource, result)
+
     def add_test_vault(self, name: str, **kwargs: typing.Unpack["TestVaultResourceKwargs"]) -> TestVaultResource:  # type: ignore
         """Adds a test vault resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -2056,6 +2066,10 @@ class AbstractResourceWithProbes(AbstractResource):
 
 class AbstractResourceWithWaitSupport(AbstractResource):
     """Abstract base class for AbstractResourceWithWaitSupport interface."""
+
+
+class AbstractTestMarkerResource(AbstractResource):
+    """Abstract base class for AbstractTestMarkerResource interface."""
 
 
 class AbstractTestVaultResource(AbstractResource):

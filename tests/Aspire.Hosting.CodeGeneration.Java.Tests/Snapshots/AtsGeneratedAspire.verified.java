@@ -1227,6 +1227,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMarkerResource", (h, c) -> new ITestMarkerResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", (h, c) -> new TestDatabaseResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", (h, c) -> new IResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString", (h, c) -> new IResourceWithConnectionString(h, c));
@@ -1495,6 +1496,15 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (TestRedisResource) result;
     }
 
+    /** Adds a resource exposed only through a bare marker interface. */
+    public ITestMarkerResource addTestMarker(String name) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestMarker", reqArgs);
+        return (ITestMarkerResource) result;
+    }
+
     /** Adds a test vault resource */
     public TestVaultResource addTestVault(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -1543,6 +1553,20 @@ package aspire;
 @SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithEnvironment extends HandleWrapperBase {
     IResourceWithEnvironment(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestMarkerResource.java =====
+// ITestMarkerResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMarkerResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestMarkerResource extends ResourceBuilderBase {
+    ITestMarkerResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
 
@@ -3603,6 +3627,7 @@ public final class WithOptionalStringOptions {
 .aspire/modules/aspire/IResource.java
 .aspire/modules/aspire/IResourceWithConnectionString.java
 .aspire/modules/aspire/IResourceWithEnvironment.java
+.aspire/modules/aspire/ITestMarkerResource.java
 .aspire/modules/aspire/ITestVaultResource.java
 .aspire/modules/aspire/JsonSerializable.java
 .aspire/modules/aspire/ReferenceExpression.java

@@ -136,6 +136,12 @@ type ResourceWithConnectionString interface {
 	handleReference
 }
 
+// TestMarkerResource marks types implementing ITestMarkerResource.
+// Marker interface.
+type TestMarkerResource interface {
+	handleReference
+}
+
 // TestVaultResource marks types implementing ITestVaultResource.
 // Methods are emitted on concrete impls; this interface is a marker for type assertions.
 type TestVaultResource interface {
@@ -565,6 +571,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirec
 // IDistributedApplicationBuilder is the public interface for handle type IDistributedApplicationBuilder.
 type IDistributedApplicationBuilder interface {
 	handleReference
+	AddTestMarker(name string) TestMarkerResource
 	AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource
 	AddTestVault(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	Build() (DistributedApplication, error)
@@ -579,6 +586,24 @@ type iDistributedApplicationBuilder struct {
 // newIDistributedApplicationBuilderFromHandle wraps an existing handle as IDistributedApplicationBuilder.
 func newIDistributedApplicationBuilderFromHandle(h *handle, c *client) IDistributedApplicationBuilder {
 	return &iDistributedApplicationBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AddTestMarker adds a resource exposed only through a bare marker interface.
+func (s *iDistributedApplicationBuilder) AddTestMarker(name string) TestMarkerResource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/addTestMarker", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(TestMarkerResource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/addTestMarker returned unexpected type %T", result))
+		return nil
+	}
+	return typed
 }
 
 // AddTestRedis adds a test Redis resource from ATS documentation.
