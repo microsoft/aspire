@@ -995,6 +995,34 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_EmitsPromiseWrapperForZeroCapabilityResourceBuilder()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19507: an exported
+        // method returning IResourceBuilder<T> for a bare interface/class with no capabilities
+        // of its own beyond the base fluent chain (e.g. IComputeEnvironmentResource, or a
+        // third-party integration's IResourceBuilder<IResourceWithServiceDiscovery> export) was
+        // always registered as needing a Promise wrapper, so every reference to
+        // "{ClassName}Promise" was still generated - but the wrapper declaration itself was
+        // skipped whenever the builder had zero of its own capabilities, producing a dangling
+        // reference ("Cannot find name '...Promise'") in the generated TypeScript SDK.
+        //
+        // ComputeEnvironmentResource (from Aspire.Hosting) is a real-world instance of this: it
+        // has no capabilities of its own in this test's scanned assemblies, so it previously hit
+        // exactly this gap.
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains(
+            "export interface ComputeEnvironmentResourcePromise extends PromiseLike<ComputeEnvironmentResource>",
+            aspireTs);
+        Assert.Contains(
+            "class ComputeEnvironmentResourcePromiseImpl implements ComputeEnvironmentResourcePromise",
+            aspireTs);
+    }
+
+    [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
     {
         // End-to-end test: verify that withEnvironment appears on TestRedisResourceBuilder
