@@ -177,12 +177,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string LaunchProfileNotFound {
-            get {
-                return ResourceManager.GetString("LaunchProfileNotFound", resourceCulture);
-            }
-        }
-
         internal static string UsingAppHost {
             get {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);

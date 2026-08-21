@@ -215,6 +215,7 @@ export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string,
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const explicitLaunchProfileNotResolved = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' could not be uniquely resolved from the project launch settings.', profileName);
 export const launchProfileUnsupportedCommandName = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses a commandName that dotnet run does not support. Use \'Project\' or \'Executable\'.', profileName);
+export const launchProfileHasInvalidProperties = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' contains property values that dotnet run does not support.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const javaDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Java AppHosts are launched through the Java debugger extension. Install {0} from the Extensions view, then start the AppHost again.', extensionId);
 export const javaAppHostCommandNotRecognized = () => vscode.l10n.t('The Java AppHost launch command was not recognized and cannot be debugged.');

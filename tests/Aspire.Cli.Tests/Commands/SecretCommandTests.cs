@@ -119,7 +119,6 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public bool SupportsLaunchProfiles => false;
         public string? AppHostFileName => null;
 
-        public LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName) => LaunchProfileMatchResult.Unknown;
         public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken) => throw new NotSupportedException();
         public bool CanHandle(FileInfo appHostFile) => true;
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken) => throw new NotSupportedException();

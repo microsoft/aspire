@@ -147,17 +147,6 @@ internal sealed class PublishContext
 }
 
 /// <summary>
-/// Describes how an explicitly requested launch profile matched the project's launch settings.
-/// </summary>
-internal enum LaunchProfileMatchResult
-{
-    Unknown,
-    NotFound,
-    Found,
-    Ambiguous
-}
-
-/// <summary>
 /// Interface for AppHost projects of various types.
 /// This is the single extension point for adding new language support.
 /// </summary>
@@ -183,14 +172,6 @@ internal interface IAppHostProject
     /// Gets whether this project type supports selecting a launch profile explicitly.
     /// </summary>
     bool SupportsLaunchProfiles { get; }
-
-    /// <summary>
-    /// Determines whether a named launch profile exists uniquely in the AppHost project.
-    /// </summary>
-    /// <param name="appHostFile">The AppHost project file.</param>
-    /// <param name="launchProfileName">The launch profile name.</param>
-    /// <returns>The launch profile match result.</returns>
-    LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName);
 
     /// <summary>
     /// Gets the file patterns to search for when detecting apphosts.

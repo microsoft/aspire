@@ -12,13 +12,51 @@ import {
     readLaunchSettings,
     expandEnvironmentVariables,
     LaunchSettings,
-    LaunchProfile
+    LaunchProfile,
+    hasSdkCompatibleLaunchProfileProperties
 } from '../debugger/launchProfiles';
 import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 import { removeDirectorySafely } from './testHelpers';
 suite('Launch Profile Tests', () => {
+    suite('hasSdkCompatibleLaunchProfileProperties', () => {
+        test('accepts valid SDK launch profile property types', () => {
+            assert.strictEqual(hasSdkCompatibleLaunchProfileProperties({
+                commandName: 'Project',
+                commandLineArgs: null,
+                launchBrowser: true,
+                executablePath: false,
+                workingDirectory: true,
+                useSSL: 'ignored by the SDK',
+                environmentVariables: {
+                    ASPNETCORE_ENVIRONMENT: 'Development'
+                }
+            }), true);
+            assert.strictEqual(hasSdkCompatibleLaunchProfileProperties({
+                commandName: 'Executable',
+                executablePath: '/usr/bin/dotnet',
+                launchBrowser: 'ignored by the SDK',
+                launchUrl: true
+            }), true);
+        });
+
+        test('rejects malformed SDK launch profile property types', () => {
+            const malformedProfiles = [
+                { commandName: 'Project', launchBrowser: 'yes' },
+                { commandName: 'Project', launchUrl: true },
+                { commandName: 'Project', dotnetRunMessages: null },
+                { commandName: 'Project', environmentVariables: { PORT: 5000 } },
+                { commandName: 'Executable', executablePath: false },
+                { commandName: 'Executable', workingDirectory: true }
+            ];
+
+            for (const profile of malformedProfiles) {
+                assert.strictEqual(hasSdkCompatibleLaunchProfileProperties(profile), false);
+            }
+        });
+    });
+
     suite('determineBaseLaunchProfile', () => {
         const sampleLaunchSettings: LaunchSettings = {
             profiles: {
@@ -922,6 +960,30 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, null);
             assert.deepStrictEqual(Object.keys(result!.profiles), ['selected']);
             assert.deepStrictEqual(result!.profileOrder, ['selected']);
+        });
+
+        test('preserves duplicate profile values for SDK default selection', async () => {
+            const content = `{
+  "profiles": {
+    "duplicate": {
+      "commandName": "Project",
+      "environmentVariables": { "SOURCE": "first" }
+    },
+    "duplicate": {
+      "commandName": "Project",
+      "launchBrowser": "yes",
+      "environmentVariables": { "SOURCE": "second" }
+    }
+  }
+}`;
+            fs.writeFileSync(launchSettingsPath, content);
+
+            const launchSettings = await readLaunchSettings(projectPath);
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profileName, 'duplicate');
+            assert.strictEqual(result.profile?.environmentVariables?.SOURCE, 'first');
+            assert.strictEqual(result.hasInvalidProperties, false);
         });
 
         test('falls back to aspire.config.json profiles when .run.json does not exist for file-based app', async () => {

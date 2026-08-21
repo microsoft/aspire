@@ -693,6 +693,9 @@ suite('Dotnet Debugger Extension Tests', () => {
                     h2: {
                         commandName: 'Project',
                         applicationUrl: 'http://localhost:15002',
+                        executablePath: false,
+                        workingDirectory: true,
+                        useSSL: 'ignored by the SDK',
                         environmentVariables: {
                             mode: '2',
                             EXPLICIT: 'from-h2',
@@ -772,6 +775,9 @@ suite('Dotnet Debugger Extension Tests', () => {
                 DEFAULT_PROFILE_ONLY: 'from-process',
                 DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit'
             });
+            assert.strictEqual(debugConfig.cwd, projectDir);
+            assert.strictEqual(debugConfig.executablePath, undefined);
+            assert.strictEqual(debugConfig.checkForDevCert, undefined);
             assert.deepStrictEqual(
                 Object.keys(debugConfig.env).filter(name => name.toLowerCase() === 'mode'),
                 ['mode']);
@@ -2914,7 +2920,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('fails explicit project launch when the selected profile is missing or has an unsupported commandName', async () => {
+    test('fails explicit project launch when the selected profile is missing, malformed, or has an unsupported commandName', async () => {
         const fs = require('fs');
         const os = require('os');
         const path = require('path');
@@ -2927,13 +2933,23 @@ suite('Dotnet Debugger Extension Tests', () => {
 
             const projectPath = path.join(projectDir, 'AppHost.csproj');
             fs.writeFileSync(projectPath, '<Project></Project>');
-            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify({
-                profiles: {
-                    invalid: {
-                        commandName: 'project'
+            fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), `{
+                "profiles": {
+                    "invalid": {
+                        "commandName": "project",
+                        "commandLineArgs": 42
+                    },
+                    "malformed": {
+                        "commandName": "Project",
+                        "launchBrowser": "yes"
+                    },
+                    "duplicateMalformed": {
+                        "commandName": "Project",
+                        "launchBrowser": "yes",
+                        "launchBrowser": true
                     }
                 }
-            }, null, 2));
+            }`);
 
             const outputPath = path.join(projectDir, 'bin', 'Debug', 'net10.0', 'AppHost.dll');
             const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, true);
@@ -2955,6 +2971,16 @@ suite('Dotnet Debugger Extension Tests', () => {
                 project_path: projectPath,
                 launch_profile: 'missing'
             };
+            const malformedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'malformed'
+            };
+            const duplicateMalformedLaunchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                launch_profile: 'duplicateMalformed'
+            };
 
             await assert.rejects(
                 extension.createDebugSessionConfigurationCallback!(
@@ -2964,6 +2990,24 @@ suite('Dotnet Debugger Extension Tests', () => {
                     { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
                     debugConfig),
                 /Launch profile 'invalid' uses a commandName that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    malformedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'malformed' contains property values that dotnet run does not support/);
+
+            await assert.rejects(
+                extension.createDebugSessionConfigurationCallback!(
+                    duplicateMalformedLaunchConfig,
+                    undefined,
+                    [],
+                    { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                    debugConfig),
+                /Launch profile 'duplicateMalformed' contains property values that dotnet run does not support/);
 
             await assert.rejects(
                 extension.createDebugSessionConfigurationCallback!(

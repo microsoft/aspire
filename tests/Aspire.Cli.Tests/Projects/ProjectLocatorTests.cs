@@ -2196,9 +2196,6 @@ builder.Build().Run();");
             public bool SupportsLaunchProfiles => false;
             public string? AppHostFileName => supportedFileName;
 
-            public LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName)
-                => LaunchProfileMatchResult.Unknown;
-
             public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
 
             public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken)

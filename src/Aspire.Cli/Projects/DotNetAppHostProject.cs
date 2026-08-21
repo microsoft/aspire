@@ -130,63 +130,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public bool SupportsLaunchProfiles => true;
 
-    /// <inheritdoc />
-    public LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName)
-    {
-        if (!TryGetLaunchSettingsPath(appHostFile, out var launchSettingsPath))
-        {
-            return LaunchProfileMatchResult.NotFound;
-        }
-
-        try
-        {
-            using var stream = File.OpenRead(launchSettingsPath);
-            using var document = JsonDocument.Parse(stream, new JsonDocumentOptions
-            {
-                CommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true
-            });
-
-            if (document.RootElement.ValueKind is not JsonValueKind.Object ||
-                !document.RootElement.TryGetProperty("profiles", out var profiles) ||
-                profiles.ValueKind is not JsonValueKind.Object)
-            {
-                return LaunchProfileMatchResult.Unknown;
-            }
-
-            var matchCount = 0;
-            foreach (var profile in profiles.EnumerateObject())
-            {
-                if (string.Equals(profile.Name, launchProfileName, StringComparison.OrdinalIgnoreCase))
-                {
-                    matchCount++;
-                }
-            }
-
-            return matchCount switch
-            {
-                0 => LaunchProfileMatchResult.NotFound,
-                1 => LaunchProfileMatchResult.Found,
-                _ => LaunchProfileMatchResult.Ambiguous
-            };
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogDebug(ex, "Unable to determine whether launch profile {LaunchProfile} exists because launch settings could not be parsed for {Project}.", launchProfileName, appHostFile.FullName);
-            return LaunchProfileMatchResult.Unknown;
-        }
-        catch (IOException ex)
-        {
-            _logger.LogDebug(ex, "Unable to determine whether launch profile {LaunchProfile} exists because launch settings could not be read for {Project}.", launchProfileName, appHostFile.FullName);
-            return LaunchProfileMatchResult.Unknown;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogDebug(ex, "Unable to determine whether launch profile {LaunchProfile} exists because launch settings could not be read for {Project}.", launchProfileName, appHostFile.FullName);
-            return LaunchProfileMatchResult.Unknown;
-        }
-    }
-
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════

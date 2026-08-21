@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { DebugConfigurationArguments, ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
-import { parse, ParseError, parseTree } from 'jsonc-parser';
+import { getNodeValue, Node, parse, ParseError, parseTree } from 'jsonc-parser';
 import { aspireConfigFileName, AspireConfigProfile } from '../utils/cliTypes';
 
 /*
@@ -28,6 +28,61 @@ export interface LaunchProfile {
     // The URL to launch in the browser. May be absolute (e.g. "https://my.localhost");
     // when relative, it is resolved against the first applicationUrl entry.
     launchUrl?: string;
+}
+
+export function hasSdkCompatibleLaunchProfileProperties(profile: unknown): profile is LaunchProfile {
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+        return false;
+    }
+
+    const value = profile as Record<string, unknown>;
+    if (typeof value.commandName !== 'string') {
+        return false;
+    }
+
+    for (const property of ['commandLineArgs']) {
+        if (value[property] !== undefined && value[property] !== null && typeof value[property] !== 'string') {
+            return false;
+        }
+    }
+
+    for (const property of ['dotnetRunMessages']) {
+        if (value[property] !== undefined && typeof value[property] !== 'boolean') {
+            return false;
+        }
+    }
+
+    if (value.environmentVariables !== undefined && value.environmentVariables !== null) {
+        if (typeof value.environmentVariables !== 'object' ||
+            Array.isArray(value.environmentVariables) ||
+            Object.values(value.environmentVariables).some(environmentValue => typeof environmentValue !== 'string')) {
+            return false;
+        }
+    }
+
+    // The SDK deserializes each provider with a different model and ignores properties from
+    // other providers, so validate only the fields consumed by the selected parser.
+    // https://github.com/dotnet/sdk/tree/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings
+    switch (value.commandName) {
+        case LaunchProfileCommandName.project:
+            for (const property of ['applicationUrl', 'launchUrl']) {
+                if (value[property] !== undefined && value[property] !== null && typeof value[property] !== 'string') {
+                    return false;
+                }
+            }
+
+            return value.launchBrowser === undefined || typeof value.launchBrowser === 'boolean';
+        case LaunchProfileCommandName.executable:
+            for (const property of ['executablePath', 'workingDirectory']) {
+                if (value[property] !== undefined && value[property] !== null && typeof value[property] !== 'string') {
+                    return false;
+                }
+            }
+
+            return true;
+        default:
+            return true;
+    }
 }
 
 /**
@@ -74,11 +129,19 @@ export interface LaunchSettings {
     // the file in source order, so we must preserve that order here to pick the same default profile.
     // Populated by readLaunchSettings; may be absent for LaunchSettings constructed by other means.
     profileOrder?: readonly string[];
+    profileEntries?: readonly LaunchProfileSourceEntry[];
+}
+
+export interface LaunchProfileSourceEntry {
+    name: string;
+    profile: LaunchProfile;
+    hasInvalidProperties: boolean;
 }
 
 export interface LaunchProfileResult {
     profile: LaunchProfile | null;
     profileName: string | null;
+    hasInvalidProperties?: boolean;
 }
 
 /**
@@ -93,19 +156,10 @@ export interface LaunchProfileResult {
  * Returns undefined when the content has no `profiles` object so callers can fall back to key order.
  */
 function extractProfileOrder(content: string): string[] | undefined {
-    const root = parseTree(content, [], { allowTrailingComma: true });
-    if (!root) {
-        return undefined;
-    }
-
     // JSON permits duplicate properties in practice, and both JSON.parse and the SDK use the last
     // top-level "profiles" value. Preserve the order from that same object.
-    const profileProperties = root.children?.filter(propertyNode =>
-        propertyNode.type === 'property' &&
-        propertyNode.children?.[0]?.value === 'profiles');
-    const profilesProperty = profileProperties?.[profileProperties.length - 1];
-    const profilesNode = profilesProperty?.children?.[1];
-    if (profilesNode?.type !== 'object' || !profilesNode.children) {
+    const profilesNode = extractProfilesNode(content);
+    if (!profilesNode?.children) {
         return undefined;
     }
 
@@ -119,6 +173,90 @@ function extractProfileOrder(content: string): string[] | undefined {
     }
 
     return order;
+}
+
+function extractProfilesNode(content: string): Node | undefined {
+    const root = parseTree(content, [], { allowTrailingComma: true });
+    const profileProperties = root?.children?.filter(propertyNode =>
+        propertyNode.type === 'property' &&
+        propertyNode.children?.[0]?.value === 'profiles');
+
+    const profilesNode = profileProperties?.[profileProperties.length - 1]?.children?.[1];
+    return profilesNode?.type === 'object' ? profilesNode : undefined;
+}
+
+function extractLaunchProfileSourceEntries(content: string): LaunchProfileSourceEntry[] | undefined {
+    const profilesNode = extractProfilesNode(content);
+    if (!profilesNode?.children) {
+        return undefined;
+    }
+
+    const entries: LaunchProfileSourceEntry[] = [];
+    for (const profileProperty of profilesNode.children) {
+        const profileName = profileProperty.children?.[0]?.value;
+        const profileNode = profileProperty.children?.[1];
+        if (typeof profileName !== 'string' || !profileNode) {
+            continue;
+        }
+
+        const profile = getNodeValue(profileNode) as LaunchProfile;
+        if (profileNode.type !== 'object' || !profileNode.children) {
+            entries.push({ name: profileName, profile, hasInvalidProperties: false });
+            continue;
+        }
+
+        const commandNameNode = profileNode.children
+            .filter(propertyNode => propertyNode.children?.[0]?.value === 'commandName')
+            .at(-1)?.children?.[1];
+        if (commandNameNode?.type !== 'string') {
+            entries.push({ name: profileName, profile, hasInvalidProperties: false });
+            continue;
+        }
+
+        const stringProperties = new Set(['commandLineArgs']);
+        const booleanProperties = new Set(['dotnetRunMessages']);
+        if (commandNameNode.value === LaunchProfileCommandName.project) {
+            stringProperties.add('applicationUrl').add('launchUrl');
+            booleanProperties.add('launchBrowser');
+        } else if (commandNameNode.value === LaunchProfileCommandName.executable) {
+            stringProperties.add('executablePath').add('workingDirectory');
+        } else {
+            entries.push({ name: profileName, profile, hasInvalidProperties: false });
+            continue;
+        }
+
+        const hasInvalidProperty = profileNode.children.some(propertyNode => {
+            const propertyName = propertyNode.children?.[0]?.value;
+            const propertyValue = propertyNode.children?.[1];
+            if (typeof propertyName !== 'string' || !propertyValue) {
+                return false;
+            }
+
+            if (stringProperties.has(propertyName)) {
+                return propertyValue.type !== 'string' && propertyValue.type !== 'null';
+            }
+
+            if (booleanProperties.has(propertyName)) {
+                return propertyValue.type !== 'boolean';
+            }
+
+            if (propertyName !== 'environmentVariables') {
+                return false;
+            }
+
+            if (propertyValue.type === 'null') {
+                return false;
+            }
+
+            return propertyValue.type !== 'object' ||
+                propertyValue.children?.some(environmentProperty =>
+                    environmentProperty.children?.[1]?.type !== 'string') === true;
+        });
+
+        entries.push({ name: profileName, profile, hasInvalidProperties: hasInvalidProperty });
+    }
+
+    return entries;
 }
 
 function parseJsonContent<T>(content: string): { value: T; normalizedContent: string } {
@@ -193,7 +331,8 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
             const { value: launchSettings, normalizedContent } = parseJsonContent<LaunchSettings>(
                 fs.readFileSync(launchSettingsPath, 'utf8'));
             // Capture the profile order from the file so the default-profile selection matches the SDK.
-            launchSettings.profileOrder = extractProfileOrder(normalizedContent);
+            launchSettings.profileEntries = extractLaunchProfileSourceEntries(normalizedContent);
+            launchSettings.profileOrder = launchSettings.profileEntries?.map(entry => entry.name);
 
             extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
             return launchSettings;
@@ -252,13 +391,19 @@ export function determineBaseLaunchProfile(
     // If launch_profile property is set, check if that profile exists
     if (launchConfig.launch_profile) {
         const profileName = launchConfig.launch_profile;
-        const profileNames = launchSettings.profileOrder ?? Object.keys(launchSettings.profiles);
-        const matchingProfileNames = profileNames
-            .filter(candidate => equalsOrdinalIgnoreCase(candidate, profileName));
-        if (matchingProfileNames.length === 1) {
-            const profile = launchSettings.profiles[matchingProfileNames[0]];
+        const profileEntries = launchSettings.profileEntries ??
+            (launchSettings.profileOrder ?? Object.keys(launchSettings.profiles))
+                .map(name => ({ name, profile: launchSettings.profiles[name], hasInvalidProperties: false }));
+        const matchingProfileEntries = profileEntries
+            .filter(candidate => equalsOrdinalIgnoreCase(candidate.name, profileName));
+        if (matchingProfileEntries.length === 1) {
+            const matchingProfile = matchingProfileEntries[0];
             extensionLogOutputChannel.debug(`Using explicit launch profile: ${profileName}`);
-            return { profile, profileName };
+            return {
+                profile: matchingProfile.profile,
+                profileName,
+                hasInvalidProperties: matchingProfile.hasInvalidProperties
+            };
         }
 
         extensionLogOutputChannel.debug(`Explicit launch profile '${profileName}' not found uniquely in launch settings`);
@@ -297,16 +442,22 @@ export function determineDefaultLaunchProfile(launchSettings: LaunchSettings | n
     }
 
     // Enumerate profiles in file source order to match the SDK's `JsonElement.EnumerateObject()`.
-    // profileOrder (populated by readLaunchSettings) preserves that order even for integer-like
-    // profile names; fall back to Object.keys for LaunchSettings constructed without it.
-    const profileNames = launchSettings.profileOrder ?? Object.keys(launchSettings.profiles);
+    // profileEntries (populated by readLaunchSettings) preserves both source order and duplicate
+    // profile values; fall back to profileOrder/Object.keys for programmatically constructed settings.
+    const profileEntries = launchSettings.profileEntries ??
+        (launchSettings.profileOrder ?? Object.keys(launchSettings.profiles))
+            .map(name => ({ name, profile: launchSettings.profiles[name], hasInvalidProperties: false }));
 
-    for (const name of profileNames) {
-        const profile = launchSettings.profiles[name];
+    for (const entry of profileEntries) {
+        const { name, profile, hasInvalidProperties } = entry;
         // Match the SDK's exact, case-sensitive provider lookup: a profile whose commandName differs only
         // in casing (e.g. "executable") is not a supported provider, so `dotnet run-api` would skip it too.
         if (profile?.commandName && defaultLaunchProfileCommandNames.has(profile.commandName)) {
-            return { profile, profileName: name };
+            return {
+                profile,
+                profileName: name,
+                hasInvalidProperties
+            };
         }
     }
 

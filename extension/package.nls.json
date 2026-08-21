@@ -182,6 +182,7 @@
   "aspire-vscode.strings.executableLaunchProfileMissingExecutablePath": "Launch profile '{0}' uses commandName 'Executable' but does not specify an executablePath. Add an executablePath to the launch profile.",
   "aspire-vscode.strings.explicitLaunchProfileNotResolved": "Launch profile '{0}' could not be uniquely resolved from the project launch settings.",
   "aspire-vscode.strings.launchProfileUnsupportedCommandName": "Launch profile '{0}' uses a commandName that dotnet run does not support. Use 'Project' or 'Executable'.",
+  "aspire-vscode.strings.launchProfileHasInvalidProperties": "Launch profile '{0}' contains property values that dotnet run does not support.",
   "aspire-vscode.strings.lookingForDevkitBuildTask": "C# Dev Kit is installed, looking for C# Dev Kit build task...",
   "aspire-vscode.strings.csharpDevKitNotInstalled": "C# Dev Kit is not installed, building using dotnet CLI...",
   "aspire-vscode.strings.hotReloadDisabledNotice": "C# Dev Kit Hot Reload is disabled. When enabled, it can apply .NET code edits while debugging where supported.",

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -20,7 +20,8 @@ import {
     LaunchProfileCommandName,
     LaunchProfile,
     LaunchSettings,
-    expandEnvironmentVariables
+    expandEnvironmentVariables,
+    hasSdkCompatibleLaunchProfileProperties
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
 import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
@@ -631,7 +632,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                     ?? launchConfig.launch_profile
             } : launchConfig;
 
-            const { profile: baseProfile, profileName } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);
+            const { profile: baseProfile, profileName, hasInvalidProperties } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);
 
             if (launchOptions.isApphost &&
                 effectiveLaunchConfig.disable_launch_profile !== true &&
@@ -647,16 +648,33 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 throw new Error(launchProfileUnsupportedCommandName(profileName ?? ''));
             }
 
+            if (launchOptions.isApphost &&
+                baseProfile &&
+                (hasInvalidProperties || !hasSdkCompatibleLaunchProfileProperties(baseProfile))) {
+                throw new Error(launchProfileHasInvalidProperties(profileName ?? ''));
+            }
+
             extensionLogOutputChannel.info(profileName
                 ? `Using launch profile '${profileName}' for project: ${projectPath}`
                 : `No launch profile selected for project: ${projectPath}`);
 
             // Configure debug session with launch profile settings
-            debugConfiguration.cwd = determineWorkingDirectory(projectPath, baseProfile);
+            // ProjectLaunchProfile does not consume workingDirectory or executablePath, and neither
+            // SDK provider consumes useSSL. Ignore them here too so bypassing dotnet run preserves
+            // the provider semantics. File-based apps are the exception: their fallback explicitly
+            // disables the SDK profile and forwards a valid workingDirectory through MSBuild.
+            const isAppHostProjectProfile = launchOptions.isApphost &&
+                baseProfile?.commandName === LaunchProfileCommandName.project;
+            const shouldApplyProfileWorkingDirectory = !isAppHostProjectProfile || isFileBasedProject;
+            const workingDirectoryProfile = shouldApplyProfileWorkingDirectory &&
+                typeof baseProfile?.workingDirectory === 'string' ? baseProfile : null;
+            debugConfiguration.cwd = determineWorkingDirectory(projectPath, workingDirectoryProfile);
             let resolvedArguments = determineArguments(baseProfile?.commandLineArgs, args);
             debugConfiguration.args = resolvedArguments;
-            debugConfiguration.executablePath = baseProfile?.executablePath;
-            debugConfiguration.checkForDevCert = baseProfile?.useSSL;
+            debugConfiguration.executablePath = launchOptions.isApphost
+                ? baseProfile?.commandName === LaunchProfileCommandName.executable ? baseProfile.executablePath : undefined
+                : baseProfile?.executablePath;
+            debugConfiguration.checkForDevCert = launchOptions.isApphost ? undefined : baseProfile?.useSSL;
 
             // `launchBrowser` from launchSettings.json is deliberately not honoured here. Every project that
             // reaches this callback is started by the app host, and the app host owns its endpoints: it

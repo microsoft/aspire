@@ -46,8 +46,6 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public bool SupportsLaunchProfiles { get; set; } = true;
 
-    public LaunchProfileMatchResult LaunchProfileMatchResult { get; set; } = LaunchProfileMatchResult.Found;
-
     /// <summary>
     /// Optional detection patterns to advertise from the test project.
     /// </summary>
@@ -158,9 +156,6 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         public string DisplayName => _factory.DisplayName;
         public bool SupportsLaunchProfiles => _factory.SupportsLaunchProfiles;
         public string? AppHostFileName => "AppHost.csproj";
-
-        public LaunchProfileMatchResult GetLaunchProfileMatch(FileInfo appHostFile, string launchProfileName)
-            => _factory.LaunchProfileMatchResult;
 
         public bool IsUsingProjectReferences(FileInfo appHostFile)
         {

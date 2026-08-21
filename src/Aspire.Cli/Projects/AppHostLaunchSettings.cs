@@ -7,8 +7,8 @@ using System.Text.Json.Serialization;
 namespace Aspire.Cli.Projects;
 
 // Keep the Project-profile properties aligned with the SDK model even when direct launch does not
-// consume them. Strong typing makes malformed SDK-known values fail deserialization so the CLI
-// falls back to `dotnet run` for its diagnostic and launch behavior.
+// consume them. Strong typing makes malformed SDK-known values fail deserialization, while the
+// serializer ignores properties that only another provider consumes.
 // https://github.com/dotnet/sdk/tree/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings
 internal sealed class AppHostLaunchProfile
 {
@@ -29,12 +29,6 @@ internal sealed class AppHostLaunchProfile
 
     [JsonPropertyName("applicationUrl")]
     public string? ApplicationUrl { get; set; }
-
-    [JsonPropertyName("executablePath")]
-    public string? ExecutablePath { get; set; }
-
-    [JsonPropertyName("workingDirectory")]
-    public string? WorkingDirectory { get; set; }
 
     [JsonPropertyName("environmentVariables")]
     public Dictionary<string, string> EnvironmentVariables { get; set; } = [];

@@ -1073,32 +1073,6 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public void GetLaunchProfileMatch_DistinguishesMissingUniqueAndAmbiguousProfiles()
-    {
-        var appHostFile = CreateProjectAppHost();
-        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
-
-        Assert.Equal(LaunchProfileMatchResult.NotFound, project.GetLaunchProfileMatch(appHostFile, "missing"));
-
-        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
-        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
-            {
-              "profiles": {
-                "container": { "commandName": "Executable", "executablePath": "custom-tool" },
-                "malformed": true,
-                "E2E": { "commandName": "Project" },
-                "e2e": { "commandName": "Project" }
-              }
-            }
-            """);
-
-        Assert.Equal(LaunchProfileMatchResult.Found, project.GetLaunchProfileMatch(appHostFile, "CONTAINER"));
-        Assert.Equal(LaunchProfileMatchResult.Found, project.GetLaunchProfileMatch(appHostFile, "malformed"));
-        Assert.Equal(LaunchProfileMatchResult.NotFound, project.GetLaunchProfileMatch(appHostFile, "missing"));
-        Assert.Equal(LaunchProfileMatchResult.Ambiguous, project.GetLaunchProfileMatch(appHostFile, "e2e"));
-    }
-
-    [Fact]
     public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile()
     {
         var appHostFile = CreateProjectAppHost();
@@ -1119,6 +1093,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                   "commandName": "Project",
                   "applicationUrl": "http://localhost:16000",
                   "commandLineArgs": "--from-profile E2E",
+                  "executablePath": false,
+                  "workingDirectory": true,
                   "environmentVariables": {
                     "SELECTED_PROFILE": "E2E",
                     "PROFILE_ONLY": "E2E"
