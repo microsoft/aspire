@@ -1143,6 +1143,72 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
     });
 
+    test('fails before publishing when a concurrent unusable generation fills the recovery bound', () => {
+        const root = createTestRoot('publish-time-generation-limit');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        const originalEntryDirectory = getCacheEntryDirectory(groupDirectory, 1);
+        const originalSentinelPath = path.join(originalEntryDirectory, 'original-generation-sentinel.txt');
+        const concurrentEntryDirectory = getCacheEntryDirectory(groupDirectory, 2);
+        const concurrentSentinelPath = path.join(concurrentEntryDirectory, 'concurrent-generation-sentinel.txt');
+        let candidateDirectory: string | undefined;
+        let concurrentEntryMetadata: ReturnType<typeof getPathIdentityAndMetadata> | undefined;
+        let concurrentSentinelMetadata: ReturnType<typeof getPathIdentityAndMetadata> | undefined;
+
+        populateFakeDownload(originalEntryDirectory, {
+            platform: 'linux',
+            architecture: 'x64',
+        });
+        writeFile(originalSentinelPath, 'original generation');
+        const originalEntryMetadata = getPathIdentityAndMetadata(originalEntryDirectory);
+        const originalSentinelMetadata = getPathIdentityAndMetadata(originalSentinelPath);
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            populate(stagingDirectory) {
+                candidateDirectory = stagingDirectory;
+                populateFakeDownload(stagingDirectory, {
+                    platform: 'linux',
+                    architecture: 'x64',
+                });
+
+                // Simulate another publisher reserving the immutable replacement while this run is
+                // populating. The publish-time read must enforce the cap before renaming candidate.
+                populateFakeDownload(concurrentEntryDirectory, {
+                    platform: 'linux',
+                    architecture: 'x64',
+                });
+                writeFile(concurrentSentinelPath, 'concurrent generation');
+                concurrentEntryMetadata = getPathIdentityAndMetadata(concurrentEntryDirectory);
+                concurrentSentinelMetadata = getPathIdentityAndMetadata(concurrentSentinelPath);
+            },
+        })), (error: unknown) => {
+            if (!(error instanceof Error)) {
+                return false;
+            }
+
+            assert.ok(error.message.includes(groupDirectory));
+            assert.match(error.message, /already contains 2 reserved generations.*will not publish another/);
+            return true;
+        });
+
+        assert.ok(candidateDirectory);
+        assert.ok(concurrentEntryMetadata);
+        assert.ok(concurrentSentinelMetadata);
+        assert.strictEqual(fs.existsSync(candidateDirectory), false);
+        assertNoCandidates(groupDirectory);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+        assert.strictEqual(fs.existsSync(getCacheEntryDirectory(groupDirectory, 3)), false);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(originalEntryDirectory), originalEntryMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(originalSentinelPath), originalSentinelMetadata);
+        assert.strictEqual(fs.readFileSync(originalSentinelPath, 'utf8'), 'original generation');
+        assert.deepStrictEqual(getPathIdentityAndMetadata(concurrentEntryDirectory), concurrentEntryMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(concurrentSentinelPath), concurrentSentinelMetadata);
+        assert.strictEqual(fs.readFileSync(concurrentSentinelPath, 'utf8'), 'concurrent generation');
+        assert.notDeepStrictEqual(
+            { dev: originalSentinelMetadata.dev, ino: originalSentinelMetadata.ino },
+            { dev: concurrentSentinelMetadata.dev, ino: concurrentSentinelMetadata.ino });
+    });
+
     test('fails before population when two directory generations are unusable', () => {
         const root = createTestRoot('generation-limit');
         const cacheRoot = path.join(root, 'cache');
