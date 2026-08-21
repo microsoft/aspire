@@ -363,6 +363,19 @@ function readManifest(cacheDirectory: string): CacheManifest {
     return JSON.parse(fs.readFileSync(path.join(cacheDirectory, cache.CACHE_MANIFEST_NAME), 'utf8')) as CacheManifest;
 }
 
+function getPathIdentityAndMetadata(candidatePath: string) {
+    const stats = fs.lstatSync(candidatePath);
+    return {
+        dev: stats.dev,
+        ino: stats.ino,
+        mode: stats.mode,
+        nlink: stats.nlink,
+        size: stats.size,
+        mtimeMs: stats.mtimeMs,
+        ctimeMs: stats.ctimeMs,
+        birthtimeMs: stats.birthtimeMs,
+    };
+}
 
 function getGroupChildNames(groupDirectory: string): string[] {
     if (!fs.existsSync(groupDirectory)) {
@@ -1130,18 +1143,31 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
     });
 
-    test('fails before population when two published generations are unusable', () => {
+    test('fails before population when two directory generations are unusable', () => {
         const root = createTestRoot('generation-limit');
         const cacheRoot = path.join(root, 'cache');
         const groupDirectory = getDefaultGroupDirectory(cacheRoot);
         let populateCalls = 0;
 
-        for (const generation of [1, 2]) {
-            populateFakeDownload(getCacheEntryDirectory(groupDirectory, generation), {
+        const originalEntries = [1, 2].map((generation) => {
+            const entryDirectory = getCacheEntryDirectory(groupDirectory, generation);
+            const sentinelPath = path.join(entryDirectory, `generation-${generation}-sentinel.txt`);
+            const sentinelContent = `original generation ${generation} content`;
+
+            populateFakeDownload(entryDirectory, {
                 platform: 'linux',
                 architecture: 'x64',
             });
-        }
+            writeFile(sentinelPath, sentinelContent);
+
+            return {
+                entryDirectory,
+                sentinelPath,
+                sentinelContent,
+                entryMetadata: getPathIdentityAndMetadata(entryDirectory),
+                sentinelMetadata: getPathIdentityAndMetadata(sentinelPath),
+            };
+        });
 
         assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
             populate() {
@@ -1153,12 +1179,62 @@ suite('E2E download cache', () => {
             }
 
             assert.ok(error.message.includes(groupDirectory));
-            assert.match(error.message, /already contains 2 published generations.*will not publish another/);
+            assert.match(error.message, /already contains 2 reserved generations.*will not publish another/);
             return true;
         });
 
         assert.strictEqual(populateCalls, 0);
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+        for (const originalEntry of originalEntries) {
+            assert.deepStrictEqual(getPathIdentityAndMetadata(originalEntry.entryDirectory), originalEntry.entryMetadata);
+            assert.deepStrictEqual(getPathIdentityAndMetadata(originalEntry.sentinelPath), originalEntry.sentinelMetadata);
+            assert.strictEqual(fs.readFileSync(originalEntry.sentinelPath, 'utf8'), originalEntry.sentinelContent);
+        }
+    });
+
+    test('fails before population when two non-directory names reserve generations', () => {
+        const root = createTestRoot('non-directory-generation-limit');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        const fileReservation = getCacheEntryDirectory(groupDirectory, 1);
+        const linkedReservation = getCacheEntryDirectory(groupDirectory, 2);
+        const externalTarget = path.join(root, 'external-generation-target');
+        const externalSentinel = path.join(externalTarget, 'external-sentinel.txt');
+        let populateCalls = 0;
+
+        writeFile(fileReservation, 'reserved generation one');
+        writeFile(externalSentinel, 'leave external target alone');
+        createDirectoryLink(linkedReservation, externalTarget);
+
+        const fileMetadata = getPathIdentityAndMetadata(fileReservation);
+        const linkMetadata = getPathIdentityAndMetadata(linkedReservation);
+        const externalSentinelMetadata = getPathIdentityAndMetadata(externalSentinel);
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            populate(stagingDirectory) {
+                populateCalls++;
+                populateFakeDownload(stagingDirectory, {
+                    platform: 'linux',
+                    architecture: 'x64',
+                });
+            },
+        })), (error: unknown) => {
+            if (!(error instanceof Error)) {
+                return false;
+            }
+
+            assert.ok(error.message.includes(groupDirectory));
+            assert.match(error.message, /already contains 2 reserved generations.*will not publish another/);
+            return true;
+        });
+
+        assert.strictEqual(populateCalls, 0);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(fileReservation), fileMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(linkedReservation), linkMetadata);
+        assert.strictEqual(fs.readFileSync(fileReservation, 'utf8'), 'reserved generation one');
+        assert.deepStrictEqual(getPathIdentityAndMetadata(externalSentinel), externalSentinelMetadata);
+        assert.strictEqual(fs.readFileSync(externalSentinel, 'utf8'), 'leave external target alone');
     });
 
     test('recovers from repeated population crashes without wedging the cache entry', () => {
@@ -1789,31 +1865,37 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
     });
 
-    test('rejects a symlinked cache entry group and replaces only the local link', () => {
+    test('repairs a symlinked cache entry group before counting its apparent generations', () => {
         const root = createTestRoot('linked-cache-entry');
         const cacheRoot = path.join(root, 'cache');
         const groupDirectory = getDefaultGroupDirectory(cacheRoot);
         const externalGroup = path.join(root, 'external-cache-entry');
-        const externalArtifacts = populateFakeDownload(path.join(externalGroup, 'entry-000001'), {
-            platform: 'linux',
-            architecture: 'x64',
-        });
         const externalSentinelPath = path.join(externalGroup, 'external-sentinel.txt');
         let populateCalls = 0;
 
         // Candidates are created inside the group with mkdtemp, so a symlinked group would send
-        // hundreds of megabytes of downloads outside the cache root.
-        writeFile(path.join(externalGroup, 'entry-000001', cache.CACHE_MANIFEST_NAME), JSON.stringify({
-            schemaVersion: cache.CACHE_SCHEMA_VERSION,
-            platform: 'linux',
-            architecture: 'x64',
-            vscodeVersion: '1.122.1',
-            extesterVersion: '8.23.0',
-            vscodeDirectory: externalArtifacts.vscodeDirectory,
-            chromeDriverEntry: externalArtifacts.chromeDriverEntry,
-            chromeDriverBinary: externalArtifacts.chromeDriverBinary,
-        }, null, 2));
+        // hundreds of megabytes of downloads outside the cache root. Its apparent generations are
+        // untrusted too, so they must not be validated or counted through the link.
+        const externalEntries = [1, 2].map((generation) => {
+            const entryDirectory = getCacheEntryDirectory(externalGroup, generation);
+            const markerFileName = `external-generation-${generation}.txt`;
+            publishValidCacheEntry(entryDirectory, {
+                ...defaultCacheKey,
+                markerFileName,
+            });
+
+            const markerPath = path.join(entryDirectory, markerFileName);
+            return {
+                entryDirectory,
+                markerPath,
+                markerFileName,
+                entryMetadata: getPathIdentityAndMetadata(entryDirectory),
+                markerMetadata: getPathIdentityAndMetadata(markerPath),
+            };
+        });
         writeFile(externalSentinelPath, 'leave external entry alone');
+        const externalGroupMetadata = getPathIdentityAndMetadata(externalGroup);
+        const externalSentinelMetadata = getPathIdentityAndMetadata(externalSentinelPath);
         createDirectoryLink(groupDirectory, externalGroup);
 
         const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
@@ -1831,7 +1913,19 @@ suite('E2E download cache', () => {
         assert.strictEqual(fs.lstatSync(groupDirectory).isSymbolicLink(), false);
         assert.strictEqual(result.cacheDirectory, getCacheEntryDirectory(groupDirectory, 1));
         assert.strictEqual(fs.readFileSync(externalSentinelPath, 'utf8'), 'leave external entry alone');
-        assert.ok(fs.existsSync(path.join(externalGroup, 'entry-000001', cache.CACHE_MANIFEST_NAME)));
+        assert.deepStrictEqual(getPathIdentityAndMetadata(externalGroup), externalGroupMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(externalSentinelPath), externalSentinelMetadata);
+        assert.deepStrictEqual(getGroupChildNames(externalGroup), [
+            getCacheEntryName(1),
+            getCacheEntryName(2),
+            path.basename(externalSentinelPath),
+        ]);
+        for (const externalEntry of externalEntries) {
+            assert.deepStrictEqual(getPathIdentityAndMetadata(externalEntry.entryDirectory), externalEntry.entryMetadata);
+            assert.deepStrictEqual(getPathIdentityAndMetadata(externalEntry.markerPath), externalEntry.markerMetadata);
+            assert.strictEqual(fs.readFileSync(externalEntry.markerPath, 'utf8'), externalEntry.markerFileName);
+            assert.ok(fs.existsSync(path.join(externalEntry.entryDirectory, cache.CACHE_MANIFEST_NAME)));
+        }
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1)]);
     });

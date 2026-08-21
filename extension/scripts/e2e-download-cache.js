@@ -16,15 +16,15 @@ const CACHE_ENTRY_GENERATION_DIGITS = 6;
 // The widest generation `CACHE_ENTRY_NAME_PATTERN` can read back. It is comfortably below
 // `Number.MAX_SAFE_INTEGER`, so parsing and incrementing a generation is always exact.
 const MAX_CACHE_ENTRY_GENERATION = 999999999999999;
-const MAX_PUBLISHED_GENERATIONS_PER_GROUP = 2;
+const MAX_RESERVED_GENERATIONS_PER_GROUP = 2;
 
 // A candidate carries the process id that created it so the sweep can tell an in-flight download
 // from debris without waiting for a timestamp to age out. See isCandidateOwnedByLiveProcess.
 const CANDIDATE_DIRECTORY_PREFIX = 'candidate-';
 const CANDIDATE_DIRECTORY_NAME_PATTERN = /^candidate-(\d{1,15})-/;
 
-// `readdir` on a group leaf that is a file, a symlink loop, or a link into a directory this user
-// cannot open has to read as "no entries here" so the miss path can detach and rebuild the leaf.
+// A group leaf can disappear or become unreadable between trust establishment and `readdir`.
+// Reading that race as "no entries here" lets candidate creation repair or reject the new leaf.
 const UNREADABLE_DIRECTORY_ERROR_CODES = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'EACCES', 'EPERM']);
 
 // A publish only ever loses to a concurrent run, and a loser either adopts the winner or moves on
@@ -116,6 +116,7 @@ function ensureDownloadCache(options) {
   const groupDirectory = getDownloadCacheEntryGroupDirectory(normalizedOptions.cacheRoot, expectedManifest);
   const cacheRootOptions = { cacheRoot: normalizedOptions.cacheRoot };
 
+  ensureTrustedCacheEntryGroupDirectory(normalizedOptions.cacheRoot, groupDirectory);
   const group = readCacheEntryGroup(groupDirectory);
   const publishedEntry = selectValidCacheEntry(groupDirectory, group.entryNames, expectedManifest, { ...cacheRootOptions, warnOnInvalid: true });
   if (publishedEntry) {
@@ -125,7 +126,7 @@ function ensureDownloadCache(options) {
     return { cacheHit: true, cacheDirectory: publishedEntry.cacheDirectory, manifest: publishedEntry.manifest };
   }
 
-  assertCanPublishAnotherCacheEntry(groupDirectory, group.entryNames);
+  assertCanPublishAnotherCacheEntry(groupDirectory, group.reservedGenerationCount);
   const candidateDirectory = createCacheEntryCandidate(normalizedOptions.cacheRoot, groupDirectory);
 
   let publishedCandidate = false;
@@ -178,7 +179,7 @@ function publishCacheEntryCandidate(groupDirectory, candidateDirectory, expected
       return { published: false, ...adoptedEntry };
     }
 
-    assertCanPublishAnotherCacheEntry(groupDirectory, group.entryNames);
+    assertCanPublishAnotherCacheEntry(groupDirectory, group.reservedGenerationCount);
 
     let entryDirectory;
     try {
@@ -215,17 +216,17 @@ function selectValidCacheEntry(groupDirectory, entryNames, expectedManifest, { c
   return null;
 }
 
-function assertCanPublishAnotherCacheEntry(groupDirectory, entryNames) {
-  if (entryNames.length >= MAX_PUBLISHED_GENERATIONS_PER_GROUP) {
+function assertCanPublishAnotherCacheEntry(groupDirectory, reservedGenerationCount) {
+  if (reservedGenerationCount >= MAX_RESERVED_GENERATIONS_PER_GROUP) {
     throw new Error(
-      `E2E download cache group '${groupDirectory}' already contains ${entryNames.length} published generations. ` +
+      `E2E download cache group '${groupDirectory}' already contains ${reservedGenerationCount} reserved generations. ` +
       `The runner will not publish another. Wait until all E2E processes using this group have stopped, then delete '${groupDirectory}' to clean it up.`);
   }
 }
 
 /**
- * Lists the generations under a group directory, newest first, along with the highest generation
- * number seen.
+ * Lists the ordinary-directory generations under a group directory, newest first, along with the
+ * highest generation number and total reserved generation names seen.
  *
  * Names that are not ordinary directories still reserve their generation number even though they
  * cannot hold an entry. Skipping them there would make a publish aim at a name that is already
@@ -236,19 +237,19 @@ function readCacheEntryGroup(groupDirectory) {
   try {
     dirents = fs.readdirSync(groupDirectory, { withFileTypes: true });
   } catch (error) {
-    // Anything that makes the leaf unreadable -- missing, a file, a symlink loop, or a link to a
-    // directory this user cannot open -- has to read as an empty group rather than propagate.
-    // Propagating would wedge the key permanently, because the repair that detaches a bad leaf
-    // only runs further down the miss path. A genuine permission problem on a real directory
-    // still surfaces: the candidate that gets created there fails loudly.
+    // The caller establishes the trust boundary before its initial read, but another process can
+    // still repair or replace the leaf before `readdir` runs. Treat that race as an empty group so
+    // candidate creation can repair or reject the new leaf. A genuine permission problem on a real
+    // directory still surfaces when the candidate is created there.
     if (isUnreadableDirectoryError(error)) {
-      return { highestGeneration: 0, entryNames: [] };
+      return { highestGeneration: 0, reservedGenerationCount: 0, entryNames: [] };
     }
 
     throw error;
   }
 
   let highestGeneration = 0;
+  let reservedGenerationCount = 0;
   const entries = [];
 
   for (const dirent of dirents) {
@@ -259,6 +260,7 @@ function readCacheEntryGroup(groupDirectory) {
 
     const generation = Number(match[1]);
     highestGeneration = Math.max(highestGeneration, generation);
+    reservedGenerationCount++;
 
     if (dirent.isDirectory()) {
       entries.push({ name: dirent.name, generation });
@@ -267,7 +269,7 @@ function readCacheEntryGroup(groupDirectory) {
 
   entries.sort((left, right) => right.generation - left.generation);
 
-  return { highestGeneration, entryNames: entries.map(entry => entry.name) };
+  return { highestGeneration, reservedGenerationCount, entryNames: entries.map(entry => entry.name) };
 }
 
 function formatCacheEntryName(generation) {
