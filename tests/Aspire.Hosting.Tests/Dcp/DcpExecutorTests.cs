@@ -5441,6 +5441,51 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PlainExecutable_MultipleLaunchRecipes_ReportsLaunchPlanFailure()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("app", "tool", Environment.CurrentDirectory)
+            .WithExplicitStart();
+        resource.Resource.Annotations.Add(
+            new ExecutableLaunchRecipeAnnotation(DirectExecutableLaunchRecipe.Instance));
+
+        var kubernetesService = new TestKubernetesService();
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            events: events);
+
+        await appExecutor.RunApplicationAsync();
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
+            () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
+
+        const string innerMessage =
+            "Resource 'app' must have exactly one executable launch recipe, but 2 were found.";
+        const string expectedMessage =
+            "Failed to create executable launch plan for resource 'app'. " + innerMessage;
+        Assert.Equal(expectedMessage, exception.Message);
+        var innerException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal(innerMessage, innerException.Message);
+
+        var failure = Assert.Single(failures);
+        Assert.Same(resource.Resource, failure.Resource);
+        Assert.Equal(expectedMessage, failure.ErrorMessage);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "app"));
+    }
+
+    [Fact]
     public async Task PlainExecutable_ExtensionMode_UnsupportedDebugMode_RunsInProcess()
     {
         // Arrange
@@ -6409,8 +6454,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task MauiProjectWithLaunchArgsOverride_LaunchConfigurationProducerThrows_FailsResource(bool useContextOverload)
+    public async Task MauiProjectWithLaunchArgsOverride_LaunchConfigurationProducerThrows_RemainsInProcessExecution(bool useContextOverload)
     {
+        // The launch override already provides a runnable Process command. A custom launch producer can add
+        // metadata in that mode, but a producer fault must not discard the process invocation.
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
         var defaultDebugSupport = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
@@ -6427,6 +6474,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 #pragma warning restore ASPIREPROJECTS001
 
         var producerInvocationCount = 0;
+        var producerFailureMessage = useContextOverload
+            ? "Test exception from async launch configuration producer"
+            : "Test exception from launch configuration producer";
         if (useContextOverload)
         {
             projectBuilder.WithDebugSupport(
@@ -6434,7 +6484,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 {
                     Interlocked.Increment(ref producerInvocationCount);
                     await Task.Yield();
-                    throw new InvalidOperationException("Test exception from async launch configuration producer");
+                    throw new InvalidOperationException(producerFailureMessage);
                 },
                 "maui");
         }
@@ -6444,7 +6494,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 TestMauiLaunchConfiguration (mode) =>
                 {
                     Interlocked.Increment(ref producerInvocationCount);
-                    throw new InvalidOperationException("Test exception from launch configuration producer");
+                    throw new InvalidOperationException(producerFailureMessage);
                 },
                 "maui");
         }
@@ -6471,11 +6521,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .Build();
 
         var kubernetesService = new TestKubernetesService();
-        var failedResources = new List<IResource>();
+        using var resourceLoggerService = new ResourceLoggerService();
+        var failedResources = new ConcurrentQueue<IResource>();
         var events = new DcpExecutorEvents();
         events.Subscribe<OnResourceFailedToStartContext>(context =>
         {
-            failedResources.Add(context.Resource);
+            failedResources.Enqueue(context.Resource);
             return Task.CompletedTask;
         });
         using var app = builder.Build();
@@ -6485,13 +6536,51 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             kubernetesService: kubernetesService,
             configuration: configuration,
             distributedApplicationOptions: distributedApplicationOptions,
+            resourceLoggerService: resourceLoggerService,
             events: events);
 
         await appExecutor.RunApplicationAsync();
 
+        var executable = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, executable.Spec.ExecutionType);
         Assert.Equal(1, Volatile.Read(ref producerInvocationCount));
-        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "proj"));
-        Assert.Same(projectBuilder.Resource, Assert.Single(failedResources));
+        Assert.Empty(failedResources);
+
+        var expectedArgs = new List<string>
+        {
+            "build",
+            "--no-restore",
+            "/t:Run",
+            "-p:NoBuild=true",
+            "TestProject"
+        };
+        if (GetTestAssemblyConfiguration() is { } configurationName)
+        {
+            expectedArgs.AddRange(["--configuration", configurationName]);
+        }
+        expectedArgs.AddRange(["-f", "net10.0-android"]);
+        Assert.Equal(expectedArgs, executable.Spec.Args);
+
+        Assert.True(executable.TryGetAnnotationAsObjectList<JsonElement>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigurations));
+        var projectLaunchConfiguration = Assert.Single(launchConfigurations);
+        Assert.Equal(
+            KnownLaunchConfigurationTypes.Project,
+            projectLaunchConfiguration.GetProperty("type").GetString());
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(projectBuilder.Resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            !line.IsErrorMessage &&
+            line.Content.Contains(
+                "Failed to apply optional launch configuration metadata of type 'maui' for Process resource 'proj'. Continuing with Process execution.",
+                StringComparison.Ordinal) &&
+            line.Content.Contains(producerFailureMessage, StringComparison.Ordinal));
     }
 
     [Fact]

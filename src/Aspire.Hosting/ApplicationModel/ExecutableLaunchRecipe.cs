@@ -7,6 +7,7 @@
 using System.Text.Json;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -82,7 +83,7 @@ internal enum ExecutableLaunchArgumentRole
 /// </summary>
 /// <param name="mechanism">The mechanism selected for the current start attempt.</param>
 /// <param name="launchMode">The mode supplied to the active launch-configuration producer.</param>
-/// <param name="debugSupport">The active debug-support annotation, or <see langword="null"/>.</param>
+/// <param name="debugSupport">The debug-support annotation used for required IDE configuration or optional Process metadata, or <see langword="null"/>.</param>
 /// <param name="useCompatibilityProjectLaunchConfiguration">
 /// Whether to synthesize a project launch configuration for a legacy project without active debug support.
 /// </param>
@@ -110,7 +111,7 @@ internal sealed class ExecutableLaunchDecision(
     public string ProjectLaunchMode { get; } = projectLaunchMode ?? launchMode;
 
     /// <summary>
-    /// Gets the active debug-support annotation, or <see langword="null"/> when no producer is active.
+    /// Gets the debug-support annotation used for required IDE configuration or optional Process metadata.
     /// </summary>
     public SupportsDebuggingAnnotation? DebugSupport { get; } = debugSupport;
 
@@ -121,6 +122,12 @@ internal sealed class ExecutableLaunchDecision(
 }
 
 /// <summary>
+/// Represents a failure while producing or serializing a launch configuration.
+/// </summary>
+internal sealed class ExecutableLaunchConfigurationException(string message, Exception innerException)
+    : Exception(message, innerException);
+
+/// <summary>
 /// Provides the resolved inputs required to create an executable launch plan for one start attempt.
 /// </summary>
 /// <param name="resource">The resource being launched.</param>
@@ -128,6 +135,7 @@ internal sealed class ExecutableLaunchDecision(
 /// <param name="distributedApplicationOptions">The options for the distributed application.</param>
 /// <param name="executionConfiguration">The resolved arguments, environment variables, and related launch data.</param>
 /// <param name="decision">The launch decision selected before invoking the recipe.</param>
+/// <param name="resourceLogger">The logger for the resource being launched.</param>
 /// <param name="cancellationToken">The token that cancels the current start attempt.</param>
 internal sealed class ExecutableLaunchContext(
     IResource resource,
@@ -135,6 +143,7 @@ internal sealed class ExecutableLaunchContext(
     DistributedApplicationOptions distributedApplicationOptions,
     IExecutionConfigurationResult executionConfiguration,
     ExecutableLaunchDecision decision,
+    ILogger resourceLogger,
     CancellationToken cancellationToken)
 {
     /// <summary>
@@ -161,6 +170,11 @@ internal sealed class ExecutableLaunchContext(
     /// Gets the launch decision selected for the current start attempt.
     /// </summary>
     public ExecutableLaunchDecision Decision { get; } = decision ?? throw new ArgumentNullException(nameof(decision));
+
+    /// <summary>
+    /// Gets the logger for the resource being launched.
+    /// </summary>
+    public ILogger ResourceLogger { get; } = resourceLogger ?? throw new ArgumentNullException(nameof(resourceLogger));
 
     /// <summary>
     /// Gets the token that cancels the current start attempt.
@@ -376,17 +390,30 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
         ExecutableLaunchContext context,
         SupportsDebuggingAnnotation debugSupport)
     {
-        var callbackContext = new LaunchConfigurationCallbackContext(
-            context.Decision.LaunchMode,
-            context.Resource,
-            context.ExecutionConfiguration.EnvironmentVariables.ToDictionary(
-                static variable => variable.Key,
-                static variable => variable.Value,
-                StringComparer.Ordinal),
-            context.CancellationToken);
-        var launchConfiguration = await debugSupport.LaunchConfigurationProducer(callbackContext).ConfigureAwait(false);
+        try
+        {
+            var callbackContext = new LaunchConfigurationCallbackContext(
+                context.Decision.LaunchMode,
+                context.Resource,
+                context.ExecutionConfiguration.EnvironmentVariables.ToDictionary(
+                    static variable => variable.Key,
+                    static variable => variable.Value,
+                    StringComparer.Ordinal),
+                context.CancellationToken);
+            var launchConfiguration = await debugSupport.LaunchConfigurationProducer(callbackContext).ConfigureAwait(false);
 
-        return JsonSerializer.SerializeToElement(launchConfiguration, launchConfiguration.GetType());
+            return JsonSerializer.SerializeToElement(launchConfiguration, launchConfiguration.GetType());
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new ExecutableLaunchConfigurationException(
+                $"Failed to produce launch configuration type '{debugSupport.LaunchConfigurationType}' for resource '{context.Resource.Name}'.",
+                ex);
+        }
     }
 }
 
@@ -514,9 +541,23 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
 
             if (context.Decision.DebugSupport is { LaunchConfigurationType: not KnownLaunchConfigurationTypes.Project } customDebugSupport)
             {
-                launchConfigurations.Add(await DirectExecutableLaunchRecipe
-                    .ProduceLaunchConfigurationAsync(context, customDebugSupport)
-                    .ConfigureAwait(false));
+                try
+                {
+                    launchConfigurations.Add(await DirectExecutableLaunchRecipe
+                        .ProduceLaunchConfigurationAsync(context, customDebugSupport)
+                        .ConfigureAwait(false));
+                }
+                catch (ExecutableLaunchConfigurationException ex)
+                    when (context.Decision.Mechanism == ExecutableLaunchMechanism.Process)
+                {
+                    // The launch override is already a complete Process invocation. Custom launch metadata remains
+                    // useful to DCP consumers when available, but it must not prevent that invocation from starting.
+                    context.ResourceLogger.LogWarning(
+                        ex,
+                        "Failed to apply optional launch configuration metadata of type '{LaunchConfigurationType}' for Process resource '{ResourceName}'. Continuing with Process execution.",
+                        customDebugSupport.LaunchConfigurationType,
+                        context.Resource.Name);
+                }
             }
 
             return launchConfigurations;

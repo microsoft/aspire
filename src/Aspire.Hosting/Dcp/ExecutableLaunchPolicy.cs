@@ -31,8 +31,8 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
             if (resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out _))
             {
                 // A project launch override is a complete Process invocation. A supported custom debug producer
-                // may still contribute launch metadata, matching the existing MAUI behavior, but it does not change
-                // the selected execution mechanism.
+                // may still contribute optional launch metadata, matching the existing MAUI behavior, but its
+                // success does not determine whether the Process invocation can run.
                 var metadataProducer = supportsDebugging &&
                     debugSupport is { LaunchConfigurationType: not KnownLaunchConfigurationTypes.Project }
                         ? debugSupport

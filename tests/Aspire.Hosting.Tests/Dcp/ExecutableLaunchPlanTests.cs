@@ -240,6 +240,7 @@ public class ExecutableLaunchPlanTests
             configuration,
             new DistributedApplicationOptions(),
             new ExecutableLaunchPolicy(configuration),
+            NullLogger.Instance,
             CancellationToken.None);
     }
 

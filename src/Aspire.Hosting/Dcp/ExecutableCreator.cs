@@ -74,6 +74,7 @@ internal sealed class ExecutableCreator(
                 _configuration,
                 _distributedApplicationOptions,
                 _launchPolicy,
+                resourceLogger,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -85,13 +86,23 @@ internal sealed class ExecutableCreator(
             resourceLogger.LogError(ex, "{Message}", ex.Message);
             throw;
         }
-        catch (Exception ex)
+        catch (ExecutableLaunchConfigurationException ex)
         {
             var failureMessage =
                 $"Failed to apply launch configuration for resource '{renderedResource.ModelResource.Name}'. " +
                 "Aspire does not retry launch configuration failures using DCP process fallback.";
             // DcpExecutor avoids duplicating FailedToApplyEnvironmentException logs, so record the underlying
             // launch producer failure on the resource logger before surfacing the actionable error.
+            resourceLogger.LogError(ex, "{Message}", failureMessage);
+            throw new FailedToApplyEnvironmentException(failureMessage, ex);
+        }
+        catch (Exception ex)
+        {
+            var failureMessage =
+                $"Failed to create executable launch plan for resource '{renderedResource.ModelResource.Name}'. " +
+                ex.Message;
+            // Report launch-planning failures with their specific cause without misclassifying recipe or invariant
+            // errors as IDE launch-configuration failures.
             resourceLogger.LogError(ex, "{Message}", failureMessage);
             throw new FailedToApplyEnvironmentException(failureMessage, ex);
         }
@@ -109,6 +120,7 @@ internal sealed class ExecutableCreator(
         IConfiguration configuration,
         DistributedApplicationOptions distributedApplicationOptions,
         ExecutableLaunchPolicy launchPolicy,
+        ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
         var recipes = resource.Annotations.OfType<ExecutableLaunchRecipeAnnotation>().ToArray();
@@ -125,6 +137,7 @@ internal sealed class ExecutableCreator(
             distributedApplicationOptions,
             executionConfiguration,
             decision,
+            resourceLogger,
             cancellationToken);
         var plan = await recipes[0].Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
 
