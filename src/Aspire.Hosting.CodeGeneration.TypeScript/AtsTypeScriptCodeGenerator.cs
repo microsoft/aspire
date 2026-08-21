@@ -922,10 +922,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
         var exportedValues = context.ExportedValues;
-        var directlyReturnedTypeIds = capabilities
-            .Select(capability => capability.ReturnType?.TypeId)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
+        var directlyReturnedResourceTypesByClassName = capabilities
+            .Where(capability => capability.CapabilityKind != AtsCapabilityKind.PropertySetter)
+            .Select(capability => capability.ReturnType)
+            .Where(typeRef => typeRef?.IsResourceBuilder == true)
+            .Select(typeRef => typeRef!)
+            .DistinctBy(typeRef => typeRef.TypeId, StringComparer.Ordinal)
+            .GroupBy(typeRef => DeriveClassName(typeRef.TypeId), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
 
         // Get builder models (flattened - each builder has all its applicable capabilities)
         var allBuilders = CreateBuilderModels(capabilities);
@@ -1001,12 +1005,24 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 _typeRefsById[builder.TypeId] = targetType;
             }
 
-            // Chainable builders reference their own Promise wrappers. Builders returned directly
-            // from exports also need wrappers for fluent return paths, while parameter-only
-            // zero-capability builders do not reference wrappers and must not reserve those names.
-            if (HasChainableMethods(builder) || directlyReturnedTypeIds.Contains(builder.TypeId))
+            directlyReturnedResourceTypesByClassName.TryGetValue(builder.BuilderClassName, out var directlyReturnedAliases);
+
+            // Builder models are deduplicated by generated class name, so the retained TypeId may
+            // differ from a directly returned interface TypeId. Register the retained TypeId to emit
+            // one declaration pair and every returned alias so return sites resolve to that pair.
+            if (HasChainableMethods(builder) || directlyReturnedAliases is not null)
             {
                 _typesWithPromiseWrappers.Add(builder.TypeId);
+
+                if (directlyReturnedAliases is not null)
+                {
+                    foreach (var alias in directlyReturnedAliases)
+                    {
+                        _typesWithPromiseWrappers.Add(alias.TypeId);
+                        _wrapperClassNames[alias.TypeId] = builder.BuilderClassName;
+                        _typeRefsById[alias.TypeId] = builder.TargetType ?? alias;
+                    }
+                }
             }
         }
         foreach (var typeClass in typeClasses)

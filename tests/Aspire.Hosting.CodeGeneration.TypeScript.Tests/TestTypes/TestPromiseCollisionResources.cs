@@ -39,3 +39,23 @@ public class TestPromiseCollisionResourcePromise : Resource, ITestPromiseCollisi
     {
     }
 }
+
+/// <summary>
+/// A mutable-property-only resource used to verify that property setters do not require Promise wrappers.
+/// </summary>
+[AspireExport(ExposeProperties = true)]
+public interface ITestMutablePromiseCollisionResource : IResource
+{
+    /// <summary>
+    /// Gets or sets the test value.
+    /// </summary>
+    string Value { get; set; }
+}
+
+/// <summary>
+/// A parameter-only resource whose generated name collides with the Promise wrapper for
+/// <see cref="ITestMutablePromiseCollisionResource"/>.
+/// </summary>
+public interface ITestMutablePromiseCollisionResourcePromise : IResource
+{
+}

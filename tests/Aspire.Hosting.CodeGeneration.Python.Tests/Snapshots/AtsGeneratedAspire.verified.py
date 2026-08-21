@@ -1634,16 +1634,15 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(AbstractTestMarkerResource, result)
 
-    def add_test_vault(self, name: str, **kwargs: typing.Unpack["TestVaultResourceKwargs"]) -> TestVaultResource:  # type: ignore
+    def add_test_vault(self, name: str) -> AbstractTestVaultResource:
         """Adds a test vault resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/addTestVault',
             rpc_args,
-            kwargs,
         )
-        return typing.cast(TestVaultResource, result)
+        return typing.cast(AbstractTestVaultResource, result)
 
 
 class AbstractValueProvider(abc.ABC):
@@ -2070,6 +2069,22 @@ class AbstractResourceWithWaitSupport(AbstractResource):
 
 class AbstractTestMarkerResource(AbstractResource):
     """Abstract base class for AbstractTestMarkerResource interface."""
+
+
+class AbstractTestMutablePromiseCollisionResource(AbstractResource):
+    """Abstract base class for AbstractTestMutablePromiseCollisionResource interface."""
+
+    @_uncached_property
+    def value(self) -> str:
+        """Gets or sets the test value."""
+
+    @value.setter
+    def value(self, value: str) -> None:
+        """Sets the Value property"""
+
+
+class AbstractTestMutablePromiseCollisionResourcePromise(AbstractResource):
+    """Abstract base class for AbstractTestMutablePromiseCollisionResourcePromise interface."""
 
 
 class AbstractTestPromiseCollisionResource(AbstractResource):
@@ -2608,12 +2623,14 @@ class TestRedisResourceKwargs(ContainerResourceKwargs, total=False):
     """TestRedisResource options."""
 
     promise_collision_resources: tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise]
+    mutable_promise_collision_resources: tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise]
     persistence: TestPersistenceMode | typing.Literal[True]
     connection_string: ReferenceExpression
     connection_string_direct: str
     redis_specific: str
     multi_param_handle_callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]
     data_volume: DataVolumeParameters | typing.Literal[True]
+    concrete_vault_resource: TestVaultResource
 
 class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString):
     """TestRedisResource resource."""
@@ -2628,6 +2645,18 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         rpc_args['resourcePromise'] = resource_promise
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_mutable_promise_collision_resources(self, resource: AbstractTestMutablePromiseCollisionResource, resource_promise: AbstractTestMutablePromiseCollisionResourcePromise) -> typing.Self:
+        """Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['resourcePromise'] = resource_promise
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withMutablePromiseCollisionResources',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -2764,6 +2793,17 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_concrete_vault_resource(self, resource: TestVaultResource) -> typing.Self:
+        """Configures a Redis resource with the concrete vault resource as a parameter."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestRedisResourceKwargs]) -> None:
         if _promise_collision_resources := kwargs.pop("promise_collision_resources", None):
             if _validate_tuple_types(_promise_collision_resources, (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)):
@@ -2773,6 +2813,14 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'promise_collision_resources'. Expected: (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)")
+        if _mutable_promise_collision_resources := kwargs.pop("mutable_promise_collision_resources", None):
+            if _validate_tuple_types(_mutable_promise_collision_resources, (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[0]
+                rpc_args["resourcePromise"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withMutablePromiseCollisionResources', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'mutable_promise_collision_resources'. Expected: (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)")
         if _persistence := kwargs.pop("persistence", None):
             if _validate_type(_persistence, TestPersistenceMode):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -2822,6 +2870,13 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'data_volume'. Expected: DataVolumeParameters or Literal[True]")
+        if _concrete_vault_resource := kwargs.pop("concrete_vault_resource", None):
+            if _validate_type(_concrete_vault_resource, TestVaultResource):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(TestVaultResource, _concrete_vault_resource)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'concrete_vault_resource'. Expected: TestVaultResource")
         super().__init__(handle, client, **kwargs)
 
 

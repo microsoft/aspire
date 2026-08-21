@@ -1039,6 +1039,58 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal(1, CountOccurrences(aspireTs, "class TestPromiseCollisionResourcePromiseImpl "));
     }
 
+    [Fact]
+    public void GenerateDistributedApplication_DoesNotEmitUnusedPromiseWrappersForMutablePropertyResources()
+    {
+        // ITestMutablePromiseCollisionResource has only get/set properties. Its property setter's
+        // fluent metadata reports the owning resource as its return type, but the generated setter
+        // returns Promise<void> and must not reserve a Promise wrapper name that collides with the
+        // parameter-only TestMutablePromiseCollisionResourcePromise.
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Equal(1, CountOccurrences(aspireTs, "export interface TestMutablePromiseCollisionResource "));
+        Assert.Equal(1, CountOccurrences(aspireTs, "class TestMutablePromiseCollisionResourceImpl "));
+        Assert.Equal(1, CountOccurrences(aspireTs, "export interface TestMutablePromiseCollisionResourcePromise "));
+        Assert.Equal(1, CountOccurrences(aspireTs, "class TestMutablePromiseCollisionResourcePromiseImpl "));
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_EmitsPromiseWrapperForReturnedInterfaceAlias()
+    {
+        // The concrete TestVaultResource is parameter-only, while the directly returned
+        // ITestVaultResource derives the same generated class name. Builder deduplication
+        // retains the concrete TypeId, but both TypeIds must resolve to its Promise wrapper.
+        var scannedContext = CreateContextFromTestAssembly();
+        var fixtureCapabilities = scannedContext.Capabilities
+            .Where(capability => capability.CapabilityId is
+                "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestVault" or
+                "Aspire.Hosting.CodeGeneration.TypeScript.Tests/withConcreteVaultResource")
+            .ToList();
+        var atsContext = new AtsContext
+        {
+            Capabilities = fixtureCapabilities,
+            HandleTypes = scannedContext.HandleTypes,
+            DtoTypes = scannedContext.DtoTypes,
+            EnumTypes = scannedContext.EnumTypes,
+            ExportedValues = scannedContext.ExportedValues,
+            Diagnostics = scannedContext.Diagnostics
+        };
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
+
+        Assert.Contains("): TestVaultResourcePromise {", aspireTs);
+        Assert.Equal(1, CountOccurrences(
+            aspireTs,
+            "export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>"));
+        Assert.Equal(1, CountOccurrences(
+            aspireTs,
+            "class TestVaultResourcePromiseImpl implements TestVaultResourcePromise"));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
