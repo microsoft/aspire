@@ -155,8 +155,8 @@
 }
 
 ::deep .resource-name {
-    fill: var(--neutral-foreground-rest);
-    stroke: var(--fill-color);
+    fill: var(--colorNeutralForeground1);
+    stroke: var(--colorNeutralBackground1);
     font-size: 15px;
     text-anchor: middle;
     stroke-width: 0.5em;
@@ -165,12 +165,12 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--fill-color);
-    fill: var(--fill-color);
+    stroke: var(--colorNeutralBackground1);
+    fill: var(--colorNeutralBackground1);
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--neutral-fill-hover) !important;
+    fill: var(--colorNeutralBackground1Hover) !important;
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -178,11 +178,11 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--neutral-fill-secondary-rest) !important;
+    fill: var(--colorNeutralBackground1Selected) !important;
 }
 
 ::deep .resource-group-selected .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-group-highlight .resource-node {
@@ -190,56 +190,56 @@
 }
 
 ::deep .resource-group-highlight .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-group-hover .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-node-border {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     fill: transparent;
 }
 
 ::deep .resource-endpoint {
-    fill: var(--foreground-subtext-rest);
+    fill: var(--colorNeutralForeground2);
     font-size: 11px;
     text-anchor: middle;
 }
 
 ::deep .resource-status-circle {
-    fill: var(--fill-color);
+    fill: var(--colorNeutralBackground1);
 }
 
 ::deep .resource-link {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     marker-end: url(#arrow-normal);
 }
 
 ::deep .arrow-normal {
-    fill: var(--neutral-stroke-rest);
+    fill: var(--colorNeutralStroke1);
 }
 
 ::deep .arrow-highlight {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .arrow-highlight-expand {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-link-highlight {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight);
 }
 
 ::deep .resource-link-highlight-expand {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight-expand);
