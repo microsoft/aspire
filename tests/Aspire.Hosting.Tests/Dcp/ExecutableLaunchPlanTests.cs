@@ -173,6 +173,7 @@ public class ExecutableLaunchPlanTests
         var resource = new ExecutableResource("app", "tool", "/tmp");
         var executable = Executable.Create("app-12345678", "stale-tool");
         executable.Spec.ExecutionType = ExecutionType.IDE;
+        executable.Spec.FallbackExecutionTypes = [ExecutionType.Process];
         executable.Spec.Args = ["stale"];
         var renderedResource = new RenderedModelResource<Executable>(resource, executable);
         var plan = new ExecutableLaunchPlan(

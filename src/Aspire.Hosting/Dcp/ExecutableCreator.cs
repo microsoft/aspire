@@ -175,6 +175,7 @@ internal sealed class ExecutableCreator(
             ExecutableLaunchMechanism.Ide => ExecutionType.IDE,
             _ => throw new InvalidOperationException($"Unknown executable launch mechanism '{plan.Mechanism}'.")
         };
+        spec.FallbackExecutionTypes = null;
         spec.Args = plan.Arguments?.ToList();
         spec.Env = plan.EnvironmentVariables
             .Select(static variable => new EnvVar { Name = variable.Key, Value = variable.Value })
