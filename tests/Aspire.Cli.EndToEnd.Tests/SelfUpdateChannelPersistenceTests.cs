@@ -33,6 +33,29 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
+        const string projectName = "SelfUpdateChannelApp";
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var configPath = Path.Combine(projectPath, "aspire.config.json");
+
+        // Model the reported scenario where the AppHost predates the self-update. Normalize any
+        // channel assigned by the current-source install so the later update must use CLI identity.
+        await auto.AspireNewCSharpEmptyAppHostAsync(
+            projectName,
+            counter,
+            timeout: TimeSpan.FromMinutes(5));
+
+        var createdConfig = ReadConfig(configPath);
+        createdConfig.Remove("channel");
+        File.WriteAllText(configPath, createdConfig.ToJsonString());
+        Assert.False(ReadConfig(configPath).ContainsKey("channel"));
+
+        if (strategy.Mode is CliInstallMode.LocalHive)
+        {
+            // LocalHive setup pins its original Aspire home to local. Remove that competing
+            // global setting before switching to the isolated script-style install.
+            await auto.RunCommandAsync("aspire config delete channel -g", counter);
+        }
+
         // Copy the current build into a dedicated get-aspire-cli.sh-style prefix. This gives the
         // self-update a realistic writable route without replacing the harness's original install.
         await auto.RunCommandAsync(
@@ -53,18 +76,6 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
         // This is a new process launched from the path that was replaced above.
         await auto.RunCommandAsync("hash -r; aspire --version", counter);
         await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
-
-        const string projectName = "SelfUpdateChannelApp";
-        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var configPath = Path.Combine(projectPath, "aspire.config.json");
-
-        await auto.AspireNewCSharpEmptyAppHostAsync(
-            projectName,
-            counter,
-            timeout: TimeSpan.FromMinutes(5));
-
-        var createdConfig = ReadConfig(configPath);
-        Assert.False(createdConfig.ContainsKey("channel"));
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.RunCommandAsync(
