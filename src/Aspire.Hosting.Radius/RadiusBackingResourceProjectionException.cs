@@ -42,28 +42,28 @@ namespace Aspire.Hosting.Radius;
 /// {
 ///     await app.RunAsync();
 /// }
-/// catch (RadiusBackingResourceEndpointException ex)
+/// catch (RadiusBackingResourceProjectionException ex)
 /// {
 ///     Console.Error.WriteLine($"'{ex.Resource.Name}' is provisioned by a Radius recipe and cannot " +
 ///                             $"be projected to its consumers: {ex.Message}");
 /// }
 /// </code>
 /// </example>
-public sealed class RadiusBackingResourceEndpointException : InvalidOperationException
+public sealed class RadiusBackingResourceProjectionException : InvalidOperationException
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="RadiusBackingResourceEndpointException"/> class.
+    /// Initializes a new instance of the <see cref="RadiusBackingResourceProjectionException"/> class.
     /// </summary>
     /// <param name="resource">The backing resource that could not be projected.</param>
     /// <param name="message">The message that describes the error.</param>
     /// <exception cref="ArgumentNullException"><paramref name="resource"/> is <see langword="null"/>.</exception>
-    public RadiusBackingResourceEndpointException(IResource resource, string message)
+    public RadiusBackingResourceProjectionException(IResource resource, string message)
         : this(resource, message, innerException: null)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RadiusBackingResourceEndpointException"/> class
+    /// Initializes a new instance of the <see cref="RadiusBackingResourceProjectionException"/> class
     /// with a reference to the inner exception that is the cause of this exception.
     /// </summary>
     /// <param name="resource">The backing resource that could not be projected.</param>
@@ -77,7 +77,7 @@ public sealed class RadiusBackingResourceEndpointException : InvalidOperationExc
     /// could not answer that.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="resource"/> is <see langword="null"/>.</exception>
-    public RadiusBackingResourceEndpointException(IResource resource, string message, Exception? innerException)
+    public RadiusBackingResourceProjectionException(IResource resource, string message, Exception? innerException)
         : base(message, innerException)
     {
         ArgumentNullException.ThrowIfNull(resource);

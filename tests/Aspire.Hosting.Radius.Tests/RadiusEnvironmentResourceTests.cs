@@ -120,7 +120,7 @@ public class RadiusEnvironmentResourceTests
         var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
         var endpoint = cache.GetEndpoint("tcp");
 
-        var ex = Assert.Throws<RadiusBackingResourceEndpointException>(() => ((IComputeEnvironmentResource)radiusEnv)
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => ((IComputeEnvironmentResource)radiusEnv)
             .GetEndpointPropertyExpression(endpoint.Property(property)));
 
         Assert.Contains("ASPIRERADIUS081", ex.Message, StringComparison.Ordinal);
