@@ -6,6 +6,7 @@ import {
     createNewAspireAppLabel,
     createWithAspirePlaceholder,
 } from '../loc/strings';
+import { type HandledCommandOutcome } from '../utils/telemetry';
 
 interface CreateWithAspireItem extends vscode.QuickPickItem {
     readonly command: 'aspire-vscode.new' | 'aspire-vscode.init';
@@ -18,7 +19,7 @@ interface CreateWithAspireItem extends vscode.QuickPickItem {
  * then delegates to the corresponding command so the CLI invocation, target
  * resolution, and telemetry stay owned by a single implementation.
  */
-export async function createWithAspireCommand(): Promise<void> {
+export async function createWithAspireCommand(): Promise<HandledCommandOutcome | undefined> {
     const items: CreateWithAspireItem[] = [
         {
             label: createNewAspireAppLabel,
@@ -41,9 +42,8 @@ export async function createWithAspireCommand(): Promise<void> {
     }
 
     if (selected.command === 'aspire-vscode.new') {
-        await vscode.commands.executeCommand(selected.command, 'tree');
-        return;
+        return vscode.commands.executeCommand<HandledCommandOutcome | undefined>(selected.command, 'tree');
     }
 
-    await vscode.commands.executeCommand(selected.command, undefined, 'tree');
+    return vscode.commands.executeCommand<HandledCommandOutcome | undefined>(selected.command, undefined, 'tree');
 }

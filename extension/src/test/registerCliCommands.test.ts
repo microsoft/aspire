@@ -159,18 +159,51 @@ suite('registerCliCommands', () => {
             ]);
     });
 
-    test('workspace folder selection cancellation prevents the gate and command body', async () => {
+    test('workspace folder selection cancellation returns a handled outcome without running the gate or command body', async () => {
         workspaceFoldersStub.value([
             createWorkspaceFolder('a', '/repo/a'),
             createWorkspaceFolder('b', '/repo/b'),
         ]);
         showWorkspaceFolderPickStub.resolves(undefined);
 
-        await callbacks.get('aspire-vscode.init')!();
+        const result = await callbacks.get('aspire-vscode.init')!();
 
+        assert.deepStrictEqual(result, { success: false, canceled: true });
         assert.strictEqual(showWorkspaceFolderPickStub.calledOnce, true);
         assert.strictEqual(resolveCliPathStub.called, false);
         assert.strictEqual(sendCommandStub.called, false);
+    });
+
+    test('command errors show one message and return the classified handled outcome', async () => {
+        workspaceFoldersStub.value([createWorkspaceFolder('a', '/repo/a')]);
+        sendCommandStub.rejects(new TypeError('failed'));
+        const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const events: CommandInvocationEvent[] = [];
+        const subscription = onDidInvokeCommand(event => events.push(event));
+
+        try {
+            const result = await callbacks.get('aspire-vscode.new')!();
+
+            assert.deepStrictEqual(result, { success: false, errorKind: 'TypeError' });
+        }
+        finally {
+            subscription.dispose();
+        }
+
+        assert.strictEqual(showErrorMessageStub.calledOnce, true);
+        assert.deepStrictEqual(
+            events.map(event => ({
+                command: event.command,
+                outcome: event.outcome,
+                source: event.source,
+                errorKind: event.errorKind,
+            })),
+            [{
+                command: 'aspire-vscode.new',
+                outcome: 'error',
+                source: 'command_palette',
+                errorKind: 'TypeError',
+            }]);
     });
 
     test('open terminal uses the only workspace folder without prompting', async () => {

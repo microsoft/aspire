@@ -14,7 +14,7 @@ import { settingsCommand } from '../commands/settings';
 import { openLocalSettingsCommand, openGlobalSettingsCommand } from '../commands/openSettings';
 import { installCliCommand, verifyCliInstalledCommand } from '../commands/walkthroughCommands';
 import { cliNotAvailable, dismissLabel, errorMessage, noAppHostInWorkspace, openCliInstallInstructions, selectWorkspaceFolderForAspireCommand } from '../loc/strings';
-import { isCommandCancellation, withCommandTelemetry } from '../utils/telemetry';
+import { classifyError, type HandledCommandOutcome, isCommandCancellation, withCommandTelemetry } from '../utils/telemetry';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -128,7 +128,7 @@ async function tryExecuteCommand(
   command: (terminalProvider: AspireTerminalProvider, invocation: CommandInvocation, cliPath: string) => Promise<void>,
   prepareInvocation: () => Promise<CommandInvocation> = async () => ({ target: windowCliPathTarget }),
   source: CommandSource = 'command_palette',
-): Promise<void> {
+): Promise<HandledCommandOutcome | undefined> {
   try {
     await withCommandTelemetry(commandName, async () => {
       const invocation = await prepareInvocation();
@@ -160,10 +160,11 @@ async function tryExecuteCommand(
     }, { source });
   }
   catch (error) {
-    // Cancellations should not surface as user-visible errors — but they still
-    // bubble through the wrapper so it can classify outcome correctly.
-    if (!isCommandCancellation(error)) {
-      vscode.window.showErrorMessage(errorMessage(error));
+    if (isCommandCancellation(error)) {
+      return { success: false, canceled: true };
     }
+
+    vscode.window.showErrorMessage(errorMessage(error));
+    return { success: false, errorKind: classifyError(error) };
   }
 }

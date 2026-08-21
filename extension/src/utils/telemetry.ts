@@ -213,6 +213,12 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
  */
 export type CommandOutcome = 'success' | 'canceled' | 'error';
 
+export interface HandledCommandOutcome {
+    readonly success: false;
+    readonly canceled?: boolean;
+    readonly errorKind?: string;
+}
+
 export interface CommandInvocationEvent {
     command: string;
     outcome: CommandOutcome;
@@ -252,7 +258,10 @@ export async function withCommandTelemetry<T>(
     let errorKind: string | undefined;
     try {
         const result = await Promise.resolve(fn());
-        if (isHandledCommandFailure(result)) {
+        if (isHandledCommandCancellation(result)) {
+            outcome = 'canceled';
+        }
+        else if (isHandledCommandFailure(result)) {
             outcome = 'error';
             errorKind = getHandledCommandFailureKind(result);
         }
@@ -321,7 +330,7 @@ function normalizeErrorKind(errorKind: string): string {
     return /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(errorKind) ? errorKind : 'Error';
 }
 
-function isHandledCommandFailure(value: unknown): value is { success: false; errorKind?: unknown } {
+function isHandledCommandFailure(value: unknown): value is HandledCommandOutcome {
     if (typeof value !== 'object' || value === null || !('success' in value)) {
         return false;
     }
@@ -331,7 +340,11 @@ function isHandledCommandFailure(value: unknown): value is { success: false; err
     return (value as { success?: unknown }).success === false;
 }
 
-function getHandledCommandFailureKind(value: { errorKind?: unknown }): string {
+function isHandledCommandCancellation(value: unknown): value is HandledCommandOutcome & { readonly canceled: true } {
+    return isHandledCommandFailure(value) && value.canceled === true;
+}
+
+function getHandledCommandFailureKind(value: HandledCommandOutcome): string {
     return typeof value.errorKind === 'string' && value.errorKind.length > 0
         ? normalizeErrorKind(value.errorKind)
         : 'HandledError';
