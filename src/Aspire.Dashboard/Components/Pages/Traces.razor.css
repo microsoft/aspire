@@ -8,7 +8,7 @@
 }
 
 .trace-id {
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
     font-size: 12px;
     font-weight: normal;

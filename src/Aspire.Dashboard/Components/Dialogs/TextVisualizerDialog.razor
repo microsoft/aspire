@@ -8,7 +8,7 @@
 <FluentDialogBody Style="width: 100%; max-height: calc(100dvh - 48px);">
     <TitleTemplate>
         <div class="dialog-title-grid">
-            <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Style="grid-area: dialog-icon; align-self: center;" />
+            <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Color="Color.Primary" Style="grid-area: dialog-icon; align-self: center;" />
             <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
                 @Content.Description
             </FluentLabel>
@@ -89,8 +89,8 @@
                               Appearance="ButtonAppearance.Primary"
                               AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                     <span slot="start">
-                        <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                        <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
+                        <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
+                        <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
                     </span>
                     @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
                 </FluentButton>

@@ -27,5 +27,5 @@
 }
 
 .notifications-scroll ::deep > :last-child {
-    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }

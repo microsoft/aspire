@@ -7,7 +7,7 @@
     min-height: 36px;
     padding: 0 8px;
     column-gap: 4px;
-    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
 .notification-entry.intent-info {
@@ -73,7 +73,7 @@
     font-size: 12px;
     text-align: right;
     padding: 4px 4px 8px 0px;
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
 }
 
 ::deep .notification-entry-action {

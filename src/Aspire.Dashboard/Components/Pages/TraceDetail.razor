@@ -57,7 +57,7 @@
                         </div>
                     }
                     <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
-                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
+                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
                     </FluentButton>
                     <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
                                       Icon="@(new Icons.Regular.Size20.Options())"
@@ -194,8 +194,9 @@
                                                                 }
                                                             }
                                                             <FluentIcon
-                                                                Style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(context.UninstrumentedPeer)};")"
                                                                 Value="icon"
+                                                                Color="Color.Custom"
+                                                                CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(context.UninstrumentedPeer)"
                                                                 Class="uninstrumented-peer-icon"/>
                                                             <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
                                                         </span>
@@ -324,7 +325,7 @@
                                         </AspireTemplateColumn>
                                     </ChildContent>
                                     <EmptyContent>
-                                        <FluentIcon Icon="Icons.Regular.Size24.GanttChart" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
+                                        <FluentIcon Icon="Icons.Regular.Size24.GanttChart" Color="Color.Primary" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
                                     </EmptyContent>
                                     </AspireFluentDataGrid>
                                 </GridColumnManager>
@@ -348,7 +349,7 @@
     else
     {
         <div class="empty-content">
-            <FluentIcon Icon="Icons.Regular.Size24.GanttChart" /> &nbsp; @string.Format(Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceNotFound)], TraceId)
+            <FluentIcon Icon="Icons.Regular.Size24.GanttChart" Color="Color.Primary" /> &nbsp; @string.Format(Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceNotFound)], TraceId)
         </div>
     }
 </div>
@@ -401,7 +402,7 @@
 
                     <DesktopToolbarDivider />
 
-                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /></FluentButton>
 
                     <DesktopToolbarDivider />
 

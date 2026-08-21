@@ -35,7 +35,7 @@
 
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
     font-size: var(--fontSizeBase200);
 }
 

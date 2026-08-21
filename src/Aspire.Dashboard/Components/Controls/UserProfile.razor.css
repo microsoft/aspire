@@ -16,7 +16,7 @@
 }
 
 ::deep fluent-button[appearance=stealth]:hover::part(control) {
-    background-color: var(--colorNeutralBackground1Hover);
+    background-color: var(--colorNeutralBackground2Hover);
 }
 
 ::deep .fluent-profile-menu > .fluent-persona {

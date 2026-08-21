@@ -82,12 +82,12 @@
 
                 @if (ViewportInformation.IsDesktop)
                 {
-                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" /></FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /></FluentButton>
                 }
                 else
                 {
                     <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
-                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
+                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
                     </FluentButton>
                 }
             </div>
@@ -207,7 +207,7 @@
                             </AspireTemplateColumn>
                         </ChildContent>
                         <EmptyContent>
-                            <FluentIcon Icon="Icons.Regular.Size24.GanttChart" />&nbsp;@Loc[nameof(Dashboard.Resources.Traces.TracesNoTraces)]
+                            <FluentIcon Icon="Icons.Regular.Size24.GanttChart" Color="Color.Primary" />&nbsp;@Loc[nameof(Dashboard.Resources.Traces.TracesNoTraces)]
                         </EmptyContent>
                     </AspireFluentDataGrid>
                 </GridColumnManager>

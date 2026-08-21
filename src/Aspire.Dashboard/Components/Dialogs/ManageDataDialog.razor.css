@@ -24,7 +24,7 @@
 
 ::deep .fluent-data-grid-row[row-type='sticky-header'] .column-header {
     background-color: var(--colorNeutralBackground1);
-    border-bottom: 1px solid var(--colorNeutralStroke2);
+    border-bottom: 1px solid var(--colorNeutralStroke3);
 }
 
 .button-container {

@@ -152,12 +152,12 @@
                     <div class="empty-content">
                         @if (ViewportInformation.IsDesktop)
                         {
-                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>@:&nbsp;
+                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary"/>@:&nbsp;
                             @Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]
                         }
                         else
                         {
-                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>@:&nbsp;
+                            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary"/>@:&nbsp;
                             <a href="#" @onclick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())" @onclick:preventDefault="true">@Loc[nameof(Dashboard.Resources.Metrics.MetricsSelectAResource)]</a>
                         }
                     </div>
@@ -165,7 +165,7 @@
                 else
                 {
                     <div class="empty-content">
-                        <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple"/>&nbsp;@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]
+                        <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary"/>&nbsp;@Loc[nameof(Dashboard.Resources.Metrics.MetricsNoMetricsForResource)]
                     </div>
                 }
             </div>

@@ -14,7 +14,7 @@
 }
 
 ::deep .trace-id {
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
     font-size: 12px;
     font-weight: normal;
@@ -85,7 +85,7 @@
 
 ::deep .empty-content-cell {
     margin-top: 8px;
-    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
 ::deep .trace-view-grid .column-header {
@@ -146,7 +146,7 @@
 
 ::deep .span-container .span-bar-label {
     font-size: 12px;
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
     padding: 0 0.5em;
     height: min-content;
 }
@@ -168,7 +168,7 @@
 
 ::deep .uninstrumented-peer {
     padding-left: 0.25rem;
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
 }
 
@@ -321,7 +321,7 @@
 }
 
 ::deep .log-tooltip-subtitle {
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
     padding-left: 0.5rem;
 }
@@ -348,7 +348,7 @@
 
 ::deep.log-tooltip-table td {
     padding: 3.5px 0;
-    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
     align-content: start;
     word-break: break-word;
 }

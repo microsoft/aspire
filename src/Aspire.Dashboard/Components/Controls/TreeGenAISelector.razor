@@ -2,6 +2,7 @@
 @using Metrics = Aspire.Dashboard.Resources.Metrics
 
 <FluentTreeView Class="genai-message-tree"
+                Size="TreeSize.Medium"
                 SelectedId="@GetSelectedTreeItemId()"
                 @bind-CurrentSelected="@PageViewModel.SelectedTreeItem"
                 @bind-CurrentSelected:after="HandleSelectedTreeItemChangedAsync">

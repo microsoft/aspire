@@ -5,7 +5,7 @@
 <FluentDialogBody Style="width: 100%; max-height: calc(100dvh - 48px);">
     <TitleTemplate>
         <div class="dialog-title-grid">
-            <FluentIcon Value="@(new Icons.Regular.Size24.Sparkle())" Style="grid-area: dialog-icon; align-self: center;" />
+            <FluentIcon Value="@(new Icons.Regular.Size24.Sparkle())" Color="Color.Primary" Style="grid-area: dialog-icon; align-self: center;" />
             <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
                 @Content.Title
                 <span class="trace-id">@OtlpHelpers.ToShortenedId(Content.Span.SpanId)</span>
@@ -51,7 +51,7 @@
                                 <FluentButton Class="back-button"
                                               Appearance="ButtonAppearance.Default"
                                               OnClick="@GoBackAsync">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowHookUpLeft())" />
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowHookUpLeft())" Color="Color.Primary" />
                                 </FluentButton>
                             </div>
                             @*
@@ -162,7 +162,7 @@
                                             {
                                                 <div class="tool-button-container">
                                                     <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                        <FluentIcon Value="@s_wrenchIcon" Color="Color.Primary" Style="vertical-align: sub;" slot="start" />
                                                         @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
                                                     </FluentButton>
                                                 </div>
@@ -174,7 +174,7 @@
                                             {
                                                 <div class="tool-button-container">
                                                     <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                        <FluentIcon Value="@s_wrenchIcon" Color="Color.Primary" Style="vertical-align: sub;" slot="start" />
                                                         @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
                                                     </FluentButton>
                                                 </div>
@@ -186,14 +186,14 @@
                                             {
                                                 <div class="tool-button-container">
                                                     <FluentButton OnClick="@(() => OnViewItem(itemVM))">
-                                                        <FluentIcon Value="@s_toolIcon" Style="vertical-align: sub;" slot="start" />
+                                                        <FluentIcon Value="@s_toolIcon" Color="Color.Primary" Style="vertical-align: sub;" slot="start" />
                                                         @Loc[nameof(Dialogs.GenAIToolCallButtonText)]
                                                     </FluentButton>
 
                                                     @if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallRequestPart.Name) is { } toolVM)
                                                     {
                                                         <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                            <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                            <FluentIcon Value="@s_wrenchIcon" Color="Color.Primary" Style="vertical-align: sub;" slot="start" />
                                                             @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
                                                         </FluentButton>
                                                     }
@@ -226,8 +226,8 @@
                                       Title="@copyButtonLabel"
                                       AdditionalAttributes="@copyButtonAttributes">
                             <span slot="start">
-                                <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                                <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
+                                <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
+                                <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
                             </span>
                             @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
                         </FluentButton>
@@ -495,7 +495,7 @@
                         }
                         <span class="defaultHidden">
                             <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="@(() => OnViewItem(item))">
-                                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" />
+                                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" Color="Color.Primary" />
                             </FluentButton>
                         </span>
                         @if (itemParts.Count > 0)
