@@ -35,7 +35,7 @@ export function registerCliCommands(
 ): vscode.Disposable[] {
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp, invocation, cliPath) => addCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
   const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', () => tryExecuteCommand('aspire-vscode.new', terminalProvider, (tp, invocation, cliPath) => newCommand(tp, invocation.target, cliPath), selectCommandInvocation));
-  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', () => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), selectCommandInvocation));
+  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', (target?: CliPathResolutionTarget) => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), target ? async () => ({ target }) : selectCommandInvocation));
   // Delegates to aspire-vscode.new / aspire-vscode.init above, so it doesn't go
   // through tryExecuteCommand itself — the delegated-to command owns its own CLI
   // availability check and telemetry.

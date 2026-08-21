@@ -10,6 +10,7 @@ import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvid
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
@@ -199,18 +200,18 @@ suite('AspireEditorCommandProvider', () => {
         }
     });
 
-    test('hasWorkspaceFolderWithoutAppHost returns false when no workspace is open', async () => {
+    test('getWorkspaceFoldersWithoutAppHosts returns an empty array when no workspace is open', async () => {
         const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(path.join(tempDir, 'unused.csproj')), createLaunchService());
         try {
             workspaceFoldersStub.value(undefined);
-            assert.strictEqual(await provider.hasWorkspaceFolderWithoutAppHost(), false);
+            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
         }
         finally {
             provider.dispose();
         }
     });
 
-    test('hasWorkspaceFolderWithoutAppHost returns false when the only folder already has an AppHost', async () => {
+    test('getWorkspaceFoldersWithoutAppHosts returns an empty array when the only folder has one AppHost candidate', async () => {
         const appHostPath = path.join(tempDir, 'AppHost.csproj');
         fs.writeFileSync(appHostPath, '<Project Sdk="Microsoft.NET.Sdk" />');
         const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
@@ -218,14 +219,36 @@ suite('AspireEditorCommandProvider', () => {
 
         const provider = new AspireEditorCommandProvider(createAppHostDiscoveryService(appHostPath), createLaunchService());
         try {
-            assert.strictEqual(await provider.hasWorkspaceFolderWithoutAppHost(), false);
+            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
         }
         finally {
             provider.dispose();
         }
     });
 
-    test('hasWorkspaceFolderWithoutAppHost returns true when a folder has no AppHost candidates', async () => {
+    test('getWorkspaceFoldersWithoutAppHosts returns an empty array for multiple AppHost candidates without showing selection UI', async () => {
+        const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
+        const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
+        workspaceFoldersStub.value([folder]);
+
+        const discoveryService = createAppHostDiscoveryService(path.join(tempDir, 'FirstAppHost.csproj'));
+        sinon.stub(discoveryService, 'discover').resolves([
+            { path: path.join(tempDir, 'FirstAppHost.csproj'), language: 'csharp', status: 'buildable' },
+            { path: path.join(tempDir, 'SecondAppHost.csproj'), language: 'csharp', status: 'buildable' },
+        ]);
+
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+        try {
+            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
+            assert.strictEqual(showQuickPickStub.called, false);
+        }
+        finally {
+            provider.dispose();
+            showQuickPickStub.restore();
+        }
+    });
+
+    test('getWorkspaceFoldersWithoutAppHosts returns the folder when it has no AppHost candidates', async () => {
         const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
         workspaceFoldersStub.value([folder]);
 
@@ -237,14 +260,30 @@ suite('AspireEditorCommandProvider', () => {
 
         const provider = new AspireEditorCommandProvider(emptyDiscoveryService, createLaunchService());
         try {
-            assert.strictEqual(await provider.hasWorkspaceFolderWithoutAppHost(), true);
+            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), [folder]);
         }
         finally {
             provider.dispose();
         }
     });
 
-    test('hasWorkspaceFolderWithoutAppHost returns true when any folder in a multi-root workspace lacks an AppHost', async () => {
+    test('getWorkspaceFoldersWithoutAppHosts treats discovery failures as ineligible', async () => {
+        const folder = { uri: vscode.Uri.file(tempDir), name: 'test', index: 0 };
+        workspaceFoldersStub.value([folder]);
+        const warningLogStub = sinon.stub(extensionLogOutputChannel, 'warn');
+
+        const provider = new AspireEditorCommandProvider(createFailingAppHostDiscoveryService(), createLaunchService());
+        try {
+            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), []);
+            assert.ok(warningLogStub.calledOnceWithExactly(`Failed to discover AppHost candidates for workspace ${folder.uri.fsPath}: Error: discovery failed`));
+        }
+        finally {
+            provider.dispose();
+            warningLogStub.restore();
+        }
+    });
+
+    test('getWorkspaceFoldersWithoutAppHosts returns only empty folders from a multi-root workspace', async () => {
         const withAppHostDir = path.join(tempDir, 'WithAppHost');
         const withoutAppHostDir = path.join(tempDir, 'WithoutAppHost');
         fs.mkdirSync(withAppHostDir);
@@ -266,7 +305,7 @@ suite('AspireEditorCommandProvider', () => {
 
         const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
         try {
-            assert.strictEqual(await provider.hasWorkspaceFolderWithoutAppHost(), true);
+            assert.deepStrictEqual(await provider.getWorkspaceFoldersWithoutAppHosts(), [withoutAppHostFolder]);
         }
         finally {
             provider.dispose();

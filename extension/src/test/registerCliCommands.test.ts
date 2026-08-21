@@ -85,6 +85,20 @@ suite('registerCliCommands', () => {
         assert.ok(sendCommandStub.calledOnceWith('init', true, undefined, { target, cliPath: '/resolved/aspire' }));
     });
 
+    test('init uses an explicit target without selecting a workspace folder', async () => {
+        const folderA = createWorkspaceFolder('a', '/repo/a');
+        const folderB = createWorkspaceFolder('b', '/repo/b');
+        const target = workspaceFolderCliPathTarget(folderB);
+        workspaceFoldersStub.value([folderA, folderB]);
+        showWorkspaceFolderPickStub.resolves(folderA);
+
+        await callbacks.get('aspire-vscode.init')!(target);
+
+        assert.strictEqual(showWorkspaceFolderPickStub.called, false);
+        assert.ok(resolveCliPathStub.calledOnceWith(target));
+        assert.ok(sendCommandStub.calledOnceWith('init', true, undefined, { target, cliPath: '/resolved/aspire' }));
+    });
+
     test('new prompts once in a multi-root window and reuses the selected target', async () => {
         const folderA = createWorkspaceFolder('a', '/repo/a');
         const folderB = createWorkspaceFolder('b', '/repo/b');

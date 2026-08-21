@@ -155,6 +155,17 @@ suite('extension/package.json', () => {
         assert.strictEqual(openDashboardToSide?.when, '!aspire.noRunningAppHosts');
     });
 
+    test('Create with Aspire is pane-only while new and init remain in the command palette', () => {
+        const manifest = readManifest();
+        const hiddenFromPalette = new Set((manifest.contributes.menus?.commandPalette ?? [])
+            .filter(item => item.when === 'false')
+            .map(item => item.command));
+
+        assert.ok(hiddenFromPalette.has('aspire-vscode.createWithAspire'));
+        assert.ok(!hiddenFromPalette.has('aspire-vscode.new'));
+        assert.ok(!hiddenFromPalette.has('aspire-vscode.init'));
+    });
+
     test('active AppHost Run action does not require a language debugger', () => {
         const manifest = readManifest();
         const editorRunMenus = manifest.contributes.menus?.['editor/title/run'] ?? [];

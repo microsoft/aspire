@@ -114,6 +114,7 @@ suite('Aspire package contribution surface E2E', function () {
         const installedPackage = (await executeE2eControlCommand({ name: 'getExtensionPackageJson' })).result as PackageJson;
         const hiddenPaletteCommands = getHiddenCommandPaletteCommands(installedPackage);
         for (const commandId of [
+            'aspire-vscode.createWithAspire',
             'aspire-vscode.runAppHost',
             'aspire-vscode.debugAppHost',
             'aspire-vscode.refreshAppHosts',
@@ -134,12 +135,15 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(explorerCommands, ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']);
         assert.deepStrictEqual(Object.keys(installedPackage.contributes?.menus ?? {}).sort(), expectedMenuLocations);
         assert.deepStrictEqual(getMenuCommands(installedPackage, 'editor/title/run'), ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']);
-        assert.deepStrictEqual(getMenuCommands(installedPackage, 'view/title'), ['aspire-vscode.switchToGlobalView', 'aspire-vscode.switchToWorkspaceView', 'aspire-vscode.globalRefreshAppHosts', 'aspire-vscode.refreshAppHosts']);
+        assert.deepStrictEqual(getMenuCommands(installedPackage, 'view/title'), ['aspire-vscode.createWithAspire', 'aspire-vscode.switchToGlobalView', 'aspire-vscode.switchToWorkspaceView', 'aspire-vscode.globalRefreshAppHosts', 'aspire-vscode.refreshAppHosts']);
         for (const commandId of expectedViewItemContextCommands) {
             assert.ok(getMenuCommands(installedPackage, 'view/item/context').includes(commandId), `view/item/context should include ${commandId}.`);
         }
         assert.ok(installedPackage.contributes?.viewsContainers?.activitybar?.some(container => container.id === 'aspire-panel' && container.icon === 'resources/aspire-activity-bar.svg'));
         assert.deepStrictEqual((installedPackage.contributes?.viewsWelcome ?? []).map(welcome => welcome.when), expectedWelcomeWhenClauses);
+        assert.ok(installedPackage.contributes?.viewsWelcome?.some(welcome =>
+            welcome.view === 'aspire-vscode.appHosts' &&
+            welcome.contents?.includes('command:aspire-vscode.createWithAspire')));
         assert.ok(installedPackage.contributes?.colors?.some(color => color.id === 'aspire.brandPurple' && color.defaults?.highContrast));
 
         const debuggerContribution = getAspireDebugger(installedPackage);
@@ -576,6 +580,7 @@ const expectedCommandIds = [
     'aspire-vscode.copyEndpointUrl',
     'aspire-vscode.copyLogFilePath',
     'aspire-vscode.copyResourceName',
+    'aspire-vscode.createWithAspire',
     'aspire-vscode.debugAppHost',
     'aspire-vscode.debugAppHostCommand',
     'aspire-vscode.deploy',

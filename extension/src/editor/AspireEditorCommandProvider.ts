@@ -120,25 +120,25 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
     }
 
     /**
-     * Returns true when at least one open workspace folder does not already have a
-     * discoverable AppHost. Used to decide whether "Add Aspire to this workspace"
-     * (aspire init) should be offered — initialization only makes sense for a folder
-     * that doesn't already contain an AppHost.
+     * Returns the open workspace folders that do not have a discoverable AppHost.
      */
-    public async hasWorkspaceFolderWithoutAppHost(): Promise<boolean> {
+    public async getWorkspaceFoldersWithoutAppHosts(): Promise<readonly vscode.WorkspaceFolder[]> {
         const folders = vscode.workspace.workspaceFolders ?? [];
-        if (folders.length === 0) {
-            return false;
-        }
+        const foldersWithoutAppHosts: vscode.WorkspaceFolder[] = [];
 
         for (const folder of folders) {
-            const appHostPath = await this.trySelectWorkspaceAppHostPath(folder);
-            if (!appHostPath) {
-                return true;
+            try {
+                const appHosts = await this._appHostDiscoveryService.discover(folder);
+                if (appHosts.length === 0) {
+                    foldersWithoutAppHosts.push(folder);
+                }
+            }
+            catch (error) {
+                extensionLogOutputChannel.warn(`Failed to discover AppHost candidates for workspace ${folder.uri.fsPath}: ${error}`);
             }
         }
 
-        return false;
+        return foldersWithoutAppHosts;
     }
 
     public async tryExecuteRunAppHost(noDebug: boolean): Promise<void> {
