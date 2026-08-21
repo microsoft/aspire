@@ -33,17 +33,19 @@ public sealed class SelectTestsWorkflowTests
     }
 
     // The repo SDK can move ahead of the target framework used by SelectTests. The minimal bootstrap
-    // must install that runtime through Arcade's wrapper using the wrapper's single-dash switches;
-    // unsupported raw dotnet-install switches make the setup job exit before test selection runs.
+    // must install that SDK through Arcade's wrapper because MSBuildLocator needs the SDK's MSBuild
+    // assemblies; installing only the runtime can execute SelectTests but cannot build its project graph.
     [Fact]
-    public void SelectTestsActionInstallsPinnedRuntimeWithArcadeWrapperArguments()
+    public void SelectTestsActionInstallsPinnedSdkWithArcadeWrapperArguments()
     {
         var action = File.ReadAllText(SelectTestsActionPath);
 
-        Assert.Contains("<DotNetRuntimeNet10VersionForTesting>", File.ReadAllText(VersionsPropsPath));
+        Assert.Contains("<DotNetSdkNet10VersionForTesting>", File.ReadAllText(VersionsPropsPath));
+        Assert.Contains("<DotNetSdkNet10VersionForTesting>", action);
         Assert.Contains("./eng/common/dotnet-install.sh", action);
-        Assert.Contains("-runtime dotnet", action);
-        Assert.Contains("-version \"$runtime_version\"", action);
+        Assert.Contains("-runtime sdk", action);
+        Assert.Contains("-version \"$sdk_version\"", action);
+        Assert.DoesNotContain("-runtime dotnet", action);
         Assert.DoesNotContain("--install-dir", action);
         Assert.DoesNotContain("--skip-non-versioned-files", action);
     }

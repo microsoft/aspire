@@ -14,6 +14,7 @@
     <DotNetRuntimeNet10VersionForTesting>10.0.8</DotNetRuntimeNet10VersionForTesting>
     <DotNetSdkNet8VersionForTesting>8.0.415</DotNetSdkNet8VersionForTesting>
     <DotNetSdkNet9VersionForTesting>9.0.306</DotNetSdkNet9VersionForTesting>
+    <DotNetSdkNet10VersionForTesting>10.0.400</DotNetSdkNet10VersionForTesting>
     <DotNetSdkNet11VersionForTesting>11.0.100-rc.1.26419.129</DotNetSdkNet11VersionForTesting>
     <!-- Keep these aliases for global.json and non-template test infrastructure. -->
     <DotNetRuntimePreviousVersionForTesting>$(DotNetRuntimeNet8VersionForTesting)</DotNetRuntimePreviousVersionForTesting>
