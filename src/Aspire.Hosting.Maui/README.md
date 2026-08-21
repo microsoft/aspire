@@ -106,9 +106,11 @@ This method automatically:
 When you configure OTLP with dev tunnel, the following environment variables are automatically set:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: The dev tunnel URL for the OTLP endpoint
-- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `grpc` (standard Aspire configuration)
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `http/protobuf` for the preferred dashboard OTLP/HTTP endpoint, or `grpc` when only OTLP/gRPC is available
 - `OTEL_SERVICE_NAME`: The resource name
 - `OTEL_RESOURCE_ATTRIBUTES`: Service instance ID
+
+When both dashboard OTLP endpoints are available, MAUI dev tunnels prefer OTLP/HTTP. Android and iOS environment targets are reevaluated when their resource restarts so updated tunnel settings are applied to the relaunched app.
 
 ## Example: Complete Aspire App with MAUI
 
