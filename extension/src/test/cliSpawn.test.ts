@@ -31,6 +31,32 @@ suite('spawnCliProcess tests', () => {
         }
     });
 
+    test('routes process exit and close events to their respective callbacks', () => {
+        const childProcess = createTestChildProcess(4803);
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
+        const processExitCallback = sinon.stub();
+        const exitCallback = sinon.stub();
+        const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
+
+        try {
+            spawnCliProcess(terminalProvider, '/repo/a/bin/aspire', ['config', 'info'], {
+                processExitCallback,
+                exitCallback,
+            });
+
+            childProcess.emit('exit', 7);
+            sinon.assert.calledOnceWithExactly(processExitCallback, 7);
+            sinon.assert.notCalled(exitCallback);
+
+            childProcess.emit('close', 7);
+            sinon.assert.calledOnceWithExactly(processExitCallback, 7);
+            sinon.assert.calledOnceWithExactly(exitCallback, 7);
+        }
+        finally {
+            spawnStub.restore();
+        }
+    });
+
     test('passes the original cmd shim path to createEnvironment on Windows, not cmd.exe', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const originalComSpec = process.env.ComSpec;

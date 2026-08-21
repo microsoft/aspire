@@ -1375,10 +1375,14 @@ ${azureFunctionsPackageReference}  </ItemGroup>
 `);
 
   const azureFunctionsResource = includeAzureFunctions
-    ? `\nbuilder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n`
+    ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
+#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRETERMINAL001
+
+using Aspire.Hosting.Pipelines;
+
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -1454,7 +1458,36 @@ builder.AddResource(new NoCommandsResource("e2e-no-commands"));
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
-${azureFunctionsResource}
+
+${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+{
+    var task = await context.ReportingStep
+        .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
+        .ConfigureAwait(false);
+
+    await using (task.ConfigureAwait(false))
+    {
+        await task.CompleteAsync(
+            "E2E run action pipeline step completed",
+            CompletionState.Completed,
+            context.CancellationToken).ConfigureAwait(false);
+    }
+});
+
+builder.Pipeline.AddStep("e2e-debug-action-step", async context =>
+{
+    var task = await context.ReportingStep
+        .CreateTaskAsync("Running E2E debug action pipeline step", context.CancellationToken)
+        .ConfigureAwait(false);
+
+    await using (task.ConfigureAwait(false))
+    {
+        await task.CompleteAsync(
+            "E2E debug action pipeline step completed",
+            CompletionState.Completed,
+            context.CancellationToken).ConfigureAwait(false);
+    }
+});
 
 builder.Build().Run();
 

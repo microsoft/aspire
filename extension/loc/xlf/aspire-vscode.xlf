@@ -10,11 +10,20 @@
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.addAspireToWorkspaceLabel">
+      <source xml:lang="en">Add Aspire to this workspace</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.addAspireToWorkspaceDescription">
+      <source xml:lang="en">Add an AppHost and Aspire configuration alongside applications already in this workspace.</source>
+    </trans-unit>
     <trans-unit id="command.add">
       <source xml:lang="en">Add an integration</source>
     </trans-unit>
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostOperationAlreadyInProgress">
+      <source xml:lang="en">Another operation is already in progress for this Aspire AppHost. The new operation was cancelled.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleBusy">
       <source xml:lang="en">Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.</source>
@@ -142,6 +151,9 @@
     <trans-unit id="aspire-vscode.strings.changelogLabel">
       <source xml:lang="en">Changelog</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.createWithAspirePlaceholder">
+      <source xml:lang="en">Choose how to set up Aspire</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.closeDashboardOnDebugEnd">
       <source xml:lang="en">Close the dashboard browser when the debug session ends. Works with debug browser options (Chrome, Edge, Firefox).</source>
     </trans-unit>
@@ -199,6 +211,9 @@
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.createNewAspireAppLabel">
+      <source xml:lang="en">Create a new Aspire app</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
     </trans-unit>
@@ -223,6 +238,12 @@
     <trans-unit id="command.codeLensDebugPipelineStep">
       <source xml:lang="en">Debug Aspire pipeline step</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDebugPipelineStepActionLabel">
+      <source xml:lang="en">Debug pipeline step</source>
+    </trans-unit>
+    <trans-unit id="command.debugPipelineStepAppHost">
+      <source xml:lang="en">Debug pipeline step</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchChromeLabel">
       <source xml:lang="en">Debug with Chrome</source>
     </trans-unit>
@@ -235,8 +256,20 @@
     <trans-unit id="aspire-vscode.strings.debugProject">
       <source xml:lang="en">Debug {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDebuggingPipelineStepDescription">
+      <source xml:lang="en">Debugging pipeline step...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDeployActionLabel">
+      <source xml:lang="en">Deploy AppHost</source>
+    </trans-unit>
+    <trans-unit id="command.deployAppHost">
+      <source xml:lang="en">Deploy AppHost</source>
+    </trans-unit>
     <trans-unit id="command.deploy">
       <source xml:lang="en">Deploy app</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDeployingDescription">
+      <source xml:lang="en">Deploying...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.directUrl">
       <source xml:lang="en">Direct: {0}</source>
@@ -288,6 +321,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandInvalidNumber">
       <source xml:lang="en">Enter a number using invariant culture, for example 1, -1.5, or 1e3.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.pipelineStepRequired">
+      <source xml:lang="en">Enter a pipeline step name.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.enterPipelineStep">
       <source xml:lang="en">Enter the pipeline step to execute</source>
@@ -472,6 +508,9 @@
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. Explicit Aspire: Dashboard Browser none or notification values win. Otherwise, legacy notification or off values override browser-opening choices; launch uses Aspire: Dashboard Browser, falling back to VS Code&apos;s integrated browser for compatibility.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.loadingPipelineSteps">
+      <source xml:lang="en">Loading pipeline steps...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectAppHostToLaunch">
       <source xml:lang="en">Multiple AppHosts were found. Select the one to launch</source>
     </trans-unit>
@@ -494,7 +533,7 @@
       <source xml:lang="en">No AppHost found in the current workspace.</source>
     </trans-unit>
     <trans-unit id="views.appHosts.welcome">
-      <source xml:lang="en">No Aspire AppHosts detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshAppHosts)</source>
+      <source xml:lang="en">No Aspire AppHosts detected in this workspace.&#10;[Set up Aspire](command:aspire-vscode.createWithAspire)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardUrlNotFound">
       <source xml:lang="en">No Aspire Dashboard URL is available. Start an AppHost and try again.</source>
@@ -507,6 +546,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.noOutputFromMsbuild">
       <source xml:lang="en">No output from msbuild.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.noPipelineStepsFound">
+      <source xml:lang="en">No pipeline steps were found.</source>
     </trans-unit>
     <trans-unit id="views.appHosts.globalWelcome">
       <source xml:lang="en">No running Aspire AppHosts detected on this machine.&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
@@ -619,8 +661,17 @@
     <trans-unit id="aspire-vscode.strings.dotNetRunFallbackDisablesDebugger">
       <source xml:lang="en">Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPublishActionLabel">
+      <source xml:lang="en">Publish AppHost</source>
+    </trans-unit>
+    <trans-unit id="command.publishAppHost">
+      <source xml:lang="en">Publish AppHost</source>
+    </trans-unit>
     <trans-unit id="command.publish">
       <source xml:lang="en">Publish deployment artifacts</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPublishingDescription">
+      <source xml:lang="en">Publishing...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rpcServerError">
       <source xml:lang="en">RPC server error: {0}.</source>
@@ -658,6 +709,12 @@
     <trans-unit id="command.runAppHost">
       <source xml:lang="en">Run AppHost</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostRunPipelineStepActionLabel">
+      <source xml:lang="en">Run pipeline step</source>
+    </trans-unit>
+    <trans-unit id="command.runPipelineStepAppHost">
+      <source xml:lang="en">Run pipeline step</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.title">
       <source xml:lang="en">Run your app</source>
     </trans-unit>
@@ -678,6 +735,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAspireRestore">
       <source xml:lang="en">Running aspire restore on {0} ...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostRunningPipelineStepDescription">
+      <source xml:lang="en">Running pipeline step...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustLabel">
       <source xml:lang="en">Rust</source>
@@ -703,6 +763,9 @@
     <trans-unit id="aspire-vscode.strings.selectDashboardPlaceholder">
       <source xml:lang="en">Select a dashboard to open</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.selectPipelineStep">
+      <source xml:lang="en">Select a pipeline step to execute</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectDirectoryTitle">
       <source xml:lang="en">Select directory</source>
     </trans-unit>
@@ -720,6 +783,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectDashboardLaunchBehavior">
       <source xml:lang="en">Select what should happen with the Aspire Dashboard when this launch configuration starts</source>
+    </trans-unit>
+    <trans-unit id="command.createWithAspire">
+      <source xml:lang="en">Set up Aspire</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableCodeLens">
       <source xml:lang="en">Show CodeLens actions (state, restart, stop, logs) inline above resource declarations in AppHost files.</source>
@@ -753,6 +819,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationTitle">
       <source xml:lang="en">Start Aspire AppHost</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.createNewAspireAppDescription">
+      <source xml:lang="en">Start a greenfield application in a new directory using an Aspire template.</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.userDescription">
       <source xml:lang="en">Start an Aspire AppHost from this workspace in run or debug mode.</source>

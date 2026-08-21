@@ -213,6 +213,41 @@ export async function answerActiveInput(value: string, expectedPlaceholder: stri
     await input.confirm();
 }
 
+export async function answerActiveInputByMessage(value: string, expectedMessage: string, timeoutMs = 30000): Promise<void> {
+    let lastMessage = '<none>';
+    const input = await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const widgets = await VSBrowser.instance.driver.findElements(By.css('.quick-input-widget'));
+            for (const widget of widgets) {
+                if (!await widget.isDisplayed()) {
+                    continue;
+                }
+
+                const messages = await widget.findElements(By.css('.quick-input-message'));
+                lastMessage = (await Promise.all(messages.map(message => message.getText()))).join(' ');
+                if (!lastMessage.includes(expectedMessage)) {
+                    continue;
+                }
+
+                const inputs = await widget.findElements(By.css('.quick-input-box input'));
+                for (const candidate of inputs) {
+                    if (await candidate.isDisplayed()) {
+                        return candidate;
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for input message '${expectedMessage}'. Last message: ${lastMessage}.`);
+    await input.click();
+    await input.sendKeys(value, '\uE007');
+}
+
 export async function chooseActiveQuickPick(label: string, timeoutMs = 30000): Promise<void> {
     const input = await VSBrowser.instance.driver.wait(async () => {
         try {

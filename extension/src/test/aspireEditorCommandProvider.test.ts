@@ -198,6 +198,7 @@ suite('AspireEditorCommandProvider', () => {
             provider.dispose();
         }
     });
+
 });
 
 function createAppHostDiscoveryService(resolvedPath: string, language = 'csharp'): AppHostDiscoveryService {

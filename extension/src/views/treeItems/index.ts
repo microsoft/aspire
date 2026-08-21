@@ -8,6 +8,7 @@ export {
     RunningAppHostsGroupItem,
     LogFileItem,
 } from './appHostItems';
+export type { AppHostActionAvailability, AppHostItemOperation, WorkspaceAppHostAction } from './appHostItems';
 export {
     EndpointUrlItem,
     ResourcesGroupItem,

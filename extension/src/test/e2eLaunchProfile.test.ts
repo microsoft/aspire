@@ -1154,6 +1154,32 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
     });
 
+    test('keeps the gated deploy test-controlled and cleans its fixture in finally', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+        const gatedDeployFixture = fixtures.slice(
+            fixtures.indexOf('export function writeGatedDeployActionCliWrapper'),
+            fixtures.indexOf('export function writeLegacyPipelineActionCliWrapper'));
+        const durableOperationTest = getTestBlock(treeActions, 'keeps one durable operation per AppHost while a deploy session is in flight');
+
+        assert.ok(gatedDeployFixture.includes('cleanup: () => void;'));
+        assert.ok(gatedDeployFixture.includes('removePath(gateDirectory, { recursive: true, force: true });'));
+        assert.ok(gatedDeployFixture.includes('removePath(cliPath, { force: true });'));
+        assert.ok(gatedDeployFixture.includes('removePath(scriptPath, { force: true });'));
+        assert.ok(fixtures.includes("waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});"));
+        assert.ok(fixtures.includes('if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {'));
+        assert.ok(durableOperationTest.replace(/\r\n/g, '\n').includes(`finally {
+            try {
+                gatedCli.releaseDeploy();
+            }
+            finally {
+                gatedCli.cleanup();
+            }
+            await waitForNoDebugSessions(120000);
+        }`));
+    });
+
     test('keeps tree action resource lifecycle commands as terminal routing assertions', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');

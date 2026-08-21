@@ -146,18 +146,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             };
         }
 
-        var operation = _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
+        return _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
         {
-            "publish" => DistributedApplicationOperation.Publish,
-            "run" => DistributedApplicationOperation.Run,
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
-        };
-
-        return operation switch
-        {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
-            DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            "run" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
+            "publish" or "inspect" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
+            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish', 'run', or 'inspect'.")
         };
     }
 
@@ -779,6 +772,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Pipeline options (valid for aspire do based commands)
             { "--step", "Pipeline:Step" },
+            { "--list-steps", "Pipeline:ListSteps" },
             { "--output-path", "Pipeline:OutputPath" },
             { "--log-level", "Pipeline:LogLevel" },
             { "--include-exception-details", "Pipeline:IncludeExceptionDetails" },

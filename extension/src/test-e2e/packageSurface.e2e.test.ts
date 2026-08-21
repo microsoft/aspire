@@ -116,8 +116,13 @@ suite('Aspire package contribution surface E2E', function () {
         const installedPackage = (await executeE2eControlCommand({ name: 'getExtensionPackageJson' })).result as PackageJson;
         const hiddenPaletteCommands = getHiddenCommandPaletteCommands(installedPackage);
         for (const commandId of [
+            'aspire-vscode.createWithAspire',
             'aspire-vscode.runAppHost',
             'aspire-vscode.debugAppHost',
+            'aspire-vscode.deployAppHost',
+            'aspire-vscode.publishAppHost',
+            'aspire-vscode.runPipelineStepAppHost',
+            'aspire-vscode.debugPipelineStepAppHost',
             'aspire-vscode.refreshAppHosts',
             'aspire-vscode.codeLensRevealResource',
             'aspire-vscode.codeLensRevealAppHost',
@@ -136,12 +141,18 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(explorerCommands, ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']);
         assert.deepStrictEqual(Object.keys(installedPackage.contributes?.menus ?? {}).sort(), expectedMenuLocations);
         assert.deepStrictEqual(getMenuCommands(installedPackage, 'editor/title/run'), ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']);
-        assert.deepStrictEqual(getMenuCommands(installedPackage, 'view/title'), ['aspire-vscode.switchToGlobalView', 'aspire-vscode.switchToWorkspaceView', 'aspire-vscode.globalRefreshAppHosts', 'aspire-vscode.refreshAppHosts']);
+        assert.deepStrictEqual(getMenuCommands(installedPackage, 'view/title'), ['aspire-vscode.createWithAspire', 'aspire-vscode.switchToGlobalView', 'aspire-vscode.switchToWorkspaceView', 'aspire-vscode.globalRefreshAppHosts', 'aspire-vscode.refreshAppHosts']);
         for (const commandId of expectedViewItemContextCommands) {
             assert.ok(getMenuCommands(installedPackage, 'view/item/context').includes(commandId), `view/item/context should include ${commandId}.`);
         }
+        assert.deepStrictEqual(
+            getMenuItems(installedPackage, 'view/item/context', expectedAppHostActionCommandIds),
+            expectedAppHostActionMenuItems);
         assert.ok(installedPackage.contributes?.viewsContainers?.activitybar?.some(container => container.id === 'aspire-panel' && container.icon === 'resources/aspire-activity-bar.svg'));
         assert.deepStrictEqual((installedPackage.contributes?.viewsWelcome ?? []).map(welcome => welcome.when), expectedWelcomeWhenClauses);
+        assert.ok(installedPackage.contributes?.viewsWelcome?.some(welcome =>
+            welcome.view === 'aspire-vscode.appHosts' &&
+            welcome.contents?.includes('command:aspire-vscode.createWithAspire')));
         assert.ok(installedPackage.contributes?.colors?.some(color => color.id === 'aspire.brandPurple' && color.defaults?.highContrast));
 
         const debuggerContribution = getAspireDebugger(installedPackage);
@@ -421,6 +432,11 @@ function getMenuCommands(packageJson: PackageJson, menuId: string): string[] {
         .filter((command): command is string => typeof command === 'string');
 }
 
+function getMenuItems(packageJson: PackageJson, menuId: string, commandIds: readonly string[]): Array<{ command?: string; when?: string; group?: string }> {
+    return (packageJson.contributes?.menus?.[menuId] ?? [])
+        .filter(menu => typeof menu.command === 'string' && commandIds.includes(menu.command));
+}
+
 function getAspireDebugger(packageJson: PackageJson): NonNullable<NonNullable<PackageJson['contributes']>['debuggers']>[number] {
     const debuggerContribution = packageJson.contributes?.debuggers?.find(candidate => candidate.type === 'aspire');
     assert.ok(debuggerContribution);
@@ -591,9 +607,12 @@ const expectedCommandIds = [
     'aspire-vscode.copyEndpointUrl',
     'aspire-vscode.copyLogFilePath',
     'aspire-vscode.copyResourceName',
+    'aspire-vscode.createWithAspire',
     'aspire-vscode.debugAppHost',
     'aspire-vscode.debugAppHostCommand',
+    'aspire-vscode.debugPipelineStepAppHost',
     'aspire-vscode.deploy',
+    'aspire-vscode.deployAppHost',
     'aspire-vscode.do',
     'aspire-vscode.executeResourceCommand',
     'aspire-vscode.executeResourceCommandItem',
@@ -612,11 +631,13 @@ const expectedCommandIds = [
     'aspire-vscode.openResourceTerminal',
     'aspire-vscode.openTerminal',
     'aspire-vscode.publish',
+    'aspire-vscode.publishAppHost',
     'aspire-vscode.refreshAppHosts',
     'aspire-vscode.restartResource',
     'aspire-vscode.restore',
     'aspire-vscode.runAppHost',
     'aspire-vscode.runAppHostCommand',
+    'aspire-vscode.runPipelineStepAppHost',
     'aspire-vscode.settings',
     'aspire-vscode.startResource',
     'aspire-vscode.stopAppHost',
@@ -664,6 +685,10 @@ const expectedViewItemContextCommands = [
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.runAppHost',
     'aspire-vscode.debugAppHost',
+    'aspire-vscode.deployAppHost',
+    'aspire-vscode.publishAppHost',
+    'aspire-vscode.runPipelineStepAppHost',
+    'aspire-vscode.debugPipelineStepAppHost',
     'aspire-vscode.stopAppHost',
     'aspire-vscode.copyAppHostPath',
     'aspire-vscode.stopResource',
@@ -680,6 +705,36 @@ const expectedViewItemContextCommands = [
     'aspire-vscode.viewAppHostSource',
     'aspire-vscode.viewAppHostLogFile',
     'aspire-vscode.copyLogFilePath',
+];
+
+const expectedAppHostActionCommandIds = [
+    'aspire-vscode.deployAppHost',
+    'aspire-vscode.publishAppHost',
+    'aspire-vscode.runPipelineStepAppHost',
+    'aspire-vscode.debugPipelineStepAppHost',
+];
+
+const expectedAppHostActionMenuItems = [
+    {
+        command: 'aspire-vscode.deployAppHost',
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost):canDeploy(:|$)/',
+        group: '2_actions@3',
+    },
+    {
+        command: 'aspire-vscode.publishAppHost',
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)(:canDeploy)?:canPublish(:|$)/',
+        group: '2_actions@4',
+    },
+    {
+        command: 'aspire-vscode.runPipelineStepAppHost',
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)(:canDeploy)?(:canPublish)?:canDo$/',
+        group: '2_actions@5',
+    },
+    {
+        command: 'aspire-vscode.debugPipelineStepAppHost',
+        when: 'view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost|workspaceAppHost)(:canDeploy)?(:canPublish)?:canDo$/',
+        group: '2_actions@6',
+    },
 ];
 
 const expectedWelcomeWhenClauses = [

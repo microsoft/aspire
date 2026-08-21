@@ -210,7 +210,9 @@ suite('Aspire debug dashboard E2E', function () {
         const beforeDebugLaunch = getDebugLaunchCount();
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            const beforePublish = getCommandInvocationCount('aspire-vscode.publishAppHost');
+            await executeE2eControlCommand({ name: 'publishAppHostAction', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'success', 60000, beforePublish);
             await waitForDebugLaunch(
                 event => event.command === 'publish' && event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath),
                 `publish launch for AppHost '${appHostPath}'`,
