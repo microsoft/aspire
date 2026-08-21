@@ -58,6 +58,12 @@ internal static class InstallSidecarWriter
                 }
 
                 stream.WriteByte((byte)'\n');
+                if (stream.Position > InstallSidecarReader.MaxSidecarBytes)
+                {
+                    throw new InvalidDataException(
+                        $"Prepared sidecar file size {stream.Position} bytes exceeds the {InstallSidecarReader.MaxSidecarBytes}-byte limit.");
+                }
+
                 stream.Flush(flushToDisk: true);
             }
 

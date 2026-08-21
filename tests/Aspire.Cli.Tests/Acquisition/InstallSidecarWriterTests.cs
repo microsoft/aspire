@@ -71,6 +71,26 @@ public class InstallSidecarWriterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PrepareForSelfUpdate_WhenSerializedSidecarExceedsLimit_PreservesOriginalContent()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sidecarPath = Path.Combine(workspace.Path, InstallSidecarReader.SidecarFileName);
+
+        // UTF-8 stores each U+00E9 character in two bytes, while Utf8JsonWriter's default encoder
+        // emits "\u00E9" as six bytes. This keeps the input below 64 KiB but expands the output above it.
+        var originalContent = $"{{\"source\":\"script\",\"futureField\":\"{new string('\u00E9', 11_000)}\"}}";
+        File.WriteAllText(sidecarPath, originalContent);
+        Assert.InRange(new FileInfo(sidecarPath).Length, 1, InstallSidecarReader.MaxSidecarBytes);
+
+        var exception = Assert.Throws<InvalidDataException>(
+            () => InstallSidecarWriter.PrepareForSelfUpdate(workspace.Path, "staging"));
+
+        Assert.Contains("exceeds", exception.Message);
+        Assert.Equal(originalContent, File.ReadAllText(sidecarPath));
+        Assert.Empty(Directory.GetFiles(workspace.Path, $"{InstallSidecarReader.SidecarFileName}.*.tmp"));
+    }
+
+    [Fact]
     public void PrepareForSelfUpdate_DisposeWithoutCommitPreservesOriginalContent()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
