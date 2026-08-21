@@ -743,7 +743,7 @@ suite('Launch Profile Tests', () => {
     suite('determineWorkingDirectory', () => {
         const projectDir = path.resolve(path.sep, 'project');
         const projectPath = path.join(projectDir, 'MyApp.csproj');
-        const absoluteWorkingDir = path.resolve(path.sep, 'custom', 'working', 'dir');
+        const absoluteWorkingDir = `${path.parse(projectDir).root}custom${path.sep}..${path.sep}working${path.sep}dir`;
 
         test('uses absolute working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
@@ -756,6 +756,31 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result, absoluteWorkingDir);
         });
 
+        test('normalizes an absolute working directory from launch settings', () => {
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: absoluteWorkingDir
+            };
+            const launchSettingsDirectory = path.join(projectDir, 'Properties');
+
+            const result = determineWorkingDirectory(projectPath, baseProfile, launchSettingsDirectory);
+
+            assert.strictEqual(result, path.resolve(absoluteWorkingDir));
+        });
+
+        (process.platform === 'win32' ? test : test.skip)('resolves a Windows drive-relative working directory from the drive current directory', () => {
+            const workingDirectory = `${path.parse(projectDir).root.slice(0, 2)}custom`;
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory
+            };
+            const launchSettingsDirectory = path.join(projectDir, 'Properties');
+
+            const result = determineWorkingDirectory(projectPath, baseProfile, launchSettingsDirectory);
+
+            assert.strictEqual(result, path.resolve(workingDirectory));
+        });
+
         test('resolves relative working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
                 commandName: 'Project',
@@ -765,6 +790,74 @@ suite('Launch Profile Tests', () => {
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
             assert.strictEqual(result, path.join(projectDir, 'custom'));
+        });
+
+        test('resolves relative working directory from launch settings directory', () => {
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: 'custom'
+            };
+            const launchSettingsDirectory = path.join(projectDir, 'Properties');
+
+            const result = determineWorkingDirectory(projectPath, baseProfile, launchSettingsDirectory);
+
+            assert.strictEqual(result, path.join(launchSettingsDirectory, 'custom'));
+        });
+
+        test('resolves an empty working directory to the launch settings directory', () => {
+            const baseProfile: LaunchProfile = {
+                commandName: 'Executable',
+                workingDirectory: ''
+            };
+            const launchSettingsDirectory = path.join(projectDir, 'Properties');
+
+            const result = determineWorkingDirectory(projectPath, baseProfile, launchSettingsDirectory);
+
+            assert.strictEqual(result, launchSettingsDirectory);
+        });
+
+        test('uses SDK environment expansion for launch settings working directory', () => {
+            const environmentVariable = 'ASPIRE_TEST_SDK_WORKING_DIRECTORY';
+            const missingEnvironmentVariable = 'ASPIRE_TEST_SDK_WORKING_DIRECTORY_MISSING';
+            try {
+                process.env[environmentVariable] = 'expanded';
+                delete process.env[missingEnvironmentVariable];
+                const baseProfile: LaunchProfile = {
+                    commandName: 'Executable',
+                    workingDirectory: `%${environmentVariable}%/$(${environmentVariable})/%${missingEnvironmentVariable}%`
+                };
+                const launchSettingsDirectory = path.join(projectDir, 'Properties');
+
+                const result = determineWorkingDirectory(projectPath, baseProfile, launchSettingsDirectory);
+
+                assert.strictEqual(
+                    result,
+                    path.resolve(launchSettingsDirectory, `expanded/$(${environmentVariable})/%${missingEnvironmentVariable}%`));
+            } finally {
+                delete process.env[environmentVariable];
+            }
+        });
+
+        test('matches SDK environment expansion for overlapping delimiters', () => {
+            const environmentVariable = 'ASPIRE_TEST_SDK_WORKING_DIRECTORY';
+            const missingEnvironmentVariable = 'ASPIRE_TEST_SDK_WORKING_DIRECTORY_MISSING';
+            try {
+                process.env[environmentVariable] = 'expanded';
+                delete process.env[missingEnvironmentVariable];
+                const baseProfile: LaunchProfile = {
+                    commandName: 'Executable',
+                    workingDirectory: `%${missingEnvironmentVariable}%${environmentVariable}%`
+                };
+                const launchSettingsDirectory = path.join(projectDir, 'Properties');
+
+                const result = determineWorkingDirectory(projectPath, baseProfile, launchSettingsDirectory);
+
+                assert.strictEqual(
+                    result,
+                    path.resolve(launchSettingsDirectory, `%${missingEnvironmentVariable}expanded`));
+            } finally {
+                delete process.env[environmentVariable];
+            }
         });
 
         test('uses project directory when no working directory specified', () => {
@@ -855,6 +948,7 @@ suite('Launch Profile Tests', () => {
 
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.profiles['Development'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+            assert.strictEqual(result!.sourceDirectory, path.dirname(launchSettingsPath));
         });
 
         test('returns null when launch settings file does not exist', async () => {
@@ -879,6 +973,7 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, null);
             assert.deepStrictEqual(Object.keys(result!.profiles), ['fromRunJson']);
             assert.strictEqual(result!.profiles['fromRunJson'].applicationUrl, 'https://localhost:7000');
+            assert.strictEqual(result!.sourceDirectory, path.dirname(projectPath));
         });
 
         test('prefers Properties/launchSettings.json over <ProjectName>.run.json for a project app', async () => {
@@ -1234,6 +1329,7 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, null);
             assert.deepStrictEqual(Object.keys(result!.profiles), ['fromRunJson']);
             assert.strictEqual(result!.profiles['fromRunJson'].applicationUrl, 'https://localhost:7000');
+            assert.strictEqual(result!.sourceDirectory, path.dirname(fileBasedAppPath));
         });
     });
 

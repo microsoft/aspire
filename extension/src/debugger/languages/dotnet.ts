@@ -674,7 +674,13 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             const shouldApplyProfileWorkingDirectory = !isAppHostProjectProfile || isFileBasedProject;
             const workingDirectoryProfile = shouldApplyProfileWorkingDirectory &&
                 typeof baseProfile?.workingDirectory === 'string' ? baseProfile : null;
-            debugConfiguration.cwd = determineWorkingDirectory(projectPath, workingDirectoryProfile);
+            const launchSettingsDirectory = baseProfile?.commandName === LaunchProfileCommandName.executable
+                ? launchSettings?.sourceDirectory
+                : undefined;
+            debugConfiguration.cwd = determineWorkingDirectory(
+                projectPath,
+                workingDirectoryProfile,
+                launchSettingsDirectory);
             const profileCommandLineArgs = isAppHostProjectProfile && baseProfile.commandLineArgs
                 ? expandEnvironmentVariables(baseProfile.commandLineArgs)
                 : baseProfile?.commandLineArgs;

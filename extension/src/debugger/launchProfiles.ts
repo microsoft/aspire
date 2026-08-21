@@ -97,6 +97,41 @@ export function expandEnvironmentVariables(value: string): string {
     return result;
 }
 
+function expandSdkEnvironmentVariables(value: string): string {
+    // Match Environment.ExpandEnvironmentVariables, which the SDK launch-profile parser uses:
+    // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/ExecutableLaunchProfileParser.cs
+    let result = '';
+    let currentIndex = 0;
+
+    while (currentIndex < value.length) {
+        const variableStart = value.indexOf('%', currentIndex);
+        if (variableStart < 0) {
+            result += value.slice(currentIndex);
+            break;
+        }
+
+        const variableEnd = value.indexOf('%', variableStart + 1);
+        if (variableEnd < 0) {
+            result += value.slice(currentIndex);
+            break;
+        }
+
+        const variableName = value.slice(variableStart + 1, variableEnd);
+        const variableValue = process.env[variableName];
+        if (variableValue !== undefined) {
+            result += value.slice(currentIndex, variableStart) + variableValue;
+            currentIndex = variableEnd + 1;
+        } else {
+            // Environment.ExpandEnvironmentVariables reconsiders the closing '%' as the start of
+            // another variable, so adjacent references can share a delimiter.
+            result += value.slice(currentIndex, variableEnd);
+            currentIndex = variableEnd;
+        }
+    }
+
+    return result;
+}
+
 /**
  * Well-known launch profile command names, using the exact casing the .NET SDK uses.
  *
@@ -122,6 +157,8 @@ const defaultLaunchProfileCommandNames: ReadonlySet<string> = new Set([
 
 export interface LaunchSettings {
     profiles: { [key: string]: LaunchProfile };
+    // Relative profile paths are resolved from the launch-settings file, not the project file.
+    sourceDirectory?: string;
     // The profile names in launchSettings.json *source order*. JavaScript objects enumerate
     // integer-like keys (e.g. "10", "2") in ascending numeric order rather than insertion order, so
     // `Object.keys(profiles)` cannot be trusted to reflect the order profiles appear in the file. The
@@ -342,6 +379,7 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
             // Capture the profile order from the file so the default-profile selection matches the SDK.
             launchSettings.profileEntries = extractLaunchProfileSourceEntries(normalizedContent);
             launchSettings.profileOrder = launchSettings.profileEntries?.map(entry => entry.name);
+            launchSettings.sourceDirectory = path.dirname(launchSettingsPath);
 
             extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
             return launchSettings;
@@ -372,7 +410,11 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
                 }
 
                 extensionLogOutputChannel.debug(`Successfully read launch profiles from: ${aspireConfigPath}`);
-                return { profiles, profileOrder: extractProfileOrder(normalizedContent) };
+                return {
+                    profiles,
+                    profileOrder: extractProfileOrder(normalizedContent),
+                    sourceDirectory: path.dirname(aspireConfigPath)
+                };
             }
         }
 
@@ -544,17 +586,25 @@ export function determineArguments(
  */
 export function determineWorkingDirectory(
     projectPath: string,
-    baseProfile: LaunchProfile | null
+    baseProfile: LaunchProfile | null,
+    launchSettingsDirectory?: string
 ): string {
-    if (baseProfile?.workingDirectory) {
-        const workingDirectory = expandEnvironmentVariables(baseProfile.workingDirectory);
-        // If working directory is relative, resolve it relative to project directory
-        if (path.isAbsolute(workingDirectory)) {
-            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${workingDirectory}`);
-            return workingDirectory;
+    if (baseProfile?.workingDirectory !== undefined && baseProfile.workingDirectory !== null) {
+        const workingDirectory = launchSettingsDirectory !== undefined
+            ? expandSdkEnvironmentVariables(baseProfile.workingDirectory)
+            : expandEnvironmentVariables(baseProfile.workingDirectory);
+        // The SDK resolves a relative workingDirectory from the launch-settings file. This matters
+        // for Properties/launchSettings.json because its directory differs from the project directory.
+        const isRooted = path.isAbsolute(workingDirectory) ||
+            (process.platform === 'win32' && /^[a-zA-Z]:/.test(workingDirectory));
+        if (isRooted) {
+            // Preserve existing behavior for callers that construct profiles without source metadata.
+            const workingDir = launchSettingsDirectory !== undefined ? path.resolve(workingDirectory) : workingDirectory;
+            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${workingDir}`);
+            return workingDir;
         } else {
-            const projectDir = path.dirname(projectPath);
-            const workingDir = path.resolve(projectDir, workingDirectory);
+            const baseDirectory = launchSettingsDirectory ?? path.dirname(projectPath);
+            const workingDir = path.resolve(baseDirectory, workingDirectory);
             extensionLogOutputChannel.debug(`Using relative working directory from launch profile: ${workingDir}`);
             return workingDir;
         }

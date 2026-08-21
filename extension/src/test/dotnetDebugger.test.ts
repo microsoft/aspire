@@ -2833,7 +2833,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.args, 'exec --depsfile ./MyClassLibFunction.deps.json --runtimeconfig ./MyClassLibFunction.runtimeconfig.json RuntimeSupport.dll MyClassLibFunction::MyClassLibFunction.Function::FunctionHandler');
 
         // cwd should resolve to the profile's working directory
-        assert.strictEqual(debugConfig.cwd, path.resolve(projectDir, 'bin/Debug/net10.0/'));
+        assert.strictEqual(debugConfig.cwd, path.resolve(propertiesDir, 'bin/Debug/net10.0/'));
 
         // env should include the profile's environment variables
         assert.strictEqual(debugConfig.env.FUNCTION_ENV, 'test');
