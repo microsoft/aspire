@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
-import { AppHostDiscoveryService, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, formatAppHostLanguage, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
+import { findWorkspaceDefaultCandidate, sortCandidatesByPath } from '../utils/appHostCandidateSelection';
 import { compareAppHostIdentity } from '../utils/appHostIdentity';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
@@ -120,6 +121,26 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
         const aspireConfig = config as AspireExtendedDebugConfiguration;
         this.ensureAppHostSelectionOrigin(aspireConfig);
+        const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
+        if (typeof config.program === 'string') {
+            const program = config.program;
+            if (aspireConfig[appHostSelectionOriginConfigKey] === 'explicit-launch-configuration' && this.isWorkspaceFolderRoot(program, folder)) {
+                aspireConfig[appHostSelectionOriginConfigKey] = 'default-discovery';
+            }
+
+            const resolvedProgram = await this.resolveDefaultDiscoveryTarget(aspireConfig, program, folder, token);
+            if (resolvedProgram === undefined) {
+                if (existingExternalReservation) {
+                    this._launchReservation.releaseExternalLaunchReservation(
+                        existingExternalReservation.appHostPath,
+                        existingExternalReservation.reservationId);
+                }
+                return undefined;
+            }
+
+            config.program = resolvedProgram;
+        }
+
         const configRecord = config as Record<string, unknown>;
         // Read before the marker is stripped: an `AppHostLaunchService` launch reaches this
         // resolver through `startDebugging` and has already reserved its own slot, so
@@ -139,7 +160,6 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         else if (!launchedByExtension) {
             delete aspireConfig.resolvedCliPath;
         }
-        const existingExternalReservation = getAspireDebugConfigurationExternalLaunchReservation(config);
         if (launchedByExtension) {
             markAspireDebugConfigurationAsExtensionOwned(config);
         }
@@ -162,10 +182,6 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         if (typeof config.program === 'string') {
             const program = config.program;
             const isWorkspaceFolderLaunch = this.isWorkspaceFolderRoot(program, folder);
-            if (aspireConfig[appHostSelectionOriginConfigKey] === 'explicit-launch-configuration' && isWorkspaceFolderLaunch) {
-                aspireConfig[appHostSelectionOriginConfigKey] = 'default-discovery';
-            }
-
             config.program = await this.resolveDebugTarget(program, folder);
 
             const telemetryTarget = await this.tryFindWorkspaceDefaultCandidate(program, folder);
@@ -324,6 +340,57 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         }
 
         return config;
+    }
+
+    private async resolveDefaultDiscoveryTarget(
+        config: AspireExtendedDebugConfiguration,
+        program: string,
+        folder: vscode.WorkspaceFolder | undefined,
+        token?: vscode.CancellationToken): Promise<string | undefined> {
+        if (config[appHostSelectionOriginConfigKey] !== 'default-discovery' || !this.isWorkspaceFolderRoot(program, folder)) {
+            return program;
+        }
+
+        const workspaceFolder = folder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program));
+        if (!workspaceFolder) {
+            return program;
+        }
+
+        let candidates: CandidateAppHostDisplayInfo[];
+        try {
+            candidates = await this._appHostDiscoveryService.discover(workspaceFolder, false, token);
+        }
+        catch (error) {
+            if (token?.isCancellationRequested) {
+                return undefined;
+            }
+
+            extensionLogOutputChannel.warn(`Failed to discover AppHost candidates for directory launch ${program}: ${error}`);
+            return program;
+        }
+
+        const buildableCandidates = candidates.filter(candidate => candidate.status === 'buildable');
+        if (buildableCandidates.length <= 1 || findWorkspaceDefaultCandidate(candidates)) {
+            return program;
+        }
+
+        const items = sortCandidatesByPath(buildableCandidates).map(candidate => ({
+            label: path.relative(workspaceFolder.uri.fsPath, candidate.path),
+            description: candidate.language ? formatAppHostLanguage(candidate.language) : undefined,
+            detail: candidate.path,
+            appHostPath: candidate.path,
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: selectAppHostToLaunch,
+            canPickMany: false,
+            ignoreFocusOut: true,
+        }, token);
+        if (!selected) {
+            return undefined;
+        }
+
+        config[appHostSelectionOriginConfigKey] = 'user-selection';
+        return selected.appHostPath;
     }
 
     private async tryFindCandidateForEditorFile(filePath: string, folder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo | undefined> {

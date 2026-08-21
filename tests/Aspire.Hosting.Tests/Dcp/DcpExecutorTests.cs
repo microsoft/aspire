@@ -4040,10 +4040,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dcpEvents = new DcpExecutorEvents();
-        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<OnResourceFailedToStartContext>(TaskCreationOptions.RunContinuationsAsynchronously);
         dcpEvents.Subscribe<OnResourceFailedToStartContext>(c =>
         {
-            tcs.SetResult();
+            tcs.SetResult(c);
             return Task.CompletedTask;
         });
 
@@ -4061,8 +4061,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () => await appExecutor.StartResourceAsync(resourceReference, CancellationToken.None));
         Assert.Equal($"Failed to delete '{dcpCtr.Metadata.Name}' successfully before restart.", ex.Message);
 
-        // Verify failed to start event.
-        await tcs.Task.DefaultTimeout();
+        var failedContext = await tcs.Task.DefaultTimeout();
+        Assert.Equal(ex.Message, failedContext.ErrorMessage);
     }
 
     [Fact]
@@ -8316,11 +8316,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
         var kubernetesService = new TestKubernetesService();
-        var failedResources = new List<IResource>();
+        using var resourceLoggerService = new ResourceLoggerService();
+        var failedResources = new List<(IResource Resource, string? ErrorMessage)>();
         var events = new DcpExecutorEvents();
         events.Subscribe<OnResourceFailedToStartContext>(context =>
         {
-            failedResources.Add(context.Resource);
+            failedResources.Add((context.Resource, context.ErrorMessage));
             return Task.CompletedTask;
         });
 
@@ -8330,17 +8331,115 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             distributedAppModel,
             kubernetesService: kubernetesService,
             configuration: configuration,
+            resourceLoggerService: resourceLoggerService,
             events: events);
 
         await appExecutor.RunApplicationAsync();
 
         Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "TestDotnetProject"));
-        Assert.Same(resource, Assert.Single(failedResources));
+        var failure = Assert.Single(failedResources);
+        Assert.Same(resource, failure.Resource);
+        Assert.NotNull(failure.ErrorMessage);
+        Assert.Contains("Failed to apply launch configuration", failure.ErrorMessage);
+        Assert.Contains("Process fallback is unavailable", failure.ErrorMessage);
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            line.IsErrorMessage &&
+            line.Content.Contains("Launch configuration failed.", StringComparison.Ordinal) &&
+            line.Content.Contains("Process fallback is unavailable", StringComparison.Ordinal));
 
         static ExecutableLaunchConfiguration ThrowingLaunchConfiguration(string mode)
         {
             throw new InvalidOperationException("Launch configuration failed.");
         }
+    }
+
+    [Fact]
+    public async Task DotnetProjectExecutable_EmptyOwnedLaunchToolArgs_LaunchConfigFailureOnRestartPropagatesFailureAndRetainsDiagnostic()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var launchConfigurationCallCount = 0;
+
+        var resource = new TestDotnetProjectExecutableResource("test-working-directory");
+        builder.AddResource(resource)
+            .WithAnnotation(new TestProjectWithLaunchSettings())
+            .WithArgs("app-arg")
+            .WithLaunchToolArgs(static _ => { }, ownedByLaunchConfigurationType: "custom")
+            .WithDebugSupport(
+                mode =>
+                {
+                    if (Interlocked.Increment(ref launchConfigurationCallCount) == 2)
+                    {
+                        throw new InvalidOperationException("Launch configuration failed.");
+                    }
+
+                    return new ExecutableLaunchConfiguration("custom") { Mode = mode };
+                },
+                "custom");
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["custom"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var resourceLoggerService = new ResourceLoggerService();
+        var failedResources = new ConcurrentQueue<(IResource Resource, string? ErrorMessage)>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Enqueue((context.Resource, context.ErrorMessage));
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration,
+            resourceLoggerService: resourceLoggerService,
+            events: events);
+
+        await appExecutor.RunApplicationAsync();
+
+        var executable = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestDotnetProject"));
+        var reference = appExecutor.GetResource(executable.Metadata.Name);
+
+        var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
+            () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
+
+        Assert.Contains("Failed to apply launch configuration", exception.Message);
+        Assert.Contains("Process fallback is unavailable", exception.Message);
+        Assert.Equal(2, launchConfigurationCallCount);
+        Assert.Equal([executable.Metadata.Name], kubernetesService.DeletedResources);
+        Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestDotnetProject"));
+
+        var failure = Assert.Single(failedResources);
+        Assert.Same(resource, failure.Resource);
+        Assert.NotNull(failure.ErrorMessage);
+        Assert.Contains("Failed to apply launch configuration", failure.ErrorMessage);
+        Assert.Contains("Process fallback is unavailable", failure.ErrorMessage);
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            line.IsErrorMessage &&
+            line.Content.Contains("Launch configuration failed.", StringComparison.Ordinal) &&
+            line.Content.Contains("Process fallback is unavailable", StringComparison.Ordinal));
     }
 
     [Fact]

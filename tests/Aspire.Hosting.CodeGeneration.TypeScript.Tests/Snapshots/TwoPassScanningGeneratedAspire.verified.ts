@@ -6746,6 +6746,14 @@ export interface InteractionInputBuilder {
      */
     withValue(value: string): InteractionInputBuilderPromise;
     /**
+     * Releases uploaded files associated with the input.
+     *
+     * Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+     * server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+     * deleted when the AppHost shuts down.
+     */
+    releaseFiles(): InteractionInputBuilderPromise;
+    /**
      * Attaches a callback that dynamically loads or updates the input after the prompt starts.
      * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
      * @param options Additional options.
@@ -6767,6 +6775,14 @@ export interface InteractionInputBuilderPromise extends PromiseLike<InteractionI
      * @returns The same builder handle.
      */
     withValue(value: string): InteractionInputBuilderPromise;
+    /**
+     * Releases uploaded files associated with the input.
+     *
+     * Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+     * server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+     * deleted when the AppHost shuts down.
+     */
+    releaseFiles(): InteractionInputBuilderPromise;
     /**
      * Attaches a callback that dynamically loads or updates the input after the prompt starts.
      * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
@@ -6832,6 +6848,27 @@ class InteractionInputBuilderImpl implements InteractionInputBuilder {
     }
 
     /** @internal */
+    async _releaseFilesInternal(): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.Ats/releaseFiles',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Releases uploaded files associated with the input.
+     *
+     * Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+     * server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+     * deleted when the AppHost shuts down.
+     */
+    releaseFiles(): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._releaseFilesInternal(), this._client);
+    }
+
+    /** @internal */
     async _withDynamicLoadingInternal(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): Promise<InteractionInputBuilder> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as InteractionInputLoadContextHandle;
@@ -6880,6 +6917,10 @@ class InteractionInputBuilderPromiseImpl implements InteractionInputBuilderPromi
 
     withValue(value: string): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.withValue(value)), this._client);
+    }
+
+    releaseFiles(): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.releaseFiles()), this._client);
     }
 
     withDynamicLoading(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): InteractionInputBuilderPromise {

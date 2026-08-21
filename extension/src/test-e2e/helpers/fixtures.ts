@@ -4,8 +4,10 @@ import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { VSBrowser } from './extester';
+import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
+import { reloadWindow } from './vscode';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -85,6 +87,22 @@ export async function executeE2eControlCommand(
 ): Promise<AspireExtensionE2EControlStatus> {
     const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
+}
+
+export async function reloadWorkspaceForE2E(timeoutMs = 120000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;
+    const controlFilePath = getControlFilePath();
+    if (controlFilePath) {
+        fs.rmSync(controlFilePath, { force: true });
+    }
+
+    await reloadWindow();
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to reload with the E2E workspace open',
+        Math.max(1, deadline - Date.now()));
+    await VSBrowser.instance.waitForWorkbench(Math.max(1, deadline - Date.now()));
 }
 
 export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: string; name?: string }[]): Promise<Array<{ name: string; uri: string; fileName: string }>> {
@@ -482,7 +500,7 @@ builder.Build().Run();
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

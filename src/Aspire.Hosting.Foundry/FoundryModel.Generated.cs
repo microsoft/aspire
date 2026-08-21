@@ -199,6 +199,12 @@ public partial class FoundryModel
         public static readonly FoundryModel DeepSeekV4Flash = new() { Name = "DeepSeek-V4-Flash", Version = "2026-04-23", Format = "DeepSeek" };
 
         /// <summary>
+        /// DeepSeek-V4-Flash-0731 is the official release of DeepSeek-V4-Flash, superseding the preview version, with substantially enhanced agentic capabilities.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel DeepSeekV4Flash0731 = new() { Name = "DeepSeek-V4-Flash-0731", Version = "2026-07-31", Format = "DeepSeek" };
+
+        /// <summary>
         /// DeepSeek V4 is an efficient MoE model family with 1M context and near state-of-the-art open-source reasoning performance.
         /// </summary>
         [AspireValue("FoundryModels")]

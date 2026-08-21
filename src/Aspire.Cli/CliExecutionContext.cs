@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, LogLevel? consoleLogLevel = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, LogLevel? consoleLogLevel = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null, bool identityOverrideNoticeRequired = false)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -96,13 +96,18 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// <see cref="IdentityCommit"/>, <see cref="NuGetServiceIndexOverride"/>
     /// or <see cref="IdentityPackagesDirectory"/>)
     /// was sourced from an <c>ASPIRE_CLI_*</c> environment variable or the
-    /// install sidecar rather than the assembly's build-time stamp. When
-    /// <see langword="true"/> the CLI is emulating a build it is not, so a
-    /// startup notice is surfaced (see
-    /// <c>Program.DisplayFirstTimeUseNoticeIfNeededAsync</c>) and tooling can
-    /// flag the run as diagnostic. See <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// install sidecar rather than the assembly's build-time stamp. This lets
+    /// source-build behavior avoid assumptions that do not apply to installed
+    /// or emulated identities. See <c>docs/specs/cli-identity-sidecar.md</c>.
     /// </summary>
     public bool IdentityOverridden { get; } = identityOverridden;
+
+    /// <summary>
+    /// Gets a value indicating whether startup should warn that developer
+    /// identity overrides are active. Installer-authored sidecar identity is
+    /// authoritative but does not require a warning.
+    /// </summary>
+    public bool IdentityOverrideNoticeRequired { get; } = identityOverrideNoticeRequired;
 
     /// <summary>
     /// Optional replacement for the canonical

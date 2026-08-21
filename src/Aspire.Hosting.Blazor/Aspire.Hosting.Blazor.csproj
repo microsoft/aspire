@@ -32,8 +32,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
-    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
+    <!-- Source-share browser debugger types with Aspire.Hosting.JavaScript via the shared source directory -->
+    <Compile Include="$(SharedDir)BrowserDebuggerResource.cs" Link="BrowserDebuggerResource.cs" />
+    <Compile Include="$(SharedDir)BrowserLaunchConfiguration.cs" Link="BrowserLaunchConfiguration.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -136,6 +136,47 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedOutput, output.ToString().Trim());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IdentityOverrideNotice_UsesDedicatedNoticePolicyInsteadOfGenericOverrideState(bool noticeRequired)
+    {
+        // Both rows deliberately keep IdentityOverridden=true. Installed sidecar identity needs
+        // the same non-source-tree behavior as explicit emulation, but only the latter should warn.
+        // This display-path test catches a tempting regression where startup UI is changed back to
+        // checking the broader IdentityOverridden property.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var errorWriter = new StringWriter();
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DisableAnsi = true;
+            options.ErrorTextWriter = errorWriter;
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(
+                identityChannel: "staging",
+                identityVersion: "13.5.0",
+                identityOverridden: true,
+                identityOverrideNoticeRequired: noticeRequired);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
+
+        var errorOutput = errorWriter.ToString();
+        if (noticeRequired)
+        {
+            Assert.Contains(
+                "Aspire CLI is emulating identity 'staging' version '13.5.0'",
+                errorOutput,
+                StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(string.Empty, errorOutput);
+        }
+    }
+
     [Fact]
     public async Task RootCommandWithHelpArgumentReturnsZero()
     {

@@ -39,6 +39,7 @@ param(
 # Global constants
 $Script:UserAgent = "get-aspire-cli.ps1/1.0"
 $Script:IsModernPowerShell = $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.PSEdition -eq "Core"
+$Script:SupportsFileMoveOverwrite = $Script:IsModernPowerShell -and $PSVersionTable.PSVersion.Major -ge 7
 $Script:ArchiveDownloadTimeoutSec = 600
 $Script:ChecksumDownloadTimeoutSec = 120
 $Script:ExtensionArtifactName = "aspire-vscode.vsix.zip"
@@ -789,6 +790,49 @@ function ConvertTo-ChannelName {
     }
 }
 
+function Write-InstallSidecar {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPath,
+        [string]$Quality
+    )
+
+    $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
+    $temporaryPath = "$sidecarPath.$([System.Guid]::NewGuid().ToString('N')).tmp"
+    $backupPath = "$temporaryPath.bak"
+    $payload = '{"source":"script"}'
+    if (-not [string]::IsNullOrWhiteSpace($Quality)) {
+        $channel = ConvertTo-ChannelName -Quality $Quality
+        $payload = "{""source"":""script"",""channel"":""$channel""}"
+    }
+
+    [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
+    try {
+        [System.IO.File]::WriteAllText($temporaryPath, "$payload`n")
+        if ($Script:SupportsFileMoveOverwrite) {
+            [System.IO.File]::Move($temporaryPath, $sidecarPath, $true)
+        }
+        else {
+            # File.Move(source, destination, overwrite) was added in .NET Core 3 and is unavailable
+            # to PowerShell 6 and Windows PowerShell 4/5.1. File.Replace provides a compatible
+            # atomic overwrite on those runtimes.
+            if ([System.IO.File]::Exists($sidecarPath)) {
+                # PowerShell binds a null backup argument as an empty path for File.Replace, so use
+                # a unique same-directory backup and remove it after the atomic replacement.
+                [System.IO.File]::Replace($temporaryPath, $sidecarPath, $backupPath)
+            }
+            else {
+                [System.IO.File]::Move($temporaryPath, $sidecarPath)
+            }
+        }
+    }
+    finally {
+        [System.IO.File]::Delete($temporaryPath)
+        [System.IO.File]::Delete($backupPath)
+    }
+}
+
 # Simplified installation path determination
 function Get-InstallPath {
     [CmdletBinding()]
@@ -1260,8 +1304,10 @@ function Install-AspireCli {
         # Authorship contract: docs/specs/install-routes.md.
         $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
         if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
-            [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
-            [System.IO.File]::WriteAllText($sidecarPath, "{""source"":""script""}`n")
+            # An explicit version can come from any channel, so retain the archive's
+            # baked identity when there was no quality route to author the channel.
+            $sidecarQuality = if ([string]::IsNullOrWhiteSpace($Version)) { $Quality } else { "" }
+            Write-InstallSidecar -InstallPath $InstallPath -Quality $sidecarQuality
         }
         else {
             Write-Host "What if: Route sidecar would be written to: $sidecarPath"

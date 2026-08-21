@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
@@ -130,6 +131,94 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("rc/daily", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("dev", "daily")]
+    [InlineData("staging", "staging")]
+    [InlineData("release", "stable")]
+    [InlineData("", null)]
+    public async Task WriteInstallSidecar_PersistsQualityChannel(string quality, string? expectedChannel)
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"write_install_sidecar '{installPath}' '{quality}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Equal("script", document.RootElement.GetProperty("source").GetString());
+        if (expectedChannel is null)
+        {
+            Assert.False(document.RootElement.TryGetProperty("channel", out _));
+        }
+        else
+        {
+            Assert.Equal(expectedChannel, document.RootElement.GetProperty("channel").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task WriteInstallSidecar_UsesPortableMktempTemplate()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+
+        // BSD mktemp only expands a trailing X run. Reject non-portable templates even on
+        // GNU mktemp, which also accepts a suffix after the X run.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $"mktemp() {{ case \"$1\" in *XXXXXXXX) command mktemp \"$1\" ;; *) return 64 ;; esac; }}; write_install_sidecar '{installPath}' 'staging'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(File.Exists(Path.Combine(installPath, ".aspire-install.json")));
+    }
+
+    [Fact]
+    public async Task ExplicitVersionInstall_WritesSourceOnlySidecar()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.TempDirectory, "install");
+
+        // Exercise main's --version routing while replacing only the network/archive work.
+        // main defaults QUALITY to release even for explicit versions, so this catches that
+        // default accidentally leaking into the install sidecar as channel: stable.
+        using var cmd = new ScriptFunctionCommand(
+            s_scriptPath,
+            $$"""
+            download_and_install_archive() {
+                mkdir -p "$INSTALL_PATH"
+                printf '#!/bin/sh\nexit 0\n' > "$INSTALL_PATH/aspire"
+                chmod +x "$INSTALL_PATH/aspire"
+            }
+            setup_cli_bundle() { return 0; }
+            main --version '13.2.0-preview.1.25366.3' --install-path '{{installPath}}' --skip-path
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        using var document = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(Path.Combine(installPath, ".aspire-install.json")));
+        Assert.Collection(
+            document.RootElement.EnumerateObject(),
+            property =>
+            {
+                Assert.Equal("source", property.Name);
+                Assert.Equal("script", property.Value.GetString());
+            });
+    }
+
     [Fact]
     public async Task OsOverride_IsRecognized()
     {
@@ -208,7 +297,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(
             File.Exists(globalConfig),
-            $"Release script must not write {globalConfig}; channel is baked into the CLI binary, not stored globally.");
+            $"Release script must not write {globalConfig}; channel belongs to the install-scoped sidecar.");
 
         // The script should not even plan a global-channel write in its dry-run output.
         Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
@@ -217,10 +306,8 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
     {
-        // Install scripts must not write a global aspire.config.json — the channel
-        // is baked into the CLI binary at build time and read via
-        // IdentityChannelReader. A global channel field would shadow the baked value.
-        // Asserts both dry-run stdout shape and absence of the global config file.
+        // Install scripts must not write channel identity to global application config.
+        // The install-scoped sidecar carries it without contaminating unrelated projects.
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
 
@@ -228,7 +315,6 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.DoesNotContain("config set channel", result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("\"channel\"", result.Output);
 
         var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(

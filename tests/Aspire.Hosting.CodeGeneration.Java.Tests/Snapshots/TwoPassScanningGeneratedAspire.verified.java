@@ -16738,6 +16738,13 @@ public class InteractionInputBuilder extends HandleWrapperBase {
         return (InteractionInputBuilder) result;
     }
 
+    /** Releases uploaded files associated with the input. */
+    public void releaseFiles() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.Ats/releaseFiles", reqArgs);
+    }
+
     public InteractionInputBuilder withDynamicLoading(AspireAction1<InteractionInputLoadContext> callback) {
         return withDynamicLoading(callback, null);
     }

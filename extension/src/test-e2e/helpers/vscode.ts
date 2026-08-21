@@ -176,6 +176,11 @@ export async function executeCommandFromPalette(command: string): Promise<void> 
     throw lastError;
 }
 
+export async function reloadWindow(): Promise<void> {
+    await dismissActiveInput();
+    await new Workbench().executeCommand('Developer: Reload Window');
+}
+
 export async function cancelActiveInput(): Promise<void> {
     const input = await VSBrowser.instance.driver.wait(async () => {
         try {

@@ -237,7 +237,38 @@ public static class BlazorGatewayExtensions
 
         gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
+        // Register browser debugging support: create a hidden child debugger resource
+        // parented to the gateway, and a "Debug in Browser" command on the WASM app resource.
+        if (!gateway.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            BrowserDebuggerHelper.AddBrowserDebuggerResource(
+                gateway.ApplicationBuilder,
+                gateway.Resource,
+                wasmApp,
+                wasmApp.Resource.ProjectPath,
+                relativePath: pathPrefix,
+                browser: wasmApp.Resource.DebuggerBrowser);
+        }
+
         return gateway;
+    }
+
+    /// <summary>
+    /// Configures the browser launched when starting a debug session for the Blazor WebAssembly app.
+    /// The value is read when the debugger is registered on the gateway, so call this before
+    /// <see cref="WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>
+    /// or <see cref="WithBlazorClientApp(IResourceBuilder{DotnetProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>
+    /// attaches the app.
+    /// </summary>
+    /// <param name="wasmApp">The Blazor WebAssembly app resource builder.</param>
+    /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
+    [AspireExport]
+    public static IResourceBuilder<BlazorWasmAppResource> WithBlazorDebuggerBrowser(
+        this IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string browser = "msedge")
+    {
+        wasmApp.Resource.DebuggerBrowser = browser;
+        return wasmApp;
     }
 
     /// <summary>
