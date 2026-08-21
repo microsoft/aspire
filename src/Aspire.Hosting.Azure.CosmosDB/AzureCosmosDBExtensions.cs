@@ -63,6 +63,19 @@ public static class AzureCosmosExtensions
         => RunAsEmulator(builder, configureContainer, useVNext: true);
 
     /// <summary>
+    /// Configures an Azure Cosmos DB resource to be emulated using the Azure Cosmos DB Linux-based (vNext) emulator with the NoSQL API.
+    /// </summary>
+    /// <ats-summary>Configures the Azure Cosmos DB resource to run using the local Linux-based (vNext) emulator. Use runAsEmulator instead.</ats-summary>
+    /// <param name="builder">The Azure Cosmos DB resource builder.</param>
+    /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    [Obsolete($"Use {nameof(RunAsEmulator)} instead.")]
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, Action<IResourceBuilder<AzureCosmosDBEmulatorResource>>? configureContainer = null)
+        => RunAsEmulator(builder, configureContainer);
+
+    /// <summary>
     /// Configures an Azure Cosmos DB resource to be emulated using the classic Azure Cosmos DB emulator with the NoSQL API. This resource requires an <see cref="AzureCosmosDBResource"/> to be added to the application model.
     /// For more information on the Azure Cosmos DB emulator, see <a href="https://learn.microsoft.com/azure/cosmos-db/emulator#authentication"></a>.
     /// </summary>

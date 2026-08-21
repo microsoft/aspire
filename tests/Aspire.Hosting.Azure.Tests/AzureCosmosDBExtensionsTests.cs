@@ -899,6 +899,21 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void RunAsPreviewEmulatorUsesVNextLatestImageTag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        var image = Assert.Single(cosmos.Resource.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("mcr.microsoft.com", image.Registry);
+        Assert.Equal("cosmosdb/linux/azure-cosmos-emulator", image.Image);
+        Assert.Equal("vnext-latest", image.Tag);
+    }
+
+    [Fact]
     public void RunAsClassicEmulatorUsesStableImageTag()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

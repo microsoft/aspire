@@ -1,1 +1,0 @@
-BREAK capability-removed Aspire.Hosting.Azure.CosmosDB Aspire.Hosting.Azure.CosmosDB/runAsPreviewEmulator -- https://github.com/microsoft/aspire/pull/19510 -- Removed the experimental preview alias after promoting the vNext emulator to RunAsEmulator; polyglot callers should use runAsEmulator.
