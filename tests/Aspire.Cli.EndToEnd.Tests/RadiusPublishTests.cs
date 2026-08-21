@@ -126,7 +126,7 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         var bicepConfigPath = Path.Combine(outputDir, "bicepconfig.json");
         Assert.True(File.Exists(bicepConfigPath), $"Expected generated bicepconfig.json at '{bicepConfigPath}'.");
         // Parse the config and confirm it pins the Radius Bicep extension, e.g.:
-        //   { "extensions": { "radius": "br:biceptypes.azurecr.io/radius:0.59" } }
+        //   { "extensions": { "radius": "br:biceptypes.azurecr.io/radius:0.60" } }
         // Parsing (rather than a raw substring check) guards against malformed JSON
         // or a missing version tag. The exact version is intentionally not pinned
         // here to avoid churn when the Radius extension version bumps.
@@ -137,7 +137,7 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
             .GetString();
         const string radiusExtensionPrefix = "br:biceptypes.azurecr.io/radius:";
         Assert.StartsWith(radiusExtensionPrefix, radiusExtension);
-        // Ensure a version tag actually follows the prefix (e.g. `...:0.59`); a bare
+        // Ensure a version tag actually follows the prefix (e.g. `...:0.60`); a bare
         // prefix with no version would otherwise satisfy StartsWith. The exact
         // version is intentionally not pinned to avoid churn when the pin bumps.
         Assert.NotEmpty(radiusExtension![radiusExtensionPrefix.Length..]);

@@ -174,7 +174,7 @@ internal static class KubernetesDeployTestHelpers
     /// </summary>
     /// <remarks>
     /// Two non-obvious behaviors this sequence works around, both confirmed against
-    /// rad 0.59.0:
+    /// rad 0.60.0:
     /// <list type="bullet">
     ///   <item><description>
     ///     <c>rad</c> ignores <c>KUBECONFIG</c> and targets the current-context of

@@ -79,8 +79,10 @@ public sealed class RadiusContainerConstruct : ProvisionableResource
     }
 
     /// <summary>
-    /// Environment variables for the container, keyed by variable name. Each entry carries
-    /// a <c>value</c> (a literal or a reference to a Bicep parameter for secret values).
+    /// Environment variables for the container, keyed by variable name. Each entry carries either
+    /// a <c>value</c> (a literal or a reference to a Bicep parameter) or a
+    /// <c>valueFrom.secretKeyRef</c> pointing at a key of a <c>Radius.Security/secrets</c> resource
+    /// (used for credential-bearing values, which must not reach the Deployment spec).
     /// </summary>
     public BicepDictionary<ContainerEnvVarConstruct> Env
     {
