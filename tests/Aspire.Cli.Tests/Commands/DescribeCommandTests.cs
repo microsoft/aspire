@@ -261,16 +261,34 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     public async Task DescribeCommand_Follow_JsonFormat_DeduplicatesIdenticalSnapshots()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var outputWriter = new TestOutputTextWriter(outputHelper);
-        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Duplicate - identical to the first snapshot
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Changed state - should be emitted
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-            // Duplicate of the changed state - should be suppressed
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-        ]);
+        var initialSnapshotDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.Contains("\"state\":\"Running\"", StringComparison.Ordinal))
+            {
+                initialSnapshotDisplayed.TrySetResult();
+            }
+        });
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => YieldResourceSnapshotsAfter(
+                    initialSnapshotDisplayed.Task,
+                    [
+                        // Duplicate of the initial snapshot - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                        // Changed state - should be emitted
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                        // Duplicate of the changed state - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                    ],
+                    cancellationToken);
+            });
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow --format json");
@@ -302,19 +320,326 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DescribeCommand_Follow_TableFormat_DeduplicatesIdenticalSnapshots()
+    public async Task DescribeCommand_Follow_JsonFormat_EmitsInitialSnapshotWithoutResourceChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Duplicate - identical to the first snapshot
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
-            // Changed state - should be emitted
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-            // Duplicate of the changed state - should be suppressed
-            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
-        ], disableAnsi: true);
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var jsonLine = Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        var resource = JsonSerializer.Deserialize(jsonLine, ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+        Assert.Equal("redis", resource.Name);
+        Assert.Equal("Running", resource.State);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_IncludesDisabledCommandsWhenRequested()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running",
+                    Commands =
+                    [
+                        new ResourceSnapshotCommand
+                        {
+                            Name = "restart",
+                            DisplayName = "Restart",
+                            State = KnownCommandState.Enabled,
+                            Visibility = KnownCommandVisibility.UI,
+                        },
+                        new ResourceSnapshotCommand
+                        {
+                            Name = "repair",
+                            DisplayName = "Repair",
+                            State = KnownCommandState.Disabled,
+                            Visibility = KnownCommandVisibility.UI,
+                        },
+                    ],
+                },
+            ],
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json --include-disabled-commands");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var jsonLine = Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        var resource = JsonSerializer.Deserialize(jsonLine, ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+        Assert.Equal(["repair", "restart"], resource.Commands!.Keys);
+        Assert.Equal(KnownCommandState.Disabled, resource.Commands["repair"].State);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_JsonFormat_DoesNotMissResourceCreatedDuringInitialLoad()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchUpdateConsumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchCallCount = 0;
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [],
+            configureConnection: connection =>
+            {
+                connection.GetResourceSnapshotsHandler = async cancellationToken =>
+                {
+                    await watchStarted.Task.WaitAsync(cancellationToken);
+                    await watchUpdateConsumed.Task.WaitAsync(cancellationToken);
+                    // The watch has already published Running by the time this stale
+                    // initial snapshot completes. The live change must win.
+                    return
+                    [
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Starting" },
+                    ];
+                };
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                    Interlocked.Increment(ref watchCallCount) == 1
+                        ? YieldResourceAfterSignaling(watchStarted, watchUpdateConsumed, cancellationToken)
+                        : EmptyResourceSnapshots(cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, watchCallCount);
+        var jsonLine = Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        var resource = JsonSerializer.Deserialize(jsonLine, ResourcesCommandJsonContext.Ndjson.ResourceJson);
+        Assert.NotNull(resource);
+        Assert.Equal("redis", resource.Name);
+        Assert.Equal("Running", resource.State);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshotWatcher_CancelsWatchWhenInitialLoadFails()
+    {
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                await watchStarted.Task.WaitAsync(cancellationToken);
+                throw new InvalidOperationException("Initial load failed.");
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                WaitForResourceSnapshotCancellation(watchStarted, watchStopped, cancellationToken)
+        };
+        using var watcher = new ResourceSnapshotWatcher(connection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => watcher.WaitForInitialLoadAsync());
+
+        Assert.True(watchStopped.Task.IsCompleted);
+        Assert.Null(watcher.WatchException);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshotWatcher_RetainsIndependentWatchCancellationWhenInitialLoadFails()
+    {
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var unrelatedCts = new CancellationTokenSource();
+        unrelatedCts.Cancel();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                await watchStarted.Task.WaitAsync(cancellationToken);
+                throw new InvalidOperationException("Initial load failed.");
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                ThrowUnrelatedCancellationAfterWatchCancellation(watchStarted, unrelatedCts.Token, cancellationToken)
+        };
+        using var watcher = new ResourceSnapshotWatcher(connection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => watcher.WaitForInitialLoadAsync());
+
+        var watchException = Assert.IsType<OperationCanceledException>(watcher.WatchException);
+        Assert.Equal(unrelatedCts.Token, watchException.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshotWatcher_IgnoresTokenlessWatchCancellationWhenInitialLoadFails()
+    {
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                await watchStarted.Task.WaitAsync(cancellationToken);
+                throw new InvalidOperationException("Initial load failed.");
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                ThrowTokenlessCancellationAfterWatchCancellation(watchStarted, cancellationToken)
+        };
+        using var watcher = new ResourceSnapshotWatcher(connection);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => watcher.WaitForInitialLoadAsync());
+
+        Assert.Null(watcher.WatchException);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshotWatcher_PreservesInitialFailureWhenWatchCancellationCallbackThrows()
+    {
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                await watchStarted.Task.WaitAsync(cancellationToken);
+                throw new InvalidOperationException("Initial load failed.");
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                WaitForCancellationWithThrowingCallback(watchStarted, watchStopped, cancellationToken)
+        };
+        using var watcher = new ResourceSnapshotWatcher(connection);
+
+        var initialException = await Assert.ThrowsAsync<InvalidOperationException>(() => watcher.WaitForInitialLoadAsync());
+
+        Assert.Equal("Initial load failed.", initialException.Message);
+        Assert.True(watchStopped.Task.IsCompleted);
+        Assert.IsType<AggregateException>(watcher.WatchException);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshotWatcher_PrefersWatchFailureOverCancellationCallbackFailure()
+    {
+        var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                await watchStarted.Task.WaitAsync(cancellationToken);
+                throw new InvalidOperationException("Initial load failed.");
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                ThrowWatchFailureWithThrowingCancellationCallback(watchStarted, cancellationToken)
+        };
+        using var watcher = new ResourceSnapshotWatcher(connection);
+
+        var initialException = await Assert.ThrowsAsync<InvalidOperationException>(() => watcher.WaitForInitialLoadAsync());
+
+        Assert.Equal("Initial load failed.", initialException.Message);
+        var watchException = Assert.IsType<IOException>(watcher.WatchException);
+        Assert.Equal("Watch failed.", watchException.Message);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshotWatcher_CoalescesWithoutBlockingBackchannelUpdates()
+    {
+        var updatesGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allUpdatesProduced = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var producedUpdateCount = 0;
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = _ => Task.FromResult(new List<ResourceSnapshot>()),
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                ProduceResourceSnapshotsAfter(
+                    updatesGate.Task,
+                    ResourceSnapshotWatcher.UpdateBufferCapacity * 2,
+                    index =>
+                    {
+                        if (Interlocked.Increment(ref producedUpdateCount) == ResourceSnapshotWatcher.UpdateBufferCapacity * 2)
+                        {
+                            allUpdatesProduced.TrySetResult();
+                        }
+
+                        return new ResourceSnapshot
+                        {
+                            Name = $"resource-{index}",
+                            DisplayName = $"resource-{index}",
+                            ResourceType = "Project",
+                            State = "Running"
+                        };
+                    },
+                    cancellationToken)
+        };
+
+        using var watcher = new ResourceSnapshotWatcher(connection, bufferUpdates: true);
+        await watcher.WaitForInitialLoadAsync().DefaultTimeout();
+        var initialCapture = watcher.CaptureAllResources();
+
+        updatesGate.TrySetResult();
+        await allUpdatesProduced.Task.DefaultTimeout();
+
+        var updates = await watcher
+            .WatchResourceSnapshotsAsync(initialCapture.UpdateSequence)
+            .ToListAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(ResourceSnapshotWatcher.UpdateBufferCapacity * 2, producedUpdateCount);
+        Assert.Equal(ResourceSnapshotWatcher.UpdateBufferCapacity * 2, updates.Count);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_TableFormat_DeduplicatesIdenticalSnapshots()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var initialSnapshotDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.Equals("[redis] Running", StringComparison.Ordinal))
+            {
+                initialSnapshotDisplayed.TrySetResult();
+            }
+        });
+        using var provider = CreateDescribeTestServices(
+            workspace,
+            outputWriter,
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+            ],
+            disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => YieldResourceSnapshotsAfter(
+                    initialSnapshotDisplayed.Task,
+                    [
+                        // Duplicate of the initial snapshot - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                        // Changed state - should be emitted
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                        // Duplicate of the changed state - should be suppressed
+                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Stopping" },
+                    ],
+                    cancellationToken);
+            });
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow");
@@ -687,6 +1012,21 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         return services.BuildServiceProvider();
     }
 
+    private static async IAsyncEnumerable<ResourceSnapshot> ProduceResourceSnapshotsAfter(
+        Task prerequisite,
+        int count,
+        Func<int, ResourceSnapshot> createSnapshot,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await prerequisite.WaitAsync(cancellationToken);
+        for (var i = 0; i < count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return createSnapshot(i);
+            await Task.Yield();
+        }
+    }
+
     private static AppHostInformation CreateAppHostInfo(TemporaryWorkspace workspace, int processId)
     {
         return new AppHostInformation
@@ -710,6 +1050,162 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         cancellationToken.ThrowIfCancellationRequested();
 
         throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> EmptyResourceSnapshots([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceSnapshots(
+        IEnumerable<ResourceSnapshot> snapshots,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var snapshot in snapshots)
+        {
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return snapshot;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceSnapshotsAfter(
+        Task prerequisite,
+        IEnumerable<ResourceSnapshot> snapshots,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await prerequisite.WaitAsync(cancellationToken);
+        await foreach (var snapshot in YieldResourceSnapshots(snapshots, cancellationToken))
+        {
+            yield return snapshot;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> YieldResourceAfterSignaling(
+        TaskCompletionSource watchStarted,
+        TaskCompletionSource watchUpdateConsumed,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        watchStarted.TrySetResult();
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield return new ResourceSnapshot
+        {
+            Name = "redis",
+            DisplayName = "redis",
+            ResourceType = "Container",
+            State = "Running",
+        };
+        watchUpdateConsumed.TrySetResult();
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> WaitForResourceSnapshotCancellation(
+        TaskCompletionSource watchStarted,
+        TaskCompletionSource watchStopped,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        watchStarted.TrySetResult();
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        finally
+        {
+            watchStopped.TrySetResult();
+        }
+
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> ThrowUnrelatedCancellationAfterWatchCancellation(
+        TaskCompletionSource watchStarted,
+        CancellationToken unrelatedCancellationToken,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        watchStarted.TrySetResult();
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(unrelatedCancellationToken);
+        }
+
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> ThrowTokenlessCancellationAfterWatchCancellation(
+        TaskCompletionSource watchStarted,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        watchStarted.TrySetResult();
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException();
+        }
+
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> WaitForCancellationWithThrowingCallback(
+        TaskCompletionSource watchStarted,
+        TaskCompletionSource watchStopped,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var callbackInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(
+            () =>
+            {
+                callbackInvoked.TrySetResult();
+                throw new InvalidOperationException("Cancellation callback failed.");
+            });
+        watchStarted.TrySetResult();
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        finally
+        {
+            // Keep the throwing registration alive until cancellation invokes it. Otherwise, the
+            // delay continuation can race CancellationTokenSource.Cancel and dispose the registration
+            // before Cancel reaches it, causing this test to pass without exercising the callback failure.
+            await callbackInvoked.Task.DefaultTimeout();
+            watchStopped.TrySetResult();
+        }
+
+        yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> ThrowWatchFailureWithThrowingCancellationCallback(
+        TaskCompletionSource watchStarted,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var callbackInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(
+            () =>
+            {
+                callbackInvoked.TrySetResult();
+                throw new InvalidOperationException("Cancellation callback failed.");
+            });
+        watchStarted.TrySetResult();
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await callbackInvoked.Task.DefaultTimeout();
+            throw new IOException("Watch failed.");
+        }
+
+        yield break;
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)

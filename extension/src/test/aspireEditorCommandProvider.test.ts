@@ -189,7 +189,10 @@ suite('AspireEditorCommandProvider', () => {
 
             assert.ok(startDebuggingStub.calledOnce);
             const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
-            assert.strictEqual(launchConfiguration.program, appHostPath);
+            // The launch binds its configuration to the physical AppHost it resolved, so where the
+            // temp directory is itself a link - macOS reports /var as a link to /private/var - the
+            // configuration carries the canonical path rather than the spelling discovery returned.
+            assert.strictEqual(launchConfiguration.program, fs.realpathSync.native(appHostPath));
             assert.strictEqual(launchConfiguration.command, 'run');
             assert.strictEqual(launchConfiguration.noDebug, true);
             assert.strictEqual(showErrorMessageStub.called, false);

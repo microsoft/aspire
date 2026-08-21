@@ -14,6 +14,9 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 {
+    private int _getResourceSnapshotsCallCount;
+    private int _lastGetResourceSnapshotsIncludeHidden = -1;
+
     public string Hash { get; set; } = "test-hash";
     public string SocketPath { get; set; } = "/tmp/test.sock";
     public AppHostInformation? AppHostInfo { get; set; }
@@ -61,6 +64,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// If null, returns the ResourceSnapshots list.
     /// </summary>
     public Func<CancellationToken, Task<List<ResourceSnapshot>>>? GetResourceSnapshotsHandler { get; set; }
+
+    /// <summary>
+    /// Gets the number of snapshot requests made through this backchannel.
+    /// </summary>
+    public int GetResourceSnapshotsCallCount => Volatile.Read(ref _getResourceSnapshotsCallCount);
+
+    /// <summary>
+    /// Gets the include-hidden value from the latest snapshot request.
+    /// </summary>
+    public bool? LastGetResourceSnapshotsIncludeHidden => Volatile.Read(ref _lastGetResourceSnapshotsIncludeHidden) switch
+    {
+        0 => false,
+        1 => true,
+        _ => null
+    };
 
     /// <summary>
     /// Gets or sets the function to call when WatchResourceSnapshotsAsync is invoked.
@@ -133,6 +151,9 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _getResourceSnapshotsCallCount);
+        Interlocked.Exchange(ref _lastGetResourceSnapshotsIncludeHidden, includeHidden ? 1 : 0);
+
         if (GetResourceSnapshotsHandler is not null)
         {
             return GetResourceSnapshotsHandler(cancellationToken);
@@ -280,12 +301,22 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public WaitForResourceResponse WaitForResourceResult { get; set; } = new WaitForResourceResponse { Success = true, State = "Running" };
 
+    /// <summary>
+    /// Gets or sets the function invoked by WaitForResourceAsync.
+    /// </summary>
+    public Func<string, string, int, CancellationToken, Task<WaitForResourceResponse>>? WaitForResourceHandler { get; set; }
+
     public Task<WaitForResourceResponse> WaitForResourceAsync(
         string resourceName,
         string status,
         int timeoutSeconds,
         CancellationToken cancellationToken = default)
     {
+        if (WaitForResourceHandler is not null)
+        {
+            return WaitForResourceHandler(resourceName, status, timeoutSeconds, cancellationToken);
+        }
+
         return Task.FromResult(WaitForResourceResult);
     }
 

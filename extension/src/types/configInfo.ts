@@ -75,6 +75,14 @@ export const lsJsonStreamCapability = 'ls-json-stream.v1';
 export const isolatedLaunchCapability = 'isolated-launch.v1';
 
 /**
+ * Capability advertised by the CLI when `aspire agent mcp` is supported. Tooling uses this to
+ * gate automatic pinned MCP server registration so an older CLI that does not advertise support
+ * is never assumed to understand the command.
+ * Keep in sync with `KnownCapabilities.AgentMcp` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const agentMcpCapability = 'agent-mcp.v1';
+
+/**
  * First Aspire CLI version that accepts `aspire run --isolated`.
  */
 export const isolatedLaunchMinimumVersion = '13.2.0';

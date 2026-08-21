@@ -46,10 +46,26 @@ export function isAppHostPathUnderFolder(appHostPath: string | undefined, folder
     return normalizedAppHostPath.startsWith(folderPrefix);
 }
 
+/**
+ * Keys an AppHost path *lexically*, applying the same normalization and platform case rules
+ * {@link isSameAppHostPath} compares with. Use this when paths must key a map rather than be
+ * compared pairwise.
+ *
+ * Deliberately named for what it does rather than for AppHost identity: it never touches the
+ * filesystem, so two spellings of one AppHost - a symlink and its target, or a path and its
+ * `..`-free equivalent under a symlinked root - key differently here. Keying AppHost *identity*
+ * is `getAppHostPathComparisonKey` in `utils/appHostIdentity`, which canonicalizes first; the two
+ * are not interchangeable and confusing them silently weakens an identity check into a string
+ * comparison an alias can influence.
+ */
+export function getLexicalAppHostPathKey(value: string): string {
+    return getComparisonKey(path.normalize(value));
+}
+
 export function isSameAppHostPath(left: string | undefined, right: string | undefined): boolean {
     if (!left || !right) {
         return false;
     }
 
-    return getComparisonKey(path.normalize(left)) === getComparisonKey(path.normalize(right));
+    return getLexicalAppHostPathKey(left) === getLexicalAppHostPathKey(right);
 }

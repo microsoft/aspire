@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Web;
 using Aspire.Cli.Backchannel;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
@@ -15,6 +17,41 @@ namespace Aspire.Cli.Mcp.Tools;
 
 internal static class McpToolHelpers
 {
+    private const int MaxExceptionTypeNameLength = 128;
+
+    private static readonly HashSet<string> s_sensitiveQueryKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "token",
+        "access_token",
+        "credential",
+        "password",
+        "key",
+        "api_key",
+        "apikey",
+        "accountkey",
+        "primarykey",
+        "secondarykey",
+        "sharedaccesskey",
+        "subscriptionkey",
+        "clientkey",
+        "accesskey",
+        "authkey",
+        "devicekey",
+        "secret",
+        "sig",
+        "signature",
+        "code",
+        "client_secret",
+        "pwd",
+        "passwd",
+        "auth",
+        "authorization",
+        "jwt",
+        "bearer",
+        "sessionid",
+        "sas"
+    };
+
     public static async Task<(string apiToken, string apiBaseUrl, string? dashboardBaseUrl)> GetDashboardInfoAsync(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, ILogger logger, CancellationToken cancellationToken)
     {
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
@@ -31,89 +68,275 @@ internal static class McpToolHelpers
             throw new McpProtocolException(McpErrorMessages.DashboardNotAvailable, McpErrorCode.InternalError);
         }
 
-        var apiBaseUrl = NormalizeDashboardUrl(dashboardInfo.ApiBaseUrl);
+        var apiBaseUrl = DashboardUrls.NormalizeDashboardRequestUrl(dashboardInfo.ApiBaseUrl, stripLoginPath: false) ?? string.Empty;
         var dashboardBaseUrl = StripLoginPath(dashboardInfo.DashboardUrls.FirstOrDefault());
 
         return (dashboardInfo.ApiToken, apiBaseUrl, dashboardBaseUrl);
     }
 
     /// <summary>
-    /// Strips the <c>/login</c> path segment (and any query string) from a dashboard URL
-    /// returned by the AppHost. Other path segments are preserved.
+    /// Strips the <c>/login</c> path segment and credentials from a dashboard URL
+    /// returned by the AppHost. Other path segments and non-sensitive query values are preserved.
     /// </summary>
-    internal static string? StripLoginPath(string? url)
-    {
-        if (url is null)
-        {
-            return null;
-        }
-
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
-        {
-            // Dashboard URLs from the AppHost look like: http://localhost:18888/login?t=abcd1234
-            // or with a base path: http://localhost:18888/base/login?t=abcd1234
-            // Strip the trailing /login segment but preserve any other path components.
-            var path = uri.AbsolutePath;
-            if (path.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
-            {
-                path = path[..^"/login".Length];
-            }
-
-            return $"{uri.Scheme}://{uri.Authority}{path.TrimEnd('/')}";
-        }
-
-        return url;
-    }
+    internal static string? StripLoginPath(string? url) =>
+        SanitizeUrl(
+            url,
+            stripLoginPath: true,
+            normalizeLocalhost: false,
+            removeDashboardLoginToken: true);
 
     /// <summary>
-    /// Replaces AppHost-scoped <c>*.localhost</c> dashboard hostnames with <c>localhost</c>.
+    /// Removes credentials and replaces AppHost-scoped <c>*.localhost</c> dashboard hostnames with <c>localhost</c>.
     /// </summary>
     /// <remarks>
     /// DNS resolvers typically don't implement RFC 6761 for localhost subdomains, so hosts
     /// like <c>dashboard.dev.localhost</c> fail to resolve when making HTTP requests.
     /// Rewriting to <c>localhost</c> ensures the CLI can reach the dashboard API.
     /// </remarks>
-    internal static string NormalizeDashboardUrl(string url)
+    internal static string NormalizeDashboardUrl(string url) =>
+        SanitizeUrl(
+            url,
+            stripLoginPath: false,
+            normalizeLocalhost: true,
+            removeDashboardLoginToken: false) ?? string.Empty;
+
+    /// <summary>
+    /// Removes credentials from an absolute URL before it is returned by an MCP tool.
+    /// </summary>
+    internal static string? SanitizeUrl(string? url) =>
+        SanitizeUrl(
+            url,
+            stripLoginPath: false,
+            normalizeLocalhost: false,
+            removeDashboardLoginToken: false,
+            allowResourceSchemes: false);
+
+    /// <summary>
+    /// Sanitizes an absolute resource endpoint URI while preserving its non-file scheme.
+    /// </summary>
+    internal static string? SanitizeResourceUrl(string? url) =>
+        SanitizeUrl(
+            url,
+            stripLoginPath: false,
+            normalizeLocalhost: false,
+            removeDashboardLoginToken: false,
+            allowResourceSchemes: true);
+
+    /// <summary>
+    /// Removes credentials and dashboard login tokens before an outbound request URL is logged.
+    /// </summary>
+    internal static string? SanitizeDashboardRequestUrl(string? url) =>
+        SanitizeUrl(
+            url,
+            stripLoginPath: false,
+            normalizeLocalhost: false,
+            removeDashboardLoginToken: true);
+
+    /// <summary>
+    /// Returns bounded exception metadata that is safe to include in diagnostics.
+    /// </summary>
+    internal static string GetBoundedExceptionDiagnostic(Exception exception)
     {
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && IsLocalhostTld(uri.Host))
+        var exceptionType = exception.GetType().Name;
+        if (exceptionType.Length > MaxExceptionTypeNameLength)
         {
-            var port = uri.IsDefaultPort ? string.Empty : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
-            var pathAndQuery = uri.PathAndQuery == "/" ? string.Empty : uri.PathAndQuery;
-            return $"{uri.Scheme}://localhost{port}{pathAndQuery}{uri.Fragment}";
+            exceptionType = exceptionType[..MaxExceptionTypeNameLength];
         }
 
-        return url;
+        return exception is HttpRequestException { StatusCode: { } statusCode }
+            ? $"{exceptionType}; HTTP {(int)statusCode} ({statusCode})"
+            : exceptionType;
+    }
+
+    private static string? SanitizeUrl(
+        string? url,
+        bool stripLoginPath,
+        bool normalizeLocalhost,
+        bool removeDashboardLoginToken,
+        bool allowResourceSchemes = false)
+    {
+        if (!(allowResourceSchemes
+            ? TryCreateResourceUri(url, out var uri)
+            : TryCreateHttpUri(url, out uri)))
+        {
+            return null;
+        }
+
+        // Dashboard login URLs look like:
+        //   https://user:password@dashboard.localhost:18888/base/login?t=token&view=resources
+        // User-info and sensitive query values must never cross the MCP boundary, while the
+        // non-sensitive path and query values remain useful to clients.
+        var isLoginPath = uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase);
+        var path = stripLoginPath && isLoginPath
+            ? uri.AbsolutePath[..^"/login".Length]
+            : uri.AbsolutePath;
+        var builder = new UriBuilder(uri)
+        {
+            Host = normalizeLocalhost && IsLocalhostTld(uri.Host) ? "localhost" : uri.Host,
+            Path = path,
+            Query = SanitizeQuery(
+                uri.Query,
+                removeDashboardLoginToken: removeDashboardLoginToken || stripLoginPath || isLoginPath),
+            Fragment = string.Empty,
+            UserName = string.Empty,
+            Password = string.Empty
+        };
+
+        var sanitizedUri = builder.Uri;
+        if (sanitizedUri.AbsolutePath == "/")
+        {
+            return sanitizedUri.GetLeftPart(UriPartial.Authority) + sanitizedUri.Query + sanitizedUri.Fragment;
+        }
+
+        return sanitizedUri.AbsoluteUri;
+    }
+
+    private static bool TryCreateHttpUri(string? value, [NotNullWhen(true)] out Uri? uri)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+            !string.IsNullOrEmpty(uri.Host);
+    }
+
+    private static bool TryCreateResourceUri(string? value, [NotNullWhen(true)] out Uri? uri)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out uri) &&
+            uri.Scheme != Uri.UriSchemeFile &&
+            value.StartsWith($"{uri.Scheme}://", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrEmpty(uri.Host) &&
+            Uri.CheckHostName(uri.Host) != UriHostNameType.Unknown;
+    }
+
+    private static string SanitizeQuery(string query, bool removeDashboardLoginToken)
+    {
+        if (string.IsNullOrEmpty(query))
+        {
+            return string.Empty;
+        }
+
+        var sanitizedQuery = new StringBuilder(query.Length);
+        var queryWithoutPrefix = query.AsSpan(1);
+        var groupStart = 0;
+
+        // Preserve '&' as the original query-group boundary. For example:
+        //   ?apikey=AB;cd=ef&view=resources
+        // If any parameter-shaped semicolon segment is sensitive, retaining another part of
+        // that group could expose a secret tail, so the whole "apikey=AB;cd=ef" group is removed.
+        for (var index = 0; index <= queryWithoutPrefix.Length; index++)
+        {
+            if (index < queryWithoutPrefix.Length && queryWithoutPrefix[index] != '&')
+            {
+                continue;
+            }
+
+            var group = queryWithoutPrefix[groupStart..index];
+            if (!ContainsSensitiveQueryParameter(group, removeDashboardLoginToken))
+            {
+                if (sanitizedQuery.Length > 0)
+                {
+                    sanitizedQuery.Append('&');
+                }
+
+                sanitizedQuery.Append(group);
+            }
+
+            groupStart = index + 1;
+        }
+
+        return sanitizedQuery.ToString();
+    }
+
+    private static bool ContainsSensitiveQueryParameter(
+        ReadOnlySpan<char> group,
+        bool removeDashboardLoginToken)
+    {
+        if (IsSensitiveQueryParameter(group, removeDashboardLoginToken))
+        {
+            return true;
+        }
+
+        for (var index = 0; index < group.Length; index++)
+        {
+            if (group[index] == ';' &&
+                StartsQueryParameter(group, index + 1) &&
+                IsSensitiveQueryParameter(group[(index + 1)..], removeDashboardLoginToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsSensitiveQueryParameter(
+        ReadOnlySpan<char> parameter,
+        bool removeDashboardLoginToken)
+    {
+        var parameterEnd = parameter.IndexOf(';');
+        if (parameterEnd >= 0)
+        {
+            parameter = parameter[..parameterEnd];
+        }
+
+        var separatorIndex = parameter.IndexOf('=');
+        var encodedKey = separatorIndex >= 0 ? parameter[..separatorIndex] : parameter;
+        var key = HttpUtility.UrlDecode(encodedKey.ToString());
+        return IsSensitiveQueryKey(key) ||
+            (removeDashboardLoginToken && string.Equals(key, "t", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool StartsQueryParameter(ReadOnlySpan<char> queryGroup, int startIndex)
+    {
+        var remaining = queryGroup[startIndex..];
+        var endIndex = remaining.IndexOf(';');
+        if (endIndex >= 0)
+        {
+            remaining = remaining[..endIndex];
+        }
+
+        var equalsIndex = remaining.IndexOf('=');
+        return equalsIndex > 0;
+    }
+
+    private static bool IsSensitiveQueryKey(string? key)
+    {
+        if (key is null)
+        {
+            return false;
+        }
+
+        var normalizedKey = key.Replace('-', '_');
+        return s_sensitiveQueryKeys.Contains(normalizedKey) ||
+            normalizedKey.EndsWith("_token", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("Token", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("_credential", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("Credential", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("_password", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("Password", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("_key", StringComparison.OrdinalIgnoreCase) ||
+            HasSensitiveCamelCaseSuffix(normalizedKey, "Key") ||
+            normalizedKey.EndsWith("_secret", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("Secret", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("_sig", StringComparison.OrdinalIgnoreCase) ||
+            HasSensitiveCamelCaseSuffix(normalizedKey, "Sig") ||
+            normalizedKey.EndsWith("_signature", StringComparison.OrdinalIgnoreCase) ||
+            normalizedKey.EndsWith("Signature", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasSensitiveCamelCaseSuffix(string key, string suffix)
+    {
+        if (!key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var suffixStart = key.Length - suffix.Length;
+        return suffixStart == 0 || key[suffixStart - 1] == '_' || char.IsUpper(key[suffixStart]);
     }
 
     private static bool IsLocalhostTld(string host)
     {
         return host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Extracts the browser token (<c>t</c> query parameter) from a dashboard login URL.
-    /// Returns <c>null</c> if the URL does not contain a login token.
-    /// </summary>
-    internal static string? ExtractLoginToken(string? url)
-    {
-        if (url is null)
-        {
-            return null;
-        }
-
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-            uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
-        {
-            // Parse query string to find 't' parameter
-            var queryParams = HttpUtility.ParseQueryString(uri.Query);
-            var token = queryParams["t"];
-            if (!string.IsNullOrEmpty(token))
-            {
-                return token;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

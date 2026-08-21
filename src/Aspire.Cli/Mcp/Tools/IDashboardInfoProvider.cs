@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 
 namespace Aspire.Cli.Mcp.Tools;
 
@@ -49,9 +51,17 @@ internal sealed class StaticDashboardInfoProvider(string dashboardUrl, string? a
     {
         // For unsecured dashboards, apiToken is empty string (no X-API-Key header will be sent)
         var apiToken = apiKey ?? string.Empty;
-        // Normalize the API base URL (e.g., rewrite *.localhost to localhost) for HTTP requests,
-        // but preserve the original URL as the dashboard display URL.
-        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardUrl);
-        return Task.FromResult((apiToken, apiBaseUrl, (string?)dashboardUrl));
+        // Build the request URL from the original value so query-based authentication remains
+        // available to HttpClient. The display URL is sanitized independently for MCP output.
+        var apiBaseUrl = DashboardUrls.NormalizeDashboardRequestUrl(dashboardUrl, stripLoginPath: true);
+        if (apiBaseUrl is null)
+        {
+            throw new McpProtocolException(
+                "The dashboard URL must be an absolute HTTP or HTTPS URL.",
+                McpErrorCode.InvalidParams);
+        }
+
+        var dashboardBaseUrl = McpToolHelpers.StripLoginPath(dashboardUrl);
+        return Task.FromResult((apiToken, apiBaseUrl, dashboardBaseUrl));
     }
 }

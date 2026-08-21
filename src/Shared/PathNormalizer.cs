@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
+
 namespace Aspire.Hosting.Utils;
 
 internal static class PathNormalizer
@@ -28,61 +30,147 @@ internal static class PathNormalizer
     }
 
     /// <summary>
-    /// On Windows, resolves a path to its filesystem-canonical form by querying the OS for
-    /// the actual casing of each path component. On other platforms this is a no-op because
-    /// the file system is case-sensitive and there is no casing ambiguity.
+    /// Resolves an existing path to the casing stored by the current filesystem.
     /// </summary>
     /// <remarks>
-    /// Use this when the path needs to match what MSBuild reports for the same file.
-    /// MSBuild always uses the true filesystem casing; a user who types
-    /// <c>--apphost c:\FOO\bar.csproj</c> will get back <c>C:\foo\bar.csproj</c>
-    /// if that is the on-disk casing, making the hash agree with the AppHost side.
+    /// Path APIs preserve caller casing even on case-insensitive filesystems. Each existing
+    /// segment is enumerated to recover its stored spelling, but a case-insensitive match is
+    /// accepted only when the filesystem resolved that candidate. Case-sensitive volumes can
+    /// therefore keep distinct paths whose names differ only by case.
     /// </remarks>
-    /// <param name="path">An absolute path to a file that exists on disk.</param>
+    /// <param name="path">A path to a file or directory.</param>
     /// <returns>
-    /// The path with OS-canonical casing, or <paramref name="path"/> unchanged if it
-    /// cannot be resolved (file does not exist, UNC path, etc.).
+    /// The path with filesystem-canonical casing, or <paramref name="path"/> unchanged if it
+    /// does not exist or cannot be enumerated.
     /// </returns>
     public static string ResolveToFilesystemPath(string path)
     {
-        if (!OperatingSystem.IsWindows())
+        return TryResolveToFilesystemPath(path, out var resolvedPath) ? resolvedPath : path;
+    }
+
+    /// <summary>
+    /// Attempts to resolve an existing path to the spelling stored by the current filesystem.
+    /// </summary>
+    /// <param name="path">A path to a file or directory.</param>
+    /// <param name="resolvedPath">The filesystem-canonical path when the method returns <see langword="true"/>.</param>
+    /// <returns>
+    /// <see langword="true"/> when every segment exists and its stored spelling was found;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    public static bool TryResolveToFilesystemPath(string path, out string resolvedPath)
+    {
+        resolvedPath = path;
+
+        if (string.IsNullOrEmpty(path))
         {
-            return path;
+            return false;
         }
 
-        // Only handle standard drive-letter paths (e.g. C:\...).
-        // UNC paths (\\server\share\...) are not common for project files and are left unchanged.
-        if (path.Length < 3 || path[1] != ':' || path[2] != Path.DirectorySeparatorChar)
+        try
         {
-            return path;
-        }
-
-        // Uppercase the drive letter and use it as the starting root (e.g. "C:\").
-        var current = char.ToUpperInvariant(path[0]) + ":" + Path.DirectorySeparatorChar;
-
-        // Walk each component after the root ("X:\") to resolve its real casing.
-        var parts = path[3..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-
-        for (var i = 0; i < parts.Length; i++)
-        {
-            if (i == parts.Length - 1)
+            var fullPath = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(root))
             {
-                // Final component: find the file with its real name.
-                var files = Directory.GetFiles(current, parts[i]);
-                return files.Length == 1 ? files[0] : Path.Combine(current, parts[i]);
+                return false;
             }
 
-            // Intermediate component: find the directory with its real name.
-            var dirs = Directory.GetDirectories(current, parts[i]);
-            current = dirs.Length == 1 ? dirs[0] : Path.Combine(current, parts[i]);
-
-            if (!current.EndsWith(Path.DirectorySeparatorChar))
+            // Directory enumeration restores the spelling of child segments, but it cannot
+            // restore the drive root. Windows exposes drive letters in uppercase on disk.
+            if (OperatingSystem.IsWindows())
             {
-                current += Path.DirectorySeparatorChar;
-            }
-        }
+                var driveLetterIndex = root.Length >= 3 &&
+                    root[1] == ':' &&
+                    char.IsAsciiLetter(root[0])
+                        ? 0
+                        : root.Length >= 7 &&
+                            root[0] is '\\' or '/' &&
+                            root[1] is '\\' or '/' &&
+                            root[2] is '?' or '.' &&
+                            root[3] is '\\' or '/' &&
+                            root[5] == ':' &&
+                            root[6] is '\\' or '/' &&
+                            char.IsAsciiLetter(root[4])
+                                ? 4
+                                : -1;
 
-        return path;
+                if (driveLetterIndex >= 0)
+                {
+                    root = $"{root[..driveLetterIndex]}{char.ToUpperInvariant(root[driveLetterIndex])}{root[(driveLetterIndex + 1)..]}";
+                }
+            }
+
+            var segments = fullPath[root.Length..].Split(
+                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+            var current = root;
+            if (!Directory.Exists(current))
+            {
+                return false;
+            }
+
+            foreach (var segment in segments)
+            {
+                var candidate = Path.Combine(current, segment);
+                if (!File.Exists(candidate) && !Directory.Exists(candidate))
+                {
+                    return false;
+                }
+
+                string? exactMatch = null;
+                string? caseInsensitiveMatch = null;
+                string? normalizationMatch = null;
+                var normalizedSegment = segment.Normalize(NormalizationForm.FormC);
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+                {
+                    var entryName = Path.GetFileName(entry);
+                    if (entryName.Equals(segment, StringComparison.Ordinal))
+                    {
+                        exactMatch = entry;
+                        break;
+                    }
+
+                    if (caseInsensitiveMatch is null &&
+                        entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
+                    {
+                        caseInsensitiveMatch = entry;
+                    }
+
+                    // The existence probe above must succeed before normalization is considered.
+                    // That prevents normalization-equivalent but distinct entries on a
+                    // normalization-sensitive filesystem from being treated as one path.
+                    if (normalizationMatch is null &&
+                        entryName.Normalize(NormalizationForm.FormC).Equals(
+                            normalizedSegment,
+                            StringComparison.Ordinal))
+                    {
+                        normalizationMatch = entry;
+                    }
+                }
+
+                if (exactMatch is null && caseInsensitiveMatch is null && normalizationMatch is null)
+                {
+                    return false;
+                }
+
+                current = exactMatch ?? caseInsensitiveMatch ?? normalizationMatch!;
+            }
+
+            resolvedPath = current;
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

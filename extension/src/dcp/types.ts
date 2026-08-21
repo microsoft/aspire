@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import type { AspireDebugSession, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
@@ -108,6 +109,109 @@ export interface BrowserLaunchConfiguration extends ExecutableLaunchConfiguratio
 
 export function isBrowserLaunchConfiguration(obj: any): obj is BrowserLaunchConfiguration {
     return obj && obj.type === 'browser';
+}
+
+/**
+ * Returns the stable resource target carried by DCP launch metadata.
+ *
+ * Only typed path fields are eligible. Session names, arguments, and environment values
+ * are intentionally excluded because they are free-form and can contain secrets or
+ * attacker-controlled text unrelated to the launched resource's identity.
+ */
+export function getLaunchConfigurationTargetPath(configuration: ExecutableLaunchConfiguration): string | undefined {
+    if (isProjectLaunchConfiguration(configuration) ||
+        isAzureFunctionsLaunchConfiguration(configuration) ||
+        isMauiLaunchConfiguration(configuration)) {
+        return getNonEmptyPath(configuration.project_path);
+    }
+
+    if (isJavaScriptRuntimeLaunchConfiguration(configuration)) {
+        return getNonEmptyPath(configuration.script_path) ??
+            getNonEmptyPath(configuration.working_directory);
+    }
+
+    if (isPythonLaunchConfiguration(configuration)) {
+        return getNonEmptyPath(configuration.program_path) ??
+            getNonEmptyPath(configuration.project_path) ??
+            getNonEmptyPath(configuration.working_directory);
+    }
+
+    if (isGoLaunchConfiguration(configuration)) {
+        return getNonEmptyPath(configuration.program) ??
+            getNonEmptyPath(configuration.working_directory);
+    }
+
+    if (isRustLaunchConfiguration(configuration)) {
+        return getNonEmptyPath(configuration.cargo?.executable_path) ??
+            getNonEmptyPath(configuration.working_directory);
+    }
+
+    if (isJavaLaunchConfiguration(configuration)) {
+        // `main_class` is a fully qualified class name ("[module/]com.example.Api") far more often
+        // than a path, and it is absent entirely when the IDE resolves the entry point itself, so
+        // the working directory is the only field that is both stable and always a real path.
+        return getNonEmptyPath(configuration.working_directory);
+    }
+
+    return undefined;
+}
+
+/**
+ * Returns the possible executable identities that DCP exposes as `executable.path`.
+ *
+ * Source targets such as JavaScript scripts and Go package directories identify what
+ * the debugger launches, but the resource snapshot retains the executable command
+ * (`node`, the Python interpreter, `go`, or `cargo`). Keep that second structured
+ * identities separately so executable resources can be correlated without inspecting
+ * free-form arguments or environment values.
+ */
+export function getLaunchConfigurationExecutablePaths(configuration: ExecutableLaunchConfiguration): readonly string[] {
+    if (isJavaScriptRuntimeLaunchConfiguration(configuration)) {
+        const runtimeExecutable = getNonEmptyPath(configuration.runtime_executable);
+        return runtimeExecutable === undefined ? [] : [runtimeExecutable];
+    }
+
+    if (isPythonLaunchConfiguration(configuration)) {
+        const interpreterPath = getNonEmptyPath(configuration.interpreter_path);
+        if (interpreterPath === undefined) {
+            return [];
+        }
+
+        const executablePaths = [interpreterPath];
+        const entrypoint = getNonEmptyPath(configuration.module);
+        if (entrypoint !== undefined) {
+            // Python module and executable entrypoints currently share one launch shape.
+            // Preserve both commands and let resource correlation fail closed if the
+            // AppHost contains resources matching both candidates.
+            const executableName = process.platform === 'win32' ? `${entrypoint}.exe` : entrypoint;
+            const entrypointPath = path.join(path.dirname(interpreterPath), executableName);
+            if (entrypointPath !== interpreterPath) {
+                executablePaths.push(entrypointPath);
+            }
+        }
+
+        return executablePaths;
+    }
+
+    if (isGoLaunchConfiguration(configuration)) {
+        return ['go'];
+    }
+
+    if (isRustLaunchConfiguration(configuration)) {
+        return ['cargo'];
+    }
+
+    if (isJavaLaunchConfiguration(configuration)) {
+        // JavaAppResource is an ExecutableResource whose command is "java". A Maven goal or Gradle
+        // task replaces that command with the wrapper invocation, which DCP reports as "sh" or
+        // "cmd"; those are far too generic to claim here, so wrapper resources are correlated by
+        // working directory instead (see `isSessionTargetMatch` in editorAssistanceToolService.ts).
+        // An AppHost running several plain Java resources still cannot be told apart by command
+        // alone, and resource correlation deliberately fails closed as ambiguous in that case.
+        return ['java'];
+    }
+
+    return [];
 }
 
 export interface AzureFunctionsLaunchConfiguration extends ExecutableLaunchConfiguration {
@@ -243,7 +347,8 @@ export interface AspireResourceDebugSession {
 export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugConfiguration {
     runId: string;
     debugSessionId: string | null;
-    projectFile?: string;
+    targetPath?: string;
+    resourceExecutablePaths?: readonly string[];
     isApphost?: boolean;
 }
 
@@ -267,6 +372,10 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
 
 interface AspireDebuggersConfiguration {
     [key: string]: DebugLaunchSettings;
+}
+
+function getNonEmptyPath(value: string | undefined): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 export interface RunSessionInfo {

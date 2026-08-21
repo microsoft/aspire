@@ -240,6 +240,48 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_HelpWithSymlinkedAppHostMatchesCanonicalRunningPath()
+    {
+        Assert.SkipUnless(
+            OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var helpWriter = new StringWriter();
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var appHostProjectFile = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostProjectFile.FullName, "<Project />");
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+        var symlinkedAppHostPath = Path.Combine(symlinkDirectory, appHostProjectFile.Name);
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = appHostProjectFile.FullName,
+                ProcessId = 1
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("wait-for-browser", "Waits for text in the browser."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource web --apphost "{symlinkedAppHostPath}" --help""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains("Available resource commands:", helpOutput);
+        Assert.Contains("wait-for-browser", helpOutput);
+    }
+
+    [Fact]
     public async Task ResourceCommand_HelpIncludesHiddenResourceCommandsWhenRequestedMatchesSnapshot()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

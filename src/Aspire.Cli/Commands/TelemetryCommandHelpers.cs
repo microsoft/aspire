@@ -163,10 +163,8 @@ internal static class TelemetryCommandHelpers
         if (!HasJsonContentType(response))
         {
             var mediaType = response.Content.Headers.ContentType?.MediaType ?? "(none)";
-            throw new HttpRequestException(
-                HttpRequestError.InvalidResponse,
+            throw new TelemetryApiResponseException(
                 string.Format(CultureInfo.InvariantCulture, TelemetryCommandStrings.UnexpectedContentType, mediaType),
-                inner: null,
                 response.StatusCode);
         }
     }
@@ -209,21 +207,26 @@ internal static class TelemetryCommandHelpers
         if (dashboardUrl is not null)
         {
             // Extract login token before normalizing the URL
-            var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
+            var loginToken = DashboardUrls.ExtractDashboardLoginToken(dashboardUrl);
 
             // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
-            var displayDashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
-            dashboardUrl = McpToolHelpers.NormalizeDashboardUrl(displayDashboardUrl);
+            var displayDashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl);
+            var requestDashboardUrl = DashboardUrls.NormalizeDashboardRequestUrl(dashboardUrl, stripLoginPath: true);
 
-            if (!UrlHelper.IsHttpUrl(dashboardUrl))
+            if (requestDashboardUrl is null || !UrlHelper.IsHttpUrl(requestDashboardUrl))
             {
                 DisplayTelemetryError(
                     interactionService,
                     new TelemetryErrorInfo(
-                        string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            TelemetryCommandStrings.DashboardUrlInvalid,
+                            displayDashboardUrl ?? TelemetryCommandStrings.InvalidDashboardUrlDisplayValue),
                         TelemetryCommandStrings.DashboardUrlInvalidHint));
                 return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
             }
+
+            dashboardUrl = requestDashboardUrl;
 
             // If no explicit --api-key was provided but a login token was found in the URL,
             // exchange the login token for an API key via the dashboard.
@@ -288,7 +291,7 @@ internal static class TelemetryCommandHelpers
             return new DashboardApiResult(true, connection, null, null, null, 0);
         }
 
-        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardInfo.ApiBaseUrl);
+        var apiBaseUrl = DashboardUrls.NormalizeDashboardRequestUrl(dashboardInfo.ApiBaseUrl, stripLoginPath: false) ?? string.Empty;
 
         // Extract dashboard base URL (without /login path) for hyperlinks.
         // Preserve the original hostname (e.g. *.dev.localhost) for display URLs.
@@ -351,7 +354,11 @@ internal static class TelemetryCommandHelpers
             return await GetDashboardApiErrorAsync(ex, baseUrl, httpClientFactory, logger, cancellationToken);
         }
 
-        return new TelemetryErrorInfo(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message));
+        return new TelemetryErrorInfo(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                TelemetryCommandStrings.FailedToFetchTelemetry,
+                GetBoundedHttpFailureReason(ex)));
     }
 
     /// <summary>
@@ -364,6 +371,9 @@ internal static class TelemetryCommandHelpers
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        var displayDashboardUrl = McpToolHelpers.SanitizeDashboardRequestUrl(dashboardBaseUrl) ??
+            TelemetryCommandStrings.ConfiguredDashboardDisplayValue;
+
         if (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
             return new TelemetryErrorInfo(TelemetryCommandStrings.DashboardAuthFailed, TelemetryCommandStrings.DashboardAuthFailedHint, TelemetryCommandStrings.DashboardAuthFailedAnonymousHint);
@@ -381,18 +391,25 @@ internal static class TelemetryCommandHelpers
                 {
                     // API is not enabled
                     return new TelemetryErrorInfo(
-                        string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardBaseUrl),
+                        string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, displayDashboardUrl),
                         TelemetryCommandStrings.DashboardApiNotEnabledHint);
                 }
             }
-            catch (Exception probeEx)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                logger.LogDebug(probeEx, "Dashboard probe failed for {Url}", dashboardBaseUrl);
+                throw;
+            }
+            catch (Exception probeException)
+            {
+                logger.LogDebug(
+                    "Dashboard probe failed for {Url}: {Diagnostic}",
+                    displayDashboardUrl,
+                    McpToolHelpers.GetBoundedExceptionDiagnostic(probeException));
             }
 
             // Dashboard base URL is also not reachable — wrong URL
             return new TelemetryErrorInfo(
-                string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlNotReachable, dashboardBaseUrl),
+                string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlNotReachable, displayDashboardUrl),
                 TelemetryCommandStrings.DashboardUrlNotReachableHint);
         }
 
@@ -400,11 +417,15 @@ internal static class TelemetryCommandHelpers
         {
             // No HTTP status — connection refused or network error
             return new TelemetryErrorInfo(
-                string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardBaseUrl),
+                string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, displayDashboardUrl),
                 TelemetryCommandStrings.DashboardConnectionFailedHint);
         }
 
-        return new TelemetryErrorInfo(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message));
+        return new TelemetryErrorInfo(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                TelemetryCommandStrings.FailedToFetchTelemetry,
+                GetBoundedHttpFailureReason(ex)));
     }
 
     /// <summary>
@@ -436,6 +457,9 @@ internal static class TelemetryCommandHelpers
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        var displayDashboardUrl = McpToolHelpers.SanitizeDashboardRequestUrl(dashboardBaseUrl) ??
+            TelemetryCommandStrings.ConfiguredDashboardDisplayValue;
+
         try
         {
             using var client = httpClientFactory.CreateClient();
@@ -453,16 +477,40 @@ internal static class TelemetryCommandHelpers
             var result = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryValidateTokenResponse, cancellationToken).ConfigureAwait(false);
             return new TokenExchangeResult(true, result?.ApiKey);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (HttpRequestException ex)
         {
-            logger.LogDebug(ex, "Failed to exchange login token for API key at {Url}", dashboardBaseUrl);
+            logger.LogDebug(
+                "Failed to exchange login token for API key at {Url}: {Diagnostic}",
+                displayDashboardUrl,
+                McpToolHelpers.GetBoundedExceptionDiagnostic(ex));
             return TokenExchangeResult.ConnectionError;
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to exchange login token for API key at {Url}", dashboardBaseUrl);
+            logger.LogDebug(
+                "Failed to exchange login token for API key at {Url}: {Diagnostic}",
+                displayDashboardUrl,
+                McpToolHelpers.GetBoundedExceptionDiagnostic(ex));
             return TokenExchangeResult.Failed;
         }
+    }
+
+    private static string GetBoundedHttpFailureReason(HttpRequestException exception)
+    {
+        if (exception is TelemetryApiResponseException telemetryApiException)
+        {
+            // Only diagnostics created from validated response metadata are trusted here.
+            // Arbitrary HttpRequestException messages can include authenticated request URLs.
+            return telemetryApiException.BoundedReason;
+        }
+
+        return exception.StatusCode is { } statusCode
+            ? $"HTTP {(int)statusCode} ({statusCode})"
+            : $"request error ({exception.HttpRequestError})";
     }
 
     /// <summary>
@@ -655,6 +703,18 @@ internal static class TelemetryCommandHelpers
 
         var otlpResource = new SimpleOtlpResource(resource.GetServiceName(), resource.GetServiceInstanceId());
         return OtlpHelpers.GetResourceName(otlpResource, allResources);
+    }
+
+    private sealed class TelemetryApiResponseException(
+        string boundedReason,
+        HttpStatusCode statusCode)
+        : HttpRequestException(
+            HttpRequestError.InvalidResponse,
+            boundedReason,
+            inner: null,
+            statusCode)
+    {
+        public string BoundedReason { get; } = boundedReason;
     }
 }
 

@@ -230,7 +230,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
-    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number; cancelBeforeInvocation?: boolean; invokeRegisteredToolDirectly?: boolean }
+    | { name: 'setDashboardBrowserForE2E'; value: 'integratedBrowser' | null }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }

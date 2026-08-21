@@ -19,9 +19,9 @@ import {
     type AppHostLifecycleToolResult,
     type AppHostStartToolInput,
     type AppHostStopToolInput,
-    type PreparableAppHostLifecycleTool,
 } from './appHostLifecycleToolContracts';
 import { AppHostLifecycleToolService } from './appHostLifecycleToolService';
+import { escapeMarkdown } from './languageModelToolUi';
 
 export class AppHostStartLanguageModelTool implements vscode.LanguageModelTool<AppHostStartToolInput> {
     constructor(private readonly _service: AppHostLifecycleToolService) {
@@ -46,7 +46,7 @@ export class AppHostStartLanguageModelTool implements vscode.LanguageModelTool<A
     }
 
     async invoke(options: vscode.LanguageModelToolInvocationOptions<AppHostStartToolInput>, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
-        return createToolResult(await this._service.start(options.input, token));
+        return createToolResult(await this._service.startConfirmed(options.input, token));
     }
 }
 
@@ -55,7 +55,7 @@ export class AppHostStopLanguageModelTool implements vscode.LanguageModelTool<Ap
     }
 
     async prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<AppHostStopToolInput>, token: vscode.CancellationToken): Promise<vscode.PreparedToolInvocation> {
-        const displayPath = escapeMarkdown(await this._service.describeTarget(options.input?.appHostPath, token));
+        const displayPath = escapeMarkdown(await this._service.prepareStopTarget(options.input, token));
         return {
             invocationMessage: appHostLifecycleStopInvocationMessage(displayPath),
             confirmationMessages: {
@@ -66,7 +66,7 @@ export class AppHostStopLanguageModelTool implements vscode.LanguageModelTool<Ap
     }
 
     async invoke(options: vscode.LanguageModelToolInvocationOptions<AppHostStopToolInput>, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
-        return createToolResult(await this._service.stop(options.input, token));
+        return createToolResult(await this._service.stopConfirmed(options.input, token));
     }
 }
 
@@ -84,12 +84,12 @@ export function registerAppHostLifecycleTools(service: AppHostLifecycleToolServi
     const registrations: vscode.Disposable[] = [];
     const startTool = new AppHostStartLanguageModelTool(service);
     const stopTool = new AppHostStopLanguageModelTool(service);
-    // The preparable view exists for E2E automation, which only has raw JSON input. The
-    // cast is safe because both tools validate every field of the input themselves and
-    // treat anything unexpected as invalid rather than trusting the declared type.
-    const tools = new Map<string, PreparableAppHostLifecycleTool>([
-        [aspireAppHostStartToolName, { prepareInvocation: (options, token) => startTool.prepareInvocation({ input: options.input as unknown as AppHostStartToolInput }, token) }],
-        [aspireAppHostStopToolName, { prepareInvocation: (options, token) => stopTool.prepareInvocation({ input: options.input as unknown as AppHostStopToolInput }, token) }],
+    // E2E automation supplies raw JSON, while the production tool API carries the
+    // manifest-declared input type. The cast is safe because both tools validate every
+    // field and reject unexpected input before performing lifecycle work.
+    const tools = new Map<string, vscode.LanguageModelTool<unknown>>([
+        [aspireAppHostStartToolName, startTool as unknown as vscode.LanguageModelTool<unknown>],
+        [aspireAppHostStopToolName, stopTool as unknown as vscode.LanguageModelTool<unknown>],
     ]);
     const registerTools = () => {
         if (registrations.length > 0) {
@@ -127,20 +127,4 @@ function createToolResult(result: AppHostLifecycleToolResult): vscode.LanguageMo
 
 function describeRequestedMode(value: unknown): string {
     return parseMode(value) ?? appHostLifecycleUnspecifiedMode;
-}
-
-/**
- * Escapes the Markdown constructs that change how a path renders inline.
- *
- * The confirmation body renders as Markdown, so an unescaped `*`, `_`, `` ` ``, `[`, or
- * `<` in a real file name would show the user something other than the file the tool is
- * about to launch. Escaping keeps the rendered text one-to-one with the path instead of
- * deleting characters, which would break that relationship in the other direction.
- * Characters that are only meaningful at the start of a line (`.`, `-`, `{`, `}`) are
- * left alone: the path is always interpolated mid-sentence and they are extremely common
- * in real project paths.
- * See https://spec.commonmark.org/0.31.2/#backslash-escapes
- */
-function escapeMarkdown(value: string): string {
-    return value.replace(/[\\`*_[\]()<>#+~|!&]/g, character => `\\${character}`);
 }

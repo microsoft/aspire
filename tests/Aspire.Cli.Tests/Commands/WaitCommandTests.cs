@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -148,10 +149,12 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -160,6 +163,12 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
+        Assert.Equal(
+            ["Scanning for running AppHosts...", "Waiting for resource 'nonexistent' to be healthy..."],
+            interactionService.ShownStatuses);
+        Assert.Equal(["Resource 'nonexistent' was not found."], interactionService.DisplayedErrors);
+        Assert.Equal([""], interactionService.DisplayedPlainText);
+        Assert.Empty(interactionService.DisplayedSuccess);
     }
 
     [Fact]
@@ -167,16 +176,22 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var backchannel = new TestAppHostAuxiliaryBackchannel
+        var timeProvider = new FakeTimeProvider();
+        var backchannel = new TestAppHostAuxiliaryBackchannel();
+        backchannel.WaitForResourceHandler = (_, _, _, _) =>
         {
-            WaitForResourceResult = new WaitForResourceResponse { Success = true, State = "Running" }
+            timeProvider.Advance(TimeSpan.FromSeconds(2.5));
+            return Task.FromResult(new WaitForResourceResponse { Success = true, State = "Running" });
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+            options.TimeProvider = timeProvider;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -185,6 +200,12 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            ["Scanning for running AppHosts...", "Waiting for resource 'myapp' to be up (running)..."],
+            interactionService.ShownStatuses);
+        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Equal([""], interactionService.DisplayedPlainText);
+        Assert.Equal(["Resource 'myapp' is up (running). (2.5s)"], interactionService.DisplayedSuccess);
     }
 
     [Fact]
@@ -228,10 +249,12 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -240,6 +263,14 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
+        Assert.Equal(
+            ["Scanning for running AppHosts...", "Waiting for resource 'mydb' to be healthy..."],
+            interactionService.ShownStatuses);
+        Assert.Equal(
+            ["Timed out waiting for resource 'mydb' to be healthy after 2s."],
+            interactionService.DisplayedErrors);
+        Assert.Equal([""], interactionService.DisplayedPlainText);
+        Assert.Empty(interactionService.DisplayedSuccess);
     }
 
     [Fact]
@@ -283,10 +314,12 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        var interactionService = new TestInteractionService();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -295,5 +328,52 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
+        Assert.Equal(
+            ["Scanning for running AppHosts...", "Waiting for resource 'myapp' to be up (running)..."],
+            interactionService.ShownStatuses);
+        Assert.Equal(
+            ["Resource 'myapp' entered a failed state: FailedToStart"],
+            interactionService.DisplayedErrors);
+        Assert.Equal([""], interactionService.DisplayedPlainText);
+        Assert.Empty(interactionService.DisplayedSuccess);
+    }
+
+    [Fact]
+    public async Task WaitCommand_ResourceFailedToStart_WaitForDown_ReturnsFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WaitForResourceResult = new WaitForResourceResponse
+            {
+                Success = true,
+                State = "FailedToStart"
+            }
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("wait myapp --status down --timeout 5");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
+        Assert.Equal(
+            ["Scanning for running AppHosts...", "Waiting for resource 'myapp' to be down..."],
+            interactionService.ShownStatuses);
+        Assert.Equal(
+            ["Resource 'myapp' entered a failed state: FailedToStart"],
+            interactionService.DisplayedErrors);
+        Assert.Equal([""], interactionService.DisplayedPlainText);
+        Assert.Empty(interactionService.DisplayedSuccess);
     }
 }

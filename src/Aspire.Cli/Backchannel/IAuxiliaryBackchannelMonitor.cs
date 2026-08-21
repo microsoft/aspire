@@ -26,17 +26,6 @@ internal interface IAuxiliaryBackchannelMonitor
     string? SelectedAppHostPath { get; set; }
 
     /// <summary>
-    /// Gets the currently selected AppHost connection based on the selection logic.
-    /// Returns the explicitly selected AppHost, or the single in-scope AppHost, or null if none available.
-    /// </summary>
-    IAppHostAuxiliaryBackchannel? SelectedConnection { get; }
-
-    /// <summary>
-    /// Gets the AppHost path of the currently resolved connection, or <c>null</c> if no connection is available.
-    /// </summary>
-    string? ResolvedAppHostPath => SelectedConnection?.AppHostInfo?.AppHostPath;
-
-    /// <summary>
     /// Gets all connections that are within the scope of the specified working directory.
     /// </summary>
     /// <param name="workingDirectory">The working directory to check against.</param>

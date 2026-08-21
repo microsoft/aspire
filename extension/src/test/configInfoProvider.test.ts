@@ -9,7 +9,7 @@ import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../utils/process/cliProcess';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
-import { describeIncludeDisabledCommandsCapability, isolatedLaunchCapability, lsJsonStreamCapability } from '../types/configInfo';
+import { agentMcpCapability, describeIncludeDisabledCommandsCapability, isolatedLaunchCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 function emitConfigInfo(options: cliModule.SpawnProcessOptions | undefined, capabilities: readonly string[] = []): void {
@@ -287,6 +287,73 @@ suite('configInfoProvider tests', () => {
 
         assert.strictEqual(status, 'supported');
         assert.strictEqual(spawnStub.callCount, 1);
+    });
+
+    test('getCapabilityStatus reports agent MCP support as unsupported when the CLI does not advertise it', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            emitConfigInfo(options, []);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const status = await provider.getCapabilityStatus(agentMcpCapability, {
+            cliPath: '/exact/aspire',
+            forceRefresh: true,
+        });
+
+        assert.strictEqual(status, 'unsupported');
+    });
+
+    test('getCapabilityStatus reports agent MCP support as unsupported when the CLI omits the capabilities property entirely', async () => {
+        // An older CLI does not emit `capabilities` at all, which is a successful probe of a CLI
+        // that cannot run `aspire agent mcp`, not a probe that failed. It has to fail closed as
+        // `unsupported` rather than `unavailable`, and without falling back to a version check.
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            options?.stdoutCallback?.(JSON.stringify({
+                localSettingsPath: '/workspace/aspire.config.json',
+                globalSettingsPath: '/home/user/.aspire/aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+            }));
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const configInfo = await provider.getConfigInfo({ cliPath: '/exact/aspire', forceRefresh: true });
+        const status = await provider.getCapabilityStatus(agentMcpCapability, { cliPath: '/exact/aspire' });
+
+        assert.ok(configInfo, 'The probe must succeed so the status reflects an older CLI, not a failed read.');
+        assert.strictEqual(configInfo.capabilities, undefined);
+        assert.strictEqual(status, 'unsupported');
+    });
+
+    test('getCapabilityStatus reports agent MCP support as supported when the CLI advertises it', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            emitConfigInfo(options, [agentMcpCapability]);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const status = await provider.getCapabilityStatus(agentMcpCapability, {
+            cliPath: '/exact/aspire',
+            forceRefresh: true,
+        });
+
+        assert.strictEqual(status, 'supported');
     });
 
     test('getCapabilityStatus accepts the stable minimum and higher numeric cores but rejects minimum-core prereleases', async () => {

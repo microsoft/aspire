@@ -16,6 +16,12 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
 
     public override string Description => "Selects which AppHost to use when multiple AppHosts are running. The path can be a fully qualified path or a workspace root relative path.";
 
+    public override ToolAnnotations Annotations => new()
+    {
+        ReadOnlyHint = false,
+        DestructiveHint = false
+    };
+
     public override JsonElement GetInputSchema()
     {
         return JsonDocument.Parse("""
@@ -67,16 +73,9 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         }
 
         // Check if there's a running AppHost with this path
-        var matchingConnection = auxiliaryBackchannelMonitor.Connections
-            .FirstOrDefault(c =>
-            {
-                if (c.AppHostInfo?.AppHostPath is null)
-                {
-                    return false;
-                }
-                var candidatePath = Path.GetFullPath(c.AppHostInfo.AppHostPath);
-                return string.Equals(candidatePath, resolvedPath, StringComparison.OrdinalIgnoreCase);
-            });
+        var matchingConnection = AppHostConnectionHelper.FindConnectionByAppHostPath(
+            auxiliaryBackchannelMonitor.Connections,
+            resolvedPath);
 
         if (matchingConnection == null)
         {

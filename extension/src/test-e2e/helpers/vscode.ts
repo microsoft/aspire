@@ -57,8 +57,30 @@ export async function openAspireView(): Promise<TreeSection> {
     }, 30000, `Timed out waiting for '${aspireAppHostsSectionTitle}' section. Visible sections: ${lastSectionTitles.join(', ') || '<none>'}.`);
 }
 
-export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
-    return await VSBrowser.instance.driver.wait(async () => {
+/**
+ * Switches the side bar away from the Aspire container so the AppHosts view is hidden.
+ *
+ * The extension keeps its `aspire describe --follow` resource streams alive only while this
+ * view is visible, so hiding it puts the repository back into the cold state a window that
+ * has never opened the view is in. Tests use it to prove a read-only surface answers from an
+ * authoritative read rather than from whatever a stream happened to leave behind.
+ */
+export async function hideAspireView(timeoutMs = 30000): Promise<void> {
+    await executeCommandFromPalette('workbench.view.explorer');
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const sections = await new SideBarView().getContent().getSections();
+            const titles = await Promise.all(sections.map(section => section.getTitle()));
+            return !titles.includes(aspireAppHostsSectionTitle);
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the '${aspireAppHostsSectionTitle}' section to be hidden.`);
+}
+
+export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {    return await VSBrowser.instance.driver.wait(async () => {
         try {
             const item = await section.findItem(label, 4);
             if (item) {
@@ -353,14 +375,20 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
 }
 
-export interface AcceptedModalDialog {
+export interface ModalDialogInteraction {
     message: string;
     details: string;
 }
 
-export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<AcceptedModalDialog> {
+// Screenshot capture for flows that change UI without a modal dialog. `interactWithModalDialog`
+// captures while a dialog is on screen; tools that open UI directly need their own capture point.
+export async function captureScreenshot(name: string): Promise<void> {
+    await VSBrowser.instance.takeScreenshot(name).catch(() => undefined);
+}
+
+export async function interactWithModalDialog(buttonTitle: string, timeoutMs = 120000, screenshotName?: string): Promise<ModalDialogInteraction> {
     let lastError: unknown;
-    const accepted = await VSBrowser.instance.driver.wait(async () => {
+    const interaction = await VSBrowser.instance.driver.wait(async () => {
         try {
             const dialog = new ModalDialog();
             const message = await dialog.getMessage();
@@ -382,7 +410,34 @@ export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000,
         }
     }, timeoutMs, `Timed out waiting for a modal dialog with a '${buttonTitle}' button. Last error: ${lastError}`);
 
-    return accepted as AcceptedModalDialog;
+    return interaction as ModalDialogInteraction;
+}
+
+export async function getOpenEditorTitles(): Promise<string[]> {
+    return await new EditorView().getOpenEditorTitles();
+}
+
+export async function waitForOpenEditorCount(minimum: number, timeoutMs = 120000): Promise<string[]> {
+    return await VSBrowser.instance.driver.wait(async () => {
+        const titles = await getOpenEditorTitles();
+        return titles.length >= minimum ? titles : false;
+    }, timeoutMs, `Timed out waiting for at least ${minimum} open editor(s).`);
+}
+
+export async function isPanelVisible(): Promise<boolean> {
+    return (await new BottomBarPanel().getRect()).height > 0;
+}
+
+export async function setPanelVisible(visible: boolean, timeoutMs = 30000): Promise<void> {
+    await new BottomBarPanel().toggle(visible);
+    await waitForPanelVisibility(visible, timeoutMs);
+}
+
+export async function waitForPanelVisibility(visible: boolean, timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(
+        async () => await isPanelVisible() === visible,
+        timeoutMs,
+        `Timed out waiting for the panel to become ${visible ? 'visible' : 'hidden'}.`);
 }
 
 export async function getNotificationCount(): Promise<number> {

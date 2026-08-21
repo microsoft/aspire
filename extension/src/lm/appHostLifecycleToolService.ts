@@ -1,8 +1,6 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { appHostLifecycleUnresolvedPath } from '../loc/strings';
-import { canonicalizeAppHostPath } from '../utils/appHostIdentity';
 import { isLinkedGitWorktree } from '../utils/gitWorktree';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isCommandCancellation } from '../utils/telemetry';
@@ -23,56 +21,7 @@ import {
     type AppHostStartToolInput,
     type AppHostStopToolInput,
 } from './appHostLifecycleToolContracts';
-
-/**
- * Upper bound on the workspace-relative path a confirmation may show.
- *
- * A path longer than this is refused outright rather than elided, because an elided path
- * no longer identifies one file: two AppHosts sharing a long prefix would produce the same
- * prompt. The bound is far above any realistic repository path (Windows' own MAX_PATH is
- * 260 for a full path), so refusing beyond it costs nothing in practice.
- */
-const maxConfirmationPathLength = 512;
-
-/** Reject model-supplied selectors large enough to make normalization itself expensive. */
-const maxAppHostSelectorLength = 4096;
-
-/** Cap on how many AppHost paths an `unknownAppHost` result lists back to the model. */
-const maxReportedKnownAppHosts = 32;
-
-/**
- * Characters that change what a path *is* without changing, or while changing, how it
- * looks: C0/C1 controls and DEL, plus every Unicode format character (`\p{Cf}`).
- *
- * Bidi controls (U+202A-U+202E, U+2066-U+2069) reorder the run that follows them, so a
- * path can render as a completely different one. Zero-width characters (U+200B-U+200D)
- * are invisible, so two distinct files can produce identical-looking prompts. A registry
- * entry carrying one of these is dropped rather than shown with the characters deleted,
- * because deleting them would break the one-to-one relationship between the identity the
- * user confirms and the file that runs.
- * See https://unicode.org/reports/tr9/ and https://unicode.org/reports/tr36/#Bidirectional_Text_Spoofing
- */
-const identityChangingCharacters = /[\u0000-\u001F\u007F-\u009F]|\p{Cf}/u;
-
-/**
- * One entry of the AppHost registry, projected into the form the tool speaks.
- *
- * Every field comes from a candidate the discovery service enumerated, so the string the
- * confirmation renders and the path the launcher receives originate from the same object.
- * The model's input only ever selects one of these; it never contributes to one.
- */
-interface ResolvedAppHostTarget {
-    /** Absolute path exactly as the registry enumerated it, used for launching. */
-    absolutePath: string;
-    /** Path relative to the containing workspace folder, always with `/` separators. */
-    relativePath: string;
-    /**
-     * The identity shown in the confirmation dialog. Identical to `relativePath` in a
-     * single-root workspace, and prefixed with the workspace folder name otherwise, so a
-     * selector that resolves under one root still names that root in the prompt.
-     */
-    displayPath: string;
-}
+import { type AppHostTargetIdentity, type ResolvedAppHostTarget, SafeAppHostTargetResolver, toAppHostLaunchTarget } from './safeAppHostTargetResolver';
 
 type AppHostTargetResolution =
     | { resolved: true; target: ResolvedAppHostTarget }
@@ -81,6 +30,17 @@ type AppHostTargetResolution =
 type PreflightResult =
     | { rejected: true; result: AppHostLifecycleToolResult }
     | { rejected: false; target: ResolvedAppHostTarget };
+
+interface PreparedLifecycleAction {
+    readonly tool: typeof aspireAppHostStartToolName | typeof aspireAppHostStopToolName;
+    readonly inputKey: string;
+    readonly identity: AppHostTargetIdentity;
+    readonly isolated?: boolean;
+    readonly expiresAt: number;
+}
+
+const preparedActionLimit = 64;
+const preparedActionLifetimeMs = 5 * 60 * 1000;
 
 /**
  * Backs the `aspire_apphost_start` / `aspire_apphost_stop` language model tools.
@@ -104,14 +64,22 @@ type PreflightResult =
  */
 export class AppHostLifecycleToolService implements vscode.Disposable {
     private readonly _dependencies: AppHostLifecycleToolDependencies;
+    private readonly _targetResolver: SafeAppHostTargetResolver;
+    private readonly _preparedActions: PreparedLifecycleAction[] = [];
+    private readonly _activePreparedActionCounts = new Map<string, number>();
     private _disposed = false;
 
-    constructor(dependencies: AppHostLifecycleToolDependencies) {
+    constructor(
+        dependencies: AppHostLifecycleToolDependencies,
+        targetResolver: SafeAppHostTargetResolver = new SafeAppHostTargetResolver(dependencies.discoveryService)) {
         this._dependencies = dependencies;
+        this._targetResolver = targetResolver;
     }
 
     dispose(): void {
         this._disposed = true;
+        this._preparedActions.length = 0;
+        this._activePreparedActionCounts.clear();
     }
 
     /**
@@ -124,6 +92,12 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
      * inside the trusted prompt that gates "Always allow".
      */
     async describeTarget(rawAppHost: unknown, token: vscode.CancellationToken): Promise<string> {
+        return await this.prepareStopTarget(
+            typeof rawAppHost === 'string' ? { appHostPath: rawAppHost } : undefined,
+            token);
+    }
+
+    async prepareStopTarget(input: AppHostStopToolInput | undefined, token: vscode.CancellationToken): Promise<string> {
         // VS Code can keep the implementation reachable in Restricted Mode and call
         // `prepareInvocation` before `invoke` gets a chance to reject the tool call. Do
         // not run AppHost discovery there: it shells out to `aspire ls`, which crosses
@@ -132,8 +106,22 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             return appHostLifecycleUnresolvedPath;
         }
 
-        const resolution = await this.resolveTarget(rawAppHost, token);
-        return resolution.resolved ? resolution.target.displayPath : appHostLifecycleUnresolvedPath;
+        if (!isValidStopInput(input)) {
+            return appHostLifecycleUnresolvedPath;
+        }
+
+        const resolution = await this._targetResolver.resolveTarget(input.appHostPath, token);
+        if (!resolution.resolved) {
+            return appHostLifecycleUnresolvedPath;
+        }
+
+        this.rememberPreparedAction({
+            tool: aspireAppHostStopToolName,
+            inputKey: getStopInputKey(input),
+            identity: resolution.target.identity,
+            expiresAt: Date.now() + preparedActionLifetimeMs,
+        });
+        return resolution.target.displayPath;
     }
 
     async describeStartTarget(input: AppHostStartToolInput | undefined, token: vscode.CancellationToken): Promise<{ displayPath: string; isolated: boolean }> {
@@ -141,7 +129,11 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
         }
 
-        const resolution = await this.resolveTarget(input?.appHostPath, token);
+        if (!isValidStartInput(input)) {
+            return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
+        }
+
+        const resolution = await this.resolveTarget(input.appHostPath, token);
         if (!resolution.resolved) {
             return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
         }
@@ -158,11 +150,41 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         // `prepareInvocation` receives unvalidated model input, so only a real boolean counts as
         // an explicit choice; anything else is rejected by `isValidStartInput` at invoke time.
         const explicitIsolation = typeof input?.isolated === 'boolean' ? input.isolated : undefined;
-        const isolated = explicitIsolation ?? isLinkedGitWorktree(resolution.target.absolutePath);
+        const isolated = explicitIsolation ?? isLinkedGitWorktree(resolution.target.canonicalPath);
+        this.rememberPreparedAction({
+            tool: aspireAppHostStartToolName,
+            inputKey: getStartInputKey(input),
+            identity: resolution.target.identity,
+            isolated,
+            expiresAt: Date.now() + preparedActionLifetimeMs,
+        });
         return { displayPath: resolution.target.displayPath, isolated };
     }
 
+    async startConfirmed(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
+        if (!isValidStartInput(input) || this._disposed || token.isCancellationRequested || !vscode.workspace.isTrusted) {
+            return await this.start(input, token);
+        }
+
+        const preparedAction = this.consumePreparedAction(aspireAppHostStartToolName, getStartInputKey(input));
+        if (preparedAction === undefined) {
+            return this.createUnconfirmedInvocationResult(aspireAppHostStartToolName, input.mode);
+        }
+
+        return await this.runPreparedAction(
+            aspireAppHostStartToolName,
+            getStartInputKey(input),
+            () => this.startCore(input, token, preparedAction));
+    }
+
     async start(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
+        return await this.startCore(input, token);
+    }
+
+    private async startCore(
+        input: AppHostStartToolInput,
+        token: vscode.CancellationToken,
+        preparedAction?: PreparedLifecycleAction): Promise<AppHostLifecycleToolResult> {
         if (!isValidStartInput(input)) {
             return createResult(aspireAppHostStartToolName, 'invalidInput', '', 'none', undefined, undefined);
         }
@@ -172,7 +194,18 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         if (preflight.rejected) {
             return preflight.result;
         }
+        if (preparedAction !== undefined &&
+            (preparedAction.identity !== preflight.target.identity ||
+                preparedAction.isolated !== (input.isolated ?? isLinkedGitWorktree(preflight.target.canonicalPath)))) {
+            return this.createUnconfirmedInvocationResult(aspireAppHostStartToolName, requestedMode);
+        }
 
+        // Every decision below is addressed to `canonicalPath`, the physical AppHost the selector
+        // resolved to, rather than to the selector itself. Ownership probes, the lifecycle lock,
+        // the launching claim, and the launch all cross awaits, and a selector is only a name: an
+        // alias repointed while one of those steps runs would move the operation onto a different
+        // AppHost while the result still reports the relative path that was confirmed. The
+        // selector remains what the result displays and what re-resolution validates.
         try {
             // Probe for a process this extension does not own *before* taking the
             // lifecycle lock, and return early when the answer is "yes".
@@ -185,15 +218,15 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             // discarded: it is only a fast path, never the authority, because an AppHost
             // started from a terminal while this call waited up to 10s for the lock would
             // leave a stale `false` behind and allow a duplicate launch.
-            if (!this.hasEditorSession(preflight.target.absolutePath) &&
-                await this.isRunningOutsideEditor(preflight.target.absolutePath, token)) {
+            if (!this.hasEditorSession(preflight.target.canonicalPath) &&
+                await this.isRunningOutsideEditor(preflight.target.canonicalPath, token)) {
                 // Launching again would start a second AppHost against the same project.
                 // Report it instead so the agent can decide, and never adopt or kill a
                 // process this extension does not own.
                 return createResult(aspireAppHostStartToolName, 'alreadyRunning', preflight.target.relativePath, 'external', requestedMode, undefined);
             }
 
-            return await this._dependencies.launchService.runWithAppHostLifecycleLock(preflight.target.absolutePath, token, async lockToken => {
+            return await this._dependencies.launchService.runWithAppHostLifecycleLock(preflight.target.canonicalPath, token, async lockToken => {
                 // Re-resolve after the confirmation and after waiting on the shared lock:
                 // the file can be deleted or replaced, and an editor command may already
                 // have launched this AppHost while this call was queued.
@@ -202,8 +235,12 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                     return recheck.result;
                 }
 
+                if (!this.isSameConfirmedAppHost(aspireAppHostStartToolName, preflight.target, recheck.target)) {
+                    return createResult(aspireAppHostStartToolName, 'failed', preflight.target.relativePath, 'none', requestedMode, undefined);
+                }
+
                 const current = recheck.target;
-                const owned = this.findEditorSessions(current.absolutePath);
+                const owned = this.findEditorSessions(current.canonicalPath);
                 // These outcomes observe an existing launch rather than creating one. The
                 // tool therefore knows only that *some* process owns the AppHost, not
                 // which effective isolation its launcher negotiated, so `isolated` stays
@@ -222,7 +259,7 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         getSessionMode(runningSession));
                 }
 
-                if (this._dependencies.launchService.isLaunching(current.absolutePath) || owned.sessions.length > 0) {
+                if (this._dependencies.launchService.isLaunching(current.canonicalPath) || owned.sessions.length > 0) {
                     return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined);
                 }
 
@@ -236,34 +273,52 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
 
                 // Authoritative ownership check immediately before launching. This is the
                 // one that matters: everything before it could be stale by now.
-                if (await this.isRunningOutsideEditor(current.absolutePath, lockToken)) {
+                if (await this.isRunningOutsideEditor(current.canonicalPath, lockToken)) {
                     return createResult(aspireAppHostStartToolName, 'alreadyRunning', current.relativePath, 'external', requestedMode, undefined);
+                }
+
+                // An omitted isolation value follows linked-worktree state. That filesystem state
+                // can change while the external-owner probes or lifecycle lock are awaited, so
+                // compare it again at the final launch boundary rather than relying only on the
+                // preflight comparison made before those awaits.
+                if (preparedAction !== undefined &&
+                    preparedAction.isolated !== (input.isolated ?? isLinkedGitWorktree(current.canonicalPath))) {
+                    return this.createUnconfirmedInvocationResult(aspireAppHostStartToolName, requestedMode);
                 }
 
                 // Claim the launching slot in one synchronous step. The lifecycle lock only
                 // serializes callers that take it, and `launch.json`/F5 reaches
                 // `startDebugging` without it, so this claim - not the checks above - is
                 // what makes "no second AppHost" hold against a concurrent editor launch.
-                if (!this._dependencies.launchService.tryReserveLaunch(current.absolutePath)) {
+                if (!this._dependencies.launchService.tryReserveLaunch(current.canonicalPath)) {
                     return createResult(aspireAppHostStartToolName, 'alreadyStarting', current.relativePath, 'editor', requestedMode, undefined);
                 }
 
                 try {
                     // `noDebug` is the only lever the tool exposes; the Aspire command is pinned
                     // to `run` so an agent can never reach deploy/publish/do through this surface.
+                    //
+                    // The whole bound target travels into the launch: the physical AppHost the
+                    // launch runs, the selector it is validated against and scoped by, and the
+                    // identity that ties the two together. Passing only the physical path would
+                    // drop the selector, and the launch's own pre-start freshness check would
+                    // then compare that path with itself.
                     const launchedIsolation = await this._dependencies.launchService.launchFromLifecycleOwner(
-                        current.absolutePath,
+                        toAppHostLaunchTarget(current),
                         'run',
                         requestedMode === 'run',
                         input.isolated,
-                        lockToken);
+                        lockToken,
+                        preparedAction !== undefined && input.isolated === undefined
+                            ? preparedAction.isolated
+                            : undefined);
                     return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, launchedIsolation?.effective);
                 }
                 catch (error) {
                     // The launch path clears its own reservation once it owns it, but a
                     // failure before that point (a disposed service, for example) would
                     // otherwise leave this AppHost reported as launching forever.
-                    this._dependencies.launchService.clearLaunching(current.absolutePath);
+                    this._dependencies.launchService.clearLaunching(current.canonicalPath);
                     return this.createErrorResult(aspireAppHostStartToolName, error, current.relativePath, 'editor', requestedMode, undefined);
                 }
             });
@@ -273,7 +328,30 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         }
     }
 
+    async stopConfirmed(input: AppHostStopToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
+        if (!isValidStopInput(input) || this._disposed || token.isCancellationRequested || !vscode.workspace.isTrusted) {
+            return await this.stop(input, token);
+        }
+
+        const preparedAction = this.consumePreparedAction(aspireAppHostStopToolName, getStopInputKey(input));
+        if (preparedAction === undefined) {
+            return this.createUnconfirmedInvocationResult(aspireAppHostStopToolName, undefined);
+        }
+
+        return await this.runPreparedAction(
+            aspireAppHostStopToolName,
+            getStopInputKey(input),
+            () => this.stopCore(input, token, preparedAction));
+    }
+
     async stop(input: AppHostStopToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
+        return await this.stopCore(input, token);
+    }
+
+    private async stopCore(
+        input: AppHostStopToolInput,
+        token: vscode.CancellationToken,
+        preparedAction?: PreparedLifecycleAction): Promise<AppHostLifecycleToolResult> {
         if (!isValidStopInput(input)) {
             return createResult(aspireAppHostStopToolName, 'invalidInput', '', 'none', undefined, undefined);
         }
@@ -282,15 +360,24 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         if (preflight.rejected) {
             return preflight.result;
         }
+        if (preparedAction !== undefined && preparedAction.identity !== preflight.target.identity) {
+            return this.createUnconfirmedInvocationResult(aspireAppHostStopToolName, undefined);
+        }
 
         try {
-            return await this._dependencies.launchService.runWithAppHostLifecycleLock(preflight.target.absolutePath, token, async lockToken => {
+            return await this._dependencies.launchService.runWithAppHostLifecycleLock(preflight.target.canonicalPath, token, async lockToken => {
                 const recheck = await this.preflight(aspireAppHostStopToolName, input.appHostPath, lockToken, undefined);
                 if (recheck.rejected) {
                     return recheck.result;
                 }
 
-                const result = await this._dependencies.launchService.stopAppHostFromLifecycleOwner(recheck.target.absolutePath, lockToken);
+                if (!this.isSameConfirmedAppHost(aspireAppHostStopToolName, preflight.target, recheck.target)) {
+                    return createResult(aspireAppHostStopToolName, 'failed', preflight.target.relativePath, 'none', undefined, undefined);
+                }
+
+                const result = await this._dependencies.launchService.stopAppHostFromLifecycleOwner(
+                    toAppHostLaunchTarget(recheck.target),
+                    lockToken);
                 return this.createStopResult(recheck.target.relativePath, result);
             });
         }
@@ -319,151 +406,116 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             effectiveMode);
     }
 
-    /**
-     * Resolves a model-supplied selector against the AppHost registry.
-     *
-     * The selector is only ever *compared* against entries the discovery service
-     * enumerated; it is never joined onto a directory, never normalized into a path, and
-     * never reaches the filesystem. That is what makes confirmation spoofing
-     * unrepresentable rather than merely rejected: whatever the model sends, the target
-     * carried forward is one of Aspire's own candidates, so the identity shown in the
-     * prompt and the identity handed to the launcher come from the same object.
-     *
-     * Resolution never guesses. A selector that names nothing is `unknownAppHost`, a
-     * selector matching several candidates is `ambiguousAppHost`, and a registry that
-     * could not be read is `discoveryFailed` rather than an empty list.
-     */
-    async resolveTarget(rawAppHost: unknown, token: vscode.CancellationToken): Promise<AppHostTargetResolution> {
-        if (typeof rawAppHost !== 'string') {
-            return { resolved: false, outcome: 'invalidInput' };
+    private rememberPreparedAction(action: PreparedLifecycleAction): void {
+        this.prunePreparedActions();
+        if (this._preparedActions.length >= preparedActionLimit) {
+            this._preparedActions.splice(0, this._preparedActions.length - preparedActionLimit + 1);
         }
 
-        const selector = rawAppHost.trim();
-        if (selector.length === 0 || selector.length > maxAppHostSelectorLength) {
-            return { resolved: false, outcome: 'invalidInput' };
+        this._preparedActions.push(action);
+    }
+
+    private consumePreparedAction(
+        tool: PreparedLifecycleAction['tool'],
+        inputKey: string): PreparedLifecycleAction | undefined {
+        this.prunePreparedActions();
+        for (let index = this._preparedActions.length - 1; index >= 0; index--) {
+            const action = this._preparedActions[index];
+            if (action.tool === tool && action.inputKey === inputKey) {
+                this._preparedActions.splice(index, 1);
+                return action;
+            }
         }
 
-        // The manifest, the README, and the tool description all say the selector is a
-        // workspace-relative path. An absolute path would still have to match a registry
-        // entry to do anything, but accepting one would make the implementation contradict
-        // its own documented contract, so it is refused up front.
-        if (path.isAbsolute(selector)) {
-            return { resolved: false, outcome: 'invalidInput' };
-        }
+        return undefined;
+    }
 
-        let knownAppHosts: readonly ResolvedAppHostTarget[];
+    private async runPreparedAction<T>(
+        tool: PreparedLifecycleAction['tool'],
+        inputKey: string,
+        action: () => Promise<T>): Promise<T> {
+        const key = `${tool}\0${inputKey}`;
+        this._activePreparedActionCounts.set(key, (this._activePreparedActionCounts.get(key) ?? 0) + 1);
         try {
-            knownAppHosts = await this.enumerateKnownAppHosts(token);
+            return await action();
         }
-        catch (error) {
-            if (isCommandCancellation(error)) {
-                return { resolved: false, outcome: 'cancelled' };
+        finally {
+            const activeCount = this._activePreparedActionCounts.get(key) ?? 0;
+            if (activeCount > 1) {
+                this._activePreparedActionCounts.set(key, activeCount - 1);
             }
-
-            // "The registry could not be read" is not "there are no AppHosts". Reporting
-            // the latter would tell the agent its target does not exist when the truth is
-            // that the extension could not find out.
-            extensionLogOutputChannel.warn(`Aspire language model tools could not enumerate AppHosts: ${String(error)}`);
-            return { resolved: false, outcome: 'discoveryFailed' };
-        }
-
-        const requestedKey = toSelectorKey(selector);
-        const displayMatches = knownAppHosts.filter(candidate => toSelectorKey(candidate.displayPath) === requestedKey);
-        if ((vscode.workspace.workspaceFolders?.length ?? 0) > 1) {
-            // A bare relative selector is not stable in a multi-root workspace: a confirmation
-            // could name the only current match under root A, then a later invocation could
-            // re-resolve the same text under root B. Require the same folder-qualified identity
-            // the confirmation displays so each invocation is independently bound to one root.
-            if (displayMatches.length === 1) {
-                return { resolved: true, target: displayMatches[0] };
+            else {
+                this._activePreparedActionCounts.delete(key);
+                this.removePreparedActions(tool, inputKey);
             }
+        }
+    }
 
-            if (displayMatches.length > 1) {
-                return { resolved: false, outcome: 'ambiguousAppHost', knownAppHosts: describeKnownAppHosts(displayMatches) };
+    private removePreparedActions(tool: PreparedLifecycleAction['tool'], inputKey: string): void {
+        // The VS Code API does not provide a preparation token to correlate with invocation.
+        // Concurrent identical confirmations may each consume one record while the first action is
+        // still active. Once the last one settles, remove every abandoned duplicate so a later
+        // unconfirmed invocation cannot replay an earlier preparation.
+        for (let index = this._preparedActions.length - 1; index >= 0; index--) {
+            const action = this._preparedActions[index];
+            if (action.tool === tool && action.inputKey === inputKey) {
+                this._preparedActions.splice(index, 1);
             }
+        }
+    }
 
-            const relativeMatches = knownAppHosts.filter(candidate => toSelectorKey(candidate.relativePath) === requestedKey);
-            if (relativeMatches.length > 0) {
-                return { resolved: false, outcome: 'ambiguousAppHost', knownAppHosts: describeKnownAppHosts(relativeMatches) };
+    private prunePreparedActions(): void {
+        const now = Date.now();
+        for (let index = this._preparedActions.length - 1; index >= 0; index--) {
+            if (this._preparedActions[index].expiresAt <= now) {
+                this._preparedActions.splice(index, 1);
             }
-
-            return { resolved: false, outcome: 'unknownAppHost', knownAppHosts: describeKnownAppHosts(knownAppHosts) };
         }
+    }
 
-        const matches = knownAppHosts.filter(candidate =>
-            toSelectorKey(candidate.relativePath) === requestedKey ||
-            toSelectorKey(candidate.displayPath) === requestedKey);
-        if (matches.length === 0) {
-            return { resolved: false, outcome: 'unknownAppHost', knownAppHosts: describeKnownAppHosts(knownAppHosts) };
-        }
-
-        // A bare relative path can name candidates under several roots of a multi-root
-        // workspace. Picking one would launch an AppHost the caller did not identify, so
-        // the folder-qualified form has to be used instead.
-        if (matches.length > 1) {
-            return { resolved: false, outcome: 'ambiguousAppHost', knownAppHosts: describeKnownAppHosts(matches) };
-        }
-
-        return { resolved: true, target: matches[0] };
+    private createUnconfirmedInvocationResult(
+        tool: PreparedLifecycleAction['tool'],
+        requestedMode: AppHostLifecycleMode | undefined): AppHostLifecycleToolResult {
+        extensionLogOutputChannel.warn(`Aspire language model tool ${tool} refused an invocation that did not match a current prepared action.`);
+        return createResult(tool, 'failed', '', 'none', requestedMode, undefined);
     }
 
     /**
-     * Projects the discovery service's candidates into tool targets.
+     * Reports whether the AppHost this operation now owns is the one the call resolved - and, for
+     * a confirmed tool call, the one the user approved.
      *
-     * Candidates outside every workspace folder are dropped: the tool's contract is
-     * expressed in workspace-relative paths, and a candidate with no containing folder
-     * has no such path to offer or to display.
+     * Resolution happens before the lifecycle lock and again after it, and the selector between
+     * them is mutable. If it now names a different AppHost, continuing would act on something
+     * nobody chose while the result still reported the confirmed workspace-relative path, so the
+     * operation fails closed instead. Re-resolving is what makes this detectable at all; the
+     * identity is the only value that survives a name being repointed and back.
      */
-    private async enumerateKnownAppHosts(token: vscode.CancellationToken): Promise<readonly ResolvedAppHostTarget[]> {
-        const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-        const candidatesByFolder = await Promise.all(workspaceFolders.map(async folder => ({
-            folder,
-            candidates: await this._dependencies.discoveryService.discover(folder, false, token),
-        })));
-
-        const targets = new Map<string, ResolvedAppHostTarget>();
-        for (const { folder, candidates } of candidatesByFolder) {
-            // Containment is decided on the real paths, because a link inside the workspace
-            // can point at a file outside it. The confirmation would show the in-workspace
-            // link while `startDebugging` executed the external target, so a lexical check
-            // alone would let the workspace boundary be crossed under an in-workspace name.
-            const canonicalFolderPath = canonicalizeAppHostPath(folder.uri.fsPath);
-            for (const candidate of candidates) {
-                const relativePath = toContainedPosixRelativePath(folder.uri.fsPath, candidate.path);
-                if (relativePath === undefined) {
-                    continue;
-                }
-
-                // The lexical relative path is still what gets displayed: it is the name the
-                // caller sees in the explorer, and it is the one they can pass back.
-                if (toContainedPosixRelativePath(canonicalFolderPath, canonicalizeAppHostPath(candidate.path)) === undefined) {
-                    continue;
-                }
-
-                const displayPath = workspaceFolders.length > 1
-                    ? `${folder.name}/${relativePath}`
-                    : relativePath;
-                // Nested workspace folders enumerate the same file twice. Keying by the
-                // absolute path collapses those into one target so a selector matching both
-                // is not reported as ambiguous against itself. The deepest folder wins, so
-                // the displayed path matches the folder the user sees in the explorer.
-                const key = toSelectorKey(candidate.path);
-                const existing = targets.get(key);
-                if (existing && existing.relativePath.length <= relativePath.length) {
-                    continue;
-                }
-
-                targets.set(key, { absolutePath: candidate.path, relativePath, displayPath });
-            }
+    private isSameConfirmedAppHost(tool: string, resolved: ResolvedAppHostTarget, owned: ResolvedAppHostTarget): boolean {
+        if (resolved.identity === owned.identity) {
+            return true;
         }
 
-        // A real file or folder name can itself carry invisible or bidi characters, and the
-        // confirmation must never show an identity it cannot render faithfully. Such an
-        // entry is dropped from the registry rather than displayed altered, which would
-        // break the one-to-one relationship between the prompt and the launch target.
-        return [...targets.values()].filter(target =>
-            !identityChangingCharacters.test(target.displayPath) &&
-            target.displayPath.length <= maxConfirmationPathLength);
+        // Bounded on purpose: the paths involved are exactly what must not reach a model-visible
+        // channel, and the tool name is enough to locate this in the output log.
+        extensionLogOutputChannel.warn(`Aspire language model tool ${tool} refused an AppHost that changed between confirmation and ownership.`);
+        return false;
+    }
+
+    private async resolveTarget(rawAppHost: unknown, token: vscode.CancellationToken): Promise<AppHostTargetResolution> {
+        const resolution = await this._targetResolver.resolveTarget(rawAppHost, token);
+        if (resolution.resolved) {
+            return resolution;
+        }
+
+        return {
+            resolved: false,
+            outcome:
+                resolution.outcome === 'appHostNotFound' ? 'unknownAppHost'
+                    : resolution.outcome === 'canceled' ? 'cancelled'
+                        : resolution.outcome === 'error' ? 'discoveryFailed'
+                            : resolution.outcome,
+            knownAppHosts: resolution.knownAppHosts,
+        };
     }
 
     private async preflight(
@@ -534,10 +586,9 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
             return createResult(tool, 'busy', relativePath, controller, requestedMode, effectiveMode);
         }
 
-        // Failure details stay in the extension log. They routinely contain absolute
-        // paths, CLI stderr, and DCP/RPC connection details, none of which may cross
-        // back into the model transcript.
-        extensionLogOutputChannel.error(`Aspire language model tool ${tool} failed: ${String(error)}`);
+        // Model-triggered failures routinely contain absolute paths, CLI output, and
+        // connection details. Keep this diagnostic bounded to the registered tool name.
+        extensionLogOutputChannel.error(`Aspire language model tool ${tool} failed.`);
         return createResult(tool, 'failed', relativePath, controller, requestedMode, effectiveMode);
     }
 
@@ -547,42 +598,10 @@ function getSessionMode(session: AppHostLifecycleEditorSession): AppHostLifecycl
     return session.configuration?.noDebug === true ? 'run' : 'debug';
 }
 
-/**
- * Normalizes a selector or registry path into the key both sides are compared on.
- *
- * The comparison is deliberately narrow: a leading `./` is dropped because it is noise,
- * and Windows separators and casing are normalized to match that filesystem. On POSIX a
- * backslash is a valid filename character, so treating it as a separator would alias two
- * different registry entries. Nothing else is normalized. `..` segments, for instance,
- * are left alone precisely so they can never match anything the registry enumerated.
- */
-function toSelectorKey(value: string): string {
-    if (process.platform === 'win32') {
-        return value.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
-    }
-
-    return value.replace(/^\.\//, '');
+function getStartInputKey(input: AppHostStartToolInput): string {
+    return JSON.stringify([input.appHostPath, input.mode, input.isolated ?? null]);
 }
 
-/**
- * Renders the selectors a failed resolution can offer back to the model.
- *
- * The list is capped because a large monorepo can enumerate hundreds of AppHosts and the
- * result is spent from the model's context window.
- */
-function describeKnownAppHosts(targets: readonly ResolvedAppHostTarget[]): readonly string[] {
-    return targets.slice(0, maxReportedKnownAppHosts).map(target => target.displayPath);
-}
-
-/**
- * Path relative to `folderPath` with `/` separators, or `undefined` when `candidate`
- * is not inside the folder.
- */
-function toContainedPosixRelativePath(folderPath: string, candidate: string): string | undefined {
-    const relative = path.relative(folderPath, candidate);
-    if (relative.length === 0 || relative.startsWith('..') || path.isAbsolute(relative)) {
-        return undefined;
-    }
-
-    return relative.split(path.sep).join('/');
+function getStopInputKey(input: AppHostStopToolInput): string {
+    return JSON.stringify([input.appHostPath]);
 }

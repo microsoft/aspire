@@ -18,6 +18,7 @@ import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } f
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { createAppHostOperationTarget, getCliPathTargetForAppHostOperation, type AppHostOperationTarget } from '../utils/appHostOperationTarget';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
@@ -155,7 +156,11 @@ export class AppHostDataRepository {
             () => this._dataActive,
             () => this._clearPostStopRefreshTimers());
         this._psPollerDisposable = vscode.Disposable.from(
-            this._psPoller.onDidReceivePsOutput(psOutput => this._handlePsOutput(psOutput.stdout, psOutput.canCompleteGlobalLoading)),
+            this._psPoller.onDidReceivePsOutput(psOutput =>
+                this._handlePsOutput(
+                    psOutput.stdout,
+                    psOutput.canCompleteGlobalLoading,
+                    psOutput.followOutputsToReplay)),
             this._psPoller.onDidChangePsError(message => this._setPsError(message)),
             this._psPoller.onDidRequestClearLoading(() => this._clearLoading()),
             this._psPoller.onDidStartPsFollow(() => this._handlePsFollowStarted()));
@@ -456,7 +461,8 @@ export class AppHostDataRepository {
         const appHostList = await this.fetchRunningAppHostsOnce();
         const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
             ...appHost,
-            resources: await this._fetchAppHostResourcesOnce(appHost.appHostPath),
+            resources: await this.fetchAppHostResourcesOnce(
+                createAppHostOperationTarget(appHost.appHostPath, appHost.appHostPath)),
         })));
 
         return appHostsWithResources.map((result, index) => {
@@ -470,6 +476,24 @@ export class AppHostDataRepository {
                 resources: [],
             };
         });
+    }
+
+    /**
+     * Describes one AppHost.
+     *
+     * The operation runs against `appHost.operationPath` while the CLI it runs is resolved from
+     * `appHost.scopePath`. Callers that resolved an alias hand the physical file as the operation
+     * and the entry they named as the scope, so `aspire describe` cannot be redirected by a
+     * retarget and still resolves the CLI the owning workspace folder configured - which the
+     * physical path alone cannot answer when the workspace root is itself a symlink or a linked
+     * worktree, because that path can fall outside every open folder.
+     */
+    async fetchAppHostResourcesOnce(appHost: AppHostOperationTarget, cancellationToken?: vscode.CancellationToken): Promise<ResourceJson[]> {
+        const snapshot = await this._runCliJson<DescribeSnapshotJson>(
+            'aspire describe',
+            this._cliRunner.withNoLogo(['describe', '--format', 'json', '--apphost', appHost.operationPath]),
+            { target: getCliPathTargetForAppHostOperation(appHost), cancellationToken });
+        return snapshot.resources ?? [];
     }
 
     /**
@@ -1300,14 +1324,6 @@ export class AppHostDataRepository {
         }
     }
 
-    private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
-        const snapshot = await this._runCliJson<DescribeSnapshotJson>(
-            'aspire describe',
-            this._cliRunner.withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]),
-            { target: getCliPathTargetForUri(vscode.Uri.file(appHostPath)) });
-        return snapshot.resources ?? [];
-    }
-
     private _stopDescribe(appHostPath: string): void {
         const stream = this._describeStreams.get(appHostPath);
         if (!stream) {
@@ -1458,12 +1474,26 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handlePsOutput(stdout: string, canCompleteGlobalLoading: boolean): void {
+    private _handlePsOutput(
+        stdout: string,
+        canCompleteGlobalLoading: boolean,
+        followOutputsToReplay: readonly string[] = []): void {
         try {
             const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
-            const appHosts = Array.isArray(parsed)
+            let appHosts = Array.isArray(parsed)
                 ? parsed
                 : this._applyPsDelta(parsed);
+            for (const followOutput of followOutputsToReplay) {
+                try {
+                    const followDelta: AppHostDisplayInfo = JSON.parse(followOutput);
+                    appHosts = this._applyPsDelta(followDelta, appHosts);
+                }
+                catch (e) {
+                    // A malformed follow line was already ignored when first received. Keep the
+                    // authoritative snapshot and skip only that replay entry.
+                    extensionLogOutputChannel.warn(`Failed to parse aspire ps follow output: ${e}`);
+                }
+            }
 
             const completesGlobalLoading = canCompleteGlobalLoading && this._loadingGlobal;
             // A fresh ps result wins the workspace loading race when it finds a workspace host,
@@ -1491,13 +1521,13 @@ export class AppHostDataRepository {
         }
     }
 
-    private _applyPsDelta(appHost: AppHostDisplayInfo): AppHostDisplayInfo[] {
+    private _applyPsDelta(appHost: AppHostDisplayInfo, currentAppHosts = this._appHosts): AppHostDisplayInfo[] {
         if (appHost.status?.toLowerCase() === 'stopped') {
-            return this._appHosts.filter(current => !isMatchingAppHostInstance(current, appHost));
+            return currentAppHosts.filter(current => !isMatchingAppHostInstance(current, appHost));
         }
 
         return [
-            ...this._appHosts.filter(current => !isMatchingAppHostInstance(current, appHost)),
+            ...currentAppHosts.filter(current => !isMatchingAppHostInstance(current, appHost)),
             appHost,
         ];
     }

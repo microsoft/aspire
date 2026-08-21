@@ -55,7 +55,13 @@
     "onCommand:aspire-vscode.installCli",
     "onCommand:aspire-vscode.verifyCliInstalled",
     "onLanguageModelTool:aspire_apphost_start",
-    "onLanguageModelTool:aspire_apphost_stop"
+    "onLanguageModelTool:aspire_apphost_stop",
+    "onLanguageModelTool:aspire_debug_session_status",
+    "onLanguageModelTool:aspire_explain_launch_failure",
+    "onLanguageModelTool:aspire_open_dashboard",
+    "onLanguageModelTool:aspire_open_output",
+    "onLanguageModelTool:aspire_list_debug_sessions",
+    "onLanguageModelTool:aspire_hot_reload_status"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
@@ -125,6 +131,162 @@
           "required": [
             "appHostPath"
           ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_debug_session_status",
+        "toolReferenceName": "aspireDebugSessionStatus",
+        "displayName": "%languageModelTool.aspireDebugSessionStatus.displayName%",
+        "modelDescription": "%languageModelTool.aspireDebugSessionStatus.modelDescription%",
+        "userDescription": "%languageModelTool.aspireDebugSessionStatus.userDescription%",
+        "icon": "$(debug)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost",
+          "debug"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            },
+            "resourceName": {
+              "type": "string",
+              "description": "%languageModelTool.aspireDebugSessionStatus.resourceName.description%"
+            }
+          },
+          "required": [
+            "appHostPath"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_explain_launch_failure",
+        "toolReferenceName": "aspireExplainLaunchFailure",
+        "displayName": "%languageModelTool.aspireExplainLaunchFailure.displayName%",
+        "modelDescription": "%languageModelTool.aspireExplainLaunchFailure.modelDescription%",
+        "userDescription": "%languageModelTool.aspireExplainLaunchFailure.userDescription%",
+        "icon": "$(lightbulb)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost",
+          "debug"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            }
+          },
+          "required": [
+            "appHostPath"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_open_dashboard",
+        "toolReferenceName": "aspireOpenDashboard",
+        "displayName": "%languageModelTool.aspireOpenDashboard.displayName%",
+        "modelDescription": "%languageModelTool.aspireOpenDashboard.modelDescription%",
+        "userDescription": "%languageModelTool.aspireOpenDashboard.userDescription%",
+        "icon": "$(dashboard)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost",
+          "dashboard"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireAppHost.appHostPath.description%"
+            }
+          },
+          "required": [
+            "appHostPath"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_open_output",
+        "toolReferenceName": "aspireOpenOutput",
+        "displayName": "%languageModelTool.aspireOpenOutput.displayName%",
+        "modelDescription": "%languageModelTool.aspireOpenOutput.modelDescription%",
+        "userDescription": "%languageModelTool.aspireOpenOutput.userDescription%",
+        "icon": "$(output)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "output"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_list_debug_sessions",
+        "toolReferenceName": "aspireListDebugSessions",
+        "displayName": "%languageModelTool.aspireListDebugSessions.displayName%",
+        "modelDescription": "%languageModelTool.aspireListDebugSessions.modelDescription%",
+        "userDescription": "%languageModelTool.aspireListDebugSessions.userDescription%",
+        "icon": "$(list-tree)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost",
+          "debug"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "aspire_hot_reload_status",
+        "toolReferenceName": "aspireHotReloadStatus",
+        "displayName": "%languageModelTool.aspireHotReloadStatus.displayName%",
+        "modelDescription": "%languageModelTool.aspireHotReloadStatus.modelDescription%",
+        "userDescription": "%languageModelTool.aspireHotReloadStatus.userDescription%",
+        "icon": "$(flame)",
+        "canBeReferencedInPrompt": true,
+        "when": "isWorkspaceTrusted",
+        "tags": [
+          "aspire",
+          "apphost",
+          "debug"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "resourceName": {
+              "type": "string",
+              "description": "%languageModelTool.aspireHotReloadStatus.resourceName.description%"
+            },
+            "appHostPath": {
+              "type": "string",
+              "description": "%languageModelTool.aspireHotReloadStatus.appHostPath.description%"
+            }
+          },
           "additionalProperties": false
         }
       }

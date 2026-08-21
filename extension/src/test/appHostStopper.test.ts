@@ -1,12 +1,14 @@
 import * as assert from 'assert';
 import nodeChildProcess = require('child_process');
 import { EventEmitter } from 'events';
+import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { stopExternalAppHost } from '../services/AppHostStopper';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
 
 suite('AppHostStopper', () => {
     test('waits for aspire stop to exit successfully', async () => {
@@ -20,7 +22,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 terminalProvider,
-                appHostPath,
+                createAppHostOperationTarget(appHostPath, appHostPath),
                 new vscode.CancellationTokenSource().token).then(() => { settled = true; });
             await new Promise(resolve => setImmediate(resolve));
 
@@ -57,7 +59,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 terminalProvider,
-                '/repo/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                 new vscode.CancellationTokenSource().token);
             await new Promise(resolve => setImmediate(resolve));
 
@@ -70,6 +72,51 @@ suite('AppHostStopper', () => {
         finally {
             getWorkspaceFolderStub.restore();
             (nodeChildProcess.spawn as sinon.SinonStub).restore();
+        }
+    });
+
+    test('runs the physical AppHost while resolving the CLI from the workspace folder that owns the selector', async () => {
+        // A symlinked workspace root puts the physical AppHost outside every open folder. The
+        // stop must still run against that physical path - a repointed alias must not move it -
+        // while the CLI comes from the folder the caller's own path belongs to. Deriving both
+        // from one string forces one of the two to be wrong.
+        const childState = createTestChildProcess();
+        const child = childState as unknown as nodeChildProcess.ChildProcessWithoutNullStreams;
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(child);
+        const workspaceRoot = path.resolve('/repo');
+        const selectorPath = path.join(workspaceRoot, 'AppHost', 'AppHost.csproj');
+        const physicalAppHostPath = path.resolve('/physical/AppHost/AppHost.csproj');
+        const cliPath = path.join(workspaceRoot, 'bin', 'aspire');
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file(workspaceRoot) } as vscode.WorkspaceFolder;
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder')
+            .callsFake(uri => uri.fsPath.startsWith(`${folder.uri.fsPath}${path.sep}`) ? folder : undefined);
+        const getAspireCliExecutablePathStub = sinon.stub().resolves(cliPath);
+        const terminalProvider = {
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: async () => { },
+        } as unknown as AspireTerminalProvider;
+
+        try {
+            const stopping = stopExternalAppHost(
+                terminalProvider,
+                createAppHostOperationTarget(physicalAppHostPath, selectorPath),
+                new vscode.CancellationTokenSource().token);
+            await new Promise(resolve => setImmediate(resolve));
+
+            assert.deepStrictEqual(spawnStub.firstCall.args.slice(0, 2), [
+                cliPath,
+                ['stop', '--apphost', physicalAppHostPath],
+            ]);
+            assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+
+            childState.exitCode = 0;
+            child.emit('close', 0);
+            await stopping;
+        }
+        finally {
+            getWorkspaceFolderStub.restore();
+            spawnStub.restore();
         }
     });
 
@@ -88,7 +135,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 terminalProvider,
-                '/outside/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/outside/AppHost/AppHost.csproj', '/outside/AppHost/AppHost.csproj'),
                 new vscode.CancellationTokenSource().token);
             await new Promise(resolve => setImmediate(resolve));
 
@@ -112,7 +159,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 createTerminalProvider(),
-                '/repo/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                 new vscode.CancellationTokenSource().token);
             await new Promise(resolve => setImmediate(resolve));
 
@@ -139,7 +186,7 @@ suite('AppHostStopper', () => {
             await assert.rejects(
                 stopExternalAppHost(
                     createTerminalProvider(),
-                    '/repo/AppHost/AppHost.csproj',
+                    createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                     cancellationToken),
                 /spawn failed/);
 
@@ -165,7 +212,7 @@ suite('AppHostStopper', () => {
             await assert.rejects(
                 stopExternalAppHost(
                     createTerminalProvider(),
-                    '/repo/AppHost/AppHost.csproj',
+                    createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                     cancellationToken),
                 error => error instanceof vscode.CancellationError);
 
@@ -184,7 +231,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 createTerminalProvider(),
-                '/repo/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                 new vscode.CancellationTokenSource().token);
             await new Promise(resolve => setImmediate(resolve));
 
@@ -223,7 +270,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 createTerminalProvider(),
-                '/repo/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                 cancellationSource.token).finally(() => { settled = true; });
             await clock.tickAsync(0);
 
@@ -267,7 +314,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 createTerminalProvider(),
-                '/repo/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                 cancellationSource.token).catch(error => {
                     rejection = error;
                 });
@@ -297,7 +344,7 @@ suite('AppHostStopper', () => {
         try {
             const stopping = stopExternalAppHost(
                 createTerminalProvider(),
-                '/repo/AppHost/AppHost.csproj',
+                createAppHostOperationTarget('/repo/AppHost/AppHost.csproj', '/repo/AppHost/AppHost.csproj'),
                 cancellationSource.token);
             await new Promise(resolve => setImmediate(resolve));
 

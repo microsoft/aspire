@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Tests.Mcp;
@@ -18,6 +19,67 @@ namespace Aspire.Cli.Tests.Mcp;
 public class ListTracesToolTests
 {
     private static readonly TestHttpClientFactory s_httpClientFactory = new();
+
+    [Fact]
+    public async Task ListTracesTool_AuthenticatedRequestDoesNotLeakInLogsOrErrors()
+    {
+        var resourcesResponse = JsonSerializer.Serialize(
+            Array.Empty<ResourceInfoJson>(),
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        Uri? tracesRequestUri = null;
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        resourcesResponse,
+                        System.Text.Encoding.UTF8,
+                        "application/json")
+                };
+            }
+
+            tracesRequestUri = request.RequestUri;
+            throw new HttpRequestException(
+                "Request failed at https://" + "exception-user" + ":" + "exception-password" +
+                "@exception.example?token=exception-secret#exception-fragment");
+        });
+        var sink = new TestSink();
+        var logger = new TestLogger<ListTracesTool>(
+            new TestLoggerFactory(sink, enabled: true));
+        var tool = new ListTracesTool(
+            new StaticDashboardInfoProvider(
+                "https://" + "request-user" + ":" + "request-password" + "@example.com:5000/login" +
+                "?t=actual-login-token&accessKey=request-secret&view=resources#request-fragment",
+                apiKey: null),
+            auxiliaryBackchannelMonitor: null,
+            new MockHttpClientFactory(handler),
+            logger);
+
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(
+                CallToolContextTestHelper.Create(),
+                CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.True(tracesRequestUri is not null, exception.ToString());
+        Assert.Equal("request-user:request-password", tracesRequestUri.UserInfo);
+        Assert.Contains("t=actual-login-token", tracesRequestUri.Query, StringComparison.Ordinal);
+        Assert.Contains("accessKey=request-secret", tracesRequestUri.Query, StringComparison.Ordinal);
+        foreach (var diagnostic in new[] { exception.Message }.Concat(
+            sink.Writes.Select(write => $"{write.Message} {write.Exception}")))
+        {
+            Assert.DoesNotContain("request-user", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-password", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("actual-login-token", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-secret", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-fragment", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-secret", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-fragment", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-user", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-password", diagnostic, StringComparison.Ordinal);
+        }
+    }
 
     [Fact]
     public async Task ListTracesTool_ReturnsFormattedTraces_WhenApiReturnsData()

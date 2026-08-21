@@ -10,6 +10,7 @@ import * as io from '../utils/io';
 import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 import * as hotReload from '../debugger/hotReload';
+import { AppHostBuildFailureError } from '../debugger/appHostBuildFailureError';
 import * as cliPathModule from '../utils/cliPath';
 import * as cliPathEnvironmentModule from '../utils/cliPathEnvironment';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
@@ -82,12 +83,30 @@ suite('Dotnet Debugger Extension Tests', () => {
         return { dotNetService: fakeDotNetService, extension: createProjectDebuggerExtension(() => fakeDotNetService), doesFileExistStub: sinon.stub(io, 'doesFileExist').resolves(doesOutputFileExist) };
     }
 
+    test('dotnet build failures use the typed AppHost build failure boundary', async () => {
+        const buildProcess = Object.assign(new EventEmitter(), {
+            stdout: new EventEmitter(),
+            stderr: new EventEmitter(),
+        });
+        sinon.stub(childProcess, 'spawn').callsFake(() => {
+            setImmediate(() => buildProcess.emit('close', 1));
+            return buildProcess as unknown as childProcess.ChildProcessWithoutNullStreams;
+        });
+        const debugSession = {
+            sendMessage: sinon.stub(),
+        } as unknown as AspireDebugSession;
+        const service = new DotNetService(debugSession);
+
+        await assert.rejects(
+            service.buildDotNetProject('/workspace/AppHost/AppHost.csproj'),
+            error => error instanceof Error && error.name === 'AppHostBuildFailureError');
+    });
+
     function restoreEnvironmentVariable(name: string, value: string | undefined): void {
         if (value === undefined) {
             delete process.env[name];
             return;
         }
-
         process.env[name] = value;
     }
 
@@ -147,8 +166,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
         const outputEvents: any[] = [];
         const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
-        const startError = new Error('Build FAILED.');
-        (startError as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten = true;
+        const startError = new AppHostBuildFailureError('Build FAILED.', true);
 
         sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
         sinon.stub(aspireDebugSession, 'startAndGetDebugSession').rejects(startError);
@@ -2670,6 +2688,7 @@ suite('Dotnet Debugger Extension Tests', () => {
             extension);
 
         assert.deepStrictEqual(debugConfig.serverReadyAction, serverReadyAction);
+        assert.strictEqual(debugConfig.targetPath, projectPath);
 
         removeDirectorySafely(tempDir);
     });

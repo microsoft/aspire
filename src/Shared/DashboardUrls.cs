@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Encodings.Web;
+using System.Web;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -15,6 +17,60 @@ internal static class DashboardUrls
     public const string TracesBasePath = "traces";
     public const string LoginBasePath = "login";
     public const string HealthBasePath = "health";
+
+    /// <summary>
+    /// Normalizes a dashboard URL for an outbound request without removing authentication data.
+    /// </summary>
+    public static string? NormalizeDashboardRequestUrl(string? url, bool stripLoginPath)
+    {
+        if (!TryCreateHttpUri(url, out var uri))
+        {
+            return null;
+        }
+
+        var isLoginPath = uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase);
+        var path = stripLoginPath && isLoginPath
+            ? uri.AbsolutePath[..^"/login".Length]
+            : uri.AbsolutePath;
+        var builder = new UriBuilder(uri)
+        {
+            Host = uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+                ? "localhost"
+                : uri.Host,
+            Path = path
+        };
+
+        var normalizedUri = builder.Uri;
+        if (normalizedUri.AbsolutePath == "/")
+        {
+            return normalizedUri.GetLeftPart(UriPartial.Authority) + normalizedUri.Query + normalizedUri.Fragment;
+        }
+
+        return normalizedUri.AbsoluteUri;
+    }
+
+    /// <summary>
+    /// Extracts the browser token from a dashboard login URL.
+    /// </summary>
+    public static string? ExtractDashboardLoginToken(string? url)
+    {
+        if (url is not null &&
+            Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = HttpUtility.ParseQueryString(uri.Query)["t"];
+            return string.IsNullOrEmpty(token) ? null : token;
+        }
+
+        return null;
+    }
+
+    private static bool TryCreateHttpUri(string? value, [NotNullWhen(true)] out Uri? uri)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+            !string.IsNullOrEmpty(uri.Host);
+    }
 
     public static string ResourcesUrl(string? resource = null, string? view = null, string? hiddenTypes = null, string? hiddenStates = null, string? hiddenHealthStates = null)
     {
@@ -181,11 +237,47 @@ internal static class DashboardUrls
     /// <returns>The combined URL.</returns>
     public static string CombineUrl(string baseUrl, string path)
     {
-        // Remove trailing slash from base URL and leading slash from path to avoid double slashes
-        var trimmedBase = baseUrl.TrimEnd('/');
-        var trimmedPath = path.TrimStart('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+        {
+            var trimmedBase = baseUrl.TrimEnd('/');
+            var trimmedPath = path.TrimStart('/');
+            return $"{trimmedBase}/{trimmedPath}";
+        }
 
-        return $"{trimmedBase}/{trimmedPath}";
+        // Inputs can carry query values on both sides:
+        //   baseUrl: https://localhost:18888/base?view=resources
+        //   path:    /api/telemetry/logs?limit=100
+        // Append the path first, then merge queries so a base query cannot swallow the path.
+        var fragmentIndex = path.IndexOf('#');
+        var pathWithoutFragment = fragmentIndex >= 0 ? path[..fragmentIndex] : path;
+        var pathFragment = fragmentIndex >= 0 ? path[(fragmentIndex + 1)..] : null;
+        var queryIndex = pathWithoutFragment.IndexOf('?');
+        var pathWithoutQuery = queryIndex >= 0 ? pathWithoutFragment[..queryIndex] : pathWithoutFragment;
+        var pathQuery = queryIndex >= 0 ? pathWithoutFragment[(queryIndex + 1)..] : string.Empty;
+
+        var builder = new UriBuilder(baseUri)
+        {
+            Path = $"{baseUri.AbsolutePath.TrimEnd('/')}/{pathWithoutQuery.TrimStart('/')}",
+            Query = CombineQuery(baseUri.Query, pathQuery)
+        };
+
+        if (pathFragment is not null)
+        {
+            builder.Fragment = pathFragment;
+        }
+
+        return builder.Uri.AbsoluteUri;
+    }
+
+    private static string CombineQuery(string first, string second)
+    {
+        first = first.TrimStart('?');
+        return (first.Length, second.Length) switch
+        {
+            (0, _) => second,
+            (_, 0) => first,
+            _ => $"{first}&{second}"
+        };
     }
 
     #region Telemetry API URLs

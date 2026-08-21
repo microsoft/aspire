@@ -55,46 +55,6 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         _connectionChanges.Writer.TryWrite(true);
     }
 
-    public IAppHostAuxiliaryBackchannel? SelectedConnection
-    {
-        get
-        {
-            var connections = Connections.ToList();
-
-            if (connections.Count == 0)
-            {
-                return null;
-            }
-
-            // Check if a specific AppHost was selected
-            if (!string.IsNullOrEmpty(SelectedAppHostPath))
-            {
-                var selectedConnection = connections.FirstOrDefault(c =>
-                    c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(Path.GetFullPath(c.AppHostInfo.AppHostPath), Path.GetFullPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
-
-                if (selectedConnection != null)
-                {
-                    return selectedConnection;
-                }
-
-                // Clear the selection since the AppHost is no longer available
-                SelectedAppHostPath = null;
-            }
-
-            // Look for in-scope connections
-            var inScopeConnections = connections.Where(c => c.IsInScope).ToList();
-
-            if (inScopeConnections.Count == 1)
-            {
-                return inScopeConnections[0];
-            }
-
-            // Fall back to the first available connection
-            return connections.FirstOrDefault();
-        }
-    }
-
     public IReadOnlyList<IAppHostAuxiliaryBackchannel> GetConnectionsForWorkingDirectory(DirectoryInfo workingDirectory)
     {
         return Connections

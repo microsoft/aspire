@@ -5,6 +5,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
@@ -12,6 +13,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
 
@@ -48,6 +50,115 @@ public class ListStructuredLogsToolTests
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
 
         Assert.Contains(McpErrorMessages.DashboardNotAvailable, exception.Message);
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_LogsSanitizedOutboundUrl()
+    {
+        var resourcesResponse = JsonSerializer.Serialize(
+            Array.Empty<ResourceInfoJson>(),
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        var logsResponse = JsonSerializer.Serialize(
+            new TelemetryApiResponse
+            {
+                Data = new OtlpTelemetryDataJson { ResourceLogs = [] },
+                TotalCount = 0,
+                ReturnedCount = 0
+            },
+            OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        string? outboundLogsUrl = null;
+
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            var isResourcesRequest = request.RequestUri!.AbsolutePath.EndsWith(
+                "/resources",
+                StringComparison.Ordinal);
+            if (!isResourcesRequest)
+            {
+                outboundLogsUrl = request.RequestUri.AbsoluteUri;
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    isResourcesRequest ? resourcesResponse : logsResponse,
+                    System.Text.Encoding.UTF8,
+                    "application/json")
+            };
+        });
+        var sink = new TestSink();
+        var logger = new TestLogger<ListStructuredLogsTool>(
+            new TestLoggerFactory(sink, enabled: true));
+        var tool = new ListStructuredLogsTool(
+            new StaticDashboardInfoProvider(
+                "https://user:password@example.com:5000/login?t=actual-login-token&view=resources",
+                apiKey: null),
+            auxiliaryBackchannelMonitor: null,
+            new MockHttpClientFactory(handler),
+            logger);
+
+        await tool.CallToolAsync(
+            CallToolContextTestHelper.Create(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(
+            $"https://user:password@example.com:5000/api/telemetry/logs?t=actual-login-token&view=resources&limit={TelemetryCommandHelpers.MaxTelemetryLimit}",
+            outboundLogsUrl);
+        var write = Assert.Single(
+            sink.Writes,
+            context => context.Message?.StartsWith(
+                "Fetching structured logs from ",
+                StringComparison.Ordinal) == true);
+        Assert.Equal(
+            $"Fetching structured logs from https://example.com:5000/api/telemetry/logs?view=resources&limit={TelemetryCommandHelpers.MaxTelemetryLimit}",
+            write.Message);
+    }
+
+    [Fact]
+    public async Task ListStructuredLogsTool_AuthenticatedRequestDoesNotLeakInLogsOrErrors()
+    {
+        var resourcesResponse = JsonSerializer.Serialize(
+            Array.Empty<ResourceInfoJson>(),
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+        Uri? logsRequestUri = null;
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/resources", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        resourcesResponse,
+                        System.Text.Encoding.UTF8,
+                        "application/json")
+                };
+            }
+
+            logsRequestUri = request.RequestUri;
+            throw new HttpRequestException(
+                "Request failed at https://" + "exception-user" + ":" + "exception-password" +
+                "@exception.example?token=exception-secret#exception-fragment");
+        });
+        var sink = new TestSink();
+        var logger = new TestLogger<ListStructuredLogsTool>(
+            new TestLoggerFactory(sink, enabled: true));
+        var tool = new ListStructuredLogsTool(
+            new StaticDashboardInfoProvider(
+                "https://" + "request-user" + ":" + "request-password" + "@example.com:5000/login" +
+                "?t=actual-login-token&accessKey=request-secret&view=resources#request-fragment",
+                apiKey: null),
+            auxiliaryBackchannelMonitor: null,
+            new MockHttpClientFactory(handler),
+            logger);
+
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(
+                CallToolContextTestHelper.Create(),
+                CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.True(logsRequestUri is not null, exception.ToString());
+        AssertAuthenticatedRequest(logsRequestUri);
+        AssertDiagnosticsAreSanitized(exception, sink);
     }
 
     [Fact]
@@ -484,5 +595,32 @@ public class ListStructuredLogsToolTests
         Assert.True(properties.TryGetProperty("search", out var search));
         Assert.True(search.TryGetProperty("type", out var type));
         Assert.Equal("string", type.GetString());
+    }
+
+    private static void AssertAuthenticatedRequest(Uri? requestUri)
+    {
+        Assert.NotNull(requestUri);
+        Assert.Equal("request-user:request-password", requestUri.UserInfo);
+        Assert.Contains("t=actual-login-token", requestUri.Query, StringComparison.Ordinal);
+        Assert.Contains("accessKey=request-secret", requestUri.Query, StringComparison.Ordinal);
+    }
+
+    private static void AssertDiagnosticsAreSanitized(
+        ModelContextProtocol.McpProtocolException exception,
+        TestSink sink)
+    {
+        foreach (var diagnostic in new[] { exception.Message }.Concat(
+            sink.Writes.Select(write => $"{write.Message} {write.Exception}")))
+        {
+            Assert.DoesNotContain("request-user", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-password", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("actual-login-token", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-secret", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-fragment", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-secret", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-fragment", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-user", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("exception-password", diagnostic, StringComparison.Ordinal);
+        }
     }
 }

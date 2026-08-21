@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText } from './helpers/vscode';
 
 const cliStartupTimeoutMs = getCliStartupTimeoutMs();
 
@@ -305,6 +305,16 @@ suite('Aspire AppHost tree E2E', function () {
         const workerItem = await waitForTreeItem(section, 'e2e-worker');
         assert.ok(workerItem);
         assert.ok(getResources(workerState.state).some(resource => (resource.displayName ?? resource.name) === 'e2e-worker'));
+
+        // The resource row ends with the CLI-reported source. For a project resource that is the
+        // project file name, so the row identifies what the resource actually runs without
+        // rendering an absolute path. Waiting on the description also pins the segment order
+        // (type, state, then source) rather than just the presence of the file name.
+        const workerDescription = await waitForTreeItemDescription(
+            section,
+            'e2e-worker',
+            'Project · Running · AspireE2E.Worker.csproj');
+        assert.strictEqual(await workerDescription.getDescription(), 'Project · Running · AspireE2E.Worker.csproj');
 
         await executeE2eControlCommand({ name: 'executeResourceCommand', resourceName: 'e2e-worker' }, { waitFor: 'started' });
         await cancelActiveInput();

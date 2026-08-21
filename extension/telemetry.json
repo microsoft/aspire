@@ -44,6 +44,115 @@
         "comment": "The duration of the command invocation in milliseconds."
       }
     },
+    "aspire/vscode/editorassistance/result": {
+      "tool": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded Aspire editor-assistance language model tool name."
+      },
+      "outcome": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded completion outcome returned by the editor-assistance tool."
+      },
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded extension surface that invoked the editor-assistance operation."
+      },
+      "scope": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether a status result describes an AppHost or one resource."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded controller category associated with the result."
+      },
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded run, debug, deploy, publish, or other mode associated with the result."
+      },
+      "stage": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded launch stage for a sanitized failure explanation."
+      },
+      "category": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded sanitized launch failure category."
+      },
+      "provider_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded debugger or runtime provider category for a sanitized launch failure."
+      },
+      "state_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded editor-owned debug session state bucket."
+      },
+      "error_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "A bounded non-sensitive error category when one applies."
+      },
+      "exit_code_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded exit-code category for a sanitized launch failure."
+      },
+      "presentation": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded editor or browser presentation used to open the Dashboard."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The duration of the editor-assistance tool invocation in milliseconds."
+      }
+    },
+    "aspire/vscode/launchfailure/recorded": {
+      "stage": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded launch stage accepted by the in-memory failure journal."
+      },
+      "category": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded sanitized launch failure category accepted by the journal."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the editor or Aspire CLI controlled the failed launch."
+      },
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded run, debug, deploy, publish, or other mode for the failed launch."
+      },
+      "provider_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded debugger or runtime provider category for the failed launch."
+      },
+      "exit_code_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded exit-code category for the failed launch."
+      },
+      "journal_size": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The current global number of sanitized launch failures retained after capacity maintenance."
+      }
+    },
     "aspire/vscode/cli/availability": {
       "available": {
         "classification": "SystemMetaData",

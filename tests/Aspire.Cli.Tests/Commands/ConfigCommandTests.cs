@@ -32,6 +32,12 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesAgentMcp()
+    {
+        Assert.Contains(KnownCapabilities.AgentMcp, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfo_AdvertisesPipelineStepListJson()
     {
         Assert.Contains(KnownCapabilities.PipelineStepListJson, KnownCapabilities.GetAdvertisedCapabilities());

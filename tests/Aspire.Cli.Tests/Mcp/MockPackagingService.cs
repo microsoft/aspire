@@ -48,8 +48,6 @@ internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
 
     public string? SelectedAppHostPath { get; set; }
 
-    public IAppHostAuxiliaryBackchannel? SelectedConnection => null;
-
     public Task ScanAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -64,4 +62,3 @@ internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         return [];
     }
 }
-
