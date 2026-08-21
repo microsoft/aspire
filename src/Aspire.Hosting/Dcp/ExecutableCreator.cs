@@ -80,6 +80,11 @@ internal sealed class ExecutableCreator(
         {
             throw;
         }
+        catch (FailedToApplyEnvironmentException ex)
+        {
+            resourceLogger.LogError(ex, "{Message}", ex.Message);
+            throw;
+        }
         catch (Exception ex)
         {
             var failureMessage =
