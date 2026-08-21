@@ -1418,6 +1418,13 @@ internal sealed class RadiusInfrastructureBuilder
             // That is exactly https://github.com/microsoft/aspire/issues/18935, so fail here rather
             // than waiting for a consumer to reference it (ApplyBackingResourceCredentials runs for
             // every emitted resource; TryProjectBackingEndpoint only runs for referenced ones).
+            //
+            // Unreachable through the public API today, which is why no test pins it:
+            // EveryEmittedBackingType_HasAConnectionSchema asserts the schema table is
+            // total over every type ResourceTypeMapper can emit, so a missing row fails at test
+            // time instead. This stays a hard failure because that guard lives in the test suite,
+            // not in the type system — a mapping added without a schema row must not fall through
+            // to the run-mode password.
             if (RadiusBackingConnections.GetSchema(radiusType) is not { } schema)
             {
                 throw new RadiusBackingResourceEndpointException(
@@ -3959,6 +3966,73 @@ internal sealed class RadiusInfrastructureBuilder
                         $"more than one port on {literalPort}/{literalProtocol} (for example port '{portName}'). The " +
                         $"Radius container recipe creates one Kubernetes Service port per declared port, so duplicate " +
                         $"(containerPort, protocol) pairs would emit conflicting Service ports. Remove the duplicate port.");
+                }
+            }
+        }
+
+        ValidateContainerEnvVarForms(options);
+    }
+
+    /// <summary>
+    /// Rejects a container environment entry that carries neither exactly a <c>value</c> nor a
+    /// complete <c>valueFrom.secretKeyRef</c>.
+    /// </summary>
+    /// <remarks>
+    /// The Radius container schema models each <c>env</c> entry as one form or the other, and the
+    /// Kubernetes API server rejects a container env var that carries both <c>value</c> and
+    /// <c>valueFrom</c>. A <c>secretKeyRef</c> missing either half is incomplete in the same way:
+    /// <c>secretName</c> without <c>key</c> names no data entry, and <c>key</c> without
+    /// <c>secretName</c> names no secret.
+    /// <para>
+    /// The publisher only ever writes one complete form (see <c>ResolveEnvironmentAsync</c>), so
+    /// every state rejected here comes from a <c>ConfigureRadiusInfrastructure</c> callback —
+    /// <see cref="ContainerEnvVarConstruct.Value"/>, <see cref="ContainerEnvVarConstruct.SecretName"/>
+    /// and <see cref="ContainerEnvVarConstruct.SecretKey"/> are all public and independently
+    /// settable, so the type's documented mutual exclusivity cannot be enforced by construction.
+    /// Rejecting it here keeps the failure attributable to the callback instead of surfacing it as
+    /// a rejected manifest at <c>rad deploy</c> time.
+    /// </para>
+    /// <para>
+    /// Assignment is detected with <see cref="RenderBicepValue"/> rather than a null check on the
+    /// property: <c>DefineProperty</c> returns a non-null <see cref="BicepValue{T}"/> in an unset
+    /// state, so an unassigned property is only recognisable by having neither an expression nor a
+    /// literal — the same test <c>ProjectedEnvValue.OriginalValue</c> relies on.
+    /// </para>
+    /// </remarks>
+    private static void ValidateContainerEnvVarForms(RadiusInfrastructureOptions options)
+    {
+        foreach (var container in options.Containers)
+        {
+            foreach (var (key, entry) in container.Env)
+            {
+                // BicepDictionary wraps each entry; a callback can leave a hole by assigning null.
+                if (entry?.Value is not { } envVar)
+                {
+                    continue;
+                }
+
+                var hasValue = RenderBicepValue(envVar.Value) is not null;
+                var hasSecretName = RenderBicepValue(envVar.SecretName) is not null;
+                var hasSecretKey = RenderBicepValue(envVar.SecretKey) is not null;
+
+                if (hasValue && (hasSecretName || hasSecretKey))
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback left environment variable '{key}' on container " +
+                        $"'{container.ContainerMapKey}' carrying both a 'value' and a 'valueFrom.secretKeyRef'. The two " +
+                        $"forms are mutually exclusive and Kubernetes rejects an environment variable that sets both. " +
+                        $"Assign either Value or the SecretName/SecretKey pair, not both. Diagnostic: ASPIRERADIUS087.");
+                }
+
+                if (hasSecretName != hasSecretKey)
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback left environment variable '{key}' on container " +
+                        $"'{container.ContainerMapKey}' with an incomplete 'valueFrom.secretKeyRef': " +
+                        $"{(hasSecretName ? "SecretName is set but SecretKey is not" : "SecretKey is set but SecretName is not")}. " +
+                        $"A secret reference needs both halves to name a key of a " +
+                        $"'{RadiusResourceTypes.SecuritySecrets}' resource. Assign both, or assign Value instead. " +
+                        $"Diagnostic: ASPIRERADIUS087.");
                 }
             }
         }
