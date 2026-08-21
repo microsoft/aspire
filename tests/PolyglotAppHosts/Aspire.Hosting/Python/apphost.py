@@ -706,7 +706,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
         )
 
         def complete_progress_work(progress_context: ProgressContext):
-            progress_context.cancel()
+            _cancel_progress = progress_context.cancel
 
         progress = interaction_service.prompt_progress(
             "Completing **work**...",
