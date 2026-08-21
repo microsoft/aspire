@@ -11,14 +11,14 @@ import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '.
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
-import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
+import type { PreparableLanguageModelTool } from '../lm/languageModelToolContracts';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { onDidInvokeCommand } from '../utils/telemetry';
+import { isCommandCancellation, onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { ResourceItem } from '../views/treeItems/resourceItems';
 import { ResourceJson } from '../data/appHostCliContracts';
@@ -35,7 +35,7 @@ export function createE2eStateFileBridge(
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
   onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
-  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
+  preparableLanguageModelTools: ReadonlyMap<string, PreparableLanguageModelTool>,
 ): vscode.Disposable {
   const stateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
   const controlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
@@ -256,7 +256,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, appHostLifecycleTools, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, preparableLanguageModelTools, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -367,7 +367,13 @@ async function processE2eControlFile(
 }
 
 function getE2eErrorMessage(error: unknown): string {
-  return error instanceof Error ? (error.stack ?? error.message) : String(error);
+  if (isCommandCancellation(error)) {
+    return 'E2E control command cancelled.';
+  }
+
+  return error instanceof Error && error.message.startsWith('Aspire extension E2E ')
+    ? error.message
+    : 'E2E control command failed.';
 }
 
 async function executeE2eControlCommand(
@@ -379,7 +385,7 @@ async function executeE2eControlCommand(
   terminalProvider: AspireTerminalProvider,
   clipboardSnapshot: E2eClipboardSnapshot,
   clipboardExpectation: E2eClipboardExpectation,
-  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
+  preparableLanguageModelTools: ReadonlyMap<string, PreparableLanguageModelTool>,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -616,7 +622,7 @@ async function executeE2eControlCommand(
     }
     case 'prepareLanguageModelToolInvocation': {
       markStarted();
-      const tool = appHostLifecycleTools.get(command.toolName);
+      const tool = preparableLanguageModelTools.get(command.toolName);
       if (!tool) {
         throw new Error(`Language model tool '${command.toolName}' is not registered.`);
       }
@@ -631,17 +637,39 @@ async function executeE2eControlCommand(
     case 'invokeLanguageModelTool': {
       markStarted();
       const invocationCount = Math.max(1, command.times ?? 1);
-      const invocationResults = await Promise.all(Array.from({ length: invocationCount }, () => vscode.lm.invokeTool(command.toolName, {
-        input: command.input,
-        toolInvocationToken: undefined,
-      })));
+      const cancellationDelayMs = getE2eCancellationDelay(command.cancelAfterMs);
+      const cancellationSource = cancellationDelayMs === undefined
+        ? undefined
+        : new vscode.CancellationTokenSource();
+      const cancellationTimer = cancellationSource
+        ? setTimeout(() => cancellationSource.cancel(), cancellationDelayMs)
+        : undefined;
+      try {
+        const invocationResults = await Promise.all(Array.from({ length: invocationCount }, () => vscode.lm.invokeTool(command.toolName, {
+          input: command.input,
+          toolInvocationToken: undefined,
+        }, cancellationSource?.token)));
 
-      return {
-        results: invocationResults.map(invocationResult => invocationResult.content
-          .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-          .map(part => part.value)
-          .join('')),
-      };
+        return {
+          results: invocationResults.map(invocationResult => invocationResult.content
+            .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+            .map(part => part.value)
+            .join('')),
+        };
+      }
+      catch (error) {
+        if (isCommandCancellation(error)) {
+          return { results: [], cancelled: true };
+        }
+
+        throw error;
+      }
+      finally {
+        if (cancellationTimer !== undefined) {
+          clearTimeout(cancellationTimer);
+        }
+        cancellationSource?.dispose();
+      }
     }
     case 'getDebugSessionProcessInfo': {
       markStarted();
@@ -1460,9 +1488,13 @@ async function runAspireCliForE2E(
       }
 
       completed = true;
+      // `getE2eErrorMessage` only forwards messages that carry the "Aspire extension E2E " marker;
+      // everything else is collapsed to a generic string so failures cannot leak user-supplied
+      // values. These two diagnostics are safe to forward because `diagnosticCommand` has already
+      // been redacted by `redactCliArgsForLogging` and neither embeds captured stdout/stderr.
       void terminateCliProcess(child, 'Aspire extension E2E CLI command', { force: true, suppressTimeoutWarning: true })
         .then(
-          () => reject(new Error(`${diagnosticCommand} timed out after ${timeoutMs}ms.`)),
+          () => reject(new Error(`Aspire extension E2E ${diagnosticCommand} timed out after ${timeoutMs}ms.`)),
           reject);
     }, timeoutMs);
 
@@ -1481,7 +1513,7 @@ async function runAspireCliForE2E(
         if (code === 0) {
           resolve(result);
         } else {
-          reject(new Error(`${diagnosticCommand} exited with code ${code}.`));
+          reject(new Error(`Aspire extension E2E ${diagnosticCommand} exited with code ${code}.`));
         }
       },
       errorCallback: error => {
@@ -1642,6 +1674,18 @@ function getE2ePositiveInteger(value: unknown, defaultValue: number, propertyNam
 
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     throw new Error(`Aspire extension E2E MAUI proof ${propertyName} must be a non-negative integer when provided.`);
+  }
+
+  return value;
+}
+
+function getE2eCancellationDelay(value: unknown): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 10000) {
+    throw new Error('Aspire extension E2E language-model cancellation delay must be an integer between 0 and 10000.');
   }
 
   return value;

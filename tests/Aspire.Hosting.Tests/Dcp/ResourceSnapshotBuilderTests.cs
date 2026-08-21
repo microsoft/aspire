@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001 // Project launch defaults are experimental but needed to verify snapshot emission.
+
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -82,6 +84,136 @@ public class ResourceSnapshotBuilderTests
         AssertHighlightedProperty(snapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: 0);
         AssertHighlightedProperty(snapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: 1);
         AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: 2);
+    }
+
+    [Fact]
+    public void ProjectSnapshotIncludesLaunchConfigurationTypeForDebuggableProject()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var project = builder.AddResource(new ProjectResource("project"));
+        project.Resource.Annotations.Add(new TestProjectMetadata());
+        var configuredProject = project.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, configuredProject.Resource.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [configuredProject.Resource.Name] = configuredProject.Resource
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        var launchConfigurationType = Assert.Single(snapshot.Properties, p => p.Name == KnownProperties.Resource.LaunchConfigurationType);
+        Assert.Equal("project", Assert.IsType<string>(launchConfigurationType.Value));
+    }
+
+    [Theory]
+    [InlineData("Run", "run", "--configuration", "--framework=net10.0")]
+    [InlineData("run", "run", "-c", "-f")]
+    [InlineData("run", "run", "--configuration=Release", "--framework")]
+    [InlineData("run", "run", "-c=Release", "-f=net10.0")]
+    [InlineData("WATCH", "watch", "--configuration", "--framework=net10.0")]
+    [InlineData("watch", "watch", "-c", "-f")]
+    [InlineData("watch", "watch", "--configuration=Release", "--framework")]
+    [InlineData("watch", "watch", "-c=Release", "-f=net10.0")]
+    public void ProjectSnapshotIncludesSafeDotNetLaunchMetadata(
+        string launchCommand,
+        string expectedLaunchCommand,
+        string configurationArgument,
+        string targetFrameworkArgument)
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata());
+
+        var effectiveArgs = new List<string>
+        {
+            launchCommand,
+            "--project",
+            "/app/project.csproj",
+            configurationArgument
+        };
+        if (!configurationArgument.Contains('='))
+        {
+            effectiveArgs.Add("Release");
+        }
+        effectiveArgs.Add(targetFrameworkArgument);
+        if (!targetFrameworkArgument.Contains('='))
+        {
+            effectiveArgs.Add("net10.0");
+        }
+        effectiveArgs.AddRange(["--", "--configuration", "Private", "--framework", "private"]);
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = effectiveArgs,
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.Equal(expectedLaunchCommand, Assert.IsType<string>(GetProperty(snapshot, KnownProperties.Project.LaunchCommand).Value));
+        Assert.Equal("Release", Assert.IsType<string>(GetProperty(snapshot, KnownProperties.Project.Configuration).Value));
+        Assert.Equal("net10.0", Assert.IsType<string>(GetProperty(snapshot, KnownProperties.Project.TargetFramework).Value));
+        Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
+        Assert.False(GetProperty(snapshot, KnownProperties.Project.LaunchCommand).IsSensitive);
+        Assert.False(GetProperty(snapshot, KnownProperties.Project.Configuration).IsSensitive);
+        Assert.False(GetProperty(snapshot, KnownProperties.Project.TargetFramework).IsSensitive);
+    }
+
+    [Fact]
+    public void ProjectSnapshotIncludesNullLaunchCommandWhenDotNetArgumentsAreMissing()
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata());
+
+        var executable = Executable.Create("project", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        var launchCommand = GetProperty(snapshot, KnownProperties.Project.LaunchCommand);
+        Assert.Null(launchCommand.Value);
+        Assert.False(launchCommand.IsSensitive);
+    }
+
+    [Fact]
+    public void ProjectSnapshotIncludesNullLaunchCommandWhenDotNetCommandIsUnsupported()
+    {
+        var project = new ProjectResource("project");
+        project.Annotations.Add(new TestProjectMetadata());
+
+        var executable = Executable.Create("project", "dotnet.exe");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["publish", "--configuration", "Release"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        var launchCommand = GetProperty(snapshot, KnownProperties.Project.LaunchCommand);
+        Assert.Null(launchCommand.Value);
+        Assert.False(launchCommand.IsSensitive);
     }
 
     [Fact]

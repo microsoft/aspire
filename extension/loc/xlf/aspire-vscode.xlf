@@ -10,6 +10,9 @@
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerAlreadyDebugging">
+      <source xml:lang="en">A debugger is already attached to {0}.</source>
+    </trans-unit>
     <trans-unit id="command.add">
       <source xml:lang="en">Add an integration</source>
     </trans-unit>
@@ -87,6 +90,36 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.defaultConfigurationNameForWorkspaceFolder">
       <source xml:lang="en">Aspire: Launch default AppHost ({0}: {1})</source>
+    </trans-unit>
+    <trans-unit id="command.attachDebuggerToResource">
+      <source xml:lang="en">Attach debugger</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceDebugToolConfirmationTitle">
+      <source xml:lang="en">Attach debugger to Aspire resource</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerConfigurationName">
+      <source xml:lang="en">Attach debugger: {0}</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireResourceDebug.modelDescription">
+      <source xml:lang="en">Attach the VS Code debugger to a running Aspire resource that the extension has already discovered. Requires a workspace-relative AppHost path and the resource name. The default auto strategy currently attaches to the resource; start and restart under debug are not supported.</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireResourceDebug.userDescription">
+      <source xml:lang="en">Attach the debugger to a running Aspire resource.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceDebugToolConfirmationMessage">
+      <source xml:lang="en">Attach the debugger to resource {0} from Aspire AppHost {1}?</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceDebugToolUnresolvedConfirmationMessage">
+      <source xml:lang="en">Attach the debugger to the requested Aspire resource?</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceDebugToolInvocationMessage">
+      <source xml:lang="en">Attaching debugger to Aspire resource {0}...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceDebugToolUnavailableInvocationMessage">
+      <source xml:lang="en">Attaching debugger to the requested Aspire resource...</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachingDebugger">
+      <source xml:lang="en">Attaching debugger to {0}...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.unsupportedResourceType">
       <source xml:lang="en">Attempted to start unsupported resource type: {0}.</source>
@@ -222,6 +255,12 @@
     </trans-unit>
     <trans-unit id="command.codeLensDebugPipelineStep">
       <source xml:lang="en">Debug Aspire pipeline step</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireResourceDebug.displayName">
+      <source xml:lang="en">Debug Aspire resource</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireResourceDebug.strategy.description">
+      <source xml:lang="en">Debug strategy. auto selects the available safe action, currently attach. attach only attaches a debugger; starting and restarting resources are not supported.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchChromeLabel">
       <source xml:lang="en">Debug with Chrome</source>
@@ -388,6 +427,12 @@
     <trans-unit id="walkthrough.getStarted.installCli.title">
       <source xml:lang="en">Install the Aspire CLI</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerCsharpExtensionRequired">
+      <source xml:lang="en">Install the C# extension to attach the debugger to .NET project resources.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerExtensionsRequired">
+      <source xml:lang="en">Install {0} to attach the debugger to this resource.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.invalidLaunchConfiguration">
       <source xml:lang="en">Invalid launch configuration for {0}.</source>
     </trans-unit>
@@ -459,6 +504,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. Explicit Aspire: Dashboard Browser none or notification values win. Otherwise, legacy notification or off values override browser-opening choices; launch uses Aspire: Dashboard Browser, falling back to VS Code&apos;s integrated browser for compatibility.</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireResourceDebug.resourceName.description">
+      <source xml:lang="en">Name of a running resource from the selected AppHost. Resource names are limited to 256 characters.</source>
     </trans-unit>
     <trans-unit id="command.new">
       <source xml:lang="en">New Aspire project</source>
@@ -844,6 +892,9 @@
     <trans-unit id="aspire-vscode.strings.appHostLifecycleIsolationCapabilityCouldNotBeVerified">
       <source xml:lang="en">The selected Aspire CLI isolation capability could not be verified.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerResourceNotFound">
+      <source xml:lang="en">The selected resource is no longer available. Refresh the Aspire pane and try again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchAlreadyClaimed">
       <source xml:lang="en">This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.</source>
     </trans-unit>
@@ -855,6 +906,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerUnavailable">
+      <source xml:lang="en">This resource cannot be attached to a debugger.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval.deprecated">
       <source xml:lang="en">This setting has been renamed to aspire.appHostsPollingInterval.</source>
@@ -906,6 +960,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.startDebuggingDeclined">
       <source xml:lang="en">VS Code did not start the Aspire {0} session for {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerDeclined">
+      <source xml:lang="en">VS Code did not start the debugger attach session for {0}.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.parameterValueMissing">
       <source xml:lang="en">Value missing</source>
@@ -963,6 +1020,9 @@
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHost.appHostPath.description">
       <source xml:lang="en">Workspace-relative path of an AppHost that Aspire has already discovered in this workspace, for example &apos;AppHost/AppHost.csproj&apos; or &apos;apphost.cs&apos;. The value must match one of the discovered AppHosts exactly; arbitrary paths, absolute paths, and files Aspire did not discover are rejected. In a multi-root workspace, always prefix the path with the workspace folder name (for example &apos;backend/AppHost/AppHost.csproj&apos;).</source>
+    </trans-unit>
+    <trans-unit id="languageModelTool.aspireResourceDebug.appHostPath.description">
+      <source xml:lang="en">Workspace-relative path of an AppHost that Aspire has already discovered. Absolute paths and paths Aspire did not discover are rejected. In a multi-root workspace, prefix the path with the workspace folder name.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.yesLabel">
       <source xml:lang="en">Yes</source>

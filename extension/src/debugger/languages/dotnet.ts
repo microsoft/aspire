@@ -1,15 +1,18 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath } from '../../loc/strings';
-import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, attachDebuggerConfigurationName, attachDebuggerCsharpExtensionRequired, attachDebuggerUnavailable } from '../../loc/strings';
+import { ChildProcessWithoutNullStreams } from 'child_process';
+import * as childProcess from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
 import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
+import { LimitedOutputBuffer, oneShotOutputBufferLimit } from '../../data/appHostCliRunner';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, DebugConfigurationArguments, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, LaunchOptions, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
+import { ResourceAttachConfigurationError, type ResourceAttachProvider, type ResourceDebugResourceSnapshot } from '../resourceDebugContracts';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
@@ -23,30 +26,80 @@ import {
     expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
-import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
+import { createAspireCliPathProcessEnvironment, createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
 import { resolveCliPath } from '../../utils/cliPath';
 import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
+import { terminateCliProcess } from '../../utils/process/cliProcess';
+import {
+    launchedChildProcessResolver,
+    type LaunchedChildProcess,
+    type LaunchedChildProcessIdentity,
+} from '../launchedChildProcessDiscovery';
 import { deleteEnvironmentVariable, getEnvironmentWithoutE2EBridgeVariables, setEnvironmentVariable } from '../../utils/environment';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
     buildDotNetProject(projectFile: string): Promise<void>;
+    getDotNetAttachTargetInfo(projectFile: string, configuration?: string, cancellationToken?: vscode.CancellationToken, framework?: string): Promise<DotNetAttachTargetInfo>;
     getDotNetTargetPath(projectFile: string): Promise<string>;
     getDotNetRunApiOutput(projectFile: string, environment?: NodeJS.ProcessEnv): Promise<string>;
 }
 
-export class DotNetService implements IDotNetService {
-    private _debugSession: AspireDebugSession;
+type DotNetLaunchCommand = 'run' | 'watch';
 
-    constructor(debugSession: AspireDebugSession) {
+interface DotNetAttachTargetInfo {
+    targetPath: string;
+    targetName?: string;
+    useAppHost: boolean;
+}
+
+interface DotNetAttachDebuggerResourceInfo {
+    configuration?: string;
+    framework?: string;
+    launchCommand?: DotNetLaunchCommand;
+    launcherPid: number;
+    projectPath: string;
+    resourceLabel: string;
+    useTargetNameFallback: boolean;
+}
+
+interface LaunchedChildProcessResolver {
+    resolveProcessId(
+        launcherPid: number,
+        identity: LaunchedChildProcessIdentity,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<number>;
+}
+
+interface DotNetAttachFileSystem {
+    realpath(path: string): Promise<string>;
+}
+
+const executableArgsPropertyName = 'executable.args';
+const executablePidPropertyName = 'executable.pid';
+const executablePathPropertyName = 'executable.path';
+const projectPathPropertyName = 'project.path';
+const projectConfigurationPropertyName = 'project.configuration';
+const projectLaunchCommandPropertyName = 'project.launchCommand';
+const projectTargetFrameworkPropertyName = 'project.targetFramework';
+const resourceParentNamePropertyName = 'resource.parentName';
+const resourceLaunchConfigurationTypePropertyName = 'resource.launchConfigurationType';
+const dotNetProjectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
+
+export class DotNetService implements IDotNetService {
+    private static readonly _msbuildProbeTimeoutMs = 10_000;
+
+    private _debugSession: AspireDebugSession | undefined;
+
+    constructor(debugSession: AspireDebugSession | undefined) {
         this._debugSession = debugSession;
     }
 
-    execFileAsync = util.promisify(execFile);
+    execFileAsync = util.promisify(childProcess.execFile);
 
     writeToDebugConsole(message: string, category: 'stdout' | 'stderr', addNewLine: boolean = false): void {
-        this._debugSession.sendMessage(message, addNewLine, category);
+        this._debugSession?.sendMessage(message, addNewLine, category);
     }
 
     async getAndActivateDevKit(): Promise<boolean> {
@@ -73,7 +126,7 @@ export class DotNetService implements IDotNetService {
 
             void (async () => {
                 const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectFile)));
-                const buildProcess = spawn('dotnet', args, {
+                const buildProcess = childProcess.spawn('dotnet', args, {
                     // The .NET SDK searches for global.json from the process working directory, not the
                     // project argument. Run from the project directory so extension and CLI builds select
                     // the same SDK and repository configuration.
@@ -119,6 +172,61 @@ export class DotNetService implements IDotNetService {
         });
     }
 
+    async getDotNetAttachTargetInfo(projectFile: string, configuration?: string, cancellationToken?: vscode.CancellationToken, framework?: string): Promise<DotNetAttachTargetInfo> {
+        const args = [
+            'msbuild',
+            projectFile,
+            '-nologo',
+            '-getProperty:TargetPath',
+            '-getProperty:TargetName',
+            '-getProperty:UseAppHost',
+            '-v:q',
+            '-property:GenerateFullPaths=true'
+        ];
+        if (configuration) {
+            args.push(`-property:Configuration=${configuration}`);
+        }
+        if (framework) {
+            args.push(`-property:TargetFramework=${framework}`);
+        }
+
+        try {
+            const stdout = await this._runDotNetMsbuild(args, path.dirname(projectFile), cancellationToken);
+            // Multiple -getProperty switches return:
+            //   { "Properties": { "TargetPath": "/repo/bin/Release/net10.0/Api.dll", "TargetName": "Api", "UseAppHost": "false" } }
+            const payload: unknown = JSON.parse(stdout);
+            const properties = typeof payload === 'object' && payload !== null && 'Properties' in payload
+                ? (payload as { Properties?: unknown }).Properties
+                : undefined;
+            const targetPath = typeof properties === 'object' && properties !== null && 'TargetPath' in properties
+                ? (properties as { TargetPath?: unknown }).TargetPath
+                : undefined;
+            const targetName = typeof properties === 'object' && properties !== null && 'TargetName' in properties
+                ? (properties as { TargetName?: unknown }).TargetName
+                : undefined;
+            const useAppHost = typeof properties === 'object' && properties !== null && 'UseAppHost' in properties
+                ? (properties as { UseAppHost?: unknown }).UseAppHost
+                : undefined;
+            if (typeof targetPath !== 'string' || targetPath.trim().length === 0) {
+                throw new Error(noOutputFromMsbuild);
+            }
+
+            return {
+                targetPath: targetPath.trim(),
+                targetName: typeof targetName === 'string' && targetName.trim().length > 0
+                    ? targetName.trim()
+                    : undefined,
+                useAppHost: typeof useAppHost === 'string' && useAppHost.trim().toLowerCase() === 'true',
+            };
+        } catch (err) {
+            if (cancellationToken?.isCancellationRequested) {
+                throw new vscode.CancellationError();
+            }
+
+            throw new Error(failedToGetTargetPath(String(err)));
+        }
+    }
+
     async getDotNetTargetPath(projectFile: string): Promise<string> {
         const args = [
             'msbuild',
@@ -148,32 +256,34 @@ export class DotNetService implements IDotNetService {
 
     async getDotNetRunApiOutput(projectPath: string, environment?: NodeJS.ProcessEnv): Promise<string> {
         const { cliPath } = await resolveCliPath(getCliPathTargetForUri(vscode.Uri.file(projectPath)));
-        let childProcess: ChildProcessWithoutNullStreams | undefined;
+        // Named `runApiProcess` rather than `childProcess` because the module import of the same
+        // name is what spawns it below.
+        let runApiProcess: ChildProcessWithoutNullStreams | undefined;
 
         return new Promise<string>((resolve, reject) => {
             const timeout = setTimeout(() => {
-                childProcess?.kill();
+                runApiProcess?.kill();
                 reject(new Error('Timeout while waiting for dotnet run-api response'));
             }, 10_000);
 
             try {
                 extensionLogOutputChannel.info('dotnet run-api - starting process');
 
-                childProcess = spawn('dotnet', ['run-api'], {
+                runApiProcess = childProcess.spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
                     env: createResolvedAspireCliPathProcessEnvironment(cliPath, { ...process.env, ...environment }),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 
-                childProcess.on('error', reject);
-                childProcess.on('exit', (code, signal) => {
+                runApiProcess.on('error', reject);
+                runApiProcess.on('exit', (code, signal) => {
                     clearTimeout(timeout);
                     if (code !== 0) {
                         reject(new Error(processExitedWithCode(code?.toString() ?? "unknown")));
                     }
                 });
 
-                const rl = readline.createInterface(childProcess.stdout);
+                const rl = readline.createInterface(runApiProcess.stdout);
                 rl.on('line', line => {
                     clearTimeout(timeout);
                     extensionLogOutputChannel.info(`dotnet run-api - received: ${line}`);
@@ -182,13 +292,100 @@ export class DotNetService implements IDotNetService {
 
                 const message = JSON.stringify({ ['$type']: 'GetRunCommand', ['EntryPointFileFullPath']: projectPath });
                 extensionLogOutputChannel.info(`dotnet run-api - sending: ${message}`);
-                childProcess.stdin.write(message + os.EOL);
-                childProcess.stdin.end();
+                runApiProcess.stdin.write(message + os.EOL);
+                runApiProcess.stdin.end();
             } catch (e) {
                 clearTimeout(timeout);
                 reject(e);
             }
-        }).finally(() => childProcess?.removeAllListeners());
+        }).finally(() => runApiProcess?.removeAllListeners());
+    }
+
+    private _runDotNetMsbuild(args: string[], workingDirectory: string, cancellationToken: vscode.CancellationToken | undefined): Promise<string> {
+        return new Promise((resolve, reject) => {
+            let completed = false;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let cancellationRegistration: vscode.Disposable | undefined;
+            const complete = (action: () => void) => {
+                if (completed) {
+                    return;
+                }
+
+                completed = true;
+                if (timeout) {
+                    clearTimeout(timeout);
+                    timeout = undefined;
+                }
+                cancellationRegistration?.dispose();
+                action();
+            };
+            const msbuildProcess = childProcess.spawn('dotnet', args, {
+                cwd: workingDirectory,
+                env: createAspireCliPathProcessEnvironment(),
+                stdio: 'pipe',
+            });
+            const stdout = new LimitedOutputBuffer(oneShotOutputBufferLimit);
+            const stderr = new LimitedOutputBuffer(oneShotOutputBufferLimit);
+
+            msbuildProcess.stdout.setEncoding('utf8');
+            msbuildProcess.stdout.on('data', (data: string) => {
+                stdout.append(data);
+            });
+            // The probe normally produces JSON only on stdout, but MSBuild can write enough failure
+            // detail to stderr to fill the pipe. Read both streams so a failed probe can always exit.
+            msbuildProcess.stderr.setEncoding('utf8');
+            msbuildProcess.stderr.on('data', (data: string) => {
+                stderr.append(data);
+            });
+
+            msbuildProcess.on('error', error => {
+                complete(() => reject(createMsbuildProbeError(error.message, stdout.value, stderr.value)));
+            });
+            msbuildProcess.on('close', code => {
+                if (cancellationToken?.isCancellationRequested) {
+                    complete(() => reject(new vscode.CancellationError()));
+                } else if (code === 0) {
+                    complete(() => resolve(stdout.value));
+                } else {
+                    complete(() => reject(createMsbuildProbeError(
+                        `dotnet msbuild exited with code ${code ?? 'unknown'}`,
+                        stdout.value,
+                        stderr.value)));
+                }
+            });
+
+            const stopProbe = (error: Error) => {
+                if (completed) {
+                    return;
+                }
+
+                // This child is a short-lived metadata probe, not the resource or AppHost. Stop only
+                // its known process handle so cancellation or timeout cannot affect the workload being attached.
+                void terminateCliProcess(msbuildProcess, 'dotnet msbuild target discovery', {
+                    force: true,
+                    suppressTimeoutWarning: true,
+                });
+                complete(() => reject(error));
+            };
+            const cancel = () => {
+                stopProbe(new vscode.CancellationError());
+            };
+            cancellationRegistration = cancellationToken?.onCancellationRequested(cancel);
+            if (completed) {
+                cancellationRegistration?.dispose();
+                return;
+            }
+
+            timeout = setTimeout(() => {
+                stopProbe(createMsbuildProbeError(
+                    `dotnet msbuild target discovery timed out after ${DotNetService._msbuildProbeTimeoutMs}ms`,
+                    stdout.value,
+                    stderr.value));
+            }, DotNetService._msbuildProbeTimeoutMs);
+            if (cancellationToken?.isCancellationRequested) {
+                cancel();
+            }
+        });
     }
 }
 
@@ -371,6 +568,10 @@ function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
     error.debugConsoleOutputAlreadyWritten = true;
 
     return error;
+}
+
+function createMsbuildProbeError(reason: string, stdout: string, stderr: string): Error {
+    return new Error(`${reason}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
 }
 
 async function shouldLaunchProjectWithDotNetRun(outputPath: string): Promise<boolean> {
@@ -581,7 +782,388 @@ function isDefaultLaunchProfileEnvironmentVariable(
         || (namesEqual('DOTNET_LAUNCH_PROFILE') && defaultProfileName === value);
 }
 
-export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
+function getDotNetAttachDebuggerResourceInfo(resource: ResourceDebugResourceSnapshot): DotNetAttachDebuggerResourceInfo | undefined {
+    if (resource.state !== 'Running' || !canRecognizeDotNetAttachDebuggerResource(resource)) {
+        return undefined;
+    }
+
+    const launcherPid = getAttachDebuggerProcessId(resource);
+    if (launcherPid === undefined) {
+        return undefined;
+    }
+
+    const launchMetadata = getDotNetLaunchMetadata(resource);
+    if (launchMetadata === undefined) {
+        return undefined;
+    }
+
+    const projectPath = resource.properties?.[projectPathPropertyName] as string;
+    return {
+        ...launchMetadata,
+        launcherPid,
+        projectPath,
+        resourceLabel: resource.displayName ?? resource.name,
+    };
+}
+
+function canRecognizeDotNetAttachDebuggerResource(resource: ResourceDebugResourceSnapshot): boolean {
+    if (resource.resourceType !== 'Project') {
+        return false;
+    }
+
+    const launchConfigurationType = getLaunchConfigurationType(resource);
+    // Newer AppHosts identify MAUI platform resources explicitly. Older AppHosts do not emit this
+    // property, so retain the parent fallback there rather than risking a CoreCLR attach to a device
+    // or simulator process. Ordinary grouped projects from newer AppHosts remain attachable.
+    if (launchConfigurationType === 'maui' ||
+        (launchConfigurationType === null && getResourceParentName(resource) !== null)) {
+        return false;
+    }
+
+    if (!isDotNetExecutable(resource)) {
+        return false;
+    }
+
+    const projectPath: unknown = resource.properties?.[projectPathPropertyName];
+    if (typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+        return false;
+    }
+
+    if (!dotNetProjectFileExtensions.has(path.extname(projectPath).toLowerCase())) {
+        return false;
+    }
+
+    return true;
+}
+
+function getDotNetLaunchMetadata(
+    resource: ResourceDebugResourceSnapshot,
+): Pick<DotNetAttachDebuggerResourceInfo, 'configuration' | 'framework' | 'launchCommand' | 'useTargetNameFallback'> | undefined {
+    const properties = resource.properties;
+    const hasConfiguration = properties !== null && properties !== undefined &&
+        Object.prototype.hasOwnProperty.call(properties, projectConfigurationPropertyName);
+    const hasFramework = properties !== null && properties !== undefined &&
+        Object.prototype.hasOwnProperty.call(properties, projectTargetFrameworkPropertyName);
+    const configuration = getNonEmptyStringProperty(resource, projectConfigurationPropertyName);
+    const framework = getNonEmptyStringProperty(resource, projectTargetFrameworkPropertyName);
+    if ((hasConfiguration && configuration === undefined) ||
+        (hasFramework && framework === undefined)) {
+        return undefined;
+    }
+
+    const hasLaunchCommand = properties !== null && properties !== undefined &&
+        Object.prototype.hasOwnProperty.call(properties, projectLaunchCommandPropertyName);
+    const launchCommandValue = properties?.[projectLaunchCommandPropertyName];
+    if (hasLaunchCommand && launchCommandValue !== 'run' && launchCommandValue !== 'watch') {
+        return undefined;
+    }
+
+    return {
+        configuration,
+        framework,
+        launchCommand: launchCommandValue as DotNetLaunchCommand | undefined,
+        useTargetNameFallback: !hasLaunchCommand &&
+            properties?.[executableArgsPropertyName] === null &&
+            !hasConfiguration &&
+            !hasFramework,
+    };
+}
+
+function getNonEmptyStringProperty(resource: ResourceDebugResourceSnapshot, propertyName: string): string | undefined {
+    const value: unknown = resource.properties?.[propertyName];
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function getResourceParentName(resource: ResourceDebugResourceSnapshot): string | null {
+    const value: unknown = resource.properties?.[resourceParentNamePropertyName];
+    return typeof value === 'string' ? value : null;
+}
+
+function getLaunchConfigurationType(resource: ResourceDebugResourceSnapshot): string | null {
+    const value: unknown = resource.properties?.[resourceLaunchConfigurationTypePropertyName];
+    return typeof value === 'string' ? value.trim().toLowerCase() : null;
+}
+
+function getAttachDebuggerProcessId(resource: ResourceDebugResourceSnapshot): number | undefined {
+    const value: unknown = resource.properties?.[executablePidPropertyName];
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+        return value;
+    }
+
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    const processId = Number(value);
+    if (!Number.isInteger(processId) || processId <= 0) {
+        return undefined;
+    }
+
+    return processId;
+}
+
+function isDotNetExecutable(resource: ResourceDebugResourceSnapshot): boolean {
+    const executablePath: unknown = resource.properties?.[executablePathPropertyName];
+    if (typeof executablePath !== 'string') {
+        return false;
+    }
+
+    const executableName = executablePath.split(/[\\/]/).pop()?.toLowerCase();
+    return executableName === 'dotnet' || executableName === 'dotnet.exe';
+}
+
+async function createDotNetProcessIdentity(
+    targetInfo: DotNetAttachTargetInfo,
+    attachInfo: DotNetAttachDebuggerResourceInfo,
+    fileSystem: DotNetAttachFileSystem,
+): Promise<LaunchedChildProcessIdentity> {
+    const requiresDirectChild = attachInfo.launchCommand !== 'watch';
+    if (attachInfo.useTargetNameFallback) {
+        const targetName = targetInfo.targetName;
+        if (targetName === undefined) {
+            throw new Error(attachDebuggerUnavailable);
+        }
+
+        return {
+            requiresDirectChild,
+            isLauncher: process => isDotNetProcess(process),
+            isCandidate: process => targetInfo.useAppHost
+                ? isAppHostProcessForTargetName(process, targetName)
+                : isFrameworkDependentProcessForTargetName(process, targetName),
+        };
+    }
+
+    const appHostPaths = targetInfo.useAppHost
+        ? await getCanonicalAppHostPaths(targetInfo.targetPath, fileSystem)
+        : undefined;
+    return {
+        requiresDirectChild,
+        isLauncher: process => isDotNetProcess(process),
+        isCandidate: process => targetInfo.useAppHost
+            ? isAppHostProcessForTarget(process, appHostPaths!)
+            : isFrameworkDependentProcessForTarget(process, targetInfo.targetPath),
+    };
+}
+
+function isDotNetProcess(process: LaunchedChildProcess): boolean {
+    const executableName = process.executable.split(/[\\/]/).pop()?.toLowerCase();
+    return executableName === 'dotnet' || executableName === 'dotnet.exe';
+}
+
+function isAppHostProcessForTarget(process: LaunchedChildProcess, appHostPaths: readonly string[]): boolean {
+    return appHostPaths.some(appHostPath => areProcessPathsEqual(process.executable, appHostPath));
+}
+
+function isAppHostProcessForTargetName(process: LaunchedChildProcess, targetName: string): boolean {
+    return doesProcessPathStemMatchTargetName(process.executable, targetName, '.exe');
+}
+
+function isFrameworkDependentProcessForTarget(process: LaunchedChildProcess, targetPath: string): boolean {
+    if (!isDotNetProcess(process)) {
+        return false;
+    }
+
+    if (process.commandLineArguments) {
+        return commandLineArgumentsContainTargetPath(process.commandLineArguments, targetPath);
+    }
+
+    return commandContainsPathArgumentAfterDotNetExec(process.command, targetPath);
+}
+
+function isFrameworkDependentProcessForTargetName(process: LaunchedChildProcess, targetName: string): boolean {
+    if (!isDotNetProcess(process)) {
+        return false;
+    }
+
+    const targetArgument = process.commandLineArguments
+        ? getFirstDllArgumentAfterExec(process.commandLineArguments)
+        : getFirstDllArgumentAfterDotNetExec(process.command);
+    return targetArgument !== undefined &&
+        doesProcessPathStemMatchTargetName(targetArgument, targetName, '.dll');
+}
+
+function getFirstDllArgumentAfterExec(argumentsList: readonly string[]): string | undefined {
+    const execIndex = argumentsList.indexOf('exec');
+    if (execIndex < 1) {
+        return undefined;
+    }
+
+    return argumentsList.slice(execIndex + 1).find(argument => /\.dll$/i.test(argument));
+}
+
+function getFirstDllArgumentAfterDotNetExec(command: string): string | undefined {
+    const dotNetExec = /^\s*(?:"[^"]+"|'[^']+'|\S+)\s+exec(?:\s+|$)/.exec(command);
+    if (!dotNetExec) {
+        return undefined;
+    }
+
+    const dllArgument = getFirstDllArgumentMatch(command.slice(dotNetExec[0].length));
+    return dllArgument?.[1] ?? dllArgument?.[2] ?? dllArgument?.[3];
+}
+
+function getFirstDllArgumentMatch(command: string): RegExpExecArray | null {
+    // Raw process text has the shape:
+    //   dotnet exec "/repo/bin/Release/net10.0/Api.dll" --flag /app/Other.dll
+    // Only the first DLL token is the host target; later DLL values are application arguments.
+    return /(?:^|\s)(?:"([^"]+\.dll)"|'([^']+\.dll)'|(\S+\.dll))(?=$|\s)/i.exec(command);
+}
+
+function doesProcessPathStemMatchTargetName(
+    processPath: string,
+    targetName: string,
+    extension: '.dll' | '.exe',
+): boolean {
+    const fileName = processPath.split(/[\\/]/).pop();
+    if (fileName === undefined) {
+        return false;
+    }
+
+    const stem = fileName.toLowerCase().endsWith(extension)
+        ? fileName.slice(0, -extension.length)
+        : fileName;
+    // Windows CIM can omit ExecutablePath and return only Name, such as `API.EXE`, so the
+    // executable suffix must also identify Windows semantics when no path is available.
+    const isWindowsIdentity = /^(?:[a-z]:[\\/]|\\\\)/i.test(processPath) ||
+        processPath.includes('\\') ||
+        /\.exe$/i.test(fileName);
+    return isWindowsIdentity
+        ? stem.toLowerCase() === targetName.toLowerCase()
+        : stem === targetName;
+}
+
+function areProcessPathsEqual(left: string, right: string): boolean {
+    const normalizedLeft = left.replace(/\\/g, '/');
+    const normalizedRight = right.replace(/\\/g, '/');
+    const isWindowsPath = /^[a-z]:\//i.test(normalizedLeft) || /^[a-z]:\//i.test(normalizedRight);
+    return isWindowsPath
+        ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+        : normalizedLeft === normalizedRight;
+}
+
+function getAppHostPaths(targetPath: string): readonly string[] {
+    if (path.extname(targetPath).toLowerCase() !== '.dll') {
+        return [targetPath];
+    }
+
+    const appHostPath = targetPath.slice(0, -'.dll'.length);
+    return [appHostPath, `${appHostPath}.exe`];
+}
+
+async function getCanonicalAppHostPaths(
+    targetPath: string,
+    fileSystem: DotNetAttachFileSystem,
+): Promise<readonly string[]> {
+    const appHostPaths = getAppHostPaths(targetPath);
+    const canonicalAppHostPaths = await Promise.all(appHostPaths.map(async appHostPath => {
+        try {
+            return await fileSystem.realpath(appHostPath);
+        }
+        catch {
+            return undefined;
+        }
+    }));
+
+    let canonicalTargetDirectory: string | undefined;
+    if (canonicalAppHostPaths.some(appHostPath => appHostPath === undefined)) {
+        try {
+            canonicalTargetDirectory = await fileSystem.realpath(path.dirname(targetPath));
+        }
+        catch {
+            // `/proc/<pid>/exe` resolves symlinked directories even after its final executable was
+            // unlinked. Retain the raw path if neither the file nor its parent directory survives.
+        }
+    }
+
+    const directoryCanonicalizedAppHostPaths = canonicalAppHostPaths.map((appHostPath, index) =>
+        appHostPath ?? (canonicalTargetDirectory
+            ? path.join(canonicalTargetDirectory, path.basename(appHostPaths[index]))
+            : appHostPaths[index]));
+    return [...new Set([...appHostPaths, ...directoryCanonicalizedAppHostPaths])];
+}
+
+function commandLineArgumentsContainTargetPath(argumentsList: readonly string[], targetPath: string): boolean {
+    const targetArgument = getFirstDllArgumentAfterExec(argumentsList);
+    return targetArgument !== undefined && areProcessPathsEqual(targetArgument, targetPath);
+}
+
+function commandContainsPathArgumentAfterDotNetExec(command: string, targetPath: string): boolean {
+    const dotNetExec = /^\s*(?:"[^"]+"|'[^']+'|\S+)\s+exec(?:\s+|$)/.exec(command);
+    if (!dotNetExec) {
+        return false;
+    }
+
+    const commandAfterExec = command.slice(dotNetExec[0].length);
+    const targetPathIndex = getPathArgumentIndex(commandAfterExec, targetPath);
+    const firstDllArgumentIndex = getFirstDllArgumentMatch(commandAfterExec)?.index;
+    return targetPathIndex !== undefined &&
+        firstDllArgumentIndex !== undefined &&
+        targetPathIndex <= firstDllArgumentIndex;
+}
+
+function getPathArgumentIndex(command: string, targetPath: string): number | undefined {
+    const normalizedCommand = command.replace(/\\/g, '/');
+    const normalizedTargetPath = targetPath.replace(/\\/g, '/');
+    const isWindowsPath = /^[a-z]:\//i.test(normalizedCommand) || /^[a-z]:\//i.test(normalizedTargetPath);
+    const match = new RegExp(
+        `(?:^|\\s|["'])${escapeRegularExpression(normalizedTargetPath)}(?=$|\\s|["'])`,
+        isWindowsPath ? 'i' : undefined).exec(normalizedCommand);
+    return match?.index;
+}
+
+function escapeRegularExpression(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export async function createDotNetAttachDebugSessionConfiguration(
+    resource: ResourceDebugResourceSnapshot,
+    dotNetService: IDotNetService,
+    childProcessResolver: LaunchedChildProcessResolver,
+    cancellationToken?: vscode.CancellationToken,
+    fileSystem: DotNetAttachFileSystem = systemDotNetAttachFileSystem,
+): Promise<vscode.DebugConfiguration> {
+    const attachInfo = getDotNetAttachDebuggerResourceInfo(resource);
+    if (!attachInfo) {
+        throw new ResourceAttachConfigurationError('resourceNotAttachable', invalidLaunchConfiguration(resource.name));
+    }
+
+    let targetInfo: DotNetAttachTargetInfo;
+    try {
+        targetInfo = await dotNetService.getDotNetAttachTargetInfo(attachInfo.projectPath, attachInfo.configuration, cancellationToken, attachInfo.framework);
+    }
+    catch (error) {
+        throw new ResourceAttachConfigurationError(
+            'resourceNotAttachable',
+            error instanceof Error ? error.message : String(error));
+    }
+
+    let applicationPid: number;
+    try {
+        applicationPid = await childProcessResolver.resolveProcessId(
+            attachInfo.launcherPid,
+            await createDotNetProcessIdentity(targetInfo, attachInfo, fileSystem),
+            cancellationToken);
+    }
+    catch (error) {
+        if (error instanceof vscode.CancellationError || cancellationToken?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        throw new ResourceAttachConfigurationError('resourceNotAttachable', attachDebuggerUnavailable);
+    }
+
+    if (!Number.isInteger(applicationPid) || applicationPid <= 0) {
+        throw new ResourceAttachConfigurationError('resourceNotAttachable', attachDebuggerUnavailable);
+    }
+
+    return {
+        type: 'coreclr',
+        request: 'attach',
+        name: attachDebuggerConfigurationName(attachInfo.resourceLabel),
+        processId: applicationPid,
+    };
+}
+
+export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession | undefined) => IDotNetService): ResourceDebuggerExtension {
     return {
         resourceType: 'project',
         debugAdapter: 'coreclr',
@@ -593,12 +1175,12 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 return launchConfig.project_path;
             }
 
-            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+            throw new Error(invalidLaunchConfiguration(launchConfig.type));
         },
         createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
             if (!isProjectLaunchConfiguration(launchConfig)) {
-                extensionLogOutputChannel.info(`The resource type was not project for ${JSON.stringify(launchConfig)}`);
-                throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+                extensionLogOutputChannel.info(`The resource type was not project for ${launchConfig.type}`);
+                throw new Error(invalidLaunchConfiguration(launchConfig.type));
             }
 
             const projectPath = launchConfig.project_path;
@@ -838,3 +1420,29 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 }
 
 export const projectDebuggerExtension: ResourceDebuggerExtension = createProjectDebuggerExtension(debugSession => new DotNetService(debugSession));
+
+export function createProjectResourceAttachProvider(
+    dotNetServiceProducer: () => IDotNetService,
+    childProcessResolver: LaunchedChildProcessResolver = launchedChildProcessResolver,
+    fileSystem: DotNetAttachFileSystem = systemDotNetAttachFileSystem,
+): ResourceAttachProvider {
+    return {
+        id: 'dotnet',
+        requiredDebuggerExtensions: [{
+            id: 'ms-dotnettools.csharp',
+            label: 'C#',
+            installMessage: attachDebuggerCsharpExtensionRequired,
+        }],
+        canRecognizeResource: resource => canRecognizeDotNetAttachDebuggerResource(resource),
+        canAttachToResource: resource => getDotNetAttachDebuggerResourceInfo(resource) !== undefined,
+        createDebugConfiguration: async (resource, cancellationToken) =>
+            await createDotNetAttachDebugSessionConfiguration(resource, dotNetServiceProducer(), childProcessResolver, cancellationToken, fileSystem),
+    };
+}
+
+const systemDotNetAttachFileSystem: DotNetAttachFileSystem = {
+    realpath: path => fs.promises.realpath(path),
+};
+
+export const projectResourceAttachProvider: ResourceAttachProvider =
+    createProjectResourceAttachProvider(() => new DotNetService(undefined));

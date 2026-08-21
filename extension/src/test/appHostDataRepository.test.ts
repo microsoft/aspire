@@ -1426,6 +1426,27 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('fetchAppHostResourcesOnce describes one AppHost with the caller cancellation token', async () => {
+        const describeProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const cancellation = new vscode.CancellationTokenSource();
+
+        try {
+            const fetchPromise = repository.fetchAppHostResourcesOnce('/workspace/AppHost.csproj', cancellation.token);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--format', 'json', '--nologo', '--apphost', '/workspace/AppHost.csproj']);
+            cancellation.cancel();
+
+            await assert.rejects(fetchPromise, vscode.CancellationError);
+            assert.strictEqual(describeProcess.killed, true);
+        } finally {
+            cancellation.dispose();
+            repository.dispose();
+        }
+    });
+
     test('fetchAppHostsOnce retries without nologo when an older CLI rejects it', async () => {
         const rejectedPsProcess = new TestChildProcess();
         const psProcess = new TestChildProcess();

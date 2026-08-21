@@ -456,7 +456,7 @@ export class AppHostDataRepository {
         const appHostList = await this.fetchRunningAppHostsOnce();
         const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
             ...appHost,
-            resources: await this._fetchAppHostResourcesOnce(appHost.appHostPath),
+            resources: await this.fetchAppHostResourcesOnce(appHost.appHostPath),
         })));
 
         return appHostsWithResources.map((result, index) => {
@@ -1300,11 +1300,11 @@ export class AppHostDataRepository {
         }
     }
 
-    private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
+    async fetchAppHostResourcesOnce(appHostPath: string, cancellationToken?: vscode.CancellationToken): Promise<ResourceJson[]> {
         const snapshot = await this._runCliJson<DescribeSnapshotJson>(
             'aspire describe',
             this._cliRunner.withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]),
-            { target: getCliPathTargetForUri(vscode.Uri.file(appHostPath)) });
+            { cancellationToken, target: getCliPathTargetForUri(vscode.Uri.file(appHostPath)) });
         return snapshot.resources ?? [];
     }
 

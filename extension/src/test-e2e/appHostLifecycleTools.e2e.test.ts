@@ -10,6 +10,7 @@ import { ensureDiagnosticsDir, getCliPath, getPrimaryAppHostProjectPath, getRepo
 import { acceptModalDialog, openAspireView, type AcceptedModalDialog } from './helpers/vscode';
 import { assertLinkedAppHostCliLaunch, commandLineArgumentEquals } from '../test/helpers/processArguments';
 import { getCmdShimSpawnCommand, shouldWrapWithCmd } from '../utils/cmdShimCommand';
+import { invokeLanguageModelTool, prepareLanguageModelToolInvocation } from './helpers/languageModelTools';
 
 interface LifecycleToolResult {
     tool: string;
@@ -19,12 +20,6 @@ interface LifecycleToolResult {
     effectiveMode?: string;
     isolated?: boolean;
     controller: string;
-}
-
-interface PreparedInvocation {
-    invocationMessage?: string;
-    confirmationTitle?: string;
-    confirmationMessage?: string;
 }
 
 interface RegisteredTool {
@@ -80,22 +75,22 @@ suite('Aspire AppHost lifecycle E2E', function () {
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const relativeAppHostPath = path.relative(getWorkspaceRoot(), appHostPath).split(path.sep).join('/');
 
-        const registeredTools = await invokeControlCommand<RegisteredTool[]>({ name: 'getRegisteredLanguageModelTools' });
-        assert.deepStrictEqual(registeredTools.map(tool => tool.name), [startToolName, stopToolName]);
+        const registeredTools = (await executeE2eControlCommand({ name: 'getRegisteredLanguageModelTools' })).result as RegisteredTool[];
+        assert.deepStrictEqual(
+            registeredTools
+                .filter(tool => tool.name === startToolName || tool.name === stopToolName)
+                .map(tool => tool.name),
+            [startToolName, stopToolName]);
 
         // The prepared invocation is also captured directly from the registered tool
         // instance so the exact confirmation strings are asserted, not just what the
         // modal renders.
-        const preparedStart = await invokeControlCommand<PreparedInvocation>({
-            name: 'prepareLanguageModelToolInvocation',
-            toolName: startToolName,
-            input: { appHostPath: relativeAppHostPath, mode: 'debug' },
-        });
-        const preparedStop = await invokeControlCommand<PreparedInvocation>({
-            name: 'prepareLanguageModelToolInvocation',
-            toolName: stopToolName,
-            input: { appHostPath: relativeAppHostPath },
-        });
+        const preparedStart = await prepareLanguageModelToolInvocation(
+            startToolName,
+            { appHostPath: relativeAppHostPath, mode: 'debug' });
+        const preparedStop = await prepareLanguageModelToolInvocation(
+            stopToolName,
+            { appHostPath: relativeAppHostPath });
 
         assert.strictEqual(preparedStart.confirmationTitle, 'Start Aspire AppHost');
         assert.strictEqual(preparedStart.confirmationMessage, `Start the Aspire AppHost ${relativeAppHostPath} in debug mode?`);
@@ -105,12 +100,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
         const debugLaunchesBeforeStart = getDebugLaunchCount();
         // Both calls are fired concurrently inside the extension host: the tool must
         // serialize them per AppHost path so only one of them launches a process.
-        const concurrentStartInvocation = await invokeLifecycleTool({
-            name: 'invokeLanguageModelTool',
-            toolName: startToolName,
-            input: { appHostPath: relativeAppHostPath, mode: 'debug' },
-            times: 2,
-        }, 600000, 2, 'apphost-lifecycle-start-confirmation');
+        const concurrentStartInvocation = await invokeLanguageModelTool<LifecycleToolResult>(
+            startToolName,
+            { appHostPath: relativeAppHostPath, mode: 'debug' },
+            { timeoutMs: 600000, times: 2, expectedConfirmations: 2, screenshotName: 'apphost-lifecycle-start-confirmation' });
         const concurrentStarts = concurrentStartInvocation.results;
 
         assert.strictEqual(concurrentStartInvocation.dialogs.length, 2, 'Expected each concurrent start call to require its own confirmation.');
@@ -134,11 +127,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
         const startedSessions = readStateFile().state.debugSessions.filter(session => session.appHostPath !== undefined && isSamePath(session.appHostPath, appHostPath));
         assert.strictEqual(startedSessions.length, 1, 'Expected exactly one editor-owned debug session after the concurrent start calls.');
 
-        const repeatedStartInvocation = await invokeLifecycleTool({
-            name: 'invokeLanguageModelTool',
-            toolName: startToolName,
-            input: { appHostPath: relativeAppHostPath, mode: 'run' },
-        }, 180000, 1);
+        const repeatedStartInvocation = await invokeLanguageModelTool<LifecycleToolResult>(
+            startToolName,
+            { appHostPath: relativeAppHostPath, mode: 'run' },
+            { timeoutMs: 180000 });
         const repeatedStart = repeatedStartInvocation.results;
         assert.strictEqual(repeatedStartInvocation.dialogs[0].details, `Start the Aspire AppHost ${relativeAppHostPath} in run mode?`);
         assert.strictEqual(repeatedStart.length, 1);
@@ -154,11 +146,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
         assert.deepStrictEqual(await findAppHostProcessIds(appHostPath), [appHostPid], 'Expected the repeated start call to leave the original AppHost process running.');
         assert.strictEqual(getDebugLaunchCount() - debugLaunchesBeforeStart, 1, 'Expected exactly one AppHost launch across all start calls.');
 
-        const stopInvocation = await invokeLifecycleTool({
-            name: 'invokeLanguageModelTool',
-            toolName: stopToolName,
-            input: { appHostPath: relativeAppHostPath },
-        }, 300000, 1, 'apphost-lifecycle-stop-confirmation');
+        const stopInvocation = await invokeLanguageModelTool<LifecycleToolResult>(
+            stopToolName,
+            { appHostPath: relativeAppHostPath },
+            { timeoutMs: 300000, screenshotName: 'apphost-lifecycle-stop-confirmation' });
         const stopResults = stopInvocation.results;
         assert.strictEqual(stopInvocation.dialogs[0].message, 'Stop Aspire AppHost');
         assert.strictEqual(stopInvocation.dialogs[0].details, `Stop the Aspire AppHost ${relativeAppHostPath}?`);
@@ -172,11 +163,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
         assert.strictEqual(readStateFile().state.debugSessions.length, 0, 'Expected no debug sessions after the stop tool call.');
         assert.deepStrictEqual(await waitForAppHostProcessCount(appHostPath, 0, 180000), [], 'Expected no AppHost processes after the stop tool call.');
 
-        const stopAgainResults = (await invokeLifecycleTool({
-            name: 'invokeLanguageModelTool',
-            toolName: stopToolName,
-            input: { appHostPath: relativeAppHostPath },
-        }, 120000, 1)).results;
+        const stopAgainResults = (await invokeLanguageModelTool<LifecycleToolResult>(
+            stopToolName,
+            { appHostPath: relativeAppHostPath },
+            { timeoutMs: 120000 })).results;
         assert.strictEqual(stopAgainResults[0].outcome, 'notRunning');
         assert.strictEqual(stopAgainResults[0].controller, 'none');
 
@@ -211,11 +201,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
             externalAppHostPid = await waitForExternalAppHost(externalRun, appHostPath, 600000);
             assert.strictEqual(readStateFile().state.debugSessions.length, 0, 'Expected a CLI-started AppHost to have no editor debug session.');
 
-            const stopInvocation = await invokeLifecycleTool({
-                name: 'invokeLanguageModelTool',
-                toolName: stopToolName,
-                input: { appHostPath: relativeAppHostPath },
-            }, 300000, 1, 'apphost-lifecycle-external-stop-confirmation');
+            const stopInvocation = await invokeLanguageModelTool<LifecycleToolResult>(
+                stopToolName,
+                { appHostPath: relativeAppHostPath },
+                { timeoutMs: 300000, screenshotName: 'apphost-lifecycle-external-stop-confirmation' });
 
             assert.strictEqual(stopInvocation.dialogs[0].message, 'Stop Aspire AppHost');
             assert.strictEqual(stopInvocation.dialogs[0].details, `Stop the Aspire AppHost ${relativeAppHostPath}?`);
@@ -403,11 +392,10 @@ suite('Aspire AppHost lifecycle E2E', function () {
                 const discovered = await waitForSelectedWorkspaceAppHost(fixture.appHostPath);
                 assert.ok(discovered.state.workspaceAppHostPath && isSamePath(discovered.state.workspaceAppHostPath, fixture.appHostPath));
 
-                const preparedStart = await invokeControlCommand<PreparedInvocation>({
-                    name: 'prepareLanguageModelToolInvocation',
-                    toolName: startToolName,
-                    input: { appHostPath: relativeAppHostPath, mode: 'debug' },
-                });
+                const preparedStart = await prepareLanguageModelToolInvocation(
+                    startToolName,
+                    { appHostPath: relativeAppHostPath, mode: 'debug' },
+                );
                 // The AppHost lives in a linked worktree and `isolated` was omitted, so the
                 // lifecycle tool infers isolation. The confirmation has to disclose that, because
                 // this dialog is what "Always allow" is granted against.

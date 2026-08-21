@@ -106,6 +106,35 @@ export interface TelemetryEventSchema {
         properties: 'resource_type' | 'mode' | 'exit_code_bucket' | 'end_reason' | 'error_kind';
         measurements: 'duration_ms' | 'exit_code';
     };
+    'aspire/vscode/resourcedebug/start': {
+        properties: 'source' | 'requested_strategy' | 'controller';
+        measurements: never;
+    };
+    'aspire/vscode/resourcedebug/result': {
+        properties:
+            | 'source'
+            | 'provider'
+            | 'resource_type'
+            | 'requested_strategy'
+            | 'effective_strategy'
+            | 'outcome'
+            | 'controller'
+            | 'state'
+            | 'debugger_requirement'
+            | 'error_kind';
+        measurements: 'resolution_duration_ms' | 'debug_start_duration_ms' | 'total_duration_ms';
+    };
+    'aspire/vscode/resourcedebug/session/end': {
+        properties:
+            | 'source'
+            | 'provider'
+            | 'resource_type'
+            | 'requested_strategy'
+            | 'effective_strategy'
+            | 'controller'
+            | 'session_end_reason';
+        measurements: 'session_duration_ms';
+    };
     'aspire/vscode/dashboard/launch/resolved': {
         properties: 'behavior' | 'source';
         measurements: never;

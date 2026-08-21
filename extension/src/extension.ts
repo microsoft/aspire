@@ -33,10 +33,16 @@ import { CliPathEnvironmentSynchronizer } from './utils/cliPathEnvironment';
 import { CliPathRejectionNotifier } from './utils/cliPathRejectionNotifier';
 import { cliPathResolver } from './utils/cliPath';
 import { AppHostLifecycleToolService, registerAppHostLifecycleTools } from './lm/appHostLifecycleTools';
+import { AppHostTargetResolverService } from './lm/appHostTargetResolverService';
+import { AspireResourceDebugToolService, registerAspireResourceDebugTool } from './lm/resourceDebugTools';
 import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
+import { extensionResourceAttachProviders, ResourceAttachProviderRegistry } from './debugger/resourceAttachProviders';
+import { ResourceDebugService } from './debugger/resourceDebugService';
+import { ResourceDebugSessionRegistry } from './debugger/resourceDebugSessionRegistry';
+import { ExtensionResourceDebugTelemetry, monotonicResourceDebugClock } from './debugger/resourceDebugTelemetry';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -117,6 +123,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
+  const resourceDebugTelemetry = new ExtensionResourceDebugTelemetry();
+  const resourceDebugClock = monotonicResourceDebugClock;
+  const resourceDebugSessionRegistry = new ResourceDebugSessionRegistry(vscode.debug, {
+    telemetry: resourceDebugTelemetry,
+    clock: resourceDebugClock,
+  });
+  const resourceDebugService = new ResourceDebugService({
+    appHostRepository: dataRepository,
+    attachProviders: new ResourceAttachProviderRegistry(extensionResourceAttachProviders),
+    sessionRegistry: resourceDebugSessionRegistry,
+    startDebugging: (workspaceFolder, configuration) =>
+      vscode.debug.startDebugging(workspaceFolder, configuration),
+    isProcessAlreadyDebugged: processId =>
+      aspireExtensionContext.aspireDebugSessions.some(session => session.hasResourceDebugSessionProcess(processId)),
+    telemetry: resourceDebugTelemetry,
+    clock: resourceDebugClock,
+  });
+  context.subscriptions.push(resourceDebugService);
   appHostLaunchService.setEditorSessionProvider(() => aspireExtensionContext.aspireDebugSessions);
   appHostLaunchService.setRunningAppHostProvider(async token => {
     const appHosts = await dataRepository.fetchRunningAppHostsOnce(token);
@@ -124,7 +148,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   appHostLaunchService.setExternalAppHostStopper((appHostPath, token) =>
     stopExternalAppHost(terminalProvider, appHostPath, token));
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, resourceDebugService, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,
@@ -210,13 +234,23 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Language model tools that let an agent use the same AppHost lifecycle service as the
   // editor and Aspire tree instead of maintaining a separate start/stop policy.
+  const appHostTargetResolver = new AppHostTargetResolverService({
+    discoveryService: appHostDiscoveryService,
+  });
   const appHostLifecycleToolService = new AppHostLifecycleToolService({
     launchService: appHostLaunchService,
-    discoveryService: appHostDiscoveryService,
+    targetResolver: appHostTargetResolver,
   });
   context.subscriptions.push(appHostLifecycleToolService);
   const appHostLifecycleToolRegistration = registerAppHostLifecycleTools(appHostLifecycleToolService);
   context.subscriptions.push(appHostLifecycleToolRegistration);
+  const resourceDebugToolService = new AspireResourceDebugToolService({
+    targetResolver: appHostTargetResolver,
+    resourceDebugger: resourceDebugService,
+  });
+  context.subscriptions.push(resourceDebugToolService);
+  const resourceDebugToolRegistration = registerAspireResourceDebugTool(resourceDebugToolService);
+  context.subscriptions.push(resourceDebugToolRegistration);
 
   const getEnableSettingsFileCreationPromptOnStartup = () => vscode.workspace.getConfiguration('aspire').get<boolean>('enableSettingsFileCreationPromptOnStartup', true);
   const setEnableSettingsFileCreationPromptOnStartup = async (value: boolean) => await vscode.workspace.getConfiguration('aspire').update('enableSettingsFileCreationPromptOnStartup', value, vscode.ConfigurationTarget.Workspace);
@@ -258,7 +292,11 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(appHostLaunchService.onDidChangeLaunchingState(fireStateChanged));
   context.subscriptions.push(appHostTreeProvider.onDidChangeStoppingState(fireStateChanged));
   context.subscriptions.push(aspireExtensionContext.onDidChangeDebugSessions(fireStateChanged));
-  const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event, appHostLifecycleToolRegistration.tools);
+  const preparableLanguageModelTools = new Map([
+    ...appHostLifecycleToolRegistration.tools,
+    ...resourceDebugToolRegistration.tools,
+  ]);
+  const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event, preparableLanguageModelTools);
   context.subscriptions.push(e2eStateFileBridge);
 
   await cliPathEnvironmentInitialization;

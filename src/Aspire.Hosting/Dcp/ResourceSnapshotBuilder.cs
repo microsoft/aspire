@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Launch configuration metadata is experimental but needed for snapshot serialization.
+
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -132,11 +134,17 @@ internal class ResourceSnapshotBuilder
     {
         string? projectPath = null;
         string? launchProfileName = null;
+        string? launchConfigurationType = null;
         IResource? appModelResource = null;
 
         if (executable.AppModelResourceName is not null &&
             _resourceState.ApplicationModel.TryGetValue(executable.AppModelResourceName, out appModelResource))
         {
+            if (appModelResource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var debugSupport))
+            {
+                launchConfigurationType = debugSupport.LaunchConfigurationType;
+            }
+
             if (appModelResource is ProjectResource projectResource)
             {
                 projectPath = projectResource.GetProjectMetadata().ProjectPath;
@@ -168,6 +176,10 @@ internal class ResourceSnapshotBuilder
         }
 
         var launchArguments = GetLaunchArgs(executable, effectiveArgs);
+        ImmutableArray<ResourcePropertySnapshot> launchConfigurationProperties = launchConfigurationType is null
+            ? []
+            : [new(KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType)];
+        var dotNetLaunchProperties = GetDotNetLaunchProperties(executable.Spec.ExecutablePath, effectiveArgs);
 
         if (projectPath is not null)
         {
@@ -185,6 +197,8 @@ internal class ResourceSnapshotBuilder
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Project.LaunchProfile, launchProfileName),
                     new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                     new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+                    .. dotNetLaunchProperties,
+                    .. launchConfigurationProperties,
                 ]),
                 EnvironmentVariables = environment,
                 CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
@@ -207,6 +221,7 @@ internal class ResourceSnapshotBuilder
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Pid, executable.Status?.ProcessId),
                 new(KnownProperties.Resource.AppArgs, launchArguments?.Args) { IsSensitive = launchArguments?.IsSensitive ?? false },
                 new(KnownProperties.Resource.AppArgsSensitivity, launchArguments?.ArgsAreSensitive) { IsSensitive = launchArguments?.IsSensitive ?? false },
+                .. launchConfigurationProperties,
             ]),
             EnvironmentVariables = environment,
             CreationTimeStamp = executable.Metadata.CreationTimestamp?.ToUniversalTime(),
@@ -220,6 +235,110 @@ internal class ResourceSnapshotBuilder
     private static bool IsNotStartedExecutableState(string? state)
     {
         return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
+    }
+
+    private static ImmutableArray<ResourcePropertySnapshot> GetDotNetLaunchProperties(string? executablePath, IReadOnlyList<string>? effectiveArgs)
+    {
+        var executableName = Path.GetFileName(executablePath);
+        if (!string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(executableName, "dotnet.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        if (effectiveArgs is not [var command, ..] ||
+            (!string.Equals(command, "run", StringComparison.OrdinalIgnoreCase) &&
+             !string.Equals(command, "watch", StringComparison.OrdinalIgnoreCase)))
+        {
+            return [new(KnownProperties.Project.LaunchCommand, null)];
+        }
+
+        string? configuration = null;
+        string? targetFramework = null;
+
+        // DCP reports dotnet launch arguments as:
+        //   ["watch", "--project", "/repo/api.csproj", "--configuration", "Release", "--framework=net10.0", "--", ...appArgs]
+        // Only launcher arguments before "--" are safe to publish as launch metadata. Application
+        // arguments after the separator can contain unrelated values and remain sensitive in executable.args.
+        for (var index = 1; index < effectiveArgs.Count; index++)
+        {
+            var argument = effectiveArgs[index];
+            if (argument == "--")
+            {
+                break;
+            }
+
+            if (TryReadOptionValue(argument, "--configuration", "-c", out var inlineConfiguration))
+            {
+                configuration = inlineConfiguration;
+                continue;
+            }
+
+            if (TryReadOptionValue(argument, "--framework", "-f", out var inlineTargetFramework))
+            {
+                targetFramework = inlineTargetFramework;
+                continue;
+            }
+
+            if (argument is "--configuration" or "-c")
+            {
+                configuration = ReadNextValue(effectiveArgs, ref index);
+                continue;
+            }
+
+            if (argument is "--framework" or "-f")
+            {
+                targetFramework = ReadNextValue(effectiveArgs, ref index);
+            }
+        }
+
+        var launchCommand = command.ToLowerInvariant();
+        var properties = ImmutableArray.CreateBuilder<ResourcePropertySnapshot>(3);
+        properties.Add(new(KnownProperties.Project.LaunchCommand, launchCommand));
+        if (configuration is not null)
+        {
+            properties.Add(new(KnownProperties.Project.Configuration, configuration));
+        }
+
+        if (targetFramework is not null)
+        {
+            properties.Add(new(KnownProperties.Project.TargetFramework, targetFramework));
+        }
+
+        return properties.ToImmutable();
+
+        static bool TryReadOptionValue(string argument, string longOption, string shortOption, out string? value)
+        {
+            foreach (var option in new[] { longOption, shortOption })
+            {
+                var prefix = option + "=";
+                if (argument.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    value = NormalizeValue(argument[prefix.Length..]);
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
+        }
+
+        static string? ReadNextValue(IReadOnlyList<string> arguments, ref int index)
+        {
+            if (index + 1 >= arguments.Count || arguments[index + 1] == "--")
+            {
+                return null;
+            }
+
+            index++;
+            return NormalizeValue(arguments[index]);
+        }
+
+        static string? NormalizeValue(string value)
+        {
+            var normalized = value.Trim();
+            return normalized.Length > 0 ? normalized : null;
+        }
     }
 
     private static (ImmutableArray<string> Args, ImmutableArray<int>? ArgsAreSensitive, bool IsSensitive)? GetLaunchArgs(CustomResource resource, IReadOnlyList<string>? effectiveArgs)

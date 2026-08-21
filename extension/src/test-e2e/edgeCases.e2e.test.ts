@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
+import type { ExecutableLaunchConfiguration } from '../dcp/types';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createExternalSingleFileAppHost, executeE2eControlCommand, isProcessAlive, removeExternalSingleFileAppHost, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
@@ -62,6 +63,17 @@ suite('Aspire extension edge case E2E', function () {
             executeE2eControlCommand({ name: 'publishAppHost' }),
             /publishAppHost requires appHostPath/);
         assert.strictEqual(getDebugLaunchCount(), beforePublishLaunch);
+
+        await assert.rejects(
+            executeE2eControlCommand({
+                name: 'createResourceDebugConfiguration',
+                launchConfig: {
+                    type: 'browser',
+                    browser: 'safari',
+                    url: 'https://top-secret.invalid',
+                } as ExecutableLaunchConfiguration,
+            }),
+            /E2E control command failed\./);
     });
 
     test('keeps CLI-independent settings commands available when the CLI is unavailable', async () => {

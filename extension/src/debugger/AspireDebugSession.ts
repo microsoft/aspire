@@ -286,6 +286,13 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     return this._cliProcess?.pid;
   }
 
+  // Already-started debugger integrations report the actual debuggee PID back to DCP.
+  // Resource attach must recognize that PID as editor-owned rather than treating it as a launcher.
+  hasResourceDebugSessionProcess(processId: number): boolean {
+    return this._resourceDebugSessions.some(
+      session => (session as Partial<AlreadyStartedResourceDebugSession>).processId === processId);
+  }
+
   constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, trackAppHostDebugSession: AppHostDebugSessionTracker = () => { }, debugSessionId: string = generateDcpIdPrefix(), operationKind?: AspireOperationKind) {
     this._session = session;
     this._rpcServer = rpcServer;

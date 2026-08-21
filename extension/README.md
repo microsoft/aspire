@@ -106,7 +106,7 @@ The dashboard gives you a live view of your running app — all your resources a
 
 ## Chat Tools for Agents
 
-The extension contributes two Language Model tools so chat agents start and stop your apphost through the same lifecycle operations as the Aspire view:
+The extension contributes three Language Model tools so chat agents can use the same AppHost and resource-debug operations as the Aspire view:
 
 When VS Code is active, agents should prefer these editor operations over running Aspire AppHost lifecycle commands in a terminal.
 
@@ -114,8 +114,11 @@ When VS Code is active, agents should prefer these editor operations over runnin
 |------|-------------------|--------------|
 | `aspire_apphost_start` | `#aspireStartAppHost` | Starts an apphost Aspire already discovered in your workspace, in `run` (no debugger) or `debug` (debugger attached) mode |
 | `aspire_apphost_stop` | `#aspireStopAppHost` | Stops a running apphost Aspire discovered in this workspace |
+| `aspire_resource_debug` | `#aspireDebugResource` | Attaches the debugger to a running resource from a discovered AppHost; `auto` and `attach` currently attach only |
 
-Both tools take the workspace-relative path of an apphost Aspire has already discovered — the same list the Aspire view shows — and resolve it against that list rather than against your filesystem. An agent can only name an apphost Aspire found, so it cannot point these tools at an arbitrary file, and the path shown in the confirmation is that discovered apphost's own path rather than anything the agent supplied. Absolute paths are rejected; in a multi-root workspace, always prefix the path with the workspace folder name. Both tools ask a chat agent's user to confirm before doing anything, and only work in a [trusted workspace](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust). They never pick an apphost for you: a path that names no discovered apphost, or more than one, fails and reports back the apphosts you can name. Starting an apphost that is already starting or running does not launch a second one. Stopping an editor-created apphost coordinates its Aspire debug session; stopping an apphost started from a terminal delegates to `aspire stop --apphost` for the same discovered path. The extension does not kill arbitrary processes. If it cannot determine which apphosts exist or whether the selected apphost is running, the call reports a failure rather than claiming nothing is there.
+All three tools take the workspace-relative path of an AppHost Aspire already discovered — the same list the Aspire view shows — and resolve it against that list rather than against your filesystem. An agent can only name an AppHost Aspire found, so it cannot point a tool at an arbitrary file. Absolute paths are rejected; in a multi-root workspace, prefix the path with the workspace folder name. The resource tool also takes a running resource name from that AppHost. `auto` does not start or restart a resource; it currently resolves to debugger attach.
+
+These tools only work in a [trusted workspace](https://code.visualstudio.com/docs/editing/workspaces/workspace-trust), and VS Code asks the chat user to confirm every invocation. When a target resolves during preparation, the confirmation shows the discovered AppHost identity. If it cannot resolve then, VS Code still shows a generic confirmation with no untrusted path text; invocation resolves the target again and fails safely if it is invalid, untrusted, or unavailable. Lifecycle tools never pick an AppHost for you: a path that names no discovered AppHost, or more than one, fails and reports the AppHosts you can name. Starting an AppHost that is already starting or running does not launch a second one. Stopping an editor-created AppHost coordinates its Aspire debug session; stopping an AppHost started from a terminal delegates to `aspire stop --apphost` for the same discovered path. The extension does not kill arbitrary processes. Resource attach returns a safe failure when the resource is stopped, unsupported, or missing its debugger extension.
 
 ---
 

@@ -17,6 +17,9 @@ export type {
     AppHostStartToolInput,
     AppHostStopToolInput,
     PreparableAppHostLifecycleTool,
+    SafeAppHostTarget,
+    SafeAppHostTargetResolver,
+    SafeAppHostTargetResolution,
 } from './appHostLifecycleToolContracts';
 export { AppHostLifecycleToolService } from './appHostLifecycleToolService';
 export {
