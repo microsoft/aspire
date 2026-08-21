@@ -17807,6 +17807,7 @@ func (s *inputsInteractionResult) Inputs() InteractionInputCollection {
 // InteractionInputBuilder is the public interface for handle type InteractionInputBuilder.
 type InteractionInputBuilder interface {
 	handleReference
+	ReleaseFiles() error
 	WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder
 	WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*DynamicLoadingOptions) InteractionInputBuilder
 	WithValue(value string) InteractionInputBuilder
@@ -17821,6 +17822,17 @@ type interactionInputBuilder struct {
 // newInteractionInputBuilderFromHandle wraps an existing handle as InteractionInputBuilder.
 func newInteractionInputBuilderFromHandle(h *handle, c *client) InteractionInputBuilder {
 	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// ReleaseFiles releases uploaded files associated with the input.
+func (s *interactionInputBuilder) ReleaseFiles() error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/releaseFiles", reqArgs)
+	return err
 }
 
 // WithChoiceOptions sets the choice options for the input.

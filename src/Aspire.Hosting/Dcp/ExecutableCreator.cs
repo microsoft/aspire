@@ -113,6 +113,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             configuration.EnvironmentVariables,
             resolvedLaunchToolArgumentCount,
             hasPreparedProjectArguments,
+            resourceLogger,
             cancellationToken).ConfigureAwait(false);
         ApplyResolvedProjectArguments(er, exe, resolvedLaunchToolArgumentCount);
 
@@ -208,6 +209,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         IEnumerable<KeyValuePair<string, string>> environmentVariables,
         int resolvedLaunchToolArgumentCount,
         bool hasPreparedProjectArguments,
+        ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
         if (er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
@@ -295,7 +297,14 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // This project-backed executable suppressed its process scaffold because the custom launch
                 // configuration performs the tool invocation. With no resolved prefix to replace it, Process
                 // execution would run a bare tool command such as `dotnet <app-args>`.
-                throw;
+                var failureMessage =
+                    $"Failed to apply launch configuration for resource '{er.ModelResource.Name}'. " +
+                    "Process fallback is unavailable because the active launch configuration owns the resource's launch tool arguments, " +
+                    "but those arguments resolved empty and the project process scaffold was suppressed.";
+                // DcpExecutor expects IObjectCreator<Executable, EmptyCreationContext>.CreateObjectAsync to log
+                // failure details before throwing FailedToApplyEnvironmentException, so record the diagnostic here.
+                resourceLogger.LogError(ex, "{Message}", failureMessage);
+                throw new FailedToApplyEnvironmentException(failureMessage, ex);
             }
 
             // The command line is composed after this point, so Process execution receives the full tool invocation.

@@ -34,6 +34,7 @@ export const cmdShimPercentArgument = vscode.l10n.t('Arguments containing %NAME%
 export const azureFunctionsUnsupportedTaskShell = vscode.l10n.t('The configured VS Code task shell is not supported for Azure Functions launch arguments. Configure terminal.integrated.automationProfile to use PowerShell, Command Prompt, bash, zsh, fish, or WSL.');
 export const azureFunctionsCmdPercentArgument = vscode.l10n.t('Azure Functions launch arguments containing "%" are not supported by cmd.exe. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
 export const azureFunctionsCmdDelayedExpansion = vscode.l10n.t('Azure Functions launch arguments containing "!" are not supported by cmd.exe because delayed environment variable expansion may change them. Configure terminal.integrated.automationProfile.windows to use PowerShell and try again.');
+export const azureFunctionsInvalidProcessId = (processId: string) => vscode.l10n.t('Azure Functions returned an invalid worker process ID: {0}.', processId);
 export const azureFunctionsTaskExitedBeforeStartup = (exitCode: number) => vscode.l10n.t('Azure Functions task exited with code {0} before startup completed.', exitCode);
 export const azureFunctionsHostStartupTimedOut = (timeoutSeconds: number, port: number) => vscode.l10n.t('Timed out after {0} seconds waiting for the Azure Functions host to start on port {1}.', timeoutSeconds, port);
 export const azureFunctionsWorkerStartupTimedOut = (timeoutSeconds: number) => vscode.l10n.t('Timed out after {0} seconds waiting for the Azure Functions worker process to start.', timeoutSeconds);
@@ -204,6 +205,7 @@ export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default AppHost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default AppHost for this workspace?');
 export const selectDefaultLaunchApphost = vscode.l10n.t('Select the default AppHost to launch when starting an Aspire debug session');
+export const selectAppHostToLaunch = vscode.l10n.t('Multiple AppHosts were found. Select the one to launch');
 export const noAppHostInWorkspace = vscode.l10n.t('No AppHost found in the Aspire settings file.');
 export const dashboard = vscode.l10n.t('Dashboard');
 export const codespaces = vscode.l10n.t('Codespaces');

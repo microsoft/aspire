@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -46,6 +47,7 @@ export function createE2eStateFileBridge(
     return new vscode.Disposable(() => undefined);
   }
 
+  const extensionHostSessionId = randomUUID();
   const commandInvocations: AspireExtensionE2ECommandInvocation[] = [];
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
@@ -75,6 +77,7 @@ export function createE2eStateFileBridge(
     recordStoppingPathEvents(state.stoppingPaths);
 
     writeJsonFileAtomic(stateFile, {
+      extensionHostSessionId,
       updatedAt: new Date().toISOString(),
       runId,
       state,
@@ -610,7 +613,14 @@ export async function executeE2eControlCommand(
         throw new Error('Aspire extension E2E startDebugging requires an open workspace folder.');
       }
 
-      const commandPromise = vscode.debug.startDebugging(workspaceFolder, command.configurationName);
+      // Passing a name only searches launch.json. Resolve a matching dynamic configuration first so
+      // the control command can await the same provider pipeline that VS Code's debug picker starts.
+      const dynamicConfigurations = await aspireContext.debugConfigProvider?.provideDebugConfigurations(workspaceFolder);
+      const configuration = dynamicConfigurations?.find(configuration =>
+        configuration.name === command.configurationName ||
+        configuration.name.startsWith(`${command.configurationName} (`))
+        ?? command.configurationName;
+      const commandPromise = vscode.debug.startDebugging(workspaceFolder, configuration);
       markStarted();
       return await commandPromise;
     }

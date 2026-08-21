@@ -97,6 +97,7 @@ export interface AspireExtensionApiV2 extends AspireExtensionApiBase {
 export type AspireExtensionApi = AspireExtensionApiV2;
 
 export interface AspireExtensionE2EStateFile {
+    extensionHostSessionId: string;
     updatedAt: string;
     /**
      * Identifies the E2E run whose extension host produced this file. The state and control files

@@ -10,9 +10,9 @@
       "version": "v5.0.5",
       "sha": "27d5ce7f107fe9357f9df03efb73ab90386fccae"
     },
-    "actions/checkout@v4": {
+    "actions/checkout@v4.3.1": {
       "repo": "actions/checkout",
-      "version": "v4",
+      "version": "v4.3.1",
       "sha": "34e114876b0b11c390a56381ad16ebd13914f8d5"
     },
     "actions/checkout@v6.0.2": {
@@ -30,9 +30,9 @@
       "version": "v3.1.1",
       "sha": "1b10c78c7865c340bc4f6099eb2f838309f1e8c3"
     },
-    "actions/download-artifact@v4": {
+    "actions/download-artifact@v4.3.0": {
       "repo": "actions/download-artifact",
-      "version": "v4",
+      "version": "v4.3.0",
       "sha": "d3f86a106a0bac45b974a628896c90dbdf5c8093"
     },
     "actions/download-artifact@v8.0.1": {
@@ -55,9 +55,9 @@
       "version": "v6.4.0",
       "sha": "48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e"
     },
-    "actions/upload-artifact@v4": {
+    "actions/upload-artifact@v4.6.2": {
       "repo": "actions/upload-artifact",
-      "version": "v4",
+      "version": "v4.6.2",
       "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02"
     },
     "actions/upload-artifact@v7.0.1": {

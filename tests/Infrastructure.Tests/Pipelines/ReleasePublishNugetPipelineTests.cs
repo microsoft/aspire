@@ -546,6 +546,36 @@ public sealed class ReleasePublishNugetPipelineTests
     }
 
     [Fact]
+    public async Task WinGetPublishingRunsOnlyForStableReleases()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        Assert.Equal("false", FindYamlParameterDefault(pipeline, "SkipWinGetPublish"));
+
+        const string stableReleaseGate = "${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:";
+        Assert.Equal(2, pipeline.Split(stableReleaseGate, StringSplitOptions.None).Length - 1);
+
+        var winGetJob = ExtractSection(
+            pipeline,
+            "# ===== WINGET PUBLISHING =====",
+            "# ===== STAGE 3: GITHUB TASKS =====");
+        Assert.Contains("eq('${{ parameters.SkipWinGetPublish }}', 'false')", winGetJob);
+        Assert.Contains("eq('${{ parameters.IsPrerelease }}', 'false')", winGetJob);
+
+        var releaseSummary = ExtractSection(
+            pipeline,
+            "# ===== SUMMARY =====",
+            "# ===== VS CODE EXTENSION PUBLISHING =====");
+        var winGetSummary = ExtractSection(
+            releaseSummary,
+            """Write-Host "║ WinGet:""",
+            """Write-Host "║ GitHub Tasks:""");
+        Assert.Contains("""if ("${{ parameters.SkipWinGetPublish }}" -eq "true")""", winGetSummary);
+        Assert.Contains("""elseif ("${{ parameters.IsPrerelease }}" -eq "true")""", winGetSummary);
+        Assert.Contains("Write-Host \" (SKIPPED - prerelease)\"", winGetSummary);
+    }
+
+    [Fact]
     public async Task VSCodeExtensionPublishUsesAzureCredential()
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
@@ -594,6 +624,38 @@ public sealed class ReleasePublishNugetPipelineTests
 
         Assert.Contains("can acquire an Azure credential and read publisher role assignments", workflow);
         Assert.Contains("Separately confirm the service connection identity is a Contributor", workflow);
+    }
+
+    [Fact]
+    public async Task WinGetJobVerifiesWingetCreateBeforeConditionalSubmission()
+    {
+        var template = await ReadRepoFileAsync("eng/pipelines/templates/publish-winget.yml");
+        var runtimeInstallIndex = FindRequiredText(template, "- task: UseDotNet@2");
+        var wingetCreateInstallIndex = FindRequiredText(template, "Write-Host \"Downloading wingetcreate...\"");
+        var submitIndex = FindRequiredText(template, "Write-Host \"Submitting WinGet manifests");
+        var runtimeInstall = template[runtimeInstallIndex..wingetCreateInstallIndex];
+        var wingetCreateInstall = template[wingetCreateInstallIndex..submitIndex];
+        var submission = template[submitIndex..];
+
+        Assert.Contains("packageType: 'runtime'", runtimeInstall);
+        Assert.Contains("version: '9.0.x'", runtimeInstall);
+        Assert.Contains("condition: succeeded()", runtimeInstall);
+        Assert.Contains("wingetcreate.exe\" info", wingetCreateInstall);
+        Assert.Contains("condition: succeeded()", wingetCreateInstall);
+        Assert.Contains("eq('${{ parameters.dryRun }}', 'false')", submission);
+        Assert.Contains("eq(variables['_IsProductionBranch'], 'true')", submission);
+    }
+
+    [Fact]
+    public async Task WinGetPreparationExercisesWingetCreate()
+    {
+        var template = await ReadRepoFileAsync("eng/pipelines/templates/prepare-winget-manifest.yml");
+
+        Assert.Contains("- task: UseDotNet@2", template);
+        Assert.Contains("packageType: 'runtime'", template);
+        Assert.Contains("version: '9.0.x'", template);
+        Assert.Contains("https://aka.ms/wingetcreate/latest", template);
+        Assert.Contains("wingetcreate.exe\" info", template);
     }
 
     [Fact]
