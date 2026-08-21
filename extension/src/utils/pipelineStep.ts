@@ -1,7 +1,98 @@
 import * as vscode from 'vscode';
-import { enterPipelineStep, pipelineStepRequired } from '../loc/strings';
+import { AppHostCliRunner, parseCliJsonOutput } from '../data/appHostCliRunner';
+import { AspireCliFailedError, AspireCliParseError } from '../data/appHostCliContracts';
+import { enterPipelineStep, loadingPipelineSteps, noPipelineStepsFound, pipelineStepRequired, selectPipelineStep } from '../loc/strings';
 import { CliPathResolutionTarget } from './cliPathVariables';
 import { ConfigInfoProvider } from './configInfoProvider';
+
+export interface PipelineStepInfo {
+    name: string;
+    description?: string;
+    dependsOn: string[];
+    tags: string[];
+    resourceName?: string;
+}
+
+interface PipelineStepQuickPickItem extends vscode.QuickPickItem {
+    step: PipelineStepInfo;
+}
+
+const appHostIncompatibleExitCode = 9;
+
+export async function selectPipelineStepFromCli(
+    cliRunner: AppHostCliRunner,
+    appHostPath: string,
+    target: CliPathResolutionTarget,
+    cliPath: string,
+): Promise<string | undefined> {
+    const args = cliRunner.withNoLogo([
+        'do',
+        '--list-steps',
+        '--format',
+        'json',
+        '--apphost',
+        appHostPath,
+    ], cliPath);
+    const { stdout } = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: loadingPipelineSteps,
+        cancellable: true,
+    }, async (_, cancellationToken) => cliRunner.runCliCommand(
+        'list pipeline steps',
+        args,
+        { target, cliPath, timeoutMs: null, cancellationToken }));
+    const steps = parsePipelineSteps(stdout);
+
+    if (steps.length === 0) {
+        await vscode.window.showInformationMessage(noPipelineStepsFound);
+        return undefined;
+    }
+
+    const items: PipelineStepQuickPickItem[] = steps.map(step => ({
+        label: step.name,
+        description: step.description,
+        detail: step.resourceName,
+        step,
+    }));
+    const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: selectPipelineStep,
+        matchOnDescription: true,
+        matchOnDetail: true,
+    });
+
+    return selected?.step.name;
+}
+
+export function isPipelineStepListUnsupportedError(error: unknown): boolean {
+    return error instanceof AspireCliFailedError && error.exitCode === appHostIncompatibleExitCode;
+}
+
+function parsePipelineSteps(stdout: string): PipelineStepInfo[] {
+    const value = parseCliJsonOutput<unknown>(stdout);
+    if (!Array.isArray(value) || !value.every(isPipelineStepInfo)) {
+        throw new AspireCliParseError('list pipeline steps', stdout, new Error('The response does not contain valid pipeline step metadata.'));
+    }
+
+    return value;
+}
+
+function isPipelineStepInfo(value: unknown): value is PipelineStepInfo {
+    if (!isRecord(value)
+        || typeof value.name !== 'string'
+        || !Array.isArray(value.dependsOn)
+        || !value.dependsOn.every(item => typeof item === 'string')
+        || !Array.isArray(value.tags)
+        || !value.tags.every(item => typeof item === 'string')) {
+        return false;
+    }
+
+    return (value.description === undefined || typeof value.description === 'string')
+        && (value.resourceName === undefined || typeof value.resourceName === 'string');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
 
 /**
  * Resolves the pipeline step for the exact CLI target that will execute it.

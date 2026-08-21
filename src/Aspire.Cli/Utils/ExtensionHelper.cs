@@ -37,11 +37,7 @@ internal static class KnownCapabilities
     public const string SecretPrompts = "secret-prompts.v1";
     public const string FilePickers = "file-pickers.v1";
     public const string Pipelines = "pipelines";
-
-    // Advertised so tooling can gate explicit CLI actions against the selected AppHost CLI.
-    public const string DeployCommand = "deploy-command.v1";
-    public const string PublishCommand = "publish-command.v1";
-    public const string DoCommand = "do-command.v1";
+    public const string PipelineStepListJson = "pipeline-step-list-json.v1";
 
     // Advertised so tooling (e.g. the VS Code extension) can detect that `aspire describe`
     // understands the hidden `--include-disabled-commands` flag without having to optimistically
@@ -58,5 +54,5 @@ internal static class KnownCapabilities
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DeployCommand, PublishCommand, DoCommand, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch];
 }

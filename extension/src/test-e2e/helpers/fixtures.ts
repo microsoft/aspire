@@ -3,10 +3,7 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import {
-    deployCommandCapability,
-    doCommandCapability,
     lsJsonStreamCapability,
-    publishCommandCapability,
     type ConfigInfo,
 } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
@@ -239,24 +236,14 @@ export function removePrimaryAppHostFixture(): void {
     removeWorkspaceAppHostConfig();
 }
 
-export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
+export function writeBaselineActionCliWrapper(name = 'aspire-baseline-actions'): string {
     return writeCliWrapper(name, {
         configInfoJson: createConfigInfo(),
     });
 }
 
-export function writeActionCapabilitiesCliWrapper(name = 'aspire-action-capabilities'): string {
-    return writeCliWrapper(name, {
-        configInfoJson: createConfigInfo([
-            deployCommandCapability,
-            publishCommandCapability,
-            doCommandCapability,
-        ]),
-    });
-}
-
 /**
- * A capability-advertising CLI whose `deploy` blocks until the test releases it. The extension
+ * A CLI whose `deploy` blocks until the test releases it. The extension
  * ends a durable non-Run operation when the CLI process exits, so holding the process is what
  * keeps one deploy observably in flight for the operating row and duplicate-action assertions.
  */
@@ -273,11 +260,7 @@ export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-act
     fs.mkdirSync(gateDirectory, { recursive: true });
 
     const cliPath = writeCliWrapper(name, {
-        configInfoJson: createConfigInfo([
-            deployCommandCapability,
-            publishCommandCapability,
-            doCommandCapability,
-        ]),
+        configInfoJson: createConfigInfo(),
         deployGateDirectory: gateDirectory,
         deployRequestFilePath,
         deployReleaseFilePath,
@@ -306,9 +289,9 @@ export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-act
 
 export function writeLegacyPipelineActionCliWrapper(name = 'aspire-legacy-pipeline-action'): string {
     return writeCliWrapper(name, {
-        // The action itself is supported, but omitting `pipelines` keeps the extension-side input
+        // Omitting `pipelines` keeps the extension-side input
         // fallback active for CLIs that cannot select a pipeline step through the interaction API.
-        configInfoJson: createConfigInfo([doCommandCapability]),
+        configInfoJson: createConfigInfo(),
     });
 }
 

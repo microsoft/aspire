@@ -31,6 +31,7 @@ suite('Aspire AppHost tree E2E', function () {
 
         const item = await waitForTreeItem(section, label);
         assert.strictEqual(await item.getLabel(), label);
+        assert.ok(await waitForChildTreeItem(item, 'Run AppHost'));
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
     });
 

@@ -24,6 +24,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Action<string, string?, bool, DebugSessionOptions?>? StartDebugSessionCallback { get; set; }
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
+    public Func<string, Func<string, ValidationResult>?, bool, bool, PromptBinding<string?>?, CancellationToken, Task<string>>? PromptForStringCallback { get; set; }
     public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
     public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
@@ -54,6 +55,11 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
+        if (PromptForStringCallback is not null)
+        {
+            return PromptForStringCallback(promptText, validator, isSecret, required, binding, cancellationToken);
+        }
+
         return Task.FromResult(binding?.DefaultValue ?? string.Empty);
     }
 

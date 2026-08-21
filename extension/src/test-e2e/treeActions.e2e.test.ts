@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeActionCapabilitiesCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
 import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
@@ -40,7 +40,7 @@ suite('Aspire tree action command E2E', function () {
         const primaryFolderPath = path.dirname(primaryAppHostPath);
         const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondaryActions', 'single-file');
         const secondaryFolderPath = path.dirname(secondaryAppHostPath);
-        const secondaryCliPath = writeActionCapabilitiesCliWrapper('aspire-secondary-actions');
+        const secondaryCliPath = writeBaselineActionCliWrapper('aspire-secondary-actions');
 
         await setE2eCliPathForE2E(undefined);
         const workspaceFolders = await setWorkspaceFoldersForE2E([
@@ -158,10 +158,10 @@ suite('Aspire tree action command E2E', function () {
         const runLaunchBefore = getDebugLaunchCount();
         const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runPipelineStepAppHost');
         await executeE2eControlCommand({ name: 'runPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
-        await answerActiveInputByMessage('e2e-run-action-step', 'The name of the step to execute', 120000);
+        await chooseActiveQuickPick('e2e-run-action-step', 120000);
         await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'success', 60000, runInvocationBefore);
         const runLaunch = await waitForDebugLaunch(
-            event => event.command === 'do' && event.noDebug && event.doStep === undefined,
+            event => event.command === 'do' && event.noDebug && event.doStep === 'e2e-run-action-step',
             'current CLI run pipeline launch',
             60000,
             runLaunchBefore);
@@ -172,10 +172,10 @@ suite('Aspire tree action command E2E', function () {
         const debugLaunchBefore = getDebugLaunchCount();
         const debugInvocationBefore = getCommandInvocationCount('aspire-vscode.debugPipelineStepAppHost');
         await executeE2eControlCommand({ name: 'debugPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
-        await answerActiveInputByMessage('e2e-debug-action-step', 'The name of the step to execute', 120000);
+        await chooseActiveQuickPick('e2e-debug-action-step', 120000);
         await waitForCommandOutcome('aspire-vscode.debugPipelineStepAppHost', 'success', 60000, debugInvocationBefore);
         const debugLaunch = await waitForDebugLaunch(
-            event => event.command === 'do' && !event.noDebug && event.doStep === undefined,
+            event => event.command === 'do' && !event.noDebug && event.doStep === 'e2e-debug-action-step',
             'current CLI debug pipeline launch',
             60000,
             debugLaunchBefore);

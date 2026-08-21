@@ -12,26 +12,25 @@ import * as workspaceModule from '../utils/workspace';
 import * as appHostIdentityModule from '../utils/appHostIdentity';
 import { registerTreeViewCommands } from '../activation/registerTreeViewCommands';
 import { AppHostDataRepository, shortenPath, shortenPaths } from '../data/AppHostDataRepository';
+import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { getResourceContextValue, getResourceIcon, getResourceCommandIcon, resolveAppHostSourcePath, buildResourceDescription } from '../views/treePresentation';
 import { AppHostItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
 import type { Clipboard } from '../views/AspireAppHostTreeProvider';
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../data/AppHostDataRepository';
+import { AppHostCliRunner } from '../data/appHostCliRunner';
 import { ResourceCommandInputType } from '../data/AppHostDataRepository';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService, type AppHostOperationState } from '../services/AppHostLaunchService';
-import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid, appHostSourceNotFound } from '../loc/strings';
+import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid, appHostSourceNotFound, loadingPipelineSteps } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import {
-    deployCommandCapability,
-    doCommandCapability,
     lsJsonStreamCapability,
     pipelineInteractionCapability,
-    publishCommandCapability,
-    type CapabilityStatus,
+    pipelineStepListJsonCapability,
     type ConfigInfo,
 } from '../types/configInfo';
 import { windowCliPathTarget, workspaceFolderCliPathTarget, type CliPathResolutionTarget } from '../utils/cliPathVariables';
@@ -2264,9 +2263,8 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         assert.strictEqual(appHostItem.label, 'AppHost.csproj');
         assert.strictEqual(appHostItem.contextValue, 'workspaceAppHost');
-        assert.strictEqual(appHostItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
-        // Deploy/publish/pipeline rows stay hidden until the selected CLI has been probed and
-        // reports that it supports them; Run and Debug never depend on a capability.
+        assert.strictEqual(appHostItem.collapsibleState, vscode.TreeItemCollapsibleState.Expanded);
+        // Deploy, publish, and pipeline rows stay hidden until the AppHost's CLI resolves.
         const appHostChildren = provider.getChildren(appHostItem);
         assert.deepStrictEqual(appHostChildren.map(item => item.contextValue), [
             'workspaceAppHostAction:openSource',
@@ -2629,12 +2627,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             availableFeatures: [],
             localSettingsSchema: { properties: [] },
             globalSettingsSchema: { properties: [] },
-            capabilities: [
-                deployCommandCapability,
-                publishCommandCapability,
-                doCommandCapability,
-                pipelineInteractionCapability,
-            ],
+            capabilities: [pipelineInteractionCapability],
         });
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
         const callbacks = registerTreeCommandCallbacks(sandbox, provider, repository);
@@ -2651,8 +2644,8 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         await callbacks.get('aspire-vscode.debugPipelineStepAppHost')!(secondaryAppHost);
 
         // Each AppHost resolves its own CLI once while rendering, and the four actions reuse that
-        // exact pair instead of resolving again. Pipeline actions check the pinned executable again
-        // after the CLI-owned step selection or legacy input prompt completes.
+        // exact pair instead of resolving again. Pipeline actions check the pinned executable and
+        // capability set again after the CLI-owned step selection or legacy input prompt completes.
         assert.deepStrictEqual(resolveCliPathStub.getCalls().map(call => call.args), [
             [windowCliPathTarget],
             [secondaryTarget],
@@ -2666,6 +2659,8 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             ['debug_gate', secondaryTarget, { pinnedCliPath: cliPath }],
         ]);
         assert.deepStrictEqual(getConfigInfoStub.getCalls().map(call => call.args), [
+            [{ target: secondaryTarget, cliPath, suppressErrors: true, forceRefresh: true }],
+            [{ target: secondaryTarget, cliPath, suppressErrors: true, forceRefresh: true }],
             [{ target: secondaryTarget, cliPath, suppressErrors: true, forceRefresh: true }],
             [{ target: secondaryTarget, cliPath, suppressErrors: true, forceRefresh: true }],
         ]);
@@ -2800,11 +2795,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             availableFeatures: [],
             localSettingsSchema: { properties: [] },
             globalSettingsSchema: { properties: [] },
-            capabilities: [
-                deployCommandCapability,
-                publishCommandCapability,
-                doCommandCapability,
-            ],
+            capabilities: [],
         });
         sandbox.stub(vscode.window, 'showInputBox').resolves(undefined);
         const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
@@ -3735,7 +3726,7 @@ suite('showResourceCommandOutput', () => {
     });
 });
 
-suite('AppHost tree action gating', () => {
+suite('AppHost tree actions', () => {
     let sandbox: sinon.SinonSandbox;
 
     setup(() => {
@@ -3756,7 +3747,7 @@ suite('AppHost tree action gating', () => {
         readonly resolveCliPath: sinon.SinonStub;
         readonly checkCliAvailable: sinon.SinonStub;
         readonly getConfigInfo: sinon.SinonStub;
-        readonly capabilityStatus: sinon.SinonStub;
+        readonly runCliCommand: sinon.SinonStub;
         readonly launch: sinon.SinonStub;
         readonly fireOperationChange: () => void;
         readonly setOperation: (operation: AppHostOperationState | undefined) => void;
@@ -3784,15 +3775,14 @@ suite('AppHost tree action gating', () => {
     }
 
     /**
-     * Builds a provider whose CLI resolution, capability answers and durable operation state are
-     * all controlled by the test, so gating can be observed without touching a real Aspire CLI.
+    * Builds a provider whose CLI resolution, pipeline protocol support, and durable operation
+    * state are controlled by the test without touching a real Aspire CLI.
      */
     function makeGatingHarness(options?: {
         repository?: AppHostDataRepository;
         cliPath?: string;
         cliAvailable?: boolean;
         forceRefreshConfigInfo?: (callOptions?: configInfoProvider.ConfigInfoOptions) => ConfigInfo | null | Promise<ConfigInfo | null>;
-        capabilityStatus?: (capability: string, callOptions?: configInfoProvider.ConfigInfoOptions) => CapabilityStatus | Promise<CapabilityStatus>;
     }): GatingHarness {
         const repository = options?.repository ?? makeGatingRepository();
         const operationEmitter = new vscode.EventEmitter<void>();
@@ -3867,23 +3857,22 @@ suite('AppHost tree action gating', () => {
                     availableFeatures: [],
                     localSettingsSchema: { properties: [] },
                     globalSettingsSchema: { properties: [] },
-                    capabilities: [
-                        deployCommandCapability,
-                        publishCommandCapability,
-                        doCommandCapability,
-                        pipelineInteractionCapability,
-                    ],
+                    capabilities: [pipelineInteractionCapability],
                 });
-        const capabilityStatus = sandbox.stub(configInfoProviderInstance, 'getCapabilityStatus');
-        capabilityStatus.callsFake(async (capability: string, callOptions?: configInfoProvider.ConfigInfoOptions) =>
-            options?.capabilityStatus?.(capability, callOptions) ?? 'supported');
+        const runCliCommand = sandbox.stub().resolves({ stdout: '[]', stderr: '' });
+        const cliRunner = {
+            withNoLogo: (args: string[]) => [...args, '--nologo'],
+            runCliCommand,
+            dispose: () => { },
+        } as unknown as AppHostCliRunner;
         const provider = new AspireAppHostTreeProvider(
             repository,
             makeTerminalProvider(),
             launchService,
             undefined,
             makeClipboard(),
-            configInfoProviderInstance);
+            configInfoProviderInstance,
+            cliRunner);
 
         return {
             provider,
@@ -3893,7 +3882,7 @@ suite('AppHost tree action gating', () => {
             resolveCliPath,
             checkCliAvailable,
             getConfigInfo,
-            capabilityStatus,
+            runCliCommand,
             launch: launchService.launch as unknown as sinon.SinonStub,
             fireOperationChange: () => operationEmitter.fire(),
             setOperation: value => { operation = value; },
@@ -3915,7 +3904,7 @@ suite('AppHost tree action gating', () => {
         };
     }
 
-    /** Renders the tree until the background capability probe for an AppHost has completed. */
+    /** Renders the tree until the AppHost's CLI has resolved. */
     async function renderUntilProbed(harness: GatingHarness, expectedContextValue: string): Promise<vscode.TreeItem> {
         let item = harness.provider.getChildren()[0];
         await waitForCondition(
@@ -3928,10 +3917,19 @@ suite('AppHost tree action gating', () => {
         return item;
     }
 
-    test('capability-gated actions stay hidden until the selected CLI reports them', async () => {
-        const harness = makeGatingHarness();
+    test('baseline actions appear after CLI resolution without command capabilities', async () => {
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [],
+            }),
+        });
 
-        // The first synchronous render cannot know what the CLI supports, so it fails closed.
+        // The first synchronous render cannot know whether the AppHost CLI is available.
         const initial = harness.provider.getChildren()[0];
         assert.strictEqual(initial.contextValue, 'workspaceAppHost');
         assert.deepStrictEqual(harness.provider.getChildren(initial).map(item => item.contextValue), [
@@ -3952,509 +3950,7 @@ suite('AppHost tree action gating', () => {
             'workspaceAppHostAction:debugPipelineStep',
             'workspaceAppHostPath',
         ]);
-        assert.deepStrictEqual(harness.capabilityStatus.getCalls().map(call => call.args[0]).sort(), [
-            'deploy-command.v1',
-            'do-command.v1',
-            'publish-command.v1',
-        ]);
-        harness.dispose();
-    });
-
-    test('a capability the CLI answers without advertising hides only its own action', async () => {
-        const harness = makeGatingHarness({
-            // An older CLI answers the probe, but does not advertise deploy.
-            capabilityStatus: capability => capability === deployCommandCapability ? 'unsupported' : 'supported',
-        });
-
-        const probed = await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-        assert.deepStrictEqual(harness.provider.getChildren(probed).map(item => item.contextValue), [
-            'workspaceAppHostAction:openSource',
-            'workspaceAppHostAction:run',
-            'workspaceAppHostAction:debug',
-            'workspaceAppHostAction:publish',
-            'workspaceAppHostAction:runPipelineStep',
-            'workspaceAppHostAction:debugPipelineStep',
-            'workspaceAppHostPath',
-        ]);
-        harness.dispose();
-    });
-
-    test('a CLI that cannot answer hides every action and is retried on the next explicit action', async () => {
-        let answered = false;
-        const harness = makeGatingHarness({
-            // A probe that could not complete is a transient failure, not a "supports nothing"
-            // answer, so it must not be recorded as the final word for the session.
-            capabilityStatus: () => answered ? 'supported' : 'unavailable',
-        });
-
-        harness.provider.getChildren();
-        await waitForCondition(() => harness.capabilityStatus.callCount === 3, 'Expected the first probe to complete.');
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
-
-        answered = true;
-        await harness.provider.deployAppHost(harness.provider.getChildren()[0] as WorkspaceAppHostItem);
-
-        assert.strictEqual(harness.launch.callCount, 1);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        harness.dispose();
-    });
-
-    test('an explicit tree refresh recovers transiently unavailable action support', async () => {
-        let answered = false;
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            capabilityStatus: () => answered ? 'supported' : 'unavailable',
-            forceRefreshConfigInfo: () => answered
-                ? {
-                    localSettingsPath: '/repo/aspire.config.json',
-                    globalSettingsPath: '/repo/global-aspire.config.json',
-                    availableFeatures: [],
-                    localSettingsSchema: { properties: [] },
-                    globalSettingsSchema: { properties: [] },
-                    capabilities: [
-                        deployCommandCapability,
-                        publishCommandCapability,
-                        doCommandCapability,
-                    ],
-                }
-                : null,
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-
-        harness.provider.getChildren();
-        await waitForCondition(() => harness.capabilityStatus.callCount === 3, 'Expected the unavailable probe to complete.');
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
-
-        answered = true;
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        assert.strictEqual(refresh.callCount, 1);
-        assert.strictEqual(harness.capabilityStatus.callCount, 3);
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-        harness.dispose();
-    });
-
-    test('an explicit tree refresh bypasses a stale successful capability snapshot', async () => {
-        let forceRefreshObserved = false;
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            capabilityStatus: capability =>
-                capability === deployCommandCapability ? 'unsupported' : 'supported',
-            forceRefreshConfigInfo: callOptions => {
-                forceRefreshObserved = callOptions?.forceRefresh === true;
-                return {
-                    localSettingsPath: '/repo/aspire.config.json',
-                    globalSettingsPath: '/repo/global-aspire.config.json',
-                    availableFeatures: [],
-                    localSettingsSchema: { properties: [] },
-                    globalSettingsSchema: { properties: [] },
-                    capabilities: [
-                        deployCommandCapability,
-                        publishCommandCapability,
-                        doCommandCapability,
-                    ],
-                };
-            },
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        assert.strictEqual(refresh.callCount, 1);
-        assert.strictEqual(forceRefreshObserved, true);
-        assert.strictEqual(
-            harness.getConfigInfo.getCalls().filter(call =>
-                (call.args[0] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
-            1);
-        harness.dispose();
-    });
-
-    test('an explicit tree refresh shares one fresh snapshot across AppHosts in one CLI scope', async () => {
-        const primaryPath = '/repo/primary.csproj';
-        const secondaryPath = '/repo/secondary.csproj';
-        const folder = createWorkspaceFolder('repo', '/repo');
-        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(folder);
-        let forceRefreshObserved = false;
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({
-                refresh,
-                workspaceAppHostPath: primaryPath,
-                workspaceAppHostCandidatePaths: [primaryPath, secondaryPath],
-                workspaceAppHostName: undefined,
-            }),
-            capabilityStatus: capability =>
-                capability === deployCommandCapability ? 'unsupported' : 'supported',
-            forceRefreshConfigInfo: callOptions => {
-                forceRefreshObserved = callOptions?.forceRefresh === true;
-                return {
-                    localSettingsPath: '/repo/aspire.config.json',
-                    globalSettingsPath: '/repo/global-aspire.config.json',
-                    availableFeatures: [],
-                    localSettingsSchema: { properties: [] },
-                    globalSettingsSchema: { properties: [] },
-                    capabilities: [
-                        deployCommandCapability,
-                        publishCommandCapability,
-                        doCommandCapability,
-                    ],
-                };
-            },
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await waitForCondition(() => {
-            const [group] = harness.provider.getChildren();
-            return harness.provider.getChildren(group).every(item =>
-                item.contextValue === 'workspaceAppHost:canPublish:canDo');
-        }, 'Expected both AppHosts to render the stale capability snapshot.');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        await waitForCondition(() => {
-            const [group] = harness.provider.getChildren();
-            return harness.provider.getChildren(group).every(item =>
-                item.contextValue === 'workspaceAppHost:canDeploy:canPublish:canDo');
-        }, 'Expected both AppHosts to render the refreshed capability snapshot.');
-
-        assert.strictEqual(refresh.callCount, 1);
-        assert.strictEqual(
-            harness.getConfigInfo.getCalls().filter(call =>
-                (call.args[0] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
-            1);
-        harness.dispose();
-    });
-
-    test('an AppHost scope discovered after explicit refresh still gets a fresh snapshot', async () => {
-        const primaryPath = '/repo/primary/AppHost.csproj';
-        const secondaryPath = '/other/secondary/AppHost.csproj';
-        const primaryFolder = createWorkspaceFolder('primary', '/repo');
-        const secondaryFolder = createWorkspaceFolder('secondary', '/other');
-        sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake(uri =>
-            uri.path.startsWith('/other/') ? secondaryFolder : primaryFolder);
-        const refresh = sandbox.stub();
-        const repository = makeGatingRepository({
-            refresh,
-            workspaceAppHostPath: primaryPath,
-            workspaceAppHostCandidatePaths: [primaryPath],
-        });
-        const harness = makeGatingHarness({
-            repository,
-            capabilityStatus: (capability, callOptions) =>
-                callOptions?.cliPath === '/other/tools/aspire' && capability === deployCommandCapability
-                    ? 'unsupported'
-                    : 'supported',
-        });
-        harness.resolveCliPath.callsFake(async (target: CliPathResolutionTarget) => ({
-            cliPath: target.kind === 'workspaceFolder' && target.workspaceFolder.name === 'secondary'
-                ? '/other/tools/aspire'
-                : '/repo/tools/aspire',
-            available: true,
-            source: 'configured' as const,
-        }));
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-
-        (repository as unknown as { workspaceAppHostCandidatePaths: string[] }).workspaceAppHostCandidatePaths = [
-            primaryPath,
-            secondaryPath,
-        ];
-        await waitForCondition(() => {
-            const [group] = harness.provider.getChildren();
-            return harness.provider.getChildren(group).every(item =>
-                item.contextValue === 'workspaceAppHost:canDeploy:canPublish:canDo');
-        }, 'Expected the later-discovered scope to use a fresh capability snapshot.');
-
-        assert.strictEqual(harness.getConfigInfo.callCount, 2);
-        harness.dispose();
-    });
-
-    test('an explicit tree refresh derives every action from the same fresh snapshot', async () => {
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            capabilityStatus: (_capability, callOptions) =>
-                callOptions?.forceRefresh ? 'supported' : 'unsupported',
-            forceRefreshConfigInfo: () => ({
-                localSettingsPath: '/repo/aspire.config.json',
-                globalSettingsPath: '/repo/global-aspire.config.json',
-                availableFeatures: [],
-                localSettingsSchema: { properties: [] },
-                globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    deployCommandCapability,
-                    publishCommandCapability,
-                    doCommandCapability,
-                ],
-            }),
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.capabilityStatus.callCount === 3,
-            'Expected the stale capability snapshot to complete.');
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        assert.strictEqual(refresh.callCount, 1);
-        assert.deepStrictEqual(harness.getConfigInfo.getCalls().map(call => call.args), [[{
-            target: windowCliPathTarget,
-            cliPath: '/repo/tools/aspire',
-            suppressErrors: true,
-            forceRefresh: true,
-        }]]);
-        harness.dispose();
-    });
-
-    test('a resolver change during explicit refresh preserves the forced snapshot', async () => {
-        let completeRefreshResolution!: (result: cliPathModule.CliPathResolutionResult) => void;
-        const refreshResolution = new Promise<cliPathModule.CliPathResolutionResult>(
-            resolve => completeRefreshResolution = resolve);
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            capabilityStatus: capability =>
-                capability === deployCommandCapability ? 'unsupported' : 'supported',
-        });
-        harness.resolveCliPath.onSecondCall().returns(refreshResolution);
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.resolveCliPath.callCount === 2,
-            'Expected the explicit refresh CLI resolution to start.');
-        harness.fireCliPathResolverChange();
-        completeRefreshResolution({
-            cliPath: '/repo/tools/aspire',
-            available: true,
-            source: 'configured',
-        });
-        await waitForCondition(
-            () => harness.getConfigInfo.callCount === 1,
-            'Expected the superseded forced snapshot to settle.');
-        await flushPromises();
-
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        assert.strictEqual(refresh.callCount, 1);
-        assert.strictEqual(harness.getConfigInfo.callCount, 2);
-        harness.dispose();
-    });
-
-    test('a resolver change before explicit refresh probing preserves the forced snapshot', async () => {
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            capabilityStatus: capability =>
-                capability === deployCommandCapability ? 'unsupported' : 'supported',
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        harness.fireCliPathResolverChange();
-
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        assert.strictEqual(refresh.callCount, 1);
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-        harness.dispose();
-    });
-
-    test('forced refresh intent clears after the refreshed snapshot is serviced', async () => {
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-
-        harness.fireCliPathResolverChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        assert.strictEqual(harness.resolveCliPath.callCount, 3);
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-        harness.dispose();
-    });
-
-    test('forced refresh intent clears when the replacement probe settles first', async () => {
-        let completeSupersededResolution!: (result: cliPathModule.CliPathResolutionResult) => void;
-        const supersededResolution = new Promise<cliPathModule.CliPathResolutionResult>(
-            resolve => completeSupersededResolution = resolve);
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-        });
-        harness.resolveCliPath.onSecondCall().returns(supersededResolution);
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.resolveCliPath.callCount === 2,
-            'Expected the superseded forced probe to start.');
-        harness.fireCliPathResolverChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        completeSupersededResolution({
-            cliPath: '/repo/tools/aspire',
-            available: true,
-            source: 'configured',
-        });
-        await flushPromises();
-
-        harness.fireCliPathResolverChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-        harness.dispose();
-    });
-
-    test('a failed forced snapshot stays fresh-required across later invalidation', async () => {
-        let refreshAttempt = 0;
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            // This is the stale successful snapshot that a normal read would return.
-            capabilityStatus: () => 'supported',
-            forceRefreshConfigInfo: () => {
-                refreshAttempt++;
-                return refreshAttempt === 1
-                    ? null
-                    : {
-                        localSettingsPath: '/repo/aspire.config.json',
-                        globalSettingsPath: '/repo/global-aspire.config.json',
-                        availableFeatures: [],
-                        localSettingsSchema: { properties: [] },
-                        globalSettingsSchema: { properties: [] },
-                        capabilities: [publishCommandCapability, doCommandCapability],
-                    };
-            },
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.getConfigInfo.callCount === 1,
-            'Expected the failed forced snapshot to settle.');
-        await flushPromises();
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
-
-        harness.fireCliPathResolverChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-
-        assert.strictEqual(harness.getConfigInfo.callCount, 2);
-        harness.dispose();
-    });
-
-    test('a forced probe that cannot resolve the CLI keeps refresh intent', async () => {
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-        });
-        harness.resolveCliPath.onSecondCall().resolves({
-            cliPath: '/repo/tools/aspire',
-            available: false,
-            source: 'not-found',
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.resolveCliPath.callCount === 2,
-            'Expected the unavailable forced probe to settle.');
-        await flushPromises();
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
-
-        harness.fireCliPathResolverChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        assert.strictEqual(harness.getConfigInfo.callCount, 1);
-        harness.dispose();
-    });
-
-    test('an older successful snapshot cannot clear a newer failed snapshot requirement', async () => {
-        let completeOlderSnapshot!: (configInfo: ConfigInfo | null) => void;
-        let completeNewerSnapshot!: (configInfo: ConfigInfo | null) => void;
-        const olderSnapshot = new Promise<ConfigInfo | null>(resolve => completeOlderSnapshot = resolve);
-        const newerSnapshot = new Promise<ConfigInfo | null>(resolve => completeNewerSnapshot = resolve);
-        let refreshAttempt = 0;
-        const refresh = sandbox.stub();
-        const harness = makeGatingHarness({
-            repository: makeGatingRepository({ refresh }),
-            // A normal read represents the stale successful snapshot retained by ConfigInfoProvider.
-            capabilityStatus: () => 'supported',
-            forceRefreshConfigInfo: () => {
-                refreshAttempt++;
-                if (refreshAttempt === 1) {
-                    return olderSnapshot;
-                }
-                if (refreshAttempt === 2) {
-                    return newerSnapshot;
-                }
-
-                return {
-                    localSettingsPath: '/repo/aspire.config.json',
-                    globalSettingsPath: '/repo/global-aspire.config.json',
-                    availableFeatures: [],
-                    localSettingsSchema: { properties: [] },
-                    globalSettingsSchema: { properties: [] },
-                    capabilities: [publishCommandCapability, doCommandCapability],
-                };
-            },
-        });
-        const callbacks = registerTreeCommandCallbacks(sandbox, harness.provider, harness.repository);
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await callbacks.get('aspire-vscode.refreshAppHosts')!();
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.getConfigInfo.callCount === 1,
-            'Expected the older forced snapshot to start.');
-        harness.fireCliPathResolverChange();
-        harness.provider.getChildren();
-        await waitForCondition(
-            () => harness.getConfigInfo.callCount === 2,
-            'Expected the newer forced snapshot to start.');
-
-        completeNewerSnapshot(null);
-        await flushPromises();
-        completeOlderSnapshot({
-            localSettingsPath: '/repo/aspire.config.json',
-            globalSettingsPath: '/repo/global-aspire.config.json',
-            availableFeatures: [],
-            localSettingsSchema: { properties: [] },
-            globalSettingsSchema: { properties: [] },
-            capabilities: [
-                deployCommandCapability,
-                publishCommandCapability,
-                doCommandCapability,
-            ],
-        });
-        await flushPromises();
-
-        harness.fireCliPathResolverChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-
-        assert.strictEqual(harness.getConfigInfo.callCount, 3);
+        assert.strictEqual(harness.getConfigInfo.called, false);
         harness.dispose();
     });
 
@@ -4476,7 +3972,6 @@ suite('AppHost tree action gating', () => {
             'workspaceAppHostPath',
         ]);
         assert.strictEqual(harness.resolveCliPath.callCount, 1);
-        assert.strictEqual(harness.capabilityStatus.called, false);
         // Drawing the tree must not nag about a CLI the user has not asked to use yet.
         assert.strictEqual(showErrorMessage.called, false);
 
@@ -4487,32 +3982,24 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('changing the configured CLI re-probes what the AppHost supports', async () => {
+    test('changing the configured CLI re-resolves the AppHost actions', async () => {
         let currentCliPath = '/repo/tools/aspire';
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) =>
-                callOptions?.cliPath === '/repo/tools/aspire' || capability !== deployCommandCapability ? 'supported' : 'unsupported',
-        });
+        const harness = makeGatingHarness();
         harness.resolveCliPath.callsFake(async () => ({ cliPath: currentCliPath, available: true, source: 'configured' as const }));
         await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
 
         currentCliPath = '/repo/tools/other-aspire';
         harness.fireCliPathConfigurationChange();
 
-        const reprobed = await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
-        assert.strictEqual(reprobed.contextValue, 'workspaceAppHost:canPublish:canDo');
+        const reprobed = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+        assert.strictEqual(reprobed.contextValue, 'workspaceAppHost:canDeploy:canPublish:canDo');
         assert.strictEqual(harness.resolveCliPath.callCount, 2);
         harness.dispose();
     });
 
-    test('a canonical CLI resolver change re-probes cached AppHost support', async () => {
+    test('a canonical CLI resolver change re-resolves cached AppHost actions', async () => {
         let currentCliPath = '/repo/tools/aspire';
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) =>
-                callOptions?.cliPath === '/repo/tools/aspire' || capability !== deployCommandCapability
-                    ? 'supported'
-                    : 'unsupported',
-        });
+        const harness = makeGatingHarness();
         harness.resolveCliPath.callsFake(async () => ({
             cliPath: currentCliPath,
             available: true,
@@ -4523,7 +4010,7 @@ suite('AppHost tree action gating', () => {
         currentCliPath = '/repo/tools/resolved-aspire';
         harness.fireCliPathResolverChange();
 
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
+        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
         assert.strictEqual(harness.resolveCliPath.callCount, 2);
         harness.dispose();
     });
@@ -4538,15 +4025,10 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('a configured CLI change during a probe cannot restore stale support', async () => {
+    test('a configured CLI change during resolution cannot restore a stale CLI', async () => {
         let completeOldResolution!: (result: cliPathModule.CliPathResolutionResult) => void;
         const oldResolution = new Promise<cliPathModule.CliPathResolutionResult>(resolve => completeOldResolution = resolve);
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) =>
-                callOptions?.cliPath === '/repo/tools/old-aspire' || capability !== deployCommandCapability
-                    ? 'supported'
-                    : 'unsupported',
-        });
+        const harness = makeGatingHarness();
         harness.resolveCliPath.onFirstCall().returns(oldResolution);
         harness.resolveCliPath.onSecondCall().resolves({
             cliPath: '/repo/tools/new-aspire',
@@ -4557,29 +4039,26 @@ suite('AppHost tree action gating', () => {
         harness.provider.getChildren();
         await waitForCondition(() => harness.resolveCliPath.callCount === 1, 'Expected the old CLI probe to start.');
         harness.fireCliPathConfigurationChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canPublish:canDo');
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
 
         completeOldResolution({
             cliPath: '/repo/tools/old-aspire',
             available: true,
             source: 'configured',
         });
-        await waitForCondition(() => harness.capabilityStatus.callCount === 6, 'Expected the stale probe to finish.');
         await flushPromises();
+        await harness.provider.deployAppHost(item as WorkspaceAppHostItem);
 
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canPublish:canDo');
+        assert.deepStrictEqual(harness.checkCliAvailable.getCalls().map(call => call.args), [
+            ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/new-aspire' }],
+        ]);
         harness.dispose();
     });
 
-    test('a workspace-folder change during a probe cannot restore stale support', async () => {
+    test('a workspace-folder change during resolution cannot restore a stale CLI', async () => {
         let completeOldResolution!: (result: cliPathModule.CliPathResolutionResult) => void;
         const oldResolution = new Promise<cliPathModule.CliPathResolutionResult>(resolve => completeOldResolution = resolve);
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) =>
-                callOptions?.cliPath === '/repo/tools/old-aspire' || capability !== publishCommandCapability
-                    ? 'supported'
-                    : 'unsupported',
-        });
+        const harness = makeGatingHarness();
         harness.resolveCliPath.onFirstCall().returns(oldResolution);
         harness.resolveCliPath.onSecondCall().resolves({
             cliPath: '/repo/tools/new-aspire',
@@ -4590,21 +4069,23 @@ suite('AppHost tree action gating', () => {
         harness.provider.getChildren();
         await waitForCondition(() => harness.resolveCliPath.callCount === 1, 'Expected the old CLI probe to start.');
         harness.fireWorkspaceFoldersChange();
-        await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canDo');
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
 
         completeOldResolution({
             cliPath: '/repo/tools/old-aspire',
             available: true,
             source: 'configured',
         });
-        await waitForCondition(() => harness.capabilityStatus.callCount === 6, 'Expected the stale probe to finish.');
         await flushPromises();
+        await harness.provider.publishAppHost(item as WorkspaceAppHostItem);
 
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canDeploy:canDo');
+        assert.deepStrictEqual(harness.checkCliAvailable.getCalls().map(call => call.args), [
+            ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/new-aspire' }],
+        ]);
         harness.dispose();
     });
 
-    test('repeated renders reuse one probe per AppHost identity', async () => {
+    test('repeated renders reuse one CLI resolution per AppHost identity', async () => {
         const harness = makeGatingHarness();
 
         harness.provider.getChildren();
@@ -4614,7 +4095,6 @@ suite('AppHost tree action gating', () => {
         harness.provider.getChildren();
 
         assert.strictEqual(harness.resolveCliPath.callCount, 1);
-        assert.strictEqual(harness.capabilityStatus.callCount, 3);
         harness.dispose();
     });
 
@@ -4633,7 +4113,7 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('each AppHost is gated by its own CLI and does not inherit another folder support', async () => {
+    test('each AppHost resolves its own CLI', async () => {
         const primaryPath = '/repo/primary/AppHost/AppHost.csproj';
         const secondaryPath = '/repo/secondary/AppHost/AppHost.csproj';
         const primaryFolder = createWorkspaceFolder('primary', '/repo/primary');
@@ -4650,19 +4130,6 @@ suite('AppHost tree action gating', () => {
                 workspaceAppHostCandidatePaths: [primaryPath, secondaryPath],
                 workspaceAppHostName: undefined,
             }),
-            // Only the secondary folder's CLI can deploy, and only the primary folder's CLI can
-            // run pipeline steps, so any leak between them is visible in the rendered rows.
-            capabilityStatus: (capability, callOptions) => {
-                const isSecondary = callOptions?.cliPath === secondaryCliPath;
-                if (capability === deployCommandCapability) {
-                    return isSecondary ? 'supported' : 'unsupported';
-                }
-                if (capability === doCommandCapability) {
-                    return isSecondary ? 'unsupported' : 'supported';
-                }
-
-                return 'supported';
-            },
         });
         harness.resolveCliPath.callsFake(async (target: CliPathResolutionTarget) => ({
             cliPath: target.kind === 'workspaceFolder' && target.workspaceFolder.name === 'secondary' ? secondaryCliPath : primaryCliPath,
@@ -4676,29 +4143,23 @@ suite('AppHost tree action gating', () => {
                 const [group] = harness.provider.getChildren();
                 return harness.provider.getChildren(group).every(item => item.contextValue !== 'workspaceAppHost');
             },
-            'Expected both AppHosts to finish probing their own CLI.');
+            'Expected both AppHosts to resolve their own CLI.');
 
         const [group] = harness.provider.getChildren();
         assert.deepStrictEqual(harness.provider.getChildren(group).map(item => item.contextValue), [
-            'workspaceAppHost:canPublish:canDo',
-            'workspaceAppHost:canDeploy:canPublish',
+            'workspaceAppHost:canDeploy:canPublish:canDo',
+            'workspaceAppHost:canDeploy:canPublish:canDo',
         ]);
         assert.deepStrictEqual(harness.resolveCliPath.getCalls().map(call => call.args), [
             [primaryTarget],
             [secondaryTarget],
         ]);
-        assert.deepStrictEqual(
-            harness.capabilityStatus.getCalls()
-                .filter(call => call.args[0] === deployCommandCapability)
-                .map(call => (call.args[1] as configInfoProvider.ConfigInfoOptions).cliPath),
-            [primaryCliPath, secondaryCliPath]);
         harness.dispose();
     });
 
-    test('actions reuse the probed CLI pair instead of resolving again', async () => {
+    test('actions reuse the resolved CLI pair instead of resolving again', async () => {
         const harness = makeGatingHarness();
         const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        sandbox.stub(harness.configInfoProviderInstance, 'hasCapability').resolves(true);
 
         await harness.provider.deployAppHost(item as WorkspaceAppHostItem);
         await harness.provider.publishAppHost(item as WorkspaceAppHostItem);
@@ -4724,225 +4185,72 @@ suite('AppHost tree action gating', () => {
             ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
         ]);
         assert.strictEqual(harness.resolveCliPath.callCount, 1);
-        assert.strictEqual(harness.capabilityStatus.callCount, 3);
         assert.strictEqual(harness.launch.called, false);
         assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
         harness.dispose();
     });
 
-    test('an executable replaced in place loses a stale supported action before launch', async () => {
-        let executableReplaced = false;
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability) =>
-                executableReplaced && capability === deployCommandCapability ? 'unsupported' : 'supported',
-        });
-        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        executableReplaced = true;
+    test('actions requested before CLI resolution wait for and reuse it', async () => {
+        const harness = makeGatingHarness();
+        const item = new WorkspaceAppHostItem(appHostPath);
 
-        await assert.rejects(harness.provider.deployAppHost(item as WorkspaceAppHostItem), vscode.CancellationError);
+        // Nothing has rendered yet, so the first action resolves the owning CLI on demand.
+        await harness.provider.deployAppHost(item);
+        await harness.provider.publishAppHost(item);
 
-        const refreshedDeployCall = harness.capabilityStatus.getCalls().find(call =>
-            call.args[0] === deployCommandCapability
-            && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh);
-        assert.ok(refreshedDeployCall);
-        assert.deepStrictEqual(refreshedDeployCall.args[1], {
-            target: windowCliPathTarget,
-            cliPath: '/repo/tools/aspire',
-            suppressErrors: true,
-            forceRefresh: true,
-        });
-        assert.strictEqual(harness.launch.called, false);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canPublish:canDo');
+        assert.strictEqual(harness.resolveCliPath.callCount, 1);
+        assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
+            [appHostPath, 'deploy', false, undefined, windowCliPathTarget, '/repo/tools/aspire'],
+            [appHostPath, 'publish', false, undefined, windowCliPathTarget, '/repo/tools/aspire'],
+        ]);
         harness.dispose();
     });
 
-    test('a newer cross-action validation supersedes an older launch', async () => {
-        let completePublishRefresh!: (status: CapabilityStatus) => void;
-        const publishRefresh = new Promise<CapabilityStatus>(resolve => completePublishRefresh = resolve);
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) => {
-                if (!callOptions?.forceRefresh) {
-                    return 'supported';
-                }
-
-                return capability === deployCommandCapability
-                    ? 'unsupported'
-                    : capability === publishCommandCapability
-                        ? publishRefresh
-                        : 'supported';
-            },
-        });
+    test('an older same-action CLI validation cannot launch after a newer invocation', async () => {
+        let completeOlderValidation!: (result: { cliPath: string; available: boolean }) => void;
+        const olderValidation = new Promise<{ cliPath: string; available: boolean }>(
+            resolve => completeOlderValidation = resolve);
+        const harness = makeGatingHarness();
         const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        const publish = harness.provider.publishAppHost(item as WorkspaceAppHostItem);
-        await waitForCondition(
-            () => harness.capabilityStatus.getCalls().some(call =>
-                call.args[0] === publishCommandCapability
-                && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh),
-            'Expected the publish capability refresh to start.');
-        await assert.rejects(harness.provider.deployAppHost(item as WorkspaceAppHostItem), vscode.CancellationError);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canPublish:canDo');
-
-        completePublishRefresh('supported');
-        await assert.rejects(publish, vscode.CancellationError);
-
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canPublish:canDo');
-        assert.strictEqual(harness.launch.called, false);
-        harness.dispose();
-    });
-
-    test('an older same-action refresh cannot overwrite or launch after a newer refresh', async () => {
-        let completeOlderRefresh!: (status: CapabilityStatus) => void;
-        const olderRefresh = new Promise<CapabilityStatus>(resolve => completeOlderRefresh = resolve);
-        let forcedDeployCalls = 0;
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) => {
-                if (capability !== deployCommandCapability || !callOptions?.forceRefresh) {
-                    return 'supported';
-                }
-
-                forcedDeployCalls++;
-                return forcedDeployCalls === 1 ? olderRefresh : 'unsupported';
-            },
-        });
-        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+        harness.checkCliAvailable.onFirstCall().returns(olderValidation);
 
         const olderInvocation = harness.provider.deployAppHost(item as WorkspaceAppHostItem);
         await waitForCondition(
-            () => forcedDeployCalls === 1,
-            'Expected the older deploy capability refresh to start.');
-        await assert.rejects(
-            harness.provider.deployAppHost(item as WorkspaceAppHostItem),
-            vscode.CancellationError);
-        completeOlderRefresh('supported');
+            () => harness.checkCliAvailable.callCount === 1,
+            'Expected the older deploy CLI validation to start.');
+        await harness.provider.deployAppHost(item as WorkspaceAppHostItem);
+        completeOlderValidation({ cliPath: '/repo/tools/aspire', available: true });
         await assert.rejects(olderInvocation, vscode.CancellationError);
 
-        assert.strictEqual(harness.launch.called, false);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canPublish:canDo');
-        harness.dispose();
-    });
-
-    test('an older cross-action unavailable result cannot erase newer support', async () => {
-        let completeOlderRefresh!: (status: CapabilityStatus) => void;
-        const olderRefresh = new Promise<CapabilityStatus>(resolve => completeOlderRefresh = resolve);
-        let forcedDeployCalls = 0;
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) => {
-                if (capability === deployCommandCapability && callOptions?.forceRefresh) {
-                    forcedDeployCalls++;
-                    return olderRefresh;
-                }
-
-                return 'supported';
-            },
-        });
-        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        const olderDeploy = harness.provider.deployAppHost(item as WorkspaceAppHostItem);
-        await waitForCondition(
-            () => forcedDeployCalls === 1,
-            'Expected the older deploy capability refresh to start.');
-        await harness.provider.publishAppHost(item as WorkspaceAppHostItem);
-        completeOlderRefresh('unavailable');
-        await assert.rejects(olderDeploy, vscode.CancellationError);
-
-        assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
-            [appHostPath, 'publish', false, undefined, windowCliPathTarget, '/repo/tools/aspire'],
-        ]);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canDeploy:canPublish:canDo');
-        harness.dispose();
-    });
-
-    test('an older cross-action supported result cannot launch after newer validation', async () => {
-        let completeOlderRefresh!: (status: CapabilityStatus) => void;
-        const olderRefresh = new Promise<CapabilityStatus>(resolve => completeOlderRefresh = resolve);
-        let forcedDeployCalls = 0;
-        const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) => {
-                if (!callOptions?.forceRefresh) {
-                    return 'supported';
-                }
-                if (capability === deployCommandCapability) {
-                    forcedDeployCalls++;
-                    return olderRefresh;
-                }
-                if (capability === publishCommandCapability) {
-                    return 'unsupported';
-                }
-
-                return 'supported';
-            },
-        });
-        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        const olderDeploy = harness.provider.deployAppHost(item as WorkspaceAppHostItem);
-        await waitForCondition(
-            () => forcedDeployCalls === 1,
-            'Expected the older deploy capability refresh to start.');
-        await assert.rejects(
-            harness.provider.publishAppHost(item as WorkspaceAppHostItem),
-            vscode.CancellationError);
-        completeOlderRefresh('supported');
-        await assert.rejects(olderDeploy, vscode.CancellationError);
-
-        assert.strictEqual(harness.launch.called, false);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canDeploy:canDo');
-        harness.dispose();
-    });
-
-    test('an unavailable forced capability refresh cannot reuse stale cached support', async () => {
-        const harness = makeGatingHarness({
-            capabilityStatus: (_capability, callOptions) => callOptions?.forceRefresh ? 'unavailable' : 'supported',
-        });
-        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
-
-        await assert.rejects(harness.provider.publishAppHost(item as WorkspaceAppHostItem), vscode.CancellationError);
-
-        assert.strictEqual(harness.launch.called, false);
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost');
-        assert.strictEqual(
-            harness.capabilityStatus.getCalls().filter(call =>
-                call.args[0] === publishCommandCapability
-                && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
-            1);
-        harness.dispose();
-    });
-
-    test('an action requested before the probe completes waits for it and is still gated', async () => {
-        const harness = makeGatingHarness({
-            capabilityStatus: capability => capability === deployCommandCapability ? 'supported' : 'unsupported',
-        });
-        const item = new WorkspaceAppHostItem(appHostPath);
-
-        // Nothing has rendered yet, so both calls resolve support on demand.
-        await harness.provider.deployAppHost(item);
-        await assert.rejects(harness.provider.publishAppHost(item), vscode.CancellationError);
-
-        assert.strictEqual(harness.resolveCliPath.callCount, 1);
         assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
             [appHostPath, 'deploy', false, undefined, windowCliPathTarget, '/repo/tools/aspire'],
         ]);
         harness.dispose();
     });
 
-    test('an unsupported action never reaches the launch service', async () => {
-        const harness = makeGatingHarness({ capabilityStatus: () => 'unsupported' });
-        const showErrorMessage = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
-        const showInputBox = sandbox.stub(vscode.window, 'showInputBox').resolves('deploy');
-        const item = new WorkspaceAppHostItem(appHostPath);
+    test('an older cross-action CLI validation cannot launch after a newer invocation', async () => {
+        let completeOlderValidation!: (result: { cliPath: string; available: boolean }) => void;
+        const olderValidation = new Promise<{ cliPath: string; available: boolean }>(
+            resolve => completeOlderValidation = resolve);
+        const harness = makeGatingHarness();
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+        harness.checkCliAvailable.onFirstCall().returns(olderValidation);
 
-        await assert.rejects(harness.provider.deployAppHost(item), vscode.CancellationError);
-        await assert.rejects(harness.provider.publishAppHost(item), vscode.CancellationError);
-        await assert.rejects(harness.provider.runPipelineStepAppHost(item), vscode.CancellationError);
-        await assert.rejects(harness.provider.debugPipelineStepAppHost(item), vscode.CancellationError);
+        const olderDeploy = harness.provider.deployAppHost(item as WorkspaceAppHostItem);
+        await waitForCondition(
+            () => harness.checkCliAvailable.callCount === 1,
+            'Expected the older deploy CLI validation to start.');
+        await harness.provider.publishAppHost(item as WorkspaceAppHostItem);
+        completeOlderValidation({ cliPath: '/repo/tools/aspire', available: true });
+        await assert.rejects(olderDeploy, vscode.CancellationError);
 
-        assert.strictEqual(harness.launch.called, false);
-        assert.strictEqual(showInputBox.called, false);
-        assert.strictEqual(showErrorMessage.called, false);
+        assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
+            [appHostPath, 'publish', false, undefined, windowCliPathTarget, '/repo/tools/aspire'],
+        ]);
         harness.dispose();
     });
 
-    test('pipeline step resolution reuses the injected provider and the probed CLI pair', async () => {
+    test('pipeline step resolution reuses the injected provider and the resolved CLI pair', async () => {
         const harness = makeGatingHarness();
         const ownedGetConfigInfo = sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves(null);
         const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
@@ -4950,6 +4258,12 @@ suite('AppHost tree action gating', () => {
         await harness.provider.debugPipelineStepAppHost(item as WorkspaceAppHostItem);
 
         assert.deepStrictEqual(harness.getConfigInfo.getCalls().map(call => call.args), [
+            [{
+                target: windowCliPathTarget,
+                cliPath: '/repo/tools/aspire',
+                suppressErrors: true,
+                forceRefresh: true,
+            }],
             [{
                 target: windowCliPathTarget,
                 cliPath: '/repo/tools/aspire',
@@ -4973,12 +4287,7 @@ suite('AppHost tree action gating', () => {
                 availableFeatures: [],
                 localSettingsSchema: { properties: [] },
                 globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    deployCommandCapability,
-                    publishCommandCapability,
-                    doCommandCapability,
-                    pipelineInteractionCapability,
-                ],
+                capabilities: [pipelineInteractionCapability],
             }),
         });
         const hasCapability = sandbox.stub(harness.configInfoProviderInstance, 'hasCapability').rejects(
@@ -4996,7 +4305,7 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('a fresh pipeline snapshot replaces every rendered action capability', async () => {
+    test('structured pipeline step capability lists before launching the selected step', async () => {
         const harness = makeGatingHarness({
             forceRefreshConfigInfo: () => ({
                 localSettingsPath: '/repo/aspire.config.json',
@@ -5004,20 +4313,144 @@ suite('AppHost tree action gating', () => {
                 availableFeatures: [],
                 localSettingsSchema: { properties: [] },
                 globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    doCommandCapability,
-                    pipelineInteractionCapability,
-                ],
+                capabilities: [pipelineInteractionCapability, pipelineStepListJsonCapability],
             }),
         });
+        harness.runCliCommand.resolves({
+            stdout: '[{"name":"deploy","description":"Deploy the app","dependsOn":["publish"],"tags":[]}]',
+            stderr: '',
+        });
+        const showQuickPick = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async items =>
+            (items as readonly vscode.QuickPickItem[])[0]);
+        const showInputBox = sandbox.stub(vscode.window, 'showInputBox');
         const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
 
         await harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
 
-        assert.strictEqual(harness.provider.getChildren()[0].contextValue, 'workspaceAppHost:canDo');
+        assert.strictEqual(showQuickPick.callCount, 1);
+        assert.strictEqual(showInputBox.called, false);
+        assert.strictEqual(harness.runCliCommand.callCount, 1);
+        assert.strictEqual(harness.runCliCommand.firstCall.args[0], 'list pipeline steps');
+        assert.deepStrictEqual(harness.runCliCommand.firstCall.args[1],
+            ['do', '--list-steps', '--format', 'json', '--apphost', appHostPath, '--nologo']);
+        assert.strictEqual(harness.runCliCommand.firstCall.args[2].target, windowCliPathTarget);
+        assert.strictEqual(harness.runCliCommand.firstCall.args[2].cliPath, '/repo/tools/aspire');
+        assert.strictEqual(harness.runCliCommand.firstCall.args[2].timeoutMs, null);
+        assert.ok(harness.runCliCommand.firstCall.args[2].cancellationToken);
+        assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
+            [appHostPath, 'do', true, 'deploy', windowCliPathTarget, '/repo/tools/aspire'],
+        ]);
+        harness.dispose();
+    });
+
+    test('structured pipeline discovery disables only the selected action while loading', async () => {
+        const configInfo: ConfigInfo = {
+            localSettingsPath: '/repo/aspire.config.json',
+            globalSettingsPath: '/repo/global-aspire.config.json',
+            availableFeatures: [],
+            localSettingsSchema: { properties: [] },
+            globalSettingsSchema: { properties: [] },
+            capabilities: [pipelineInteractionCapability, pipelineStepListJsonCapability],
+        };
+        let deferCapabilityRefresh = false;
+        let resolveCapabilityRefresh!: (value: ConfigInfo) => void;
+        const capabilityRefresh = new Promise<ConfigInfo>(resolve => { resolveCapabilityRefresh = resolve; });
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => deferCapabilityRefresh ? capabilityRefresh : configInfo,
+        });
+        let resolveList!: (value: { stdout: string; stderr: string }) => void;
+        harness.runCliCommand.returns(new Promise(resolve => { resolveList = resolve; }));
+        sandbox.stub(vscode.window, 'showQuickPick').callsFake(async items =>
+            (items as readonly vscode.QuickPickItem[])[0]);
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+        const initialConfigInfoCallCount = harness.getConfigInfo.callCount;
+        deferCapabilityRefresh = true;
+
+        const action = harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
+        await waitForCondition(
+            () => harness.getConfigInfo.callCount > initialConfigInfoCallCount,
+            'Expected pipeline capability refresh to start.');
+
+        const loadingItem = harness.provider.getChildren()[0];
+        assert.strictEqual(loadingItem.contextValue, 'workspaceAppHost:canDeploy:canPublish:canDo');
+        const loadingChildren = harness.provider.getChildren(loadingItem);
+        assert.deepStrictEqual(loadingChildren.map(child => child.contextValue), [
+            'workspaceAppHostAction:openSource',
+            'workspaceAppHostAction:run',
+            'workspaceAppHostAction:debug',
+            'workspaceAppHostAction:deploy',
+            'workspaceAppHostAction:publish',
+            'workspaceAppHostAction:runPipelineStep:loading',
+            'workspaceAppHostAction:debugPipelineStep',
+            'workspaceAppHostPath',
+        ]);
+        const loadingAction = loadingChildren[5];
+        assert.strictEqual(loadingAction.description, loadingPipelineSteps);
+        assert.strictEqual(loadingAction.command, undefined);
+        assert.strictEqual(loadingChildren[6].command?.command, 'aspire-vscode.debugPipelineStepAppHost');
+
+        resolveCapabilityRefresh(configInfo);
+        await waitForCondition(() => harness.runCliCommand.calledOnce, 'Expected pipeline discovery to start.');
+        resolveList({
+            stdout: '[{"name":"deploy","dependsOn":[],"tags":[]}]',
+            stderr: '',
+        });
+        await action;
+
+        const readyItem = harness.provider.getChildren()[0];
+        assert.strictEqual(readyItem.contextValue, 'workspaceAppHost:canDeploy:canPublish:canDo');
+        harness.dispose();
+    });
+
+    test('structured pipeline step incompatibility falls back to CLI interaction', async () => {
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [pipelineInteractionCapability, pipelineStepListJsonCapability],
+            }),
+        });
+        harness.runCliCommand.rejects(new AspireCliFailedError('list pipeline steps', 9, '', 'AppHost is incompatible'));
+        const showQuickPick = sandbox.stub(vscode.window, 'showQuickPick');
+        const showInputBox = sandbox.stub(vscode.window, 'showInputBox');
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        await harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
+
+        assert.strictEqual(showQuickPick.called, false);
+        assert.strictEqual(showInputBox.called, false);
         assert.deepStrictEqual(harness.launch.getCalls().map(call => call.args), [
             [appHostPath, 'do', true, undefined, windowCliPathTarget, '/repo/tools/aspire'],
         ]);
+        harness.dispose();
+    });
+
+    test('structured pipeline step failure other than incompatibility does not fall back', async () => {
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: [pipelineInteractionCapability, pipelineStepListJsonCapability],
+            }),
+        });
+        const failure = new AspireCliFailedError('list pipeline steps', 6, '', 'AppHost failed');
+        harness.runCliCommand.rejects(failure);
+        const showInputBox = sandbox.stub(vscode.window, 'showInputBox');
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        await assert.rejects(harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem), error => error === failure);
+
+        assert.strictEqual(showInputBox.called, false);
+        assert.strictEqual(harness.launch.called, false);
+        assert.strictEqual(
+            harness.provider.getChildren(harness.provider.getChildren()[0])[5].contextValue,
+            'workspaceAppHostAction:runPipelineStep');
         harness.dispose();
     });
 
@@ -5025,19 +4458,13 @@ suite('AppHost tree action gating', () => {
         let completeInput!: (value: string | undefined) => void;
         const input = new Promise<string | undefined>(resolve => completeInput = resolve);
         const harness = makeGatingHarness({
-            capabilityStatus: capability =>
-                capability === pipelineInteractionCapability ? 'unsupported' : 'supported',
             forceRefreshConfigInfo: () => ({
                 localSettingsPath: '/repo/aspire.config.json',
                 globalSettingsPath: '/repo/global-aspire.config.json',
                 availableFeatures: [],
                 localSettingsSchema: { properties: [] },
                 globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    deployCommandCapability,
-                    publishCommandCapability,
-                    doCommandCapability,
-                ],
+                capabilities: [],
             }),
         });
         const showInputBox = sandbox.stub(vscode.window, 'showInputBox').returns(input);
@@ -5063,11 +4490,7 @@ suite('AppHost tree action gating', () => {
                 availableFeatures: [],
                 localSettingsSchema: { properties: [] },
                 globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    deployCommandCapability,
-                    publishCommandCapability,
-                    doCommandCapability,
-                ],
+                capabilities: [],
             }),
         });
         const showInputBox = sandbox.stub(vscode.window, 'showInputBox').returns(input);
@@ -5090,26 +4513,18 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('a pinned CLI that loses do support while choosing a legacy step does not launch', async () => {
+    test('a legacy CLI replaced by a pipeline-interaction CLI while choosing a step does not launch', async () => {
+        let configReadCount = 0;
         let completeInput!: (value: string | undefined) => void;
         const input = new Promise<string | undefined>(resolve => completeInput = resolve);
-        let doSupported = true;
         const harness = makeGatingHarness({
-            capabilityStatus: (capability, callOptions) =>
-                capability === doCommandCapability && callOptions?.forceRefresh && !doSupported
-                    ? 'unsupported'
-                    : 'supported',
             forceRefreshConfigInfo: () => ({
                 localSettingsPath: '/repo/aspire.config.json',
                 globalSettingsPath: '/repo/global-aspire.config.json',
                 availableFeatures: [],
                 localSettingsSchema: { properties: [] },
                 globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    deployCommandCapability,
-                    publishCommandCapability,
-                    doCommandCapability,
-                ],
+                capabilities: configReadCount++ === 0 ? [] : [pipelineInteractionCapability],
             }),
         });
         const showInputBox = sandbox.stub(vscode.window, 'showInputBox').returns(input);
@@ -5117,15 +4532,97 @@ suite('AppHost tree action gating', () => {
 
         const action = harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
         await waitForCondition(() => showInputBox.called, 'Expected the legacy pipeline prompt to open.');
-        doSupported = false;
         completeInput('deploy');
 
         await assert.rejects(action, vscode.CancellationError);
+        assert.strictEqual(harness.getConfigInfo.callCount, 2);
+        assert.strictEqual(harness.launch.called, false);
         assert.strictEqual(
-            harness.capabilityStatus.getCalls().filter(call =>
-                call.args[0] === doCommandCapability
-                && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
-            1);
+            harness.provider.getChildren(harness.provider.getChildren()[0])[5].contextValue,
+            'workspaceAppHostAction:runPipelineStep');
+        harness.dispose();
+    });
+
+    test('a pipeline-interaction CLI replaced by a legacy CLI does not launch without a selected step', async () => {
+        let configReadCount = 0;
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: configReadCount++ === 0 ? [pipelineInteractionCapability] : [],
+            }),
+        });
+        const showInputBox = sandbox.stub(vscode.window, 'showInputBox').resolves('deploy');
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        await assert.rejects(
+            harness.provider.debugPipelineStepAppHost(item as WorkspaceAppHostItem),
+            vscode.CancellationError);
+
+        assert.strictEqual(showInputBox.called, false);
+        assert.strictEqual(harness.getConfigInfo.callCount, 2);
+        assert.strictEqual(harness.launch.called, false);
+        harness.dispose();
+    });
+
+    test('a structured-list CLI replaced while its picker is open does not launch', async () => {
+        let configReadCount = 0;
+        let completeQuickPick!: (item: vscode.QuickPickItem | undefined) => void;
+        const quickPick = new Promise<vscode.QuickPickItem | undefined>(resolve => completeQuickPick = resolve);
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: configReadCount++ === 0
+                    ? [pipelineInteractionCapability, pipelineStepListJsonCapability]
+                    : [pipelineInteractionCapability],
+            }),
+        });
+        harness.runCliCommand.resolves({
+            stdout: '[{"name":"deploy","dependsOn":[],"tags":[]}]',
+            stderr: '',
+        });
+        const showQuickPick = sandbox.stub(vscode.window, 'showQuickPick').returns(quickPick);
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        const action = harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
+        await waitForCondition(() => showQuickPick.called, 'Expected the structured pipeline picker to open.');
+        completeQuickPick((showQuickPick.firstCall.args[0] as readonly vscode.QuickPickItem[])[0]);
+
+        await assert.rejects(action, vscode.CancellationError);
+        assert.strictEqual(harness.getConfigInfo.callCount, 2);
+        assert.strictEqual(harness.launch.called, false);
+        harness.dispose();
+    });
+
+    test('a pipeline-interaction CLI replaced by structured listing does not launch', async () => {
+        let configReadCount = 0;
+        const harness = makeGatingHarness({
+            forceRefreshConfigInfo: () => ({
+                localSettingsPath: '/repo/aspire.config.json',
+                globalSettingsPath: '/repo/global-aspire.config.json',
+                availableFeatures: [],
+                localSettingsSchema: { properties: [] },
+                globalSettingsSchema: { properties: [] },
+                capabilities: configReadCount++ === 0
+                    ? [pipelineInteractionCapability]
+                    : [pipelineInteractionCapability, pipelineStepListJsonCapability],
+            }),
+        });
+        const item = await renderUntilProbed(harness, 'workspaceAppHost:canDeploy:canPublish:canDo');
+
+        await assert.rejects(
+            harness.provider.debugPipelineStepAppHost(item as WorkspaceAppHostItem),
+            vscode.CancellationError);
+
+        assert.strictEqual(harness.runCliCommand.called, false);
+        assert.strictEqual(harness.getConfigInfo.callCount, 2);
         assert.strictEqual(harness.launch.called, false);
         harness.dispose();
     });
@@ -5138,11 +4635,7 @@ suite('AppHost tree action gating', () => {
                 availableFeatures: [],
                 localSettingsSchema: { properties: [] },
                 globalSettingsSchema: { properties: [] },
-                capabilities: [
-                    deployCommandCapability,
-                    publishCommandCapability,
-                    doCommandCapability,
-                ],
+                capabilities: [],
             }),
         });
         const showInputBox = sandbox.stub(vscode.window, 'showInputBox').resolves(' migrate ');
@@ -5151,11 +4644,7 @@ suite('AppHost tree action gating', () => {
         await harness.provider.runPipelineStepAppHost(item as WorkspaceAppHostItem);
 
         assert.strictEqual(showInputBox.callCount, 1);
-        assert.strictEqual(
-            harness.capabilityStatus.getCalls().filter(call =>
-                call.args[0] === doCommandCapability
-                && (call.args[1] as configInfoProvider.ConfigInfoOptions).forceRefresh).length,
-            1);
+        assert.strictEqual(harness.getConfigInfo.callCount, 2);
         assert.deepStrictEqual(harness.checkCliAvailable.getCalls().map(call => call.args), [
             ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
             ['debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/tools/aspire' }],
@@ -5184,7 +4673,7 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('a running workspace AppHost row carries the actions its CLI supports', async () => {
+    test('a running workspace AppHost row carries all baseline actions', async () => {
         const runningAppHost = makeAppHost({ appHostPath, resources: [] });
         const harness = makeGatingHarness({
             repository: makeGatingRepository({
@@ -5199,7 +4688,7 @@ suite('AppHost tree action gating', () => {
         harness.dispose();
     });
 
-    test('a global AppHost row carries only the actions its CLI supports', async () => {
+    test('a global AppHost row carries all baseline actions', async () => {
         const harness = makeGatingHarness({
             repository: makeGatingRepository({
                 viewMode: 'global' as ViewMode,
@@ -5207,24 +4696,23 @@ suite('AppHost tree action gating', () => {
                 workspaceAppHostPath: undefined,
                 workspaceAppHostCandidatePaths: [],
             }),
-            capabilityStatus: capability => capability === doCommandCapability ? 'unsupported' : 'supported',
         });
 
-        const item = await renderUntilProbed(harness, 'appHost:canDeploy:canPublish');
+        const item = await renderUntilProbed(harness, 'appHost:canDeploy:canPublish:canDo');
 
         assert.ok(item instanceof AppHostItem);
         harness.dispose();
     });
 
-    test('a workspace row without a running AppHost carries no capability tokens', async () => {
-        // Resources can arrive before `aspire ps` reports the AppHost. Every capability-gated
-        // action requires the running AppHost context, so the row stays plain until then.
+    test('a workspace row without a running AppHost carries no action tokens', async () => {
+        // Resources can arrive before `aspire ps` reports the AppHost. Actions require the running
+        // AppHost context, so the row stays plain after CLI resolution.
         const harness = makeGatingHarness({
             repository: makeGatingRepository({ workspaceResources: [makeResource()] }),
         });
 
         harness.provider.getChildren();
-        await waitForCondition(() => harness.capabilityStatus.callCount === 3, 'Expected the AppHost to be probed.');
+    await waitForCondition(() => harness.resolveCliPath.callCount === 1, 'Expected the AppHost CLI to resolve.');
 
         const item = harness.provider.getChildren()[0];
         assert.ok(item instanceof WorkspaceResourcesItem);
@@ -5369,7 +4857,6 @@ suite('AppHost tree action gating', () => {
         const renderedContextValues = [
             'appHost',
             'appHost:canDeploy:canPublish:canDo',
-            'appHost:canPublish',
             'appHost:operating',
             'appHost:stopping',
             'workspaceResources',
@@ -5380,7 +4867,6 @@ suite('AppHost tree action gating', () => {
             'workspaceResources:stopping',
             'workspaceAppHost',
             'workspaceAppHost:canDeploy:canPublish:canDo',
-            'workspaceAppHost:canDo',
             'workspaceAppHostLaunching',
             'workspaceAppHostOperating',
             'workspaceAppHostStopping',
@@ -5390,7 +4876,7 @@ suite('AppHost tree action gating', () => {
             'runningAppHostsGroup',
         ];
 
-        // Capability-bearing rows only, and never a row that is busy with an operation.
+        // Rows with resolved baseline actions only, and never a row that is busy with an operation.
         assert.deepStrictEqual(matchingContextValues('deployAppHost'), [
             'appHost:canDeploy:canPublish:canDo',
             'workspaceResources:hasAppHost:canDeploy:canPublish:canDo',
@@ -5398,7 +4884,6 @@ suite('AppHost tree action gating', () => {
         ]);
         assert.deepStrictEqual(matchingContextValues('publishAppHost'), [
             'appHost:canDeploy:canPublish:canDo',
-            'appHost:canPublish',
             'workspaceResources:hasAppHost:canDeploy:canPublish:canDo',
             'workspaceAppHost:canDeploy:canPublish:canDo',
         ]);
@@ -5407,7 +4892,6 @@ suite('AppHost tree action gating', () => {
                 'appHost:canDeploy:canPublish:canDo',
                 'workspaceResources:hasAppHost:canDeploy:canPublish:canDo',
                 'workspaceAppHost:canDeploy:canPublish:canDo',
-                'workspaceAppHost:canDo',
             ]);
         }
 
@@ -5416,7 +4900,6 @@ suite('AppHost tree action gating', () => {
             assert.deepStrictEqual(matchingContextValues(command), [
                 'workspaceAppHost',
                 'workspaceAppHost:canDeploy:canPublish:canDo',
-                'workspaceAppHost:canDo',
             ]);
         }
 
@@ -5425,7 +4908,6 @@ suite('AppHost tree action gating', () => {
             assert.deepStrictEqual(matchingContextValues(command), [
                 'appHost',
                 'appHost:canDeploy:canPublish:canDo',
-                'appHost:canPublish',
                 'appHost:operating',
                 'appHost:stopping',
                 'workspaceResources',
@@ -5436,7 +4918,6 @@ suite('AppHost tree action gating', () => {
                 'workspaceResources:stopping',
                 'workspaceAppHost',
                 'workspaceAppHost:canDeploy:canPublish:canDo',
-                'workspaceAppHost:canDo',
                 'workspaceAppHostLaunching',
                 'workspaceAppHostOperating',
                 'workspaceAppHostStopping',
@@ -5445,7 +4926,6 @@ suite('AppHost tree action gating', () => {
         assert.deepStrictEqual(matchingContextValues('viewAppHostSource'), [
             'appHost',
             'appHost:canDeploy:canPublish:canDo',
-            'appHost:canPublish',
             'appHost:operating',
             'appHost:stopping',
             'workspaceResources:hasAppHost',
@@ -5458,7 +4938,6 @@ suite('AppHost tree action gating', () => {
         assert.deepStrictEqual(matchingContextValues('stopAppHost'), [
             'appHost',
             'appHost:canDeploy:canPublish:canDo',
-            'appHost:canPublish',
             'appHost:operating',
             'workspaceResources:hasAppHost',
             'workspaceResources:hasAppHost:canDeploy:canPublish:canDo',
@@ -5467,7 +4946,6 @@ suite('AppHost tree action gating', () => {
         assert.deepStrictEqual(matchingContextValues('openDashboard'), [
             'appHost',
             'appHost:canDeploy:canPublish:canDo',
-            'appHost:canPublish',
             'appHost:operating',
             'appHost:stopping',
             'workspaceResources',

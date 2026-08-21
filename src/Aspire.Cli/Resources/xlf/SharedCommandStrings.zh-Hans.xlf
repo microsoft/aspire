@@ -117,9 +117,24 @@
         <target state="new">The environment to use for the operation. The default is 'Production'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PipelineFormatOptionDescription">
+        <source>Set the output format.</source>
+        <target state="new">Set the output format.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineFormatRequiresListSteps">
+        <source>The --format option can only be used together with --list-steps.</source>
+        <target state="new">The --format option can only be used together with --list-steps.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PipelineIncludeExceptionDetailsOptionDescription">
         <source>Include exception details (stack traces) in pipeline logs</source>
         <target state="new">Include exception details (stack traces) in pipeline logs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineListStepsOptionDescription">
+        <source>List registered pipeline steps without running lifecycle callbacks or pipeline steps.</source>
+        <target state="new">List registered pipeline steps without running lifecycle callbacks or pipeline steps.</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineLogLevelOptionDescription">

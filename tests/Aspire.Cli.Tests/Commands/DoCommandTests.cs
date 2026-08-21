@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Backchannel;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -12,6 +14,7 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
+[Collection(ConsoleOutputCollection.Name)]
 public class DoCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
@@ -27,6 +30,34 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommand_WhenExtensionStepPromptIsCancelled_DoesNotDisplayError()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var displayedErrors = new List<string>();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                DisplayErrorCallback = displayedErrors.Add,
+                PromptForStringCallback = (_, _, _, _, _, _) => throw new ExtensionOperationCanceledException("Pipeline step selection was canceled.")
+            };
+            options.ConfigurationCallback += config => config[KnownConfigNames.ExtensionDebugSessionId] = "test-session-id";
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        Assert.Empty(displayedErrors);
     }
 
     [Fact]
@@ -283,16 +314,24 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
-    [Fact]
-    public async Task DoCommandWithListStepsReturnsZero()
+    [Theory]
+    [InlineData("do", null)]
+    [InlineData("publish", "publish")]
+    [InlineData("deploy", "deploy")]
+    public async Task PipelineCommandWithListStepsUsesInspectOperation(string commandName, string? expectedStep)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
 
         var requestStopCalled = new TaskCompletionSource();
         var getPipelineStepsCalled = new TaskCompletionSource();
+        string? requestedStep = "not-called";
+        string[]? capturedArgs = null;
+        var publishingActivitiesRequested = false;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
             options.DotNetCliRunnerFactory = (sp) =>
@@ -308,10 +347,34 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
                     RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
                     {
+                        capturedArgs = args;
                         var backchannel = new TestAppHostBackchannel
                         {
                             RequestStopAsyncCalled = requestStopCalled,
-                            GetPipelineStepsAsyncCalled = getPipelineStepsCalled
+                            GetPipelineStepsAsyncCalled = getPipelineStepsCalled,
+                            GetPipelineStepsAsyncCallback = (step, ct) =>
+                            {
+                                requestedStep = step;
+                                return Task.FromResult(new GetPipelineStepsResponse
+                                {
+                                    Steps =
+                                    [
+                                        new PipelineStepInfo
+                                        {
+                                            Name = "deploy",
+                                            Description = "Deploy the application",
+                                            DependsOn = ["publish"],
+                                            Tags = ["deployment"],
+                                            ResourceName = "api"
+                                        }
+                                    ]
+                                });
+                            },
+                            GetPublishingActivitiesAsyncCallback = ct =>
+                            {
+                                publishingActivitiesRequested = true;
+                                return AsyncEnumerable.Empty<PublishingActivity>();
+                            }
                         };
                         backchannelCompletionSource?.SetResult(backchannel);
                         await requestStopCalled.Task.DefaultTimeout();
@@ -326,67 +389,120 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        // Act - step argument is required, even with --list-steps
-        var result = command.Parse("do deploy --list-steps");
+        var operationOverride = commandName == "do" ? string.Empty : " --operation run";
+        var result = command.Parse($"{commandName} --list-steps --format json{operationOverride}");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Assert
         Assert.Equal(0, exitCode);
         Assert.True(getPipelineStepsCalled.Task.IsCompleted, "GetPipelineStepsAsync should have been called");
         Assert.True(requestStopCalled.Task.IsCompleted, "RequestStopAsync should have been called");
+        Assert.Equal(expectedStep, requestedStep);
+        Assert.False(publishingActivitiesRequested);
+        Assert.NotNull(capturedArgs);
+        Assert.Contains("--list-steps", capturedArgs);
+        var operationIndex = Array.LastIndexOf(capturedArgs, "--operation");
+        Assert.True(operationIndex >= 0 && operationIndex + 1 < capturedArgs.Length);
+        Assert.Equal("inspect", capturedArgs[operationIndex + 1]);
+        var output = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal(ConsoleOutput.Standard, output.ConsoleOverride);
+        using var document = JsonDocument.Parse(output.Text);
+        var step = Assert.Single(document.RootElement.EnumerateArray());
+        Assert.Equal(5, step.EnumerateObject().Count());
+        Assert.Equal("deploy", step.GetProperty("name").GetString());
+        Assert.Equal("Deploy the application", step.GetProperty("description").GetString());
+        Assert.Equal(["publish"], step.GetProperty("dependsOn").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(["deployment"], step.GetProperty("tags").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal("api", step.GetProperty("resourceName").GetString());
     }
 
     [Fact]
-    public async Task DoCommandWithListStepsAndNoStepArgumentShowsFriendlyError()
+    public async Task DoCommandWithListStepsPropagatesAppHostExitCode()
     {
-        // Regression for https://github.com/microsoft/aspire/issues/17526:
-        // `aspire do --list-steps` with no step argument used to launch the AppHost
-        // and crash mid-pipeline. It should now fail validation with a friendly
-        // error pointing at concrete examples.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-
-        var result = command.Parse("do --list-steps");
-
-        Assert.NotEmpty(result.Errors);
-        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
-        Assert.Contains("--list-steps", combined);
-        Assert.Contains("aspire do deploy --list-steps", combined);
-        Assert.Contains("build", combined);
-        Assert.Contains("publish", combined);
-        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
-    }
-
-    [Fact]
-    public async Task DoCommandWithListStepsAndNoStepArgumentInExtensionHostShowsFriendlyError()
-    {
-        // The extension host bypasses the plain `aspire do` step requirement because
-        // GetRunArgumentsAsync prompts the user interactively. But `--list-steps` does
-        // not flow through that prompt, so without the validator firing the extension
-        // would still hit the original crash from https://github.com/microsoft/aspire/issues/17526.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var requestStopCalled = new TaskCompletionSource();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
-            options.ConfigurationCallback += config =>
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
-                config[KnownConfigNames.ExtensionDebugSessionId] = "test-session-id";
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = requestStopCalled,
+                        GetPipelineStepsAsyncCallback = (step, ct) => Task.FromResult(new GetPipelineStepsResponse { Steps = [] })
+                    });
+                    await requestStopCalled.Task.DefaultTimeout();
+                    return 42;
+                }
             };
         });
+
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("do --list-steps");
+        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
 
-        Assert.NotEmpty(result.Errors);
-        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
-        Assert.Contains("--list-steps", combined);
-        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
+        Assert.Equal(42, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsJsonDoesNotWriteTerminalProgressToStandardOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = requestStopCalled,
+                        GetPipelineStepsAsyncCallback = (step, ct) => Task.FromResult(new GetPipelineStepsResponse
+                        {
+                            Steps = [new PipelineStepInfo { Name = "deploy" }]
+                        })
+                    });
+                    await requestStopCalled.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        using var standardOutput = new StringWriter();
+        var originalStandardOutput = Console.Out;
+
+        try
+        {
+            Console.SetOut(standardOutput);
+            var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(0, exitCode);
+        }
+        finally
+        {
+            Console.SetOut(originalStandardOutput);
+        }
+
+        Assert.Empty(standardOutput.ToString());
+        var output = Assert.Single(interactionService.DisplayedRawText);
+        JsonDocument.Parse(output.Text).Dispose();
     }
 
     [Fact]
@@ -494,6 +610,98 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoCommandWithListStepsReturnsBuildFailureWhenCurrentAppHostExitsBeforeBackchannel()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    Task.FromResult(1)
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsReturnsIncompatibleWithoutLaunchingLegacyAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runCalled = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, "13.5.0"),
+                RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    runCalled = true;
+                    return Task.FromResult(0);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        Assert.False(runCalled);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsStopsAppHostWhenCapabilityIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = requestStopCalled,
+                        GetCapabilitiesAsyncCallback = _ => Task.FromResult<string[]>(["baseline.v2"])
+                    });
+                    await requestStopCalled.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("do --list-steps --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        Assert.True(requestStopCalled.Task.IsCompleted);
+    }
+
+    [Fact]
     public async Task DoCommandListStepsDisplaysCustomSteps()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -562,6 +770,20 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithFormatWithoutListStepsReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var exitCode = await command.Parse("do deploy --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -670,4 +892,10 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedArgs);
         Assert.DoesNotContain("--log-level", capturedArgs);
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ConsoleOutputCollection
+{
+    public const string Name = nameof(ConsoleOutputCollection);
 }

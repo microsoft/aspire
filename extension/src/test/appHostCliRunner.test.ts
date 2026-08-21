@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
-import { AppHostCliRunner, isDescribeUnsupportedOutput } from '../data/appHostCliRunner';
+import { AppHostCliRunner, isDescribeUnsupportedOutput, parseCliJsonOutput } from '../data/appHostCliRunner';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as cliModule from '../utils/process/cliProcess';
@@ -19,6 +19,18 @@ class TestChildProcess extends EventEmitter {
 }
 
 suite('data/appHostCliRunner tests', () => {
+
+    suite('parseCliJsonOutput', () => {
+        test('parses multiline JSON after startup diagnostics', () => {
+            const output = `Starting AppHost...\n[
+  {
+    "name": "deploy"
+  }
+]`;
+
+            assert.deepStrictEqual(parseCliJsonOutput(output), [{ name: 'deploy' }]);
+        });
+    });
 
     suite('AppHostCliRunner one-shot process tracking', () => {
         let subscriptions: vscode.Disposable[];
@@ -89,6 +101,27 @@ suite('data/appHostCliRunner tests', () => {
                 await runner.runCliCommand('describe', ['describe'], options);
 
                 assert.strictEqual(getCliPathStub.calledOnceWithExactly(target), true);
+            } finally {
+                runner.dispose();
+            }
+        });
+
+        test('uses a supplied concrete CLI path without resolving it again', async () => {
+            const cliProcess = new TestChildProcess();
+            spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
+                cliProcess.exitCode = 0;
+                options.exitCallback?.(0);
+                return cliProcess;
+            });
+
+            const runner = new AppHostCliRunner(terminalProvider);
+            try {
+                await runner.runCliCommand('list pipeline steps', ['do', '--list-steps'], {
+                    cliPath: '/repo/tools/aspire',
+                });
+
+                assert.strictEqual(getCliPathStub.called, false);
+                assert.strictEqual(spawnStub.firstCall.args[1], '/repo/tools/aspire');
             } finally {
                 runner.dispose();
             }

@@ -1,9 +1,10 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
-import { CliPathResolutionTarget, getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from '../utils/cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
-import { resolvePipelineStep } from '../utils/pipelineStep';
+import { isPipelineStepListUnsupportedError, resolvePipelineStep, selectPipelineStepFromCli } from '../utils/pipelineStep';
+import { AppHostCliRunner } from '../data/appHostCliRunner';
 import { cliPathResolver, resolveCliPath } from '../utils/cliPath';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { compareResourceCommands } from '../utils/resourceDisplay';
@@ -40,7 +41,7 @@ import { executeResourceCommand as executeResourceCommandWithUi, getErrorMessage
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isSameFileSystemEntry } from '../utils/appHostDiscovery';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { deployCommandCapability, doCommandCapability, pipelineInteractionCapability, publishCommandCapability, type CapabilityStatus, type ConfigInfo } from '../types/configInfo';
+import { pipelineInteractionCapability, pipelineStepListJsonCapability } from '../types/configInfo';
 import { isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
 import { isCommandCancellation } from '../utils/telemetry';
 import {
@@ -73,6 +74,7 @@ import {
     WorkspaceResourcesItem,
     type AppHostActionAvailability,
     type AppHostItemOperation,
+    type WorkspaceAppHostAction,
 } from './treeItems';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
@@ -80,8 +82,8 @@ type AppHostActionElement = AppHostItem | WorkspaceResourcesItem | WorkspaceAppH
 type AppHostActionCommand = 'deploy' | 'publish' | 'do';
 
 /**
- * The exact Aspire CLI selected for an AppHost together with the actions that CLI advertises.
- * Both halves travel together so an action runs against the same executable the row was gated on.
+ * The exact Aspire CLI selected for an AppHost together with its baseline actions.
+ * Both halves travel together so an action runs against the same executable the row was resolved with.
  */
 interface AppHostActionSupport {
     readonly target: CliPathResolutionTarget;
@@ -94,23 +96,13 @@ interface ResolvedAppHostActionSupport extends AppHostActionSupport {
     readonly invocationKey: string;
     readonly invocationSequence: number;
     readonly pipelineInteractionSupported: boolean;
+    readonly pipelineStepListJsonSupported: boolean;
 }
 
 /** Durable non-Run state plus capability-gated actions for one rendered AppHost row. */
 interface AppHostRenderState {
     readonly operation: AppHostItemOperation | undefined;
     readonly actions: AppHostActionAvailability | undefined;
-}
-
-function isActionSupported(support: AppHostActionSupport, command: AppHostActionCommand): boolean {
-    switch (command) {
-        case 'deploy':
-            return support.availability.deploy;
-        case 'publish':
-            return support.availability.publish;
-        case 'do':
-            return support.availability.do;
-    }
 }
 
 function isSamePath(left: string, right: string): boolean {
@@ -156,23 +148,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     private readonly _cliPathResolverSubscription: vscode.Disposable;
     private readonly _workspaceFoldersSubscription: vscode.Disposable;
     private readonly _stoppingAppHostTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
-    /**
-     * Probed action support per exact normalized AppHost path. `null` records a probe that produced
-     * no usable answer - an unavailable CLI, or one that could not report its capabilities - and is
-     * cached like any other result because re-probing on every render would loop between render and
-     * the refresh the probe fires. Explicit actions re-probe such an entry; explicit refreshes and
-     * CLI resolution-scope changes clear all entries.
-     */
+    private readonly _autoExpandedWorkspaceAppHostKeys = new Set<string>();
+    /** The resolved CLI and baseline actions per exact normalized AppHost path. */
     private readonly _actionSupportByAppHost = new Map<string, AppHostActionSupport | null>();
     private readonly _pendingActionSupportByAppHost = new Map<string, Promise<AppHostActionSupport | null>>();
-    private readonly _forcedActionSupportRefreshByScope = new Map<string, Promise<ConfigInfo | null>>();
-    private readonly _actionSupportRefreshRequiredByScope = new Set<string>();
-    private readonly _actionSupportRefreshEpochByScope = new Map<string, number>();
     private readonly _actionSupportInvocationSequenceByAction = new Map<string, number>();
     private readonly _latestActionSupportValidationSequenceByAppHost = new Map<string, number>();
+    private readonly _pipelineStepSelectionByAppHost = new Map<string, WorkspaceAppHostAction>();
     private _nextActionSupportInvocationSequence = 0;
     private _actionSupportGeneration = 0;
-    private _actionSupportRefreshEpoch = 0;
     private _disposed = false;
     private _contentProviderRegistration: vscode.Disposable | undefined;
     private readonly _appHostSourceContents = new Map<string, string>();
@@ -187,11 +171,13 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         private readonly _secretWarningState?: vscode.Memento,
         private readonly _clipboard: Clipboard = vscode.env.clipboard,
         private readonly _configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(_terminalProvider),
+        private readonly _cliRunner: AppHostCliRunner = new AppHostCliRunner(_terminalProvider),
     ) {
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._clearLaunchingPathsForRunningAppHosts();
             this._clearStoppingPathsForStoppedAppHosts();
             this._onDidChangeTreeData.fire();
+            this._autoExpandSingleWorkspaceAppHost();
         });
 
         // When the launch service's launching state changes, refresh the tree.
@@ -263,7 +249,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     refreshActionSupport(): void {
-        this._actionSupportRefreshEpoch++;
         this._invalidateActionSupport();
     }
 
@@ -278,17 +263,16 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         this._actionSupportGeneration++;
         this._actionSupportByAppHost.clear();
         this._pendingActionSupportByAppHost.clear();
-        this._forcedActionSupportRefreshByScope.clear();
-        this._actionSupportRefreshRequiredByScope.clear();
-        this._actionSupportRefreshEpochByScope.clear();
         this._actionSupportInvocationSequenceByAction.clear();
         this._latestActionSupportValidationSequenceByAppHost.clear();
+        this._pipelineStepSelectionByAppHost.clear();
         for (const timeout of this._stoppingAppHostTimeouts.values()) {
             clearTimeout(timeout);
         }
         this._stoppingAppHostTimeouts.clear();
         this._contentProviderRegistration?.dispose();
         this._documentCloseSubscription?.dispose();
+        this._cliRunner.dispose();
         this._onDidChangeTreeData.dispose();
         this._onDidChangeStoppingState.dispose();
         this._onDidChangeContent.dispose();
@@ -296,6 +280,32 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     setTreeView(treeView: vscode.TreeView<TreeElement>): void {
         this._treeView = treeView;
+        this._autoExpandSingleWorkspaceAppHost();
+    }
+
+    private _autoExpandSingleWorkspaceAppHost(): void {
+        if (!this._treeView || this._repository.viewMode !== 'workspace') {
+            return;
+        }
+
+        const rootElements = this.getChildren();
+        if (rootElements.length !== 1 || !(rootElements[0] instanceof WorkspaceAppHostItem)) {
+            return;
+        }
+
+        const appHostItem = rootElements[0];
+        const key = appHostItem.id;
+        if (!key || this._autoExpandedWorkspaceAppHostKeys.has(key)) {
+            return;
+        }
+
+        // VS Code does not apply an expanded state when a root is added after the initial render.
+        // Reveal each AppHost only once so later refreshes preserve the user's manual collapse.
+        this._autoExpandedWorkspaceAppHostKeys.add(key);
+        void this._treeView.reveal(appHostItem, { expand: true }).then(undefined, error => {
+            this._autoExpandedWorkspaceAppHostKeys.delete(key);
+            extensionLogOutputChannel.warn(`Unable to expand the workspace AppHost '${appHostItem.appHostPath}': ${getErrorMessage(error)}`);
+        });
     }
 
     // When a launching AppHost appears in the running list, clear it from the launch service.
@@ -397,13 +407,13 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    // ── Durable operation state and capability-gated actions ──
+    // ── Durable operation state and AppHost actions ──
 
     /**
-     * The durable non-Run state and the capability-gated actions for one AppHost row.
+    * The durable non-Run state and baseline actions for one AppHost row.
      *
      * Rendering is synchronous, so a row can only show what has already been probed. The first
-     * render of an AppHost starts one probe and renders no capability-gated actions; the probe
+    * render of an AppHost starts one probe and renders no CLI actions; the probe
      * refreshes the tree when it completes, and the second render picks up the answer.
      */
     private _getAppHostRenderState(appHostPath: string | undefined): AppHostRenderState {
@@ -439,7 +449,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             void this._startActionSupportProbe(appHostPath, key, false);
         }
 
-        // Fail closed: an unprobed AppHost offers no deploy/publish/do until its CLI answers.
+        // An unprobed AppHost offers no CLI actions until its owning CLI resolves.
         return null;
     }
 
@@ -447,7 +457,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         this._actionSupportGeneration++;
         this._actionSupportByAppHost.clear();
         this._pendingActionSupportByAppHost.clear();
-        this._forcedActionSupportRefreshByScope.clear();
         this._onDidChangeTreeData.fire();
     }
 
@@ -471,7 +480,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     private _startActionSupportProbe(appHostPath: string, key: string, notifyWhenUnavailable: boolean): Promise<AppHostActionSupport | null> {
         const generation = this._actionSupportGeneration;
         let probe!: Promise<AppHostActionSupport | null>;
-        probe = this._probeActionSupport(appHostPath, notifyWhenUnavailable, generation)
+        probe = this._probeActionSupport(appHostPath, notifyWhenUnavailable)
             .catch(err => {
                 extensionLogOutputChannel.warn(`Unable to determine Aspire CLI action support for '${appHostPath}': ${getErrorMessage(err)}`);
                 return null;
@@ -496,7 +505,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     private async _probeActionSupport(
         appHostPath: string,
         notifyWhenUnavailable: boolean,
-        generation: number,
     ): Promise<AppHostActionSupport | null> {
         const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
         // Drawing the tree is not something the user asked for, so the render probe resolves the
@@ -510,102 +518,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return null;
         }
 
-        // Normal checks share one `aspire config info` invocation through ConfigInfoProvider.
-        // Explicit refresh instead shares one forced full snapshot per CLI resolution scope below.
-        const options = { target, cliPath: result.cliPath, suppressErrors: true };
-        let deploy: CapabilityStatus;
-        let publish: CapabilityStatus;
-        let doCommand: CapabilityStatus;
-        const scopeKey = this._getActionSupportScopeKey(target, result.cliPath);
-        const refreshEpoch = this._actionSupportRefreshEpoch;
-        const requiresExplicitRefresh = refreshEpoch > 0
-            && this._actionSupportRefreshEpochByScope.get(scopeKey) !== refreshEpoch;
-        if (requiresExplicitRefresh || this._actionSupportRefreshRequiredByScope.has(scopeKey)) {
-            // A successful config-info read is cached. Explicit refresh must replace that complete
-            // snapshot before the remaining capability checks read it, otherwise a CLI replaced at
-            // the same path can keep newly-added actions hidden indefinitely.
-            const configInfo = await this._forceRefreshActionSupportSnapshot(
-                target,
-                result.cliPath,
-                scopeKey,
-                refreshEpoch,
-                generation);
-            if (!configInfo) {
-                return null;
-            }
-
-            deploy = configInfo.capabilities?.includes(deployCommandCapability) ? 'supported' : 'unsupported';
-            publish = configInfo.capabilities?.includes(publishCommandCapability) ? 'supported' : 'unsupported';
-            doCommand = configInfo.capabilities?.includes(doCommandCapability) ? 'supported' : 'unsupported';
-        } else {
-            [deploy, publish, doCommand] = await Promise.all([
-                this._configInfoProvider.getCapabilityStatus(deployCommandCapability, options),
-                this._configInfoProvider.getCapabilityStatus(publishCommandCapability, options),
-                this._configInfoProvider.getCapabilityStatus(doCommandCapability, options),
-            ]);
-        }
-
-        // A CLI that could not answer at all is a transient failure rather than a negative answer.
-        // ConfigInfoProvider deliberately does not cache those, so this reports no support instead
-        // of recording an authoritative "supports nothing" for the rest of the session.
-        if ([deploy, publish, doCommand].includes('unavailable')) {
-            return null;
-        }
-
         return {
             target,
             cliPath: result.cliPath,
             availability: {
-                // An older CLI that answers without advertising the capability leaves it hidden.
-                deploy: deploy === 'supported',
-                publish: publish === 'supported',
-                do: doCommand === 'supported',
+                deploy: true,
+                publish: true,
+                do: true,
             },
         };
-    }
-
-    private _forceRefreshActionSupportSnapshot(
-        target: CliPathResolutionTarget,
-        cliPath: string,
-        scopeKey = this._getActionSupportScopeKey(target, cliPath),
-        refreshEpoch = this._actionSupportRefreshEpoch,
-        generation = this._actionSupportGeneration,
-    ): Promise<ConfigInfo | null> {
-        const pending = this._forcedActionSupportRefreshByScope.get(scopeKey);
-        if (pending) {
-            return pending;
-        }
-
-        let refresh!: Promise<ConfigInfo | null>;
-        refresh = this._configInfoProvider.getConfigInfo({
-            target,
-            cliPath,
-            suppressErrors: true,
-            forceRefresh: true,
-        }).then(configInfo => {
-            // ConfigInfoProvider does not cache failures. Let a later explicit action retry rather
-            // than pinning one transient failure for the rest of this refresh generation.
-            if (!configInfo && this._forcedActionSupportRefreshByScope.get(scopeKey) === refresh) {
-                this._actionSupportRefreshRequiredByScope.add(scopeKey);
-                this._forcedActionSupportRefreshByScope.delete(scopeKey);
-            } else if (configInfo && this._forcedActionSupportRefreshByScope.get(scopeKey) === refresh) {
-                if (generation === this._actionSupportGeneration
-                    && refreshEpoch === this._actionSupportRefreshEpoch) {
-                    this._actionSupportRefreshRequiredByScope.delete(scopeKey);
-                    this._actionSupportRefreshEpochByScope.set(scopeKey, refreshEpoch);
-                } else {
-                    this._forcedActionSupportRefreshByScope.delete(scopeKey);
-                }
-            }
-
-            return configInfo;
-        });
-        this._forcedActionSupportRefreshByScope.set(scopeKey, refresh);
-        return refresh;
-    }
-
-    private _getActionSupportScopeKey(target: CliPathResolutionTarget, cliPath: string): string {
-        return `${getCliPathTargetKey(target)}\u0000${cliPath}`;
     }
 
     findResourceElement(resourceName: string, appHostPath?: string): TreeElement | undefined {
@@ -850,7 +771,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
                     if (!runningAppHost) {
                         const candidateState = this._getAppHostRenderState(candidatePath);
-                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching, this._isStoppingAppHost(candidatePath), candidateState.operation, candidateState.actions));
+                        const collapsibleState = workspaceAppHostPaths.length === 1
+                            ? vscode.TreeItemCollapsibleState.Expanded
+                            : vscode.TreeItemCollapsibleState.Collapsed;
+                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching, this._isStoppingAppHost(candidatePath), candidateState.operation, candidateState.actions, collapsibleState));
                         continue;
                     }
 
@@ -951,8 +875,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                     items.push(new WorkspaceAppHostActionItem(element, 'publish'));
                 }
                 if (element.actions?.do) {
-                    items.push(new WorkspaceAppHostActionItem(element, 'runPipelineStep'));
-                    items.push(new WorkspaceAppHostActionItem(element, 'debugPipelineStep'));
+                    const loadingAction = this._pipelineStepSelectionByAppHost.get(getActionSupportCacheKey(element.appHostPath));
+                    items.push(new WorkspaceAppHostActionItem(element, 'runPipelineStep', loadingAction === 'runPipelineStep'));
+                    items.push(new WorkspaceAppHostActionItem(element, 'debugPipelineStep', loadingAction === 'debugPipelineStep'));
                 }
             }
             items.push(new WorkspaceAppHostPathItem(element));
@@ -1250,7 +1175,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const support = await this._resolveSupportedActionCli(appHostPath, command);
+        const support = await this._resolveActionCli(appHostPath, command);
         await this._launchService.launch(appHostPath, command, noDebug, undefined, support.target, support.cliPath);
     }
 
@@ -1261,21 +1186,55 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const support = await this._resolveSupportedActionCli(appHostPath, 'do');
-        const step = await resolvePipelineStep(
-            this._configInfoProvider,
-            support.target,
-            support.cliPath,
-            support.pipelineInteractionSupported);
-        if (step === undefined) {
-            throw new vscode.CancellationError();
-        }
-        if (!this._isResolvedActionSupportCurrent(support)) {
+        const key = getActionSupportCacheKey(appHostPath);
+        if (this._pipelineStepSelectionByAppHost.has(key)) {
             throw new vscode.CancellationError();
         }
 
-        await this._revalidatePipelineStepCli(appHostPath, support);
-        await this._launchService.launch(appHostPath, 'do', noDebug, step ?? undefined, support.target, support.cliPath);
+        const loadingAction: WorkspaceAppHostAction = noDebug ? 'runPipelineStep' : 'debugPipelineStep';
+        this._pipelineStepSelectionByAppHost.set(key, loadingAction);
+        this._onDidChangeTreeData.fire();
+        try {
+            const support = await this._resolveActionCli(appHostPath, 'do');
+            let step: string | null | undefined;
+            if (support.pipelineStepListJsonSupported) {
+                try {
+                    step = await selectPipelineStepFromCli(this._cliRunner, appHostPath, support.target, support.cliPath);
+                } catch (error) {
+                    if (!isPipelineStepListUnsupportedError(error)) {
+                        throw error;
+                    }
+
+                    step = await resolvePipelineStep(
+                        this._configInfoProvider,
+                        support.target,
+                        support.cliPath,
+                        support.pipelineInteractionSupported);
+                }
+            } else {
+                step = await resolvePipelineStep(
+                    this._configInfoProvider,
+                    support.target,
+                    support.cliPath,
+                    support.pipelineInteractionSupported);
+            }
+            if (step === undefined) {
+                throw new vscode.CancellationError();
+            }
+            if (!this._isResolvedActionSupportCurrent(support)) {
+                throw new vscode.CancellationError();
+            }
+
+            await this._revalidatePipelineStepCli(appHostPath, support);
+            await this._launchService.launch(appHostPath, 'do', noDebug, step ?? undefined, support.target, support.cliPath);
+        } finally {
+            if (this._pipelineStepSelectionByAppHost.get(key) === loadingAction) {
+                this._pipelineStepSelectionByAppHost.delete(key);
+                if (!this._disposed) {
+                    this._onDidChangeTreeData.fire();
+                }
+            }
+        }
     }
 
     private async _revalidatePipelineStepCli(
@@ -1299,46 +1258,30 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
-        const capabilityStatus = await this._configInfoProvider.getCapabilityStatus(doCommandCapability, {
+        const configInfo = await this._configInfoProvider.getConfigInfo({
             target: support.target,
             cliPath: support.cliPath,
             suppressErrors: true,
             forceRefresh: true,
         });
-        if (!this._isResolvedActionSupportCurrent(support)) {
-            throw new vscode.CancellationError();
-        }
-        if (capabilityStatus === 'unavailable') {
-            this._setCachedActionSupportForValidation(
-                key,
-                null,
-                support.generation,
-                support.invocationSequence);
+        const pipelineInteractionSupported = configInfo?.capabilities?.includes(pipelineInteractionCapability) ?? false;
+        const pipelineStepListJsonSupported = configInfo?.capabilities?.includes(pipelineStepListJsonCapability) ?? false;
+        if (!this._isResolvedActionSupportCurrent(support)
+            || pipelineInteractionSupported !== support.pipelineInteractionSupported
+            || pipelineStepListJsonSupported !== support.pipelineStepListJsonSupported) {
             throw new vscode.CancellationError();
         }
 
-        if (!this._setCachedActionCapability(
-            key,
-            support,
-            'do',
-            capabilityStatus === 'supported',
-            support.generation,
-            support.invocationSequence)) {
-            throw new vscode.CancellationError();
-        }
-        if (capabilityStatus !== 'supported') {
-            extensionLogOutputChannel.warn(`The Aspire CLI at '${support.cliPath}' no longer supports 'do' for AppHost '${appHostPath}'.`);
+        if (!this._acceptActionSupportValidation(key, support.generation, support.invocationSequence)) {
             throw new vscode.CancellationError();
         }
     }
 
     /**
-     * Resolves the exact CLI for an action and confirms that CLI still advertises it. The row and
-     * context menu already hide unsupported actions, so reaching this check means the request came
-     * from somewhere that never saw the gate: it fails silently rather than running a command the
-     * CLI does not understand.
+     * Resolves and revalidates the exact CLI for an action. Deploy, publish, and do are baseline
+     * commands in every supported CLI, while the pipelines capability selects the richer step picker.
      */
-    private async _resolveSupportedActionCli(appHostPath: string, command: AppHostActionCommand): Promise<ResolvedAppHostActionSupport> {
+    private async _resolveActionCli(appHostPath: string, command: AppHostActionCommand): Promise<ResolvedAppHostActionSupport> {
         const key = getActionSupportCacheKey(appHostPath);
         const invocationKey = `${key}\u0000${command}`;
         const invocationSequence = ++this._nextActionSupportInvocationSequence;
@@ -1355,11 +1298,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
-        if (!isActionSupported(support, command)) {
-            extensionLogOutputChannel.warn(`The Aspire CLI at '${support.cliPath}' does not support '${command}' for AppHost '${appHostPath}'.`);
-            throw new vscode.CancellationError();
-        }
-
         const generation = this._actionSupportGeneration;
         const availability = await checkCliAvailableOrRedirect(
             'debug_gate',
@@ -1373,14 +1311,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
-        const capability = command === 'deploy'
-            ? deployCommandCapability
-            : command === 'publish'
-                ? publishCommandCapability
-                : doCommandCapability;
-        let capabilityStatus: CapabilityStatus;
         let pipelineInteractionSupported = false;
-        let refreshedAvailability: AppHostActionAvailability | undefined;
+        let pipelineStepListJsonSupported = false;
         if (command === 'do') {
             const configInfo = await this._configInfoProvider.getConfigInfo({
                 target: support.target,
@@ -1388,53 +1320,14 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 suppressErrors: true,
                 forceRefresh: true,
             });
-            capabilityStatus = !configInfo
-                ? 'unavailable'
-                : configInfo.capabilities?.includes(capability) ? 'supported' : 'unsupported';
             pipelineInteractionSupported = configInfo?.capabilities?.includes(pipelineInteractionCapability) ?? false;
-            if (configInfo) {
-                refreshedAvailability = {
-                    deploy: configInfo.capabilities?.includes(deployCommandCapability) ?? false,
-                    publish: configInfo.capabilities?.includes(publishCommandCapability) ?? false,
-                    do: configInfo.capabilities?.includes(doCommandCapability) ?? false,
-                };
-            }
-        } else {
-            capabilityStatus = await this._configInfoProvider.getCapabilityStatus(capability, {
-                target: support.target,
-                cliPath: support.cliPath,
-                suppressErrors: true,
-                forceRefresh: true,
-            });
+            pipelineStepListJsonSupported = configInfo?.capabilities?.includes(pipelineStepListJsonCapability) ?? false;
         }
         if (generation !== this._actionSupportGeneration || !isCurrentInvocation()) {
             throw new vscode.CancellationError();
         }
 
-        if (capabilityStatus === 'unavailable') {
-            this._setCachedActionSupportForValidation(key, null, generation, invocationSequence);
-            throw new vscode.CancellationError();
-        }
-
-        const cacheAccepted = refreshedAvailability
-            ? this._setCachedActionSnapshotForValidation(
-                key,
-                support,
-                refreshedAvailability,
-                generation,
-                invocationSequence)
-            : this._setCachedActionCapability(
-                key,
-                support,
-                command,
-                capabilityStatus === 'supported',
-                generation,
-                invocationSequence);
-        if (!cacheAccepted) {
-            throw new vscode.CancellationError();
-        }
-        if (capabilityStatus !== 'supported') {
-            extensionLogOutputChannel.warn(`The Aspire CLI at '${support.cliPath}' no longer supports '${command}' for AppHost '${appHostPath}'.`);
+        if (!this._acceptActionSupportValidation(key, generation, invocationSequence)) {
             throw new vscode.CancellationError();
         }
 
@@ -1444,6 +1337,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             invocationKey,
             invocationSequence,
             pipelineInteractionSupported,
+            pipelineStepListJsonSupported,
         };
     }
 
@@ -1464,56 +1358,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         this._actionSupportByAppHost.set(key, support);
         this._onDidChangeTreeData.fire();
-    }
-
-    private _setCachedActionCapability(
-        key: string,
-        fallbackSupport: AppHostActionSupport,
-        command: AppHostActionCommand,
-        supported: boolean,
-        generation: number,
-        validationSequence: number,
-    ): boolean {
-        if (!this._acceptActionSupportValidation(key, generation, validationSequence)) {
-            return false;
-        }
-
-        // A newer successful validation can safely recover from an older unavailable result, but
-        // only the capability it actually re-probed is restored from the fail-closed null state.
-        const currentSupport = this._actionSupportByAppHost.get(key);
-        const support = currentSupport ?? {
-            ...fallbackSupport,
-            availability: { deploy: false, publish: false, do: false },
-        };
-        this._actionSupportByAppHost.set(key, {
-            ...support,
-            availability: {
-                ...support.availability,
-                [command]: supported,
-            },
-        });
-        this._onDidChangeTreeData.fire();
-        return true;
-    }
-
-    private _setCachedActionSnapshotForValidation(
-        key: string,
-        fallbackSupport: AppHostActionSupport,
-        availability: AppHostActionAvailability,
-        generation: number,
-        validationSequence: number,
-    ): boolean {
-        if (!this._acceptActionSupportValidation(key, generation, validationSequence)) {
-            return false;
-        }
-
-        const currentSupport = this._actionSupportByAppHost.get(key);
-        this._actionSupportByAppHost.set(key, {
-            ...(currentSupport ?? fallbackSupport),
-            availability,
-        });
-        this._onDidChangeTreeData.fire();
-        return true;
     }
 
     private _acceptActionSupportValidation(

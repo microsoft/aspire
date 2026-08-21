@@ -10,6 +10,34 @@ Streaming output should be the streamed form of the command's JSON content rathe
 
 Most JSON output uses camel-case property names. Properties whose values are not available can be omitted or written as `null`, depending on the command-specific serializer.
 
+## Pipeline steps
+
+`aspire do --list-steps --format json` starts the selected AppHost in inspection mode and returns pipeline steps registered while building the application model. Inspection does not run `BeforeStart` callbacks, raise publish events, or execute pipeline steps. The AppHost still starts its registered hosted services so the CLI backchannel can connect. Steps added dynamically by `BeforeStart` are not included. Supplying a step name filters the result to that step and its transitive dependencies.
+
+```json
+[
+  {
+    "name": "deploy-api",
+    "description": "Deploy the API",
+    "dependsOn": [
+      "publish-api"
+    ],
+    "tags": [
+      "deploy-compute"
+    ],
+    "resourceName": "api"
+  }
+]
+```
+
+| Field | Description |
+| ----- | ----------- |
+| `name` | Unique pipeline step name. |
+| `description` | Optional description of the step. |
+| `dependsOn` | Names of direct dependencies. |
+| `tags` | Tags associated with the step. |
+| `resourceName` | Name of the associated resource, when applicable. |
+
 ## AppHost discovery and lifecycle
 
 ### `aspire ls`

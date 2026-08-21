@@ -7,7 +7,7 @@ import { registerTreeViewCommands } from '../activation/registerTreeViewCommands
 import { AppHostDataRepository, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { executeE2eControlCommand } from '../testing/e2eStateFileBridge';
-import { deployCommandCapability, doCommandCapability, pipelineInteractionCapability, publishCommandCapability } from '../types/configInfo';
+import { pipelineInteractionCapability } from '../types/configInfo';
 import { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
@@ -69,9 +69,6 @@ suite('E2E state file bridge', () => {
             localSettingsSchema: { properties: [] },
             globalSettingsSchema: { properties: [] },
             capabilities: [
-                deployCommandCapability,
-                publishCommandCapability,
-                doCommandCapability,
                 pipelineInteractionCapability,
             ],
         });

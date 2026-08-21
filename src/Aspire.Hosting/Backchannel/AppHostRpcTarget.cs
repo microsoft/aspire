@@ -229,7 +229,8 @@ internal class AppHostRpcTarget(
         _ = cancellationToken;
         return Task.FromResult(new string[] {
             "baseline.v2",
-            "pipeline-steps.v1"
+            "pipeline-steps.v1",
+            "pipeline-steps.v2"
             });
     }
 #pragma warning restore CA1822

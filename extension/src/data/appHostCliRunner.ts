@@ -17,6 +17,7 @@ export interface RunCliCommandOptions {
     cancellationToken?: vscode.CancellationToken;
     env?: { name: string; value: string }[];
     target?: CliPathResolutionTarget;
+    cliPath?: string;
 }
 
 export class AppHostCliRunner implements vscode.Disposable {
@@ -77,9 +78,10 @@ export class AppHostCliRunner implements vscode.Disposable {
     }
 
     async runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
-            throw new AspireCliNotInstalledError(String(error));
-        });
+        const cliPath = options.cliPath
+            ?? await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
+                throw new AspireCliNotInstalledError(String(error));
+            });
 
         if (options.cancellationToken?.isCancellationRequested) {
             throw new vscode.CancellationError();
@@ -264,15 +266,14 @@ export function parseCliJsonOutput<T>(stdout: string): T {
         // Some CLI invocations can emit startup diagnostics before the final JSON payload:
         //   Starting AppHost...
         //   {"resources":[{"name":"api", ...}]}
-        // Parse the whole output first for the normal deterministic path, then fall back to
-        // the last JSON-looking line so older or chatty CLIs do not poison the snapshot.
-        for (const line of stdout.split(/\r?\n/).reverse()) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        // Parse the whole output first for the normal deterministic path, then try each trailing
+        // JSON-looking document start so pretty-printed payloads remain intact.
+        for (let index = stdout.length - 1; index >= 0; index--) {
+            if (stdout[index] === '{' || stdout[index] === '[') {
                 try {
-                    return JSON.parse(trimmed);
+                    return JSON.parse(stdout.slice(index).trim());
                 } catch {
-                    // Keep scanning in case the CLI wrote a JSON-looking diagnostic after the payload.
+                    // Keep scanning toward the root of a nested or multiline JSON document.
                 }
             }
         }

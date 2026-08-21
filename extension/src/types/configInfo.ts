@@ -39,28 +39,17 @@ export interface ConfigInfo {
 export type CapabilityStatus = 'supported' | 'unsupported' | 'unavailable';
 
 /**
- * Capability advertised by the CLI when `aspire deploy` is available.
- * Keep in sync with `KnownCapabilities.DeployCommand` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
- */
-export const deployCommandCapability = 'deploy-command.v1';
-
-/**
- * Capability advertised by the CLI when `aspire publish` is available.
- * Keep in sync with `KnownCapabilities.PublishCommand` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
- */
-export const publishCommandCapability = 'publish-command.v1';
-
-/**
- * Capability advertised by the CLI when `aspire do` is available.
- * Keep in sync with `KnownCapabilities.DoCommand` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
- */
-export const doCommandCapability = 'do-command.v1';
-
-/**
  * Capability advertised by the CLI when interaction-service pipeline actions are available.
  * Keep in sync with `KnownCapabilities.Pipelines` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const pipelineInteractionCapability = 'pipelines';
+
+/**
+ * Capability advertised by the CLI when `aspire do --list-steps --format json` returns pipeline
+ * metadata without executing the pipeline. Keep in sync with `KnownCapabilities.PipelineStepListJson`
+ * in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const pipelineStepListJsonCapability = 'pipeline-step-list-json.v1';
 
 /**
  * Capability advertised by the CLI when `aspire describe` supports the hidden

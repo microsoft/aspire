@@ -2,11 +2,12 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { doCommand } from '../commands/do';
+import { AppHostCliRunner } from '../data/appHostCliRunner';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
-import { pipelineStepRequired } from '../loc/strings';
+import { loadingPipelineSteps, noPipelineStepsFound, pipelineStepRequired, selectPipelineStep } from '../loc/strings';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
-import { resolvePipelineStep } from '../utils/pipelineStep';
+import { resolvePipelineStep, selectPipelineStepFromCli } from '../utils/pipelineStep';
 
 suite('pipeline step resolution', () => {
     let sandbox: sinon.SinonSandbox;
@@ -94,6 +95,134 @@ suite('pipeline step resolution', () => {
         const step = await resolvePipelineStep(configInfoProvider, target, cliPath);
 
         assert.strictEqual(step, undefined);
+    });
+
+    test('structured list uses the pinned CLI and maps metadata to a quick pick', async () => {
+        const runCliCommandStub = sandbox.stub().resolves({
+            stdout: JSON.stringify([
+                {
+                    name: 'publish',
+                    description: 'Publish artifacts',
+                    dependsOn: ['build'],
+                    tags: ['publish'],
+                    resourceName: 'api',
+                },
+                {
+                    name: 'deploy',
+                    dependsOn: ['publish'],
+                    tags: [],
+                },
+            ]),
+            stderr: '',
+        });
+        const cliRunner = {
+            withNoLogo: sandbox.stub().callsFake(args => [...args, '--nologo']),
+            runCliCommand: runCliCommandStub,
+        } as unknown as AppHostCliRunner;
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async items =>
+            (items as readonly vscode.QuickPickItem[])[1]);
+
+        const step = await selectPipelineStepFromCli(cliRunner, appHostPath, target, cliPath);
+
+        assert.strictEqual(step, 'deploy');
+        assert.strictEqual(runCliCommandStub.callCount, 1);
+        assert.strictEqual(runCliCommandStub.firstCall.args[0], 'list pipeline steps');
+        assert.deepStrictEqual(runCliCommandStub.firstCall.args[1],
+            ['do', '--list-steps', '--format', 'json', '--apphost', appHostPath, '--nologo']);
+        assert.strictEqual(runCliCommandStub.firstCall.args[2].target, target);
+        assert.strictEqual(runCliCommandStub.firstCall.args[2].cliPath, cliPath);
+        assert.strictEqual(runCliCommandStub.firstCall.args[2].timeoutMs, null);
+        assert.ok(runCliCommandStub.firstCall.args[2].cancellationToken);
+        const items = showQuickPickStub.firstCall.args[0] as readonly vscode.QuickPickItem[];
+        assert.deepStrictEqual(items.map(item => ({
+            label: item.label,
+            description: item.description,
+            detail: item.detail,
+        })), [
+                { label: 'publish', description: 'Publish artifacts', detail: 'api' },
+                { label: 'deploy', description: undefined, detail: undefined },
+            ]);
+        assert.deepStrictEqual(showQuickPickStub.firstCall.args[1], {
+            placeHolder: selectPipelineStep,
+            matchOnDescription: true,
+            matchOnDetail: true,
+        });
+    });
+
+    test('structured list cancellation returns undefined', async () => {
+        const cliRunner = {
+            withNoLogo: sandbox.stub().returns(['do']),
+            runCliCommand: sandbox.stub().resolves({
+                stdout: '[{"name":"deploy","dependsOn":[],"tags":[]}]',
+                stderr: '',
+            }),
+        } as unknown as AppHostCliRunner;
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+
+        const step = await selectPipelineStepFromCli(cliRunner, appHostPath, target, cliPath);
+
+        assert.strictEqual(step, undefined);
+    });
+
+    test('structured listing can be canceled before the picker opens', async () => {
+        const cancellationSource = new vscode.CancellationTokenSource();
+        const runCliCommandStub = sandbox.stub().callsFake(async (_command, _args, options) => {
+            assert.strictEqual(options.cancellationToken, cancellationSource.token);
+            throw new vscode.CancellationError();
+        });
+        const cliRunner = {
+            withNoLogo: sandbox.stub().returns(['do']),
+            runCliCommand: runCliCommandStub,
+        } as unknown as AppHostCliRunner;
+        const withProgressStub = sandbox.stub(vscode.window, 'withProgress').callsFake(async (options, task) => {
+            assert.deepStrictEqual(options, {
+                location: vscode.ProgressLocation.Notification,
+                title: loadingPipelineSteps,
+                cancellable: true,
+            });
+            return task({ report: () => { } }, cancellationSource.token);
+        });
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+
+        await assert.rejects(
+            selectPipelineStepFromCli(cliRunner, appHostPath, target, cliPath),
+            error => error instanceof vscode.CancellationError);
+
+        assert.strictEqual(withProgressStub.calledOnce, true);
+        assert.strictEqual(runCliCommandStub.calledOnce, true);
+        assert.strictEqual(showQuickPickStub.called, false);
+        cancellationSource.dispose();
+    });
+
+    test('structured list reports when no pipeline steps are available', async () => {
+        const cliRunner = {
+            withNoLogo: sandbox.stub().returns(['do']),
+            runCliCommand: sandbox.stub().resolves({ stdout: '[]', stderr: '' }),
+        } as unknown as AppHostCliRunner;
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+
+        const step = await selectPipelineStepFromCli(cliRunner, appHostPath, target, cliPath);
+
+        assert.strictEqual(step, undefined);
+        assert.strictEqual(showQuickPickStub.called, false);
+        assert.strictEqual(showInformationMessageStub.callCount, 1);
+        assert.strictEqual(showInformationMessageStub.firstCall.args[0], noPipelineStepsFound);
+    });
+
+    test('structured list rejects malformed pipeline step metadata', async () => {
+        const cliRunner = {
+            withNoLogo: sandbox.stub().returns(['do']),
+            runCliCommand: sandbox.stub().resolves({
+                stdout: '[{"name":"deploy","dependsOn":"publish","tags":[]}]',
+                stderr: '',
+            }),
+        } as unknown as AppHostCliRunner;
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+
+        await assert.rejects(selectPipelineStepFromCli(cliRunner, appHostPath, target, cliPath));
+
+        assert.strictEqual(showQuickPickStub.called, false);
     });
 
     test('non-cancellation errors propagate', async () => {

@@ -21,6 +21,7 @@ import {
     appHostPublishingDescription,
     appHostRunningPipelineStepDescription,
     appHostDebuggingPipelineStepDescription,
+    loadingPipelineSteps,
 } from '../../loc/strings';
 import { AppHostDisplayInfo, ResourceJson } from '../../data/AppHostDataRepository';
 import { appHostIcon } from '../treePresentation';
@@ -148,9 +149,10 @@ export class WorkspaceAppHostItem extends vscode.TreeItem {
         public readonly launching?: boolean,
         public readonly stopping = false,
         public readonly operation?: AppHostItemOperation,
-        public readonly actions?: AppHostActionAvailability
+        public readonly actions?: AppHostActionAvailability,
+        collapsibleState = vscode.TreeItemCollapsibleState.Collapsed
     ) {
-        super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Collapsed);
+        super(appHostName ?? workspaceAppHostLabel, collapsibleState);
         this.id = `workspace-apphost:${path.resolve(appHostPath)}`;
 
         if (stopping) {
@@ -213,17 +215,21 @@ const actionCommands: Record<WorkspaceAppHostAction, string> = {
 };
 
 export class WorkspaceAppHostActionItem extends vscode.TreeItem {
-    constructor(parent: WorkspaceAppHostItem, action: WorkspaceAppHostAction) {
+    constructor(parent: WorkspaceAppHostItem, action: WorkspaceAppHostAction, loading = false) {
         const label = actionLabels[action];
         super(label, vscode.TreeItemCollapsibleState.None);
         this.id = `${parent.id}:action:${action}`;
-        this.iconPath = new vscode.ThemeIcon(actionIcons[action]);
-        this.contextValue = `workspaceAppHostAction:${action}`;
-        this.command = {
-            command: actionCommands[action],
-            title: label,
-            arguments: [parent]
-        };
+        this.iconPath = new vscode.ThemeIcon(loading ? 'loading~spin' : actionIcons[action]);
+        this.contextValue = `workspaceAppHostAction:${action}${loading ? ':loading' : ''}`;
+        if (loading) {
+            this.description = loadingPipelineSteps;
+        } else {
+            this.command = {
+                command: actionCommands[action],
+                title: label,
+                arguments: [parent]
+            };
+        }
     }
 }
 
