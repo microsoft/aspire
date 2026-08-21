@@ -302,6 +302,30 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfiguredNewSourceSkipsTemplateSubcommandPackageMetadataPrefetching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += configuration =>
+                configuration[AspireConfigFile.NuGetSourceKey] = "https://configured.example/v3/index.json";
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var newCommand = provider.GetRequiredService<NewCommand>();
+        var templateCommand = Assert.IsType<TemplateCommand>(newCommand.Subcommands.First());
+        var commandLine = $"new {templateCommand.Name}";
+
+        await AssertPrefetchingAsync(
+            provider,
+            templateCommand,
+            commandLine,
+            expectedTemplatePrefetch: false,
+            expectedCliPrefetch: true,
+            parseResult: newCommand.Parse(commandLine));
+    }
+
+    [Fact]
     public async Task DetachedRunStartsNoPackageMetadataPrefetching()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

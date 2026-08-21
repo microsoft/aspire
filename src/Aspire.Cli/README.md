@@ -71,6 +71,25 @@ aspire <command> [options]
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
 
+## Configure a default NuGet source
+
+Set a source in the nearest Aspire configuration file:
+
+```bash
+aspire config set nugetSource https://packages.example.com/v3/index.json
+```
+
+Or set a default for all apps:
+
+```bash
+aspire config set nugetSource https://packages.example.com/v3/index.json --global
+```
+
+The source is used by `aspire new`, `aspire add`, `aspire integration list`, and
+`aspire integration search`. Local configuration takes precedence over global
+configuration, and an explicit `--source` option on `new` or `add` takes
+precedence over both.
+
 ## Examples
 
 ```bash

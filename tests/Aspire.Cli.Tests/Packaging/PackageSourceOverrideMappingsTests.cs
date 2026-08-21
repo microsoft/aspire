@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -52,5 +54,57 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
 
         Assert.Equal(source, result);
+    }
+
+    [Fact]
+    public void SourcesMatch_ResolvesMacOSFilesystemAliases()
+    {
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Filesystem aliases such as /var -> /private/var are specific to macOS.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = workspace.WorkspaceRoot.FullName;
+        var canonicalSource = PathNormalizer.ResolveSymlinks(source);
+        Assert.NotEqual(source, canonicalSource);
+
+        var result = PackageSourceOverrideMappings.SourcesMatch(source, canonicalSource, new TestEnvironment());
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void SourcesMatch_LocalPathsDifferOnlyByCaseOnLinux_ReturnsFalse()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var upperCaseSource = Path.Combine(workspace.WorkspaceRoot.FullName, "Release");
+        var lowerCaseSource = Path.Combine(workspace.WorkspaceRoot.FullName, "release");
+
+        var result = PackageSourceOverrideMappings.SourcesMatch(
+            upperCaseSource,
+            lowerCaseSource,
+            TestEnvironment.CreateLinux());
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void SourcesMatch_HttpPathsDifferOnlyByCase_ReturnsFalse()
+    {
+        var result = PackageSourceOverrideMappings.SourcesMatch(
+            "https://packages.example/feeds/Release/index.json",
+            "https://packages.example/feeds/release/index.json",
+            TestEnvironment.CreateLinux());
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void SourcesMatch_HttpSchemeAndHostDifferOnlyByCase_ReturnsTrue()
+    {
+        var result = PackageSourceOverrideMappings.SourcesMatch(
+            "HTTPS://PACKAGES.EXAMPLE/feeds/release/index.json",
+            "https://packages.example/feeds/release/index.json",
+            TestEnvironment.CreateLinux());
+
+        Assert.True(result);
     }
 }

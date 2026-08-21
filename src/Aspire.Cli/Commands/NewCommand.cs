@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -34,6 +35,8 @@ internal sealed class NewCommand : BaseCommand
     private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IConfiguration _configuration;
+    private readonly IConfigurationService _configurationService;
 
     internal static readonly Option<string?> s_nameOption = new("--name", "-n")
     {
@@ -73,6 +76,7 @@ internal sealed class NewCommand : BaseCommand
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
         IConfiguration configuration,
+        IConfigurationService configurationService,
         CommonCommandServices services)
         : base("new", NewCommandStrings.Description, services)
     {
@@ -82,6 +86,8 @@ internal sealed class NewCommand : BaseCommand
         _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
+        _configuration = configuration;
+        _configurationService = configurationService;
 
         Options.Add(s_nameOption);
         Options.Add(s_outputOption);
@@ -118,9 +124,44 @@ internal sealed class NewCommand : BaseCommand
 
         foreach (var template in _templates)
         {
-            var templateCommand = new TemplateCommand(template, ExecuteAsync, services);
+            var templateCommand = new TemplateCommand(template, ExecuteAsync, configuration, services);
             Subcommands.Add(templateCommand);
         }
+    }
+
+    internal static string? GetEffectiveSource(ParseResult parseResult, IConfiguration configuration)
+    {
+        var explicitSource = parseResult.GetValue(s_sourceOption);
+        if (!string.IsNullOrWhiteSpace(explicitSource))
+        {
+            return explicitSource;
+        }
+
+        var configuredSource = configuration[AspireConfigFile.NuGetSourceKey];
+        return string.IsNullOrWhiteSpace(configuredSource) ? null : configuredSource;
+    }
+
+    private async Task<string?> GetResolvedEffectiveSourceAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var explicitSource = parseResult.GetValue(s_sourceOption);
+        if (!string.IsNullOrWhiteSpace(explicitSource))
+        {
+            return PackageSourceOverrideMappings.ResolveForWorkingDirectory(explicitSource, ExecutionContext.WorkingDirectory);
+        }
+
+        var configuredSource = await _configurationService.GetConfigurationFromDirectoryWithOriginAsync(
+            AspireConfigFile.NuGetSourceKey,
+            ExecutionContext.WorkingDirectory,
+            cancellationToken: cancellationToken);
+        var source = configuredSource?.Value ?? _configuration[AspireConfigFile.NuGetSourceKey];
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return null;
+        }
+
+        return PackageSourceOverrideMappings.ResolveForWorkingDirectory(
+            source,
+            configuredSource?.BaseDirectory ?? ExecutionContext.WorkingDirectory);
     }
 
     private string? ParseExplicitLanguageId(ParseResult parseResult)
@@ -131,10 +172,10 @@ internal sealed class NewCommand : BaseCommand
 
     internal override void PrepareForExecution(ParseResult parseResult)
     {
-        if (!string.IsNullOrWhiteSpace(parseResult.GetValue(s_sourceOption)))
+        if (GetEffectiveSource(parseResult, _configuration) is not null)
         {
-            // The foreground template lookup applies --source. Background prefetch does not know
-            // about invocation options, so letting it run would still contact fallback feeds.
+            // The foreground template lookup applies either --source or the configured source.
+            // Background prefetch does not know about either input and could contact fallback feeds.
             DisableTemplatePackageMetadataPrefetchingForInvocation();
         }
     }
@@ -459,7 +500,7 @@ internal sealed class NewCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
-        var source = parseResult.GetValue(s_sourceOption);
+        var source = await GetResolvedEffectiveSourceAsync(parseResult, cancellationToken);
         if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
         {
             InteractionService.DisplayError(NewCommandStrings.SourceWithCredentialsCannotBePersisted);
@@ -467,7 +508,6 @@ internal sealed class NewCommand : BaseCommand
         }
         if (!string.IsNullOrWhiteSpace(source))
         {
-            source = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, ExecutionContext.WorkingDirectory);
             if (PackageSourceOverrideMappings.GetMissingLocalDirectory(source) is { } missingDirectory)
             {
                 InteractionService.DisplayError(string.Format(

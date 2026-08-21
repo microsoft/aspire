@@ -1419,7 +1419,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
 
         // Build and regenerate SDK code with the new package
-        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, context.Source, cancellationToken);
         if (!regenerateSuccess)
         {
             return false;

@@ -462,6 +462,9 @@ public class DotNetTemplateFactoryTests
         public Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
+        public Task<(int ExitCode, string[] Sources)> GetNuGetSourcesAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
         public Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => Task.FromResult(0);
     }

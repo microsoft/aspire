@@ -363,7 +363,13 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         return Task.FromResult(configuration[configKey]);
     }
 
-    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    public async Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    {
+        var configurationValue = await GetConfigurationFromDirectoryWithOriginAsync(key, startDirectory, continueSearchWhenKeyMissing, cancellationToken);
+        return configurationValue?.Value;
+    }
+
+    public Task<ConfigurationValueWithOrigin?> GetConfigurationFromDirectoryWithOriginAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(startDirectory);
 
@@ -382,7 +388,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
             if (TryReadConfigurationValue(configFilePath, configKey, out var configFileValue))
             {
-                return Task.FromResult<string?>(configFileValue);
+                return Task.FromResult<ConfigurationValueWithOrigin?>(new(configFileValue, searchDirectory, IsGlobal: false));
             }
             else if (File.Exists(configFilePath) && !continueSearchWhenKeyMissing)
             {
@@ -392,7 +398,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
             if (TryReadConfigurationValue(legacySettingsPath, configKey, out var legacySettingsValue))
             {
-                return Task.FromResult<string?>(legacySettingsValue);
+                return Task.FromResult<ConfigurationValueWithOrigin?>(new(legacySettingsValue, searchDirectory, IsGlobal: false));
             }
             else if (File.Exists(legacySettingsPath) && !continueSearchWhenKeyMissing)
             {
@@ -402,23 +408,17 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
         // 2. Global settings file fallback (lower precedence).
         //
-        // Transitional path: identity-channel is now baked into the CLI binary (AspireCliChannel
-        // assembly metadata) and the acquisition scripts no longer seed a "channel" field into
-        // global settings. The read here remains so a user who deliberately ran
-        // `aspire config set -g channel <x>` continues to get their preference honored by
-        // `aspire update` until that workflow is removed in a follow-up. New per-project flows
-        // (`aspire add`, `aspire init`) do not consult global config and must not start to.
         if (File.Exists(globalSettingsFile.FullName))
         {
             var globalConfig = LoadSettingsFileForReading(globalSettingsFile.FullName);
             var globalValue = globalConfig[configKey];
             if (!string.IsNullOrWhiteSpace(globalValue))
             {
-                return Task.FromResult<string?>(globalValue);
+                return Task.FromResult<ConfigurationValueWithOrigin?>(new(globalValue, globalSettingsFile.Directory!, IsGlobal: true));
             }
         }
 
-        return Task.FromResult<string?>(null);
+        return Task.FromResult<ConfigurationValueWithOrigin?>(null);
     }
 
     private static bool TryReadConfigurationValue(string settingsFilePath, string configKey, [NotNullWhen(true)] out string? value)

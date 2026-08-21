@@ -17,6 +17,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, int>? RestoreAsyncCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, bool IsAspireHost, string? AspireHostingVersion)>? GetAppHostInformationAsyncCallback { get; set; }
     public Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, string[] ConfigPaths)>? GetNuGetConfigPathsAsyncCallback { get; set; }
+    public Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, string[] Sources)>? GetNuGetSourcesAsyncCallback { get; set; }
     public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync { get; set; }
     public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallbackWithTargets { get; set; }
     public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackAsync { get; set; }
@@ -71,6 +72,13 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
         return GetNuGetConfigPathsAsyncCallback != null
             ? Task.FromResult(GetNuGetConfigPathsAsyncCallback(workingDirectory, options, cancellationToken))
             : Task.FromResult((0, GetGlobalNuGetPaths())); // If not overridden, return success with no config paths which will blow up.
+    }
+
+    public Task<(int ExitCode, string[] Sources)> GetNuGetSourcesAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    {
+        return GetNuGetSourcesAsyncCallback is not null
+            ? Task.FromResult(GetNuGetSourcesAsyncCallback(workingDirectory, options, cancellationToken))
+            : Task.FromResult((0, Array.Empty<string>()));
     }
 
     private static string[] GetGlobalNuGetPaths()

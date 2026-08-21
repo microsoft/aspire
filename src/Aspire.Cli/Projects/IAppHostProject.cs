@@ -81,6 +81,11 @@ internal sealed class AddPackageContext
     public string? Source { get; init; }
 
     /// <summary>
+    /// Gets or sets whether the source was explicitly provided for package installation.
+    /// </summary>
+    public bool IsSourceExplicit { get; init; }
+
+    /// <summary>
     /// Gets or sets the output collector for capturing stdout/stderr.
     /// Project implementations populate this during execution.
     /// Commands can access it for error display.

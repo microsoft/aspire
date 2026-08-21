@@ -786,10 +786,11 @@ public class GuestAppHostProjectTests : IDisposable
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
 
+        var appHostServerProject = new FakeFailingAppHostServerProject(_workspace.WorkspaceRoot.FullName);
         var factory = new TestAppHostServerProjectFactory
         {
-            CreateAsyncCallback = (appPath, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+            CreateAsyncCallback = (_, _) =>
+                Task.FromResult<IAppHostServerProject>(appHostServerProject)
         };
 
         var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
@@ -800,10 +801,12 @@ public class GuestAppHostProjectTests : IDisposable
                 AppHostFile = new FileInfo(appHostPath),
                 PackageId = "Aspire.Hosting.Redis",
                 PackageVersion = "2.0.0",
+                Source = "https://configured.example/v3/index.json",
             },
             CancellationToken.None);
 
         Assert.False(result);
+        Assert.Equal("https://configured.example/v3/index.json", appHostServerProject.LastPackageSourceOverride);
 
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);

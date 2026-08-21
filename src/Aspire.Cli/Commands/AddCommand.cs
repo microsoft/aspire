@@ -12,6 +12,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Semver;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -32,6 +33,7 @@ internal sealed class AddCommand : BaseCommand
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IFeatures _features;
+    private readonly IConfiguration _configuration;
 
     private static readonly Argument<string> s_integrationArgument = new("integration")
     {
@@ -52,7 +54,7 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.AllArgumentDescription
     };
 
-    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
+    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, IConfiguration configuration, CommonCommandServices services)
         : base("add", AddCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
@@ -63,6 +65,7 @@ internal sealed class AddCommand : BaseCommand
         _projectFactory = projectFactory;
         _profilingTelemetry = profilingTelemetry;
         _features = services.Features;
+        _configuration = configuration;
 
         Arguments.Add(s_integrationArgument);
         Options.Add(s_appHostOption);
@@ -104,7 +107,11 @@ internal sealed class AddCommand : BaseCommand
             var integrationName = parseResult.GetValue(s_integrationArgument);
             var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
             var version = parseResult.GetValue(s_versionOption);
-            var source = parseResult.GetValue(s_sourceOption);
+            var explicitSource = parseResult.GetValue(s_sourceOption);
+            explicitSource = string.IsNullOrWhiteSpace(explicitSource) ? null : explicitSource;
+            var invocationConfiguredSource = _configuration[AspireConfigFile.NuGetSourceKey];
+            invocationConfiguredSource = string.IsNullOrWhiteSpace(invocationConfiguredSource) ? null : invocationConfiguredSource;
+            var source = explicitSource ?? invocationConfiguredSource;
             var includeAllIntegrations = parseResult.GetValue(s_allOption);
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
@@ -122,6 +129,14 @@ internal sealed class AddCommand : BaseCommand
             {
                 return AddCommandFailure(CliExitCodes.FailedToFindProject);
             }
+
+            source = explicitSource is not null
+                ? PackageSourceOverrideMappings.ResolveForWorkingDirectory(explicitSource, ExecutionContext.WorkingDirectory)
+                : await _integrationPackageSearchService.GetConfiguredNuGetSourceAsync(
+                    effectiveAppHostProjectFile,
+                    appHostWasExplicitlyPassed: passedAppHostProjectFile is not null,
+                    invocationConfiguredSource,
+                    cancellationToken);
 
             // Get the appropriate project handler
             var project = _projectFactory.GetProject(effectiveAppHostProjectFile);
@@ -181,7 +196,7 @@ internal sealed class AddCommand : BaseCommand
                 {
                     var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
-                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, source, cancellationToken));
                     packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
                     polyglotCompatibleIds = discoveredPolyglotIds;
                 }
@@ -189,7 +204,7 @@ internal sealed class AddCommand : BaseCommand
                 {
                     var discoveredPackages = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
-                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, source, cancellationToken));
                     packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
                 }
 
@@ -359,7 +374,8 @@ internal sealed class AddCommand : BaseCommand
                 AppHostFile = effectiveAppHostProjectFile,
                 PackageId = selectedNuGetPackage.Package.Id,
                 PackageVersion = selectedNuGetPackage.Package.Version,
-                Source = source
+                Source = source,
+                IsSourceExplicit = explicitSource is not null
             };
 
             // Stop any running AppHost instance before adding the package.

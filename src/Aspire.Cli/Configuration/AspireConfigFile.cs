@@ -53,6 +53,7 @@ namespace Aspire.Cli.Configuration;
 internal sealed class AspireConfigFile
 {
     public const string FileName = "aspire.config.json";
+    public const string NuGetSourceKey = "nugetSource";
 
     /// <summary>
     /// The JSON Schema URL for this configuration file.
@@ -93,6 +94,13 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("channel")]
     [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.")]
     public string? Channel { get; set; }
+
+    /// <summary>
+    /// The default NuGet source for package and template operations.
+    /// </summary>
+    [JsonPropertyName(NuGetSourceKey)]
+    [Description("The default NuGet source for package and template operations. Explicit --source arguments override this value.")]
+    public string? NuGetSource { get; set; }
 
     /// <summary>
     /// Feature flags.
@@ -414,6 +422,7 @@ internal sealed class AspireConfigFile
             }
 
             config.Channel = settings.Channel;
+            config.NuGetSource = settings.NuGetSource;
             config.Features = settings.Features;
             config.Packages = settings.Packages;
         }

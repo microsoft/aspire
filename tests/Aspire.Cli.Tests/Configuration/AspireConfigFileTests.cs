@@ -39,6 +39,24 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Load_ReturnsConfig_WhenFileContainsNuGetSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "nugetSource": "https://proxy.example/v3/index.json"
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.Equal("https://proxy.example/v3/index.json", result.NuGetSource);
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -535,6 +553,27 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(saved);
         Assert.Equal("src/apphost.ts", saved.AppHost?.Path);
         Assert.Equal("13.2.0", saved.SdkVersion);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacyNuGetSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+              "nugetSource": "https://proxy.example/v3/index.json"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+        var saved = AspireConfigFile.Load(root);
+
+        Assert.Equal("https://proxy.example/v3/index.json", config.NuGetSource);
+        Assert.NotNull(saved);
+        Assert.Equal("https://proxy.example/v3/index.json", saved.NuGetSource);
     }
 
     [Fact]

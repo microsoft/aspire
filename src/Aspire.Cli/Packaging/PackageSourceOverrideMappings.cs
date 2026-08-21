@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Packaging;
 
@@ -39,6 +40,42 @@ internal static class PackageSourceOverrideMappings
         }
 
         return Directory.Exists(localDirectory) ? null : localDirectory;
+    }
+
+    public static bool SourcesMatch(string left, string right, IEnvironment environment)
+    {
+        if (string.Equals(left, right, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var pathComparer = environment.IsWindows() || environment.IsMacOS()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+
+        if (UrlHelper.IsHttpUrl(left) || UrlHelper.IsHttpUrl(right))
+        {
+            return Uri.TryCreate(left, UriKind.Absolute, out var leftUri) &&
+                Uri.TryCreate(right, UriKind.Absolute, out var rightUri) &&
+                Uri.Compare(
+                    leftUri,
+                    rightUri,
+                    UriComponents.SchemeAndServer | UriComponents.PathAndQuery,
+                    UriFormat.Unescaped,
+                    StringComparison.Ordinal) == 0;
+        }
+
+        if (Uri.TryCreate(left, UriKind.Absolute, out var leftFileUri) && leftFileUri.IsFile)
+        {
+            left = leftFileUri.LocalPath;
+        }
+
+        if (Uri.TryCreate(right, UriKind.Absolute, out var rightFileUri) && rightFileUri.IsFile)
+        {
+            right = rightFileUri.LocalPath;
+        }
+
+        return pathComparer.Equals(PathNormalizer.ResolveSymlinks(left), PathNormalizer.ResolveSymlinks(right));
     }
 
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
