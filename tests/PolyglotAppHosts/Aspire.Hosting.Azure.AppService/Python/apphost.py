@@ -1,14 +1,14 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import AzureResourceInfrastructure, WebSite, WebSiteSlot, create_builder
 
 
-def configure_app_service(_infrastructure, app_service):
+def configure_app_service(_infrastructure: AzureResourceInfrastructure, app_service: WebSite):
     app_service.configure_site_config({"IsAlwaysOn": True})
 
 
-def configure_app_service_slot(_infrastructure, app_service_slot):
+def configure_app_service_slot(_infrastructure: AzureResourceInfrastructure, app_service_slot: WebSiteSlot):
     app_service_slot.configure_slot_site_config({"IsAlwaysOn": False})
 
 

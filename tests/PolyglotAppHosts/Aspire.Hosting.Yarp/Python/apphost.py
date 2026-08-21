@@ -1,10 +1,10 @@
 # Aspire Python validation AppHost
 # Validates the unified YARP route helpers against Python SDK generation.
 
-from aspire_app import create_builder
+from aspire_app import AbstractYarpConfigurationBuilder, create_builder
 
 
-def configure_proxy(config):
+def configure_proxy(config: AbstractYarpConfigurationBuilder):
     endpoint = backend.get_endpoint("http")
     endpoint_cluster = config.add_cluster_from_endpoint(endpoint)
     resource_cluster = config.add_cluster_from_resource(backend_service)

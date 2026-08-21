@@ -1,7 +1,11 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import ReferenceExpression, create_builder
+from aspire_app import AzureResourceInfrastructure, ReferenceExpression, create_builder
+
+
+def configure_infrastructure(_infrastructure: AzureResourceInfrastructure):
+    pass
 
 
 with create_builder() as builder:
@@ -34,7 +38,7 @@ with create_builder() as builder:
     inline_bicep.clear_default_role_assignments()
     inline_bicep.get_bicep_identifier()
     inline_bicep.is_existing()
-    infrastructure = builder.add_azure_infrastructure("resource", lambda _infrastructure: None)
+    infrastructure = builder.add_azure_infrastructure("resource", configure_infrastructure)
     infrastructure_output = infrastructure.get_output("endpoint")
     infrastructure_output_expression = ReferenceExpression.format_string("{0}", infrastructure_output)
     _infrastructure_output_name = infrastructure_output.name
@@ -60,7 +64,7 @@ with create_builder() as builder:
     identity = builder.add_azure_user_assigned_identity("resource")
     identity_client_id = identity.get_output("clientId")
     identity_client_id_expression = ReferenceExpression.format_string("{0}", identity_client_id)
-    identity.configure_infrastructure(lambda _infrastructure: None)
+    identity.configure_infrastructure(configure_infrastructure)
     identity.with_parameter("default")
     identity.with_parameter("string-value", value="value")
     identity.with_parameter("string-values", value=["value-1", "value-2"])

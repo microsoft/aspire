@@ -1,7 +1,13 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import (
+    HelmChartOptions,
+    KubernetesEnvironmentResource,
+    KubernetesManifestResource,
+    KubernetesResource,
+    create_builder,
+)
 
 
 with create_builder() as builder:
@@ -14,7 +20,7 @@ with create_builder() as builder:
     persistent_volume_capacity = builder.add_parameter("persistent-volume-capacity")
     kubernetes = builder.add_kubernetes_env("resource")
 
-    def configure_helm(helm):
+    def configure_helm(helm: HelmChartOptions):
         helm.with_namespace("validation-namespace")
         helm.with_release_name("validation-release")
         helm.with_chart_name("validation-kubernetes")
@@ -27,7 +33,10 @@ with create_builder() as builder:
         helm.with_chart_description(helm_chart_description)
 
     kubernetes.with_helm(configure=configure_helm)
-    kubernetes.with_properties(lambda _properties: None)
+    def configure_properties(_properties: KubernetesEnvironmentResource):
+        pass
+
+    kubernetes.with_properties(configure_properties)
     _resolved_default_storage_class_name = kubernetes.default_storage_class_name
     _resolved_default_service_type = kubernetes.default_service_type
     gateway = kubernetes.add_gateway("public-gateway")
@@ -46,15 +55,15 @@ with create_builder() as builder:
     service_container = builder.add_container("resource", "image")
     service_container.with_compute_env(kubernetes)
 
-    def configure_service(service):
-        def configure_manifest(manifest):
+    def configure_service(service: KubernetesResource):
+        def configure_manifest(manifest: KubernetesManifestResource):
             manifest.with_label("example.com/custom", "true")
             manifest.with_annotation("example.com/source", "python")
             manifest.with_field("spec.scaleTargetRef.kind", "Deployment")
             manifest.with_field("spec.scaleTargetRef.name", "resource")
             manifest.with_field("spec.maxReplicaCount", 3)
 
-        service.add_manifest("keda.sh/v1alpha1", "ScaledObject", "resource-scaler", configure_manifest)
+        service.add_manifest("keda.sh/v1alpha1", "ScaledObject", "resource-scaler", configure=configure_manifest)
 
     service_container.publish_as_kubernetes_service(configure_service)
     builder.run()
