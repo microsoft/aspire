@@ -38,6 +38,8 @@ suite('createWithAspireCommand', () => {
     });
 
     test('offers only the new-app option when every workspace folder already has an AppHost', async () => {
+        showQuickPickStub.callsFake(async (items: { command: string }[]) => items[0]);
+
         await createWithAspireCommand(createEditorCommandProvider([]));
 
         assert.ok(showQuickPickStub.calledOnce);
@@ -47,6 +49,8 @@ suite('createWithAspireCommand', () => {
     });
 
     test('also offers the add-to-workspace option when an applicable folder lacks an AppHost', async () => {
+        showQuickPickStub.callsFake(async (items: { command: string }[]) => items[0]);
+
         await createWithAspireCommand(createEditorCommandProvider([createWorkspaceFolder('eligible', 0)]));
 
         assert.ok(showQuickPickStub.calledOnce);
@@ -73,7 +77,7 @@ suite('createWithAspireCommand', () => {
 
         await createWithAspireCommand(createEditorCommandProvider([createWorkspaceFolder('eligible', 0)]));
 
-        assert.ok(executeCommandStub.calledOnceWithExactly('aspire-vscode.new'));
+        assert.ok(executeCommandStub.calledOnceWithExactly('aspire-vscode.new', 'tree'));
     });
 
     test('passes the sole eligible workspace folder target to aspire-vscode.init', async () => {
@@ -82,7 +86,7 @@ suite('createWithAspireCommand', () => {
 
         await createWithAspireCommand(createEditorCommandProvider([folder]));
 
-        assert.ok(executeCommandStub.calledOnceWithExactly('aspire-vscode.init', workspaceFolderCliPathTarget(folder)));
+        assert.ok(executeCommandStub.calledOnceWithExactly('aspire-vscode.init', workspaceFolderCliPathTarget(folder), 'tree'));
     });
 
     test('uses the active eligible workspace folder without showing another picker', async () => {
@@ -104,6 +108,7 @@ suite('createWithAspireCommand', () => {
         assert.ok(executeCommandStub.calledOnce);
         assert.strictEqual(executeCommandStub.firstCall.args[0], 'aspire-vscode.init');
         assert.strictEqual(executeCommandStub.firstCall.args[1].workspaceFolder, eligibleSecondFolder);
+        assert.strictEqual(executeCommandStub.firstCall.args[2], 'tree');
     });
 
     test('prompts with only eligible folders and forwards the selected target when multiple are eligible', async () => {
@@ -126,24 +131,28 @@ suite('createWithAspireCommand', () => {
         const folderItems = showQuickPickStub.secondCall.args[0] as { workspaceFolder: vscode.WorkspaceFolder }[];
         assert.deepStrictEqual(folderItems.map(item => item.workspaceFolder), [firstFolder, secondFolder]);
         assert.strictEqual(showQuickPickStub.secondCall.args[1].placeHolder, selectWorkspaceFolderForAspireCommand);
-        assert.ok(executeCommandStub.calledOnceWithExactly('aspire-vscode.init', workspaceFolderCliPathTarget(secondFolder)));
+        assert.ok(executeCommandStub.calledOnceWithExactly('aspire-vscode.init', workspaceFolderCliPathTarget(secondFolder), 'tree'));
     });
 
-    test('does nothing when the outcome picker is dismissed', async () => {
+    test('throws cancellation when the outcome picker is dismissed', async () => {
         showQuickPickStub.resolves(undefined);
 
-        await createWithAspireCommand(createEditorCommandProvider([createWorkspaceFolder('eligible', 0)]));
+        await assert.rejects(
+            () => createWithAspireCommand(createEditorCommandProvider([createWorkspaceFolder('eligible', 0)])),
+            error => error instanceof vscode.CancellationError);
 
         assert.strictEqual(executeCommandStub.called, false);
     });
 
-    test('does nothing when the eligible workspace folder picker is dismissed', async () => {
+    test('throws cancellation when the eligible workspace folder picker is dismissed', async () => {
         const firstFolder = createWorkspaceFolder('first', 0);
         const secondFolder = createWorkspaceFolder('second', 1);
         showQuickPickStub.onFirstCall().callsFake(async (items: { command: string }[]) => items.find(item => item.command === 'aspire-vscode.init'));
         showQuickPickStub.onSecondCall().resolves(undefined);
 
-        await createWithAspireCommand(createEditorCommandProvider([firstFolder, secondFolder]));
+        await assert.rejects(
+            () => createWithAspireCommand(createEditorCommandProvider([firstFolder, secondFolder])),
+            error => error instanceof vscode.CancellationError);
 
         assert.strictEqual(showQuickPickStub.callCount, 2);
         assert.strictEqual(executeCommandStub.called, false);

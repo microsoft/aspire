@@ -298,7 +298,7 @@ suite('AspireEditorCommandProvider', () => {
         const discoveryService = {
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             tryFindCandidateForEditorFile: async () => undefined,
-            discover: async (folder: vscode.WorkspaceFolder) => folder.uri.fsPath === withAppHostDir
+            discover: async (folder: vscode.WorkspaceFolder) => folder.uri.toString() === withAppHostFolder.uri.toString()
                 ? [{ path: appHostPath, language: 'csharp', status: 'buildable' }]
                 : [],
         } as unknown as AppHostDiscoveryService;

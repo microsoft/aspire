@@ -29,13 +29,15 @@ interface CommandInvocation {
   readonly appHost?: AppHostCommandTarget;
 }
 
+type CommandSource = 'command_palette' | 'tree';
+
 export function registerCliCommands(
   terminalProvider: AspireTerminalProvider,
   editorCommandProvider: AspireEditorCommandProvider,
 ): vscode.Disposable[] {
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp, invocation, cliPath) => addCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
-  const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', () => tryExecuteCommand('aspire-vscode.new', terminalProvider, (tp, invocation, cliPath) => newCommand(tp, invocation.target, cliPath), selectCommandInvocation));
-  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', (target?: CliPathResolutionTarget) => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), target ? async () => ({ target }) : selectCommandInvocation));
+  const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', (source: CommandSource = 'command_palette') => tryExecuteCommand('aspire-vscode.new', terminalProvider, (tp, invocation, cliPath) => newCommand(tp, invocation.target, cliPath), selectCommandInvocation, source));
+  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', (target?: CliPathResolutionTarget, source: CommandSource = 'command_palette') => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), target ? async () => ({ target }) : selectCommandInvocation, source));
   // Delegates to aspire-vscode.new / aspire-vscode.init above, so it doesn't go
   // through tryExecuteCommand itself — the delegated-to command owns its own CLI
   // availability check and telemetry.
@@ -125,6 +127,7 @@ async function tryExecuteCommand(
   terminalProvider: AspireTerminalProvider,
   command: (terminalProvider: AspireTerminalProvider, invocation: CommandInvocation, cliPath: string) => Promise<void>,
   prepareInvocation: () => Promise<CommandInvocation> = async () => ({ target: windowCliPathTarget }),
+  source: CommandSource = 'command_palette',
 ): Promise<void> {
   try {
     await withCommandTelemetry(commandName, async () => {
@@ -154,7 +157,7 @@ async function tryExecuteCommand(
       }
 
       await command(terminalProvider, invocation, cliPath);
-    }, { source: 'command_palette' });
+    }, { source });
   }
   catch (error) {
     // Cancellations should not surface as user-visible errors — but they still

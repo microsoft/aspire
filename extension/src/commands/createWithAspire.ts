@@ -51,11 +51,11 @@ export async function createWithAspireCommand(editorCommandProvider: AspireEdito
     });
 
     if (!selected) {
-        return;
+        throw new vscode.CancellationError();
     }
 
     if (selected.command === 'aspire-vscode.new') {
-        await vscode.commands.executeCommand(selected.command);
+        await vscode.commands.executeCommand(selected.command, 'tree');
         return;
     }
 
@@ -79,10 +79,10 @@ export async function createWithAspireCommand(editorCommandProvider: AspireEdito
             placeHolder: selectWorkspaceFolderForAspireCommand,
         });
         if (!selectedFolder) {
-            return;
+            throw new vscode.CancellationError();
         }
         folder = selectedFolder.workspaceFolder;
     }
 
-    await vscode.commands.executeCommand(selected.command, workspaceFolderCliPathTarget(folder));
+    await vscode.commands.executeCommand(selected.command, workspaceFolderCliPathTarget(folder), 'tree');
 }

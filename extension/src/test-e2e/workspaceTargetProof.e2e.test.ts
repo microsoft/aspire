@@ -43,6 +43,16 @@ suite('Workspace target proof E2E', function () {
         await invokeCreateWithAspireNewForFolder('folder-a', folderA);
         await invokeNewForFolder('folder-b', folderB);
 
+        const beforeCanceledCreateInvocation = getCommandInvocationCount('aspire-vscode.createWithAspire');
+        const beforeCanceledCreateTerminal = getTerminalCommandCount();
+        await executeE2eControlCommand(
+            { name: 'executeAspireCommand', commandId: 'aspire-vscode.createWithAspire' },
+            { waitFor: 'started' });
+        await waitForQuickPickLabels(createWithAspireActionLabels);
+        await cancelActiveInput();
+        await waitForCommandOutcome('aspire-vscode.createWithAspire', 'canceled', 60000, beforeCanceledCreateInvocation);
+        assert.strictEqual(getTerminalCommandCount(), beforeCanceledCreateTerminal);
+
         const beforeCanceledInvocation = getCommandInvocationCount('aspire-vscode.new');
         const beforeCanceledTerminal = getTerminalCommandCount();
         await executeCommandFromPalette('Aspire: New Project');

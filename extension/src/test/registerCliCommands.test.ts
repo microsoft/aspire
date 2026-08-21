@@ -12,6 +12,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { CommandInvocationEvent, onDidInvokeCommand } from '../utils/telemetry';
 import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 suite('registerCliCommands', () => {
     let sandbox: sinon.SinonSandbox;
@@ -111,6 +112,51 @@ suite('registerCliCommands', () => {
         assert.strictEqual(showWorkspaceFolderPickStub.calledOnce, true);
         assert.ok(resolveCliPathStub.calledOnceWith(target));
         assert.ok(sendCommandStub.calledOnceWith('new', true, undefined, { target, cliPath: '/resolved/aspire' }));
+    });
+
+    test('direct new and init calls report command_palette telemetry source', async () => {
+        const folder = createWorkspaceFolder('a', '/repo/a');
+        workspaceFoldersStub.value([folder]);
+        const events: CommandInvocationEvent[] = [];
+        const subscription = onDidInvokeCommand(event => events.push(event));
+
+        try {
+            await callbacks.get('aspire-vscode.new')!();
+            await callbacks.get('aspire-vscode.init')!();
+        }
+        finally {
+            subscription.dispose();
+        }
+
+        assert.deepStrictEqual(
+            events.map(event => ({ command: event.command, source: event.source })),
+            [
+                { command: 'aspire-vscode.new', source: 'command_palette' },
+                { command: 'aspire-vscode.init', source: 'command_palette' },
+            ]);
+    });
+
+    test('delegated new and init calls report tree telemetry source', async () => {
+        const folder = createWorkspaceFolder('a', '/repo/a');
+        const target = workspaceFolderCliPathTarget(folder);
+        workspaceFoldersStub.value([folder]);
+        const events: CommandInvocationEvent[] = [];
+        const subscription = onDidInvokeCommand(event => events.push(event));
+
+        try {
+            await callbacks.get('aspire-vscode.new')!('tree');
+            await callbacks.get('aspire-vscode.init')!(target, 'tree');
+        }
+        finally {
+            subscription.dispose();
+        }
+
+        assert.deepStrictEqual(
+            events.map(event => ({ command: event.command, source: event.source })),
+            [
+                { command: 'aspire-vscode.new', source: 'tree' },
+                { command: 'aspire-vscode.init', source: 'tree' },
+            ]);
     });
 
     test('workspace folder selection cancellation prevents the gate and command body', async () => {
