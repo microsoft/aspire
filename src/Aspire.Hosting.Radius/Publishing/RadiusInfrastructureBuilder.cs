@@ -1921,7 +1921,7 @@ internal sealed class RadiusInfrastructureBuilder
         var secretIdentifier = BicepPostProcessor.SanitizeIdentifier($"{resource.Name}_{propertyName}_secret");
         var secret = new RadiusSecuritySecretConstruct(secretIdentifier)
         {
-            SecretName = $"{resource.Name}-{propertyName}-secret",
+            SecretName = BuildKubernetesSecretName($"{resource.Name}-{propertyName}-secret"),
             EnvironmentId = BuildIdExpression(envConstruct),
         };
 
@@ -2961,7 +2961,7 @@ internal sealed class RadiusInfrastructureBuilder
         var secret = new RadiusSecuritySecretConstruct(
             BicepPostProcessor.SanitizeIdentifier($"{resource.Name}_env_secret"))
         {
-            SecretName = $"{resource.Name}-env-secret",
+            SecretName = BuildKubernetesSecretName($"{resource.Name}-env-secret"),
             EnvironmentId = BuildIdExpression(envConstruct),
         };
 
@@ -2980,6 +2980,25 @@ internal sealed class RadiusInfrastructureBuilder
 
         return secret;
     }
+
+    /// <summary>
+    /// Builds the <c>Radius.Security/secrets</c> resource name for a secret this publisher emits.
+    /// </summary>
+    /// <remarks>
+    /// Lowercased because the Kubernetes secrets recipe uses the Radius resource name verbatim as
+    /// the <c>core/Secret</c> <c>metadata.name</c> (<c>name: secretName</c>, where
+    /// <c>secretName = context.resource.name</c>), and a Kubernetes object name must be an RFC 1123
+    /// subdomain — lowercase only. The container recipe normalizes for itself
+    /// (<c>var normalizedName = toLower(resourceName)</c>), so a mixed-case Aspire resource name
+    /// deploys fine as a workload and only breaks on the secret; <c>AddContainer("MyApi", ...)</c>
+    /// with a credential-bearing variable would otherwise emit <c>MyApi-env-secret</c> and be
+    /// rejected at apply time. Aspire resource names are already restricted to ASCII letters,
+    /// digits, and non-trailing hyphens starting with a letter (see <c>ModelName</c>), so
+    /// lowercasing is the only transformation RFC 1123 needs here.
+    /// See <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Security/secrets/recipes/kubernetes/bicep/kubernetes-secrets.bicep"/>
+    /// and <see href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names"/>.
+    /// </remarks>
+    private static string BuildKubernetesSecretName(string name) => name.ToLowerInvariant();
 
     /// <summary>
     /// A container environment value that reads from a backing resource's Radius construct, kept so
