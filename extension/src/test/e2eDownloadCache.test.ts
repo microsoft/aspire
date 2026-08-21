@@ -272,7 +272,7 @@ function getVsCodeExecutableRelativePath(platform: NodeJS.Platform, architecture
 
     switch (platform) {
         case 'darwin':
-            return path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
+            return path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code');
         case 'linux':
             return path.join(vscodeDirectory, 'code');
         case 'win32':
@@ -2228,6 +2228,20 @@ suite('E2E download cache', () => {
         assert.strictEqual(reused.cacheHit, true);
     });
 
+    test('rejects Electron-only macOS bundles', () => {
+        const root = createTestRoot('darwin-electron-only-executable');
+        const bundle = 'Visual Studio Code.app';
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
+            platform: 'darwin',
+            architecture: 'arm64',
+            populate(stagingDirectory) {
+                writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Electron'), 'legacy executable');
+                writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
+            },
+        })), /vscodeExecutable points to missing paths: 'Visual Studio Code\.app[\\/]Contents[\\/]MacOS[\\/]Code'\./);
+    });
+
     test('projects a Code-only macOS bundle for legacy ExTester without mutating the shared cache', () => {
         const root = createTestRoot('darwin-code-projection-with-legacy-extester');
         const cacheRoot = path.join(root, 'cache');
@@ -2236,20 +2250,35 @@ suite('E2E download cache', () => {
         const bundle = 'Visual Studio Code.app';
         const codeRelativePath = path.join(bundle, 'Contents', 'MacOS', 'Code');
         const electronRelativePath = path.join(bundle, 'Contents', 'MacOS', 'Electron');
+        const appRootSentinelRelativePath = path.join(bundle, 'app-root-sentinel.txt');
+        const contentsSentinelRelativePath = path.join(bundle, 'Contents', 'contents-sentinel.txt');
+        const macOsSentinelRelativePath = path.join(bundle, 'Contents', 'MacOS', 'macos-sentinel.txt');
 
         const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
             platform: 'darwin',
             architecture: 'arm64',
             populate(stagingDirectory) {
                 writeFile(path.join(stagingDirectory, codeRelativePath), 'fake Code binary');
+                writeFile(path.join(stagingDirectory, appRootSentinelRelativePath), 'app root sibling');
+                writeFile(path.join(stagingDirectory, contentsSentinelRelativePath), 'Contents sibling');
+                writeFile(path.join(stagingDirectory, macOsSentinelRelativePath), 'MacOS sibling');
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
             },
         }));
 
         cache.projectDownloadCache(result, storageDirectory);
 
+        const projectedBundleDirectory = path.join(storageDirectory, bundle);
+        const projectedContentsDirectory = path.join(projectedBundleDirectory, 'Contents');
+        const projectedMacOsDirectory = path.join(projectedContentsDirectory, 'MacOS');
         const sharedElectron = path.join(result.cacheDirectory, electronRelativePath);
         const projectedElectron = path.join(storageDirectory, electronRelativePath);
+        assert.strictEqual(fs.lstatSync(projectedBundleDirectory).isDirectory(), true);
+        assert.strictEqual(fs.lstatSync(projectedContentsDirectory).isDirectory(), true);
+        assert.strictEqual(fs.lstatSync(projectedMacOsDirectory).isDirectory(), true);
+        assert.strictEqual(fs.readFileSync(path.join(storageDirectory, appRootSentinelRelativePath), 'utf8'), 'app root sibling');
+        assert.strictEqual(fs.readFileSync(path.join(storageDirectory, contentsSentinelRelativePath), 'utf8'), 'Contents sibling');
+        assert.strictEqual(fs.readFileSync(path.join(storageDirectory, macOsSentinelRelativePath), 'utf8'), 'MacOS sibling');
         assert.strictEqual(fs.existsSync(sharedElectron), false);
         assert.strictEqual(fs.lstatSync(projectedElectron).isSymbolicLink(), true);
         assert.strictEqual(fs.readFileSync(projectedElectron, 'utf8'), 'fake Code binary');
@@ -2304,7 +2333,7 @@ suite('E2E download cache', () => {
     });
 
     test('rejects a VS Code executable symlink that escapes the cache entry', () => {
-        const root = createTestRoot('darwin-escaping-electron-symlink');
+        const root = createTestRoot('darwin-escaping-code-symlink');
         const outsideBinary = path.join(root, 'outside-binary');
         writeFile(outsideBinary, 'attacker binary');
 
@@ -2314,7 +2343,7 @@ suite('E2E download cache', () => {
             populate(stagingDirectory) {
                 const macOsDirectory = path.join(stagingDirectory, 'Visual Studio Code.app', 'Contents', 'MacOS');
                 fs.mkdirSync(macOsDirectory, { recursive: true });
-                fs.symlinkSync(outsideBinary, path.join(macOsDirectory, 'Electron'));
+                fs.symlinkSync(outsideBinary, path.join(macOsDirectory, 'Code'));
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
             },
         })), /vscodeExecutable points to a symbolic link or junction that escapes the cache entry/i);

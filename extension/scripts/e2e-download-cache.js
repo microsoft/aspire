@@ -814,8 +814,7 @@ function readCacheManifest(cacheDirectory, expectedManifest, { cacheRoot }) {
  * VS Code loads far more than the executable named in the manifest.
  *
  * Genuine artifacts contain internal symlinks -- a macOS VS Code bundle has framework links such
- * as `Contents/Frameworks/Electron Framework.framework/Versions/Current`, plus the
- * `Contents/MacOS/Electron -> Code` link ExTester creates while unpacking -- so links are allowed
+ * as `Contents/Frameworks/Electron Framework.framework/Versions/Current` -- so links are allowed
  * as long as they resolve inside the entry.
  *
  * Hard links are judged by reachability too, not by link count. `nlink` counts directory entries
@@ -1240,10 +1239,7 @@ function getVsCodeExecutableRelativePaths(platform, architecture) {
 
   switch (platform) {
     case 'darwin':
-      return [
-        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code'),
-        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron'),
-      ];
+      return [path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code')];
     case 'linux':
       return [path.join(vscodeDirectory, 'code')];
     case 'win32':
