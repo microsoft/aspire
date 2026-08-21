@@ -78,6 +78,47 @@ public class ContainerSecretEnvironmentTests
     }
 
     /// <summary>
+    /// A mixed-case Aspire resource name still produces a Kubernetes-legal secret name.
+    /// </summary>
+    /// <remarks>
+    /// The Kubernetes secrets recipe uses the Radius resource name verbatim as the
+    /// <c>core/Secret</c> <c>metadata.name</c>, which must be an RFC 1123 subdomain, so
+    /// <c>MyApi-env-secret</c> would be rejected at apply time. The container recipe lowercases for
+    /// itself, so nothing else in the emitted document catches this.
+    /// </remarks>
+    [Fact]
+    public void UppercaseResourceName_ProducesALowercaseSecretName()
+    {
+        var bicep = GenerateBicep(builder =>
+        {
+            var secret = builder.AddParameter("apikey", secret: true);
+            builder.AddContainer("MyApi", "myapp/api:latest")
+                .WithEnvironment("API_KEY", secret);
+        });
+
+        Assert.Contains("name: 'myapi-env-secret'", bicep, StringComparison.Ordinal);
+        Assert.Contains("secretName: 'myapi-env-secret'", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same normalization applies to the credential secret emitted for a backing resource,
+    /// which is named after that resource rather than a container.
+    /// </summary>
+    [Fact]
+    public void UppercaseBackingResourceName_ProducesALowercaseSecretName()
+    {
+        var bicep = GenerateBicep(builder =>
+        {
+            // An explicit user name is required for RabbitMQ (ASPIRERADIUS082), so supply one
+            // rather than tripping that diagnostic before the secret is ever emitted.
+            var user = builder.AddParameter("queueuser", "app");
+            builder.AddRabbitMQ("MyQueue", userName: user);
+        });
+
+        Assert.Contains("name: 'myqueue-password-secret'", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A value with nothing sensitive in it stays a plain <c>value</c>. Routing everything through a
     /// secret would make the deployed spec unreadable and bloat the emitted secret for no benefit.
     /// </summary>
