@@ -837,9 +837,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private static bool NeedsPublicPort(IResource resource, EndpointAnnotation endpoint)
     {
-        // Only compute resources have a DCP workload that can listen on an allocated port. Non-compute
-        // resources can publish endpoints later through integration-specific lifecycle logic.
-        return resource is IComputeResource &&
+        // DCP can allocate a port only for resources it launches as workloads. This includes compute
+        // resources and annotation-backed containers; integration-owned endpoints publish their own addresses.
+        return (resource is IComputeResource || resource.IsContainer()) &&
             !endpoint.IsProxied &&
             !TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts: false, out _);
     }

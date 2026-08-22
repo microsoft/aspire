@@ -1053,7 +1053,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProxylessPortAllocatorOnlyAllocatesPortsForComputeResources()
+    public async Task ProxylessPortAllocatorOnlyAllocatesPortsForDcpWorkloads()
     {
         var (rangeStart, rangeEnd) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder();
@@ -1088,6 +1088,50 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Null(tunnelEndpoint.Port);
         Assert.Null(tunnelEndpoint.TargetPort);
         Assert.Null(tunnelEndpoint.AllocatedEndpoint);
+    }
+
+    [Fact]
+    public async Task ProxylessPortAllocatorAllocatesPortForNonComputeContainerResource()
+    {
+        const int targetPort = 10000;
+        var (allocatedPort, _) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        var emulator = builder.AddResource(new TestContainerResource("emulator"))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "image" })
+            .WithAnnotation(new ContainerLifetimeAnnotation { Lifetime = ContainerLifetime.Persistent })
+            .WithHttpEndpoint(targetPort: targetPort, name: "http");
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+            })
+            .Build();
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = allocatedPort,
+            ProxylessEndpointPortRangeEnd = allocatedPort
+        };
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var endpoint = emulator.GetEndpoint("http").EndpointAnnotation;
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            configuration: configuration,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.IsNotAssignableFrom<IComputeResource>(emulator.Resource);
+        Assert.True(emulator.Resource.IsContainer());
+        Assert.Equal(allocatedPort, endpoint.Port);
+        Assert.Equal(targetPort, endpoint.TargetPort);
+        Assert.Equal(allocatedPort, endpoint.AllocatedEndpoint?.Port);
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == emulator.Resource.Name);
     }
 
     [Fact]
@@ -10247,6 +10291,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
     private sealed class TestExecutableResource(string directory) : ExecutableResource("TestExecutable", "test", directory);
     private sealed class TestOtherExecutableResource(string directory) : ExecutableResource("TestOtherExecutable", "test-other", directory);
+    private sealed class TestContainerResource(string name) : Resource(name), IResourceWithEndpoints;
 
     private sealed class NullValueProvider : IValueProvider
     {
