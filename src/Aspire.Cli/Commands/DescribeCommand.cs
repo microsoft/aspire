@@ -147,7 +147,7 @@ internal sealed class DescribeCommand : BaseCommand
         // so the user can describe any resource by name.
         var effectiveIncludeHidden = includeHidden || resourceName is not null;
         var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-        using var resourceWatcher = new ResourceSnapshotWatcher(connection, effectiveIncludeHidden);
+        using var resourceWatcher = new ResourceSnapshotWatcher(connection, effectiveIncludeHidden, bufferUpdates: follow);
         await resourceWatcher.WaitForInitialLoadAsync(cancellationToken).ConfigureAwait(false);
 
         var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
@@ -161,7 +161,7 @@ internal sealed class DescribeCommand : BaseCommand
         {
             try
             {
-                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
@@ -221,23 +221,19 @@ internal sealed class DescribeCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
-    private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeDisabledCommands, CancellationToken cancellationToken)
+    private async Task<int> ExecuteWatchAsync(ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeDisabledCommands, CancellationToken cancellationToken)
     {
         // Cache the last displayed content per resource to avoid duplicate output.
         // Values are either a string (JSON mode) or a ResourceDisplayState (non-JSON mode).
         var lastDisplayedContent = new Dictionary<string, object>(StringComparers.ResourceName);
 
-        // Stream resource snapshots. The watcher keeps its dictionary up to date in the
-        // background, so we use it for relationship resolution and display name deduplication.
-        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
+        void DisplaySnapshot(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> currentSnapshots)
         {
             // Skip hidden resources when not included
             if (!resourceWatcher.IncludeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
             {
-                continue;
+                return;
             }
-
-            var currentSnapshots = resourceWatcher.GetAllResources().ToList();
 
             // Filter by resource name if specified
             if (resourceName is not null)
@@ -245,13 +241,17 @@ internal sealed class DescribeCommand : BaseCommand
                 var resolved = ResourceSnapshotMapper.ResolveResources(resourceName, currentSnapshots);
                 if (!resolved.Any(r => string.Equals(r.Name, snapshot.Name, StringComparison.OrdinalIgnoreCase)))
                 {
-                    continue;
+                    return;
                 }
             }
 
             if (format == OutputFormat.Json)
             {
-                var resourceJson = ResourceSnapshotMapper.MapToResourceJson(snapshot, currentSnapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
+                var resourceJson = ResourceSnapshotMapper.MapToResourceJson(
+                    snapshot,
+                    currentSnapshots,
+                    dashboardBaseUrl,
+                    includeDisabledCommands: includeDisabledCommands);
 
                 // NDJSON output - compact, one object per line for streaming
                 var json = JsonSerializer.Serialize(resourceJson, ResourcesCommandJsonContext.Ndjson.ResourceJson);
@@ -259,7 +259,7 @@ internal sealed class DescribeCommand : BaseCommand
                 // Skip if the JSON is identical to the last output for this resource
                 if (lastDisplayedContent.TryGetValue(snapshot.Name, out var lastValue) && lastValue is string lastJson && lastJson == json)
                 {
-                    continue;
+                    return;
                 }
 
                 lastDisplayedContent[snapshot.Name] = json;
@@ -269,15 +269,30 @@ internal sealed class DescribeCommand : BaseCommand
             {
                 // Human-readable update - build display state and skip if unchanged
                 var displayState = BuildResourceDisplayState(snapshot, currentSnapshots);
-
                 if (lastDisplayedContent.TryGetValue(snapshot.Name, out var lastValue) && lastValue.Equals(displayState))
                 {
-                    continue;
+                    return;
                 }
 
                 lastDisplayedContent[snapshot.Name] = displayState;
                 DisplayResourceUpdate(displayState);
             }
+        }
+
+        var initialCapture = resourceWatcher.CaptureAllResources();
+        var initialSnapshots = initialCapture.Resources;
+        foreach (var snapshot in initialSnapshots)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DisplaySnapshot(snapshot, initialSnapshots);
+        }
+
+        // Stream resource snapshots. The watcher keeps its dictionary up to date in the
+        // background, so we use it for relationship resolution and display name deduplication.
+        await foreach (var snapshot in resourceWatcher.WatchResourceSnapshotsAsync(initialCapture.UpdateSequence, cancellationToken).ConfigureAwait(false))
+        {
+            var currentSnapshots = resourceWatcher.GetAllResources().ToList();
+            DisplaySnapshot(snapshot, currentSnapshots);
         }
 
         return CliExitCodes.Success;
