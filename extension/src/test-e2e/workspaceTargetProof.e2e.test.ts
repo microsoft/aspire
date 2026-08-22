@@ -106,7 +106,6 @@ suite('Workspace target proof E2E', function () {
         fs.writeFileSync(path.join(collidingProject, 'existing.txt'), 'existing project');
         writeWorkspaceSetting('files.simpleDialog.enable', true);
 
-        await openAspireView();
         await waitForRepositoryIdle();
         const beforeInvocation = getCommandInvocationCount('aspire-vscode.new');
         await executeCommandFromPalette('Aspire: New Project');
