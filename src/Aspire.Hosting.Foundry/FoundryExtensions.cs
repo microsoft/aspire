@@ -270,13 +270,7 @@ public static class FoundryExtensions
         var builtInRoles = new CognitiveServicesBuiltInRole[roles.Length];
         for (var i = 0; i < roles.Length; i++)
         {
-            builtInRoles[i] = roles[i] switch
-            {
-                FoundryRole.CognitiveServicesOpenAIContributor => CognitiveServicesBuiltInRole.CognitiveServicesOpenAIContributor,
-                FoundryRole.CognitiveServicesOpenAIUser => CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser,
-                FoundryRole.CognitiveServicesUser => CognitiveServicesBuiltInRole.CognitiveServicesUser,
-                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(FoundryRole)} value.", nameof(roles))
-            };
+            builtInRoles[i] = roles[i].ToBuiltInRole();
         }
 
         return builder.WithRoleAssignments(target, builtInRoles);

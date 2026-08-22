@@ -115,6 +115,15 @@ var project = foundry.AddProject("my-project")
                      .WithKeyVault(keyVault);
 ```
 
+Some Foundry features call other services through the project's managed identity. Assign the required role on the parent Foundry account directly to that identity:
+
+```csharp
+var foundryUserRole = (CognitiveServicesBuiltInRole)"53ca6127-db72-4b80-b1b0-d745d6d5456d";
+
+var project = foundry.AddProject("my-project")
+                     .WithRoleAssignments(foundryUserRole);
+```
+
 ## Hosted agent usage
 
 To deploy a containerized application as a hosted agent in Microsoft Foundry:
