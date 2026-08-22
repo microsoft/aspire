@@ -1004,7 +1004,18 @@ public class AtsTypeScriptCodeGeneratorTests
         // marker interface emits "{ClassName}Promise" as its return type (the reference site),
         // while the wrapper declaration used to be skipped because the builder had no capabilities
         // of its own - a dangling "Cannot find name '...Promise'" in the generated SDK.
-        var atsContext = CreateContextFromTestAssembly();
+        // Also reference the concrete implementation so CreateBuilderModels deduplicates the
+        // interface and concrete builders to the same generated TestMarkerResource class. Wrapper
+        // registration must still honor the interface return type from AddTestMarker.
+        var atsContext = WithAdditionalCapabilities(
+            CreateContextFromTestAssembly(),
+            CreateVoidEntryPointCapability(
+                "inspectTestMarkerResource",
+                new AtsParameterInfo
+                {
+                    Name = "resource",
+                    Type = CreateResourceTypeRef<TestMarkerResource>()
+                }));
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.mts"];
@@ -1234,6 +1245,28 @@ public class AtsTypeScriptCodeGeneratorTests
             Diagnostics = context.Diagnostics
         };
     }
+
+    private static AtsTypeRef CreateResourceTypeRef<TResource>() where TResource : IResource =>
+        new()
+        {
+            TypeId = GetAtsTypeId(typeof(TResource)),
+            ClrType = typeof(TResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+    private static AtsCapabilityInfo CreateVoidEntryPointCapability(string methodName, params AtsParameterInfo[] parameters) =>
+        new()
+        {
+            CapabilityId = $"Aspire.Hosting.CodeGeneration.TypeScript.Tests/{methodName}",
+            MethodName = methodName,
+            Parameters = parameters,
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            },
+            CapabilityKind = AtsCapabilityKind.Method
+        };
 
     private static AtsCapabilityInfo CreateDistributedApplicationBuilderCapability(
         AtsContext context,
@@ -1891,34 +1924,18 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         // A zero-capability resource named Foo does not need a Promise wrapper when it is only
         // referenced as a parameter. Generating one would collide with a real FooPromise resource.
-        var resourceType = new AtsTypeRef
-        {
-            TypeId = GetAtsTypeId(typeof(TestPromiseNameCollisionResource)),
-            ClrType = typeof(TestPromiseNameCollisionResource),
-            Category = AtsTypeCategory.Handle
-        };
-        var promiseResourceType = new AtsTypeRef
-        {
-            TypeId = GetAtsTypeId(typeof(TestPromiseNameCollisionResourcePromise)),
-            ClrType = typeof(TestPromiseNameCollisionResourcePromise),
-            Category = AtsTypeCategory.Handle
-        };
-        var collisionCapability = new AtsCapabilityInfo
-        {
-            CapabilityId = "Aspire.Hosting.CodeGeneration.TypeScript.Tests/inspectPromiseNameCollision",
-            MethodName = "inspectPromiseNameCollision",
-            Parameters =
-            [
-                new AtsParameterInfo { Name = "resource", Type = resourceType },
-                new AtsParameterInfo { Name = "promiseResource", Type = promiseResourceType }
-            ],
-            ReturnType = new AtsTypeRef
+        var collisionCapability = CreateVoidEntryPointCapability(
+            "inspectPromiseNameCollision",
+            new AtsParameterInfo
             {
-                TypeId = AtsConstants.Void,
-                Category = AtsTypeCategory.Primitive
+                Name = "resource",
+                Type = CreateResourceTypeRef<TestPromiseNameCollisionResource>()
             },
-            CapabilityKind = AtsCapabilityKind.Method
-        };
+            new AtsParameterInfo
+            {
+                Name = "promiseResource",
+                Type = CreateResourceTypeRef<TestPromiseNameCollisionResourcePromise>()
+            });
         var atsContext = WithAdditionalCapabilities(CreateContextFromTestAssembly(), collisionCapability);
 
         var files = _generator.GenerateDistributedApplication(atsContext);

@@ -965,9 +965,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // 2. Type classes: everything else (context types, wrapper types)
         var resourceBuilders = builders.Where(b => b.TargetType?.IsResourceBuilder == true).ToList();
         var typeClasses = builders.Where(b => b.TargetType?.IsResourceBuilder != true).ToList();
-        var returnedBuilderTypeIds = capabilities
+        var returnedBuilderTypes = capabilities
             .Where(capability => capability.ReturnsBuilder)
-            .Select(capability => capability.ReturnType.TypeId)
+            .Select(capability => capability.ReturnType)
+            .DistinctBy(typeRef => typeRef.TypeId)
+            .ToList();
+        var returnedBuilderClassNames = returnedBuilderTypes
+            .Select(typeRef => DeriveClassName(typeRef.TypeId))
             .ToHashSet(StringComparer.Ordinal);
 
         // Build wrapper class name mapping before DTO generation so callback
@@ -1006,10 +1010,26 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // own, as in a third-party factory returning IResourceBuilder<IResourceWithServiceDiscovery>.
             // Do not generate wrappers for zero-capability types that are only referenced as
             // parameters: Foo's FooPromise wrapper would collide with a real FooPromise resource.
-            if (HasChainableMethods(builder) || returnedBuilderTypeIds.Contains(builder.TypeId))
+            if (HasChainableMethods(builder) || returnedBuilderClassNames.Contains(builder.BuilderClassName))
             {
                 _typesWithPromiseWrappers.Add(builder.TypeId);
             }
+        }
+        // CreateBuilderModels deduplicates IFoo and Foo to one generated Foo builder. Preserve
+        // directly returned aliases so an export returning IFoo still resolves FooPromise even when
+        // the retained builder model represents Foo.
+        foreach (var returnedBuilderType in returnedBuilderTypes)
+        {
+            var builder = resourceBuilders.FirstOrDefault(candidate =>
+                string.Equals(candidate.BuilderClassName, DeriveClassName(returnedBuilderType.TypeId), StringComparison.Ordinal));
+            if (builder is null || !_typesWithPromiseWrappers.Contains(builder.TypeId))
+            {
+                continue;
+            }
+
+            _wrapperClassNames[returnedBuilderType.TypeId] = builder.BuilderClassName;
+            _typeRefsById[returnedBuilderType.TypeId] = returnedBuilderType;
+            _typesWithPromiseWrappers.Add(returnedBuilderType.TypeId);
         }
         foreach (var typeClass in typeClasses)
         {
