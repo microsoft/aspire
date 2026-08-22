@@ -52,6 +52,7 @@ public static class TestExtensions
         return builder.AddResource(resource);
     }
 
+#if ASPIRE_TYPESCRIPT_CODEGEN_TESTS
     /// <summary>
     /// Adds a resource exposed only through a bare marker interface.
     /// </summary>
@@ -68,6 +69,7 @@ public static class TestExtensions
     {
         return builder.AddResource(new TestMarkerResource(name));
     }
+#endif
 
     /// <summary>
     /// Configures a Redis resource with parameter-only resources whose generated names collide.

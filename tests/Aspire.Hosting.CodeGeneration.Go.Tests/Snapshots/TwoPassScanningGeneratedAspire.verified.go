@@ -1241,12 +1241,6 @@ type ResourceWithWaitSupport interface {
 	handleReference
 }
 
-// TestMarkerResource marks types implementing ITestMarkerResource.
-// Marker interface.
-type TestMarkerResource interface {
-	handleReference
-}
-
 // TestMutablePromiseCollisionResourcePromise marks types implementing ITestMutablePromiseCollisionResourcePromise.
 // Marker interface.
 type TestMutablePromiseCollisionResourcePromise interface {
@@ -9649,7 +9643,6 @@ type DistributedApplicationBuilder interface {
 	AddParameterFromConfiguration(name string, configurationKey string, options ...*AddParameterFromConfigurationOptions) ParameterResource
 	AddParameterWithGeneratedValue(name string, value *GenerateParameterDefault, options ...*AddParameterWithGeneratedValueOptions) ParameterResource
 	AddProject(name string, projectPath string, options ...*AddProjectOptions) ProjectResource
-	AddTestMarker(name string) TestMarkerResource
 	AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource
 	AddTestVault(name string) TestVaultResource
 	AppHostDirectory() (string, error)
@@ -10112,24 +10105,6 @@ func (s *distributedApplicationBuilder) AddProject(name string, projectPath stri
 		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddTestMarker adds a resource exposed only through a bare marker interface.
-func (s *distributedApplicationBuilder) AddTestMarker(name string) TestMarkerResource {
-	if s.err != nil { return nil }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/addTestMarker", reqArgs)
-	if err != nil { s.setErr(err); return nil }
-	typed, ok := result.(TestMarkerResource)
-	if !ok {
-		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/addTestMarker returned unexpected type %T", result))
-		return nil
-	}
-	return typed
 }
 
 // AddTestRedis adds a test Redis resource from ATS documentation.

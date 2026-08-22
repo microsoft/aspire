@@ -11677,16 +11677,6 @@ impl IDistributedApplicationBuilder {
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
 
-    /// Adds a resource exposed only through a bare marker interface.
-    pub fn add_test_marker(&self, name: &str) -> Result<ITestMarkerResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/addTestMarker", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(ITestMarkerResource::new(handle, self.client.clone()))
-    }
-
     /// Adds a test vault resource
     pub fn add_test_vault(&self, name: &str) -> Result<ITestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -12962,32 +12952,6 @@ impl IServiceProvider {
         let result = self.client.invoke_capability("Aspire.Hosting/getUserSecretsManager", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IUserSecretsManager::new(handle, self.client.clone()))
-    }
-}
-
-/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMarkerResource
-pub struct ITestMarkerResource {
-    handle: Handle,
-    client: Arc<AspireClient>,
-}
-
-impl HasHandle for ITestMarkerResource {
-    fn handle(&self) -> &Handle {
-        &self.handle
-    }
-}
-
-impl ITestMarkerResource {
-    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
-        Self { handle, client }
-    }
-
-    pub fn handle(&self) -> &Handle {
-        &self.handle
-    }
-
-    pub fn client(&self) -> &Arc<AspireClient> {
-        &self.client
     }
 }
 

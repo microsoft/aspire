@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#if ASPIRE_TYPESCRIPT_CODEGEN_TESTS
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
@@ -29,3 +30,4 @@ public class TestMarkerResource : Resource, ITestMarkerResource
     {
     }
 }
+#endif
