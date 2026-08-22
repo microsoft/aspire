@@ -28,8 +28,13 @@ class ShellSession {
     });
 
     const session = new ShellSession(shell, ptyProcess);
-    await session.ready();
-    return session;
+    try {
+      await session.ready();
+      return session;
+    } catch (error) {
+      await session.dispose();
+      throw error;
+    }
   }
 
   constructor(shell, ptyProcess) {
