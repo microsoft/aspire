@@ -59,36 +59,39 @@ internal sealed class ProfileCaptureService(
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var managedPath = ResolveManagedPathOverride(configuration);
+        var dashboardPath = ResolveManagedPathOverride(configuration);
         BundleLayoutLease? layoutLease = null;
-        if (managedPath is null)
+        if (dashboardPath is null)
         {
             layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "profile-dashboard", cancellationToken).ConfigureAwait(false);
             var layout = layoutLease?.Layout;
-            managedPath = layout?.GetManagedPath();
+            dashboardPath = layout?.GetDashboardPath();
         }
 
         // `ASPIRE_REPO_ROOT` is the shared opt-in for repo-local assets. Avoid independently
         // walking from the command directory or process path here, because installed CLIs should not
         // accidentally bind to a nearby checkout while profiling unrelated applications.
-        managedPath ??= ResolveRepoLocalManagedPath(configuration[BundleDiscovery.RepoRootEnvVar]);
+        dashboardPath ??= ResolveRepoLocalDashboardPath(configuration[BundleDiscovery.RepoRootEnvVar]);
 
-        if (managedPath is null || !File.Exists(managedPath))
+        if (dashboardPath is null || !File.Exists(dashboardPath))
         {
             layoutLease?.Dispose();
             throw new InvalidOperationException(DashboardCommandStrings.ManagedBinaryNotFound);
         }
 
         var outputCollector = new OutputCollector(fileLoggerProvider, "ProfileDashboard");
-        var dashboardArgs = new[]
+        var dashboardArgs = new List<string>
         {
-            "dashboard",
             $"--{KnownAspNetCoreConfigNames.Urls}={options.DashboardUrl}",
             $"--{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}={options.OtlpGrpcUrl}",
             $"--{KnownConfigNames.DashboardOtlpHttpEndpointUrl}={options.OtlpHttpUrl}",
             $"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
             $"--{KnownConfigNames.DashboardApiEnabled}=true"
         };
+        if (BundleDiscovery.IsAspireManagedBinary(dashboardPath))
+        {
+            dashboardArgs.Insert(0, "dashboard");
+        }
 
         var processOptions = new ProcessInvocationOptions
         {
@@ -102,13 +105,13 @@ internal sealed class ProfileCaptureService(
             var environmentVariables = CreateDashboardEnvironment();
             layoutLease?.AddEnvironment(environmentVariables);
 
-            // Launch aspire-managed directly instead of calling `aspire dashboard run`. Calling
+            // Launch the bundle-owned Dashboard directly instead of calling `aspire dashboard run`. Calling
             // back through the CLI being profiled would recursively apply --capture-profile and
             // make the collector part of the measurement.
             // Bind the collector dashboard to the Windows kill-on-close job so it cannot outlive a
             // hard-killed CLI (OS-level backstop on top of the cross-platform watchdog). No-op off Windows.
             dashboardProcess = await layoutProcessRunner.StartAsync(
-                managedPath,
+                dashboardPath,
                 dashboardArgs,
                 environmentVariables: environmentVariables,
                 options: processOptions,
@@ -167,8 +170,7 @@ internal sealed class ProfileCaptureService(
         // configuration-backed so callers can set them via environment variables or other CLI config
         // providers without this path reading process environment directly.
 
-        // ASPIRE_DASHBOARD_PATH is the older hosting/DCP override name. It is expected to point
-        // directly at the aspire-managed executable that hosts the dashboard collector.
+        // ASPIRE_DASHBOARD_PATH is the hosting/DCP override for the Dashboard executable.
         if (configuration[BundleDiscovery.DashboardPathEnvVar] is { Length: > 0 } dashboardPath &&
             File.Exists(dashboardPath))
         {
@@ -194,7 +196,7 @@ internal sealed class ProfileCaptureService(
         return null;
     }
 
-    internal static string? ResolveRepoLocalManagedPath(string? repoRoot)
+    internal static string? ResolveRepoLocalDashboardPath(string? repoRoot)
     {
         if (string.IsNullOrEmpty(repoRoot))
         {
@@ -202,17 +204,17 @@ internal sealed class ProfileCaptureService(
         }
 
         // `ASPIRE_REPO_ROOT` is a dev-build escape hatch, so keep it predictable: use the same Debug
-        // net10.0 output produced by the normal repo-local build instead of scanning every artifact
+        // net11.0 output produced by the normal repo-local build instead of scanning every artifact
         // folder and guessing between configurations.
-        var managedPath = Path.Combine(
+        var dashboardPath = Path.Combine(
             repoRoot,
             "artifacts",
             "bin",
-            "Aspire.Managed",
+            "Aspire.Dashboard",
             "Debug",
-            "net10.0",
-            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        return File.Exists(managedPath) ? managedPath : null;
+            "net11.0",
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        return File.Exists(dashboardPath) ? dashboardPath : null;
     }
 
     internal sealed class ProfileCaptureSession : IAsyncDisposable

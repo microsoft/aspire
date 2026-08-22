@@ -2570,10 +2570,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
 
             if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
-                layout.GetManagedPath() is { } layoutManagedPath &&
-                IsUsableDashboardPath(layoutManagedPath))
+                layout.GetDashboardPath() is { } layoutDashboardPath &&
+                IsUsableDashboardPath(layoutDashboardPath))
             {
-                env[BundleDiscovery.DashboardPathEnvVar] = layoutManagedPath;
+                env[BundleDiscovery.DashboardPathEnvVar] = layoutDashboardPath;
             }
         }
 

@@ -7,20 +7,14 @@ namespace Aspire.Dashboard.Tests;
 
 public class BlazorAssetsTests
 {
-    [Theory]
-    [InlineData("10")]
-    [InlineData("11")]
-    public void BlazorWebJs_DoesNotSendUnsupportedKeyboardEventProperties(string runtimeMajorVersion)
+    [Fact]
+    public void BlazorScript_UsesTargetFrameworkStaticWebAsset()
     {
-        var blazorWebJsPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "wwwroot", "framework", $"blazor.web.{runtimeMajorVersion}.js");
-        Assert.True(File.Exists(blazorWebJsPath), $"Expected generated Blazor asset at {blazorWebJsPath}");
+        var blazorScriptPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "Components", "BlazorScript.razor");
 
-        var blazorWebJs = File.ReadAllText(blazorWebJsPath);
+        var blazorScript = File.ReadAllText(blazorScriptPath).Trim();
 
-        Assert.Contains("keydown", blazorWebJs, StringComparison.Ordinal);
-        Assert.False(
-            blazorWebJs.Contains("isComposing", StringComparison.Ordinal),
-            "The dashboard Blazor script must not emit KeyboardEvent.isComposing because the server event parser rejects the unknown property.");
+        Assert.Equal("""<script src="_framework/blazor.web.js"></script>""", blazorScript);
     }
 
     private static string GetRepoRoot()

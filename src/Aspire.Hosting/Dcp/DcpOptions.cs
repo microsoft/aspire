@@ -32,7 +32,7 @@ internal sealed class DcpOptions
     /// Optional path to a folder containing the Aspire Dashboard binaries.
     /// </summary>
     /// <example>
-    /// When running the playground applications in this repo: <c>..\..\..\artifacts\bin\Aspire.Dashboard\Debug\net8.0\Aspire.Dashboard.dll</c>
+    /// When running the playground applications in this repo: <c>..\..\..\artifacts\bin\Aspire.Dashboard\Debug\net11.0\Aspire.Dashboard.dll</c>
     /// </example>
     public string? DashboardPath { get; set; }
 
@@ -281,11 +281,10 @@ internal class ConfigureDefaultDcpOptions(
         // 4. Runtime inference from DashboardPath (below): only fires when none of the
         //    above produced a value, which happens when the AppHost was built on a
         //    machine where ResolveAspireCliBundle could not locate the bundle, but at
-        //    runtime the launching CLI did set ASPIRE_DASHBOARD_PATH. Since 13.4 the
-        //    bundle ships a single multi-mode aspire-managed exe that dispatches to
-        //    dashboard / terminalhost via a leading subcommand arg, so reusing
-        //    DashboardPath as the terminal host (with "terminalhost" as the dispatch
-        //    arg) is correct.
+        //    runtime the launching CLI did set ASPIRE_DASHBOARD_PATH. This fallback
+        //    applies to legacy bundles where that path points to the multi-mode
+        //    aspire-managed executable. New bundles ship a separate Native AOT
+        //    Dashboard and provide terminal-host metadata directly.
         //
         // Note: if both the dashboard and terminal host paths end up empty, .WithTerminal()
         // resources will fail at start time; see TerminalHostFailureDiagnosticService for
