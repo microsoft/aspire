@@ -146,6 +146,10 @@ builder.AddMcpClient("mcp", settings =>
 });
 ```
 
+### Use configuration providers
+
+The client binds settings from the `Aspire:Mcp:Client` configuration section:
+
 ```json
 {
   "Aspire": {
