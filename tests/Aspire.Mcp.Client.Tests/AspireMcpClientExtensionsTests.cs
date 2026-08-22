@@ -610,6 +610,26 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public async Task McpClientPreservesUriDestinationAndHostMetadataForPlatformServiceEndpoint()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.AddSingleton<IServiceEndpointProviderFactory>(new StaticServiceEndpointProviderFactory(
+            CreateServiceEndpoint(new UriEndPoint(new Uri("https://127.0.0.12:5001/base")), hostName: "platform-mcp")));
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<McpClient>();
+        var exception = await Record.ExceptionAsync(async () => await client.PingAsync());
+
+        Assert.Null(exception);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://127.0.0.12:5001/base/mcp");
+        Assert.Contains(handler.RequestHosts, host => host == "platform-mcp");
+    }
+
+    [Fact]
     public async Task McpClientSelectsNextServiceDiscoveryEndpointAfterReconnect()
     {
         var handler = new FailPingOnceHandler();

@@ -578,11 +578,17 @@ public static class AspireMcpClientExtensions
         {
             return serviceEndpoint.EndPoint switch
             {
-                UriEndPoint uriEndPoint => new(CreateResolvedEndpointUri(uriEndPoint.Uri, endpoint), RequestHost: null),
-                DnsEndPoint dnsEndPoint => new(CreateResolvedEndpointUri(endpoint, dnsEndPoint.Host, dnsEndPoint.Port), RequestHost: null),
+                UriEndPoint uriEndPoint => new(CreateResolvedEndpointUri(uriEndPoint.Uri, endpoint), GetRequestHost(serviceEndpoint)),
+                DnsEndPoint dnsEndPoint => new(CreateResolvedEndpointUri(endpoint, dnsEndPoint.Host, dnsEndPoint.Port), GetRequestHost(serviceEndpoint)),
                 IPEndPoint ipEndPoint => CreateResolvedIpEndpoint(ipEndPoint, serviceEndpoint.Features.Get<IHostNameFeature>(), endpoint),
                 _ => null,
             };
+        }
+
+        private static string? GetRequestHost(ServiceEndpoint serviceEndpoint)
+        {
+            var hostName = serviceEndpoint.Features.Get<IHostNameFeature>()?.HostName;
+            return string.IsNullOrWhiteSpace(hostName) ? null : hostName;
         }
 
         private static ResolvedEndpoint CreateResolvedIpEndpoint(IPEndPoint ipEndPoint, IHostNameFeature? hostNameFeature, Uri endpoint)
