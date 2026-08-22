@@ -97,7 +97,10 @@ export function expandEnvironmentVariables(value: string): string {
     return result;
 }
 
-function expandSdkEnvironmentVariables(value: string): string {
+export function expandSdkEnvironmentVariables(
+    value: string,
+    environment: NodeJS.ProcessEnv = process.env
+): string {
     // Match Environment.ExpandEnvironmentVariables, which the SDK launch-profile parser uses:
     // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/ExecutableLaunchProfileParser.cs
     let result = '';
@@ -117,19 +120,38 @@ function expandSdkEnvironmentVariables(value: string): string {
         }
 
         const variableName = value.slice(variableStart + 1, variableEnd);
-        const variableValue = process.env[variableName];
+        const variableValue = getSdkEnvironmentVariable(environment, variableName);
         if (variableValue !== undefined) {
             result += value.slice(currentIndex, variableStart) + variableValue;
             currentIndex = variableEnd + 1;
+        } else if (process.platform === 'win32') {
+            // Windows delegates to ExpandEnvironmentStringsW, which leaves an unresolved span
+            // intact and continues after its closing delimiter.
+            // https://learn.microsoft.com/windows/win32/api/processenv/nf-processenv-expandenvironmentstringsw
+            result += value.slice(currentIndex, variableEnd + 1);
+            currentIndex = variableEnd + 1;
         } else {
-            // Environment.ExpandEnvironmentVariables reconsiders the closing '%' as the start of
-            // another variable, so adjacent references can share a delimiter.
+            // The Unix runtime reconsiders the closing '%' as the start of another variable, so
+            // adjacent references can share a delimiter.
+            // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Environment.UnixOrBrowser.cs
             result += value.slice(currentIndex, variableEnd);
             currentIndex = variableEnd;
         }
     }
 
     return result;
+}
+
+function getSdkEnvironmentVariable(environment: NodeJS.ProcessEnv, name: string): string | undefined {
+    if (process.platform !== 'win32') {
+        return environment[name];
+    }
+
+    // Windows environment names are case-insensitive, including when the supplied environment is
+    // a plain snapshot rather than Node's special process.env object.
+    const normalizedName = name.toLowerCase();
+    const matchingName = Object.keys(environment).find(candidate => candidate.toLowerCase() === normalizedName);
+    return matchingName ? environment[matchingName] : undefined;
 }
 
 /**

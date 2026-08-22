@@ -664,7 +664,15 @@ suite('Dotnet Debugger Extension Tests', () => {
             CLI_PRECEDENCE: process.env.CLI_PRECEDENCE,
             DEFAULT_PROFILE_ONLY: process.env.DEFAULT_PROFILE_ONLY,
             DEFAULT_PROFILE_EXPLICIT: process.env.DEFAULT_PROFILE_EXPLICIT,
-            PROFILE_ROOT: process.env.PROFILE_ROOT
+            DEFAULT_PROFILE_EXPANDED: process.env.DEFAULT_PROFILE_EXPANDED,
+            DEFAULT_PROFILE_SOURCE: process.env.DEFAULT_PROFILE_SOURCE,
+            DEFAULT_PROFILE_DEPENDENT: process.env.DEFAULT_PROFILE_DEPENDENT,
+            DEFAULT_PROFILE_RAW: process.env.DEFAULT_PROFILE_RAW,
+            DEFAULT_PROFILE_CYCLE_A: process.env.DEFAULT_PROFILE_CYCLE_A,
+            DEFAULT_PROFILE_CYCLE_B: process.env.DEFAULT_PROFILE_CYCLE_B,
+            DEFAULT_PROFILE_SELF: process.env.DEFAULT_PROFILE_SELF,
+            PROFILE_ROOT: process.env.PROFILE_ROOT,
+            PROFILE_MISSING: process.env.PROFILE_MISSING
         };
 
         process.env.mode = 'ambient-h1';
@@ -675,7 +683,15 @@ suite('Dotnet Debugger Extension Tests', () => {
         process.env.CLI_PRECEDENCE = 'from-process';
         process.env.DEFAULT_PROFILE_ONLY = 'from-process';
         process.env.DEFAULT_PROFILE_EXPLICIT = 'from-process';
-        process.env.PROFILE_ROOT = '/profile/root';
+        process.env.DEFAULT_PROFILE_EXPANDED = 'from-process';
+        process.env.DEFAULT_PROFILE_SOURCE = 'from-process-source';
+        process.env.DEFAULT_PROFILE_DEPENDENT = 'from-process-dependent';
+        process.env.DEFAULT_PROFILE_RAW = 'from-process-raw';
+        process.env.DEFAULT_PROFILE_CYCLE_A = 'ambient-a';
+        process.env.DEFAULT_PROFILE_CYCLE_B = 'ambient-b';
+        process.env.DEFAULT_PROFILE_SELF = 'ambient-self';
+        delete process.env.PROFILE_ROOT;
+        delete process.env.PROFILE_MISSING;
 
         try {
             const projectPath = nodePath.join(projectDir, 'AppHost.csproj');
@@ -689,7 +705,15 @@ suite('Dotnet Debugger Extension Tests', () => {
                             mode: '1',
                             EXPLICIT: 'from-h1',
                             DEFAULT_PROFILE_ONLY: 'from-h1',
-                            DEFAULT_PROFILE_EXPLICIT: 'from-h1'
+                            DEFAULT_PROFILE_EXPLICIT: 'from-h1',
+                            DEFAULT_PROFILE_EXPANDED: '%PROFILE_ROOT%/default',
+                            DEFAULT_PROFILE_SOURCE: 'from-h1',
+                            DEFAULT_PROFILE_DEPENDENT: '%DEFAULT_PROFILE_SOURCE%/dependent',
+                            DEFAULT_PROFILE_RAW: '%DEFAULT_PROFILE_SOURCE%/raw',
+                            DEFAULT_PROFILE_CYCLE_A: '%DEFAULT_PROFILE_CYCLE_B%',
+                            DEFAULT_PROFILE_CYCLE_B: '%DEFAULT_PROFILE_CYCLE_A%',
+                            DEFAULT_PROFILE_SELF: '%DEFAULT_PROFILE_SELF%',
+                            INVALID_DEFAULT_ENV: 42
                         }
                     },
                     h2: {
@@ -706,10 +730,13 @@ suite('Dotnet Debugger Extension Tests', () => {
                     },
                     h3: {
                         commandName: 'Project',
-                        commandLineArgs: '--profile-root %PROFILE_ROOT%',
+                        commandLineArgs: '--profile-root %PROFILE_ROOT% --msbuild $(PROFILE_ROOT) --missing %PROFILE_MISSING% --overlap %PROFILE_MISSING%PROFILE_ROOT%',
                         environmentVariables: {
                             UNSELECTED_ONLY: 'from-h3',
-                            PROFILE_PATH: '%PROFILE_ROOT%/config'
+                            PROFILE_PATH: '%PROFILE_ROOT%/config',
+                            PROFILE_MSBUILD: '$(PROFILE_ROOT)/config',
+                            PROFILE_UNRESOLVED: '%PROFILE_MISSING%/config',
+                            PROFILE_OVERLAP: '%PROFILE_MISSING%PROFILE_ROOT%'
                         }
                     }
                 }
@@ -753,7 +780,15 @@ suite('Dotnet Debugger Extension Tests', () => {
                     { name: 'CLI_PRECEDENCE', value: 'from-cli' },
                     { name: 'UNSELECTED_ONLY', value: 'from-cli' },
                     { name: 'DEFAULT_PROFILE_ONLY', value: 'from-h1' },
-                    { name: 'DEFAULT_PROFILE_EXPLICIT', value: 'from-cli-explicit' }
+                    { name: 'DEFAULT_PROFILE_EXPLICIT', value: 'from-cli-explicit' },
+                    { name: 'DEFAULT_PROFILE_EXPANDED', value: '/profile/root/default' },
+                    { name: 'DEFAULT_PROFILE_SOURCE', value: 'from-h1' },
+                    { name: 'DEFAULT_PROFILE_DEPENDENT', value: 'from-process-source/dependent' },
+                    { name: 'DEFAULT_PROFILE_RAW', value: '%DEFAULT_PROFILE_SOURCE%/raw' },
+                    { name: 'DEFAULT_PROFILE_CYCLE_A', value: 'ambient-b' },
+                    { name: 'DEFAULT_PROFILE_CYCLE_B', value: 'ambient-a' },
+                    { name: 'DEFAULT_PROFILE_SELF', value: 'explicit-self' },
+                    { name: 'PROFILE_ROOT', value: '/profile/root' }
                 ],
                 { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
                 extension);
@@ -767,7 +802,14 @@ suite('Dotnet Debugger Extension Tests', () => {
                 CLI_PRECEDENCE: debugConfig.env.CLI_PRECEDENCE,
                 UNSELECTED_ONLY: debugConfig.env.UNSELECTED_ONLY,
                 DEFAULT_PROFILE_ONLY: debugConfig.env.DEFAULT_PROFILE_ONLY,
-                DEFAULT_PROFILE_EXPLICIT: debugConfig.env.DEFAULT_PROFILE_EXPLICIT
+                DEFAULT_PROFILE_EXPLICIT: debugConfig.env.DEFAULT_PROFILE_EXPLICIT,
+                DEFAULT_PROFILE_EXPANDED: debugConfig.env.DEFAULT_PROFILE_EXPANDED,
+                DEFAULT_PROFILE_SOURCE: debugConfig.env.DEFAULT_PROFILE_SOURCE,
+                DEFAULT_PROFILE_DEPENDENT: debugConfig.env.DEFAULT_PROFILE_DEPENDENT,
+                DEFAULT_PROFILE_RAW: debugConfig.env.DEFAULT_PROFILE_RAW,
+                DEFAULT_PROFILE_CYCLE_A: debugConfig.env.DEFAULT_PROFILE_CYCLE_A,
+                DEFAULT_PROFILE_CYCLE_B: debugConfig.env.DEFAULT_PROFILE_CYCLE_B,
+                DEFAULT_PROFILE_SELF: debugConfig.env.DEFAULT_PROFILE_SELF
             }, {
                 mode: '2',
                 DOTNET_LAUNCH_PROFILE: 'h2',
@@ -777,7 +819,14 @@ suite('Dotnet Debugger Extension Tests', () => {
                 CLI_PRECEDENCE: 'from-cli',
                 UNSELECTED_ONLY: 'from-cli',
                 DEFAULT_PROFILE_ONLY: 'from-process',
-                DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit'
+                DEFAULT_PROFILE_EXPLICIT: 'from-cli-explicit',
+                DEFAULT_PROFILE_EXPANDED: 'from-process',
+                DEFAULT_PROFILE_SOURCE: 'from-process-source',
+                DEFAULT_PROFILE_DEPENDENT: 'from-process-dependent',
+                DEFAULT_PROFILE_RAW: 'from-process-raw',
+                DEFAULT_PROFILE_CYCLE_A: 'ambient-a',
+                DEFAULT_PROFILE_CYCLE_B: 'ambient-b',
+                DEFAULT_PROFILE_SELF: 'explicit-self'
             });
             assert.strictEqual(debugConfig.cwd, projectDir);
             assert.strictEqual(debugConfig.executablePath, undefined);
@@ -820,19 +869,24 @@ suite('Dotnet Debugger Extension Tests', () => {
                 cliSelectedDebugSessionConfig,
                 cliSelectedLaunchConfig,
                 undefined,
-                [],
+                [{ name: 'PROFILE_ROOT', value: '/profile/root' }],
                 { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
                 extension);
 
-            assert.strictEqual(cliSelectedDebugConfig.args, '--profile-root /profile/root');
+            assert.strictEqual(
+                cliSelectedDebugConfig.args,
+                '--profile-root /profile/root --msbuild $(PROFILE_ROOT) --missing %PROFILE_MISSING% --overlap %PROFILE_MISSING%PROFILE_ROOT%');
             assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_PATH, '/profile/root/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_MSBUILD, '$(PROFILE_ROOT)/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_UNRESOLVED, '%PROFILE_MISSING%/config');
+            assert.strictEqual(cliSelectedDebugConfig.env.PROFILE_OVERLAP, '%PROFILE_MISSING%PROFILE_ROOT%');
 
             const forwardedArguments = ['--literal', '%PROFILE_ROOT%'];
             const explicitArgumentsDebugConfig = await createDebugSessionConfiguration(
                 cliSelectedDebugSessionConfig,
                 cliSelectedLaunchConfig,
                 forwardedArguments,
-                [],
+                [{ name: 'PROFILE_ROOT', value: '/profile/root' }],
                 { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
                 extension);
 

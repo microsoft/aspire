@@ -11,6 +11,7 @@ import {
     determineWorkingDirectory,
     readLaunchSettings,
     expandEnvironmentVariables,
+    expandSdkEnvironmentVariables,
     LaunchSettings,
     LaunchProfile,
     hasSdkCompatibleLaunchProfileProperties
@@ -854,7 +855,11 @@ suite('Launch Profile Tests', () => {
 
                 assert.strictEqual(
                     result,
-                    path.resolve(launchSettingsDirectory, `%${missingEnvironmentVariable}expanded`));
+                    path.resolve(
+                        launchSettingsDirectory,
+                        process.platform === 'win32'
+                            ? `%${missingEnvironmentVariable}%${environmentVariable}%`
+                            : `%${missingEnvironmentVariable}expanded`));
             } finally {
                 delete process.env[environmentVariable];
             }
@@ -1382,6 +1387,42 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result, 'alpha/beta/end');
             delete process.env['TEST_MIX_A'];
             delete process.env['TEST_MIX_B'];
+        });
+    });
+
+    suite('expandSdkEnvironmentVariables', () => {
+        test('reconsiders an unresolved closing delimiter on Unix', () => {
+            const platformStub = sinon.stub(process, 'platform').value('darwin');
+            try {
+                delete process.env.TEST_EXPAND_SDK_MISSING;
+
+                assert.strictEqual(
+                    expandSdkEnvironmentVariables(
+                        '%TEST_EXPAND_SDK_MISSING%TEST_EXPAND_SDK_DEFINED%',
+                        { TEST_EXPAND_SDK_DEFINED: 'expanded' }),
+                    '%TEST_EXPAND_SDK_MISSINGexpanded');
+            } finally {
+                platformStub.restore();
+            }
+        });
+
+        test('continues after an unresolved closing delimiter on Windows', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            try {
+                delete process.env.TEST_EXPAND_SDK_MISSING;
+                const environment = { test_expand_sdk_defined: 'expanded' };
+
+                assert.strictEqual(
+                    expandSdkEnvironmentVariables('%TEST_EXPAND_SDK_DEFINED%', environment),
+                    'expanded');
+                assert.strictEqual(
+                    expandSdkEnvironmentVariables(
+                        '%TEST_EXPAND_SDK_MISSING%TEST_EXPAND_SDK_DEFINED%',
+                        environment),
+                    '%TEST_EXPAND_SDK_MISSING%TEST_EXPAND_SDK_DEFINED%');
+            } finally {
+                platformStub.restore();
+            }
         });
     });
 });
