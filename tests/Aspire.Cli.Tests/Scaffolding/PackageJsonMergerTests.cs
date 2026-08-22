@@ -1491,4 +1491,589 @@ public class PackageJsonMergerTests
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
     }
+
+    /// <summary>
+    /// The scaffold pins typescript-eslint 8.58.0, whose peer range is
+    /// typescript ">=4.8.4 &lt;6.1.0". Dependency merging keeps the newer version, so a project
+    /// already on TypeScript 7 keeps it and would receive an unsatisfiable pair. Reproduced against
+    /// the real resolver: npm reports ERESOLVE "Found: typescript@7.0.2".
+    /// </summary>
+    [Theory]
+    [InlineData("^7.0.2")]
+    [InlineData("~7.1.0")]
+    [InlineData("6.1.0")]
+    [InlineData("6.1.0-beta.1")]
+    [InlineData("next")]
+    [InlineData("latest")]
+    [InlineData("npm:typescript@7.0.2")]
+    [InlineData("workspace:*")]
+    [InlineData("^6.0.0 || ^7.0.0")]
+    [InlineData(">=6.0.3")]
+    // A caret range is decided by the version it can reach, not the one it names: `^6.0.3` resolves
+    // to the newest 6.x, so it installs 6.1.0 or later the moment one is published and the peer
+    // range stops being satisfied.
+    [InlineData("^6.0.3")]
+    [InlineData("6.x")]
+    public void Merge_BrownfieldOnUnsupportedTypeScript_DropsLintToolchain(string existingTypeScript)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": { "typescript": "{{existingTypeScript}}" }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+        var merged = ParseJson(result);
+
+        Assert.Equal(existingTypeScript, GetDep(result, "devDependencies", "typescript"));
+        Assert.Null(merged["devDependencies"]?["typescript-eslint"]);
+        Assert.DoesNotContain("aspire:lint", GetScripts(result).Select(script => script.Key));
+
+        // The rest of the AppHost toolchain is untouched: only the lint rules need typescript-eslint.
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+        Assert.Equal("tsc -p tsconfig.apphost.json", GetScript(result, "aspire:build"));
+    }
+
+    /// <summary>
+    /// The counterpart: every version these specs can resolve to is inside typescript-eslint's
+    /// <c>&lt;6.1.0</c> peer range, so the lint toolchain stays. `^5.9.3` stops below 6.0.0 and
+    /// `~6.0.3` stops below 6.1.0, which is why a tilde on the same base version is accepted where
+    /// the caret is not.
+    /// </summary>
+    [Theory]
+    [InlineData("^5.9.3")]
+    [InlineData("~6.0.3")]
+    [InlineData("6.0.3")]
+    [InlineData("=6.0.3")]
+    public void Merge_BrownfieldOnSupportedTypeScript_KeepsLintToolchain(string existingTypeScript)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": { "typescript": "{{existingTypeScript}}" }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+        Assert.Equal("eslint apphost.mts", GetScript(result, "aspire:lint"));
+    }
+
+    /// <summary>
+    /// A project that already depends on typescript-eslint owns that choice, so `aspire init` leaves
+    /// it in place rather than making a destructive edit to a dependency it did not introduce.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldAlreadyUsingTypeScriptEslint_LeavesItInPlace()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "^7.0.2",
+                "typescript-eslint": "^8.58.0"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("^8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+        Assert.Equal("^7.0.2", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    /// <summary>
+    /// Owning typescript-eslint means owning the spec, not just the package. Narrowing a project's
+    /// range to the scaffold's exact pin removes its ability to resolve a future 8.x that supports
+    /// its compiler, and 8.58.0 peers <c>typescript: &gt;=4.8.4 &lt;6.1.0</c>, so on TypeScript 7 the
+    /// rewrite turns an install that resolved into ERESOLVE.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldTypeScriptEslintRange_IsNotNarrowedToTheScaffoldPin()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "^7.0.2",
+                "typescript-eslint": "^8.57.1"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("^8.57.1", GetDep(result, "devDependencies", "typescript-eslint"));
+        Assert.Equal("^7.0.2", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    /// <summary>
+    /// The same ownership holds when the project declares typescript-eslint as a runtime dependency:
+    /// the entry is left where the project put it rather than being upgraded in place.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldTypeScriptEslintAsRuntimeDependency_IsLeftWhereTheProjectPutIt()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "dependencies": {
+                "typescript-eslint": "^8.57.1"
+              },
+              "devDependencies": {
+                "typescript": "^7.0.2"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("^8.57.1", GetDep(result, "dependencies", "typescript-eslint"));
+        Assert.Null(GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// Ownership of the linter spec only survives while the merge leaves the compiler alone. Here it
+    /// does not: TypeScript 5.9.3 is behind the scaffold, so it is upgraded to 6.0.3, and the
+    /// project's exact typescript-eslint 8.57.1 peers <c>typescript: &lt;6.0.0</c>. Leaving that spec
+    /// in place would be the thing that produces ERESOLVE, so the linter moves with the compiler.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldTypeScriptEslintPinnedBehindAnUpgradedCompiler_IsUpgradedWithIt()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "5.9.3",
+                "typescript-eslint": "8.57.1"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// npm rejects an override for a package the manifest depends on directly unless the two specs
+    /// are identical, and it does so before any peer resolution. This manifest installs today; the
+    /// merge moves the direct spec to the scaffold's 6.0.3, so the override has to move with it or
+    /// <c>npm install</c> fails with EOVERRIDE.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldWithAnNpmOverride_MovesTheOverrideWithTheUpgradedDependency()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "^5.9.3"
+              },
+              "overrides": {
+                "typescript": "^5.9.3",
+                "left-pad": "1.3.0",
+                "some-package": { "typescript": "^5.9.3" }
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+        var overrides = ParseJson(result)["overrides"]!.AsObject();
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("6.0.3", overrides["typescript"]?.GetValue<string>());
+
+        // Untouched: an override for a package this merge did not rewrite, and an override tree
+        // for a different package, which scopes that package's own dependencies.
+        Assert.Equal("1.3.0", overrides["left-pad"]?.GetValue<string>());
+        Assert.Equal("^5.9.3", overrides["some-package"]?["typescript"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// npm compares an override against whatever direct spec the manifest ends up with, and does not
+    /// care how it got there. An override beside no direct dependency at all is valid until this
+    /// merge introduces one, so the three paths that write a direct spec - an addition, an upgrade
+    /// made in the section the project chose, and the linter replacement that follows an upgraded
+    /// compiler - all have to be reconciled, not just the plain in-place upgrade.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldWithAnOverrideForAPackageTheMergeAdds_MovesTheOverrideToTheAddedSpec()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "overrides": {
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("6.0.3", ParseJson(result)["overrides"]?["typescript"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The scaffold declares typescript as a devDependency, but a project that put it in
+    /// dependencies keeps it there and is upgraded in place. That rewrite is just as visible to npm
+    /// as one made in the scaffold's own section.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldWithAnOverrideForADependencyUpgradedInTheOtherSection_MovesTheOverride()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "dependencies": {
+                "typescript": "^5.9.3"
+              },
+              "overrides": {
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "dependencies", "typescript"));
+        Assert.Null(GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("6.0.3", ParseJson(result)["overrides"]?["typescript"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The linter replacement runs after the floor merge and is the last word on the spec, so an
+    /// override on typescript-eslint has to follow that value rather than the one the project wrote.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldWithAnOverrideForTheReplacedLinter_MovesTheOverrideToTheReplacement()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "5.9.3",
+                "typescript-eslint": ">=8.57.1 <8.58.0"
+              },
+              "overrides": {
+                "typescript-eslint": ">=8.57.1 <8.58.0"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+        Assert.Equal("8.58.0", ParseJson(result)["overrides"]?["typescript-eslint"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// npm applies the same rule to an object entry's "." key, which is a spec for the package
+    /// itself rather than for its dependencies. Reproduced against the real resolver: with
+    /// <c>devDependencies.typescript "6.0.3"</c> and
+    /// <c>overrides.typescript { ".": "^5.9.3", "some-dep": "1.0.0" }</c>,
+    /// <c>npm install --package-lock-only</c> reports
+    /// <c>EOVERRIDE / Override for typescript@6.0.3 conflicts with direct dependency</c>; setting
+    /// "." to 6.0.3 installs. So the "." key has to move with the direct spec, and the tree beside
+    /// it has to survive.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldWithASelfScopedNestedOverride_MovesOnlyTheSelfEntry()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "^5.9.3"
+              },
+              "overrides": {
+                "typescript": { ".": "^5.9.3", "some-dep": "1.0.0" }
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+        var typeScriptOverride = ParseJson(result)["overrides"]!["typescript"]!.AsObject();
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("6.0.3", typeScriptOverride["."]?.GetValue<string>());
+        Assert.Equal("1.0.0", typeScriptOverride["some-dep"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Merge_BrownfieldUnsupportedTypeScript_PreservesExistingLintScriptsItDidNotAdd()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "scripts": {
+                "aspire:lint": "eslint src",
+                "check": "npm run aspire:lint && npm test"
+              },
+              "devDependencies": { "typescript": "^7.0.2" }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+        var scripts = GetScripts(result);
+
+        Assert.Equal("eslint src", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint && npm test", scripts["check"]?.GetValue<string>());
+        Assert.Null(scripts["lint"]);
+        Assert.Null(GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// npm completes a partial literal into a range over the components it leaves out, so `6` is
+    /// `6.x.x` and `~6` is <c>&gt;=6.0.0 &lt;7.0.0</c> - both resolve to 6.1.0 once it is published,
+    /// which is outside typescript-eslint 8.58.0's <c>&lt;6.1.0</c> peer range. Only `6.0` still
+    /// pins the minor, so only `6.0` is provably inside it.
+    /// </summary>
+    /// <remarks>
+    /// The scaffold here is deliberately behind the project. Dependency merging rewrites a project
+    /// spec whose lower bound is below the scaffold's version, which would replace the partial
+    /// literal with the scaffold's exact version and hide what this is testing. A project that is
+    /// already ahead of the scaffold keeps its own spec, which is the case the support check exists
+    /// to judge.
+    ///
+    /// See <see href="https://github.com/npm/node-semver#x-ranges-12x-1x-12-"/> and
+    /// <see href="https://github.com/npm/node-semver#tilde-ranges-123-12-1"/>.
+    /// </remarks>
+    [Theory]
+    [InlineData("6", false)]
+    [InlineData("~6", false)]
+    [InlineData("^6", false)]
+    [InlineData("6.0", true)]
+    [InlineData("~6.0", true)]
+    public void Merge_BrownfieldAheadOfScaffoldOnPartialTypeScriptLiteral_KeepsLintToolchainOnlyWhenTheRangeCannotReachTheUnsupportedVersion(
+        string existingTypeScript,
+        bool expectsLintToolchain)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": { "typescript": "{{existingTypeScript}}" }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldBehindOnTypeScript);
+
+        // The spec has to survive the merge for the support check to be what decided the outcome.
+        Assert.Equal(existingTypeScript, GetDep(result, "devDependencies", "typescript"));
+
+        if (expectsLintToolchain)
+        {
+            Assert.Equal("8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+            Assert.Equal("eslint apphost.mts", GetScript(result, "aspire:lint"));
+        }
+        else
+        {
+            Assert.Null(ParseJson(result)["devDependencies"]?["typescript-eslint"]);
+            Assert.DoesNotContain("aspire:lint", GetScripts(result).Select(script => script.Key));
+        }
+    }
+
+    /// <summary>
+    /// A comparator range can be unreadable to the lower-bound merge while still being ahead of the
+    /// scaffold. Replacing it with the scaffold's exact pin would be a destructive downgrade.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldLinterComparatorRangeAboveScaffoldFloor_IsPreservedWhenTheMergeUpgradesTheCompiler()
+    {
+        const string ExistingLinter = ">=8.60.0 <8.66.0";
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "5.9.3",
+                "typescript-eslint": "{{ExistingLinter}}"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal(ExistingLinter, GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// Comparator and wildcard ranges are replaced only when they cannot resolve to the scaffold
+    /// floor or anything newer. Inclusive bounds can admit the floor itself; exclusive bounds must
+    /// leave room for a later stable version.
+    /// </summary>
+    [Theory]
+    [InlineData("<8.58.0", "8.58.0")]
+    [InlineData("<=8.58.0", "<=8.58.0")]
+    [InlineData(">8.58.0", ">8.58.0")]
+    [InlineData(">=8.58.0", ">=8.58.0")]
+    [InlineData(">=8.57.1 <8.58.0", "8.58.0")]
+    [InlineData(">8.57.1 <8.58.0", "8.58.0")]
+    [InlineData(">=8.58.0 <8.58.0", "8.58.0")]
+    [InlineData(">8.58.0 <=8.58.0", "8.58.0")]
+    [InlineData(">=8.57.1 <=8.58.0", ">=8.57.1 <=8.58.0")]
+    [InlineData(">=8.57.1 <8.58.1", ">=8.57.1 <8.58.1")]
+    [InlineData(">=8.58.0 <8.66.0", ">=8.58.0 <8.66.0")]
+    [InlineData(">8.58.0 <8.66.0", ">8.58.0 <8.66.0")]
+    [InlineData("8.57.x", "8.58.0")]
+    [InlineData("8.58.x", "8.58.x")]
+    [InlineData("8.x", "8.x")]
+    public void Merge_BrownfieldLinterRange_IsReplacedOnlyWhenItCannotReachTheScaffoldFloor(
+        string existingLinter,
+        string expectedLinter)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "5.9.3",
+                "typescript-eslint": "{{existingLinter}}"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal(expectedLinter, GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// Range forms outside the focused comparator and wildcard parser remain project-owned. An
+    /// unsupported or malformed form is not enough evidence to replace the project's dependency.
+    /// </summary>
+    [Theory]
+    [InlineData("^8.57.1 || >=8.60.0")]
+    [InlineData("8.57.1 - 8.57.9")]
+    [InlineData(">=8.60.0-alpha.1 <8.66.0")]
+    [InlineData(">=8.60.0 <")]
+    public void Merge_BrownfieldLinterRangeWithUnknownFloor_IsPreservedWhenTheMergeUpgradesTheCompiler(string existingLinter)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "5.9.3",
+                "typescript-eslint": "{{existingLinter}}"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal(existingLinter, GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// Package specifications that are not ordinary npm semver ranges are project-owned references,
+    /// not evidence that the project selected an old linter. The compiler upgrade must not replace
+    /// workspace links, local packages, aliases, forks, or direct artifact references.
+    /// </summary>
+    [Theory]
+    [InlineData("workspace:*")]
+    [InlineData("file:../typescript-eslint")]
+    [InlineData("npm:@contoso/typescript-eslint-fork@^8.57.1")]
+    [InlineData("github:contoso/typescript-eslint-fork#semver:^8.57.1")]
+    [InlineData("git+https://github.com/contoso/typescript-eslint-fork.git#v8.57.1")]
+    [InlineData("https://packages.contoso.test/typescript-eslint-fork-8.57.1.tgz")]
+    public void Merge_BrownfieldLinterOpaqueSpec_IsPreservedWhenTheMergeUpgradesTheCompiler(string existingLinter)
+    {
+        var existing = $$"""
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "5.9.3",
+                "typescript-eslint": "{{existingLinter}}"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal(existingLinter, GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    [Fact]
+    public void Merge_BrownfieldRuntimeLinterOpaqueSpec_RemainsInTheProjectOwnedSection()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "dependencies": {
+                "typescript-eslint": "workspace:*"
+              },
+              "devDependencies": {
+                "typescript": "5.9.3"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("6.0.3", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal("workspace:*", GetDep(result, "dependencies", "typescript-eslint"));
+        Assert.Null(GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    /// <summary>
+    /// The reconciliation is scoped to the compiler moving. A project whose compiler this merge
+    /// leaves alone still owns its linter, however unusual the spec, because nothing about the
+    /// install changed underneath it.
+    /// </summary>
+    [Fact]
+    public void Merge_BrownfieldLinterSpecIsUncheckable_IsLeftAloneWhenTheCompilerDoesNotMove()
+    {
+        const string Existing = """
+            {
+              "name": "brownfield",
+              "devDependencies": {
+                "typescript": "^7.0.2",
+                "typescript-eslint": ">=8.57.1 <8.58.0"
+              }
+            }
+            """;
+
+        var result = MergeJson(Existing, ScaffoldWithLintToolchain);
+
+        Assert.Equal("^7.0.2", GetDep(result, "devDependencies", "typescript"));
+        Assert.Equal(">=8.57.1 <8.58.0", GetDep(result, "devDependencies", "typescript-eslint"));
+    }
+
+    private const string ScaffoldWithLintToolchain = """
+        {
+          "scripts": {
+            "aspire:lint": "eslint apphost.mts",
+            "aspire:build": "tsc -p tsconfig.apphost.json"
+          },
+          "dependencies": { "vscode-jsonrpc": "^8.2.0" },
+          "devDependencies": {
+            "typescript": "6.0.3",
+            "typescript-eslint": "8.58.0",
+            "eslint": "^10.0.3"
+          }
+        }
+        """;
+
+    private const string ScaffoldBehindOnTypeScript = """
+        {
+          "scripts": {
+            "aspire:lint": "eslint apphost.mts",
+            "aspire:build": "tsc -p tsconfig.apphost.json"
+          },
+          "dependencies": { "vscode-jsonrpc": "^8.2.0" },
+          "devDependencies": {
+            "typescript": "5.9.3",
+            "typescript-eslint": "8.58.0",
+            "eslint": "^10.0.3"
+          }
+        }
+        """;
 }

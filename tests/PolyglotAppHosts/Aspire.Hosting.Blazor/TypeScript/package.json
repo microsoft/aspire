@@ -7,13 +7,13 @@
     "dev": "tsc --noEmit --watch"
   },
   "dependencies": {
-    "vscode-jsonrpc": "^8.2.0"
+    "vscode-jsonrpc": "8.2.1"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "nodemon": "^3.1.11",
-    "tsx": "^4.22.3",
-    "typescript": "^5.3.0"
+    "@types/node": "20.19.43",
+    "nodemon": "3.1.14",
+    "tsx": "4.22.3",
+    "typescript": "6.0.3"
   },
   "overrides": {
     "brace-expansion": "5.0.8"

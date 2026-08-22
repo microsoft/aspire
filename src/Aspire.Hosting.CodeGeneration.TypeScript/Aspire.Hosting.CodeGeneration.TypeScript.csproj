@@ -23,7 +23,6 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\transport.mts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.transport.mts" />
     <EmbeddedResource Include="Resources\base.mts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.base.mts" />
-    <EmbeddedResource Include="Resources\package.json" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json" />
     <!--
       eslint.config.mjs and tsconfig.apphost.json are sourced from the ts-starter
       template under src/Aspire.Cli so the scaffold output, the `aspire init`

@@ -418,6 +418,32 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    public void PolyglotTypeScriptFixturesUseBridgeCompiler()
+    {
+        var polyglotRoot = Path.Combine(_repoRoot, "tests", "PolyglotAppHosts");
+        var packageJsonPaths = Directory.EnumerateDirectories(polyglotRoot)
+            .Select(directory => Path.Combine(directory, "TypeScript", "package.json"))
+            .Where(File.Exists)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(packageJsonPaths);
+
+        // The validation script compiles each generated SDK with the fixture's declared compiler.
+        // Letting one fixture retain an older version would leave that integration outside the bridge.
+        foreach (var packageJsonPath in packageJsonPaths)
+        {
+            var packageJson = JsonNode.Parse(File.ReadAllText(packageJsonPath))?.AsObject();
+            var typeScriptVersion = packageJson?["devDependencies"]?["typescript"]?.GetValue<string>();
+            var relativePath = Path.GetRelativePath(_repoRoot, packageJsonPath);
+
+            Assert.True(
+                string.Equals("6.0.3", typeScriptVersion, StringComparison.Ordinal),
+                $"Expected {relativePath} to declare TypeScript 6.0.3, but found '{typeScriptVersion}'.");
+        }
+    }
+
+    [Fact]
     public async Task RunTestsInstallsAzureFunctionsCoreToolsFromPinnedGitHubRelease()
     {
         var workflow = await ReadRepoFileAsync(".github/workflows/run-tests.yml");

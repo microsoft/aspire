@@ -950,6 +950,28 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         throw new InvalidOperationException("No integration src/Aspire.Hosting*/api/<name>.ats.txt with a matching tests/PolyglotAppHosts/<name> fixture was found.");
     }
 
+    // The TypeScript codegen generators emit the scaffold manifest and the .aspire/modules SDK that
+    // the TypeScript* tests in Aspire.Cli.EndToEnd.Tests npm-install and build. Those tests are the
+    // only place CI actually installs a generated package, so they are what catches a manifest that
+    // cannot resolve — a dependency floor whose peer range excludes the TypeScript the same manifest
+    // pins, for instance. Routing codegen changes only to job:polyglot and job:typescript-sdk left
+    // that class of break invisible until it reached users, so this pins the routing.
+    [Fact]
+    public void RealMapTypeScriptCodegenChangeRunsCliEndToEndTests()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var generatorSource = Path.Combine("src", "Aspire.Hosting.CodeGeneration.TypeScript", "TypeScriptLanguageSupport.cs")
+            .Replace(Path.DirectorySeparatorChar, '/');
+        Assert.True(File.Exists(Path.Combine(RepoRoot.Path, generatorSource)), $"{generatorSource} does not exist. Update this test if the generator moved.");
+
+        var r = selector.Select([generatorSource], ["Aspire.Hosting.CodeGeneration.TypeScript"], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
+    }
+
     private static (string Dir, string Test) FirstComponentWithSameNamedTest(IReadOnlyCollection<string> matrix)
     {
         var componentsRoot = Path.Combine(RepoRoot.Path, "src", "Components");

@@ -365,9 +365,9 @@ affected_project_rules:
   - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets
-  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk]
+  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed, Aspire.AppHost.Sdk, Aspire.Hosting.CodeGeneration.*]
     targets: [test:Aspire.Cli.EndToEnd.Tests]
-    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources
+    reason: consumes the CLI native archive (RequiresCliArchive=true) built from these sources; the codegen generators also emit the scaffold and .aspire/modules SDK that the 16 TypeScript* tests here npm-install and build, so a manifest/API change lands in this suite before it lands on a user
 
 # Derived targets: selected test project -> extra jobs/tests. Applied to the UNION of Layer 1 and
 # Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how

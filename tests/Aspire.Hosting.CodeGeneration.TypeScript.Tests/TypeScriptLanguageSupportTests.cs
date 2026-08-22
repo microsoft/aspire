@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Shared;
 using Aspire.TypeSystem;
 
@@ -45,10 +46,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
         Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
         Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
-        Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
-        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+        Assert.Equal("4.22.3", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("6.0.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("10.0.3", devDependencies["eslint"]?.GetValue<string>());
+        Assert.Equal("8.58.0", devDependencies["typescript-eslint"]?.GetValue<string>());
 
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
@@ -117,11 +118,11 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.False(scripts.ContainsKey("preview"));
 
         // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
-        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
-        Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("8.2.1", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Equal("4.22.3", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("22.19.15", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("3.1.14", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("6.0.3", devDependencies["typescript"]?.GetValue<string>());
         Assert.False(devDependencies.ContainsKey("vite"));
 
         // engines.node is always set
@@ -181,11 +182,11 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
 
         // Scaffold always produces Aspire's desired versions — the CLI-side
         // PackageJsonMerger handles semver comparison with existing on-disk versions.
-        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
-        Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
-        Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
-        Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
-        Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("8.2.1", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Equal("22.19.15", devDependencies["@types/node"]?.GetValue<string>());
+        Assert.Equal("3.1.14", devDependencies["nodemon"]?.GetValue<string>());
+        Assert.Equal("4.22.3", devDependencies["tsx"]?.GetValue<string>());
+        Assert.Equal("6.0.3", devDependencies["typescript"]?.GetValue<string>());
     }
 
     [Fact]
@@ -314,7 +315,178 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal(EmbeddedResources.Read("tsconfig.apphost.json"), files["tsconfig.apphost.json"]);
     }
 
+    [Fact]
+    public void Scaffold_PinsTypeScriptToTheLastJavaScriptApiRelease()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = workspace.Path,
+            ProjectName = "BridgeApp"
+        });
+
+        var devDependencies = ParseJson(files["package.json"])["devDependencies"]!.AsObject();
+        var typeScriptRange = devDependencies["typescript"]?.GetValue<string>();
+
+        // TypeScript 7 is a native (Go) compiler with no JavaScript compiler API, and the scaffolded
+        // `aspire:lint` script runs typescript-eslint, whose `typescript` peer range is capped below
+        // 6.1.0. TypeScript 6.0 is therefore the newest release a scaffolded AppHost can take, and it
+        // is the exact compiler that the `@typescript/typescript6` TS7 compatibility package
+        // re-exports. See "Running Side-by-Side with TypeScript 6.0" in
+        // https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/.
+        Assert.Equal("6.0.3", typeScriptRange);
+        Assert.True(
+            NpmVersionHelper.TryParseNpmVersion(typeScriptRange!, out var typeScriptVersion),
+            $"Expected '{typeScriptRange}' to be a parseable npm version range.");
+        Assert.Equal(6, typeScriptVersion.Major);
+        Assert.Equal(0, typeScriptVersion.Minor);
+    }
+
+    [Fact]
+    public void Scaffold_PinsTypeScriptEslintHighEnoughToPeerTheScaffoldedTypeScript()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = workspace.Path,
+            ProjectName = "PeerApp"
+        });
+
+        var devDependencies = ParseJson(files["package.json"])["devDependencies"]!.AsObject();
+        var typeScriptRange = devDependencies["typescript"]!.GetValue<string>();
+        var typeScriptEslintRange = devDependencies["typescript-eslint"]!.GetValue<string>();
+
+        Assert.True(NpmVersionHelper.TryParseNpmVersion(typeScriptRange, out var typeScript));
+
+        // The scaffolded package pairs a `typescript` floor with a `typescript-eslint` floor, and
+        // `aspire:lint` only installs if the resolved typescript-eslint peers the resolved
+        // TypeScript. typescript-eslint's `typescript` peer range moves one minor at a time:
+        //   8.57.1 -> ">=4.8.4 <6.0.0"
+        //   8.58.0 -> ">=4.8.4 <6.1.0"
+        // A caret floor is satisfiable by the floor itself, so pinning `^8.57.1` alongside
+        // TypeScript 6 produces a scaffold that fails to install on the peer conflict. This asserts
+        // the pairing rather than the literal strings, so a future TypeScript bump has to move the
+        // typescript-eslint floor with it.
+        var requiredTypeScriptEslintFloor = $"{typeScript.Major}.{typeScript.Minor}" switch
+        {
+            "6.0" => "8.58.0",
+            _ => null
+        };
+
+        Assert.True(
+            requiredTypeScriptEslintFloor is not null,
+            $"The scaffold now pins TypeScript '{typeScriptRange}'. Look up the first typescript-eslint " +
+            "release whose `typescript` peer range admits it and record the required floor in this test.");
+
+        // ShouldUpgrade(existing, desired) is true when desired is strictly newer, so the scaffolded
+        // floor is high enough exactly when it does not want upgrading to the required floor.
+        Assert.False(
+            NpmVersionHelper.ShouldUpgrade(typeScriptEslintRange, requiredTypeScriptEslintFloor!),
+            $"Scaffolded typescript '{typeScriptRange}' needs a typescript-eslint floor of at least " +
+            $"{requiredTypeScriptEslintFloor} to satisfy its peer range, but the scaffold pins '{typeScriptEslintRange}'.");
+    }
+
+    /// <summary>
+    /// Fails when the TypeScript AppHost scaffold declares a dependency as a version range, or at a
+    /// version the shipped starter lockfiles do not resolve.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>aspire init</c> writes no package-lock.json, so the <c>npm install</c> it runs resolves
+    /// every declared range from scratch and takes the newest matching version the registry
+    /// advertises. That is unsafe against an Azure Artifacts npm mirror such as the approved
+    /// dotnet-public-npm feed, which serves only package versions it has already ingested and
+    /// answers 401 — not 404 — for everything else, including package names that exist upstream.
+    /// Its packument and its tarball store drift apart, so it advertises versions it cannot hand
+    /// out and a caret range is a failure waiting for the next upstream publish.
+    /// </para>
+    /// <para>
+    /// Measured against the approved feed on 2026-08-09, with <c>tsx: "^4.22.3"</c> resolving to the
+    /// 4.23.5 that feed's packument named <c>latest</c>: <c>GET /tsx/-/tsx-4.23.1.tgz</c> returned
+    /// 200 while <c>GET /tsx/-/tsx-4.23.5.tgz</c> returned 401, and
+    /// <c>aspire init --language typescript</c> failed with <c>npm error code E401</c> in the
+    /// TypeScript SDK Validation job.
+    /// </para>
+    /// <para>
+    /// Requiring exact versions that match the shipped lockfiles keeps <c>aspire init</c> on the
+    /// same already-ingested toolchain <c>aspire new</c> installs, and turns a stale pin into a
+    /// reviewable diff instead of a red job. Transitive dependencies still resolve by range; those
+    /// are covered by the lockfiles for <c>aspire new</c> and are the residual risk here.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("ts-starter")]
+    [InlineData("py-starter")]
+    public void Scaffold_PinsEveryDependencyToAnExactVersionTheShippedStarterLockfilesResolve(string starterTemplateName)
+    {
+        // Read from the copy the project puts next to the test assembly rather than from the
+        // checkout: this project is archived for Helix, whose payload has no repository at all, so
+        // walking up for Aspire.slnx would throw there instead of asserting.
+        var relativeLockfilePath = Path.Combine("ShippedTemplates", starterTemplateName, "package-lock.json");
+        var lockfilePath = Path.Combine(AppContext.BaseDirectory, relativeLockfilePath);
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = workspace.Path,
+            ProjectName = "PinnedApp"
+        });
+
+        var packageJson = ParseJson(files["package.json"]);
+        var lockfile = ParseJson(File.ReadAllText(lockfilePath));
+        var lockedPackages = lockfile["packages"]!.AsObject();
+
+        var findings = new List<string>();
+
+        foreach (var sectionName in new[] { "dependencies", "devDependencies" })
+        {
+            if (packageJson[sectionName] is not JsonObject section)
+            {
+                continue;
+            }
+
+            foreach (var (packageName, versionNode) in section)
+            {
+                var version = versionNode?.GetValue<string>() ?? "";
+
+                if (!s_exactNpmVersion.IsMatch(version))
+                {
+                    findings.Add($"{sectionName}.{packageName} is '{version}', which is a range rather than an exact version");
+                    continue;
+                }
+
+                // npm keys a lockfile's installed packages by their path under node_modules, so the
+                // top-level copy of a dependency is "node_modules/<name>":
+                //   "node_modules/tsx": { "version": "4.22.3", "resolved": "https://.../tsx-4.22.3.tgz" }
+                var lockedVersion = lockedPackages[$"node_modules/{packageName}"]?["version"]?.GetValue<string>();
+
+                if (lockedVersion is null)
+                {
+                    findings.Add($"{sectionName}.{packageName} is not installed by {relativeLockfilePath}");
+                }
+                else if (lockedVersion != version)
+                {
+                    findings.Add($"{sectionName}.{packageName} is pinned to '{version}' but {relativeLockfilePath} installs '{lockedVersion}'");
+                }
+            }
+        }
+
+        Assert.Equal([], findings);
+    }
+
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
+
+    /// <summary>
+    /// An npm version with no range operator: <c>4.22.3</c> matches, <c>^4.22.3</c>, <c>~4.22.3</c>,
+    /// <c>4.x</c>, <c>&gt;=4.22.3</c> and <c>*</c> do not. Prerelease and build metadata are allowed
+    /// because they are still a single exact version.
+    /// </summary>
+    private static readonly Regex s_exactNpmVersion = new(
+        @"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$",
+        RegexOptions.CultureInvariant);
 
     private static int GetPort(string url) => new Uri(url).Port;
 

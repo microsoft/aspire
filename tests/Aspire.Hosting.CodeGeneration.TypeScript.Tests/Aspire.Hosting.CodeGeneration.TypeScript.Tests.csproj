@@ -23,6 +23,23 @@
   <ItemGroup>
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
+
+  <!--
+    Scaffold_PinsEveryDependencyToAnExactVersionTheShippedStarterLockfilesResolve compares the
+    scaffold's pins against the lockfiles the starter templates ship. This project is archived and
+    run on Helix, where the payload contains only the test output and no repository checkout, so the
+    lockfiles have to travel with the assembly rather than being read from the source tree.
+  -->
+  <ItemGroup>
+    <Content Include="$(RepoRoot)src/Aspire.Cli/Templating/Templates/ts-starter/package-lock.json"
+             Link="ShippedTemplates/ts-starter/package-lock.json"
+             CopyToOutputDirectory="PreserveNewest"
+             Visible="false" />
+    <Content Include="$(RepoRoot)src/Aspire.Cli/Templating/Templates/py-starter/package-lock.json"
+             Link="ShippedTemplates/py-starter/package-lock.json"
+             CopyToOutputDirectory="PreserveNewest"
+             Visible="false" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />

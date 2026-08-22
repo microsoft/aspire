@@ -13,7 +13,7 @@
 ARG NODE_VERSION=24
 FROM mcr.microsoft.com/devcontainers/typescript-node:${NODE_VERSION}
 ARG NODE_VERSION
-ARG TSGO_VERSION=7.0.0-dev.20260523.1
+ARG TYPESCRIPT_VERSION=7.0.2
 ARG NPM_REGISTRY=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
 
 # Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
@@ -32,15 +32,19 @@ RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_V
 # package-manager markers, so make all selected tools available in the image.
 # Install each tool directly because Corepack's package-manager downloads bypass
 # NPM_REGISTRY and would acquire pnpm and Yarn outside dotnet-public-npm.
+#
+# TypeScript 7 (the native Go compiler) ships as the plain `typescript` package with a `tsc` binary
+# since 7.0 GA, replacing the pre-GA `@typescript/native-preview` package and its `tsgo` binary.
+# See https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/.
 RUN npm install --global --force --registry "${NPM_REGISTRY}" \
     pnpm@10.0.0 \
     @yarnpkg/cli-dist@4.14.1 \
     bun@1.2.0 \
-    "@typescript/native-preview@${TSGO_VERSION}" && \
+    "typescript@${TYPESCRIPT_VERSION}" && \
     test "$(pnpm --version)" = "10.0.0" && \
     test "$(yarn --version)" = "4.14.1" && \
     test "$(bun --version)" = "1.2.0" && \
-    test "$(tsgo --version)" = "Version ${TSGO_VERSION}"
+    test "$(tsc --version)" = "Version ${TYPESCRIPT_VERSION}"
 
 # Pre-configure Aspire CLI path
 ENV PATH="/root/.aspire/bin:${PATH}"
