@@ -206,15 +206,8 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
         {
             if (appHostStarted)
             {
-                try
-                {
-                    output.WriteLine("Stopping AppHost...");
-                    await auto.RunCommandAsync("aspire stop --non-interactive 2>/dev/null || true", counter, TimeSpan.FromMinutes(2));
-                }
-                catch (Exception ex)
-                {
-                    output.WriteLine($"Failed to stop AppHost: {ex.Message}");
-                }
+                output.WriteLine("Stopping AppHost...");
+                await DeploymentE2ETestHelpers.StopAppHostAsync(workspace.WorkspaceRoot.FullName, output.WriteLine);
             }
 
             try
