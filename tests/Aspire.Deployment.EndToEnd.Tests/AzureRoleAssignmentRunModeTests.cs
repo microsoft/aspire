@@ -8,25 +8,37 @@ using Xunit;
 namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for live Azure resources provisioned by <c>aspire start</c>.
+/// End-to-end tests for Azure role assignments created by <c>aspire start</c> (run mode).
 /// </summary>
-public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
+/// <remarks>
+/// Run mode is the only execution mode where the <c>principalType</c> of a role assignment is
+/// inferred from the ambient credential rather than being statically known. In publish mode the
+/// assignment targets a user-assigned managed identity, so <c>AzureResourcePreparer</c> hardcodes
+/// <c>ServicePrincipal</c> and <c>BicepProvisioner</c> refuses to infer principal parameters at all.
+/// That makes every <c>aspire deploy</c> test in this project blind to the run-mode inference path,
+/// which is where https://github.com/microsoft/aspire/issues/13933 regressed.
+/// <para>
+/// This test exists to keep that path covered under the CI service principal, which is app-only.
+/// See https://github.com/microsoft/aspire/issues/19487.
+/// </para>
+/// </remarks>
+public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
 {
     // Timeout set to 30 minutes for Azure resource provisioning.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(30);
 
     [Fact]
-    public async Task ResourceCommandReturnsLiveAzureResourceInfo()
+    public async Task RoleAssignmentsSucceedForAmbientCredentialInRunMode()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
 
-        await ResourceCommandReturnsLiveAzureResourceInfoCore(cancellationToken);
+        await RoleAssignmentsSucceedForAmbientCredentialInRunModeCore(cancellationToken);
     }
 
-    private async Task ResourceCommandReturnsLiveAzureResourceInfoCore(CancellationToken cancellationToken)
+    private async Task RoleAssignmentsSucceedForAmbientCredentialInRunModeCore(CancellationToken cancellationToken)
     {
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
         if (string.IsNullOrEmpty(subscriptionId))
@@ -48,10 +60,10 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
 
         using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
-        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("storage-run");
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("roles-run");
         var tenantId = AzureAuthenticationHelpers.GetTenantId();
 
-        output.WriteLine($"Test: {nameof(ResourceCommandReturnsLiveAzureResourceInfo)}");
+        output.WriteLine($"Test: {nameof(RoleAssignmentsSucceedForAmbientCredentialInRunMode)}");
         output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
         output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
@@ -61,7 +73,6 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         var appHostStarted = false;
-        var cleanupCommandSucceeded = false;
 
         try
         {
@@ -84,53 +95,50 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             appHostContent = appHostContent.Replace(
                 "builder.Build().Run();",
                 """
-                // This test verifies resource command metadata for a standalone storage account.
-                // No app consumes the account, so skip default RBAC to avoid testing role assignment propagation.
-                builder.AddAzureStorage("storage")
-                    .ClearDefaultRoleAssignments();
+                // Deliberately no ClearDefaultRoleAssignments() here — that is the entire point of this
+                // test. In run mode an Azure resource that no compute resource references still gets its
+                // default role assignments applied to the ambient deployment principal, which synthesizes
+                // a "storage-roles" resource and a matching ARM deployment. That deployment stamps a
+                // principalType inferred from the signed-in credential, so it is the only live coverage
+                // of the inference path. See https://github.com/microsoft/aspire/issues/19487.
+                builder.AddAzureStorage("storage");
 
                 builder.Build().Run();
                 """);
             File.WriteAllText(appHostFilePath, appHostContent);
 
-            var validateScriptPath = Path.Combine(workspace.WorkspaceRoot.FullName, "validate-get-resource.py");
+            // The comparison is scripted rather than expressed as a shell one-liner because the terminal
+            // automator types commands into an interactive prompt, where nested quoting is fragile.
+            var validateScriptPath = Path.Combine(workspace.WorkspaceRoot.FullName, "validate-role-assignment.py");
             File.WriteAllText(validateScriptPath, """
                 import json
                 import sys
                 from pathlib import Path
 
-                text = Path(sys.argv[1]).read_text(encoding="utf-8")
-                payload = None
+                deployment = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+                account = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+                require_service_principal = sys.argv[3] == "true"
 
-                # The CLI writes command result JSON to stdout, but local runs can include
-                # launch/build preamble text before the payload:
-                #   Building...
-                #   { "success": true, "command": "get-azure-resource", ... }
-                # Parse from the first JSON object so the check works in both CI and local runs.
-                json_start = text.find("{")
-                if json_start >= 0:
-                    payload = json.JSONDecoder().raw_decode(text[json_start:])[0]
+                properties = deployment["properties"]
+                state = properties["provisioningState"]
+                assert state == "Succeeded", f"storage-roles deployment state was {state!r}"
 
-                if payload is None:
-                    raise AssertionError("get-azure-resource did not emit a JSON payload")
+                # `az account show` reports the kind of the signed-in identity:
+                #   { "user": { "name": "<appId or upn>", "type": "servicePrincipal" } }  # az login --service-principal
+                #   { "user": { "name": "someone@example.com", "type": "user" } }         # interactive az login
+                account_type = account["user"]["type"]
 
-                assert payload["success"] is True, payload
-                assert payload["command"] == "get-azure-resource", payload
-                assert payload["resourceName"] == "storage", payload
+                # In CI the workflow logs in with `az login --service-principal --federated-token`, so a
+                # user identity here means the credential has degraded and the test would silently stop
+                # covering the app-only scenario it exists for.
+                if require_service_principal:
+                    assert account_type == "servicePrincipal", f"expected an app-only credential, got {account_type!r}"
 
-                deployment = payload["deployment"]
-                live = payload["live"]
-                assert deployment["hasState"] is True, payload
-                assert live["checked"] is True, payload
-                assert live["exists"] is True, payload
+                expected = "ServicePrincipal" if account_type == "servicePrincipal" else "User"
+                actual = properties["parameters"]["principalType"]["value"]
+                assert actual == expected, f"principalType was {actual!r}, expected {expected!r}"
 
-                resource_id = deployment["resourceId"]
-                deployment_id = deployment["deploymentId"]
-                assert resource_id, payload
-                assert deployment_id, payload
-
-                Path(sys.argv[2]).write_text(resource_id, encoding="utf-8")
-                Path(sys.argv[3]).write_text(deployment_id, encoding="utf-8")
+                print(f"storage-roles succeeded with principalType={actual}")
                 """);
 
             output.WriteLine("Step 6: Setting Azure run-mode context...");
@@ -152,29 +160,33 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             appHostStarted = true;
             await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
 
-            output.WriteLine("Step 8: Waiting for Azure Storage resource to be running...");
-            // `aspire start` returns after the AppHost is detached. Run-mode Azure provisioning
-            // continues inside that AppHost, so wait for the resource state before invoking commands.
+            output.WriteLine("Step 8: Waiting for the role assignment resource to be running...");
+            // `aspire start` returns once the AppHost is detached; run-mode Azure provisioning continues
+            // inside it. The roles resource is a first-class resource in the model, so it can be waited on
+            // directly — and it fails fast rather than hanging, because AzureProvisioningController marks
+            // it terminal when ARM rejects the deployment.
+            await auto.RunCommandAsync("aspire wait storage-roles --status up --timeout 1500 --non-interactive", counter, TimeSpan.FromMinutes(26));
+
+            output.WriteLine("Step 9: Waiting for the storage resource to be running...");
+            // The target resource only reaches Running after its role assignments provision; on failure it
+            // is published as "Failed to Provision Roles", so this catches a roles failure that somehow did
+            // not surface on the roles resource itself.
             await auto.RunCommandAsync("aspire wait storage --status up --timeout 1500 --non-interactive", counter, TimeSpan.FromMinutes(26));
 
-            output.WriteLine("Step 9: Running get-azure-resource command...");
-            await auto.RunCommandAsync("aspire resource storage get-azure-resource --non-interactive > get-resource.json", counter, TimeSpan.FromMinutes(2));
-            await auto.RunCommandAsync("python3 validate-get-resource.py get-resource.json storage-resource-id.txt storage-deployment-id.txt", counter, TimeSpan.FromSeconds(30));
+            output.WriteLine("Step 10: Verifying the role assignment deployment with az...");
+            // In run mode BicepProvisioner names the ARM deployment after the resource itself (publish mode
+            // appends a timestamp), so the deployment is literally "storage-roles".
+            await auto.RunCommandAsync($"az deployment group show --resource-group {resourceGroupName} --name storage-roles -o json > roles-deployment.json", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("az account show -o json > az-account.json", counter, TimeSpan.FromMinutes(1));
 
-            output.WriteLine("Step 10: Verifying emitted Azure resource IDs with az...");
-            await auto.RunCommandAsync("az resource show --ids \"$(cat storage-resource-id.txt)\" --query \"properties.provisioningState\" -o tsv | grep '^Succeeded$'", counter, TimeSpan.FromMinutes(1));
-            await auto.RunCommandAsync("az resource show --ids \"$(cat storage-deployment-id.txt)\" --query \"properties.provisioningState\" -o tsv | grep '^Succeeded$'", counter, TimeSpan.FromMinutes(1));
-
-            output.WriteLine("Step 11: Deleting live Azure resources through the visible Azure control resource...");
-            await auto.RunCommandAsync("aspire resource azure-environment delete-azure-resources --non-interactive", counter, TimeSpan.FromMinutes(10));
-            cleanupCommandSucceeded = true;
-            await auto.RunCommandAsync($"az group exists --name {resourceGroupName} -o tsv | grep '^false$'", counter, TimeSpan.FromSeconds(30));
+            var requireServicePrincipal = DeploymentE2ETestHelpers.IsRunningInCI ? "true" : "false";
+            await auto.RunCommandAsync($"python3 validate-role-assignment.py roles-deployment.json az-account.json {requireServicePrincipal}", counter, TimeSpan.FromSeconds(30));
 
             var duration = DateTime.UtcNow - startTime;
-            output.WriteLine($"Run-mode Azure resource command test completed in {duration}");
+            output.WriteLine($"Run-mode role assignment test completed in {duration}");
 
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(ResourceCommandReturnsLiveAzureResourceInfo),
+                nameof(RoleAssignmentsSucceedForAmbientCredentialInRunMode),
                 resourceGroupName,
                 new Dictionary<string, string>(),
                 duration);
@@ -184,7 +196,7 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             output.WriteLine($"Test failed: {ex.Message}");
 
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(ResourceCommandReturnsLiveAzureResourceInfo),
+                nameof(RoleAssignmentsSucceedForAmbientCredentialInRunMode),
                 resourceGroupName,
                 ex.Message);
 
@@ -209,11 +221,8 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
                 output.WriteLine($"Failed to exit terminal cleanly: {ex.Message}");
             }
 
-            if (!cleanupCommandSucceeded)
-            {
-                output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
-                await CleanupResourceGroupAsync(resourceGroupName);
-            }
+            output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
+            await CleanupResourceGroupAsync(resourceGroupName);
         }
     }
 
