@@ -8,19 +8,20 @@ namespace Aspire.Hosting.Orleans;
 /// <summary>
 /// Configuration for an Orleans provider.
 /// </summary>
-internal sealed class ProviderConfiguration(string providerType, string? serviceKey = null, string? invariant = null, IResourceBuilder<IResourceWithConnectionString>? resource = null) : IProviderConfiguration
+internal sealed class ProviderConfiguration(string providerType, string? serviceKey = null, IReadOnlyDictionary<string, string>? options = null, IResourceBuilder<IResourceWithConnectionString>? resource = null) : IProviderConfiguration
 {
     private const string AdoNetProviderType = "AdoNet";
     private readonly string _providerType = ValidateProviderType(providerType);
-    private readonly string? _invariant = providerType.Equals(AdoNetProviderType, StringComparison.Ordinal) ? ValidateInvariant(invariant) : null;
+    private readonly IReadOnlyDictionary<string, string>? _options = ValidateOptions(providerType, options);
 
-    private static string GetProviderType(IResourceBuilder<IResourceWithConnectionString> resourceBuilder)
+    private static string GetProviderType(IResourceBuilder<IResourceWithConnectionString> resourceBuilder, out IReadOnlyDictionary<string, string>? options)
     {
         string providerType;
 
         if (resourceBuilder.Resource.TryGetAnnotationsOfType<OrleansProviderTypeAnnotation>(out var annotations) && annotations.FirstOrDefault() is OrleansProviderTypeAnnotation annotation)
         {
             providerType = annotation.ProviderType;
+            options = annotation.Options;
         }
         else
         {
@@ -29,24 +30,27 @@ internal sealed class ProviderConfiguration(string providerType, string? service
 
             // Use a simple transformation to get the provider type: remove the "Resource" suffix if it exists.
             providerType = resourceType.EndsWith(resource, StringComparison.Ordinal) ? resourceType[..^resource.Length] : resourceType;
+            options = null;
         }
 
         return providerType;
     }
 
-    private static string ValidateInvariant(string? invariant)
+    private static IReadOnlyDictionary<string, string>? ValidateOptions(string providerType, IReadOnlyDictionary<string, string>? options)
     {
-        if (invariant is null)
+        if (providerType.Equals(AdoNetProviderType, StringComparison.Ordinal))
         {
-            throw new ArgumentNullException(nameof(invariant), "Orleans ADO.NET providers require an invariant. Configure it by calling WithOrleansAdoNetInvariant on the resource builder.");
+            ArgumentNullException.ThrowIfNull(options, nameof(options));
+
+            if (!options.TryGetValue("Invariant", out var invariant))
+            {
+                throw new InvalidOperationException("Orleans ADO.NET providers require an invariant. Configure it by calling WithOrleansAdoNetInvariant on the resource builder.");
+            }
+
+            ArgumentException.ThrowIfNullOrWhiteSpace(invariant, nameof(invariant));
         }
 
-        if (string.IsNullOrWhiteSpace(invariant))
-        {
-            throw new ArgumentException("Orleans ADO.NET providers require an invariant. Configure it by calling WithOrleansAdoNetInvariant on the resource builder.", nameof(invariant));
-        }
-
-        return invariant;
+        return options;
     }
 
     private static string ValidateProviderType(string providerType)
@@ -64,15 +68,9 @@ internal sealed class ProviderConfiguration(string providerType, string? service
     internal static ProviderConfiguration Create(IResourceBuilder<IResourceWithConnectionString> resourceBuilder)
     {
         var serviceKey = resourceBuilder.Resource.Name;
-        var providerType = GetProviderType(resourceBuilder);
-        string? invariant = null;
+        var providerType = GetProviderType(resourceBuilder, out var options);
 
-        if (resourceBuilder.Resource.TryGetAnnotationsOfType<OrleansAdoNetInvariantAnnotation>(out var annotations))
-        {
-            invariant = annotations.FirstOrDefault()?.Invariant;
-        }
-
-        return new(providerType, serviceKey, invariant, resourceBuilder);
+        return new(providerType, serviceKey, options, resourceBuilder);
     }
 
     /// <summary>
@@ -95,9 +93,12 @@ internal sealed class ProviderConfiguration(string providerType, string? service
             resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__{key}", serviceKey);
         }
 
-        if (!string.IsNullOrEmpty(_invariant))
+        if (_options is not null)
         {
-            resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__Invariant", _invariant);
+            foreach (var option in _options)
+            {
+                resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__{option.Key}", option.Value);
+            }
         }
 
         if (resource is not null)

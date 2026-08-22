@@ -18,8 +18,10 @@ public class OrleansAdoNetInvariantTests
             ConnectionString = "connectionString"
         }).WithOrleansAdoNetInvariant("Npgsql");
 
-        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansAdoNetInvariantAnnotation>());
-        Assert.Equal("Npgsql", annotation.Invariant);
+        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansProviderTypeAnnotation>());
+        var invariant = annotation.Options?["Invariant"];
+
+        Assert.Equal("Npgsql", invariant);
     }
 
     [Fact]
@@ -34,8 +36,10 @@ public class OrleansAdoNetInvariantTests
             .WithOrleansAdoNetInvariant("Npgsql")
             .WithOrleansAdoNetInvariant("Microsoft.Data.SqlClient");
 
-        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansAdoNetInvariantAnnotation>());
-        Assert.Equal("Microsoft.Data.SqlClient", annotation.Invariant);
+        var annotation = Assert.Single(provider.Resource.Annotations.OfType<OrleansProviderTypeAnnotation>());
+        var invariant = annotation.Options?["Invariant"];
+
+        Assert.Equal("Microsoft.Data.SqlClient", invariant);
     }
 
     [Fact]
@@ -71,21 +75,6 @@ public class OrleansAdoNetInvariantTests
         Assert.Equal(nameof(invariant), exception.ParamName);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" ")]
-    public void CtorOrleansAdoNetInvariantAnnotationShouldThrowWhenInvariantIsNullOrWhiteSpace(string? invariant)
-    {
-        var action = () => new OrleansAdoNetInvariantAnnotation(invariant!);
-
-        var exception = invariant is null
-            ? Assert.Throws<ArgumentNullException>(action)
-            : Assert.Throws<ArgumentException>(action);
-
-        Assert.Equal(nameof(invariant), exception.ParamName);
-    }
-
     [Fact]
     public async Task AdoNetProviderUsesConnectionNameInsteadOfServiceKey()
     {
@@ -95,7 +84,6 @@ public class OrleansAdoNetInvariantTests
         {
             ConnectionString = "connectionString"
         })
-            .WithOrleansProviderType("AdoNet")
             .WithOrleansAdoNetInvariant("Npgsql");
 
         var orleans = builder.AddOrleans("orleans")
@@ -120,7 +108,6 @@ public class OrleansAdoNetInvariantTests
         {
             ConnectionString = "connectionString"
         })
-            .WithOrleansProviderType("AdoNet")
             .WithOrleansAdoNetInvariant("Npgsql");
 
         var orleans = builder.AddOrleans("orleans")
@@ -132,28 +119,6 @@ public class OrleansAdoNetInvariantTests
         var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
 
         Assert.Equal("Npgsql", config["Orleans__Clustering__Invariant"]);
-    }
-
-    [Fact]
-    public async Task NonAdoNetProviderDoesNotWriteInvariant()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var provider = builder.AddResource(new TestProviderResource("provider")
-        {
-            ConnectionString = "connectionString"
-        })
-            .WithOrleansProviderType("Redis");
-
-        var orleans = builder.AddOrleans("orleans")
-            .WithClustering(provider);
-
-        var silo = builder.AddContainer("silo", "image")
-            .WithReference(orleans);
-
-        var config = await TestUtils.GetEnvironmentVariablesAsync(silo.Resource, builder);
-
-        Assert.False(config.ContainsKey("Orleans__Clustering__Invariant"));
     }
 
     [Fact]

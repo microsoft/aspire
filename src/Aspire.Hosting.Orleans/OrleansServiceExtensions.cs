@@ -393,21 +393,17 @@ public static class OrleansServiceExtensions
     }
 
     /// <summary>
-    /// Configures the ADO.NET provider invariant for an Orleans provider resource.
+    /// Configures a resource as an Orleans ADO.NET provider.
     /// </summary>
     /// <param name="builder">The connection-string resource builder.</param>
     /// <param name="invariant">The Orleans ADO.NET Invariant to use for the resource.</param>
     /// <returns>The resource builder.</returns>
-    /// <remarks>
-    /// This method only applies to the Orleans ADO.NET provider and should be used together with <c>WithOrleansProviderType("AdoNet")</c>.
-    /// </remarks>
     /// <example>
     /// Configure a Postgres database resource as the provider for Orleans Clustering and Reminders:
     /// <code>
     /// var postgres = builder.AddPostgres("postgres");
     ///
     /// var postgresDb = postgres.AddDatabase("postgresDb")
-    ///     .WithOrleansProviderType("AdoNet")
     ///     .WithOrleansAdoNetInvariant("Npgsql");
     ///
     /// var orleans = builder.AddOrleans("orleans")
@@ -424,7 +420,12 @@ public static class OrleansServiceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(invariant);
 
-        return builder.WithAnnotation(new OrleansAdoNetInvariantAnnotation(invariant), ResourceAnnotationMutationBehavior.Replace);
+        var options = new Dictionary<string, string>
+        {
+            ["Invariant"] = invariant
+        };
+
+        return builder.WithAnnotation(new OrleansProviderTypeAnnotation("AdoNet", options), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
