@@ -2,7 +2,7 @@
   "id": "cli-smoke-test-homebrew-winget-unrelated",
   "type": "infra-failure",
   "title": "CLI smoke test (aspire new + restore) fails during Homebrew/WinGet installer artifact preparation",
-  "error_pattern": "Smoke test installed CLI (aspire new + restore) step fails with exit code 1 or 4 during 'Prepare Homebrew cask' / 'Prepare WinGet manifests' jobs. Homebrew run also emits unrelated tap-trust warnings (aws/tap not trusted). Job logs unavailable ('Failed to fetch logs for job'). Occurs independent of PR content.",
+  "error_pattern": "Smoke test installed CLI (aspire new + restore) step fails with exit code 1 or 4 during 'Prepare Homebrew cask' / 'Prepare WinGet manifests' jobs. Homebrew run also emits unrelated tap-trust warnings (aws/tap not trusted). Job logs unavailable ('Failed to fetch logs for job'). Occurs independent of PR changes.",
   "occurrences": [
     {
       "run_id": 32550757022,
@@ -10,6 +10,13 @@
       "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
       "pr_number": 19577,
       "observed_at": "2026-08-22T04:37:50Z"
+    },
+    {
+      "run_id": 32551216411,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32551216411",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 19494,
+      "observed_at": "2026-08-22T05:28:22Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19596"
