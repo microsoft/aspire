@@ -171,8 +171,11 @@ function createShellController(context, description, timeoutMs, artifactCounts) 
     }
 
     disposed = true;
-    activeRun?.flushArtifacts();
-    await session?.dispose();
+    try {
+      activeRun?.flushArtifacts();
+    } finally {
+      await session?.dispose();
+    }
   }
 
   return {
