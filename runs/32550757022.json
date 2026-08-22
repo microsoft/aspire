@@ -1,0 +1,56 @@
+{
+  "run_id": 32550757022,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32550757022",
+  "analyzed_at": "2026-08-22T04:37:50Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19577,
+    "title": "Fix TypeScript codegen dropping Promise wrapper for zero-capability resource builders",
+    "author": "flojon",
+    "state": "closed",
+    "head_branch": "fix/typescript-promise-wrapper-zero-capability",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19577"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 96977947778,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32550757022/job/96977947778",
+      "classification": "flaky-test",
+      "reason": "Smoke test of installed CLI (aspire new + restore) failed with exit code 4, accompanied by Homebrew tap-trust warnings unrelated to CLI functionality. PR only modifies TypeScript codegen source/tests; this job packages/tests Homebrew CLI distribution and is unaffected by the PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 96978370894,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32550757022/job/96978370894",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no retrievable job logs, matching a recurring known-flaky shard (vscode-e2e-windows-edge-cases-flaky, 3 prior occurrences). PR only touches TypeScript codegen, unrelated to VS Code extension E2E tests.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 96978370970,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32550757022/job/96978370970",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no retrievable job logs. Part of the same recurring pattern of VS Code extension E2E shard failures unrelated to PR changes (TypeScript codegen only).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 96978428282,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32550757022/job/96978428282",
+      "classification": "flaky-test",
+      "reason": "Smoke test of installed CLI (aspire new + restore) failed with exit code 1, no retrievable logs. PR only modifies TypeScript codegen source/tests; this job packages/tests WinGet CLI distribution and is unaffected by the PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["cli-smoke-test-homebrew-winget-unrelated", "vscode-e2e-windows-edge-cases-flaky", "vscode-e2e-linux-workspace-target-proof-flaky"]
+}
