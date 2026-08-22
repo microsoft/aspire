@@ -82,6 +82,63 @@ public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddGateway_WithRuntimeOnlyHostnameParameter_DefersValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var hostname = builder.AddParameter("hostname", "localhost");
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public")
+            .WithGatewayClass("nginx")
+            .WithHostname(hostname)
+            .WithTls();
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var gatewayPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+        var routePath = Path.Combine(workspace.Path, "templates", "public", "route.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+
+        await Verify(File.ReadAllText(gatewayPath), "yaml")
+            .AppendContentAsFile(File.ReadAllText(routePath), "yaml")
+            .AppendContentAsFile(File.ReadAllText(valuesPath), "yaml");
+    }
+
+    [Fact]
+    public async Task AddGateway_WithHostname_AppliesToHostlessRoute()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public")
+            .WithGatewayClass("nginx")
+            .WithHostname("api.example.com")
+            .WithHostname("www.example.com");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var routePath = Path.Combine(workspace.Path, "templates", "public", "route.yaml");
+
+        await Verify(File.ReadAllText(routePath), "yaml");
+    }
+
+    [Fact]
     public async Task AddGateway_WithTls_GeneratesHttpsListener()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
