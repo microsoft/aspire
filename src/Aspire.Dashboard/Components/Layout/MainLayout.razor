@@ -1,4 +1,4 @@
-﻿@using Aspire.Dashboard.Components.CustomIcons
+@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dialogs> DialogsLoc
@@ -117,7 +117,7 @@
     </div>
     <div class="layout-body-container">
         <main class="custom-body-content body-content">
-            <FluentToastProvider MaxToastCount="3" Timeout="5000" />
+            <FluentToastProvider MaxToastCount="3" Timeout="5000" data-update-version="@_toastProviderUpdateVersion" />
             @Body
         </main>
     </div>

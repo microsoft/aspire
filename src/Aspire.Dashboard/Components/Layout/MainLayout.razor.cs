@@ -18,6 +18,9 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    // Fluent v5 has no API to notify the provider after mutating an existing toast's options. This value is
+    // rendered as an additional provider attribute so changing it forces FluentToastProvider to read them again.
+    private int _toastProviderUpdateVersion;
 
     // Desktop nav rail layout. false = collapsed to icons only (default, most content space,
     // labels still available via each item's tooltip); true = expanded so each item shows its
@@ -80,11 +83,16 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
 
+    [Inject]
+    public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        NotificationService.OnChange += HandleNotificationsChanged;
+
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -434,6 +442,17 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         StateHasChanged();
     }
 
+    private void HandleNotificationsChanged()
+    {
+        // Resource command toasts and notification-center entries are updated together. Use that notification
+        // event to refresh any open toast whose retained ToastOptions instance was mutated with the result.
+        _ = InvokeAsync(() =>
+        {
+            _toastProviderUpdateVersion++;
+            StateHasChanged();
+        });
+    }
+
     private async Task ToggleNavMenuExpandedAsync()
     {
         _isNavMenuExpanded = !_isNavMenuExpanded;
@@ -446,6 +465,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _layoutReference?.Dispose();
         _themeChangedSubscription?.Dispose();
         _locationChangingRegistration?.Dispose();
+        NotificationService.OnChange -= HandleNotificationsChanged;
         ShortcutManager.RemoveGlobalKeydownListener(this);
 
         try

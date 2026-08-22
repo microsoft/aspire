@@ -1,4 +1,4 @@
-::deep table.main-grid {
+::deep table.main-grid:not(:has(tr[row-state="empty-content"], tr[row-state="loading-content"])) {
     margin-bottom: 1px !important; /* make bottom table row border visible when scrolling */
 }
 

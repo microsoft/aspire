@@ -65,36 +65,39 @@
     </ChildContent>
 
     <ActionTemplate>
-        <div class="button-container">
-            @if (ShowSecretsWarning is true)
-            {
-                <FluentButton Class="text-visualizer-unmask-content"
-                              OnClick="@UnmaskContentAsync">
-                    @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
-                </FluentButton>
-            }
-
-            <div class="button-container-right">
-                @if (Content.DownloadFileName is not null)
+        @if (!_isLoading)
+        {
+            <div class="button-container">
+                @if (ShowSecretsWarning is true)
                 {
-                    <FluentButton OnClick="@DownloadAsync"
-                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
-                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
-                                  IconStart="new Icons.Regular.Size16.ArrowDownload()">
-                        @ControlsStringsLoc[nameof(ControlsStrings.Download)]
+                    <FluentButton Class="text-visualizer-unmask-content"
+                                  OnClick="@UnmaskContentAsync">
+                        @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
                     </FluentButton>
                 }
 
-                <FluentButton Id="@_copyButtonId"
-                              Appearance="ButtonAppearance.Primary"
-                              AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                    <span slot="start">
-                        <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
-                        <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
-                    </span>
-                    @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-                </FluentButton>
+                <div class="button-container-right">
+                    @if (Content.DownloadFileName is not null)
+                    {
+                        <FluentButton OnClick="@DownloadAsync"
+                                      Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                      aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                      IconStart="new Icons.Regular.Size16.ArrowDownload()">
+                            @ControlsStringsLoc[nameof(ControlsStrings.Download)]
+                        </FluentButton>
+                    }
+
+                    <FluentButton Id="@_copyButtonId"
+                                  Appearance="ButtonAppearance.Primary"
+                                  AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                        <span slot="start">
+                            <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
+                            <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
+                        </span>
+                        @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
+                    </FluentButton>
+                </div>
             </div>
-        </div>
+        }
     </ActionTemplate>
 </FluentDialogBody>

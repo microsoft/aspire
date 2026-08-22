@@ -8,6 +8,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.Components;
@@ -108,7 +109,7 @@ public sealed class DashboardCommandExecutorTests
     }
 
     [Fact]
-    public async Task ExecuteAsyncCore_SuccessfulCommandWithoutResult_ClearsCancelToastAction()
+    public async Task ExecuteAsyncCore_OpenProgressToast_UpdatesWithResult()
     {
         var commandStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finishCommandTcs = new TaskCompletionSource<ResourceCommandResponseViewModel>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -125,7 +126,9 @@ public sealed class DashboardCommandExecutorTests
 
         var executeTask = executor.ExecuteAsyncCore(resource, command, r => r.DisplayName);
         await commandStartedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var toast = GetToastInstance(toastService);
+        var startingToast = GetToastInstance(toastService);
+
+        Assert.Equal(TimeSpan.Zero, startingToast.Options.Lifetime);
 
         finishCommandTcs.SetResult(new ResourceCommandResponseViewModel
         {
@@ -134,13 +137,51 @@ public sealed class DashboardCommandExecutorTests
 
         await executeTask.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Null(toast.Options.QuickAction1.Label);
-        Assert.Null(toast.Options.QuickAction2.Label);
+        var resultToast = GetToastInstance(toastService);
+        Assert.Same(startingToast, resultToast);
+        Assert.Equal(startingToast.Id, resultToast.Id);
+        Assert.Equal(ToastIntent.Success, resultToast.Options.Intent);
+        Assert.Equal("api Localized:ResourceCommandSuccess", resultToast.Options.Title);
+        Assert.Null(resultToast.Options.QuickAction1.Label);
+        Assert.Null(resultToast.Options.QuickAction2.Label);
+        Assert.Equal(TimeSpan.Zero, resultToast.Options.Lifetime);
         var notification = Assert.Single(notificationService.GetNotifications());
         Assert.Equal("Localized:ResourceCommandSuccess", notification.Entry.Title);
         Assert.Null(notification.Entry.PrimaryAction);
     }
 
+    [Fact]
+    public async Task ExecuteAsyncCore_ClosedProgressToast_ShowsNewResultToast()
+    {
+        var commandStartedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishCommandTcs = new TaskCompletionSource<ResourceCommandResponseViewModel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) =>
+            {
+                commandStartedTcs.SetResult();
+                return finishCommandTcs.Task;
+            });
+        var executor = CreateExecutor(dashboardClient, out _, out var toastService);
+        var command = CreateCommand();
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+
+        var executeTask = executor.ExecuteAsyncCore(resource, command, r => r.DisplayName);
+        await commandStartedTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var startingToast = GetToastInstance(toastService);
+        await toastService.Service.CloseAsync(startingToast);
+
+        finishCommandTcs.SetResult(new ResourceCommandResponseViewModel
+        {
+            Kind = ResourceCommandResponseKind.Succeeded
+        });
+
+        await executeTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var resultToast = GetToastInstance(toastService);
+        Assert.NotEqual(startingToast.Id, resultToast.Id);
+        Assert.Equal(DashboardUIHelpers.ToastTimeout, resultToast.Options.Lifetime);
+    }
     private static DashboardCommandExecutor CreateExecutor(TestDashboardClient dashboardClient, out Aspire.Dashboard.Model.INotificationService notificationService, out TestNotificationService toastService)
     {
         var dimensionManager = new DimensionManager();

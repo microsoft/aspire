@@ -26,6 +26,26 @@ public partial class MainLayoutTests : DashboardTestContext
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
 
     [Fact]
+    public void NotificationChange_RefreshesToastProvider()
+    {
+        SetupMainLayoutServices();
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var notificationService = Services.GetRequiredService<Aspire.Dashboard.Model.INotificationService>();
+
+        Assert.Equal("0", cut.Find("[data-update-version]").GetAttribute("data-update-version"));
+
+        notificationService.AddNotification(new NotificationEntry
+        {
+            Title = "Test notification",
+            Intent = MessageBarIntent.Info
+        });
+
+        cut.WaitForAssertion(() => Assert.Equal("1", cut.Find("[data-update-version]").GetAttribute("data-update-version")));
+    }
+    [Fact]
     public async Task OnInitialize_UnsecuredOtlp_NotDismissed_DisplayMessageBar()
     {
         // Arrange

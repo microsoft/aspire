@@ -82,6 +82,31 @@ fluent-button {
     min-width: 32px;
 }
 
+.main-grid-expand-container {
+    display: inline-block;
+    width: 18px;
+}
+
+.main-grid-expand-container svg {
+    transition: transform 0.1s linear;
+    pointer-events: none;
+}
+
+.main-grid-collapsed svg {
+    transform: rotate(0deg);
+}
+
+.main-grid-expanded svg {
+    transform: rotate(90deg);
+}
+
+.main-grid-expand-button {
+    width: 18px;
+    height: 24px;
+    min-width: 18px;
+    vertical-align: middle;
+}
+
 .datagrid-overflow-area,
 .parent-details-container {
     width: 100%;

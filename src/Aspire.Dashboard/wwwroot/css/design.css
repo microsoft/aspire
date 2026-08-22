@@ -1,4 +1,7 @@
 :root {
+    color-scheme: light;
+    --trace-tick-background-color: #d8d8d8;
+
     /* Highlight.js palette. */
     --hljs-default: #545454;
     --hljs-comment: #696969;
@@ -60,10 +63,6 @@
     --console-font-color: var(--console-theme-white);
 }
 
-[data-theme="light"] {
-    color-scheme: light;
-}
-
 #components-reconnect-modal {
     color: var(--colorNeutralForeground1);
     background-color: var(--colorNeutralBackground1);
@@ -75,6 +74,7 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
+    --trace-tick-background-color: #717171;
 
     --hljs-default: #f8f8f2;
     --hljs-comment: #d4d0ab;

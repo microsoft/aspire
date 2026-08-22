@@ -283,6 +283,23 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_TextVisualizerDialog_WithSecretAndAsyncSettingsLoad_RendersActionsAfterInitializationAsync()
+    {
+        const string rawText = """my text with a secret""";
+
+        var localStorage = new TestLocalStorage
+        {
+            OnBeforeGetUnprotectedAsync = async _ => await Task.Yield()
+        };
+        var getCut = SetUpDialog(out var dialogService, localStorage: localStorage);
+
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: true), new DialogParameters());
+        var cut = getCut();
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".button-container")));
+    }
+
+    [Fact]
     public async Task Render_TextVisualizerDialog_WithFixedFormat_UsesFixedFormatAndHidesDropdownAsync()
     {
         const string rawText = """export VAR=value""";

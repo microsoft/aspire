@@ -104,18 +104,16 @@ public sealed class DashboardCommandExecutor(
         var cancelRequested = false;
         var cancelLock = new object();
 
-        // When a resource command starts a toast is immediately shown.
-        // The toast is open for a certain amount of time and then automatically closed.
-        // When the resource command is finished the status is displayed in a toast.
-        // Either the open toast is updated and its time is exteneded, or the a new toast is shown with the finished status.
-        // Because of this logic we need to manage opening and closing the toasts manually.
+        // Fluent v5 retains the ToastOptions instance, which lets us update an open progress toast in place.
+        // Use a manual lifetime because Fluent does not expose a way to restart a rendered toast's lifetime
+        // when those options change from progress to a result.
         var toastId = Guid.NewGuid().ToString();
         var toastOptions = new ToastOptions
         {
             Id = toastId,
             Intent = ToastIntent.Progress,
             Title = toastStartingTitle,
-            Lifetime = TimeSpan.FromDays(1) // App logic handles closing the toast.
+            Lifetime = TimeSpan.Zero
         };
 
         string? progressNotificationId = null;
@@ -130,13 +128,10 @@ public sealed class DashboardCommandExecutor(
         toastOptions.QuickAction1.OnClickAsync = _ => RequestCancelAsync();
 
         ResourceCommandResponseViewModel response;
-        // The CTS intentionally outlives the command execution to ensure we can close the toast in all scenarios
-        // e.g., even if the command execution fails or the toast is still open when the command finishes.
-        // It's ok to let it be cleaned up by GC when the short CancelAfter completes.
-        var closeToastCts = new CancellationTokenSource();
-        await ShowOrReplaceToastAsync().ConfigureAwait(false);
-        closeToastCts.Token.Register(() => _ = toastService.CloseAsync(toastId));
-        closeToastCts.CancelAfter(DashboardUIHelpers.ToastTimeout);
+        using var progressToastCloseCts = new CancellationTokenSource();
+        await toastService.ShowToastAsync(toastOptions).ConfigureAwait(false);
+        // Keep the progress timeout cancellable so command completion can replace it with a full result timeout.
+        var progressToastCloseTask = CloseToastAfterDelayAsync(toastId, progressToastCloseCts.Token);
 
         try
         {
@@ -188,6 +183,8 @@ public sealed class DashboardCommandExecutor(
             var canceledTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandCanceled)], command.GetDisplayName());
 
             // For cancelled commands, just close the existing toast and don't show any success or error message.
+            progressToastCloseCts.Cancel();
+            await progressToastCloseTask.ConfigureAwait(false);
             await toastService.CloseAsync(toastId).ConfigureAwait(false);
 
             notificationService.ReplaceNotification(GetProgressNotificationId(), new NotificationEntry
@@ -196,7 +193,6 @@ public sealed class DashboardCommandExecutor(
                 Body = response.Message,
                 Intent = FluentMessageIntent.Info,
             });
-            closeToastCts.Dispose();
             return;
         }
         else
@@ -233,8 +229,23 @@ public sealed class DashboardCommandExecutor(
             }
         }
 
-        closeToastCts.CancelAfter(DashboardUIHelpers.ToastTimeout);
-        await ShowOrReplaceToastAsync().ConfigureAwait(false);
+        progressToastCloseCts.Cancel();
+        await progressToastCloseTask.ConfigureAwait(false);
+        if (IsToastOpen(toastId))
+        {
+            // ToastInstance references toastOptions, so the notification replacement above causes MainLayout
+            // to rerender FluentToastProvider with the result values without replacing the toast component.
+            // Restart the close delay so the result remains visible for the full timeout.
+            _ = CloseToastAfterDelayAsync(toastId, CancellationToken.None);
+        }
+        else
+        {
+            // Fluent keeps dismissed toasts registered during their exit animation. Use a fresh ID when the
+            // progress toast is no longer open and let Fluent manage the new result toast's lifetime.
+            toastOptions.Id = Guid.NewGuid().ToString();
+            toastOptions.Lifetime = DashboardUIHelpers.ToastTimeout;
+            await toastService.ShowToastAsync(toastOptions).ConfigureAwait(false);
+        }
 
         Task RequestCancelAsync()
         {
@@ -253,7 +264,7 @@ public sealed class DashboardCommandExecutor(
             toastOptions.Title = $"{getResourceName(resource)} {cancelingTitle}";
             toastOptions.Intent = ToastIntent.Progress;
             toastOptions.Icon = GetIntentIcon(ToastIntent.Progress);
-            _ = ShowOrReplaceToastAsync();
+            toastOptions.Lifetime = TimeSpan.Zero;
 
             notificationService.ReplaceNotification(GetProgressNotificationId(), new NotificationEntry
             {
@@ -264,14 +275,24 @@ public sealed class DashboardCommandExecutor(
             return Task.CompletedTask;
         }
 
-        async Task ShowOrReplaceToastAsync()
+        bool IsToastOpen(string id)
         {
-            if (toastService.GetToastInstance(toastId) is not null)
-            {
-                await toastService.CloseAsync(toastId).ConfigureAwait(false);
-            }
+            // Dismissed instances remain discoverable until Fluent finishes their exit animation, but they
+            // can no longer be updated in place.
+            return toastService.GetToastInstance(id)?.LifecycleStatus is ToastLifecycleStatus.Queued or ToastLifecycleStatus.Visible;
+        }
 
-            _ = toastService.ShowToastAsync(toastOptions);
+        async Task CloseToastAfterDelayAsync(string id, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(DashboardUIHelpers.ToastTimeout, cancellationToken).ConfigureAwait(false);
+                await toastService.CloseAsync(id).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Command completion cancels the progress timeout before scheduling the result timeout.
+            }
         }
 
         string GetProgressNotificationId()
