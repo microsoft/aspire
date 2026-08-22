@@ -44,6 +44,10 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private const string ProjectAssetsFileName = "project.assets.json";
     private const string RestoreStampFileName = "aspire-restore.stamp";
 
+    // The stamp records the restore inputs on the first line and a fingerprint of the assets
+    // those inputs produced on the second. Both are required for a stamp to be trusted.
+    private const int StampLineCount = 2;
+
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
@@ -605,13 +609,23 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private static readonly SearchValues<char> s_floatingVersionChars = SearchValues.Create("*[(,");
 
     /// <summary>
-    /// Determines whether the last successful restore already saw this exact set of inputs.
+    /// Determines whether the last successful restore already saw this exact set of inputs and
+    /// still owns the assets on disk.
     /// </summary>
     /// <remarks>
     /// The stamp is written only after a restore succeeds, so its presence with a matching
     /// fingerprint means a complete restore has run for these inputs. This is compared by content
     /// rather than by timestamp because file modification times are unreliable across coarse
     /// filesystems, clock skew, and caches that restore mtimes.
+    /// <para>
+    /// Matching inputs alone are not enough, because the stamp records what this CLI restored and
+    /// nothing stops another writer from replacing the assets afterwards. Switching CLI versions
+    /// does exactly that: an older CLI restores the same synthesized project against its own
+    /// package versions, and switching back reproduces a byte-identical project file and therefore
+    /// the earlier fingerprint. A skip on the input fingerprint alone would then build against the
+    /// other version's closure and report success. So the stamp also records a fingerprint of the
+    /// assets file it produced, and a skip requires the assets still to be the ones it vouches for.
+    /// </para>
     /// </remarks>
     internal static bool CanSkipIntegrationRestore(string restoreDir, string expectedFingerprint, ILogger logger)
     {
@@ -622,27 +636,79 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             return false;
         }
 
+        string[] stampLines;
         try
         {
-            return string.Equals(File.ReadAllText(stampPath), expectedFingerprint, StringComparison.Ordinal);
+            stampLines = File.ReadAllLines(stampPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogDebug(ex, "Unable to read the integration restore stamp; restoring.");
             return false;
         }
+
+        // A stamp left by a CLI that recorded only the inputs cannot vouch for the assets, so it is
+        // treated as stale rather than trusted. That costs one restore on first launch after an
+        // upgrade, which is the safe direction.
+        if (stampLines.Length != StampLineCount || !string.Equals(stampLines[0], expectedFingerprint, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var assetsFingerprint = TryComputeAssetsFingerprint(assetsPath, logger);
+        if (!string.Equals(stampLines[1], assetsFingerprint, StringComparison.Ordinal))
+        {
+            logger.LogDebug("The integration restore assets were replaced since the last restore by this CLI; restoring.");
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
-    /// Records that a restore completed successfully for <paramref name="fingerprint" />.
+    /// Fingerprints the restore output the stamp vouches for, or <see langword="null" /> when it
+    /// cannot be read.
     /// </summary>
-    private static async Task WriteRestoreStampAsync(string restoreDir, string fingerprint, ILogger logger, CancellationToken cancellationToken)
+    private static string? TryComputeAssetsFingerprint(string assetsPath, ILogger logger)
+    {
+        try
+        {
+            using var stream = File.OpenRead(assetsPath);
+            var hash = new XxHash3();
+            hash.Append(stream);
+            return Convert.ToHexString(hash.GetCurrentHash());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Unable to fingerprint the integration restore assets; restoring.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Records that a restore completed successfully for <paramref name="fingerprint" />, together
+    /// with a fingerprint of the assets it produced.
+    /// </summary>
+    internal static async Task WriteRestoreStampAsync(string restoreDir, string fingerprint, ILogger logger, CancellationToken cancellationToken)
     {
         try
         {
             var objDir = Path.Combine(restoreDir, "obj");
             Directory.CreateDirectory(objDir);
-            await File.WriteAllTextAsync(Path.Combine(objDir, RestoreStampFileName), fingerprint, cancellationToken).ConfigureAwait(false);
+
+            // Without an assets fingerprint the stamp could only vouch for the inputs, which is the
+            // guarantee that let a foreign restore go unnoticed. Leaving no stamp costs a restore on
+            // the next launch; writing a half-stamp would cost correctness.
+            var assetsFingerprint = TryComputeAssetsFingerprint(Path.Combine(objDir, ProjectAssetsFileName), logger);
+            if (assetsFingerprint is null)
+            {
+                return;
+            }
+
+            await File.WriteAllTextAsync(
+                Path.Combine(objDir, RestoreStampFileName),
+                $"{fingerprint}\n{assetsFingerprint}",
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

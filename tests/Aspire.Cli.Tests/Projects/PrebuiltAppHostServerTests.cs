@@ -115,6 +115,48 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenAnotherRestoreReplacedTheAssets()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint");
+
+        // A different CLI version restoring the same synthesized project rewrites the assets
+        // without touching this CLI's stamp. Switching back reproduces the same inputs, so the
+        // input fingerprint matches again while the closure on disk belongs to the other version.
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "project.assets.json"),
+            """{"libraries":{"Aspire.Hosting/13.5.1":{}}}""");
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void CanSkipIntegrationRestore_RestoresWhenTheStampDoesNotVouchForTheAssets()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var objDir = Path.Combine(workspace.WorkspaceRoot.FullName, "obj");
+        Directory.CreateDirectory(objDir);
+        File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
+
+        // A stamp recording only the inputs, as written by an earlier CLI.
+        File.WriteAllText(Path.Combine(objDir, "aspire-restore.stamp"), "fingerprint");
+
+        Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void WriteRestoreStampAsync_WritesNoStampWhenTheAssetsAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint", writeAssets: false);
+
+        // Vouching for assets that could not be read would restore the very guarantee this stamp
+        // exists to avoid making.
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "aspire-restore.stamp")));
+    }
+
+    [Fact]
     public async Task ComputeRestoreInputsAsync_FingerprintChangesWhenAReferencedProjectChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -347,6 +389,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(ErrorStrings.IntegrationBuildFailed, PrebuiltAppHostServer.GetIntegrationBuildFailureMessage(output));
     }
 
+    // Mirrors a completed restore: the assets on disk plus the stamp vouching for them. The stamp
+    // is written through the production writer so the tests cannot drift from its format.
     private static void WriteRestoreState(string restoreDir, string fingerprint, bool writeAssets = true)
     {
         var objDir = Path.Combine(restoreDir, "obj");
@@ -356,7 +400,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
         }
 
-        File.WriteAllText(Path.Combine(objDir, "aspire-restore.stamp"), fingerprint);
+        PrebuiltAppHostServer.WriteRestoreStampAsync(restoreDir, fingerprint, NullLogger.Instance, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     [Fact]
