@@ -4,36 +4,35 @@
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@implements IDialogContentComponent<Aspire.Dashboard.Model.TextVisualizerDialogViewModel>
 
-<FluentDialogHeader ShowDismiss="true">
-    <div class="dialog-title-grid">
-        <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Style="grid-area: dialog-icon; align-self: center;" />
-        <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
-            @Content.Description
-        </FluentLabel>
+<FluentDialogBody Style="width: 100%; max-height: calc(100dvh - 48px);">
+    <TitleTemplate>
+        <div class="dialog-title-grid">
+            <FluentIcon Value="@(new Icons.Regular.Size24.SlideSearch())" Color="Color.Primary" Style="grid-area: dialog-icon; align-self: center;" />
+            <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
+                @Content.Description
+            </FluentLabel>
 
-        @if (!HasFixedFormat)
-        {
-            <div Style="grid-area: dialog-format;">
-                <FluentSelect TOption="SelectViewModel<string>"
-                              Id="@_selectFormatId"
-                              Items="@_options"
-                              Position="SelectPosition.Below"
-                              OptionText="@(option => option.Name)"
-                              OptionValue="@(option => option.Id)"
-                              OptionDisabled="@(option => !EnabledOptions.Contains(option.Id))"
-                              OptionTitle="@(option => option.Name)"
-                              @bind-SelectedOption="@_selectedFormat"
-                              @bind-SelectedOption:after="OnSelectedFormatChanged"
-                              AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                              Style="min-width: 12rem; width: max-content; max-width: 100%;" />
-            </div>
-        }
-    </div>
-</FluentDialogHeader>
+            @if (!HasFixedFormat)
+            {
+                <div class="dialog-format">
+                    <FluentSelect TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                                  Id="@_selectFormatId"
+                                  Items="@_options"
+                                  Position="SelectPosition.Below"
+                                  OptionText="@((SelectViewModel<string>? option) => option?.Name)"
+                                  OptionDisabled="@((SelectViewModel<string>? option) => option is not null && !EnabledOptions.Contains(option.Id))"
+                                  OptionTitle="@((SelectViewModel<string> option) => option.Name)"
+                                  @bind-Value="@_selectedFormat"
+                                  @bind-Value:after="OnSelectedFormatChanged"
+                                  AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                                  Style="width: clamp(7rem, 20vw, 12rem); max-width: 100%;" />
+                </div>
+            }
+        </div>
+    </TitleTemplate>
 
-<FluentDialogBody>
+    <ChildContent>
     <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
@@ -62,39 +61,43 @@
                 </div>
             </div>
         }
+    </div>
+    </ChildContent>
 
-        <div class="button-container">
-            @if (ShowSecretsWarning is true)
-            {
-                <FluentButton Class="text-visualizer-unmask-content"
-                              OnClick="@UnmaskContentAsync">
-                    @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
-                </FluentButton>
-            }
-
-            <div class="button-container-right">
-                @if (Content.DownloadFileName is not null)
+    <ActionTemplate>
+        @if (!_isLoading)
+        {
+            <div class="button-container">
+                @if (ShowSecretsWarning is true)
                 {
-                    <FluentButton OnClick="@DownloadAsync"
-                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
-                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
-                                  IconStart="new Icons.Regular.Size16.ArrowDownload()">
-                        @ControlsStringsLoc[nameof(ControlsStrings.Download)]
+                    <FluentButton Class="text-visualizer-unmask-content"
+                                  OnClick="@UnmaskContentAsync">
+                        @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
                     </FluentButton>
                 }
 
-                <FluentButton Id="@_copyButtonId"
-                              Appearance="Appearance.Accent"
-                              AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                    <span slot="start">
-                        <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                        <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                    </span>
-                    @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-                </FluentButton>
-            </div>
-        </div>
-    </div>
-</FluentDialogBody>
+                <div class="button-container-right">
+                    @if (Content.DownloadFileName is not null)
+                    {
+                        <FluentButton OnClick="@DownloadAsync"
+                                      Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                      aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                      IconStart="new Icons.Regular.Size16.ArrowDownload()">
+                            @ControlsStringsLoc[nameof(ControlsStrings.Download)]
+                        </FluentButton>
+                    }
 
-<FluentDialogFooter Visible="false" />
+                    <FluentButton Id="@_copyButtonId"
+                                  Appearance="ButtonAppearance.Primary"
+                                  AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                        <span slot="start">
+                            <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" Color="Color.Primary" />
+                            <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" Color="Color.Primary" />
+                        </span>
+                        @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
+                    </FluentButton>
+                </div>
+            </div>
+        }
+    </ActionTemplate>
+</FluentDialogBody>

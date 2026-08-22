@@ -1,8 +1,8 @@
 ::deep .span-messages-container {
     background: var(--main-container-background-color);
-    color: var(--neutral-foreground-rest);
-    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-layer-rest);
-    border-radius: calc(var(--layer-corner-radius) * 1px);
+    color: var(--colorNeutralForeground1);
+    border: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
+    border-radius: 10px;
     padding: 8px 8px 16px 16px;
     height: 65vh;
     display: grid;
@@ -24,8 +24,8 @@
 
 ::deep .message-container {
     padding: 12px;
-    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-hover);
-    border-radius: calc(var(--layer-corner-radius) * 0.5px);
+    border: var(--strokeWidthThin) solid var(--colorNeutralStroke1Hover);
+    border-radius: 5px;
     display: flex;
     flex-direction: column;
     row-gap: 12px;
@@ -33,18 +33,18 @@
 }
 
 ::deep .message-container .message-title {
-    font-size: var(--type-ramp-plus-1-font-size);
+    font-size: var(--fontSizeBase400);
     display: flex;
     align-items: center;
 }
 
 ::deep .section-title {
-    font-size: var(--type-ramp-plus-1-font-size);
+    font-size: var(--fontSizeBase400);
     font-weight: 600;
 }
 
 .dialog-title-grid ::deep .trace-id {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
     font-size: 12px;
     font-weight: normal;
@@ -56,7 +56,6 @@
 }
 
 ::deep .genai-message-tree {
-    --base-height-multiplier: 9;
     min-width: auto;
 }
 
@@ -152,7 +151,7 @@
 }
 
 ::deep .message-header-date {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
 }
 
@@ -219,7 +218,7 @@
 }
 
 ::deep .no-message-content {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
 }
 
@@ -238,7 +237,7 @@
 }
 
 ::deep .no-message-content-content {
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
     font-size: 12px;
     padding-bottom: 12px;
 }
@@ -261,25 +260,13 @@
     width: 100%;
 }
 
-::deep .tab-container .tools-list fluent-accordion-item {
-    --fill-color: var(--property-grid-genai-dialog-background-color);
-}
-
 ::deep .tab-container .tools-list fluent-accordion-item.tool-highlighted {
-    border: 2px solid var(--accent-fill-rest);
+    border: 2px solid var(--colorBrandBackground);
 }
 
 ::deep .tab-container .tools-list fluent-accordion-item,
 ::deep .tab-container .tools-list fluent-accordion-item::part(region) {
     background-color: var(--property-grid-genai-dialog-background-color);
-}
-
-/* This is a hack because we can't do a selector that selects inside of a ::part,
-   which is what we'd need to do to access `::part(heading):not(:hover) .icon`.
-   So instead we just change the color token the non-hovered state uses.
-*/
-::deep .tab-container .tools-list fluent-accordion-item::part(icon) {
-    --neutral-fill-stealth-rest-on-neutral-fill-layer-rest: var(--property-grid-genai-dialog-background-color);
 }
 
 ::deep .tab-container .tool-heading {
@@ -328,7 +315,7 @@
 ::deep .tab-container .tool-cell {
     text-align: left;
     padding: 8px;
-    border-bottom: 1px solid var(--neutral-stroke-divider-rest);
+    border-bottom: 1px solid var(--colorNeutralStroke3);
 }
 
 ::deep .tab-container strong {
@@ -345,8 +332,8 @@
 
 ::deep .tab-container .evaluation-container {
     padding: 12px;
-    border: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-hover);
-    border-radius: calc(var(--layer-corner-radius) * 0.5px);
+    border: var(--strokeWidthThin) solid var(--colorNeutralStroke1Hover);
+    border-radius: 5px;
     width: 100%;
     row-gap: 12px;
     display: flex;
@@ -363,9 +350,9 @@
 
 ::deep .tab-container .evaluation-divider {
     height: 20px;
-    border-color: var(--neutral-stroke-hover);
+    border-color: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
+    margin-right: var(--spacingHorizontalXS);
 }

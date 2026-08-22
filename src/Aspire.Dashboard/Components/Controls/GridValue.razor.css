@@ -16,7 +16,7 @@
 
 ::deep .masking-enabled .button-container, td:hover .button-container, td:focus-within .button-container {
     /* the button container always has contents if masking is enabled or it is hovered over, so display margin */
-    margin-left: calc((6 + (var(--design-unit) * var(--density))) * 1px);
+    margin-left: var(--spacingHorizontalXXS);
 }
 
 ::deep .defaultHidden {

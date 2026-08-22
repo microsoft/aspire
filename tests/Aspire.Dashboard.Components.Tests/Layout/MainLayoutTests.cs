@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -14,7 +15,6 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -23,23 +23,34 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public partial class MainLayoutTests : DashboardTestContext
 {
+    private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
+
+    [Fact]
+    public void NotificationChange_RefreshesToastProvider()
+    {
+        SetupMainLayoutServices();
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var notificationService = Services.GetRequiredService<Aspire.Dashboard.Model.INotificationService>();
+
+        Assert.Equal("0", cut.Find("[data-update-version]").GetAttribute("data-update-version"));
+
+        notificationService.AddNotification(new NotificationEntry
+        {
+            Title = "Test notification",
+            Intent = MessageBarIntent.Info
+        });
+
+        cut.WaitForAssertion(() => Assert.Equal("1", cut.Find("[data-update-version]").GetAttribute("data-update-version")));
+    }
     [Fact]
     public async Task OnInitialize_UnsecuredOtlp_NotDismissed_DisplayMessageBar()
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
-
-        SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService);
-
-        Message? message = null;
-        var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
-        {
-            message = messageService.AllMessages.Single();
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
-        };
+        SetupMainLayoutServices(localStorage: testLocalStorage);
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
         {
@@ -76,11 +87,8 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         // Assert
-        await messageShownTcs.Task.DefaultTimeout();
-
-        Assert.NotNull(message);
-
-        message.Close();
+        var dismissButton = _messageBarProvider!.WaitForElement($"fluent-button[aria-label='{Aspire.Dashboard.Resources.Dialogs.NotificationEntryDismiss}']");
+        dismissButton.Click();
 
         Assert.True(await dismissedSettingSetTcs.Task.DefaultTimeout());
     }
@@ -92,16 +100,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
-
-        SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService);
-
-        var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
-        {
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
-        };
+        SetupMainLayoutServices(localStorage: testLocalStorage);
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
         {
@@ -125,13 +124,7 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         // Assert
-        var timeoutTask = Task.Delay(100);
-        var completedTask = await Task.WhenAny(messageShownTcs.Task, timeoutTask).DefaultTimeout();
-
-        // It's hard to test something not happening.
-        // In this case of checking for a message, apply a small display and then double check that no message was displayed.
-        Assert.True(completedTask != messageShownTcs.Task, "No message bar should be displayed.");
-        Assert.Empty(messageService.AllMessages);
+        Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
     }
 
     [Theory]
@@ -141,19 +134,10 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         // Arrange
         var testLocalStorage = new TestLocalStorage();
-        var messageService = new MessageService();
-
-        SetupMainLayoutServices(localStorage: testLocalStorage, messageService: messageService, configureOptions: o =>
+        SetupMainLayoutServices(localStorage: testLocalStorage, configureOptions: o =>
         {
             o.Otlp.SuppressUnsecuredMessage = telemetrySuppressUnsecuredMessage;
         });
-
-        var messageShownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        messageService.OnMessageItemsUpdatedAsync += () =>
-        {
-            messageShownTcs.TrySetResult();
-            return Task.CompletedTask;
-        };
 
         testLocalStorage.OnGetUnprotectedAsync = key =>
         {
@@ -178,18 +162,12 @@ public partial class MainLayoutTests : DashboardTestContext
         // Assert
         if (!expectMessageBar)
         {
-            var timeoutTask = Task.Delay(100);
-            var completedTask = await Task.WhenAny(messageShownTcs.Task, timeoutTask).DefaultTimeout();
-
-            // When suppressed, no message should be displayed
-            Assert.True(completedTask != messageShownTcs.Task, "No message bar should be displayed when suppressed by configuration.");
-            Assert.Empty(messageService.AllMessages);
+            Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
         }
         else
         {
-            // When not suppressed, message should be displayed since it wasn't dismissed
-            await messageShownTcs.Task.DefaultTimeout();
-            Assert.NotEmpty(messageService.AllMessages);
+            var messageBarProvider = _messageBarProvider!;
+            messageBarProvider.WaitForAssertion(() => Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>()));
         }
     }
 
@@ -242,7 +220,7 @@ public partial class MainLayoutTests : DashboardTestContext
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.CompletedTask;
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -259,18 +237,14 @@ public partial class MainLayoutTests : DashboardTestContext
         }
         else
         {
-            var menuItemName = expectedDialogId == "HelpDialog"
-                ? "Help"
-                : "Settings";
-
-            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+            var shortcut = expectedDialogId == "HelpDialog" ? AspireKeyboardShortcut.Help : AspireKeyboardShortcut.Settings;
+            await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(shortcut));
         }
 
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
 
-        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(dialogService.LastInstance!));
 
         cut.WaitForAssertion(() =>
         {
@@ -298,7 +272,7 @@ public partial class MainLayoutTests : DashboardTestContext
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.CompletedTask;
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -316,12 +290,8 @@ public partial class MainLayoutTests : DashboardTestContext
         }
         else
         {
-            var menuItemName = expectedDialogId == "HelpDialog"
-                ? "Help"
-                : "Settings";
-
-            await cut.InvokeAsync(() => cut.Find("#dashboard-navigation-button").Click());
-            await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuItemName, StringComparison.OrdinalIgnoreCase)).Click());
+            var shortcut = expectedDialogId == "HelpDialog" ? AspireKeyboardShortcut.Help : AspireKeyboardShortcut.Settings;
+            await cut.InvokeAsync(() => cut.FindComponent<MainLayout>().Instance.OnPageKeyDownAsync(shortcut));
         }
 
         Assert.NotNull(capturedParameters);
@@ -333,7 +303,7 @@ public partial class MainLayoutTests : DashboardTestContext
             parameters.AddChildContent<MainLayout>();
         });
 
-        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(dialogService.LastInstance!));
 
         cut.WaitForAssertion(() =>
         {
@@ -354,7 +324,7 @@ public partial class MainLayoutTests : DashboardTestContext
         dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
         {
             capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+            return Task.CompletedTask;
         });
 
         SetupMainLayoutServices(dialogService: dialogService);
@@ -370,7 +340,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
 
-        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(null!));
+        await cut.InvokeAsync(() => capturedParameters.OnDialogClosing.InvokeAsync(dialogService.LastInstance!));
 
         cut.WaitForAssertion(() =>
         {
@@ -383,11 +353,10 @@ public partial class MainLayoutTests : DashboardTestContext
 
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
-        MessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
         IDialogService? dialogService = null)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
+        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage);
 
         if (dialogService is not null)
         {
@@ -398,7 +367,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
         Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         Services.AddSingleton<ITooltipService, TooltipService>();
-        Services.AddSingleton<IToastService, ToastService>();
         Services.Configure<DashboardOptions>(o =>
         {
             // Configure OTLP endpoint URLs so they can be parsed
@@ -413,15 +381,22 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentOverflow(this);
         FluentUISetupHelpers.SetupFluentAnchor(this);
         FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true);
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
         LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
+
+        _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
+        {
+            builder.Add(p => p.Section, DashboardUIHelpers.MessageBarSection);
+        });
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
     }

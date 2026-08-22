@@ -1,4 +1,6 @@
-﻿<FluentMenu Id="@MobileNavMenuId" Class="aspire-menu-container mobile-nav-menu" Open="@IsNavMenuOpen" Anchored="false" Style="grid-area: nav-menu; max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset)); margin-top: var(--mobile-nav-menu-offset); overflow-y: auto; padding-block: var(--mobile-nav-menu-focus-padding); scroll-padding-block: var(--mobile-nav-menu-focus-padding);">
+﻿@if (IsNavMenuOpen)
+{
+<FluentMenu Id="@MobileNavMenuId" Class="aspire-menu-container mobile-nav-menu" Style="grid-area: nav-menu; max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset)); margin-top: var(--mobile-nav-menu-offset); overflow-y: auto; padding-block: var(--mobile-nav-menu-focus-padding); scroll-padding-block: var(--mobile-nav-menu-focus-padding);">
     @foreach (var item in GetMobileNavMenuEntries())
     {
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
@@ -12,7 +14,7 @@
         }
 
         @* mobile-nav-menu-item-active drives the accent color bar applied via
-           ::before in app.css, mirroring the desktop FluentAppBar selected
+           ::before, mirroring the desktop selected
            treatment without needing a separate sibling element. *@
         <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes">
             <span>@item.Text</span>
@@ -25,11 +27,11 @@
                 <span slot="start" class="@(isActive ? "mobile-nav-menu-icon-active" : null)">
                     @if (isActive)
                     {
-                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" CustomColor="var(--accent-foreground-active)" Color="Color.Custom"/>
+                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" CustomColor="var(--colorBrandForegroundLinkPressed)" Color="Color.Custom"/>
                     }
                     else
                     {
-                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" Color="Color.Neutral" />
+                        <FluentIcon Class="align-text-bottom" Value="@icon" Slot="start" Color="Color.Default" />
                     }
                 </span>
             }
@@ -38,6 +40,7 @@
         <FluentDivider/>
     }
 </FluentMenu>
+}
 
 @code {
     [Parameter, EditorRequired]

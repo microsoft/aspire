@@ -1,19 +1,3 @@
-
-// To avoid Flash of Unstyled Content, the body is hidden by default with
-// the before-upgrade CSS class. Here we'll find the first web component
-// and wait for it to be upgraded. When it is, we'll remove that class
-// from the body.
-const firstUndefinedElement = document.body.querySelector(":not(:defined)");
-
-if (firstUndefinedElement) {
-    customElements.whenDefined(firstUndefinedElement.localName).then(() => {
-        document.body.classList.remove("before-upgrade");
-    });
-} else {
-    // In the event this code doesn't run until after they've all been upgraded
-    document.body.classList.remove("before-upgrade");
-}
-
 function isElementTagName(element, tagName) {
     return element.tagName.toLowerCase() === tagName;
 }
@@ -451,12 +435,12 @@ const AUTOFIT_MIN_WIDTH = 48;      // never collapse a column to nothing
 
 function autoFitGridColumn(handle) {
     const grid = handle.closest("table.fluent-data-grid");
-    const header = handle.closest(".column-header");
+    const header = handle.closest("th[cell-type='columnheader']");
     if (!grid || !header) {
         return;
     }
 
-    const headers = Array.from(grid.querySelectorAll(".column-header"));
+    const headers = Array.from(grid.querySelectorAll("th[cell-type='columnheader']"));
     const columnIndex = headers.indexOf(header);
     if (columnIndex < 0) {
         return;
@@ -511,11 +495,11 @@ function autoFitGridColumn(handle) {
     setTimeout(cleanup, 500);
 }
 
-// Register a global double-click listener for grid resize handles. The handle class is
-// "resize-handle" in current Fluent UI Blazor; "col-width-draghandle" is matched too for resilience
-// against a rename. closest() with a descendant selector confirms the handle is inside a grid.
+// Register a global double-click listener for grid resize handles. Fluent UI v5 marks its
+// dynamically created handle with actual-resize-handle; keep the v4 class selectors so the
+// listener remains compatible with dashboard assets from older Fluent UI versions.
 document.addEventListener("dblclick", function (e) {
-    const handle = e.target.closest?.(".fluent-data-grid .resize-handle, .fluent-data-grid .col-width-draghandle");
+    const handle = e.target.closest?.(".fluent-data-grid [actual-resize-handle], .fluent-data-grid .resize-handle, .fluent-data-grid .col-width-draghandle");
     if (handle) {
         // Prevent the double-click from selecting the header text while we resize.
         e.preventDefault();

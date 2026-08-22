@@ -2,6 +2,13 @@
     margin-bottom: 1rem;
 }
 
+.interaction-dialog-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .interaction-input-dialog .interaction-input ::deep {
     width: 100%;
 }
@@ -28,8 +35,8 @@
 
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
-    color: var(--foreground-settings-text);
-    font-size: var(--type-ramp-minus-1-font-size);
+    color: var(--colorNeutralForeground3);
+    font-size: var(--fontSizeBase200);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description p,

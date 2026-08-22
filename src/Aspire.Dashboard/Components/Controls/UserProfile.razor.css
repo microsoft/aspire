@@ -12,11 +12,11 @@
 }
 
 ::deep fluent-button[appearance=stealth]:not(:hover):not(:active)::part(control) {
-    background-color: var(--neutral-layer-floating);
+    background-color: var(--colorNeutralBackground1);
 }
 
 ::deep fluent-button[appearance=stealth]:hover::part(control) {
-    background-color: var(--neutral-fill-secondary-hover);
+    background-color: var(--colorNeutralBackground2Hover);
 }
 
 ::deep .fluent-profile-menu > .fluent-persona {
@@ -24,23 +24,23 @@
 }
 
 ::deep .fluent-profile-menu > .fluent-persona > .initials {
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--fontSizeBase200);
 }
 
 ::deep .full-name,
 ::deep .user-id {
-    color: var(--neutral-foreground-rest);
+    color: var(--colorNeutralForeground1);
     max-width: 200px;
     overflow-x: hidden;
     text-overflow: ellipsis;
 }
 
 ::deep .full-name {
-    font-size: var(--type-ramp-base-font-size);
+    font-size: var(--fontSizeBase300);
 }
 
 ::deep .user-id {
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--fontSizeBase200);
     font-weight: normal;
     max-width: 200px;
 }

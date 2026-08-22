@@ -1,40 +1,22 @@
 @using Aspire.Dashboard.Model.Interaction
-@implements IDialogContentComponent<InteractionsProgressDialogViewModel>
-
-@if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.Title))
-{
-    <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
-        <FluentStack VerticalAlignment="VerticalAlignment.Center">
-            <FluentLabel Typo="Typography.PaneHeader">
-                @Dialog.Instance.Parameters.Title
-            </FluentLabel>
-        </FluentStack>
-    </FluentDialogHeader>
-}
-else
-{
-    <FluentDialogHeader Visible="false" />
-}
 
 <FluentDialogBody Class="interaction-progress-dialog">
-    <div class="progress-content">
-        <FluentProgressRing />
+    <ChildContent>
+        <div class="progress-content">
+            <FluentSpinner />
 
-        <div class="interaction-message">
-            @((MarkupString)Content.Message)
+            <div class="interaction-message">
+                @((MarkupString)Content.Message)
+            </div>
         </div>
-    </div>
-</FluentDialogBody>
+    </ChildContent>
 
-@if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.PrimaryAction))
-{
-    <FluentDialogFooter>
-        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
-            @Dialog.Instance.Parameters.PrimaryAction
-        </FluentButton>
-    </FluentDialogFooter>
-}
-else
-{
-    <FluentDialogFooter Visible="false" />
-}
+    <ActionTemplate>
+        @if (!string.IsNullOrEmpty(Dialog.Options.Footer.PrimaryAction.Label))
+        {
+            <FluentButton Appearance="ButtonAppearance.Default" OnClick="@CancelAsync">
+                @Dialog.Options.Footer.PrimaryAction.Label
+            </FluentButton>
+        }
+    </ActionTemplate>
+</FluentDialogBody>

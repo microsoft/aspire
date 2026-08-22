@@ -5,9 +5,9 @@
         "toolbar"
         "main";
     overflow: auto;
-    gap: calc(var(--design-unit) * 1px);
+    gap: var(--spacingHorizontalXS);
 }
 
-::deep.resource-details-layout > fluent-toolbar {
+::deep.resource-details-layout > .details-toolbar {
     grid-area: toolbar;
 }

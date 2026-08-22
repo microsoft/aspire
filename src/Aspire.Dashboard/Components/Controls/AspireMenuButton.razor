@@ -3,33 +3,36 @@
 @inherits FluentComponentBase
 
 @{
-    // Do not add aria-expanded here. Its presence signals that FluentMenu has finished initializing and so can't be added before then.
-    // We'll have to live with aria-expanded missing before the menu is clicked, and then being set to true while the menu is open.
+    var hasText = !string.IsNullOrWhiteSpace(Text);
+    var iconOnly = !hasText && IconStart is null;
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
-        { "aria-haspopup", "menu" }
+        { "aria-haspopup", "menu" },
+        { "aria-expanded", _visible ? "true" : "false" }
     };
 }
 
-<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
-    @if (string.IsNullOrWhiteSpace(Text))
-    {
-        <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
-    }
-    else
-    {
-        @Text
-
-        @if (!HideIcon)
+<div>
+    <FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" IconOnly="@iconOnly" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+        @if (!hasText)
         {
-            <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" Slot="end" />
+            <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
         }
-    }
-</FluentButton>
+        else
+        {
+            @Text
 
-@* Render lazily because FluentMenu is expensive: building menu items and initializing its JavaScript interop add significant overhead when many menu buttons are displayed. *@
-@if (_renderMenu)
-{
-    <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnRenderComplete="OnMenuRenderComplete" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
-}
+            @if (!HideIcon)
+            {
+                <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" Slot="end" />
+            }
+        }
+    </FluentButton>
+
+    @* Render lazily because FluentMenu is expensive: building menu items and initializing its JavaScript interop add significant overhead when many menu buttons are displayed. *@
+    @if (_renderMenu)
+    {
+        <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
+    }
+</div>

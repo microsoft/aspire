@@ -1,0 +1,362 @@
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    overflow: hidden;
+}
+
+/* Fluent menu item content otherwise occupies only a fixed 20px grid track, so the fixed-position
+   menu resolves to its 160px minimum instead of sizing to its labels. Include the adjacent auto
+   track while leaving submenu items unchanged because they use it for the submenu glyph. */
+.aspire-menu-container:not(.mobile-nav-menu) fluent-menu-item:not(:state(submenu))::part(content) {
+    grid-column-end: span 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.aspire-menu-container fluent-menu-list[slot="submenu"] {
+    /* At least one side of the anchor has half the viewport available. Keeping the submenu below
+       that height lets Fluent's position fallback move command-heavy menus left and above/below. */
+    max-height: calc(50dvh - 8px);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* Fluent renders each bar between two sibling panes. Match a collapsed pane immediately before
+   the bar with the adjacent-sibling selector, or immediately after it via :has(). */
+.fluent-multi-splitter > .fluent-multi-splitter-pane[status="collapsed"] + .fluent-multi-splitter-bar,
+.fluent-multi-splitter > .fluent-multi-splitter-bar:has(+ .fluent-multi-splitter-pane[status="collapsed"]) {
+    display: none;
+}
+
+body .fluent-multi-splitter > .fluent-multi-splitter-bar {
+    background-color: transparent;
+    z-index: 1;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
+    display: none;
+}
+
+.fluent-multi-splitter > .fluent-multi-splitter-bar::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--fluent-multi-splitter-background-color);
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar::before {
+    inset-block: 0;
+    width: 1px;
+}
+
+.fluent-multi-splitter[orientation="horizontal"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-inline: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar::before {
+    inset-inline: 0;
+    height: 1px;
+}
+
+.fluent-multi-splitter[orientation="vertical"] > .fluent-multi-splitter-bar {
+    /* Overlap the transparent hit target across both panes so only the 1px line consumes space. */
+    margin-block: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+}
+
+fluent-button {
+    min-width: 32px;
+}
+
+.main-grid-expand-container {
+    display: inline-block;
+    width: 18px;
+}
+
+.main-grid-expand-container svg {
+    transition: transform 0.1s linear;
+    pointer-events: none;
+}
+
+.main-grid-collapsed svg {
+    transform: rotate(0deg);
+}
+
+.main-grid-expanded svg {
+    transform: rotate(90deg);
+}
+
+.main-grid-expand-button {
+    width: 18px;
+    height: 24px;
+    min-width: 18px;
+    vertical-align: middle;
+}
+
+.datagrid-overflow-area,
+.parent-details-container {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+}
+
+.fluent-data-grid tr[row-state="empty-content"] > td {
+    height: 100% !important;
+}
+
+.body-content {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.page-content-container {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.items-footer {
+    display: flex;
+    align-items: center;
+    min-height: 46px;
+    column-gap: 20px;
+}
+
+.dialog-title-grid {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "dialog-icon dialog-title dialog-format";
+    align-items: center;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+}
+
+fluent-dialog-body > [slot="title"],
+fluent-drawer-body > [slot="title"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.dialog-format {
+    grid-area: dialog-format;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    gap: 8px;
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightRegular);
+    line-height: var(--lineHeightBase300);
+}
+
+.dialog-format fluent-dropdown {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+.filter-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 8px;
+}
+
+.main-toolbar.filter-toolbar {
+    padding: 8px var(--layout-right-padding) 8px var(--layout-left-padding);
+}
+
+.filter-toolbar > * {
+    flex: 0 0 auto;
+}
+
+.toolbar-end {
+    display: contents;
+}
+
+.filter-toolbar > .toolbar-end {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
+    margin-inline-start: auto;
+    gap: inherit;
+}
+
+.filter-toolbar > fluent-button,
+.filter-toolbar > .toolbar-end > fluent-button {
+    width: auto;
+}
+
+.filter-toolbar > fluent-button:not(.clear-button),
+.filter-toolbar > .toolbar-end > fluent-button:not(.clear-button) {
+    width: 32px;
+}
+
+.filter-toolbar fluent-divider {
+    display: none;
+}
+
+.filter-toolbar .toolbar-search {
+    flex: 0 1 17rem;
+    width: 17rem;
+    min-width: 10rem;
+    max-width: 17rem;
+}
+
+.details-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 8px;
+}
+
+.details-toolbar > .toolbar-end {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
+    margin-inline-start: auto;
+    gap: inherit;
+}
+
+.details-toolbar fluent-divider[orientation="vertical"] {
+    align-self: center;
+    flex: 0 0 1px;
+    width: 1px;
+    height: 20px;
+    min-height: 20px;
+    max-height: 20px;
+}
+
+.details-toolbar > .toolbar-end > fluent-field {
+    flex: 0 1 17rem;
+    width: 17rem;
+    min-width: 10rem;
+    max-width: 17rem;
+}
+
+.details-toolbar > .toolbar-end > fluent-button {
+    width: 32px;
+}
+
+/* Floating scroll-to-bottom button for overflowing live-data regions. Position and visibility
+   classes are managed by app.js so the control can follow Blazor-owned scroll containers. */
+.scroll-buttons {
+    position: fixed;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.scroll-buttons:not(.is-active) {
+    display: none;
+}
+
+.scroll-button {
+    pointer-events: auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 50%;
+    background-color: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(0.25rem);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease, background-color 0.15s ease;
+}
+
+.scroll-button.is-visible {
+    opacity: 0.85;
+    visibility: visible;
+    transform: none;
+}
+
+.scroll-button:hover {
+    opacity: 1;
+    background-color: var(--colorNeutralBackground1Hover);
+}
+
+.scroll-button:focus-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.scroll-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+}
+
+.scroll-button.scroll-to-bottom svg {
+    transform: translateY(1px);
+}
+
+.grid-action-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.col-long-content {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blazor-error-ui {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: none;
+}
+
+#blazor-error-ui .dismiss {
+    position: absolute;
+    inset-inline-end: 0.75rem;
+}

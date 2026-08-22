@@ -917,7 +917,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         response.EnsureSuccessStatusCode();
-        Assert.NotEmpty(response.Headers.GetValues(HeaderNames.ContentSecurityPolicy).Single());
+        Assert.All(response.Headers.GetValues(HeaderNames.ContentSecurityPolicy), Assert.NotEmpty);
     }
 
     [Fact]

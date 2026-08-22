@@ -49,11 +49,11 @@
     <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" class="button-container">
 
         <span class="defaultHidden">
-            <FluentButton Appearance="Appearance.Lightweight"
+            <FluentButton Appearance="ButtonAppearance.Transparent"
                           Disabled="@(ValueToVisualize is null && Value is null)"
                           OnClick="OpenTextVisualizerAsync"
                           aria-label="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)]">
-                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" />
+                <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" Color="Color.Primary" />
             </FluentButton>
         </span>
 
@@ -64,7 +64,7 @@
 
         @if (EnableMasking)
         {
-            <FluentButton Appearance="Appearance.Lightweight"
+            <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
                           Title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
                           OnClick="ToggleMaskStateAsync"

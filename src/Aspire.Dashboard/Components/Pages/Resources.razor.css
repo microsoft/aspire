@@ -8,14 +8,14 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--accent-fill-rest);
+    color: var(--colorBrandBackground);
     text-decoration: underline;
     cursor: pointer;
     font: inherit;
 }
 
 ::deep .value-not-set-link:hover {
-    color: var(--accent-fill-hover);
+    color: var(--colorBrandBackgroundHover);
 }
 
 ::deep .unread-logs-errors-link::part(control) {
@@ -91,16 +91,15 @@
     overflow-y: hidden;
 }
 
-/* On desktop the tabs row also hosts the filter controls on the right, so the toolbar shares a
-   single row with the tabs instead of taking its own band above the grid. The row wraps (controls
-   drop below the tabs) when horizontal space is tight, keeping it responsive. */
+/* On desktop the tabs row also hosts the filter controls on the right. The filter toolbar wraps
+    its controls when its share of the row becomes too narrow. */
 ::deep .resource-tabs-header-row {
     grid-area: resources-tab-header;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
-    gap: calc(var(--design-unit) * 1.5px);
+    flex-wrap: nowrap;
+    gap: var(--spacingHorizontalSNudge);
     min-width: 0;
     padding-top: 0.5rem;
     padding-left: var(--layout-left-padding);
@@ -115,30 +114,18 @@
 }
 
 ::deep .resource-tabs-toolbar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    /* Match the control/icon-button spacing used on every other page toolbar (Structured, Console,
-       Traces, Metrics). Those render a Fluent FluentToolbar, which spaces adjacent items with a 4px
-       margin on each side = 8px (2 design units) between controls. Resources merges its controls into
-       the tabs row with a plain flex gap, so pin that gap to the same 2-design-unit rhythm instead of
-       the previous 1 unit (4px) so the filter / view-option icon buttons sit the same distance apart
-       as the icon buttons on the log/trace/metric pages. */
-    gap: calc(var(--design-unit) * 2px);
+    flex: 1 1 auto;
+    justify-content: flex-end;
+}
+
+::deep .resources-filter-popup::part(dialog) {
+    transform: translateX(calc(-100% + 32px));
 }
 
 @container (max-width: 500px) {
     ::deep .resource-tabs-toolbar {
-        flex: 1 0 100%;
-        justify-content: flex-end;
-        box-sizing: border-box;
-        padding-left: var(--layout-left-padding);
+        min-width: 0;
     }
-}
-
-/* Keep the search box usable but compact so the tabs stay on the same row at typical widths. */
-::deep .resource-tabs-toolbar fluent-search {
-    min-width: 160px;
 }
 
 ::deep .resources-grid-container {
@@ -172,8 +159,8 @@
 }
 
 ::deep .resource-name {
-    fill: var(--neutral-foreground-rest);
-    stroke: var(--fill-color);
+    fill: var(--colorNeutralForeground1);
+    stroke: var(--colorNeutralBackground1);
     font-size: 15px;
     text-anchor: middle;
     stroke-width: 0.5em;
@@ -182,12 +169,12 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--fill-color);
-    fill: var(--fill-color);
+    stroke: var(--colorNeutralBackground1);
+    fill: var(--colorNeutralBackground1);
 }
 
 ::deep .resource-group-hover .resource-node {
-    fill: var(--neutral-fill-hover) !important;
+    fill: var(--colorNeutralBackground1Hover) !important;
 }
 
 ::deep .resource-group-selected .resource-scale {
@@ -195,11 +182,11 @@
 }
 
 ::deep .resource-group-selected .resource-node {
-    fill: var(--neutral-fill-secondary-rest) !important;
+    fill: var(--colorNeutralBackground1Selected) !important;
 }
 
 ::deep .resource-group-selected .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-group-highlight .resource-node {
@@ -207,61 +194,61 @@
 }
 
 ::deep .resource-group-highlight .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-group-hover .resource-node-border {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-node-border {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     fill: transparent;
 }
 
 ::deep .resource-endpoint {
-    fill: var(--foreground-subtext-rest);
+    fill: var(--colorNeutralForeground3);
     font-size: 11px;
     text-anchor: middle;
 }
 
 ::deep .resource-status-circle {
-    fill: var(--fill-color);
+    fill: var(--colorNeutralBackground1);
 }
 
 ::deep .resource-link {
-    stroke: var(--neutral-stroke-rest);
+    stroke: var(--colorNeutralStroke1);
     stroke-width: 1;
     marker-end: url(#arrow-normal);
 }
 
 ::deep .arrow-normal {
-    fill: var(--neutral-stroke-rest);
+    fill: var(--colorNeutralStroke1);
 }
 
 ::deep .arrow-highlight {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .arrow-highlight-expand {
-    fill: var(--neutral-stroke-hover);
+    fill: var(--colorNeutralStroke1Hover);
 }
 
 ::deep .resource-link-highlight {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight);
 }
 
 ::deep .resource-link-highlight-expand {
-    stroke: var(--neutral-stroke-hover);
+    stroke: var(--colorNeutralStroke1Hover);
     stroke-dasharray: 5,5;
     stroke-width: 2;
     marker-end: url(#arrow-highlight-expand);
 }
 
 ::deep .tab-label > svg {
-    margin-right: calc(var(--design-unit) * 1px);
+    margin-right: var(--spacingHorizontalXS);
 }
