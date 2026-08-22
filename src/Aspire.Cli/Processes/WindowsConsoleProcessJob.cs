@@ -35,7 +35,7 @@ namespace Aspire.Cli.Processes;
 /// IMPORTANT: do NOT dispose this service during the normal shutdown ladder. The graceful
 /// shutdown path is responsible for cooperatively terminating its children; closing the
 /// job handle while they are still alive would convert clean shutdown into a hard kill.
-/// Let the OS close the handle on process exit; the kill-on-close behavior is exactly the
+/// Let the OS close the handle on process exit; the kill-on-parent-exit behavior is exactly the
 /// crash-safety net we want and is harmless when the children have already exited.
 /// </para>
 /// </remarks>
@@ -54,8 +54,8 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
     private int _disposed;
 
     /// <summary>
-    /// The process-wide job, created on first access. Callers on the isolated-console spawn
-    /// path use this instead of receiving a job instance, so they cannot forget to supply one.
+    /// The process-wide job, created on first access. Callers that opt into parent-lifetime
+    /// cleanup use this instead of receiving a job instance, so they cannot forget to supply one.
     /// Intentionally never disposed in production: the OS closes the handle at process exit,
     /// which is exactly the crash-safety net we want.
     /// </summary>
@@ -66,7 +66,7 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
         _jobHandle = WindowsProcessInterop.CreateJobObjectW(nint.Zero, null);
         if (_jobHandle.IsInvalid)
         {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create CLI console-isolation job object");
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create CLI kill-on-parent-exit job object");
         }
 
         try
@@ -94,7 +94,7 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
                     infoPtr,
                     (uint)infoSize))
                 {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to configure CLI console-isolation job object limits");
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to configure CLI kill-on-parent-exit job object limits");
                 }
             }
             finally
@@ -113,8 +113,9 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
     }
 
     /// <summary>
-    /// The job handle. Pass directly to <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>
-    /// so the spawn primitive can do the suspended-create / assign / resume dance atomically.
+    /// The job handle. Pass directly to <see cref="WindowsProcessInterop.SpawnProcess"/> so the spawn
+    /// primitive can assign the child to this job atomically at creation via
+    /// <c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>.
     /// </summary>
     public SafeFileHandle Handle => _jobHandle;
 

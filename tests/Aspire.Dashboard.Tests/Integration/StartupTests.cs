@@ -7,7 +7,6 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
@@ -63,6 +62,42 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         AssertDynamicIPEndpoint(app.OtlpServiceGrpcEndPointAccessor);
         AssertDynamicIPEndpoint(app.OtlpServiceHttpEndPointAccessor);
+    }
+
+    [Fact]
+    public async Task RunAsync_TokenCancelled_ShutsDownAndReturnsZero()
+    {
+        // The standalone `aspire-managed dashboard` process relies on RunAsync honoring its cancellation
+        // token so the parent-liveness watchdog can tear the dashboard down when the launching CLI dies.
+        // Verify a running dashboard shuts down gracefully and reports success when the token is cancelled.
+        var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(testOutputHelper);
+        var logger = loggerFactory.CreateLogger<StartupTests>();
+
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(loggerFactory);
+
+        using var cts = new CancellationTokenSource();
+        var runTask = app.RunAsync(cts.Token);
+
+        // Wait until the dashboard is actually serving so we exercise the running -> graceful-shutdown
+        // path rather than a start-time cancellation race. FrontendEndPointsAccessor throws until started.
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+            {
+                try
+                {
+                    return app.FrontendEndPointsAccessor.Count > 0;
+                }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
+            },
+            "Dashboard reached startup.", logger);
+
+        cts.Cancel();
+
+        var exitCode = await runTask.DefaultTimeout();
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]
@@ -282,11 +317,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("TestKey123!", app.DashboardOptionsMonitor.CurrentValue.Otlp.PrimaryApiKey);
     }
 
-    [Theory]
-    [InlineData(null, true)]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public async Task Configuration_OptionsMonitor_DebugSession(bool? aiDisabled, bool expectedAIDisabled)
+    [Fact]
+    public async Task Configuration_OptionsMonitor_DebugSession()
     {
         // Arrange
         var testCert = TelemetryTestHelpers.GenerateDummyCertificate();
@@ -294,15 +326,12 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: initialData =>
             {
-                initialData[DashboardConfigNames.DashboardAIDisabledName.ConfigKey] = aiDisabled?.ToString().ToLower();
                 initialData[DashboardConfigNames.DebugSessionPortName.ConfigKey] = "8080";
                 initialData[DashboardConfigNames.DebugSessionServerCertificateName.ConfigKey] = Convert.ToBase64String(testCert.Export(X509ContentType.Cert));
                 initialData[DashboardConfigNames.DebugSessionTokenName.ConfigKey] = "token!";
                 initialData[DashboardConfigNames.DebugSessionDcpInstanceIdName.ConfigKey] = "aspire-extension-run-123-dashboard";
                 initialData[DashboardConfigNames.DebugSessionTelemetryOptOutName.ConfigKey] = "true";
             });
-
-        var aiContextProvider = app.Services.GetRequiredService<IAIContextProvider>();
 
         // Act
         await app.StartAsync().DefaultTimeout();
@@ -317,9 +346,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("token!", app.DashboardOptionsMonitor.CurrentValue.DebugSession.Token);
         Assert.Equal("aspire-extension-run-123-dashboard", app.DashboardOptionsMonitor.CurrentValue.DebugSession.DcpInstanceId);
         Assert.Equal(true, app.DashboardOptionsMonitor.CurrentValue.DebugSession.TelemetryOptOut);
-
-        Assert.Equal(expectedAIDisabled, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
-        Assert.Equal(!expectedAIDisabled, aiContextProvider.Enabled);
     }
 
     [Fact]
@@ -1001,34 +1027,6 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Contains(typeof(TelemetryLoggerProvider), loggerProviderTypes);
         Assert.Contains(typeof(ConsoleLoggerProvider), loggerProviderTypes);
-    }
-
-    [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    [InlineData(null, true)]
-    public async Task Configuration_DisableAI_EnsureValueSetOnOptions(bool? value, bool expectedAIDisabled)
-    {
-        // Arrange & Act
-        var testCert = TelemetryTestHelpers.GenerateDummyCertificate();
-
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-            additionalConfiguration: data =>
-            {
-                data[DashboardConfigNames.DashboardAIDisabledName.ConfigKey] = value?.ToString().ToLower();
-
-                // Set debug session values so that AIContextProvider.Enabled has those values.
-                data[DashboardConfigNames.DebugSessionPortName.ConfigKey] = "8080";
-                data[DashboardConfigNames.DebugSessionServerCertificateName.ConfigKey] = Convert.ToBase64String(testCert.Export(X509ContentType.Cert));
-                data[DashboardConfigNames.DebugSessionTokenName.ConfigKey] = "token!";
-                data[DashboardConfigNames.DebugSessionTelemetryOptOutName.ConfigKey] = "true";
-            });
-
-        var aiContextProvider = app.Services.GetRequiredService<IAIContextProvider>();
-
-        // Assert
-        Assert.Equal(expectedAIDisabled, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
-        Assert.Equal(!expectedAIDisabled, aiContextProvider.Enabled);
     }
 
     [Fact]

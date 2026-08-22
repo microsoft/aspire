@@ -19,7 +19,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScanAsync_WhenVsCodeFolderExists_ReturnsApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -36,7 +36,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScanAsync_WhenVsCodeFolderExistsInParent_ReturnsApplicatorForParent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var childDir = workspace.CreateDirectory("subdir");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
@@ -54,7 +54,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScanAsync_WhenRepositoryRootReachedBeforeVsCode_AndNoCliAvailable_ReturnsNoApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childDir = workspace.CreateDirectory("subdir");
         // Repository root is the workspace root, so search should stop there
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
@@ -70,7 +70,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScanAsync_WhenNoVsCodeFolder_AndVsCodeCliAvailable_ReturnsApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeCliRunner = new FakeVsCodeCliRunner(new SemVersion(1, 85, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
@@ -86,7 +86,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScanAsync_WhenNoVsCodeFolder_AndNoCliAvailable_ReturnsNoApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
@@ -103,7 +103,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_CreatesVsCodeFolderIfNotExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -130,7 +130,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_CreatesMcpJsonWithCorrectConfiguration()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -170,7 +170,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_PreservesExistingMcpJsonContent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         
         // Create an existing mcp.json with another server
@@ -211,7 +211,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_UpdatesExistingAspireServerConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         
         // Create an existing mcp.json with another server (not aspire, since aspire being present would skip offering the applicator)
@@ -258,7 +258,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScanAsync_AddsPlaywrightCliApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -274,7 +274,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_WithMalformedMcpJson_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
 
         // Create a malformed mcp.json
@@ -302,7 +302,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_WithEmptyMcpJson_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
 
         // Create an empty mcp.json (this is the exact scenario from the issue)
@@ -327,7 +327,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_WithMalformedMcpJson_DoesNotOverwriteFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
 
         // Create a malformed mcp.json with content the user may want to preserve

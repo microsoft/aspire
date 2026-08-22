@@ -49,8 +49,8 @@ internal sealed class AppHostServerProjectFactory(
                 dotNetCliRunner,
                 packagingService,
                 processExecutionFactory,
+                environment,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
-                environment: environment,
                 logFilePath: executionContext.LogFilePath);
         }
 
@@ -88,6 +88,7 @@ internal sealed class AppHostServerProjectFactory(
                 packagingService,
                 executionContext,
                 processExecutionFactory,
+                environment,
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
                 layoutLease);
         }

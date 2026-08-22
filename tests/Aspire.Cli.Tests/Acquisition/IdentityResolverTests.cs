@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.Utils;
@@ -22,7 +23,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveChannel_EnvWins_OverSidecarAndAssembly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
         var resolver = CreateResolver(workspace,
@@ -37,7 +38,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveChannel_SidecarWins_OverAssembly_WhenEnvAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
         var resolver = CreateResolver(workspace, channel: "stable");
@@ -50,7 +51,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveChannel_AssemblyFallback_WhenSidecarAndEnvAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // No sidecar file written — resolver should skip the sidecar layer.
 
         var resolver = CreateResolver(workspace, channel: "daily");
@@ -63,7 +64,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveChannel_TerminalDefault_WhenAllLayersEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Assembly without channel metadata throws inside IdentityChannelReader;
         // the resolver swallows that and falls through to the terminal default.
@@ -80,7 +81,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // An empty string env var value must not shadow a real sidecar/assembly
         // value — otherwise a user un-setting via `set ASPIRE_CLI_CHANNEL=` on
         // Windows would silently force `local`.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
 
         var resolver = CreateResolver(workspace,
@@ -95,7 +96,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveVersion_SplitsInformationalVersionAtPlus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace, informationalVersion: "13.4.0-preview.1.25366.3+abcdef0");
 
         var version = resolver.ResolveVersion();
@@ -109,7 +110,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveCommit_EmptyWhenInformationalVersionHasNoPlus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace, informationalVersion: "13.4.0");
 
         Assert.Equal(string.Empty, resolver.ResolveCommit().Value);
@@ -119,7 +120,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveVersion_EnvOverridesAssembly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.VersionEnvVar] = "99.0.0-test" });
 
@@ -134,7 +135,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [InlineData("13.4.0+abcdef0")]
     public void ResolveVersion_AcceptsValidSemVer(string version)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.VersionEnvVar] = version });
 
@@ -153,7 +154,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // The whole point of this PR's hardening: a bad ASPIRE_CLI_VERSION must surface
         // immediately with a message naming the env var, not silently corrupt downstream
         // version-keyed decisions.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.VersionEnvVar] = version });
 
@@ -165,7 +166,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveVersion_FromSidecar_FailsFast_WhenNotAVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","version":"garbage"}""");
         var resolver = CreateResolver(workspace);
 
@@ -180,7 +181,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [InlineData("0123456789012345678901234567890123456789")]
     public void ResolveCommit_AcceptsHexSha(string commit)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.CommitEnvVar] = commit });
 
@@ -196,7 +197,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [InlineData("abcdef 0")]       // embedded space
     public void ResolveCommit_FromEnv_FailsFast_WhenNotHex(string commit)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.CommitEnvVar] = commit });
 
@@ -209,7 +210,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [InlineData("https://api.nuget.org/v3/index.json")]
     public void ResolveNuGetServiceIndexOverride_AcceptsAbsoluteHttpUrl(string url)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.NuGetServiceIndexEnvVar] = url });
 
@@ -224,7 +225,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [InlineData("/relative/v3/index.json")]     // not absolute
     public void ResolveNuGetServiceIndexOverride_FromEnv_FailsFast_WhenNotHttpUrl(string url)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.NuGetServiceIndexEnvVar] = url });
 
@@ -238,7 +239,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         // Channel is intentionally NOT shape-validated from env/sidecar: bespoke labels like
         // "pr-17580" are legitimate overrides. This pins that decision so a future "tighten
         // validation" change can't silently break the override's primary use case.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             environmentVariables: new Dictionary<string, string?> { [IdentityResolver.ChannelEnvVar] = "totally-made-up" },
             channel: "stable",
@@ -252,7 +253,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveNuGetServiceIndexOverride_NullByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // No sidecar field, no env var — the override must remain null so
         // callers fall back to PackageSources.NuGetOrg via the `?? canonical` pattern.
         var resolver = CreateResolver(workspace, assemblyName: "OverrideNull");
@@ -265,7 +266,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveNuGetServiceIndexOverride_EnvWins()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","nugetServiceIndexOverride":"http://sidecar/v3/index.json"}""");
 
         var resolver = CreateResolver(workspace,
@@ -280,7 +281,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolveNuGetServiceIndexOverride_SidecarUsedWhenEnvAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","nugetServiceIndexOverride":"http://proxy.local/v3/index.json"}""");
 
         var resolver = CreateResolver(workspace, assemblyName: "OverrideSc");
@@ -293,7 +294,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolvePackagesDirectory_NullByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // No sidecar field, no env var — the override must remain null so the
         // packaging service does not synthesize an override channel.
         var resolver = CreateResolver(workspace, assemblyName: "PackagesNull");
@@ -306,7 +307,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolvePackagesDirectory_EnvWins()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
 
         var resolver = CreateResolver(workspace,
@@ -321,7 +322,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ResolvePackagesDirectory_SidecarUsedWhenEnvAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","packages":"/sidecar/packages"}""");
 
         var resolver = CreateResolver(workspace, assemblyName: "PackagesSc");
@@ -331,36 +332,139 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(IdentitySource.Sidecar, resolved.Source);
     }
 
-    [Fact]
-    public void BuildCliExecutionContext_FlagsIdentityOverridden_WhenEnvVersionSupplied()
+    /// <summary>
+    /// Pins the warning policy independently for every source and field. Sidecar
+    /// channel/version/commit values are canonical installed identity, while every
+    /// environment value and both package-redirection fields are diagnostic overrides.
+    /// Keeping the rows explicit makes adding a future identity field require a conscious
+    /// warning-policy decision instead of silently inheriting whichever boolean is convenient.
+    /// </summary>
+    [Theory]
+    // Installers and self-update author these fields. Any one of them is authoritative
+    // installed identity and must not make a normal staging installation look emulated.
+    // The sidecar has no authorship marker, so a manual edit follows the same policy.
+    [InlineData(IdentityInputSource.Sidecar, IdentityField.Channel, false)]
+    [InlineData(IdentityInputSource.Sidecar, IdentityField.Version, false)]
+    [InlineData(IdentityInputSource.Sidecar, IdentityField.Commit, false)]
+    // These sidecar fields redirect package behavior and are developer test affordances,
+    // so their persistent nature does not make them part of a standard installation.
+    [InlineData(IdentityInputSource.Sidecar, IdentityField.NuGetServiceIndexOverride, true)]
+    [InlineData(IdentityInputSource.Sidecar, IdentityField.Packages, true)]
+    // Environment variables always describe process-local emulation, even when their value
+    // happens to match the installed identity, because ambient shell state can be accidental.
+    [InlineData(IdentityInputSource.Environment, IdentityField.Channel, true)]
+    [InlineData(IdentityInputSource.Environment, IdentityField.Version, true)]
+    [InlineData(IdentityInputSource.Environment, IdentityField.Commit, true)]
+    [InlineData(IdentityInputSource.Environment, IdentityField.NuGetServiceIndexOverride, true)]
+    [InlineData(IdentityInputSource.Environment, IdentityField.Packages, true)]
+    public void BuildCliExecutionContext_IdentityOverrideNoticePolicy_MatchesSourceAndFieldSemantics(
+        IdentityInputSource inputSource,
+        IdentityField field,
+        bool expectedNoticeRequired)
     {
-        // ASPIRE_CLI_VERSION emulation must light up the override notice and feed IdentityVersion.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var envVars = new Dictionary<string, string?> { [IdentityResolver.VersionEnvVar] = "13.4.2" };
-        var resolver = CreateResolver(workspace,
-            environmentVariables: envVars,
-            informationalVersion: "13.5.0-dev+local",
-            assemblyName: "EnvVersionOverride");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var value = GetIdentityValue(workspace, field);
+        IReadOnlyDictionary<string, string?>? environmentVariables = null;
+
+        if (inputSource is IdentityInputSource.Sidecar)
+        {
+            var sidecar = new Dictionary<string, string>
+            {
+                ["source"] = "script",
+                [GetSidecarFieldName(field)] = value,
+            };
+            WriteSidecar(workspace.WorkspaceRoot.FullName, JsonSerializer.Serialize(sidecar));
+        }
+        else
+        {
+            environmentVariables = new Dictionary<string, string?>
+            {
+                [GetEnvironmentVariableName(field)] = value,
+            };
+        }
+
+        var resolver = CreateResolver(
+            workspace,
+            environmentVariables: environmentVariables,
+            informationalVersion: "13.5.0-dev+abcdef01",
+            assemblyName: $"NoticePolicy{inputSource}{field}");
 
         var context = BuildContextFromResolver(workspace, resolver);
 
+        Assert.Equal(
+            inputSource is IdentityInputSource.Sidecar ? IdentitySource.Sidecar : IdentitySource.Environment,
+            GetResolvedSource(resolver, field));
         Assert.True(context.IdentityOverridden);
-        Assert.Equal("13.4.2", context.IdentityVersion);
+        Assert.Equal(expectedNoticeRequired, context.IdentityOverrideNoticeRequired);
     }
 
     [Fact]
-    public void BuildCliExecutionContext_FlagsIdentityOverridden_WhenSidecarChannelSupplied()
+    public void BuildCliExecutionContext_AllInstalledSidecarIdentityFields_DoNotRequireOverrideNotice()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script","channel":"staging"}""");
-        var resolver = CreateResolver(workspace,
-            informationalVersion: "13.5.0-dev+local",
-            assemblyName: "SidecarChannelOverride");
+        // Installers may eventually author all three fields together. The policy applies to
+        // any combination, not just the channel-only shape written by today's staging flow.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteSidecar(
+            workspace.WorkspaceRoot.FullName,
+            """{"source":"script","channel":"staging","version":"13.5.0","commit":"abcdef01"}""");
+        var resolver = CreateResolver(
+            workspace,
+            channel: "stable",
+            informationalVersion: "13.4.6+12345678",
+            assemblyName: "AllInstalledSidecarIdentity");
 
         var context = BuildContextFromResolver(workspace, resolver);
 
         Assert.True(context.IdentityOverridden);
+        Assert.False(context.IdentityOverrideNoticeRequired);
         Assert.Equal("staging", context.IdentityChannel);
+        Assert.Equal("13.5.0", context.IdentityVersion);
+        Assert.Equal("abcdef01", context.IdentityCommit);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_LegacySourceOnlySidecar_DoesNotRequireOverrideNotice()
+    {
+        // A legacy route sidecar contributes no identity. Falling back to assembly metadata
+        // may warrant a doctor diagnostic, but it is not evidence of active emulation.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, """{"source":"script"}""");
+        var resolver = CreateResolver(
+            workspace,
+            channel: "stable",
+            informationalVersion: "13.4.6+12345678",
+            assemblyName: "LegacySourceOnlySidecar");
+
+        var context = BuildContextFromResolver(workspace, resolver);
+
+        Assert.False(context.IdentityOverridden);
+        Assert.False(context.IdentityOverrideNoticeRequired);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_InstalledIdentityWithDiagnosticOverride_RequiresOverrideNotice()
+    {
+        // One diagnostic input is enough to warn, even when the base channel/version/commit
+        // correctly describe a standard staging installation.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        WriteSidecar(
+            workspace.WorkspaceRoot.FullName,
+            """{"source":"script","channel":"staging","version":"13.5.0","commit":"abcdef01"}""");
+        var packagesDirectory = workspace.CreateDirectory("identity-packages");
+        var resolver = CreateResolver(
+            workspace,
+            environmentVariables: new Dictionary<string, string?>
+            {
+                [IdentityResolver.PackagesEnvVar] = packagesDirectory.FullName,
+            },
+            assemblyName: "InstalledIdentityWithDiagnosticOverride");
+
+        var context = BuildContextFromResolver(workspace, resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.True(context.IdentityOverrideNoticeRequired);
+        Assert.Equal("staging", context.IdentityChannel);
+        Assert.Equal(packagesDirectory.FullName, context.IdentityPackagesDirectory!.FullName);
     }
 
     [Fact]
@@ -368,7 +472,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         // No env vars and no sidecar — a real install reads its own assembly stamp, so the
         // notice must stay silent.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var resolver = CreateResolver(workspace,
             channel: "daily",
             informationalVersion: "13.5.0-preview.1.25366.3+abcdef0",
@@ -377,26 +481,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         var context = BuildContextFromResolver(workspace, resolver);
 
         Assert.False(context.IdentityOverridden);
-    }
-
-    [Fact]
-    public void BuildCliExecutionContext_FlagsIdentityOverridden_AndSetsPackagesDirectory_WhenPackagesOverrideSupplied()
-    {
-        // ASPIRE_CLI_PACKAGES emulation must light up the override notice and surface the directory
-        // so PackagingService can synthesize an override channel from it.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var packagesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "shipping");
-        var envVars = new Dictionary<string, string?> { [IdentityResolver.PackagesEnvVar] = packagesDir };
-        var resolver = CreateResolver(workspace,
-            environmentVariables: envVars,
-            informationalVersion: "13.5.0-dev+local",
-            assemblyName: "EnvPackagesOverride");
-
-        var context = BuildContextFromResolver(workspace, resolver);
-
-        Assert.True(context.IdentityOverridden);
-        Assert.NotNull(context.IdentityPackagesDirectory);
-        Assert.Equal(packagesDir, context.IdentityPackagesDirectory!.FullName);
+        Assert.False(context.IdentityOverrideNoticeRequired);
     }
 
     [Fact]
@@ -421,6 +506,50 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
 
     private static void WriteSidecar(string directory, string json)
         => File.WriteAllText(Path.Combine(directory, InstallSidecarReader.SidecarFileName), json);
+
+    private static string GetIdentityValue(TemporaryWorkspace workspace, IdentityField field)
+        => field switch
+        {
+            IdentityField.Channel => "staging",
+            IdentityField.Version => "13.5.0",
+            IdentityField.Commit => "abcdef01",
+            IdentityField.NuGetServiceIndexOverride => "https://example.test/v3/index.json",
+            IdentityField.Packages => workspace.CreateDirectory("identity-packages").FullName,
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
+
+    private static string GetSidecarFieldName(IdentityField field)
+        => field switch
+        {
+            IdentityField.Channel => "channel",
+            IdentityField.Version => "version",
+            IdentityField.Commit => "commit",
+            IdentityField.NuGetServiceIndexOverride => "nugetServiceIndexOverride",
+            IdentityField.Packages => "packages",
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
+
+    private static string GetEnvironmentVariableName(IdentityField field)
+        => field switch
+        {
+            IdentityField.Channel => IdentityResolver.ChannelEnvVar,
+            IdentityField.Version => IdentityResolver.VersionEnvVar,
+            IdentityField.Commit => IdentityResolver.CommitEnvVar,
+            IdentityField.NuGetServiceIndexOverride => IdentityResolver.NuGetServiceIndexEnvVar,
+            IdentityField.Packages => IdentityResolver.PackagesEnvVar,
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
+
+    private static IdentitySource GetResolvedSource(IIdentityResolver resolver, IdentityField field)
+        => field switch
+        {
+            IdentityField.Channel => resolver.ResolveChannel().Source,
+            IdentityField.Version => resolver.ResolveVersion().Source,
+            IdentityField.Commit => resolver.ResolveCommit().Source,
+            IdentityField.NuGetServiceIndexOverride => resolver.ResolveNuGetServiceIndexOverride().Source,
+            IdentityField.Packages => resolver.ResolvePackagesDirectory().Source,
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
 
     private IdentityResolver CreateResolver(
         TemporaryWorkspace workspace,
@@ -447,6 +576,7 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
     {
         return Program.BuildCliExecutionContext(
             debugMode: false,
+            consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "test.log"),
             identityResolver: resolver);
@@ -467,5 +597,20 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         builder.SetCustomAttribute(new CustomAttributeBuilder(infoCtor, [informationalVersion]));
 
         return builder;
+    }
+
+    public enum IdentityInputSource
+    {
+        Sidecar,
+        Environment,
+    }
+
+    public enum IdentityField
+    {
+        Channel,
+        Version,
+        Commit,
+        NuGetServiceIndexOverride,
+        Packages,
     }
 }

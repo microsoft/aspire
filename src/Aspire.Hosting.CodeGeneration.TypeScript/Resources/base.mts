@@ -352,6 +352,12 @@ export interface InteractionInputOption {
     value?: string;
 }
 
+export interface InteractionInputFile {
+    id?: string;
+    name?: string;
+    filePath?: string;
+}
+
 export interface InteractionInput {
     name?: string;
     label?: string;
@@ -365,6 +371,7 @@ export interface InteractionInput {
     allowCustomChoice?: boolean;
     disabled?: boolean;
     maxLength?: number;
+    files?: InteractionInputFile[];
 }
 
 type InteractionInputCollectionHandle = Handle<typeof interactionInputCollectionTypeId>;

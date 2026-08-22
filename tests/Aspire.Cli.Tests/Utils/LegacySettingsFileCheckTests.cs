@@ -11,7 +11,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WithLegacySettingsFile_ReturnsWarning()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var legacyDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
         Directory.CreateDirectory(legacyDir);
         await File.WriteAllTextAsync(Path.Combine(legacyDir, "settings.json"), "{}");
@@ -38,7 +38,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WithModernConfigFile_ReturnsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
             """{ "sdk": { "version": "13.0.0" } }""");
@@ -56,7 +56,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     {
         // If both legacy and modern files exist at the same level, no warning needed
         // because the modern config takes precedence.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var legacyDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
         Directory.CreateDirectory(legacyDir);
         await File.WriteAllTextAsync(Path.Combine(legacyDir, "settings.json"), "{}");
@@ -75,7 +75,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WithModernConfigBoundary_AndNoLegacyFiles_ReturnsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Place a modern config at the workspace root to prevent the walk-up from
         // escaping into the real filesystem where a legacy file might exist.
@@ -99,7 +99,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WithLegacyFileInParentDirectory_ReturnsWarning()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Place legacy settings at the workspace root level
         var legacyDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
@@ -125,7 +125,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     {
         // If a modern config exists between the working dir and the legacy file,
         // the walk-up should stop at the modern config.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Put legacy file in workspace root
         var legacyDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
@@ -154,7 +154,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Order_Is101()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         var check = new LegacySettingsFileCheck(executionContext);
 

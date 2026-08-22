@@ -27,13 +27,13 @@ using Microsoft.Extensions.Hosting;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class ProjectResourceTests
+public class ProjectResourceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddProjectWithTrailingCommasInLaunchSettingsDoesNotThrow()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync(workspace.WorkspaceRoot.FullName).DefaultTimeout();
 
         var appBuilder = CreateBuilder();
 
@@ -76,8 +76,8 @@ public class ProjectResourceTests
     [Fact]
     public async Task AddProjectWithInvalidLaunchSettingsShouldThrowSpecificError()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync(workspace.WorkspaceRoot.FullName).DefaultTimeout();
 
         var ex = Assert.Throws<DistributedApplicationException>(() =>
         {
@@ -990,6 +990,28 @@ public class ProjectResourceTests
         Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
+    [Fact]
+    public void GetProjectMetadataThrowsWhenSeveralAnnotationsArePresent()
+    {
+        var resource = new ProjectResource("projectName");
+        resource.Annotations.Add(new TestProject());
+        resource.Annotations.Add(new OverrideTestProject());
+
+        var exception = Assert.Throws<InvalidOperationException>(resource.GetProjectMetadata);
+        Assert.Contains("projectName", exception.Message);
+        Assert.Contains("more than one", exception.Message);
+    }
+
+    [Fact]
+    public void GetProjectMetadataThrowsWhenTheResourceHasNoProjectMetadata()
+    {
+        var resource = new ProjectResource("projectName");
+
+        var exception = Assert.Throws<InvalidOperationException>(resource.GetProjectMetadata);
+        Assert.Contains("projectName", exception.Message);
+        Assert.Contains(nameof(IProjectMetadata), exception.Message);
+    }
+
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
     {
         var resolvedArgs = new List<string>();
@@ -1013,6 +1035,11 @@ public class ProjectResourceTests
         public string ProjectPath => "another-path";
 
         public LaunchSettings? LaunchSettings { get; set; }
+    }
+
+    private sealed class OverrideTestProject : IProjectMetadata
+    {
+        public string ProjectPath => "override-path";
     }
 
     internal abstract class BaseProjectWithProfileAndConfig : IProjectMetadata

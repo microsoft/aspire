@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
@@ -26,7 +23,6 @@ public sealed class ResourceMenuBuilder
     private static readonly Icon s_tracesIcon = new Icons.Regular.Size16.GanttChart();
     private static readonly Icon s_metricsIcon = new Icons.Regular.Size16.ChartMultiple();
     private static readonly Icon s_linkIcon = new Icons.Regular.Size16.Link();
-    private static readonly Icon s_gitHubCopilotIcon = new AspireIcons.Size16.GitHubCopilot();
     private static readonly Icon s_toolboxIcon = new Icons.Regular.Size16.Toolbox();
     private static readonly Icon s_linkMultipleIcon = new Icons.Regular.Size16.LinkMultiple();
     private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
@@ -34,11 +30,8 @@ public sealed class ResourceMenuBuilder
 
     private readonly NavigationManager _navigationManager;
     private readonly TelemetryRepository _telemetryRepository;
-    private readonly IAIContextProvider _aiContextProvider;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
-    private readonly IStringLocalizer<Resources.AIAssistant> _aiAssistantLoc;
-    private readonly IStringLocalizer<Resources.AIPrompts> _aiPromptsLoc;
     private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
 
@@ -48,21 +41,15 @@ public sealed class ResourceMenuBuilder
     public ResourceMenuBuilder(
         NavigationManager navigationManager,
         TelemetryRepository telemetryRepository,
-        IAIContextProvider aiContextProvider,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
-        IStringLocalizer<Resources.AIAssistant> aiAssistantLoc,
-        IStringLocalizer<Resources.AIPrompts> aiPromptsLoc,
         IconResolver iconResolver,
         DashboardDialogService dialogService)
     {
         _navigationManager = navigationManager;
         _telemetryRepository = telemetryRepository;
-        _aiContextProvider = aiContextProvider;
         _controlLoc = controlLoc;
         _loc = loc;
-        _aiAssistantLoc = aiAssistantLoc;
-        _aiPromptsLoc = aiPromptsLoc;
         _iconResolver = iconResolver;
         _dialogService = dialogService;
     }
@@ -142,23 +129,6 @@ public sealed class ResourceMenuBuilder
                         ContainsSecret = true,
                         FixedFormat = DashboardUIHelpers.PropertiesFormat
                     }).ConfigureAwait(false);
-                }
-            });
-        }
-
-        if (_aiContextProvider.Enabled)
-        {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = s_gitHubCopilotIcon,
-                OnClick = async () =>
-                {
-                    await _aiContextProvider.LaunchAssistantSidebarAsync(
-                        promptContext => PromptContextsBuilder.AnalyzeResource(
-                            promptContext,
-                            _aiPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeResource), resource.Name),
-                            resource)).ConfigureAwait(false);
                 }
             });
         }

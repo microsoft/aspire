@@ -18,8 +18,8 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
 
     private readonly Func<OperatingSystemDetails> _getOperatingSystemDetails;
 
-    public OperatingSystemCheck()
-        : this(GetCurrentOperatingSystemDetails)
+    public OperatingSystemCheck(IEnvironment environment)
+        : this(() => GetCurrentOperatingSystemDetails(environment))
     {
     }
 
@@ -53,22 +53,22 @@ internal sealed class OperatingSystemCheck : IEnvironmentCheck
         return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([result]);
     }
 
-    internal static OperatingSystemDetails GetCurrentOperatingSystemDetails()
+    internal static OperatingSystemDetails GetCurrentOperatingSystemDetails(IEnvironment environment)
     {
         var version = Environment.OSVersion.Version;
         var description = RuntimeInformation.OSDescription;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (environment.IsWindows())
         {
             return CreateWindowsDetails(version, description);
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        if (environment.IsMacOS())
         {
             return CreateMacOSDetails(version, description);
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (environment.IsLinux())
         {
             return CreateLinuxDetails(version, description);
         }

@@ -1,0 +1,479 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+#pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
+
+namespace Aspire.Hosting.Tests;
+
+[Trait("Partition", "2")]
+public class DebugSupportExtensionsTests
+{
+    [Fact]
+    public void LaunchConfigurationCallbackContextExposesOnlyLaunchProducerInputs()
+    {
+        var contextType = typeof(LaunchConfigurationCallbackContext);
+
+        Assert.Empty(contextType.GetConstructors(BindingFlags.Public | BindingFlags.Instance));
+        Assert.Equal(
+            [
+                nameof(LaunchConfigurationCallbackContext.CancellationToken),
+                nameof(LaunchConfigurationCallbackContext.EnvironmentVariables),
+                nameof(LaunchConfigurationCallbackContext.Mode),
+                nameof(LaunchConfigurationCallbackContext.Resource)
+            ],
+            contextType.GetProperties().Select(property => property.Name).Order());
+        Assert.All(contextType.GetProperties(), property => Assert.Null(property.SetMethod));
+    }
+
+    [Fact]
+    public void CreateLaunchConfigurationOverloadsPreservePublicModeAndInternalContextContracts()
+    {
+        var methods = typeof(DebugSupportExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name == nameof(DebugSupportExtensions.CreateLaunchConfigurationAsync))
+            .ToList();
+
+        var modeOverload = Assert.Single(methods, method =>
+        {
+            var parameters = method.GetParameters();
+            return parameters.Length == 3 &&
+                parameters[0].ParameterType == typeof(IResource) &&
+                parameters[1].ParameterType == typeof(string) &&
+                parameters[2].ParameterType == typeof(CancellationToken);
+        });
+        Assert.True(modeOverload.IsPublic);
+        Assert.True(modeOverload.GetParameters()[2].IsOptional);
+
+        var contextOverload = Assert.Single(methods, method =>
+        {
+            var parameters = method.GetParameters();
+            return parameters.Length == 2 &&
+                parameters[0].ParameterType == typeof(IResource) &&
+                parameters[1].ParameterType == typeof(LaunchConfigurationCallbackContext);
+        });
+        Assert.True(contextOverload.IsAssembly);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationInspectionOverloadCreatesResourceBoundContext()
+    {
+        var inspectionOverload = typeof(DebugSupportExtensions).GetMethod(
+            nameof(DebugSupportExtensions.CreateLaunchConfigurationAsync),
+            BindingFlags.Public | BindingFlags.Static,
+            [typeof(IResource), typeof(string), typeof(CancellationToken)]);
+
+        Assert.NotNull(inspectionOverload);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration { Mode = context.Mode });
+                                }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug, cts.Token));
+
+        Assert.NotNull(observedContext);
+        Assert.Same(executable.Resource, observedContext.Resource);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, observedContext.Mode);
+        Assert.Empty(observedContext.EnvironmentVariables);
+        Assert.Equal(cts.Token, observedContext.CancellationToken);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationResolvesTheLaunchProfileForProjectResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
+        Assert.Equal(GetProjectPath(project.Resource), launchConfiguration.ProjectPath);
+        Assert.Equal("http", launchConfiguration.LaunchProfile);
+        Assert.False(launchConfiguration.DisableLaunchProfile);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationDisablesTheLaunchProfileWhenTheResourceExcludesIt()
+    {
+        // The producer registered by AddProject never sets DisableLaunchProfile; it is derived from
+        // ExcludeLaunchProfileAnnotation when the configuration is finalized. Passing a null launch profile
+        // name applies that annotation.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.True(launchConfiguration.DisableLaunchProfile);
+        Assert.Equal(string.Empty, launchConfiguration.LaunchProfile);
+    }
+
+    [Fact]
+    public void AddProjectRegistersProjectDebugSupportOnce()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+
+        var debugSupport = Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>());
+
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, debugSupport.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationReturnsTheProducerOutputForACustomProjectProducer()
+    {
+        // A resource can replace the project debug support that WithProjectDefaults registers. The producer
+        // owns the whole configuration, so its output is returned (and sent) verbatim.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http")
+                             .WithDebugSupport(mode => new ProjectLaunchConfiguration
+                             {
+                                 Mode = mode,
+                                 ProjectPath = "custom-path",
+                                 LaunchProfile = "https"
+                             }, KnownLaunchConfigurationTypes.Project);
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.NoDebug));
+
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+        Assert.Equal("custom-path", launchConfiguration.ProjectPath);
+        Assert.Equal("https", launchConfiguration.LaunchProfile);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationReturnsTheProducerOutputForNonProjectLaunchTypes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode, Package = "./cmd/api" }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.NoDebug));
+
+        Assert.Equal("go", launchConfiguration.Type);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+        Assert.Equal("./cmd/api", launchConfiguration.Package);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationAwaitsAnAsynchronousProducer()
+    {
+        // The producer is asynchronous so integrations can resolve the configuration from callbacks that are
+        // themselves asynchronous (for example build-argument callbacks contributed by other annotations).
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(async (mode, _) =>
+                                {
+                                    await Task.Yield();
+                                    return new TestGoLaunchConfiguration { Mode = mode, Package = "./cmd/api" };
+                                }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.Mode);
+        Assert.Equal("./cmd/api", launchConfiguration.Package);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationPropagatesTheCancellationTokenToTheProducer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        CancellationToken observedToken = default;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport((mode, cancellationToken) =>
+                                {
+                                    observedToken = cancellationToken;
+                                    return Task.FromResult(new TestGoLaunchConfiguration { Mode = mode });
+                                }, "go");
+
+        await CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug, cts.Token);
+
+        Assert.Equal(cts.Token, observedToken);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationPublicOverloadInvokesContextProducerWithLegacyInputs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration
+                                    {
+                                        Mode = context.Mode,
+                                        Package = "./cmd/api"
+                                    });
+                                }, "go");
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.NoDebug, cts.Token));
+
+        var actualContext = Assert.IsType<LaunchConfigurationCallbackContext>(observedContext);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+        Assert.Equal("./cmd/api", launchConfiguration.Package);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, actualContext.Mode);
+        Assert.Same(executable.Resource, actualContext.Resource);
+        Assert.Empty(actualContext.EnvironmentVariables);
+        Assert.Equal(cts.Token, actualContext.CancellationToken);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationPublicOverloadValidatesMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => executable.Resource.CreateLaunchConfigurationAsync(null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationWithContextUsesResolvedEnvironmentAndCancellation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cts = new CancellationTokenSource();
+        LaunchConfigurationCallbackContext? observedContext = null;
+
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(context =>
+                                {
+                                    observedContext = context;
+                                    return Task.FromResult(new TestGoLaunchConfiguration
+                                    {
+                                        Mode = context.Mode,
+                                        Package = context.EnvironmentVariables["GO_PACKAGE"]
+                                    });
+                                }, "go");
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            executable.Resource,
+            ExecutableLaunchMode.NoDebug,
+            new Dictionary<string, string> { ["GO_PACKAGE"] = "./cmd/api" },
+            cts.Token);
+
+        var launchConfiguration = Assert.IsType<TestGoLaunchConfiguration>(
+            await executable.Resource.CreateLaunchConfigurationAsync(callbackContext));
+
+        var actualContext = Assert.IsType<LaunchConfigurationCallbackContext>(observedContext);
+        Assert.Same(callbackContext, actualContext);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, launchConfiguration.Mode);
+        Assert.Equal("./cmd/api", launchConfiguration.Package);
+        Assert.Equal(cts.Token, actualContext.CancellationToken);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationThrowsWhenTheResourceHasNoDebugSupport()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.Contains("does not declare debug launch support", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationThrowsWhenTheResourceHasNoProjectMetadata()
+    {
+        // The producer resolves project metadata when it runs, so a resource that declares "project" debug
+        // support without carrying metadata fails with a clear message rather than a sequence error.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "dotnet", ".");
+        executable.WithDebugSupport(
+            mode => ProjectLaunchConfigurationFactory.Create(executable.Resource, mode),
+            KnownLaunchConfigurationTypes.Project);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.Contains("has no project metadata", exception.Message);
+    }
+
+    [Fact]
+    public async Task CreateLaunchConfigurationThrowsWhenTheProducerReturnsNull()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(_ => (TestGoLaunchConfiguration)null!, "go");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateLaunchConfigurationForTestAsync(executable.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.Contains("returned null", exception.Message);
+        Assert.Contains("app", exception.Message);
+        Assert.Contains("go", exception.Message);
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseWhenTheResourceHasNoDebugSupport()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".");
+
+        Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out var annotation));
+        Assert.Null(annotation);
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseWhenNoDebugSessionIsActive()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+
+        Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(debugSessionPort: null), out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
+    {
+        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches every project resource
+        // natively, so "project" stays implicitly supported instead of falling back to a plain process.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+
+        Assert.True(project.Resource.SupportsDebugging(CreateConfiguration(), out var annotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseForANonProjectTypeWhenTheIdeSendsNoCapabilityList()
+    {
+        // The implicit rule is deliberately limited to "project": an IDE that never advertised its
+        // capabilities cannot be assumed to know how to launch a "go" resource.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+
+        Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out _));
+    }
+
+    [Theory]
+    [InlineData(new[] { "go" }, true)]
+    [InlineData(new[] { "project", "go" }, true)]
+    [InlineData(new[] { "project" }, false)]
+    [InlineData(new string[0], false)]
+    public void SupportsDebuggingHonorsTheAdvertisedCapabilityList(string[] supportedLaunchConfigurations, bool expected)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+
+        var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(supportedLaunchConfigurations));
+
+        Assert.Equal(expected, executable.Resource.SupportsDebugging(configuration, out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseForProjectWhenTheAdvertisedCapabilityListOmitsIt()
+    {
+        // "project" gets no special treatment once the IDE advertises a list. The VS Code extension only
+        // includes it when the C# extension is installed; treating it as implicit would route the
+        // resource to an IDE that cannot launch it and leave it stuck.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+
+        var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(["go", "python"]));
+
+        Assert.False(project.Resource.SupportsDebugging(configuration, out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseWhenTheResourceForcesProcessExecution()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http")
+                             .WithAnnotation(new ForceProcessExecutionAnnotation());
+
+        Assert.False(project.Resource.SupportsDebugging(CreateConfiguration(), out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseForAPersistentResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http")
+                             .WithPersistentLifetime();
+
+        Assert.False(project.Resource.SupportsDebugging(CreateConfiguration(), out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingFallsBackToTheImplicitProjectRuleWhenDebugSessionInfoIsMalformed()
+    {
+        // Malformed DEBUG_SESSION_INFO is swallowed and treated as "no capability list", so the resource
+        // keeps the Visual Studio behavior instead of failing the run outright.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+        var executable = builder.AddExecutable("app", "go", ".")
+                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+
+        var configuration = CreateConfiguration(debugSessionInfo: "{ not json");
+
+        Assert.True(project.Resource.SupportsDebugging(configuration, out _));
+        Assert.False(executable.Resource.SupportsDebugging(configuration, out _));
+    }
+
+    private static IConfiguration CreateConfiguration(string? debugSessionPort = "12345", string? debugSessionInfo = null)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = debugSessionPort,
+                [KnownConfigNames.DebugSessionInfo] = debugSessionInfo
+            })
+            .Build();
+    }
+
+    // DEBUG_SESSION_INFO is the JSON the IDE sends, for example:
+    //   {"protocols_supported":["2024-03-03"],"supported_launch_configurations":["project","go"]}
+    // protocols_supported is required, so it must be present for the payload to deserialize at all.
+    private static string CreateDebugSessionInfo(string[] supportedLaunchConfigurations)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            protocols_supported = new[] { "2024-03-03" },
+            supported_launch_configurations = supportedLaunchConfigurations
+        });
+    }
+
+    private static string GetProjectPath(IResource resource) => resource.Annotations.OfType<IProjectMetadata>().Last().ProjectPath;
+
+    private static Task<object> CreateLaunchConfigurationForTestAsync(
+        IResource resource,
+        string mode = ExecutableLaunchMode.Debug,
+        CancellationToken cancellationToken = default)
+    {
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            resource,
+            mode,
+            cancellationToken: cancellationToken);
+
+        return resource.CreateLaunchConfigurationAsync(callbackContext);
+    }
+
+    private sealed class TestGoLaunchConfiguration() : ExecutableLaunchConfiguration("go")
+    {
+        [JsonPropertyName("package")]
+        public string Package { get; set; } = string.Empty;
+    }
+}

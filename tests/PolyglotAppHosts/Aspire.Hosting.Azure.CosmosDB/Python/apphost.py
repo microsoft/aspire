@@ -23,8 +23,8 @@ with create_builder() as builder:
     # 8) runAsEmulator + emulator container configuration methods
     cosmos_emulator = builder.add_azure_cosmos_db("resource")
     cosmos_emulator.run_as_emulator()
-    # 12) runAsPreviewEmulator + 13) withDataExplorer
-    cosmos_preview = builder.add_azure_cosmos_db("resource")
-    cosmos_preview.run_as_preview_emulator()
+    # 12) runAsClassicEmulator
+    cosmos_classic = builder.add_azure_cosmos_db("resource")
+    cosmos_classic.run_as_classic_emulator()
     app = builder.build()
     builder.run()

@@ -42,6 +42,7 @@ public static class DotnetToolResourceExtensions
     public static IResourceBuilder<T> AddDotnetTool<T>(this IDistributedApplicationBuilder builder, T resource)
         where T : DotnetToolResource
     {
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
         return builder.AddResource(resource)
             .WithInitialState(new CustomResourceSnapshot
             {
@@ -50,9 +51,10 @@ public static class DotnetToolResourceExtensions
             })
             .WithIconName("Toolbox")
             .WithCommand("dotnet")
-            .WithArgs(BuildToolExecArguments)
+            .WithLaunchToolArgs(BuildToolExecArguments, showInCommandLine: false)
             .WithRequiredCommand("dotnet", context => ValidateDotnetSdkVersionAsync(context, resource.WorkingDirectory))
             .OnBeforeResourceStarted(BeforeResourceStarted);
+#pragma warning restore ASPIREEXTENSION001
 
         void BuildToolExecArguments(CommandLineArgsCallbackContext x)
         {

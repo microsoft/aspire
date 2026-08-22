@@ -10,6 +10,34 @@ Streaming output should be the streamed form of the command's JSON content rathe
 
 Most JSON output uses camel-case property names. Properties whose values are not available can be omitted or written as `null`, depending on the command-specific serializer.
 
+## Pipeline steps
+
+`aspire do --list-steps --format json` starts the selected AppHost in inspection mode and returns pipeline steps registered while building the application model. Inspection does not run `BeforeStart` callbacks, raise publish events, or execute pipeline steps. The AppHost still starts its registered hosted services so the CLI backchannel can connect. Steps added dynamically by `BeforeStart` are not included. Supplying a step name filters the result to that step and its transitive dependencies.
+
+```json
+[
+  {
+    "name": "deploy-api",
+    "description": "Deploy the API",
+    "dependsOn": [
+      "publish-api"
+    ],
+    "tags": [
+      "deploy-compute"
+    ],
+    "resourceName": "api"
+  }
+]
+```
+
+| Field | Description |
+| ----- | ----------- |
+| `name` | Unique pipeline step name. |
+| `description` | Optional description of the step. |
+| `dependsOn` | Names of direct dependencies. |
+| `tags` | Tags associated with the step. |
+| `resourceName` | Name of the associated resource, when applicable. |
+
 ## AppHost discovery and lifecycle
 
 ### `aspire ls`
@@ -451,17 +479,32 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
       "message": "Container runtime is not running.",
       "fix": "Start Docker Desktop.",
       "link": "https://learn.microsoft.com/dotnet/aspire/"
+    },
+    {
+      "category": "devtools",
+      "name": "vscode-extension",
+      "status": "warning",
+      "message": "VS Code is installed, but the Aspire extension is not installed",
+      "fix": "Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.",
+      "link": "https://aka.ms/aspire/vscode-extension",
+      "metadata": {
+        "vsCodeInstalled": true,
+        "extensionInstalled": false,
+        "extensionId": "microsoft-aspire.aspire-vscode"
+      }
     }
   ],
   "summary": {
     "passed": 2,
-    "warnings": 1,
+    "warnings": 2,
     "failed": 0
   }
 }
 ```
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
+
+The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
 
 ### `aspire config info`
 
@@ -492,6 +535,8 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
   ]
 }
 ```
+
+The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
 
 ## MCP tooling
 

@@ -219,6 +219,14 @@
   <data name="SummaryDetailsViewSplitVertical" xml:space="preserve">
     <value>Split vertical</value>
   </data>
+  <data name="TextVisualizerContentLabel" xml:space="preserve">
+    <value>Text content</value>
+    <comment>Accessible name for the scrollable text/code region in the text visualizer.</comment>
+  </data>
+  <data name="ScrollToBottom" xml:space="preserve">
+    <value>Scroll to bottom</value>
+    <comment>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</comment>
+  </data>
   <data name="SummaryDetailsViewCloseView" xml:space="preserve">
     <value>Close</value>
   </data>

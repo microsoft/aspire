@@ -2,8 +2,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { mauiExtensionId } from '../../capabilities';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, MauiLaunchConfiguration, isMauiLaunchConfiguration } from "../../dcp/types";
 import { invalidLaunchConfiguration } from "../../loc/strings";
+import { delay } from "../../utils/async";
 import { addFilteredEnvironmentKeys, removeFilteredEnvironmentKeys } from "../../utils/environment";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
@@ -107,10 +109,6 @@ async function waitForMauiCommand(command: string, timeoutMs: number): Promise<b
     return false;
 }
 
-function delay(timeoutMs: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, timeoutMs));
-}
-
 function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
     if (isMauiLaunchConfiguration(launchConfig)) {
         return launchConfig.project_path;
@@ -147,6 +145,8 @@ function isMauiDebugAdapterInfrastructureEnvironmentVariable(name: string): bool
 function isKnownMauiApplicationEnvironmentVariable(name: string): boolean {
     return name === 'ASPNETCORE_ENVIRONMENT' ||
         name === 'DOTNET_ENVIRONMENT' ||
+        // TODO: Remove ASPIRE_DASHBOARD_AI_DISABLED — no longer recognized by the dashboard.
+        // See https://github.com/microsoft/aspire/issues/18751
         name === 'ASPIRE_DASHBOARD_AI_DISABLED' ||
         name === 'ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL' ||
         name === 'ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL' ||
@@ -378,7 +378,7 @@ function getDeviceIdentity(device: MauiDeviceInfo): string {
 }
 
 async function listMauiDevices(): Promise<MauiDeviceInfo[]> {
-    const mauiExtension = vscode.extensions.getExtension('ms-dotnettools.dotnet-maui');
+    const mauiExtension = vscode.extensions.getExtension(mauiExtensionId);
     if (!mauiExtension) {
         throw new Error('The .NET MAUI VS Code extension is required to resolve MAUI device targets.');
     }
@@ -608,7 +608,7 @@ function registerMauiLaunchJsonConfigurationWrapper(runId: string, projectPath: 
         }
 
         try {
-            await vscode.extensions.getExtension('ms-dotnettools.dotnet-maui')?.activate();
+            await vscode.extensions.getExtension(mauiExtensionId)?.activate();
             const debugCommandAvailable = await waitForMauiCommand(mauiStartDebugSessionCommand, mauiCommandRegistrationTimeoutMs);
             if (!debugCommandAvailable) {
                 throw new Error(`The .NET MAUI extension did not register '${mauiStartDebugSessionCommand}' within ${mauiCommandRegistrationTimeoutMs}ms.`);
@@ -636,7 +636,7 @@ function registerMauiActiveDebugTargetWrapper(runId: string, platform: string | 
 }
 
 async function setMauiActiveDebugTarget(platform: string, device: string): Promise<void> {
-    const mauiExtension = vscode.extensions.getExtension<MauiExtensionApi>('ms-dotnettools.dotnet-maui');
+    const mauiExtension = vscode.extensions.getExtension<MauiExtensionApi>(mauiExtensionId);
     const exports = await mauiExtension?.activate() ?? mauiExtension?.exports;
     const debugTargetsManager = exports?.maui?.debugTargetsManager;
     const setActiveDebugTarget = debugTargetsManager?.setActiveDebugTarget;
@@ -752,7 +752,7 @@ function applyEnvironmentToMauiConfiguration(env: EnvVar[], debugConfiguration: 
 export const mauiDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'maui',
     debugAdapter: 'maui',
-    extensionId: 'ms-dotnettools.dotnet-maui',
+    extensionId: mauiExtensionId,
     getDisplayName,
     getSupportedFileTypes: () => ['.csproj'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),

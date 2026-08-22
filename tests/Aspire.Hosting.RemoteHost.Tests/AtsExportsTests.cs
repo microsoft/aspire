@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Aspire.Tests.Utils;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Tests;
 using Xunit;
@@ -12,7 +13,7 @@ using Xunit;
 namespace Aspire.Hosting.RemoteHost.Tests;
 
 [Trait("Partition", "4")]
-public class AtsExportsTests
+public class AtsExportsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void GetConnectionString_ReturnsConfiguredValue()
@@ -113,6 +114,70 @@ public class AtsExportsTests
                 Assert.Equal("zone", input.Name);
                 Assert.Equal("a", input.Value);
             });
+    }
+
+    [Fact]
+    public async Task PromptInputs_ResultCarriesSubmittedFileMetadataByName()
+    {
+        var interactionService = new TestInteractionService();
+        var input = InteractionExports.CreateFileInput(interactionService, "artifact", new CreateInteractionInputOptions
+        {
+            Label = "Artifact",
+            MaxFileSize = 1024
+        });
+
+        var promptTask = InteractionExports.PromptInputs(
+            interactionService,
+            "Upload",
+            "Select a file.",
+            [input]);
+
+        var data = await interactionService.Interactions.Reader.ReadAsync();
+        data.Inputs["artifact"].Value = "/repo/artifact.zip";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
+        await File.WriteAllTextAsync(tempFile, "test content");
+        var releaseCount = 0;
+        data.Inputs["artifact"].SetFiles(new InteractionFileCollection(
+            [new InteractionFile("file-1", "artifact.zip", tempFile)],
+            () => releaseCount++));
+
+        data.CompletionTcs.SetResult(InteractionResult.Ok(data.Inputs));
+
+        var result = await promptTask;
+
+        Assert.False(result.Canceled);
+        Assert.Equal("/repo/artifact.zip", result.Inputs["artifact"].Value);
+        var files = result.Inputs["artifact"].GetFiles();
+        var file = Assert.Single(files);
+        Assert.Equal("artifact.zip", file.Name);
+        Assert.Equal(1024, result.Inputs["artifact"].MaxFileSize);
+
+        input.ReleaseFiles();
+        input.ReleaseFiles();
+
+        Assert.Equal(1, releaseCount);
+        Assert.Equal("artifact.zip", file.Name);
+    }
+
+    [Fact]
+    public void CreateFileInput_CreatesFileWithOptions()
+    {
+        var interactionService = new TestInteractionService();
+
+        var input = InteractionExports.CreateFileInput(interactionService, "artifact", new CreateInteractionInputOptions
+        {
+            Label = "Artifact",
+            Placeholder = "Choose artifact",
+            MaxFileSize = 2048
+        }).Input;
+
+        Assert.Equal("artifact", input.Name);
+        Assert.Equal("Artifact", input.Label);
+        Assert.Equal("Choose artifact", input.Placeholder);
+        Assert.Equal(InputType.File, input.InputType);
+        Assert.Equal(2048, input.MaxFileSize);
     }
 #pragma warning restore ASPIREINTERACTION001
 

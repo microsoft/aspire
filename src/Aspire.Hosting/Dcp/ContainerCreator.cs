@@ -400,9 +400,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
     }
 
-    IEnumerable<RenderedModelResource<ContainerExec>> IObjectCreator<ContainerExec, EmptyCreationContext>.PrepareObjects()
-        => _appResources.Get().OfType<RenderedModelResource<ContainerExec>>();
-
     bool IObjectCreator<ContainerExec, EmptyCreationContext>.IsReadyToCreate(RenderedModelResource<ContainerExec> resource, EmptyCreationContext context)
         => true;
 

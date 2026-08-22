@@ -175,7 +175,7 @@ public class TelemetryConfigurationTests
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
-        var config = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var config = AppHostLauncher.CreateDetachedChildEnvironment(activity, appHostSelectionOrigin: null);
         config[AspireCliTelemetry.OtlpExporterEndpointConfigKey] = "http://localhost:4317";
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(config.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value)))
@@ -275,6 +275,35 @@ public class TelemetryConfigurationTests
         var manager = new TelemetryManager(configuration, tagsSource, [flag]);
 
         Assert.False(manager.HasAzureMonitor);
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("true")]
+    public void AzureMonitor_Disabled_ForAgentTelemetry_WhenGlobalOptOutSet(string optOutValue)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [AspireCliTelemetry.TelemetryOptOutConfigKey] = optOutValue
+            })
+            .Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.False(manager.HasAzureMonitor);
+    }
+
+    [Fact]
+    public void AzureMonitor_Enabled_ForAgentTelemetry_WhenNoOptOutSet()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.True(manager.HasAzureMonitor);
     }
 
     private static ActivityListener CreateActivityListener(string sourceName)

@@ -48,7 +48,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_InPlaceCreation_WithoutExistingConfig_CreatesInWorkingDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -69,7 +69,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_InPlaceCreation_WithExistingConfig_UpdatesWorkingDirectoryConfig()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
 
         // Create existing NuGet.config in working directory without the required source
@@ -104,7 +104,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_SubdirectoryCreation_WithParentConfig_IgnoresParentAndCreatesInOutputDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -148,7 +148,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_SubdirectoryCreation_WithExistingConfigInOutputDirectory_MergesInOutputDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -185,7 +185,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_SubdirectoryCreation_WithoutAnyConfig_CreatesInOutputDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -215,7 +215,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_ImplicitChannel_DoesNothing()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -236,7 +236,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_ExplicitChannelWithoutMappings_DoesNothing()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -382,7 +382,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<bool> PromptConfirmAsync(string prompt, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -404,7 +404,7 @@ public class DotNetTemplateFactoryTests
         public void DisplayError(string message, bool allowMarkup = false) { }
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-        public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
+        public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null) { }
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
@@ -474,6 +474,8 @@ public class DotNetTemplateFactoryTests
                 EnvironmentVariables = new Dictionary<string, string>(),
                 Success = true
             });
+
+        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter

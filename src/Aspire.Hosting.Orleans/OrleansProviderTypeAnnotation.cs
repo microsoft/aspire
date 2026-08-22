@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Orleans;
 /// </summary>
 /// <param name="providerType">The Orleans provider type to use for the resource.</param>
 /// <param name="options">Configuration options to be set for this resource's type.</param>
-public sealed class OrleansProviderTypeAnnotation(string providerType, IReadOnlyDictionary<string, string>? options = null) : IResourceAnnotation
+internal sealed class OrleansProviderTypeAnnotation(string providerType, IReadOnlyDictionary<string, string>? options = null) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the Orleans provider type to use for the resource.

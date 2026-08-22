@@ -511,7 +511,7 @@ internal sealed class BicepProvisioner(
         var targetScope = BicepUtilities.GetExistingResourceScope(resource);
         var isTenantScoped = targetScope?.IsTenantScope == true;
         var isSubscriptionScoped = !isTenantScoped &&
-            targetScope is { Subscription: not null, ResourceGroup: null };
+            targetScope is { Subscription: not null, HasResourceGroup: false };
 
         if (targetScope?.Subscription is { } existingSubscription)
         {
@@ -519,8 +519,9 @@ internal sealed class BicepProvisioner(
             subscription = await context.ArmClient.GetSubscriptionAsync(existingSubscriptionId, cancellationToken).ConfigureAwait(false);
         }
 
-        if (targetScope?.ResourceGroup is { } existingResourceGroup)
+        if (targetScope?.HasResourceGroup == true)
         {
+            var existingResourceGroup = targetScope.ResourceGroup;
             var existingResourceGroupName = await ResolveScopeValueAsync(existingResourceGroup, cancellationToken).ConfigureAwait(false);
             var response = await subscription.GetResourceGroups().GetAsync(existingResourceGroupName, cancellationToken).ConfigureAwait(false);
             resourceGroup = response.Value;
@@ -1403,7 +1404,13 @@ internal sealed class BicepProvisioner(
         {
             ValidateUnknownPrincipalParameter(context);
 
-            resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = "User";
+            // Use the principal type detected from the credential's access token (the `idtyp`
+            // claim) instead of hardcoding "User". A hardcoded "User" caused the role-assignment
+            // `-roles` deployments synthesized by AzureResourcePreparer to fail with
+            // `UnmatchedPrincipalType` / `PrincipalNotFound` whenever the AppHost ran under a
+            // service-principal / federated-workload-identity credential (CI, CD, deploy bots).
+            // See https://github.com/microsoft/aspire/issues/13933.
+            resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = context.Principal.Type;
         }
 
         if (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null)

@@ -45,7 +45,11 @@ internal enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file input. Allows the user to select a file.
+    /// </summary>
+    File
 }
 
 internal sealed class EnvVar
@@ -64,6 +68,9 @@ internal sealed class EnvVar
 /// </summary>
 internal sealed class DebugSessionOptions
 {
+    internal const string ExplicitCliAppHostSelectionOrigin = "explicit-cli";
+    internal const string DefaultDiscoveryAppHostSelectionOrigin = "default-discovery";
+
     /// <summary>
     /// Gets or sets the command type for the debug session (e.g., "run", "deploy", "publish", "do").
     /// </summary>
@@ -75,4 +82,16 @@ internal sealed class DebugSessionOptions
     /// </summary>
     [JsonPropertyName("args")]
     public string[]? Args { get; set; }
+
+    /// <summary>
+    /// Gets or sets environment variables to pass to the CLI process started by the debug session.
+    /// </summary>
+    [JsonPropertyName("env")]
+    public Dictionary<string, string>? EnvironmentVariables { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value describing how the AppHost was selected.
+    /// </summary>
+    [JsonPropertyName("appHostSelectionOrigin")]
+    public string? AppHostSelectionOrigin { get; set; }
 }

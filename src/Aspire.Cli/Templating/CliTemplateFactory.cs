@@ -43,6 +43,15 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         ".otf"
     ];
 
+    // Embedded resources carry no file mode, so every scaffolded file lands with the default
+    // 0644. Build wrappers are invoked as "./mvnw" / "./gradlew" and fail with "Permission
+    // denied" on Unix unless the execute bit is restored here.
+    private static readonly HashSet<string> s_executableTemplateFileNames =
+    [
+        "mvnw",
+        "gradlew"
+    ];
+
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
     {
         Description = TemplatingStrings.UseLocalhostTld_Description
@@ -60,6 +69,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     private readonly CliExecutionContext _executionContext;
     private readonly IInteractionService _interactionService;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IEnvironment _environment;
     private readonly TemplateNuGetConfigService _templateNuGetConfigService;
     private readonly ILogger<CliTemplateFactory> _logger;
 
@@ -71,6 +81,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         ICliHostEnvironment hostEnvironment,
+        IEnvironment environment,
         TemplateNuGetConfigService templateNuGetConfigService,
         ILogger<CliTemplateFactory> logger)
     {
@@ -81,6 +92,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         _executionContext = executionContext;
         _interactionService = interactionService;
         _hostEnvironment = hostEnvironment;
+        _environment = environment;
         _templateNuGetConfigService = templateNuGetConfigService;
         _logger = logger;
     }
@@ -199,7 +211,16 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyGoStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                languageId: KnownLanguageId.Go)
+                languageId: KnownLanguageId.Go),
+
+            new CallbackTemplate(
+                KnownTemplateId.JavaStarter,
+                "Starter App (Spring Boot/React, Java AppHost)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyJavaStarterTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Java)
         ];
 
         return templates.Where(IsTemplateAvailable);
@@ -327,6 +348,30 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 await writer.WriteAsync(transformedContent.AsMemory(), cancellationToken);
                 await writer.FlushAsync(cancellationToken);
             }
+
+            MakeExecutableIfBuildWrapper(filePath);
+        }
+    }
+
+    private void MakeExecutableIfBuildWrapper(string filePath)
+    {
+        if (_environment.IsWindows() || !s_executableTemplateFileNames.Contains(Path.GetFileName(filePath)))
+        {
+            return;
+        }
+
+        try
+        {
+#pragma warning disable CA1416 // Guarded by the IsWindows check above, which the analyzer cannot see through.
+            var mode = File.GetUnixFileMode(filePath);
+            File.SetUnixFileMode(filePath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+#pragma warning restore CA1416
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            // A wrapper that is not executable still runs through "sh ./mvnw", so a file system that
+            // rejects mode changes should degrade rather than fail the whole scaffold.
+            _logger.LogDebug(ex, "Unable to set the execute bit on scaffolded build wrapper '{FilePath}'.", filePath);
         }
     }
 
@@ -335,7 +380,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         var currentDir = _executionContext.WorkingDirectory.FullName;
         var relativePath = Path.GetRelativePath(currentDir, outputPath);
 
-        var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        var pathComparison = _environment.IsWindows() || _environment.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 

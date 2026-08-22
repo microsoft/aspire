@@ -21,12 +21,13 @@ namespace Aspire.Cli.Acquisition;
 /// </remarks>
 internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 {
-    private static readonly string s_aspireBinaryName = OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
+    private readonly string _aspireBinaryName;
 
     private readonly IIdentityChannelReader _channelReader;
     private readonly IInstallSidecarReader _sidecarReader;
     private readonly IPeerInstallProbe _peerProbe;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<InstallationDiscovery> _logger;
     private readonly IReadOnlyList<IInstallationCandidateSource> _candidateSources;
 
@@ -35,6 +36,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         IInstallSidecarReader sidecarReader,
         IPeerInstallProbe peerProbe,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<InstallationDiscovery> logger,
         IEnumerable<IInstallationCandidateSource> candidateSources)
     {
@@ -42,6 +44,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         ArgumentNullException.ThrowIfNull(sidecarReader);
         ArgumentNullException.ThrowIfNull(peerProbe);
         ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(candidateSources);
 
@@ -49,7 +52,9 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         _sidecarReader = sidecarReader;
         _peerProbe = peerProbe;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
+        _aspireBinaryName = environment.IsWindows() ? "aspire.exe" : "aspire";
         var sources = candidateSources.ToArray();
         _candidateSources = sources.Length > 0 ? sources : CreateDefaultCandidateSources();
     }
@@ -136,7 +141,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         // the same canonical path are silently dropped.
         var seen = new HashSet<string>(
             self.CanonicalPath is { Length: > 0 } sp ? [sp] : [],
-            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            _environment.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
         if (pathHits.Count == 0)
         {
@@ -154,7 +159,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 
         var candidateCount = 0;
         var candidateContext = new InstallationCandidateContext(
-            s_aspireBinaryName,
+            _aspireBinaryName,
             _executionContext.HomeDirectory,
             _executionContext.AspireHomeDirectory,
             pathHits,
@@ -452,14 +457,14 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         }
     }
 
-    private static string GetPathStatus(string? canonicalPath, IEnumerable<InstallationPathHit> pathHits)
+    private string GetPathStatus(string? canonicalPath, IEnumerable<InstallationPathHit> pathHits)
     {
         if (string.IsNullOrEmpty(canonicalPath))
         {
             return InstallationPathStatus.NotOnPath;
         }
 
-        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var comparer = _environment.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var isFirst = true;
         foreach (var pathHit in pathHits)
         {

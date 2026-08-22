@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
@@ -40,6 +39,8 @@ internal static class ResourceSetupHelpers
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
         context.JSInterop.SetupVoid("focusElement", _ => true);
+
+        FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
     public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)

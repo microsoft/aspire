@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
@@ -82,6 +83,7 @@ internal sealed class AzureProvisioningController(
 {
     internal const string ForgetStateCommandName = "forget-state";
     internal const string ChangeResourceLocationCommandName = "change-location";
+    internal const string ConfirmDeleteArgumentName = "confirmDelete";
     internal const string GetAzureResourceCommandName = "get-azure-resource";
     internal const string CancelCommandName = "cancel-azure-operation";
     internal const string DeleteAzureResourceCommandName = "delete-azure-resource";
@@ -364,8 +366,18 @@ internal sealed class AzureProvisioningController(
                 AlwaysLoadOnStart = true,
                 LoadCallback = context => LoadLocationArgumentOptionsAsync(context, deploymentStateResourceName)
             }
-        }
+        },
+        CreateChangeLocationDeleteConfirmationArgument()
     ];
+
+    private static InteractionInput CreateChangeLocationDeleteConfirmationArgument() => new()
+    {
+        Name = ConfirmDeleteArgumentName,
+        Label = AzureProvisioningStrings.ChangeResourceLocationConfirmDeleteLabel,
+        Description = AzureProvisioningStrings.ChangeResourceLocationConfirmDeleteDescription,
+        InputType = InputType.Boolean,
+        Value = "false"
+    };
 
     private static async Task LoadTenantArgumentOptionsAsync(LoadInputContext context)
     {
@@ -652,7 +664,7 @@ internal sealed class AzureProvisioningController(
             throw new MissingConfigurationException("Azure resource location can't be changed because the interaction service is unavailable.");
         }
 
-        var targetResources = GetTargetAzureResources(model, resourceName);
+        var targetResources = GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: false);
         var currentLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
         var locationOptions = await GetLocationOptionsAsync(cancellationToken).ConfigureAwait(false);
         var useChoiceInput = locationOptions.Count > 0;
@@ -671,7 +683,8 @@ internal sealed class AzureProvisioningController(
                     Required = true,
                     Value = currentLocation,
                     Options = locationOptions
-                }
+                },
+                CreateChangeLocationDeleteConfirmationArgument()
             ],
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -686,10 +699,20 @@ internal sealed class AzureProvisioningController(
             return false;
         }
 
-        return await ChangeResourceLocationAsync(model, resourceName, location, cancellationToken).ConfigureAwait(false);
+        return await ChangeResourceLocationAsync(
+            model,
+            resourceName,
+            location,
+            IsResourceDeletionConfirmed(result.Data),
+            cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> ChangeResourceLocationAsync(DistributedApplicationModel model, string resourceName, string location, CancellationToken cancellationToken)
+    private async Task<bool> ChangeResourceLocationAsync(
+        DistributedApplicationModel model,
+        string resourceName,
+        string location,
+        bool confirmDelete,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
@@ -699,7 +722,10 @@ internal sealed class AzureProvisioningController(
 
         location = NormalizeLocation(location, await GetLocationOptionsAsync(cancellationToken).ConfigureAwait(false));
 
-        return await RunOperationAsync<bool>(model, new ChangeResourceLocationIntent(resourceName, location), cancellationToken).ConfigureAwait(false);
+        return await RunOperationAsync<bool>(
+            model,
+            new ChangeResourceLocationIntent(resourceName, location, confirmDelete),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private Task<ExecuteCommandResult> ExecuteResetProvisioningStateCommandAsync(ExecuteCommandContext context)
@@ -879,8 +905,18 @@ internal sealed class AzureProvisioningController(
             return Task.FromResult(false);
         }
 
-        return ChangeResourceLocationAsync(model, resourceName, location, cancellationToken);
+        return ChangeResourceLocationAsync(
+            model,
+            resourceName,
+            location,
+            IsResourceDeletionConfirmed(arguments),
+            cancellationToken);
     }
+
+    private static bool IsResourceDeletionConfirmed(InteractionInputCollection arguments)
+        => arguments.TryGetByName(ConfirmDeleteArgumentName, out var input) &&
+            bool.TryParse(input.Value, out var confirmDelete) &&
+            confirmDelete;
 
     internal ResourceCommandState GetEnvironmentCommandState()
     {
@@ -1192,7 +1228,10 @@ internal sealed class AzureProvisioningController(
             !bicepResource.IsEmulator())];
     }
 
-    private static List<(IResource Resource, IAzureResource AzureResource)> GetTargetAzureResources(DistributedApplicationModel model, string resourceName)
+    private static List<(IResource Resource, IAzureResource AzureResource)> GetTargetAzureResources(
+        DistributedApplicationModel model,
+        string resourceName,
+        bool includeAnnotationParentRelationships)
     {
         var azureResources = GetProvisionableAzureResources(model);
         var targetResource = azureResources.SingleOrDefault(resource =>
@@ -1204,7 +1243,7 @@ internal sealed class AzureProvisioningController(
             throw new InvalidOperationException($"Azure resource '{resourceName}' was not found or cannot be reprovisioned.");
         }
 
-        var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
+        var parentChildLookup = GetTargetParentChildLookup(model, includeAnnotationParentRelationships);
         var visitedResources = new HashSet<string>(StringComparers.ResourceName);
         var queue = new Queue<(IResource Resource, IAzureResource AzureResource)>();
         var targetResources = new List<(IResource Resource, IAzureResource AzureResource)>();
@@ -1261,14 +1300,41 @@ internal sealed class AzureProvisioningController(
         }
     }
 
+    private static ILookup<IResource, IResource> GetTargetParentChildLookup(DistributedApplicationModel model, bool includeAnnotationParentRelationships)
+    {
+        // WithParentRelationship stores visual parentage as ResourceRelationshipAnnotation instead of
+        // IResourceWithParent. Reprovision target discovery needs both forms so parent commands include
+        // generated Azure children such as implicit Key Vaults.
+        return model.Resources
+            .SelectMany(resource => GetResourceParents(resource, includeAnnotationParentRelationships).Select(parent => (Parent: parent, Child: resource)))
+            .ToLookup(static relationship => relationship.Parent, static relationship => relationship.Child);
+    }
+
+    private static IEnumerable<IResource> GetResourceParents(IResource resource, bool includeAnnotationParentRelationships)
+    {
+        if (resource is IResourceWithParent resourceWithParent)
+        {
+            yield return resourceWithParent.Parent;
+        }
+
+        // Change-location opts out of annotation-based parents so a parent resource with an
+        // implicit Key Vault child is not treated as a Key Vault location-change target.
+        if (includeAnnotationParentRelationships &&
+            resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships) &&
+            relationships.LastOrDefault(static relationship => relationship.Type == KnownRelationshipTypes.Parent) is { } parentRelationship)
+        {
+            yield return parentRelationship.Resource;
+        }
+    }
+
     private static bool IsKeyVaultTarget(DistributedApplicationModel model, string resourceName)
     {
-        return GetTargetAzureResources(model, resourceName)
+        return GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: false)
             .Any(static resource => resource.AzureResource is IAzureKeyVaultResource);
     }
 
     private static void ThrowIfKeyVaultLocationChangeTarget(DistributedApplicationModel model, string resourceName)
-        => ThrowIfKeyVaultLocationChangeTarget(GetTargetAzureResources(model, resourceName));
+        => ThrowIfKeyVaultLocationChangeTarget(GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: false));
 
     private static void ThrowIfKeyVaultLocationChangeTarget(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> targetResources)
     {
@@ -1678,7 +1744,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<object?> ExecuteForgetResourceStateAsync(DistributedApplicationModel model, ForgetResourceStateIntent intent, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: true);
         // Forgetting state is local-only. It deliberately does not call ARM delete; users choose the
         // Delete command when they want Aspire to remove live Azure resources.
         await ResetResourcesAsync(model, targetResources, preserveOverrides: false, cancellationToken).ConfigureAwait(false);
@@ -1818,8 +1884,21 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteChangeResourceLocationAsync(DistributedApplicationModel model, ChangeResourceLocationIntent intent, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: false);
         ThrowIfKeyVaultLocationChangeTarget(targetResources);
+
+        var targetBicepResource = targetResources[0].AzureResource as AzureBicepResource;
+        LocationChangeResourceDeletion? resourceDeletion = null;
+        if (targetBicepResource is not null)
+        {
+            // Validate the potentially destructive step before publishing ChangingLocation. A rejected
+            // invocation must leave the resource tree at its prior terminal state so drift checks continue.
+            resourceDeletion = await PrepareCachedResourceDeletionForLocationChangeAsync(
+                targetBicepResource,
+                intent.Location,
+                intent.ConfirmDelete,
+                cancellationToken).ConfigureAwait(false);
+        }
 
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
         UpdateActiveOperationPhase(
@@ -1834,7 +1913,7 @@ internal sealed class AzureProvisioningController(
             }).ConfigureAwait(false);
         }
 
-        if (targetResources[0].AzureResource is AzureBicepResource targetBicepResource)
+        if (targetBicepResource is not null)
         {
             // ARM rejects redeploying many resource types to a different location while the old
             // resource still exists. Delete the cached live resource first, then save the override
@@ -1843,7 +1922,7 @@ internal sealed class AzureProvisioningController(
                 intent,
                 AzureProvisioningStrings.OperationPhaseDeletingAzureResource,
                 FormatUserString(AzureProvisioningStrings.OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat, intent.Location));
-            await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, cancellationToken).ConfigureAwait(false);
+            await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, resourceDeletion, cancellationToken).ConfigureAwait(false);
             await SetResourceLocationOverrideAsync(targetBicepResource.Name, intent.Location, cancellationToken).ConfigureAwait(false);
         }
 
@@ -1858,7 +1937,7 @@ internal sealed class AzureProvisioningController(
     private async Task<bool> ExecuteReprovisionResourceAsync(DistributedApplicationModel model, ReprovisionResourceIntent intent, CancellationToken cancellationToken)
     {
         UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseReprovisioning);
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: true);
         var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
         var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
         await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
@@ -1872,12 +1951,37 @@ internal sealed class AzureProvisioningController(
         {
             // If a delete command is canceled after the live vault is deleted but before purge finishes,
             // the next reprovision sees ARM's soft-delete conflict. At that point the user explicitly
-            // asked to recreate this resource, so purge the tombstone for the same target ID and retry once.
+            // asked to recreate this resource, so purge the tombstone for the same target ID when Azure
+            // can still find it.
+            var keyVaultResourceIdentifier = new ResourceIdentifier(keyVaultResourceId);
             UpdateActiveOperationPhase(
                 intent,
                 AzureProvisioningStrings.OperationPhasePurgingDeletedKeyVault,
-                FormatUserString(AzureProvisioningStrings.OperationPhasePurgingRecoverableKeyVaultFormat, new ResourceIdentifier(keyVaultResourceId).Name));
-            await DeleteAzureResourceIdsAsync([keyVaultResourceId], intent.ResourceName, effectiveLocation, currentContext.Location, allowKeyVaultPurgeTimeout: false, cancellationToken).ConfigureAwait(false);
+                FormatUserString(AzureProvisioningStrings.OperationPhasePurgingRecoverableKeyVaultFormat, keyVaultResourceIdentifier.Name));
+            var armClient = await GetArmClientForResourceIdAsync(keyVaultResourceId, cancellationToken).ConfigureAwait(false);
+            // Key Vault names are reserved by a location-scoped soft-delete tombstone after the live
+            // vault is gone. Reprovision has to purge that tombstone before ARM can create a new vault
+            // with the same generated name. ARM only reports this conflict once the live vault is already
+            // absent, so issue the purge directly rather than starting another delete that can wait on
+            // the same tombstone and delay the retry.
+            var purged = await PurgeDeletedKeyVaultAsync(
+                armClient,
+                keyVaultResourceId,
+                intent.ResourceName,
+                effectiveLocation,
+                currentContext.Location,
+                allowTimeout: false,
+                cancellationToken).ConfigureAwait(false);
+            if (!purged)
+            {
+                var failureDetails = AzureProvisioningFailureDetails.CreateKeyVaultDeletedStateTombstoneNotFound(
+                    keyVaultResourceIdentifier.Name,
+                    keyVaultResourceId,
+                    GetKeyVaultPurgeLocations(effectiveLocation, currentContext.Location));
+                await PublishSyntheticProvisioningFailureAsync(model, targetResources, failureDetails).ConfigureAwait(false);
+                throw new AzureProvisioningFailureException(failureDetails, ex);
+            }
+
             await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
             return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
         }
@@ -1918,7 +2022,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task CancelResourceCoreAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, resourceName);
+        var targetResources = GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: true);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
         ActiveAzureOperation? activeOperation = null;
@@ -1984,7 +2088,7 @@ internal sealed class AzureProvisioningController(
     private async Task<DeleteAzureResourceResult> ExecuteDeleteAzureResourceAsync(DistributedApplicationModel model, DeleteAzureResourceIntent intent, CancellationToken cancellationToken)
     {
         UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseDeletingAzureResource);
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: true);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
         foreach (var resource in targetResources)
@@ -2178,7 +2282,10 @@ internal sealed class AzureProvisioningController(
             return intent.Operation;
         }
 
-        var resourceNames = GetTargetAzureResources(model, intent.Operation.ResourceNames.Single())
+        var resourceNames = GetTargetAzureResources(
+            model,
+            intent.Operation.ResourceNames.Single(),
+            includeAnnotationParentRelationships: intent is not ChangeResourceLocationIntent)
             .SelectMany(static resource => resource.Resource == resource.AzureResource
                 ? [resource.Resource.Name]
                 : new[] { resource.Resource.Name, resource.AzureResource.Name })
@@ -2355,7 +2462,10 @@ internal sealed class AzureProvisioningController(
     private async Task<JsonObject> CreateResourceCommandResultJsonAsync(string commandName, DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken)
     {
         var json = await CreateCommandResultJsonAsync(commandName, resourceName, cancellationToken).ConfigureAwait(false);
-        var targetResources = GetTargetAzureResources(model, resourceName);
+        var targetResources = GetTargetAzureResources(
+            model,
+            resourceName,
+            includeAnnotationParentRelationships: commandName != ChangeResourceLocationCommandName);
         var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
         json["resourceCount"] = targetResources.Count;
         json["location"] = effectiveLocation;
@@ -2365,7 +2475,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<CommandResultData> CreateAzureResourceInfoCommandResultDataAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, resourceName);
+        var targetResources = GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: true);
 
         // Targeting a parent Azure resource can include children and role assignments that must
         // be reprovisioned together. The info command, however, reports the resource the user
@@ -2841,31 +2951,62 @@ internal sealed class AzureProvisioningController(
             // from deployment state that point at a different subscription than the current context.
             var armClient = await GetArmClientForResourceIdAsync(resourceId, cancellationToken).ConfigureAwait(false);
 
-            _logger.LogInformation("Deleting Azure resource {ResourceId} for {ResourceName}.", resourceId, resourceName);
-
-            try
-            {
-                await armClient.DeleteResourceAsync(resourceId, cancellationToken).ConfigureAwait(false);
-            }
-            catch (RequestFailedException ex) when (ex.Status == 404)
-            {
-                _logger.LogInformation(ex, "Azure resource {ResourceId} was already absent while deleting resources for {ResourceName}.", resourceId, resourceName);
-            }
-
-            await PurgeDeletedKeyVaultAsync(armClient, resourceId, resourceName, resourceLocation, fallbackResourceLocation, allowKeyVaultPurgeTimeout, cancellationToken).ConfigureAwait(false);
+            await DeleteAzureResourceIdAndPurgeDeletedKeyVaultAsync(
+                armClient,
+                resourceId,
+                resourceName,
+                resourceLocation,
+                fallbackResourceLocation,
+                allowKeyVaultPurgeTimeout,
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private async Task PurgeDeletedKeyVaultAsync(IArmClient armClient, string resourceId, string resourceName, string? resourceLocation, string? fallbackResourceLocation, bool allowTimeout, CancellationToken cancellationToken)
+    private async Task<bool> DeleteAzureResourceIdAndPurgeDeletedKeyVaultAsync(
+        IArmClient armClient,
+        string resourceId,
+        string resourceName,
+        string? resourceLocation,
+        string? fallbackResourceLocation,
+        bool allowKeyVaultPurgeTimeout,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Deleting Azure resource {ResourceId} for {ResourceName}.", resourceId, resourceName);
+
+        try
+        {
+            await armClient.DeleteResourceAsync(resourceId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogInformation(ex, "Azure resource {ResourceId} was already absent while deleting resources for {ResourceName}.", resourceId, resourceName);
+        }
+
+        return await PurgeDeletedKeyVaultAsync(
+            armClient,
+            resourceId,
+            resourceName,
+            resourceLocation,
+            fallbackResourceLocation,
+            allowKeyVaultPurgeTimeout,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> PurgeDeletedKeyVaultAsync(
+        IArmClient armClient,
+        string resourceId,
+        string resourceName,
+        string? resourceLocation,
+        string? fallbackResourceLocation,
+        bool allowTimeout,
+        CancellationToken cancellationToken)
     {
         if (!IsKeyVaultResourceId(resourceId))
         {
-            return;
+            return false;
         }
 
-        var keyVaultLocations = new List<string>();
-        AddLocationIfPresent(keyVaultLocations, resourceLocation);
-        AddLocationIfPresent(keyVaultLocations, fallbackResourceLocation);
+        var keyVaultLocations = GetKeyVaultPurgeLocations(resourceLocation, fallbackResourceLocation);
 
         foreach (var keyVaultLocation in keyVaultLocations)
         {
@@ -2874,15 +3015,22 @@ internal sealed class AzureProvisioningController(
                 if (await armClient.PurgeDeletedKeyVaultAsync(resourceId, keyVaultLocation, cancellationToken).ConfigureAwait(false))
                 {
                     _logger.LogInformation("Purged deleted Azure Key Vault {ResourceId} in {Location} for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
-                    return;
+                    // The locations are candidates for the same recoverable vault tombstone. Once
+                    // Azure finds and accepts the purge in one location, there is no second
+                    // tombstone to purge.
+                    return true;
                 }
+
+                _logger.LogInformation("Deleted Azure Key Vault {ResourceId} was not found in {Location} while purging for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
             }
             catch (TimeoutException ex) when (allowTimeout)
             {
                 _logger.LogWarning(ex, "Timed out waiting for deleted Azure Key Vault {ResourceId} in {Location} to be purged for {ResourceName}. The live vault was deleted and purge was requested; a later reprovision can retry if Azure is still finalizing the tombstone.", resourceId, keyVaultLocation, resourceName);
-                return;
+                return true;
             }
         }
+
+        return false;
     }
 
     private static bool IsKeyVaultResourceId(string resourceId)
@@ -2890,6 +3038,17 @@ internal sealed class AzureProvisioningController(
         return ResourceIdentifier.TryParse(resourceId, out var parsedResourceId) &&
             parsedResourceId is not null &&
             string.Equals(parsedResourceId.ResourceType.ToString(), KeyVaultVaultResourceType, StringComparisons.AzureResourceType);
+    }
+
+    private static IReadOnlyList<string> GetKeyVaultPurgeLocations(string? resourceLocation, string? fallbackResourceLocation)
+    {
+        // Deleted Key Vault lookups are location-scoped. Try the resource's effective location first,
+        // then the current Azure context location as a fallback for older cached state or partial
+        // failures where the resource-specific location was not persisted.
+        var keyVaultLocations = new List<string>();
+        AddLocationIfPresent(keyVaultLocations, resourceLocation);
+        AddLocationIfPresent(keyVaultLocations, fallbackResourceLocation);
+        return keyVaultLocations;
     }
 
     private static void AddLocationIfPresent(List<string> locations, string? location)
@@ -3249,7 +3408,11 @@ internal sealed class AzureProvisioningController(
         }
     }
 
-    private async Task DeleteCachedResourceForLocationChangeAsync(AzureBicepResource resource, string requestedLocation, CancellationToken cancellationToken)
+    private async Task<LocationChangeResourceDeletion?> PrepareCachedResourceDeletionForLocationChangeAsync(
+        AzureBicepResource resource,
+        string requestedLocation,
+        bool confirmDelete,
+        CancellationToken cancellationToken)
     {
         var currentLocation = TryGetCurrentResourceLocation(resource) ??
             await TryGetPersistedResourceLocationAsync(resource, cancellationToken).ConfigureAwait(false);
@@ -3258,14 +3421,14 @@ internal sealed class AzureProvisioningController(
         {
             // If the current location is unknown or already matches the requested location, there is
             // nothing safe or necessary to delete before reprovisioning.
-            return;
+            return null;
         }
 
         if (await TryGetResourceIdFromDeploymentStateAsync(resource, cancellationToken).ConfigureAwait(false) is not { } resourceId)
         {
             // Without a cached resource ID we cannot target the old live resource. Let
             // reprovisioning proceed and surface any ARM conflict through the normal deployment path.
-            return;
+            return null;
         }
 
         var context = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
@@ -3274,7 +3437,7 @@ internal sealed class AzureProvisioningController(
             // Deleting for a location change is a best-effort preflight. If context is invalid, avoid
             // making a destructive call and let the subsequent provisioning validation report the
             // missing subscription configuration.
-            return;
+            return null;
         }
 
         var armClientProvider = serviceProvider.GetRequiredService<IArmClientProvider>();
@@ -3284,31 +3447,63 @@ internal sealed class AzureProvisioningController(
         {
             // Cached state can point at a resource that has already been manually deleted. In that
             // case the location change only needs to update local override state and reprovision.
+            return null;
+        }
+
+        if (!confirmDelete)
+        {
+            // Resource command confirmations are UI metadata and are not enforced by non-interactive
+            // CLI or MCP callers. Require an explicit command argument before publishing transient
+            // state or reaching the destructive boundary.
+            throw new InvalidOperationException(FormatUserString(
+                AzureProvisioningStrings.ChangeResourceLocationDeleteConfirmationRequiredFormat,
+                resource.Name,
+                ConfirmDeleteArgumentName));
+        }
+
+        return new(armClient, resourceId, currentLocation);
+    }
+
+    private async Task DeleteCachedResourceForLocationChangeAsync(
+        AzureBicepResource resource,
+        string requestedLocation,
+        LocationChangeResourceDeletion? resourceDeletion,
+        CancellationToken cancellationToken)
+    {
+        if (resourceDeletion is null)
+        {
             return;
         }
 
         _logger.LogInformation(
             "Deleting Azure resource {ResourceId} before reprovisioning {ResourceName} from {CurrentLocation} to {RequestedLocation}.",
-            resourceId,
+            resourceDeletion.ResourceId,
             resource.Name,
-            currentLocation,
+            resourceDeletion.CurrentLocation,
             requestedLocation);
 
         try
         {
-            await armClient.DeleteResourceAsync(resourceId, cancellationToken).ConfigureAwait(false);
+            await resourceDeletion.ArmClient.DeleteResourceAsync(resourceDeletion.ResourceId, cancellationToken).ConfigureAwait(false);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
             _logger.LogInformation(
                 "Azure resource {ResourceId} was already absent before reprovisioning {ResourceName} from {CurrentLocation} to {RequestedLocation}.",
-                resourceId,
+                resourceDeletion.ResourceId,
                 resource.Name,
-                currentLocation,
+                resourceDeletion.CurrentLocation,
                 requestedLocation);
         }
 
-        await PurgeDeletedKeyVaultAsync(armClient, resourceId, resource.Name, currentLocation, null, allowTimeout: false, cancellationToken).ConfigureAwait(false);
+        await PurgeDeletedKeyVaultAsync(
+            resourceDeletion.ArmClient,
+            resourceDeletion.ResourceId,
+            resource.Name,
+            resourceDeletion.CurrentLocation,
+            null,
+            allowTimeout: false,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> TryGetPersistedResourceLocationAsync(AzureBicepResource resource, CancellationToken cancellationToken)
@@ -3563,6 +3758,25 @@ internal sealed class AzureProvisioningController(
                 Properties = failureDetails is null
                     ? state.Properties
                     : failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private async Task PublishSyntheticProvisioningFailureAsync(
+        DistributedApplicationModel model,
+        IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> targetResources,
+        AzureProvisioningFailureDetails failureDetails)
+    {
+        // This is only for synthetic reprovision failures raised outside the normal per-resource
+        // provisioning task. Exceptions observed by AfterProvisionAsync keep their existing path so
+        // ARM-specific terminal states are not replaced with a generic provisioning failure.
+        var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
+        foreach (var targetResource in targetResources)
+        {
+            await PublishUpdateToResourceTreeAsync(targetResource, parentChildLookup, state => state with
+            {
+                State = new(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error),
+                Properties = failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
             }).ConfigureAwait(false);
         }
     }
@@ -4165,7 +4379,9 @@ internal sealed class AzureProvisioningController(
 
     private sealed record ForgetResourceStateIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Reset provisioning state"));
 
-    private sealed record ChangeResourceLocationIntent(string ResourceName, string Location) : AzureIntent(AzureOperationState.Resource(ResourceName, "Change Azure resource location"));
+    private sealed record ChangeResourceLocationIntent(string ResourceName, string Location, bool ConfirmDelete) : AzureIntent(AzureOperationState.Resource(ResourceName, "Change Azure resource location"));
+
+    private sealed record LocationChangeResourceDeletion(IArmClient ArmClient, string ResourceId, string CurrentLocation);
 
     private sealed record ReprovisionResourceIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Reprovision Azure resource"));
 

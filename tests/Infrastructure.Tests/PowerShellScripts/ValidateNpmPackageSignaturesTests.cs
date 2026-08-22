@@ -17,23 +17,24 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class ValidateNpmPackageSignaturesTests : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly ITestOutputHelper _output;
 
     public ValidateNpmPackageSignaturesTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "validate-npm-package-signatures.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
     public async Task FailsWhenShippingDirectoryDoesNotExist()
     {
-        var missing = Path.Combine(_tempDir.Path, "does-not-exist");
+        var missing = Path.Combine(_workspace.Path, "does-not-exist");
 
         var result = await RunScript(missing);
 
@@ -50,7 +51,7 @@ public sealed class ValidateNpmPackageSignaturesTests : IDisposable
         // now rejects non-container paths up front (Test-Path -PathType
         // Container) and reports the same "not found (or not a directory)"
         // error so callers get one clear failure mode.
-        var filePath = Path.Combine(_tempDir.Path, "not-a-directory.txt");
+        var filePath = Path.Combine(_workspace.Path, "not-a-directory.txt");
         File.WriteAllText(filePath, "hi");
 
         var result = await RunScript(filePath);
@@ -210,7 +211,7 @@ public sealed class ValidateNpmPackageSignaturesTests : IDisposable
     private string CreateShipping()
     {
         var unique = Path.GetRandomFileName();
-        var path = Path.Combine(_tempDir.Path, unique, "Shipping");
+        var path = Path.Combine(_workspace.Path, unique, "Shipping");
         Directory.CreateDirectory(path);
         return path;
     }

@@ -51,6 +51,7 @@ public static class GitHubModelsExtensions
         defaultApiKeyParameter.WithParentRelationship(resource);
 
         return builder.AddResource(resource)
+            .WithIconName("BrainCircuit")
             .WithInitialState(new()
             {
                 ResourceType = "GitHubModel",

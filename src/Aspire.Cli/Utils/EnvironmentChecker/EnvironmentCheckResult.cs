@@ -37,6 +37,11 @@ internal static class EnvironmentCheckCategories
     /// Checks that report SDK state.
     /// </summary>
     internal const string Sdk = "sdk";
+
+    /// <summary>
+    /// Checks that report development tooling state (for example, editor extensions).
+    /// </summary>
+    internal const string DevelopmentTools = "devtools";
 }
 
 /// <summary>

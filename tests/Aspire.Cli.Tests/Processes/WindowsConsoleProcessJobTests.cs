@@ -30,42 +30,134 @@ public class WindowsConsoleProcessJobTests
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
         var job = new WindowsConsoleProcessJob();
-        Process spawnedProcess;
+        using var spawnedProcess = SpawnJobAssignedChildProcess(job, createNewConsole: true);
 
-        // Long-running ping (~60s) so we can verify it's still alive between spawn and
-        // job dispose; the process exits exactly because JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-        // fires when the last handle to the job closes (i.e. inside Dispose below).
-        var startInfo = new IsolatedProcessStartInfo
+        // Confirm the child is up before disposing the job — otherwise a fast spawn
+        // failure would look identical to successful parent-exit cleanup.
+        Assert.False(spawnedProcess.HasExited);
+
+        job.Dispose();
+
+        // KILL_ON_JOB_CLOSE is reliably observable within a couple of seconds;
+        // give a generous window for CI under load.
+        await spawnedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.True(spawnedProcess.HasExited);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task Dispose_KillsAssignedChildProcessWithoutConsoleIsolation()
+    {
+        Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
+
+        var job = new WindowsConsoleProcessJob();
+        using var spawnedProcess = SpawnJobAssignedChildProcess(job, createNewConsole: false);
+
+        Assert.False(spawnedProcess.HasExited);
+
+        job.Dispose();
+
+        await spawnedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.True(spawnedProcess.HasExited);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void SpawnProcess_WithJob_AssignsChildToJobAtomicallyAtCreation()
+    {
+        Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
+
+        using var job = new WindowsConsoleProcessJob();
+
+        using var nulHandle = WindowsProcessInterop.CreateFileW(
+            "NUL",
+            WindowsProcessInterop.GenericRead | WindowsProcessInterop.GenericWrite,
+            WindowsProcessInterop.FileShareRead | WindowsProcessInterop.FileShareWrite,
+            nint.Zero,
+            WindowsProcessInterop.OpenExisting,
+            0,
+            nint.Zero);
+
+        Assert.False(nulHandle.IsInvalid);
+        Assert.True(WindowsProcessInterop.SetHandleInformation(
+            nulHandle,
+            WindowsProcessInterop.HandleFlagInherit,
+            WindowsProcessInterop.HandleFlagInherit));
+
+        var nulRawHandle = nulHandle.DangerousGetHandle();
+        var stdio = new WindowsProcessInterop.StdioHandles(
+            Stdin: nulRawHandle,
+            Stdout: nulRawHandle,
+            Stderr: nulRawHandle);
+
+        var pi = WindowsProcessInterop.SpawnProcess(
+            "cmd.exe",
+            ["/c", "ping", "-n", "60", "127.0.0.1"],
+            Environment.CurrentDirectory,
+            stdio,
+            environment: null,
+            createNewConsole: false,
+            job.Handle);
+
+        try
         {
-            FileName = "cmd.exe",
-            WorkingDirectory = Environment.CurrentDirectory,
-            JobHandle = job.Handle,
-        };
-        startInfo.ArgumentList.Add("/c");
-        startInfo.ArgumentList.Add("ping");
-        startInfo.ArgumentList.Add("-n");
-        startInfo.ArgumentList.Add("60");
-        startInfo.ArgumentList.Add("127.0.0.1");
-
-        await using (var child = IsolatedProcess.Start(
-            startInfo,
-            standardOutputHandler: static (_, _) => { },
-            standardErrorHandler: static (_, _) => { }))
+            // PROC_THREAD_ATTRIBUTE_JOB_LIST associates the child with the job before it runs, so the
+            // membership is observable the instant CreateProcess returns — there is no separate assign
+            // step that a parent dying mid-spawn could skip, and the child was never suspended.
+            Assert.True(WindowsProcessInterop.IsProcessInJob(pi.hProcess, job.Handle, out var isInJob));
+            Assert.True(isInJob);
+        }
+        finally
         {
-            spawnedProcess = child.Process;
+            WindowsProcessInterop.TerminateProcess(pi.hProcess, 1);
+            WindowsProcessInterop.CloseHandle(pi.hProcess);
+            WindowsProcessInterop.CloseHandle(pi.hThread);
+        }
+    }
 
-            // Confirm the child is up before disposing the job — otherwise a fast spawn
-            // failure would look identical to a successful kill-on-close.
-            Assert.False(spawnedProcess.HasExited);
+    [SupportedOSPlatform("windows")]
+    private static Process SpawnJobAssignedChildProcess(WindowsConsoleProcessJob job, bool createNewConsole)
+    {
+        using var nulHandle = WindowsProcessInterop.CreateFileW(
+            "NUL",
+            WindowsProcessInterop.GenericRead | WindowsProcessInterop.GenericWrite,
+            WindowsProcessInterop.FileShareRead | WindowsProcessInterop.FileShareWrite,
+            nint.Zero,
+            WindowsProcessInterop.OpenExisting,
+            0,
+            nint.Zero);
 
-            job.Dispose();
+        Assert.False(nulHandle.IsInvalid);
+        Assert.True(WindowsProcessInterop.SetHandleInformation(
+            nulHandle,
+            WindowsProcessInterop.HandleFlagInherit,
+            WindowsProcessInterop.HandleFlagInherit));
 
-            // KILL_ON_JOB_CLOSE is reliably observable within a couple of seconds;
-            // give a generous window for CI under load.
-            await spawnedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        var nulRawHandle = nulHandle.DangerousGetHandle();
+        var stdio = new WindowsProcessInterop.StdioHandles(
+            Stdin: nulRawHandle,
+            Stdout: nulRawHandle,
+            Stderr: nulRawHandle);
 
-            Assert.True(spawnedProcess.HasExited);
+        var pi = WindowsProcessInterop.SpawnProcess(
+            "cmd.exe",
+            ["/c", "ping", "-n", "60", "127.0.0.1"],
+            Environment.CurrentDirectory,
+            stdio,
+            environment: null,
+            createNewConsole,
+            job.Handle);
+
+        try
+        {
+            return Process.GetProcessById(pi.dwProcessId);
+        }
+        finally
+        {
+            WindowsProcessInterop.CloseHandle(pi.hProcess);
+            WindowsProcessInterop.CloseHandle(pi.hThread);
         }
     }
 }
-

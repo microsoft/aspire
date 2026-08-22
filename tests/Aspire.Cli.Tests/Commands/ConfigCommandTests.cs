@@ -7,6 +7,7 @@ using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System.Text.Json;
@@ -18,6 +19,24 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class ConfigCommandTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void ConfigInfo_AdvertisesLsJsonStream()
+    {
+        Assert.Contains(KnownCapabilities.LsJsonStream, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesIsolatedLaunch()
+    {
+        Assert.Contains(KnownCapabilities.IsolatedLaunch, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesPipelineStepListJson()
+    {
+        Assert.Contains(KnownCapabilities.PipelineStepListJson, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
     [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
@@ -41,7 +60,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigCommand_WithExtensionMode_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper,
             options =>
             {
@@ -69,7 +88,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigCommandReturnsInvalidCommandExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -83,7 +102,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_WithFlatKey_CreatesSimpleProperty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -106,7 +125,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsSourceUrls_CanBeConfiguredViaAspireConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -143,7 +162,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_WithDotNotation_CreatesNestedObject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -168,7 +187,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_WithDeepDotNotation_CreatesDeeplyNestedObject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -196,7 +215,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_ReplacesPrimitiveWithObject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -226,7 +245,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigGetCommand_WithFlatKey_ReturnsValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services1 = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider1 = services1.BuildServiceProvider();
 
@@ -252,7 +271,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigGetCommand_WithDotNotation_ReturnsNestedValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services1 = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider1 = services1.BuildServiceProvider();
 
@@ -277,7 +296,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigGetCommand_WithNonExistentKey_ReturnsError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -291,7 +310,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigDeleteCommand_WithFlatKey_RemovesValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -316,7 +335,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigDeleteCommand_CleansUpEmptyParentObjects()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -345,7 +364,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigListCommand_ShowsFlattenedDotNotationKeys()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -373,7 +392,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigListCommand_WithoutAllFlag_ShowsHintInsteadOfFeatures()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -399,7 +418,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigListCommand_WithAllFlag_ShowsFeatureDetails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -425,7 +444,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigListCommand_WithoutAllFlag_NoConfig_ShowsHintAboutAllFlag()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -447,7 +466,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigListCommand_WithAllFlag_NoConfig_ShowsAvailableFeatures()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -467,9 +486,78 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConfigListCommand_WithAllFlag_DoesNotListHiddenFeature()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var listResult = command.Parse("config list --all");
+        var listExitCode = await listResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, listExitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+        // A non-hidden feature is listed, proving the available-features section rendered...
+        Assert.Contains(KnownFeatures.ShowAllTemplates, output);
+        // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not be advertised.
+        Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
+    }
+
+    [Fact]
+    public async Task ConfigInfoJson_DoesNotAdvertiseHiddenFeature()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var infoResult = command.Parse("config info --json");
+        var infoExitCode = await infoResult.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, infoExitCode);
+
+        // The only place a feature name reaches the JSON is availableFeatures (SettingsSchemaBuilder
+        // does not enumerate feature flags), so asserting on the name token reliably proves exclusion.
+        var output = string.Join("\n", outputWriter.Logs);
+        // A non-hidden feature is present, proving availableFeatures was emitted...
+        Assert.Contains(KnownFeatures.ShowAllTemplates, output);
+        // ...but the hidden aspireSkillsRemoteFetchEnabled feature must not appear.
+        Assert.DoesNotContain(KnownFeatures.AspireSkillsRemoteFetchEnabled, output);
+    }
+
+    [Fact]
+    public void HiddenFeature_WhenSetExplicitly_IsStillHonored()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(
+            workspace,
+            outputHelper,
+            // Hiding a feature only removes it from discovery; a value set directly in
+            // configuration must still be honored by IFeatures.
+            options => options.ConfigurationCallback += config =>
+            {
+                config[$"{KnownFeatures.FeaturePrefix}:{KnownFeatures.AspireSkillsRemoteFetchEnabled}"] = "true";
+            });
+        using var provider = services.BuildServiceProvider();
+
+        var featureFlags = provider.GetRequiredService<IFeatures>();
+        Assert.True(featureFlags.IsFeatureEnabled(KnownFeatures.AspireSkillsRemoteFetchEnabled, defaultValue: false));
+    }
+
+    [Fact]
     public async Task FeatureFlags_WhenSetToTrue_ReturnsTrue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(
             workspace,
             outputHelper,
@@ -491,7 +579,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FeatureFlags_WhenSetToFalse_ReturnsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options => options.DisabledFeatures = new[] { "testFeature" });
         using var provider = services.BuildServiceProvider();
 
@@ -509,7 +597,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FeatureFlags_WhenSetToInvalidValue_ReturnsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(
             workspace,
             outputHelper,
@@ -533,7 +621,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DeployCommand_IsAlwaysAvailable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -547,7 +635,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ShowDeprecatedPackages_CanBeConfiguredViaCommandLine()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -570,7 +658,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ShowDeprecatedPackages_DefaultsToFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -582,7 +670,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_WithColonNotation_CreatesNestedObject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -608,7 +696,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_ColonThenDot_NoDuplicateKeys()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -639,7 +727,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_DotThenColon_NoDuplicateKeys()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -670,7 +758,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigDeleteCommand_WithColonNotation_DeletesNestedValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -697,7 +785,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_WithCorruptedFile_RecoversDuringLoad()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Manually create a corrupted settings file with duplicate keys
         // (flat colon key + nested object for the same path)
@@ -730,7 +818,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_WithCorruptedFile_PreservesExistingNestedValueOverFlatKey()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a settings file where both a nested value and a flat colon key exist
         // for the same path but with different values.
@@ -764,8 +852,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [InlineData("appHost:path")]
     public async Task ConfigSetCommand_LocalAppHostPath_RemainsAllowed(string key)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        File.Delete(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json"));
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -793,7 +880,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [InlineData("appHost:path")]
     public async Task ConfigSetCommand_LocalAppHostPath_MigratesLegacySettingsFile(string key)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var legacySettingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
         await File.WriteAllTextAsync(legacySettingsPath, """{ "channel": "daily" }""");
 
@@ -824,7 +911,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [InlineData("appHostPath", nameof(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand))]
     public async Task ConfigSetCommand_GlobalAppHostPath_ReturnsInvalidCommand(string key, string expectedErrorResourceName)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -853,7 +940,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using (var provider = services.BuildServiceProvider())
         {
@@ -893,7 +980,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_LegacyAppHostPath_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -911,7 +998,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigSetCommand_AppHostLanguage_RemainsAllowed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 

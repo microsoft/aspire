@@ -452,6 +452,9 @@ type PipelineStepFactoryContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pi
  */
 type PipelineSummaryHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary'>;
 
+/** Provides context to the work callback of a progress interaction. */
+type ProgressContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProgressContext'>;
+
 /** Various properties to modify the behavior of the project resource. */
 type ProjectResourceOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions'>;
 
@@ -835,6 +838,35 @@ export interface CommandOptions {
     isHighlighted?: boolean;
     /** A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated. If a callback isn't specified, the command is always enabled. */
     updateState?: (arg: UpdateCommandStateContext) => Promise<ResourceCommandState>;
+    /**
+     * Gets or sets options for displaying a progress dialog while the command is executing.
+     *
+     * When `Message` is not `null` or empty, a progress dialog
+     * is automatically shown while the command callback executes. The dialog closes when the command completes.
+     * When `null`, or when `Message` is `null` or empty,
+     * no progress dialog is shown and the command executes without visual feedback.
+     */
+    progress?: CommandProgressOptions;
+}
+
+/** Options for displaying a progress dialog while a command is executing. */
+export interface CommandProgressOptions {
+    /**
+     * Gets or sets the message to display in the progress dialog.
+     *
+     * When not `null` or empty, a progress dialog is displayed while the command executes.
+     */
+    message?: string | null;
+    /** Gets or sets the optional title of the progress dialog. */
+    title?: string | null;
+    /**
+     * Gets or sets a value indicating whether the cancel button is hidden in the progress dialog.
+     *
+     * When `false` (the default), a cancel button is shown. Clicking it cancels the command via the
+     * `CancellationToken`.
+     * When `true`, no cancel button is displayed and the user cannot cancel the operation from the dialog.
+     */
+    hideCancelButton?: boolean;
 }
 
 /** Represents a value produced by a command. */
@@ -899,6 +931,12 @@ export interface CreateInteractionInputOptions {
     disabled?: boolean | null;
     /** Gets or sets the maximum length for text inputs. */
     maxLength?: number | null;
+    /** Gets or sets the maximum file size in bytes for file inputs. */
+    maxFileSize?: number | null;
+    /** Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs. */
+    allowMultipleFiles?: boolean | null;
+    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*". */
+    fileFilter?: string | null;
 }
 
 /** Options controlling when a dynamic-loading callback runs. */
@@ -1128,6 +1166,18 @@ export interface InteractionNotificationOptions {
     linkUrl?: string | null;
 }
 
+/** Options for progress dialog prompts. */
+export interface InteractionProgressOptions {
+    /** Gets or sets the optional title of the progress dialog. */
+    title?: string | null;
+    /** Gets or sets the primary button text (e.g. "Cancel"). */
+    primaryButtonText?: string | null;
+    /** Gets or sets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed. When provided, the progress dialog remains open while this callback executes and closes automatically when the callback completes. */
+    work?: (arg: ProgressContext) => Promise<void>;
+}
+
 /** Options for customizing parameter inputs from polyglot app hosts. */
 export interface ParameterCustomInputOptions {
     /** Gets or sets the type of the input. */
@@ -1248,6 +1298,22 @@ export interface ResourceUrlAnnotation {
     endpoint?: EndpointReference;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
     displayLocation?: UrlDisplayLocation;
+}
+
+/**
+ * Holds settings applicable to the AppHost run mode (when `Operation` is `Run`).
+ *
+ * Integrations use it to vary how their resources are launched without changing the core hosting behavior.
+ * In `Publish` mode every property holds its default value.
+ */
+export interface RunConfiguration {
+    /**
+     * Indicates that resources should start in watch mode if able.
+     *
+     * Integrations that support watch can launch their resources so that source changes are hot-reloaded.
+     * This is a hint: integrations that cannot watch their resources should start them in normal fashion.
+     */
+    watchEnabled?: boolean;
 }
 
 /** Test DTO to verify [AspireDto] generates TypeScript interfaces. */
@@ -3590,6 +3656,8 @@ export interface DistributedApplicationExecutionContext {
     };
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    runConfiguration(): Promise<RunConfiguration>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
     /** The `IServiceProvider` for the AppHost. */
@@ -3603,6 +3671,8 @@ export interface DistributedApplicationExecutionContext {
 export interface DistributedApplicationExecutionContextPromise extends PromiseLike<DistributedApplicationExecutionContext> {
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
+    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    runConfiguration(): Promise<RunConfiguration>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
     /** The `IServiceProvider` for the AppHost. */
@@ -3642,6 +3712,13 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
     async operation(): Promise<DistributedApplicationOperation> {
         return await this._client.invokeCapability<DistributedApplicationOperation>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.operation',
+            { context: this._handle }
+        );
+    }
+
+    async runConfiguration(): Promise<RunConfiguration> {
+        return await this._client.invokeCapability<RunConfiguration>(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration',
             { context: this._handle }
         );
     }
@@ -3701,6 +3778,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     operation(): Promise<DistributedApplicationOperation> {
         return this._promise.then(obj => obj.operation());
+    }
+
+    runConfiguration(): Promise<RunConfiguration> {
+        return this._promise.then(obj => obj.runConfiguration());
     }
 
     serviceProvider(): ServiceProviderPromise {
@@ -6665,6 +6746,14 @@ export interface InteractionInputBuilder {
      */
     withValue(value: string): InteractionInputBuilderPromise;
     /**
+     * Releases uploaded files associated with the input.
+     *
+     * Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+     * server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+     * deleted when the AppHost shuts down.
+     */
+    releaseFiles(): InteractionInputBuilderPromise;
+    /**
      * Attaches a callback that dynamically loads or updates the input after the prompt starts.
      * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
      * @param options Additional options.
@@ -6686,6 +6775,14 @@ export interface InteractionInputBuilderPromise extends PromiseLike<InteractionI
      * @returns The same builder handle.
      */
     withValue(value: string): InteractionInputBuilderPromise;
+    /**
+     * Releases uploaded files associated with the input.
+     *
+     * Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+     * server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+     * deleted when the AppHost shuts down.
+     */
+    releaseFiles(): InteractionInputBuilderPromise;
     /**
      * Attaches a callback that dynamically loads or updates the input after the prompt starts.
      * @param callback The callback invoked to load the input. Use the supplied context to read other inputs and update this input.
@@ -6751,6 +6848,27 @@ class InteractionInputBuilderImpl implements InteractionInputBuilder {
     }
 
     /** @internal */
+    async _releaseFilesInternal(): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.Ats/releaseFiles',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Releases uploaded files associated with the input.
+     *
+     * Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+     * server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+     * deleted when the AppHost shuts down.
+     */
+    releaseFiles(): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._releaseFilesInternal(), this._client);
+    }
+
+    /** @internal */
     async _withDynamicLoadingInternal(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): Promise<InteractionInputBuilder> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as InteractionInputLoadContextHandle;
@@ -6799,6 +6917,10 @@ class InteractionInputBuilderPromiseImpl implements InteractionInputBuilderPromi
 
     withValue(value: string): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.withValue(value)), this._client);
+    }
+
+    releaseFiles(): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.releaseFiles()), this._client);
     }
 
     withDynamicLoading(callback: (arg: InteractionInputLoadContext) => Promise<void>, options?: DynamicLoadingOptions): InteractionInputBuilderPromise {
@@ -8276,6 +8398,64 @@ class PipelineSummaryPromiseImpl implements PipelineSummaryPromise {
 
     addMarkdown(key: string, markdownString: string): PipelineSummaryPromise {
         return new PipelineSummaryPromiseImpl(this._promise.then(obj => obj.addMarkdown(key, markdownString)), this._client);
+    }
+
+}
+
+// ============================================================================
+// ProgressContext
+// ============================================================================
+
+/** Provides context to the work callback of a progress interaction. */
+export interface ProgressContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+export interface ProgressContextPromise extends PromiseLike<ProgressContext> {
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+// ============================================================================
+// ProgressContextImpl
+// ============================================================================
+
+/** Provides context to the work callback of a progress interaction. */
+class ProgressContextImpl implements ProgressContext {
+    constructor(private _handle: ProgressContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting/ProgressContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+}
+
+/**
+ * Thenable wrapper for ProgressContext that enables fluent chaining.
+ */
+class ProgressContextPromiseImpl implements ProgressContextPromise {
+    constructor(private _promise: Promise<ProgressContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ProgressContext, TResult2 = never>(
+        onfulfilled?: ((value: ProgressContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
     }
 
 }
@@ -12619,6 +12799,11 @@ export interface InteractionService {
      */
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
      * Prompts the user for a single input.
      * @param options Additional options.
      */
@@ -12648,6 +12833,11 @@ export interface InteractionService {
      * @param options Additional options.
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
      * Creates a choice input that selects from a list of options.
      * @param name The name of the input.
@@ -12678,6 +12868,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      */
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
      * Prompts the user for a single input.
      * @param options Additional options.
      */
@@ -12707,6 +12902,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      * @param options Additional options.
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
      * Creates a choice input that selects from a list of options.
      * @param name The name of the input.
@@ -12776,6 +12976,33 @@ class InteractionServiceImpl implements InteractionService {
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<BoolInteractionResult>(
             'Aspire.Hosting/promptNotification',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    async promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcWork = __optionsForRpc.work;
+            if (____optionsForRpcWork !== undefined) {
+                const ____optionsForRpcWorkId = ____optionsForRpcWork ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ProgressContextHandle;
+                    const arg = new ProgressContextImpl(argHandle, this._client);
+                    await ____optionsForRpcWork(arg);
+                }) : undefined;
+                __optionsForRpcData["work"] = ____optionsForRpcWorkId;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, message };
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptProgress',
             rpcArgs
         );
     }
@@ -12918,6 +13145,25 @@ class InteractionServiceImpl implements InteractionService {
     }
 
     /** @internal */
+    async _createFileInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createFileInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createFileInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
     async _createChoiceInputInternal(name: string, choices?: InteractionChoiceOption[], options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
         const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
         if (choices !== undefined) rpcArgs.choices = choices;
@@ -12973,6 +13219,10 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
         return this._promise.then(obj => obj.promptNotification(title, message, options, cancellationToken));
     }
 
+    promptProgress(message: string, options?: InteractionProgressOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptProgress(message, options, cancellationToken));
+    }
+
     promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult> {
         return this._promise.then(obj => obj.promptInput(title, message, input, options, cancellationToken));
     }
@@ -12995,6 +13245,10 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
 
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createNumberInput(name, options)), this._client);
+    }
+
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createFileInput(name, options)), this._client);
     }
 
     createChoiceInput(name: string, options?: CreateChoiceInputOptions): InteractionInputBuilderPromise {
@@ -61066,6 +61320,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep', (h
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext', (handle, client) => new PipelineStepContextImpl(handle as PipelineStepContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext', (handle, client) => new PipelineStepFactoryContextImpl(handle as PipelineStepFactoryContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary', (handle, client) => new PipelineSummaryImpl(handle as PipelineSummaryHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProgressContext', (handle, client) => new ProgressContextImpl(handle as ProgressContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptionsImpl(handle as ProjectResourceOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilderImpl(handle as ReferenceExpressionBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext', (handle, client) => new RequiredCommandValidationContextImpl(handle as RequiredCommandValidationContextHandle, client));

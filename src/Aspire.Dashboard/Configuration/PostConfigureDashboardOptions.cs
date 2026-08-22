@@ -54,6 +54,10 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         if (_configuration.GetBool(DashboardConfigNames.DashboardUnsecuredAllowAnonymousName.ConfigKey,
                                    DashboardConfigNames.Legacy.DashboardUnsecuredAllowAnonymousName.ConfigKey) ?? false)
         {
+            // This setting explicitly opts into unsecured endpoints. See the security considerations at
+            // https://aspire.dev/dashboard/security-considerations/ before enabling it outside local development.
+            // When the corresponding endpoints are enabled, the dashboard logs warnings and displays a warning
+            // in the UI to inform users about the risks of anonymous access.
             options.Frontend.AuthMode = FrontendAuthMode.Unsecured;
             options.Otlp.AuthMode = OtlpAuthMode.Unsecured;
             options.Api.AuthMode = ApiAuthMode.Unsecured;
@@ -61,6 +65,8 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         else
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
+            // OTLP is unsecured by default for local development. See the security considerations at
+            // https://aspire.dev/dashboard/security-considerations/ when exposing the endpoint outside a trusted environment.
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
             options.Api.AuthMode ??= ApiAuthMode.ApiKey;
         }
@@ -83,17 +89,6 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             // (at startup, after CI is created, after options change). Setting the key in configuration makes it consistent.
             _configuration[DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey] = apiKey;
             options.Api.PrimaryApiKey = apiKey;
-        }
-
-        // ASPIRE_DASHBOARD_AI_DISABLED takes precendence over ASPIRE__DASHBOARD__AI__DISABLED.
-        if (_configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey) is { } aiDisabled)
-        {
-            options.AI.Disabled = aiDisabled;
-        }
-        else
-        {
-            // If there is no explicit setting then default to disabled.
-            options.AI.Disabled = true;
         }
 
         // DashboardAspireApiDisabledName takes precedence over DashboardAspireApiEnabledName.

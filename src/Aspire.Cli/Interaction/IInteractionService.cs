@@ -23,7 +23,7 @@ internal interface IInteractionService
     /// </remarks>
     Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null);
     Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
-    Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
+    Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default);
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default);
     Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull;
     Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull;
@@ -39,7 +39,7 @@ internal interface IInteractionService
     void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines);
     void DisplayRenderable(IRenderable renderable);
     Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback);
-    void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null);
+    void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null);
     void DisplayEmptyLine();
 
     /// <summary>

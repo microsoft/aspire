@@ -76,8 +76,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
         // The execution local is forward-referenced by the per-line callbacks so they can read the
         // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
-        // (line only), but the guest wants the pid in each trace line. The callbacks only fire after
-        // Start(), by which point `execution` is assigned and ProcessId is valid.
+        // (line only), but the guest wants the pid in each trace line. ProcessExecution publishes the
+        // child pid before it starts stdout/stderr pumps so immediate output can read ProcessId.
         IProcessExecution execution = null!;
 
         void HandleStdoutLine(string line)
@@ -124,13 +124,16 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             startInfo.Environment[key] = value;
         }
 
+        var isolateConsoleForGracefulShutdown = options?.IsolateConsoleForGracefulShutdown == true;
         var invocationOptions = new ProcessInvocationOptions
         {
             StandardOutputCallback = HandleStdoutLine,
             StandardErrorCallback = HandleStderrLine,
             // Run-path spawn: isolated console group + anonymous-pipe stdio so a graceful CTRL+C can
-            // target the guest without also signalling the CLI.
-            IsolateConsole = options?.IsolateConsoleForGracefulShutdown == true,
+            // target the guest without also signalling the CLI. The Windows kill-on-close job is the
+            // matching hard-kill safety net if the launching CLI is terminated before graceful cleanup.
+            IsolateConsole = isolateConsoleForGracefulShutdown,
+            KillOnParentExit = isolateConsoleForGracefulShutdown,
             GracefulShutdownSignaler = options?.GracefulShutdownSignaler,
             ShutdownService = options?.ShutdownService,
             // The guest is the AppHost's primary process; always tree-kill on escalation so no
@@ -145,7 +148,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
         try
         {
-            execution.Start();
+            await execution.StartAsync(cancellationToken).ConfigureAwait(false);
 
             _logger.LogDebug("{Language} guest process {ProcessId} started: {Command}", _language, execution.ProcessId, resolvedCommandPath);
             activity?.SetTag(TelemetryConstants.Tags.ProcessPid, execution.ProcessId);

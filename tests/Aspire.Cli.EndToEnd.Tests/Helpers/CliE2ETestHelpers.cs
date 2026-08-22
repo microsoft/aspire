@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using Aspire.Cli.Tests.Utils;
 using Hex1b;
 using Hex1b.Automation;
 using Xunit;

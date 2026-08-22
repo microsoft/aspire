@@ -1,0 +1,22 @@
+﻿{
+  "resources": {
+    "api": {
+      "type": "container.v1",
+      "build": {
+      "context": "{sourceDirectory}",
+        "dockerfile": "api.Dockerfile"
+      },
+      "env": {
+        "SERVER_PORT": "{api.bindings.http.targetPort}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    }
+  }
+}

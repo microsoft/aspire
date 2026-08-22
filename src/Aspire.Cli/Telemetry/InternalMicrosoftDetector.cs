@@ -49,6 +49,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly HttpMessageHandler? _gitHubHttpMessageHandler;
     private readonly TimeSpan _gitHubCandidateTimeout;
+    private readonly TimeSpan _gitHubHttpTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
@@ -74,7 +75,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         IProcessExecutionFactory processExecutionFactory,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
-        TimeSpan? gitHubCandidateTimeout = null)
+        TimeSpan? gitHubCandidateTimeout = null,
+        TimeSpan? gitHubHttpTimeout = null)
     {
         _cacheFilePath = cacheFilePath;
         _executionContext = executionContext;
@@ -82,6 +84,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _processExecutionFactory = processExecutionFactory;
         _gitHubHttpMessageHandler = gitHubHttpMessageHandler;
         _gitHubCandidateTimeout = gitHubCandidateTimeout ?? s_gitHubCandidateTimeout;
+        _gitHubHttpTimeout = gitHubHttpTimeout ?? s_gitHubHttpTimeout;
         _timeProvider = timeProvider;
         _logger = logger;
         _probeStages = probeStages ?? CreateDefaultProbeStages();
@@ -131,7 +134,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         // Fastest/strongest signal probes
         var stage1 = new List<InternalMicrosoftProbe>();
-        if (OperatingSystem.IsMacOS())
+        if (_environment.IsMacOS())
         {
             // Use the platform SSO service on MacOS as the strongest signal (indicates machine is enrolled in
             // Microsoft Intune and user has a Microsoft account in the Microsoft tenant configured in their keychain)
@@ -159,7 +162,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             new("Copilot CLI GitHub org membership", CheckCopilotCliAsync)
         };
 
-        if (OperatingSystem.IsWindows())
+        if (_environment.IsWindows())
         {
             // Stage 1
 
@@ -728,7 +731,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var http = _gitHubHttpMessageHandler is null
             ? new HttpClient()
             : new HttpClient(_gitHubHttpMessageHandler, disposeHandler: false);
-        http.Timeout = s_gitHubHttpTimeout;
+        http.Timeout = _gitHubHttpTimeout;
 
         http.DefaultRequestHeaders.UserAgent.ParseAdd("aspire-cli-internal-microsoft-detector/1.0");
         return http;
@@ -769,13 +772,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             _executionContext.WorkingDirectory,
             options);
 
-        if (!execution.Start())
-        {
-            return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
-        }
-
         try
         {
+            if (!await execution.StartAsync(timeoutCts.Token).ConfigureAwait(false))
+            {
+                return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
+            }
+
             var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
         }
@@ -1059,7 +1062,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         var home = _executionContext.HomeDirectory.FullName;
 
-        if (OperatingSystem.IsWindows())
+        if (_environment.IsWindows())
         {
             var appData = GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData, "APPDATA");
             if (string.IsNullOrWhiteSpace(appData))
@@ -1075,7 +1078,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        if (OperatingSystem.IsMacOS())
+        if (_environment.IsMacOS())
         {
             if (string.IsNullOrWhiteSpace(home))
             {
@@ -1111,7 +1114,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private bool IsWsl()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!_environment.IsLinux())
         {
             return false;
         }
@@ -1147,7 +1150,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return false;
         }
 
-        var extensions = OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(command))
+        var extensions = _environment.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(command))
             ? (_environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").Split(';', StringSplitOptions.RemoveEmptyEntries)
             : [string.Empty];
 

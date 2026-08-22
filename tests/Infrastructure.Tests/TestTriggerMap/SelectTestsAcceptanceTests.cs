@@ -8,14 +8,14 @@ namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
 /// Behavior spec for the <see cref="TestSelector"/> engine. These tests drive the selector with
-/// small SYNTHETIC maps (a temp <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
+/// small SYNTHETIC maps (a workspace <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
 /// the resolution mechanisms — conventions, overrides, ignore, Layer-1 attribution, the run-all
 /// fallback, derived targets, and group expansion — without coupling to the contents of the real
 /// <c>eng/github-ci/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
 /// filesystem, never hardcoding project names) lives at the end; structural invariants of the real
 /// map are covered by <see cref="TestTriggerMapTests"/>.
 /// </summary>
-public sealed class SelectTestsAcceptanceTests : IDisposable
+public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) : IDisposable
 {
     // A synthetic map exercising every section. Test projects referenced here are supplied (or
     // withheld) via the per-test matrix to drive the existence guard.
@@ -105,14 +105,14 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
 
     // Temp dirs holding synthetic maps are tracked here and removed in Dispose, so the ~40 tests in
     // this class don't each leave a directory behind. xUnit constructs one instance per test, so a
-    // given test's temp dirs are cleaned up when that instance is disposed.
-    private readonly List<TestTempDirectory> _tempDirs = [];
+    // given test's workspace dirs are cleaned up when that instance is disposed.
+    private readonly List<TemporaryWorkspace> _tempDirs = [];
 
     private string NewMapDir()
     {
-        var temp = new TestTempDirectory();
-        _tempDirs.Add(temp);
-        return temp.Path;
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        _tempDirs.Add(workspace);
+        return workspace.Path;
     }
 
     private TestSelector Selector(IEnumerable<string>? projectDirs = null)
@@ -896,6 +896,23 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
 
         Assert.False(r.SelectsAll);
         Assert.Contains("job:typescript-api-compat", r.Jobs);
+        Assert.Contains("job:polyglot", r.Jobs);
+    }
+
+    [Fact]
+    public void RealMapBlazorRuntimeAssetChangeRunsPackageAndPolyglotRegressions()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(
+            ["src/Aspire.Hosting.Blazor/targets/GenerateScripts.targets"],
+            [],
+            new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Aspire.Hosting.Tests", r.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", r.TestProjects);
         Assert.Contains("job:polyglot", r.Jobs);
     }
 

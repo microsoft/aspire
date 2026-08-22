@@ -51,6 +51,7 @@ internal sealed record AppHostCandidateFileSearchResult(FileInfo[] Files, Dictio
 /// </summary>
 internal sealed class AppHostCandidateFinder(
     IGitRepository gitRepository,
+    IEnvironment environment,
     ProfilingTelemetry profilingTelemetry,
     ILogger<AppHostCandidateFinder> logger) : IAppHostCandidateFinder
 {
@@ -167,7 +168,7 @@ internal sealed class AppHostCandidateFinder(
         return searchResult;
     }
 
-    private static AppHostCandidateFileSearchResult MatchFromIncludedPaths(
+    private AppHostCandidateFileSearchResult MatchFromIncludedPaths(
         DirectoryInfo searchDirectory,
         IReadOnlyList<string> patterns,
         IReadOnlySet<string> includedPaths,
@@ -265,7 +266,7 @@ internal sealed class AppHostCandidateFinder(
             || candidate.StartsWith(ancestor + Path.DirectorySeparatorChar, pathComparison);
     }
 
-    private static int CountIncludedDirectories(IReadOnlySet<string> includedPaths)
+    private int CountIncludedDirectories(IReadOnlySet<string> includedPaths)
     {
         var directories = new HashSet<string>(GetPathComparer());
         foreach (var includedPath in includedPaths)
@@ -378,7 +379,7 @@ internal sealed class AppHostCandidateFinder(
         return true;
     }
 
-    private static AppHostCandidateFileSearchResult FindMatchingFiles(
+    private AppHostCandidateFileSearchResult FindMatchingFiles(
         DirectoryInfo searchDirectory,
         IReadOnlyList<string> patterns,
         EnumerationOptions options,
@@ -484,16 +485,16 @@ internal sealed class AppHostCandidateFinder(
         return matcher;
     }
 
-    private static StringComparison GetPathComparison()
+    private StringComparison GetPathComparison()
     {
-        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        return environment.IsWindows() || environment.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
     }
 
-    private static StringComparer GetPathComparer()
+    private StringComparer GetPathComparer()
     {
-        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        return environment.IsWindows() || environment.IsMacOS()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
     }

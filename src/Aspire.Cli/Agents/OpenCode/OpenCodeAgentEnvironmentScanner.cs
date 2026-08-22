@@ -53,6 +53,8 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         {
             _logger.LogDebug("Found existing opencode.jsonc at: {ConfigFilePath}", configFilePath);
 
+            context.AddDetectedClient(AgentClientKind.OpenCode);
+
             // Check if aspire is already configured
             _logger.LogDebug("Checking if Aspire MCP server is already configured in opencode.jsonc...");
             if (!HasAspireServerConfigured(configFilePath))
@@ -78,6 +80,9 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
             if (openCodeVersion is not null)
             {
                 _logger.LogDebug("Found OpenCode CLI version: {Version}", openCodeVersion);
+
+                context.AddDetectedClient(AgentClientKind.OpenCode);
+
                 // OpenCode is installed - offer to create config
                 _logger.LogDebug("Adding OpenCode applicator to create new opencode.jsonc at: {ConfigDirectory}", configDirectory.FullName);
                 context.AddApplicator(CreateApplicator(configDirectory));
