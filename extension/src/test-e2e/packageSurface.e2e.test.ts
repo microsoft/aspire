@@ -605,6 +605,7 @@ const expectedCommandIds = [
     'aspire-vscode.globalRefreshAppHosts',
     'aspire-vscode.init',
     'aspire-vscode.installCli',
+    'aspire-vscode.installDebuggerExtension',
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',

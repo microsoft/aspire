@@ -644,6 +644,59 @@ suite('E2E launch profile', () => {
         assert.ok(runTests.includes('extestEnv'));
     });
 
+    test('persists E2E NuGet packages while purging repo-built Aspire packages', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const nuGetPathDeclaration = "const e2eNuGetPackages = path.join(downloadCacheRoot, 'nuget-packages', shardName);";
+        const nuGetPathIndex = runner.indexOf(nuGetPathDeclaration);
+        const restoreWorkspaceIndex = runner.indexOf('restoreWorkspaceFixture();');
+        const prepareCacheStart = runner.indexOf('function prepareNuGetPackageCache()');
+        const prepareCacheEnd = runner.indexOf('\nfunction ', prepareCacheStart + 1);
+        const prepareCache = runner.slice(prepareCacheStart, prepareCacheEnd);
+        const mainStart = runner.indexOf('async function main()');
+        const mainBody = runner.slice(mainStart, runner.indexOf('\n  finally {', mainStart));
+        const cliEnvironmentStart = runner.indexOf('function getAspireCliEnvironment');
+        const cliEnvironmentEnd = runner.indexOf('\nfunction ', cliEnvironmentStart + 1);
+        const cliEnvironment = runner.slice(cliEnvironmentStart, cliEnvironmentEnd);
+        const extestEnvironmentStart = runner.indexOf('const extestEnv = getAspireCliEnvironment({');
+        const extestEnvironmentEnd = runner.indexOf('\n    });', extestEnvironmentStart);
+        const extestEnvironment = runner.slice(extestEnvironmentStart, extestEnvironmentEnd);
+        const javaSdkGenerationStart = runner.indexOf('function ensureJavaAppHostSdkGenerated');
+        const javaSdkGenerationEnd = runner.indexOf('\nfunction ', javaSdkGenerationStart + 1);
+        const javaSdkGeneration = runner.slice(javaSdkGenerationStart, javaSdkGenerationEnd);
+        const javaRestoreStart = javaSdkGeneration.indexOf("spawnSync(bundledCliPath, ['restore'], {");
+        const javaRestoreEnd = javaSdkGeneration.indexOf('\n  });', javaRestoreStart);
+        const javaRestore = javaSdkGeneration.slice(javaRestoreStart, javaRestoreEnd);
+
+        assert.ok(nuGetPathIndex >= 0);
+        assert.ok(nuGetPathIndex < restoreWorkspaceIndex);
+        assert.ok(prepareCacheStart >= 0);
+        assert.ok(prepareCacheEnd > prepareCacheStart);
+        assert.ok(prepareCache.includes("fs.mkdirSync(e2eNuGetPackages, { recursive: true });"));
+        assert.ok(prepareCache.includes("fs.readdirSync(e2eNuGetPackages, { withFileTypes: true })"));
+        assert.ok(prepareCache.includes("/^aspire(?:\\.|$)/i.test(entry.name)"));
+        assert.ok(prepareCache.includes("removePathWithoutFollowingLinks(path.join(e2eNuGetPackages, entry.name), { recursive: true, force: true });"));
+        assert.ok(mainBody.includes('prepareNuGetPackageCache();'));
+        assert.ok(cliEnvironment.includes('NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(extestEnvironment.includes('NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(extestEnvironment.includes('ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(javaRestoreStart >= 0);
+        assert.ok(javaRestoreEnd > javaRestoreStart);
+        assert.ok(javaRestore.includes('env: getAspireCliEnvironment(),'));
+    });
+
+    test('makes local NuGet sources available to external AppHosts', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const writeConfigStart = runner.indexOf('function writeNuGetConfigIfLocalPackageSourcesExist');
+        const writeConfigEnd = runner.indexOf('\nfunction ', writeConfigStart + 1);
+        const writeConfig = runner.slice(writeConfigStart, writeConfigEnd);
+
+        assert.ok(runner.includes("const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');"));
+        assert.ok(writeConfig.includes('fs.writeFileSync(runRootNuGetConfigPath, nugetConfig);'));
+        assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
+    });
+
     test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');

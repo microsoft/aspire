@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 
 export const noCsprojFound = vscode.l10n.t('No AppHost found in the current workspace.');
-export const errorMessage = (error: any) => vscode.l10n.t('Error: {0}', error);
+// l10n.t only substitutes primitives, so passing an Error left the message as the literal "Error: {0}".
+export const errorMessage = (error: unknown) => vscode.l10n.t('Error: {0}', error instanceof Error ? error.message : String(error));
 export const yesLabel = vscode.l10n.t('Yes');
 export const noLabel = vscode.l10n.t('No');
 export const directUrl = (url: string) => vscode.l10n.t('Direct: {0}', url);
@@ -199,11 +200,18 @@ export const rustBuildOutputRedacted = vscode.l10n.t('[redacted]');
 export const rustBuildStderrTruncated = (limit: number) => vscode.l10n.t('[cargo stderr truncated to the last {0} characters.]', limit);
 export const rustLaunchConfigurationMissingExecutable = (workingDirectory: string) => vscode.l10n.t('The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.', workingDirectory);
 export const rustWindowsGnuDebuggerUnsupported = (target: string) => vscode.l10n.t('The cppvsdbg debugger cannot debug Rust target {0} because GNU Windows targets use DWARF symbols. Install CodeLLDB or build an MSVC Rust target such as x86_64-pc-windows-msvc.', target);
-export const rustDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.', extensionId);
+export const rustDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Rust AppHosts require native debugger support. Set up {0} in the Extensions view, then start the AppHost again.', extensionId);
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
+// Neutral wording: a required extension that is installed but disabled is absent from
+// vscode.extensions, so we cannot tell missing from disabled until the action runs.
+export const debuggerSetupAction = vscode.l10n.t({ message: 'Set Up', comment: 'Button label; "Set Up" is an imperative verb.' });
+export const debuggerSetupNotification = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support to debug resources in this app.', debuggerName);
+export const debuggerExtensionDisabled = (debuggerName: string) => vscode.l10n.t('One or more extensions required for {0} debugging did not become available. They may be disabled or require a window reload. Open the Extensions view to continue setup.', debuggerName);
+export const debuggerInstalledRestartAppHost = (debuggerName: string) => vscode.l10n.t('The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.', debuggerName);
+export const openExtensionsLabel = vscode.l10n.t('Open Extensions');
 export const javaDisplayName = (mainClass: string) => vscode.l10n.t('Java: {0}', mainClass);
 export const javaLabel = vscode.l10n.t('Java');
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
@@ -227,7 +235,7 @@ export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPat
 export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string, projectPath: string) => vscode.l10n.t('The default launch profile \'{0}\' is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', profileName, projectPath);
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
-export const javaDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Java AppHosts are launched through the Java debugger extension. Install {0} from the Extensions view, then start the AppHost again.', extensionId);
+export const javaDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Java AppHosts require Java debugger support. Set up {0} in the Extensions view, then start the AppHost again.', extensionId);
 export const javaAppHostCommandNotRecognized = () => vscode.l10n.t('The Java AppHost launch command was not recognized and cannot be debugged.');
 export const javaAttachNotSupported = vscode.l10n.t('Java resources are started by the IDE rather than attached to, and the app host requested an attach session. Aspire cannot start one because no debug address is available.');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
@@ -285,6 +293,9 @@ export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
 export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
 export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
 export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');
+// An emoji rather than $(warning): CodeLens titles render codicons in the lens foreground color,
+// so the codicon warning cannot be yellow.
+export const codeLensSetUpDebugger = (debuggerName: string) => vscode.l10n.t('⚠️ Set up {0} debugger', debuggerName);
 export const codeLensRustAppHostAlreadyRunning = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; this AppHost is already running in Aspire');
 export const codeLensRustAppHostAlreadyRunningTooltip = vscode.l10n.t('Use Aspire controls instead. rust-analyzer starts another Cargo process outside the running Aspire session.');
 export const codeLensRustAppHostUseAspire = vscode.l10n.t('⚠️ Do not click the rust-analyzer Run or Debug actions; they bypass Aspire');

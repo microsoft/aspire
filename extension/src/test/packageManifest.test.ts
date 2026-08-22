@@ -267,16 +267,18 @@ suite('extension/package.json', () => {
         assert.strictEqual(argsProperty.description, '%extension.debug.args%');
     });
 
-    test('CodeLens commands are contributed and hidden from the command palette', () => {
-        // CodeLens commands are invoked from lenses, never typed by the user, so each registration
-        // needs a contributes.commands entry (otherwise the title is unlocalized/undeclared) plus a
-        // commandPalette "when": "false" entry so it does not leak into the palette.
+    test('CodeLens command handlers are contributed and hidden from the command palette', () => {
+        // Commands registered by the CodeLens module are invoked from lenses, never typed by the user,
+        // so each registration needs a contributes.commands entry (otherwise the title is
+        // unlocalized/undeclared) plus a commandPalette "when": "false" entry.
         const manifest = readManifest();
         const registrationSource = fs.readFileSync(path.resolve(__dirname, '../../src/activation/registerCodeLensCommands.ts'), 'utf8');
-        const registeredCodeLensCommands = [...registrationSource.matchAll(/registerInstrumentedCommand\('(aspire-vscode\.codeLens[A-Za-z0-9]*)'/g)]
-            .map(match => match[1]);
+        const registeredCodeLensCommands = [...registrationSource.matchAll(
+            /registerInstrumentedCommand\(\s*(['"])(aspire-vscode\.[A-Za-z0-9]+)\1/g)]
+            .map(match => match[2]);
 
         assert.ok(registeredCodeLensCommands.includes('aspire-vscode.codeLensRevealAppHost'), 'Expected codeLensRevealAppHost to be registered.');
+        assert.ok(registeredCodeLensCommands.includes('aspire-vscode.installDebuggerExtension'), 'Expected installDebuggerExtension to be registered.');
 
         const contributedCommands = new Set((manifest.contributes.commands ?? []).map(item => item.command));
         const hiddenFromPalette = new Set((manifest.contributes.menus?.commandPalette ?? [])
