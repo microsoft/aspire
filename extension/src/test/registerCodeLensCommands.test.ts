@@ -33,7 +33,18 @@ suite('registerCodeLensCommands', () => {
         const registrations = registerCodeLensCommands(
             treeProvider,
             {} as vscode.TreeView<unknown>,
-            { viewMode: 'global' } as AppHostDataRepository,
+            {
+                viewMode: 'global',
+                // registerCodeLensCommands now wires the debugger install hint watcher to this
+                // repository, and the watcher refreshes immediately, so the fake has to satisfy the
+                // whole DebuggerInstallHintDataSource shape. Empty collections mean no AppHost is
+                // known, so no data lease is taken and no install hints fire during this test.
+                workspaceAppHostCandidatePaths: [],
+                workspaceResources: [],
+                appHosts: [],
+                onDidChangeData: () => ({ dispose: () => { } }),
+                keepDataActive: () => ({ dispose: () => { } }),
+            } as unknown as AppHostDataRepository,
             terminalProvider,
             {} as AspireEditorCommandProvider,
             { get: () => undefined, update: async () => { } } as unknown as vscode.Memento,

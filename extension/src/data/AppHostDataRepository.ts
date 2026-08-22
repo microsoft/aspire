@@ -88,6 +88,7 @@ export class AppHostDataRepository {
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
     private _openAppHostPaths: readonly string[] = [];
+    private _dataKeepAliveCount = 0;
     private _hasEverBeenDataActive = false;
 
     private readonly _configInfoProvider: ConfigInfoProvider;
@@ -286,6 +287,30 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         this._syncPolling(resumedFromInactive);
+    }
+
+    /**
+     * Keeps the running AppHost data sources active for a background consumer that cannot depend on
+     * the Aspire panel or an AppHost editor remaining open.
+     */
+    keepDataActive(): vscode.Disposable {
+        const wasDataActive = this._dataActive;
+        this._dataKeepAliveCount++;
+        const becameDataActive = !wasDataActive && this._dataActive;
+        const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
+        this._hasEverBeenDataActive = true;
+        this._syncPolling(resumedFromInactive);
+
+        let disposed = false;
+        return new vscode.Disposable(() => {
+            if (disposed) {
+                return;
+            }
+
+            disposed = true;
+            this._dataKeepAliveCount--;
+            this._syncPolling();
+        });
     }
 
     /**
@@ -551,11 +576,11 @@ export class AppHostDataRepository {
     // ── PS polling lifecycle ──
 
     /**
-     * Either source is active when the panel is visible **or** at least one AppHost tab is open
-     * (visible or backgrounded).
+     * Sources are active while the panel is visible, at least one AppHost tab is open (visible or
+     * backgrounded), or a background consumer holds a keep-alive lease.
      */
     private get _dataActive(): boolean {
-        return this._panelVisible || this._openAppHostPaths.length > 0;
+        return this._panelVisible || this._openAppHostPaths.length > 0 || this._dataKeepAliveCount > 0;
     }
 
     private _syncPolling(refreshBeforeFollowOnResume = false): void {

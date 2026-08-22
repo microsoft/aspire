@@ -440,7 +440,7 @@
       <source xml:lang="en">Java</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.javaDebuggerExtensionNotInstalled">
-      <source xml:lang="en">Java AppHosts are launched through the Java debugger extension. Install {0} from the Extensions view, then start the AppHost again.</source>
+      <source xml:lang="en">Java AppHosts require Java debugger support. Set up {0} in the Extensions view, then start the AppHost again.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.javaAttachNotSupported">
       <source xml:lang="en">Java resources are started by the IDE rather than attached to, and the app host requested an attach session. Aspire cannot start one because no debug address is available.</source>
@@ -556,6 +556,9 @@
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerExtensionDisabled">
+      <source xml:lang="en">One or more extensions required for {0} debugging did not become available. They may be disabled or require a window reload. Open the Extensions view to continue setup.</source>
+    </trans-unit>
     <trans-unit id="command.viewAppHostLogFile">
       <source xml:lang="en">Open AppHost logs file</source>
     </trans-unit>
@@ -576,6 +579,9 @@
     </trans-unit>
     <trans-unit id="command.openTerminal">
       <source xml:lang="en">Open Aspire terminal</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.openExtensionsLabel">
+      <source xml:lang="en">Open Extensions</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.configuredCliPathRejectedOpenSetting">
       <source xml:lang="en">Open Setting</source>
@@ -728,7 +734,7 @@
       <source xml:lang="en">Rust</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustDebuggerExtensionNotInstalled">
-      <source xml:lang="en">Rust AppHosts are launched through a native debugger extension. Install {0} from the Extensions view, then start the AppHost again.</source>
+      <source xml:lang="en">Rust AppHosts require native debugger support. Set up {0} in the Extensions view, then start the AppHost again.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustDisplayName">
       <source xml:lang="en">Rust: {0}</source>
@@ -769,8 +775,17 @@
     <trans-unit id="aspire-vscode.strings.selectDashboardLaunchBehavior">
       <source xml:lang="en">Select what should happen with the Aspire Dashboard when this launch configuration starts</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerSetupAction">
+      <source xml:lang="en">Set Up</source>
+    </trans-unit>
     <trans-unit id="command.createWithAspire">
       <source xml:lang="en">Set up Aspire</source>
+    </trans-unit>
+    <trans-unit id="command.installDebuggerExtension">
+      <source xml:lang="en">Set up debugger support</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerSetupNotification">
+      <source xml:lang="en">Set up {0} debugging support to debug resources in this app.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableCodeLens">
       <source xml:lang="en">Show CodeLens actions (state, restart, stop, logs) inline above resource declarations in AppHost files.</source>
@@ -903,6 +918,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dotNetRunFileBasedExecutableProfileFallback">
       <source xml:lang="en">The default launch profile &apos;{0}&apos; is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.debuggerInstalledRestartAppHost">
+      <source xml:lang="en">The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. Use &apos;${workspaceFolder}&apos; for the operation&apos;s workspace folder or &apos;${workspaceFolder:name}&apos; for a named folder. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
@@ -1101,6 +1119,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.codeLensSpringBootDashboardBypassesAspire">
       <source xml:lang="en">⚠️ Do not start this app from the Spring Boot Dashboard; it bypasses Aspire</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensSetUpDebugger">
+      <source xml:lang="en">⚠️ Set up {0} debugger</source>
     </trans-unit>
   </body></file>
 </xliff>

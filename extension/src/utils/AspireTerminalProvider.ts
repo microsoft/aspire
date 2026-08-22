@@ -5,7 +5,7 @@ import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
-import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
+import { EnvironmentVariables, getEnvironmentForChildProcess } from './environment';
 import { CliPathResolutionResult, CliPathResolver, resolveCliPath } from './cliPath';
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath } from './cliPathEnvironment';
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
@@ -352,7 +352,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean, resolvedCliPath?: string): any {
         if (noExtensionVariables) {
             const env: any = {
-                ...getEnvironmentWithoutE2EBridgeVariables(),
+                ...getEnvironmentForChildProcess(),
 
                 // Hidden CLI processes still render status/error text that VS Code shows to the user.
                 // Keep those messages aligned with the VS Code UI language without enabling the
@@ -367,7 +367,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
 
         const env: any = {
-            ...getEnvironmentWithoutE2EBridgeVariables(),
+            ...getEnvironmentForChildProcess(),
         };
 
         addForwardableAspireCliPath(env, resolvedCliPath);
@@ -397,7 +397,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     createDcpRunSessionEnvironment(debugSessionId: string, noDebug?: boolean): any {
         const env: any = {
-            ...getEnvironmentWithoutE2EBridgeVariables(),
+            ...getEnvironmentForChildProcess(),
 
             // Include DCP server info without the extension RPC backchannel. Short-lived
             // helper CLI processes must not register an extension backchannel because the

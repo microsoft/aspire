@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
+import { csharpExtensionId } from '../../capabilities';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, DebugConfigurationArguments, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, LaunchOptions, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
@@ -27,7 +28,7 @@ import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPa
 import { resolveCliPath } from '../../utils/cliPath';
 import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
-import { deleteEnvironmentVariable, getEnvironmentWithoutE2EBridgeVariables, setEnvironmentVariable } from '../../utils/environment';
+import { deleteEnvironmentVariable, getEnvironmentForChildProcess, setEnvironmentVariable } from '../../utils/environment';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -510,7 +511,7 @@ function createProjectEnvironment(
         ));
     }
 
-    const environment = getEnvironmentWithoutE2EBridgeVariables();
+    const environment = getEnvironmentForChildProcess();
     const { profile: defaultProfile, profileName: defaultProfileName } = determineDefaultLaunchProfile(launchSettings);
     applyEnvironmentVariables(environment, runApiEnvironment, defaultProfile, defaultProfileName);
     for (const envVar of runSessionEnvironment) {
@@ -585,7 +586,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
     return {
         resourceType: 'project',
         debugAdapter: 'coreclr',
-        extensionId: 'ms-dotnettools.csharp',
+        extensionId: csharpExtensionId,
         getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => `C#: ${path.basename((launchConfig as ProjectLaunchConfiguration).project_path)}`,
         getSupportedFileTypes: () => ['.cs', '.csproj'],
         getProjectFile: (launchConfig) => {
