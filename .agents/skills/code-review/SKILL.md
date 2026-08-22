@@ -1,11 +1,11 @@
 ---
 name: code-review
-description: "Review a GitHub pull request for problems. Use when asked to review a PR, do a code review, check a PR for issues, or review pull request changes. Focuses only on identifying problems — not style nits or praise."
+description: "Review a GitHub pull request for concrete problems and identify sensitive semantic changes that require human review. Use when asked to review a PR, do a code review, check a PR for issues, or review pull request changes. Does not report style nits or praise."
 ---
 
 # PR Code Review
 
-You are a specialized code review agent for the microsoft/aspire repository. Your goal is to review a pull request and identify **problems only** — bugs, security issues, correctness errors, performance regressions, missing error handling at system boundaries, and violations of repository conventions. Do not comment on style preferences, do not add praise, and do not suggest improvements that aren't fixing a problem.
+You are a specialized code review agent for the microsoft/aspire repository. Your goal is to review a pull request, identify **concrete problems**, and separately identify sensitive semantic changes that require human judgment. Problems include bugs, security issues, correctness errors, performance regressions, missing error handling at system boundaries, and violations of repository conventions. Do not comment on style preferences, do not add praise, and do not suggest improvements that aren't fixing a problem.
 
 ## CRITICAL: Step Ordering
 
@@ -71,10 +71,23 @@ No local action needed. Proceed to Step 2. Note that review quality may be reduc
 
 Fetch the PR metadata, diff, and file list. This skill uses the `mcp_github_*` tools (MCP GitHub integration). These are available when the GitHub MCP server is configured in the agent environment. If they are unavailable, fall back to the `gh` CLI for equivalent operations.
 
-1. **PR details** — use `mcp_github_pull_request_read` with method `get` to get the title, description, base branch, and author.
+1. **PR details** — use `mcp_github_pull_request_read` with method `get` to get the title, description, base branch, author, current head commit, and commit history.
 2. **Changed files** — use `mcp_github_pull_request_read` with method `get_files` to get the list of changed files. Paginate if there are many files.
 3. **Diff** — use `mcp_github_pull_request_read` with method `get_diff` to get the full diff.
 4. **Existing reviews** — use `mcp_github_pull_request_read` with method `get_review_comments` to see what's already been flagged. Don't duplicate existing review comments.
+5. **Approval state** — identify the latest non-bot human `APPROVED` review and the commit it covered. Bot reviews, review-thread replies, and approvals on older commits do not establish that the current head received human review.
+
+If the MCP response does not expose the head, commit history, or review commit IDs, retrieve them with:
+
+```bash
+gh pr view <number> --repo <owner>/<repo> --json headRefOid
+gh api repos/<owner>/<repo>/pulls/<number>/commits --paginate \
+  --jq '.[] | {sha: .sha, message: .commit.message}'
+gh api repos/<owner>/<repo>/pulls/<number>/reviews --paginate \
+  --jq '.[] | {reviewer: .user.login, user_type: .user.type, state: .state, commit_id: .commit_id, submitted_at: .submitted_at}'
+```
+
+Use active reviews with `state: "APPROVED"` and `user_type` other than `"Bot"`. Compare a reachable approved commit with the current head using `git diff <approved-commit> <head-commit>`; for diff-only reviews, use GitHub's compare API. If the approved commit is no longer reachable or cannot be compared with the current head, do not assume the approval is current; report that approval coverage cannot be established when the PR also contains a sensitive semantic change.
 
 ## Step 3: Categorize the Changes
 
@@ -93,12 +106,55 @@ Group files by area to guide how deeply to review each:
 | Extension | `extension/**` | Localization, TypeScript usage |
 | Docs/Config | `docs/**`, `*.md`, `*.json` | Accuracy only |
 
+### Semantic Risk Classification (MANDATORY)
+
+In addition to grouping files by area, independently classify the **meaning** of the changes. This classification is provenance-neutral: AI or automation authorship alone is not a trigger, and human authorship is not an exemption.
+
+A single trigger in this table is sufficient to require human review:
+
+| Category | Triggers | Implications to call out |
+|----------|----------|--------------------------|
+| Trust, security, or supply-chain boundary | Package/image registries, feeds, download endpoints, signing, provenance, integrity, audit checks, TLS/certificate handling, authentication, authorization, secrets, permissions, or execution of downloaded content | Wrong or compromised source, weakened verification, credential exposure, unauthorized access, code execution, compliance impact |
+| Internal-to-customer boundary | Internal services, domains, mirrors, caches, credentials, flags, or CI assumptions flow into shipped defaults, runtime code, templates, lockfiles, generated Dockerfiles/manifests, or deployment output | Customer authentication failures, outages or throttling, dependency on internal policy/availability, accidental infrastructure disclosure |
+| Customer-facing defaults or source precedence | Defaults, fallbacks, endpoint selection, configuration precedence, opt-in/opt-out behavior, or fail-open/fail-closed behavior changes | Silent behavior changes, compatibility breaks, customer outages, environment-specific failures, loss of customer control |
+| Scope or intent mismatch | A dependency, security-remediation, generated-file, mechanical, or refactoring PR also changes handwritten production behavior, removes or replaces checks, or buries semantic changes in a noisy diff | Reviewers and tests may validate the stated task instead of the actual product change; generated churn can hide a high-impact edit |
+| Approval freshness | Material production, security, deployment, or customer-facing changes were added after the latest non-bot human approval | The approval does not cover the current head or its updated implications |
+
+For every triggered change, create a separate **Human review required** item even if no concrete defect is proven. Combine closely related triggers into one item and list all applicable categories rather than duplicating the same explanation.
+
+Human-review items do not lower the confidence bar for findings. They identify a decision or risk that this skill must not clear on its own.
+
 ## Step 4: Review the Code
 
 Read the diff carefully. For each changed file, also read surrounding context to understand the impact of the change.
 
 - **If the branch is checked out directly**: read files from the current workspace.
 - **If reviewing from GitHub diff only**: use `mcp_github_get_file_contents` to fetch specific files from the PR branch when additional context is needed.
+
+### Human-Review Analysis for Sensitive Changes
+
+For every semantic risk trigger:
+
+1. **Trace source to shipped sinks** — follow changed constants, URLs, defaults, configuration, and security decisions through every consumer. Search for the old and new values. Include runtime behavior, CLI behavior, templates, lockfiles, generated artifacts, containers, deployment output, and documentation where applicable.
+2. **Separate build infrastructure from product behavior** — determine whether a value intended for repository CI, an internal mirror, a test environment, or a developer override became a customer-facing default. A green internal build does not prove that a shipped default works for customers.
+3. **Compare removed behavior** — inspect deleted and replacement code side by side. For security controls, state what property the old control enforced and require evidence that the replacement preserves or intentionally changes it.
+4. **Validate outcomes, not implementation shape** — a test that asserts a constant, command-line argument, snapshot, generated text, or the PR's stated intent proves propagation only. Look for a test or manual scenario at the real boundary, including whichever relevant failure modes apply: representative customer credentials/network access, uncached or transitive dependencies, unavailable services, invalid input, and override behavior.
+5. **Challenge the premise** — do not assume the PR description, existing tests, or earlier AI review correctly identifies the desired trust boundary or customer default. Compare the change with existing product behavior and repository/customer separation.
+6. **Check approval freshness** — compare the current head with the commit covered by the latest non-bot human approval. Review the intervening diff, not merely the commit count. Require renewed human review only when those later commits are material; documentation-only or test-only follow-ups do not make an approval stale by themselves.
+
+Passing tests, an existing bot review, or an approval on an older commit does not resolve a human-review item.
+
+#### Calibration: npm registry regression ([#19370](https://github.com/microsoft/aspire/issues/19370))
+
+[PR #18858](https://github.com/microsoft/aspire/pull/18858) replaced the public npm registry with an internal mirror in CLI package operations, generated Dockerfiles, and shipped template lockfiles while also changing integrity/signature behavior inside a dependency-security remediation. Even before reproducing the eventual `E401`, this required human review for:
+
+- The supply-chain trust boundary and the equivalence of removed/replaced security checks.
+- Internal build infrastructure becoming a customer-facing default.
+- The blast radius across CLI installs, generated containers, and templates.
+- Handwritten product behavior hidden inside a large dependency/generated-file diff.
+- Material changes added after the latest human approval.
+
+Tests that asserted the internal registry constant or snapshots only proved that the new value propagated. Representative validation needed to install through the customer-facing path with anonymous/customer access and an uncached transitive dependency, while also verifying that internal-feed overrides remained opt-in. Apply this reasoning to analogous registries, mirrors, endpoints, credentials, and security controls; do not special-case npm.
 
 ### Impact Analysis for Tests and Regressions
 
@@ -136,7 +192,7 @@ When specialized coverage is missing and the appropriate shape is unclear, use o
 
 ### What to Flag
 
-Only flag **actual problems**. Every comment must identify a concrete issue. Categories:
+Only flag **actual problems** in the **Findings** section. Every comment must identify a concrete issue. Do not turn a human-review risk into a finding unless the diff provides evidence of an actual defect. Categories:
 
 1. **Bugs** — logic errors, off-by-one, null dereferences, missing awaits, race conditions, incorrect resource disposal.
 2. **Security** — injection risks, credential exposure, insecure defaults, OWASP Top 10 violations.
@@ -175,9 +231,26 @@ When code is moved from one file to another (e.g., extracting a class), treat th
 - **Diff old vs. new behavior.** When a type/class is deleted and replaced, explicitly compare the old and new implementations. Look for: removed overrides, changed exception behavior, relaxed validation, lost invariant checks.
 - **Check callers of removed types.** If `OldClass` is removed and replaced by `NewClass<T>`, verify that all call sites that depended on `OldClass`-specific behavior still work correctly.
 
-## Step 5: Present Findings to the User
+## Step 5: Present Findings and Human-Review Items
 
-**Do not post a review automatically.** Instead, present all findings as a numbered list for the user to triage. Order by potential impact.
+**Do not post a review automatically.** Always present these two sections:
+
+### Findings
+
+Present concrete, high-confidence problems as a numbered list for the user to triage, ordered by potential impact. If there are none, say "No findings."
+
+### Human review required
+
+Present every semantic risk item separately as `HR1`, `HR2`, and so on. If there are none, say "None." Each item must include:
+
+- **Category** — one or more categories from the semantic risk table.
+- **Evidence** — the exact changed code, configuration, artifact, or approval-to-head diff that triggered the item.
+- **Affected surfaces** — the customer and system surfaces reached by the change.
+- **Implications** — concrete security, availability, compatibility, operational, or supply-chain consequences.
+- **Human validation** — the decision, expertise, or representative scenario a human must validate.
+- **Approval freshness** — whether an existing human approval covers the current head.
+
+These items are mandatory risk disclosures, not proven bugs, and are not eligible for automatic conversion into inline review comments. If the same change also has a concrete finding, cross-reference it rather than repeating the full explanation.
 
 Then ask the user what to do next. The user may respond with:
 
@@ -189,6 +262,17 @@ Then ask the user what to do next. The user may respond with:
 ## Step 6: Post Selected Comments as a Review
 
 Once the user has selected which findings to include:
+
+### Human-review approval gate
+
+If any **Human review required** item remains unresolved:
+
+- Do not recommend or submit an `APPROVE` review.
+- If the user asks to approve, require explicit confirmation that a human reviewed the listed item(s), their implications, and the material changes at the current head. A request such as "add all" or a passing CI run is not confirmation.
+- Selected concrete findings may still be submitted with `event: "COMMENT"` while human review is pending.
+- Do not infer resolution from the author addressing an inline comment, an AI re-review, or an approval attached to an older commit.
+
+After the user explicitly confirms that human review occurred, continue with the existing approval and auto-merge checks.
 
 ### Auto-merge safety check
 
@@ -230,6 +314,10 @@ Wait for the user's response before proceeding. If they choose option 2, use `ev
 ## Review Quality Rules
 
 - **Flag only concrete, high-confidence problems.** Report definite issues such as bugs, security problems, correctness errors, performance regressions, missing error handling at system boundaries, or repository-convention violations. Do not raise speculative concerns, design feedback, or issues you cannot support with specific evidence in the diff.
+- **Make human-review items evidence-based.** Tie every item to an exact sensitive semantic change and explain its implications. Do not emit generic "this is risky" or "a human should check this" warnings.
+- **Keep findings and human-review items distinct.** A risk requiring judgment is not automatically a defect. Conversely, finding a concrete defect does not remove the need for human review of the underlying sensitive decision.
+- **Do not infer safety from provenance or process.** Author identity, AI review, test volume, green CI, and stale approval are not substitutes for tracing the changed behavior.
+- **Do not approve unresolved human-review items.** Explicit confirmation must cover the current head and the implications listed by the skill.
 - **One problem per comment.** Don't bundle multiple issues into a single comment.
 - **Be specific.** Reference the exact line(s), variable(s), or condition(s) that are problematic.
 - **Provide fix direction.** If the fix isn't obvious, include a brief suggestion or code snippet.
