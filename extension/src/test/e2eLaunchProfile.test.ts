@@ -1028,6 +1028,34 @@ suite('E2E launch profile', () => {
         assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
     });
 
+    test('keeps the ambiguous dynamic debug launch timeout above its process-state wait', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const dynamicDebugConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'dynamicDebugConfiguration.e2e.test.ts'), 'utf8');
+        const ambiguousLaunchTest = getTestBlock(dynamicDebugConfiguration, 'launches the selected AppHost from an ambiguous single-folder workspace');
+
+        assert.ok(dynamicDebugConfiguration.includes('const appHostProcessStateTimeoutMs = 120000;'));
+        assert.ok(ambiguousLaunchTest.includes('this.timeout(300000);'));
+        assert.ok(ambiguousLaunchTest.includes('appHostProcessStateTimeoutMs'));
+    });
+
+    test('uses state-specific assertions for debugger guidance and project creation readiness', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const workspaceTargetProofSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'workspaceTargetProof.e2e.test.ts'), 'utf8');
+
+        assert.ok(workspaceTargetProofSource.includes("const wrapperDirectory = path.join(fixtureRoot, '.workspace-target-cli-wrappers');"));
+        assert.ok(workspaceTargetProofSource.includes('const wrapperPath = path.join(wrapperDirectory, `aspire-${folderName}`);'));
+        assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
+
+        const edgeCases = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+        assert.ok(edgeCases.includes("waitForCodeLensText('apphost.cs', 'Set up Python debugger', 60000)"));
+        assert.ok(!edgeCases.includes("waitForWorkbenchText('Set up Python debugger'"));
+
+        const workspaceCollision = getTestBlock(workspaceTargetProofSource, 'reopens the project folder picker after a colliding selection');
+        assert.ok(!workspaceCollision.includes('await openAspireView();'));
+        assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
+    });
+
     test('uses integrated-browser webview text instead of editor title waits', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
