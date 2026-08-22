@@ -5,6 +5,7 @@ using Azure.AI.Inference;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
@@ -137,6 +138,28 @@ public class AspireAzureAIInferenceEmbeddingsExtensionTests
 
         Assert.NotNull(metadata);
         Assert.Equal("other", metadata?.DefaultModelId);
+    }
+
+    [Theory]
+    [InlineData("https://account.services.ai.azure.com/models", true)]
+    [InlineData("https://models.github.ai/inference", false)]
+    [InlineData("https://models.inference.ai.azure.com", false)]
+    [InlineData("https://account.openai.azure.com/openai/deployments/model", false)]
+    [InlineData("https://account.openai.azure.us/openai/deployments/model", false)]
+    [InlineData("https://account.openai.azure.cn/openai/deployments/model", false)]
+    [InlineData("https://account.openai.azure.de/openai/deployments/model", false)]
+    public void HealthCheckRegistrationMatchesEndpointSupport(string endpoint, bool expected)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:embedding", $"Endpoint={endpoint};Key=fakekey;Model=model")
+        ]);
+
+        builder.AddAzureEmbeddingsClient("embedding");
+
+        using var host = builder.Build();
+
+        Assert.Equal(expected, host.Services.GetService<HealthCheckService>() is not null);
     }
 
     [Theory]

@@ -186,10 +186,10 @@ public static class AspireAzureAIInferenceExtensions
             => configuration.Bind(settings);
 
         protected override IHealthCheck CreateHealthCheck(ChatCompletionsClient client, ChatCompletionsClientSettings settings)
-            => throw new NotImplementedException();
+            => new AzureAIInferenceChatCompletionsHealthCheck(client);
 
         protected override bool GetHealthCheckEnabled(ChatCompletionsClientSettings settings)
-            => false;
+            => !settings.DisableHealthChecks && SupportsModelInfoHealthCheck(settings.Endpoint);
 
         protected override bool GetMetricsEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableMetrics;
@@ -439,10 +439,10 @@ public static class AspireAzureAIInferenceExtensions
             => configuration.Bind(settings);
 
         protected override IHealthCheck CreateHealthCheck(EmbeddingsClient client, ChatCompletionsClientSettings settings)
-            => throw new NotImplementedException();
+            => new AzureAIInferenceEmbeddingsHealthCheck(client);
 
         protected override bool GetHealthCheckEnabled(ChatCompletionsClientSettings settings)
-            => false;
+            => !settings.DisableHealthChecks && SupportsModelInfoHealthCheck(settings.Endpoint);
 
         protected override bool GetMetricsEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableMetrics;
@@ -452,6 +452,28 @@ public static class AspireAzureAIInferenceExtensions
 
         protected override bool GetTracingEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableTracing;
+    }
+
+    private static bool SupportsModelInfoHealthCheck(Uri? endpoint)
+    {
+        if (endpoint is null)
+        {
+            return false;
+        }
+
+        // The SDK's /info operation is unsupported by GitHub Models and Azure OpenAI endpoints.
+        // See https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient.getmodelinfoasync.
+        var host = endpoint.Host;
+        return !IsHostOrSubdomain(host, "models.github.ai")
+            && !IsHostOrSubdomain(host, "models.inference.ai.azure.com")
+            && !IsHostOrSubdomain(host, "openai.azure.com")
+            && !IsHostOrSubdomain(host, "openai.azure.us")
+            && !IsHostOrSubdomain(host, "openai.azure.cn")
+            && !IsHostOrSubdomain(host, "openai.azure.de");
+
+        static bool IsHostOrSubdomain(string host, string domain)
+            => host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith($".{domain}", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
