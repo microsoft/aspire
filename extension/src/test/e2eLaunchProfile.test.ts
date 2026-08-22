@@ -746,14 +746,15 @@ suite('E2E launch profile', () => {
         const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
         const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
         const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+        const normalizedDebugBrowserTest = debugBrowserTest.replace(/\r\n/g, '\n');
         const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
         const nonWindowsSkip = `if (process.platform !== 'win32') {
             this.skip();
         }`;
 
         assert.deepStrictEqual({
-            nonWindowsSkipPrecedesDashboardBrowserSetting: debugBrowserTest.indexOf(nonWindowsSkip) >= 0
-                && debugBrowserTest.indexOf(nonWindowsSkip) < debugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
+            nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
+                && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
             waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
             waitsForNoBrowserDebugSessions: debugBrowserTest.includes('await waitForNoBrowserDebugSessions()'),
             hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
