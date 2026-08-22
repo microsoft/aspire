@@ -250,6 +250,14 @@ public partial class StructuredLogsTests : DashboardTestContext
 
         Assert.True(Services.GetRequiredService<PauseManager>().AreStructuredLogsPaused(out _));
         Assert.Contains("Capture paused", cut.Markup);
+
+        // The warning leads the footer so it sits to the left of "Showing X structured logs"
+        // instead of floating in the middle of the footer.
+        var footer = cut.Find(".items-footer");
+        Assert.Collection(
+            footer.Children,
+            first => Assert.Contains("block-warning", first.ClassList),
+            second => Assert.Contains("result-count", second.ClassList));
     }
 
     private void SetupStructureLogsServices()
