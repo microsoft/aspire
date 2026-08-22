@@ -36,7 +36,15 @@ public static class OracleDatabaseBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var passwordParameter = password?.Resource ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password");
+        // Oracle's database creation scripts reject the broader special-character set used by the default
+        // password generator. The complexity policy still requires lower, upper, and numeric characters.
+        var passwordParameter = password?.Resource ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(
+            builder,
+            $"{name}-password",
+            special: false,
+            minLower: 1,
+            minUpper: 1,
+            minNumeric: 1);
 
         var oracleDatabaseServer = new OracleDatabaseServerResource(name, passwordParameter);
 
@@ -141,11 +149,14 @@ public static class OracleDatabaseBuilderExtensions
     }
 
     /// <summary>
-    /// Copies init files into a Oracle Database server container resource.
+    /// Copies startup files into an Oracle Database server container resource.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="source">The source file or directory on the host to copy into the container.</param>
+    /// <param name="source">The source file or directory on the host to copy into the container's startup scripts directory.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Oracle executes scripts in the startup scripts directory each time the database container starts.
+    /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<OracleDatabaseServerResource> WithInitFiles(this IResourceBuilder<OracleDatabaseServerResource> builder, string source)
@@ -153,7 +164,7 @@ public static class OracleDatabaseBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(source);
 
-        const string initPath = "/docker-entrypoint-initdb.d";
+        const string initPath = "/opt/oracle/scripts/startup";
 
         var importFullPath = Path.GetFullPath(source, builder.ApplicationBuilder.AppHostDirectory);
 
@@ -166,6 +177,12 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Oracle executes setup scripts only when creating a database. Oracle Database Free images contain a pre-built database,
+    /// so configure an empty data volume or bind mount with <see cref="WithDataVolume"/> or <see cref="WithDataBindMount"/>
+    /// to create a new database and run the setup scripts.
+    /// </remarks>
+    /// <seealso href="https://container-registry.oracle.com/ords/ocr/ba/database/free">Oracle Database Free container image documentation</seealso>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<OracleDatabaseServerResource> WithDbSetupBindMount(this IResourceBuilder<OracleDatabaseServerResource> builder, string source)

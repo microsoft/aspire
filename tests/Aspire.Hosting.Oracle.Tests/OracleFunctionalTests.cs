@@ -344,15 +344,25 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
         }
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false, Skip = "https://github.com/microsoft/aspire/issues/5190")]
+    [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
-    public async Task VerifyWithInitFiles(bool init)
+    public Task VerifyWithInitFiles()
+    {
+        return VerifyInitializationFiles(useSetupBindMount: false);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public Task VerifyWithDbSetupBindMount()
+    {
+        return VerifyInitializationFiles(useSetupBindMount: true);
+    }
+
+    private async Task VerifyInitializationFiles(bool useSetupBindMount)
     {
         // Creates a script that should be executed when the container is initialized.
 
-        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         var pipeline = new ResiliencePipelineBuilder()
             .AddRetry(new()
             {
@@ -364,6 +374,17 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
             .Build();
 
         var initFilesPath = Directory.CreateTempSubdirectory().FullName;
+        var dataPath = useSetupBindMount ? Directory.CreateTempSubdirectory().FullName : null;
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(initFilesPath, MountFilePermissions);
+
+            if (dataPath is not null)
+            {
+                File.SetUnixFileMode(dataPath, MountFilePermissions);
+            }
+        }
 
         var oracleDbName = "freepdb1";
 
@@ -382,22 +403,21 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
             var oracle = builder.AddOracle("oracle");
             var db = oracle.AddDatabase(oracleDbName);
 
-            var ready = builder;
-
-            if (init)
+            if (useSetupBindMount)
             {
-                oracle.WithInitFiles(initFilesPath);
+                oracle.WithDbSetupBindMount(initFilesPath)
+                    .WithDataBindMount(dataPath!);
             }
             else
             {
-                oracle.WithDbSetupBindMount(initFilesPath);
+                oracle.WithInitFiles(initFilesPath);
             }
 
             using var app = builder.Build();
 
             await app.StartAsync();
 
-            await app.WaitForTextAsync(DatabaseReadyText, cancellationToken: cts.Token);
+            await app.WaitForTextAsync("DONE: Executing user defined scripts", cancellationToken: cts.Token);
 
             var hb = Host.CreateApplicationBuilder();
 
@@ -430,14 +450,8 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
         }
         finally
         {
-            try
-            {
-                Directory.Delete(initFilesPath, true);
-            }
-            catch
-            {
-                // Don't fail test if we can't clean the temporary folder
-            }
+            TryDeleteDirectory(initFilesPath);
+            TryDeleteDirectory(dataPath);
         }
     }
 
@@ -488,4 +502,24 @@ public class OracleFunctionalTests(ITestOutputHelper testOutputHelper)
             "resource");
     }
 
+    private static void TryDeleteDirectory(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (IOException)
+        {
+            // Container runtimes can briefly retain handles to bind-mounted directories during teardown.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The Oracle container can leave database files owned by its non-root user.
+        }
+    }
 }

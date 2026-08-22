@@ -22,6 +22,17 @@ public class AddOracleTests
     }
 
     [Fact]
+    public void AddOracleGeneratesPasswordAcceptedByDatabaseCreationScripts()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var orcl = appBuilder.AddOracle("orcl");
+        var password = orcl.Resource.PasswordParameter.Default!.GetDefaultValue();
+
+        Assert.Matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])[a-zA-Z0-9]{22}$", password);
+    }
+
+    [Fact]
     public void AddOracleDoesNotAddGeneratedPasswordParameterWithUserSecretsParameterDefaultInPublishMode()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -256,6 +267,56 @@ public class AddOracleTests
             }
             """;
         Assert.Equal(expectedManifest, serverManifest.ToString());
+    }
+
+    [Fact]
+    public async Task WithInitFilesCopiesFilesToStartupDirectory()
+    {
+        var sourceDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var sourcePath = Path.Combine(sourceDirectory.FullName, "01_init.sql");
+            await File.WriteAllTextAsync(sourcePath, "SELECT 1 FROM DUAL;");
+
+            using var builder = TestDistributedApplicationBuilder.Create();
+            var oracle = builder.AddOracle("oracle")
+                .WithInitFiles(sourceDirectory.FullName);
+
+            var annotation = Assert.Single(oracle.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+            Assert.Equal("/opt/oracle/scripts/startup", annotation.DestinationPath);
+            Assert.Null(annotation.DefaultOwner);
+            Assert.Null(annotation.DefaultGroup);
+            Assert.Null(annotation.Umask);
+
+            var entries = await annotation.Callback(new()
+            {
+                Services = TestServiceProvider.Instance,
+                Model = oracle.Resource
+            }, CancellationToken.None);
+
+            var file = Assert.IsType<ContainerFile>(Assert.Single(entries));
+            Assert.Equal("01_init.sql", file.Name);
+            Assert.Equal(sourcePath, file.SourcePath);
+        }
+        finally
+        {
+            sourceDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WithDbSetupBindMountAddsSetupDirectoryMount()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var oracle = builder.AddOracle("oracle")
+            .WithDbSetupBindMount("setup");
+
+        var mount = Assert.Single(oracle.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal(Path.Combine(builder.AppHostDirectory, "setup"), mount.Source);
+        Assert.Equal("/opt/oracle/scripts/setup", mount.Target);
+        Assert.Equal(ContainerMountType.BindMount, mount.Type);
+        Assert.False(mount.IsReadOnly);
     }
 
     [Fact]
