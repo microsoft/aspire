@@ -1272,7 +1272,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         JsonElement root = doc.RootElement;
 
         HashSet<string> testPatternAllowedFields = ["testName", "testProject", "output", "reason", "enabled"];
-        HashSet<string> jobPatternAllowedFields = ["jobName", "output", "reason", "enabled"];
+        HashSet<string> jobPatternAllowedFields = ["jobName", "output", "reason", "enabled", "causeId"];
         HashSet<string> testPatternMatcherFields = ["testName", "testProject", "output"];
         HashSet<string> jobPatternMatcherFields = ["jobName", "output"];
 
@@ -2063,7 +2063,13 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             },
             jobFailurePatterns = new object[]
             {
-                new { jobName = new { regex = ".*windows.*" }, output = "0xC0000142", reason = "Win init" }
+                new
+                {
+                    jobName = new { regex = ".*windows.*" },
+                    output = "0xC0000142",
+                    reason = "Win init",
+                    causeId = "windows-process-init-failure-0xc0000142"
+                }
             }
         };
 
@@ -2073,6 +2079,33 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         Assert.True(result.Valid);
         Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsInvalidCauseId()
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = Array.Empty<object>(),
+            jobFailurePatterns = new object[]
+            {
+                new
+                {
+                    output = "0xC0000142",
+                    reason = "Win init",
+                    causeId = "Invalid Cause ID"
+                }
+            }
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("'causeId' must be a safe cause ID", StringComparison.Ordinal));
     }
 
     private static void ValidatePatternRule(JsonElement rule, HashSet<string> allowedFields, HashSet<string> matcherFields)
@@ -2093,6 +2126,14 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             Assert.True(
                 enabled.ValueKind is JsonValueKind.True or JsonValueKind.False,
                 "'enabled' must be a boolean.");
+        }
+
+        if (rule.TryGetProperty("causeId", out JsonElement causeId))
+        {
+            Assert.True(
+                causeId.ValueKind == JsonValueKind.String &&
+                System.Text.RegularExpressions.Regex.IsMatch(causeId.GetString()!, "^[a-z0-9][a-z0-9-]*$"),
+                "'causeId' must be a safe cause ID.");
         }
 
         bool hasMatcherField = false;

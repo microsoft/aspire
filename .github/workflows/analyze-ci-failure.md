@@ -427,8 +427,12 @@ env:
   ENABLE_RERUN: 'false'
 
 concurrency:
-  group: analyze-ci-failure-${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+  # Publication mutates a shared memory branch and recurring-cause issues.
+  # Serialize runs so each resolver sees the canonical identities from the
+  # previous publication before performing issue side effects.
+  group: analyze-ci-failure-publish
   cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read
@@ -471,6 +475,15 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Checkout workflow helpers
+          uses: actions/checkout@v4.3.1
+          with:
+            persist-credentials: false
+            sparse-checkout: |
+              .github/workflows/analyze-ci-failure-cause-resolver.js
+              eng/test-retry-patterns.json
+            sparse-checkout-cone-mode: false
+
         - name: Publish analysis data and comment on PR
           run: |
             set -euo pipefail
@@ -517,6 +530,7 @@ safe-outputs:
             # a single pr.number; if the collect-data job passed multiple PRs
             # in the future, extend the agent schema accordingly.
             PR_NUMBERS=$(jq -r '.pr.number // "" | tostring' "$ANALYSIS_FILE")
+            RESOLVER_STATUS=0
 
             # ── 1. Set up memory branch and merge cause data ──
             # Skip persisting data for code-issue verdicts — these are not
@@ -536,9 +550,18 @@ safe-outputs:
               git -C memory-repo config user.name "github-actions[bot]"
               git -C memory-repo config user.email "github-actions[bot]@users.noreply.github.com"
 
-              # Store run summary under runs/ directory
-              mkdir -p "memory-repo/runs"
-              cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
+              # Agent-generated IDs are proposals. Resolve them against the complete
+              # memory branch before any run, cause, or issue lookup is persisted.
+              node .github/workflows/analyze-ci-failure-cause-resolver.js \
+                "$ANALYSIS_FILE" \
+                "$CAUSES_DIR" \
+                "memory-repo/causes" \
+                "eng/test-retry-patterns.json" || RESOLVER_STATUS=$?
+
+              if [ "$RESOLVER_STATUS" -eq 0 ]; then
+                # Store run summary under runs/ directory
+                mkdir -p "memory-repo/runs"
+                cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
 
               # Store individual cause files under causes/ (shared across runs).
               # Each cause file accumulates occurrences over time. The agent
@@ -550,8 +573,6 @@ safe-outputs:
                 # Build the occurrence entry from the run summary JSON
                 ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
                 PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-                # Find the first failed job name for context in the occurrence
-                FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
 
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
@@ -562,21 +583,22 @@ safe-outputs:
                   fi
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
+                  CAUSE_JOBS=$(jq -r '(.job_names // ["unknown"]) | join("<br>")' "$CAUSE_FILE")
 
                   # Add an occurrences array with this run's entry to the agent's cause file
                   CAUSE_WITH_OCC=$(jq --argjson run_id "$RUN_ID" \
                     --arg run_url "$RUN_URL" \
-                    --arg job "$FIRST_JOB" \
+                    --arg job "$CAUSE_JOBS" \
                     --argjson pr_number "$PR_NUMBER" \
                     --arg observed_at "$ANALYZED_AT" \
-                    '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
+                    'del(.job_ids, .job_names) + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
                     "$CAUSE_FILE")
 
                   if [ -f "$EXISTING" ]; then
                     # Merge: append new occurrence, deduplicate by run_id
                     echo "$CAUSE_WITH_OCC" | jq -s --slurpfile existing "$EXISTING" '
                       .[0] as $new | $existing[0] as $ex |
-                      ($new | del(.occurrences)) * {
+                      $ex * ($new | del(.occurrences)) * {
                         occurrences: (
                           [$ex.occurrences[], $new.occurrences[]]
                           | unique_by(.run_id)
@@ -592,22 +614,31 @@ safe-outputs:
                 echo "Persisted cause files to causes/ (${CAUSE_COUNT} total)"
               fi
 
-            # ── 2. Create or update issues for each cause ──
+              # ── 2. Publish canonical identities before issue side effects ──
+              git -C memory-repo add -A
+              if git -C memory-repo diff --cached --quiet; then
+                echo "No analysis changes to memory branch"
+              else
+                git -C memory-repo commit -m "Add CI failure analysis for run ${RUN_ID}"
+                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
+                echo "Memory branch updated with analysis for run ${RUN_ID}"
+              fi
+
+            # ── 3. Create or update issues for each cause ──
             if [ -d "$CAUSES_DIR" ]; then
               # Build occurrence info from the run summary for issue updates
               ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
               PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-              FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
 
-              # Build the occurrence table row for this run
               OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
 
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 jq empty "$CAUSE_FILE" 2>/dev/null || continue
 
                 CAUSE_ID=$(jq -r '.id' "$CAUSE_FILE")
+                CAUSE_JOBS=$(jq -r '(.job_names // ["unknown"]) | join("<br>")' "$CAUSE_FILE")
+                NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${CAUSE_JOBS} | #${PR_NUMBER} |"
 
                 # Validate CAUSE_ID is a safe slug (lowercase alphanumeric + hyphens)
                 # to prevent HTML comment injection via the marker.
@@ -714,9 +745,9 @@ safe-outputs:
                     echo ""
                     echo "Build: ${RUN_URL}"
                     if [ -n "$TEST_NAME" ]; then
-                      echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
+                      echo "Build error leg or test failing: ${CAUSE_JOBS} / \`${TEST_NAME}\`"
                     else
-                      echo "Build error leg: ${FIRST_JOB}"
+                      echo "Build error leg: ${CAUSE_JOBS}"
                     fi
                     echo "Pull request: #${PR_NUMBER}"
                     echo ""
@@ -764,21 +795,27 @@ safe-outputs:
               rm -f "${OPEN_ISSUES_CACHE:-}" "${CLOSED_ISSUES_CACHE:-}"
             fi
 
-              # ── 3. Push memory branch ──
-              git -C memory-repo add -A
-              if git -C memory-repo diff --cached --quiet; then
-                echo "No changes to memory branch"
+                # ── 4. Persist issue links to the memory branch ──
+                git -C memory-repo add -A
+                if git -C memory-repo diff --cached --quiet; then
+                  echo "No changes to memory branch"
+                else
+                  git -C memory-repo commit -m "Link CI failure issues for run ${RUN_ID}"
+                  git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
+                  echo "Memory branch updated with issue links for run ${RUN_ID}"
+                fi
               else
-                git -C memory-repo commit -m "Add CI failure analysis for run ${RUN_ID}"
-                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
-                echo "Memory branch updated with analysis for run ${RUN_ID}"
+                echo "::error::Cause resolver failed; skipping memory persistence and issue updates."
               fi
             fi
 
-            # ── 4. Post PR comment using the analysis JSON ──
+            # ── 5. Post PR comment using the analysis JSON ──
             FIRST_PR=$(echo "$PR_NUMBERS" | cut -d',' -f1)
             if [ -z "$FIRST_PR" ] || [ "$FIRST_PR" = "null" ]; then
               echo "No PR number found in analysis. Skipping comment."
+              if [ "$RESOLVER_STATUS" -ne 0 ]; then
+                exit "$RESOLVER_STATUS"
+              fi
               exit 0
             fi
 
@@ -786,6 +823,9 @@ safe-outputs:
             PR_LOCKED=$(gh api "repos/${REPO}/pulls/${FIRST_PR}" --jq '.locked' 2>/dev/null || echo "false")
             if [ "$PR_LOCKED" = "true" ]; then
               echo "PR #${FIRST_PR} is locked. Skipping comment."
+              if [ "$RESOLVER_STATUS" -ne 0 ]; then
+                exit "$RESOLVER_STATUS"
+              fi
               exit 0
             fi
 
@@ -831,6 +871,10 @@ safe-outputs:
               echo "Posted new analysis comment on PR #${FIRST_PR}"
             fi
             rm -f "$COMMENT_FILE"
+
+            if [ "$RESOLVER_STATUS" -ne 0 ]; then
+              exit "$RESOLVER_STATUS"
+            fi
     rerun-failed-jobs:
       name: "Rerun failed CI jobs"
       description: |
@@ -950,7 +994,7 @@ Analyze all of the data to classify each failed job (see **Classification Rules*
 
 When a failure is classified as `flaky-test` or `infra-failure` (NOT `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
 
-If any of this run's transient failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked.
+If any of this run's transient failures match an existing cause, reuse that cause's `id` when writing the cause file in Step 3b. Do NOT attempt to match code-issue failures against prior causes — those are not tracked. The publish job treats agent-generated IDs as proposals and deterministically resolves them against the complete cause memory before persistence, so a prior cause omitted from the summary cannot create a duplicate identity.
 
 A failure matches an existing cause when:
 - For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
@@ -1028,7 +1072,8 @@ Each cause file must follow this schema:
   "type": "flaky-test | infra-failure",
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
-  "error_pattern": "The key error message or pattern that identifies this cause"
+  "error_pattern": "The key error message or pattern that identifies this cause",
+  "job_ids": [67890]
 }
 ```
 
@@ -1036,8 +1081,9 @@ Field details:
 - `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
 - `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
-- `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
+- `test_name`: The fully qualified test method name without theory argument text. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
+- `job_ids`: Required array containing the numeric IDs of every failed job caused by this underlying failure. Use the IDs from `failed_jobs`; do not attribute a cause to an unrelated failed job.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
