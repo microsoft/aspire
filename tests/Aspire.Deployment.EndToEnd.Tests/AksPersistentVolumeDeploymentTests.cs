@@ -237,7 +237,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             """builder.AddProject<Projects.AksPersistentVolume_ApiService>("apiservice")""",
             """
             builder.AddProject<Projects.AksPersistentVolume_ApiService>("apiservice")
-                .WithPersistentVolume(data, "/srv/data")
+                .WithPersistentVolume(data, "/srv/data", env: "DATA_PATH")
                 .WithEnvironment("DEPLOYMENT_REVISION", "first")
             """,
             appHostPath);
@@ -276,8 +276,10 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
 
             var app = builder.Build();
 
-            const string markerPath = "/srv/data/marker.txt";
-            const string newMarkerPath = "/srv/data/new-marker.txt";
+            var dataPath = app.Configuration["DATA_PATH"]
+                ?? throw new InvalidOperationException("DATA_PATH is not configured.");
+            var markerPath = Path.Combine(dataPath, "marker.txt");
+            var newMarkerPath = Path.Combine(dataPath, "new-marker.txt");
             const string markerToken = "aks-pv-marker-42";
             var deploymentRevision = app.Configuration["DEPLOYMENT_REVISION"]
                 ?? throw new InvalidOperationException("DEPLOYMENT_REVISION is not configured.");

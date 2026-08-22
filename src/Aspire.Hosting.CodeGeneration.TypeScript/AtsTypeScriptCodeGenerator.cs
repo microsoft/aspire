@@ -1427,6 +1427,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return $"{ToPascalCase(simpleName)}Options";
     }
 
+    private static string GetCapabilityName(string capabilityId)
+    {
+        var slashIndex = capabilityId.LastIndexOf('/');
+
+        return slashIndex >= 0 ? capabilityId[(slashIndex + 1)..] : capabilityId;
+    }
+
     /// <summary>
     /// Gets the options interface name for a specific capability, accounting for type conflicts.
     /// Falls back to the default method-name-based interface if no specific mapping exists.
@@ -1493,8 +1500,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// <summary>
     /// Registers an options interface to be generated later.
     /// Uses method name to create the interface name. When methods share a name but have
-    /// incompatible callback parameter types, separate options interfaces are created with
-    /// numeric suffixes (e.g., RunAsEmulatorOptions, RunAsEmulator1Options).
+    /// different option shapes, separate options interfaces are created from the capability ID.
     /// </summary>
     private void RegisterOptionsInterface(string capabilityId, string methodName, List<AtsParameterInfo> optionalParams)
     {
@@ -1508,6 +1514,17 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Check if an existing interface with this name is compatible
         if (_optionsInterfacesToGenerate.TryGetValue(baseInterfaceName, out var existingParams))
         {
+            var capabilityName = GetCapabilityName(capabilityId);
+            if (!string.Equals(capabilityName, methodName, StringComparison.Ordinal)
+                && !AreOptionsExactMatch(existingParams, optionalParams))
+            {
+                // Capabilities can share a projected method name while accepting different options.
+                // Reusing the method-name interface would let callers pass options that the selected
+                // capability implementation never reads, so fall back to the capability ID.
+                RegisterDisambiguatedOptionsInterface(capabilityId, capabilityName, optionalParams);
+                return;
+            }
+
             if (AreOptionsCompatible(existingParams, optionalParams))
             {
                 // Compatible - merge any new parameters and share the interface
@@ -1523,34 +1540,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 return;
             }
 
-            // Incompatible - find or create a suffixed interface
-            for (var suffix = 1; ; suffix++)
-            {
-                var suffixedName = GetOptionsInterfaceName($"{methodName}{suffix}");
-                if (!_optionsInterfacesToGenerate.TryGetValue(suffixedName, out var suffixedParams))
-                {
-                    // Create a new interface with this suffix
-                    _generatedOptionsInterfaces.Add(suffixedName);
-                    _optionsInterfacesToGenerate[suffixedName] = [.. optionalParams];
-                    _capabilityOptionsInterfaceMap[capabilityId] = suffixedName;
-                    return;
-                }
-
-                if (AreOptionsCompatible(suffixedParams, optionalParams))
-                {
-                    // Compatible with this suffixed interface - share it
-                    var existingNames2 = new HashSet<string>(suffixedParams.Select(p => p.Name));
-                    foreach (var param in optionalParams)
-                    {
-                        if (existingNames2.Add(param.Name))
-                        {
-                            suffixedParams.Add(param);
-                        }
-                    }
-                    _capabilityOptionsInterfaceMap[capabilityId] = suffixedName;
-                    return;
-                }
-            }
+            RegisterDisambiguatedOptionsInterface(capabilityId, capabilityName, optionalParams);
         }
         else
         {
@@ -1558,6 +1548,42 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             _generatedOptionsInterfaces.Add(baseInterfaceName);
             _optionsInterfacesToGenerate[baseInterfaceName] = [.. optionalParams];
             _capabilityOptionsInterfaceMap[capabilityId] = baseInterfaceName;
+        }
+    }
+
+    private void RegisterDisambiguatedOptionsInterface(string capabilityId, string capabilityName, List<AtsParameterInfo> optionalParams)
+    {
+        var capabilityInterfaceName = GetOptionsInterfaceName(capabilityName);
+        if (!_optionsInterfacesToGenerate.TryGetValue(capabilityInterfaceName, out var capabilityParameters))
+        {
+            _generatedOptionsInterfaces.Add(capabilityInterfaceName);
+            _optionsInterfacesToGenerate[capabilityInterfaceName] = [.. optionalParams];
+            _capabilityOptionsInterfaceMap[capabilityId] = capabilityInterfaceName;
+            return;
+        }
+
+        if (AreOptionsCompatible(capabilityParameters, optionalParams))
+        {
+            _capabilityOptionsInterfaceMap[capabilityId] = capabilityInterfaceName;
+            return;
+        }
+
+        for (var suffix = 1; ; suffix++)
+        {
+            var suffixedName = GetOptionsInterfaceName($"{capabilityName}{suffix}");
+            if (!_optionsInterfacesToGenerate.TryGetValue(suffixedName, out var suffixedParams))
+            {
+                _generatedOptionsInterfaces.Add(suffixedName);
+                _optionsInterfacesToGenerate[suffixedName] = [.. optionalParams];
+                _capabilityOptionsInterfaceMap[capabilityId] = suffixedName;
+                return;
+            }
+
+            if (AreOptionsCompatible(suffixedParams, optionalParams))
+            {
+                _capabilityOptionsInterfaceMap[capabilityId] = suffixedName;
+                return;
+            }
         }
     }
 
@@ -1577,6 +1603,23 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             // Same name - check type compatibility
             if (!AreParameterTypesEqual(match, param))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static bool AreOptionsExactMatch(List<AtsParameterInfo> existing, List<AtsParameterInfo> candidate)
+    {
+        if (existing.Count != candidate.Count)
+        {
+            return false;
+        }
+        for (var i = 0; i < existing.Count; i++)
+        {
+            if (!string.Equals(existing[i].Name, candidate[i].Name, StringComparison.Ordinal)
+                || !AreParameterTypesEqual(existing[i], candidate[i]))
             {
                 return false;
             }
