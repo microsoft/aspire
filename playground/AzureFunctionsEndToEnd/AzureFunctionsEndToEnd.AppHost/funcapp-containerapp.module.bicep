@@ -33,7 +33,7 @@ param env_outputs_azure_container_registry_endpoint string
 
 param env_outputs_azure_container_registry_managed_identity_id string
 
-resource funcapp 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource funcapp 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'funcapp'
   location: location
   properties: {

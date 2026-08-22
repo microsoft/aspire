@@ -1,5 +1,8 @@
 {
   "resources": {
+    "compose": {
+      "error": "This resource does not support generation in the manifest."
+    },
     "pass": {
       "type": "parameter.v0",
       "value": "{pass.inputs.value}",
@@ -10,7 +13,7 @@
       }
     },
     "cache": {
-      "type": "container.v0",
+      "type": "container.v1",
       "connectionString": "{cache.bindings.tcp.host}:{cache.bindings.tcp.port},password={pass.value}{cond-cache-bindings-tcp-tlsenabled-3eddb73a.connectionString}",
       "image": "docker.io/library/redis:8.6",
       "entrypoint": "/bin/sh",
@@ -31,12 +34,15 @@
       }
     },
     "weatherapi": {
-      "type": "project.v0",
+      "type": "project.v1",
       "path": "../AspireWithNode.AspNetCoreApi/AspireWithNode.AspNetCoreApi.csproj",
       "env": {
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
-        "HTTP_PORTS": "{weatherapi.bindings.http.targetPort}"
+        "HTTP_PORTS": "{weatherapi.bindings.http.targetPort}",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "{compose-dashboard.bindings.otlp-grpc.url}",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+        "OTEL_SERVICE_NAME": "weatherapi"
       },
       "bindings": {
         "http": {
@@ -70,7 +76,10 @@
         "CACHE_URI": "{cache.bindings.tcp.scheme}://:{pass-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
         "PORT": "{frontend.bindings.http.targetPort}",
         "HOST": "0.0.0.0",
-        "HOSTNAME": "0.0.0.0"
+        "HOSTNAME": "0.0.0.0",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "{compose-dashboard.bindings.otlp-grpc.url}",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+        "OTEL_SERVICE_NAME": "frontend"
       },
       "bindings": {
         "http": {
@@ -79,6 +88,31 @@
           "transport": "http",
           "targetPort": 8000,
           "external": true
+        }
+      }
+    },
+    "compose-dashboard": {
+      "type": "container.v1",
+      "image": "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest",
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 18888,
+          "external": true
+        },
+        "otlp-grpc": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 18889
+        },
+        "otlp-http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 18890
         }
       }
     },
