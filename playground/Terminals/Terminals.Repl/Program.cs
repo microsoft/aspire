@@ -56,6 +56,9 @@ while (true)
         case "rainbow":
             PrintRainbow(rest.Length > 0 ? rest : "Hello from Aspire!");
             break;
+        case "kgp":
+            PrintKittyImage();
+            break;
         case "echo":
             Console.WriteLine(rest);
             break;
@@ -90,6 +93,7 @@ static void PrintHelp()
     Console.WriteLine($"  {Cyan}size{Reset}                  Show terminal dimensions (resize the window!)");
     Console.WriteLine($"  {Cyan}echo <text>{Reset}           Echo a line back");
     Console.WriteLine($"  {Cyan}rainbow [text]{Reset}        Print rainbow text");
+    Console.WriteLine($"  {Cyan}kgp{Reset}                   Draw a Kitty graphics image (re-run to replace it)");
     Console.WriteLine($"  {Cyan}clear{Reset}                 Clear the screen");
     Console.WriteLine($"  {Cyan}exit{Reset}                  Quit the REPL");
 }
@@ -110,3 +114,68 @@ static void PrintRainbow(string text)
     sb.Append(Reset);
     Console.WriteLine(sb.ToString());
 }
+
+// Emits a Kitty Graphics Protocol image so the full graphics path can be
+// exercised from the dashboard: this process writes APC bytes to its PTY,
+// Aspire.TerminalHost forwards them verbatim over HMP1, and the dashboard's
+// xterm.js image addon decodes and renders them.
+//
+// Two escape sequences are involved, both of the form
+// ESC '_G' <comma-separated key=value pairs> ';' <base64 payload> ESC '\':
+//
+//   ESC _ G a=t,f=32,s=64,v=64,i=1,t=d,q=2,m=1 ; <base64 chunk> ESC \
+//   ESC _ G a=p,i=1,p=1,c=16,r=8,q=2           ;                 ESC \
+//
+//   a=t   transmit only (a=p places what was transmitted)
+//   f=32  payload is 32-bit RGBA, so s/v carry the pixel dimensions
+//   t=d   payload travels inline ("direct"); the file/shared-memory
+//         transports name backend resources a browser cannot reach
+//   i/p   image and placement identity, so re-running this replaces the
+//         previous placement instead of stacking a new copy
+//   q=2   suppress the terminal's OK/error replies, which would otherwise
+//         arrive on this process's stdin and be read as a REPL command
+//   m=1   more chunks follow (the final chunk sends m=0)
+//
+// Spec: https://sw.kovidgoyal.net/kitty/graphics-protocol/
+static void PrintKittyImage()
+{
+    const int Size = 64;
+    const int ImageId = 1;
+    const int PlacementId = 1;
+
+    var pixels = new byte[Size * Size * 4];
+    for (var y = 0; y < Size; y++)
+    {
+        for (var x = 0; x < Size; x++)
+        {
+            var offset = ((y * Size) + x) * 4;
+            var onBorder = x < 3 || y < 3 || x >= Size - 3 || y >= Size - 3;
+            pixels[offset] = onBorder ? (byte)0xFF : (byte)(x * 255 / (Size - 1));
+            pixels[offset + 1] = onBorder ? (byte)0xFF : (byte)(y * 255 / (Size - 1));
+            pixels[offset + 2] = onBorder ? (byte)0xFF : (byte)0x80;
+            pixels[offset + 3] = 0xFF;
+        }
+    }
+
+    // The protocol caps a single escape sequence's payload at 4096 base64
+    // bytes, so anything larger has to be split across chunked sequences.
+    const int MaxChunk = 4096;
+    var payload = Convert.ToBase64String(pixels);
+
+    for (var sent = 0; sent < payload.Length; sent += MaxChunk)
+    {
+        var chunk = payload.AsSpan(sent, Math.Min(MaxChunk, payload.Length - sent));
+        var more = sent + MaxChunk < payload.Length ? 1 : 0;
+        var keys = sent == 0
+            ? string.Create(CultureInfo.InvariantCulture, $"a=t,f=32,s={Size},v={Size},i={ImageId},t=d,q=2,m={more}")
+            : string.Create(CultureInfo.InvariantCulture, $"m={more}");
+
+        Console.Write($"\u001b_G{keys};{chunk}\u001b\\");
+    }
+
+    Console.Write(string.Create(CultureInfo.InvariantCulture, $"\u001b_Ga=p,i={ImageId},p={PlacementId},c=16,r=8,q=2\u001b\\"));
+    Console.Out.Flush();
+    Console.WriteLine();
+    Console.WriteLine($"{Green}Sent a {Size}x{Size} RGBA Kitty image (id={ImageId}, placement={PlacementId}).{Reset}");
+}
+

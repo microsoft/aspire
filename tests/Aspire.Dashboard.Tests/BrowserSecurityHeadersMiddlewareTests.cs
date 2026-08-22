@@ -63,6 +63,24 @@ public class BrowserSecurityHeadersMiddlewareTests
     }
 
     [Theory]
+    [InlineData("Development")]
+    [InlineData("Production")]
+    public async Task InvokeAsync_ScriptSrc_AllowsWasmForTerminalImageAddon(string environmentName)
+    {
+        // Arrange
+        var middleware = CreateMiddleware(environmentName);
+        var httpContext = new DefaultHttpContext();
+
+        // Act
+        await middleware.InvokeAsync(httpContext).DefaultTimeout();
+
+        // Assert
+        // The terminal's xterm.js image addon instantiates a WebAssembly module to decode Kitty
+        // graphics payloads, which a bare script-src 'self' blocks.
+        Assert.Contains("script-src 'self' 'wasm-unsafe-eval';", httpContext.Response.Headers.ContentSecurityPolicy.ToString());
+    }
+
+    [Theory]
     [InlineData(ConnectionType.OtlpGrpc)]
     [InlineData(ConnectionType.OtlpHttp)]
     public async Task InvokeAsync_Otlp_NotAdded(ConnectionType connectionType)

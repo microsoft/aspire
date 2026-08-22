@@ -188,5 +188,29 @@ as a Phase 3 follow-up on the parent issue.
 | Dashboard WebSocket proxy            | `src/Aspire.Dashboard/Terminal/TerminalWebSocketProxy.cs`           |
 | Dashboard resolver                   | `src/Aspire.Dashboard/Terminal/DefaultTerminalConnectionResolver.cs`|
 | `TerminalView` (xterm.js host)       | `src/Aspire.Dashboard/Components/Controls/TerminalView.razor.*`     |
+| Vendored xterm.js + image addon      | `src/Aspire.Dashboard/wwwroot/js/xterm/` (see its `README.md`)      |
 | Property keys                        | `src/Shared/Model/KnownProperties.cs` (`Terminal.*`)                |
 | Playground sample                    | `playground/Terminals/Terminals.AppHost/AppHost.cs`                 |
+
+## Kitty graphics
+
+Terminal workloads can draw images in the dashboard terminal using the
+[Kitty Graphics Protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/).
+Nothing on the Aspire side interprets these sequences — the workload writes APC
+`_G` payloads to its PTY, Hex1b's HMP1 producer forwards the raw bytes, the
+dashboard WebSocket proxies them unchanged, and `@xterm/addon-image` decodes and
+renders them in the browser.
+
+Two things make this work and are easy to break:
+
+- The dashboard CSP must allow `'wasm-unsafe-eval'` in `script-src`
+  (`Model/BrowserSecurityHeadersMiddleware.cs`). The image addon instantiates a
+  WebAssembly decoder; when it is blocked the addon throws part-way through the
+  APC sequence and the terminal stops advancing until the next reconnect.
+- The vendored `addon-image` build carries Kitty placement fixes that the
+  published npm package does not have yet. See
+  `src/Aspire.Dashboard/wwwroot/js/xterm/README.md` for provenance and the
+  remaining protocol limitations.
+
+`playground/Terminals` exercises this end to end: run the AppHost, open the
+`repl` resource's Terminal view, and type `kgp`.
