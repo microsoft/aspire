@@ -4,7 +4,7 @@ import * as path from 'path';
 import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForBrowserDebugSession, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoBrowserDebugSessions, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { dismissModalDialogIfPresent, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
@@ -90,7 +90,11 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
     });
 
-    test('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows', async () => {
+    test('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
         writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome');
 
         await openAspireView();
@@ -109,28 +113,20 @@ suite('Aspire debug dashboard E2E', function () {
         // look like a missing browser session.
         await waitForDebugDashboardUrl();
 
-        if (process.platform === 'win32') {
-            const browserSession = await waitForBrowserDebugSession();
-            assert.deepStrictEqual(
-                getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
-                [{ id: browserSession.id, type: 'pwa-chrome' }]);
-        }
+        const browserSession = await waitForBrowserDebugSession();
+        assert.deepStrictEqual(
+            getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
+            [{ id: browserSession.id, type: 'pwa-chrome' }]);
 
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
 
-        if (process.platform !== 'win32') {
-            await dismissModalDialogIfPresent('Unable to launch browser: "Could not attach to main target"', 'Cancel', 30000);
-        }
-
-        if (process.platform === 'win32') {
-            // The Aspire session ending is not enough on its own. VS Code leaves the child browser
-            // session running unless the extension stops it explicitly, which is what left orphaned
-            // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
-            // on the extension's own debugSessions cannot catch that regression: it was already empty
-            // while the browser kept running.
-            await waitForNoBrowserDebugSessions();
-        }
+        // The Aspire session ending is not enough on its own. VS Code leaves the child browser
+        // session running unless the extension stops it explicitly, which is what left orphaned
+        // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
+        // on the extension's own debugSessions cannot catch that regression: it was already empty
+        // while the browser kept running.
+        await waitForNoBrowserDebugSessions();
     });
 
     test('workspace debug stop removes running apphost', async () => {

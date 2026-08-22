@@ -392,62 +392,6 @@ export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000,
     return accepted as AcceptedModalDialog;
 }
 
-export async function dismissModalDialogIfPresent(expectedMessage: string, buttonTitle: string, timeoutMs = 5000): Promise<AcceptedModalDialog | undefined> {
-    const deadline = Date.now() + timeoutMs;
-
-    while (Date.now() < deadline) {
-        const dialog = new ModalDialog();
-        let message: string;
-        try {
-            message = await dialog.getMessage();
-            if (!message) {
-                await delay(Math.min(250, Math.max(0, deadline - Date.now())));
-                continue;
-            }
-        }
-        catch (error) {
-            throwIfWebDriverSessionFailure(error);
-            await delay(Math.min(250, Math.max(0, deadline - Date.now())));
-            continue;
-        }
-
-        if (!message.includes(expectedMessage)) {
-            throw new Error(`Expected modal dialog message to include '${expectedMessage}', but found '${message}'.`);
-        }
-
-        const details = await dialog.getDetails().catch(error => {
-            throwIfWebDriverSessionFailure(error);
-            return '';
-        });
-        await dialog.pushButton(buttonTitle);
-
-        await VSBrowser.instance.driver.wait(async () => {
-            let currentMessage: string;
-            try {
-                currentMessage = await new ModalDialog().getMessage();
-            }
-            catch (error) {
-                throwIfWebDriverSessionFailure(error);
-                return true;
-            }
-
-            if (!currentMessage) {
-                return true;
-            }
-
-            if (!currentMessage.includes(expectedMessage)) {
-                throw new Error(`Expected modal dialog message to include '${expectedMessage}', but found '${currentMessage}'.`);
-            }
-
-            return false;
-        }, 5000, `Timed out waiting for modal dialog containing '${expectedMessage}' to be dismissed.`);
-
-        return { message, details };
-    }
-
-    return undefined;
-}
-
 export async function getNotificationCount(): Promise<number> {
     return (await new Workbench().getNotifications()).length;
 }

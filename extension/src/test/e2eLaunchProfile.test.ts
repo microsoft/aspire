@@ -740,18 +740,33 @@ suite('E2E launch profile', () => {
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
-    test('dismisses only the expected non-Windows debug browser failure modal', () => {
+    test('scopes real debug browser cleanup to Windows while retaining deterministic nonblocking coverage', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
         const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
         const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+        const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
+        const nonWindowsSkip = `if (process.platform !== 'win32') {
+            this.skip();
+        }`;
 
-        assert.match(debugDashboard, /import \{[^}]*\bdismissModalDialogIfPresent\b[^}]*\} from '\.\/helpers\/vscode';/);
-        assert.ok(vscodeHelpers.includes('export async function dismissModalDialogIfPresent('));
-        assert.strictEqual(debugBrowserTest.includes(`if (process.platform !== 'win32') {
-            await dismissModalDialogIfPresent('Unable to launch browser: "Could not attach to main target"', 'Cancel', 30000);
-        }`), true, 'Expected the exact known js-debug modal message and 30000ms late-listener window.');
-        assert.ok(vscodeHelpers.includes("Timed out waiting for modal dialog containing '${expectedMessage}' to be dismissed."));
+        assert.deepStrictEqual({
+            nonWindowsSkipPrecedesDashboardBrowserSetting: debugBrowserTest.indexOf(nonWindowsSkip) >= 0
+                && debugBrowserTest.indexOf(nonWindowsSkip) < debugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
+            waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
+            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('await waitForNoBrowserDebugSessions()'),
+            hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
+            usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
+            removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
+        }, {
+            nonWindowsSkipPrecedesDashboardBrowserSetting: true,
+            waitsForBrowserDebugSession: true,
+            waitsForNoBrowserDebugSessions: true,
+            hasNonblockingUnitTest: true,
+            usesNeverSettlingBrowserLaunch: true,
+            removedOptionalModalHelper: true,
+        });
     });
 
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
