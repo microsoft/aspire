@@ -181,7 +181,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         var relativePathToProjectFile = GetManifestRelativePath(metadata.ProjectPath);
 
-        var deploymentTarget = project.GetDeploymentTargetAnnotation();
+        // The manifest schema has room for a single deployment target per resource, so a resource deployed
+        // as several regional stamps is represented by its first stamp. Use the Azure publisher to emit
+        // infrastructure for every stamp.
+        var projectDeploymentTargets = project.GetDeploymentTargetAnnotations();
+        var deploymentTarget = projectDeploymentTargets.Count > 0 ? projectDeploymentTargets[0] : null;
         if (deploymentTarget is not null)
         {
             Writer.WriteString("type", "project.v1");
@@ -314,7 +318,9 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
     public async Task WriteContainerAsync(ContainerResource container)
     {
-        var deploymentTarget = container.GetDeploymentTargetAnnotation();
+        // See WriteProjectAsync: the manifest represents only the first stamp of a stamped resource.
+        var containerDeploymentTargets = container.GetDeploymentTargetAnnotations();
+        var deploymentTarget = containerDeploymentTargets.Count > 0 ? containerDeploymentTargets[0] : null;
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {

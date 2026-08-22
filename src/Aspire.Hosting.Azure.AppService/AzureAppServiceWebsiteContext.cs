@@ -35,9 +35,14 @@ internal sealed class AzureAppServiceWebsiteContext(
     public AzureResourceInfrastructure Infra => _infrastructure ?? throw new InvalidOperationException("Infra is not set");
 
     // Naming the app service is globally unique (domain names), so we use the resource group ID to create a unique name
-    // within the naming spec for the app service.
+    // within the naming spec for the app service. The name is stamp-qualified because every stamp of a
+    // resource deploys into the same resource group, so the uniqueString suffix is identical between them and
+    // would otherwise collide. This must stay in sync with
+    // AzureAppServiceEnvironmentResource.GetHostAddressExpression, which advertises this same hostname.
     private BicepValue<string> HostName => BicepFunction.Take(
-        BicepFunction.Interpolate($"{BicepFunction.ToLower(resource.Name)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}"), 60);
+        BicepFunction.Interpolate($"{BicepFunction.ToLower(StampQualifiedResourceName)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}"), 60);
+
+    private string StampQualifiedResourceName => resource.GetStampQualifiedName(environmentContext.Environment);
 
     /// <summary>
     /// Gets the hostname for a deployment slot by appending the slot name to the base website name.
@@ -47,7 +52,7 @@ internal sealed class AzureAppServiceWebsiteContext(
     public BicepValue<string> GetSlotHostName(BicepValue<string> deploymentSlot)
     {
         var websitePrefix = BicepFunction.Take(
-            BicepFunction.Interpolate($"{BicepFunction.ToLower(resource.Name)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}"), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLengthWithSlot);
+            BicepFunction.Interpolate($"{BicepFunction.ToLower(StampQualifiedResourceName)}-{AzureAppServiceEnvironmentResource.GetWebSiteSuffixBicep()}"), AzureAppServiceWebSiteResource.MaxWebSiteNamePrefixLengthWithSlot);
 
         return BicepFunction.Take(
             BicepFunction.Interpolate($"{websitePrefix}-{BicepFunction.ToLower(deploymentSlot)}"), AzureAppServiceWebSiteResource.MaxHostPrefixLengthWithSlot);

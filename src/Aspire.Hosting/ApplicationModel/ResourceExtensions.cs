@@ -1036,6 +1036,11 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to get the compute environment for.</param>
     /// <returns>The compute environment the resource is bound to, or <c>null</c> if the resource is not bound to any specific compute environment.</returns>
+    /// <remarks>
+    /// A resource deployed as several regional stamps is bound to more than one compute environment, and this
+    /// method returns only the last of them. Use <see cref="GetComputeEnvironments(IResource)"/> or
+    /// <see cref="GetComputeStamps(IResource)"/> to handle stamped resources.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
     public static IComputeEnvironmentResource? GetComputeEnvironment(this IResource resource)
     {
@@ -1047,6 +1052,156 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Gets every compute environment that the resource is explicitly bound to, in declaration order.
+    /// </summary>
+    /// <param name="resource">The resource to get the compute environments for.</param>
+    /// <returns>The compute environments the resource is bound to. Empty if the resource is not bound to any specific compute environment.</returns>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
+    public static IReadOnlyList<IComputeEnvironmentResource> GetComputeEnvironments(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return [.. resource.Annotations.OfType<ComputeEnvironmentAnnotation>().Select(a => a.ComputeEnvironment).Distinct()];
+    }
+
+    /// <summary>
+    /// Determines whether the resource is bound to the specified compute environment.
+    /// </summary>
+    /// <param name="resource">The resource to check.</param>
+    /// <param name="computeEnvironment">The compute environment to look for.</param>
+    /// <returns><see langword="true"/> if the resource is explicitly bound to <paramref name="computeEnvironment"/>; otherwise <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
+    public static bool IsBoundToComputeEnvironment(this IResource resource, IComputeEnvironmentResource computeEnvironment)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(computeEnvironment);
+
+        return resource.Annotations.OfType<ComputeEnvironmentAnnotation>().Any(a => a.ComputeEnvironment == computeEnvironment);
+    }
+
+    /// <summary>
+    /// Gets the regional stamps of the resource: one entry per compute environment the resource is deployed to.
+    /// </summary>
+    /// <param name="resource">The resource to get the stamps for.</param>
+    /// <returns>
+    /// The stamps of the resource in declaration order. Empty if the resource is not bound to any specific
+    /// compute environment.
+    /// </returns>
+    /// <remarks>
+    /// Infrastructure names are only stamp-qualified when the resource is bound to more than one compute
+    /// environment, or when an explicit stamp name was supplied. This keeps names for single-region
+    /// applications unchanged.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
+    public static IReadOnlyList<ComputeStamp> GetComputeStamps(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        // De-duplicate by environment. Annotations can repeat — the singular WithComputeEnvironment appends,
+        // and auto-binding adds one directly — and counting duplicates would flip name qualification on and
+        // silently rename already deployed infrastructure. This must agree with IsStamped.
+        var annotations = new List<ComputeEnvironmentAnnotation>();
+        var seen = new HashSet<IComputeEnvironmentResource>();
+        foreach (var annotation in resource.Annotations.OfType<ComputeEnvironmentAnnotation>())
+        {
+            if (seen.Add(annotation.ComputeEnvironment))
+            {
+                annotations.Add(annotation);
+            }
+        }
+
+        if (annotations.Count == 0)
+        {
+            return [];
+        }
+
+        var qualifiesNames = annotations.Count > 1;
+
+        var stamps = new List<ComputeStamp>(annotations.Count);
+        foreach (var annotation in annotations)
+        {
+            stamps.Add(new ComputeStamp(
+                annotation.ComputeEnvironment,
+                annotation.StampName ?? annotation.ComputeEnvironment.Name,
+                qualifiesNames || annotation.StampName is not null));
+        }
+
+        return stamps;
+    }
+
+    /// <summary>
+    /// Determines whether the resource is deployed as more than one regional stamp.
+    /// </summary>
+    /// <param name="resource">The resource to check.</param>
+    /// <returns><see langword="true"/> if the resource is bound to more than one compute environment; otherwise <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
+    public static bool IsStamped(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource.Annotations.OfType<ComputeEnvironmentAnnotation>().Select(a => a.ComputeEnvironment).Distinct().Count() > 1;
+    }
+
+    /// <summary>
+    /// Gets the infrastructure name to use for the resource within the specified compute environment.
+    /// </summary>
+    /// <param name="resource">The resource whose name is being qualified.</param>
+    /// <param name="computeEnvironment">The compute environment the name is being generated for, or <see langword="null"/> when no environment is in scope.</param>
+    /// <returns>
+    /// The resource name suffixed with the stamp name when the resource is stamped; otherwise the resource
+    /// name unchanged.
+    /// </returns>
+    /// <remarks>
+    /// Every name derived from a compute resource — container app names, web site names, Bicep module paths,
+    /// pipeline step names — must go through this helper so that the stamps of one resource do not collide.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
+    public static string GetStampQualifiedName(this IResource resource, IComputeEnvironmentResource? computeEnvironment)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        if (computeEnvironment is null)
+        {
+            return resource.Name;
+        }
+
+        foreach (var stamp in resource.GetComputeStamps())
+        {
+            if (stamp.Environment == computeEnvironment)
+            {
+                return stamp.QualifiesNames ? $"{resource.Name}-{stamp.Name}" : resource.Name;
+            }
+        }
+
+        return resource.Name;
+    }
+
+    /// <summary>
+    /// Gets every deployment target of the resource, one per compute environment it is deployed to.
+    /// </summary>
+    /// <param name="resource">The resource to get the deployment targets for.</param>
+    /// <returns>The deployment targets of the resource. Empty if the resource has none.</returns>
+    /// <remarks>
+    /// Unlike <see cref="GetDeploymentTargetAnnotation(IResource, IComputeEnvironmentResource?)"/> this never
+    /// throws on ambiguity, so it is the accessor to use for a resource deployed as several regional stamps.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Deployment target inspection helper — not part of the ATS surface.")]
+    public static IReadOnlyList<DeploymentTargetAnnotation> GetDeploymentTargetAnnotations(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var boundEnvironments = resource.GetComputeEnvironments();
+        var annotations = resource.Annotations.OfType<DeploymentTargetAnnotation>();
+
+        // When the resource is explicitly bound, only report targets for those environments. A compute
+        // environment that the resource is not bound to may still have produced a target if it ran before
+        // the binding was applied.
+        return boundEnvironments.Count == 0
+            ? [.. annotations]
+            : [.. annotations.Where(a => a.ComputeEnvironment is null || boundEnvironments.Contains(a.ComputeEnvironment))];
+    }
+
+    /// <summary>
     /// Gets the deployment target for the specified resource, if any. Throws an exception if
     /// there are multiple compute environments and a compute environment is not explicitly specified.
     /// </summary>
@@ -1054,17 +1209,20 @@ public static class ResourceExtensions
     public static DeploymentTargetAnnotation? GetDeploymentTargetAnnotation(this IResource resource, IComputeEnvironmentResource? targetComputeEnvironment = null)
     {
         IComputeEnvironmentResource? selectedComputeEnvironment = null;
-        if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
+        var boundComputeEnvironments = resource.GetComputeEnvironments();
+        if (boundComputeEnvironments.Count > 0)
         {
             // If you have a ComputeEnvironmentAnnotation, it means the resource is bound to a specific compute environment.
             // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
-            if (targetComputeEnvironment is not null && targetComputeEnvironment != computeEnvironmentAnnotation.ComputeEnvironment)
+            if (targetComputeEnvironment is not null && !boundComputeEnvironments.Contains(targetComputeEnvironment))
             {
                 return null;
             }
 
-            // If the resource is bound to a specific compute environment, use that one.
-            selectedComputeEnvironment = computeEnvironmentAnnotation.ComputeEnvironment;
+            // A stamped resource is bound to several environments, so it can only be narrowed by an explicit
+            // target. Leaving the selection null lets the ambiguity check below produce the error.
+            selectedComputeEnvironment = targetComputeEnvironment
+                ?? (boundComputeEnvironments.Count == 1 ? boundComputeEnvironments[0] : null);
         }
 
         if (resource.TryGetAnnotationsOfType<DeploymentTargetAnnotation>(out var deploymentTargetAnnotations))
@@ -1079,7 +1237,9 @@ public static class ResourceExtensions
             if (annotations.Length > 1)
             {
                 var computeEnvironmentNames = string.Join(", ", annotations.Select(a => a.ComputeEnvironment?.Name));
-                throw new InvalidOperationException($"Resource '{resource.Name}' has multiple compute environments - '{computeEnvironmentNames}'. Please specify a single compute environment using 'WithComputeEnvironment'.");
+                throw new InvalidOperationException(resource.IsStamped()
+                    ? $"Resource '{resource.Name}' is deployed as multiple stamps across compute environments - '{computeEnvironmentNames}'. Use 'GetDeploymentTargetAnnotations' to enumerate every stamp, or pass the compute environment to select one."
+                    : $"Resource '{resource.Name}' has multiple compute environments - '{computeEnvironmentNames}'. Please specify a single compute environment using 'WithComputeEnvironment'.");
             }
 
             var deploymentTargetAnnotation = annotations[0];
@@ -1366,11 +1526,29 @@ public static class ResourceExtensions
             return registryAnnotation.Registry;
         }
 
-        // Try to get the container registry from DeploymentTargetAnnotation first
-        var deploymentTarget = resource.GetDeploymentTargetAnnotation();
-        if (deploymentTarget?.ContainerRegistry is not null)
+        // Try to get the container registry from DeploymentTargetAnnotation first. A stamped resource has one
+        // deployment target per compute environment, and the image is built and pushed once. If the stamps
+        // resolved to different registries, every stamp after the first would be wired to an image that was
+        // never pushed to its registry — and whose managed identity has no pull rights — so fail with an
+        // actionable message instead of producing a deployment that cannot pull its image.
+        var registries = resource.GetDeploymentTargetAnnotations()
+            .Select(a => a.ContainerRegistry)
+            .Where(r => r is not null)
+            .Distinct()
+            .ToArray();
+
+        if (registries.Length > 1)
         {
-            return deploymentTarget.ContainerRegistry;
+            var deploymentTargetRegistryNames = string.Join(", ", registries.Select(r => r is IResource res ? res.Name : r!.ToString()));
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' is deployed as multiple stamps whose compute environments use different container registries - '{deploymentTargetRegistryNames}'. " +
+                $"A stamped resource is built once and pulled by every stamp, so all of its compute environments must share one registry. " +
+                $"Point them at the same registry with '.WithContainerRegistry(registryBuilder)' on each compute environment.");
+        }
+
+        if (registries.Length == 1)
+        {
+            return registries[0]!;
         }
 
         // Fall back to RegistryTargetAnnotation (added automatically via BeforeStartEvent)

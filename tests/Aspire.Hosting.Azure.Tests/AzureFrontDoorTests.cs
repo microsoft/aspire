@@ -249,6 +249,267 @@ public class AzureFrontDoorTests
         Assert.Contains("has already been added", exception.Message);
     }
 
+    [Fact]
+    public async Task AddAzureFrontDoorWithStampedOriginGeneratesOneOriginPerStamp()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+        var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironments(eastus, westeu);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureFrontDoorWithFailoverRoutingAssignsAscendingPriorities()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+        var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironments(eastus, westeu);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOriginGroup(api, g => g.WithRouting(FrontDoorOriginRouting.Failover));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureFrontDoorWithWeightedRoutingAndCustomDomainGeneratesBicep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+        var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironments(eastus, westeu);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOriginGroup(api, g => g
+                .WithRouting(FrontDoorOriginRouting.Weighted)
+                .WithStampWeight(eastus, 900)
+                .WithStampWeight(westeu, 100)
+                .WithHealthProbe("/health", FrontDoorHealthProbeProtocol.Https, TimeSpan.FromSeconds(30))
+                .WithLoadBalancing(sampleSize: 8, successfulSamplesRequired: 5, additionalLatencyMilliseconds: 100)
+                .WithSessionAffinity(true)
+                .WithTrafficRestorationTime(TimeSpan.FromMinutes(10))
+                .WithCustomDomain("www.contoso.com"));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task StampedOriginsUseShortStampNamesFromWithStamp()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+        var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithStamp(eastus, "eus")
+            .WithStamp(westeu, "weu");
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        Assert.Contains("param api_eus_host string", bicep);
+        Assert.Contains("param api_weu_host string", bicep);
+        Assert.Contains("api_eusOrigin", bicep);
+        Assert.Contains("api_weuOrigin", bicep);
+    }
+
+    [Fact]
+    public async Task StampedOriginsShareASingleEndpointAndOriginGroup()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+        var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironments(eastus, westeu);
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        // One global entry point: a single endpoint, origin group, and route fronting both regions.
+        Assert.Equal(1, CountOccurrences(bicep, "'Microsoft.Cdn/profiles/afdEndpoints@"));
+        Assert.Equal(1, CountOccurrences(bicep, "'Microsoft.Cdn/profiles/originGroups@"));
+        Assert.Equal(1, CountOccurrences(bicep, "'Microsoft.Cdn/profiles/afdEndpoints/routes@"));
+        Assert.Equal(2, CountOccurrences(bicep, "'Microsoft.Cdn/profiles/originGroups/origins@"));
+        Assert.Equal(1, CountOccurrences(bicep, "output api_endpointUrl string"));
+    }
+
+    [Fact]
+    public void WithStampPriorityRejectsOutOfRangeValues()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus");
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            frontDoor.WithOriginGroup(api, g => g.WithStampPriority(eastus, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            frontDoor.WithOriginGroup(api, g => g.WithStampPriority(eastus, 6)));
+    }
+
+    [Fact]
+    public void WithStampWeightRejectsOutOfRangeValues()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus");
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            frontDoor.WithOriginGroup(api, g => g.WithStampWeight(eastus, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            frontDoor.WithOriginGroup(api, g => g.WithStampWeight(eastus, 1001)));
+    }
+
+    [Fact]
+    public void WithOriginGroupThrowsOnNullConfigure()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+
+        Assert.Throws<ArgumentNullException>(() => frontDoor.WithOriginGroup(api, null!));
+    }
+
+    [Fact]
+    public async Task EachStampIsDeployedToItsOwnComputeEnvironmentRegion()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var eastus = builder.AddAzureContainerAppEnvironment("aca-eastus").WithLocation("eastus");
+        var westeu = builder.AddAzureContainerAppEnvironment("aca-westeu").WithLocation("westeurope");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironments(eastus, westeu);
+
+        builder.AddAzureFrontDoor("frontdoor").WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // Azure requires a container app to live in the region of its managed environment, so each stamp's
+        // deployment target must carry its own environment's region rather than the app-wide one.
+        var targets = api.Resource.GetDeploymentTargetAnnotations();
+        Assert.Equal(2, targets.Count);
+
+        var locations = targets
+            .Select(t => ((AzureBicepResource)t.DeploymentTarget).Parameters[AzureBicepResource.KnownParameters.Location])
+            .ToArray();
+
+        Assert.Equal(["eastus", "westeurope"], locations);
+    }
+
+    [Fact]
+    public async Task SingleEnvironmentDeploymentTargetDoesNotPinALocation()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        builder.AddAzureFrontDoor("frontdoor").WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // Without an explicit WithLocation the deployment target must keep resolving to the shared Azure
+        // environment region, so no location is pinned on it.
+        var target = Assert.Single(api.Resource.GetDeploymentTargetAnnotations());
+        Assert.DoesNotContain(
+            AzureBicepResource.KnownParameters.Location,
+            ((AzureBicepResource)target.DeploymentTarget).Parameters.Keys);
+    }
+
+    private static int CountOccurrences(string value, string substring)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = value.IndexOf(substring, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += substring.Length;
+        }
+
+        return count;
+    }
+
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";

@@ -30,19 +30,22 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
         // Add pipeline step annotation for deploy
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
-            // Get the deployment target annotation
-            var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation();
+            // Get the deployment target annotation for this stamp. A stamped target resource has one
+            // deployment target per compute environment, so the environment has to narrow the lookup.
+            var deploymentTargetAnnotation = targetResource.GetDeploymentTargetAnnotation(ComputeEnvironment);
             if (deploymentTargetAnnotation is null)
             {
                 return [];
             }
 
+            var stampName = targetResource.GetStampQualifiedName(ComputeEnvironment);
+
             var steps = new List<PipelineStep>();
 
             var printResourceSummary = new PipelineStep
             {
-                Name = $"print-{targetResource.Name}-summary",
-                Description = $"Prints the deployment summary and URL for {targetResource.Name}.",
+                Name = $"print-{stampName}-summary",
+                Description = $"Prints the deployment summary and URL for {stampName}.",
                 Action = async ctx =>
                 {
                     var computerEnv = (AzureAppServiceEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
@@ -70,8 +73,8 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
 
             var deployStep = new PipelineStep
             {
-                Name = $"deploy-{targetResource.Name}",
-                Description = $"Aggregation step for deploying {targetResource.Name} to Azure App Service.",
+                Name = $"deploy-{stampName}",
+                Description = $"Aggregation step for deploying {stampName} to Azure App Service.",
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.DeployCompute]
             };
@@ -104,15 +107,25 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     public IResource TargetResource { get; }
 
     /// <summary>
+    /// Gets the compute environment this web site is deployed to.
+    /// </summary>
+    /// <remarks>
+    /// A target resource deployed as several regional stamps produces one <see cref="AzureAppServiceWebSiteResource"/>
+    /// per compute environment. This identifies which of those stamps this instance represents, so that
+    /// deployment-target lookups and generated names stay unambiguous.
+    /// </remarks>
+    public IComputeEnvironmentResource? ComputeEnvironment { get; init; }
+
+    /// <summary>
     /// Gets the base Azure App Service website name without any deployment slot suffix.
     /// </summary>
     /// <param name="context">The pipeline step context.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the website name.</returns>
     private async Task<string> GetAppServiceWebsiteBaseNameAsync(PipelineStepContext context)
     {
-        var computerEnv = (AzureAppServiceEnvironmentResource)TargetResource.GetDeploymentTargetAnnotation()!.ComputeEnvironment!;
+        var computerEnv = (AzureAppServiceEnvironmentResource)TargetResource.GetDeploymentTargetAnnotation(ComputeEnvironment)!.ComputeEnvironment!;
         var websiteSuffix = await computerEnv.WebSiteSuffix.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-        return TruncateToMaxLength($"{TargetResource.Name.ToLowerInvariant()}-{websiteSuffix}", 60);
+        return TruncateToMaxLength($"{TargetResource.GetStampQualifiedName(ComputeEnvironment).ToLowerInvariant()}-{websiteSuffix}", 60);
     }
 
     private static string GetAppServiceWebsiteName(string websiteName, string? deploymentSlot = null)
