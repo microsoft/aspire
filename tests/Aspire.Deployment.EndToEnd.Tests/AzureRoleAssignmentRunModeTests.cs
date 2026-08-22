@@ -153,8 +153,12 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
             await auto.RunCommandAsync(contextCommand, counter);
 
             output.WriteLine("Step 7: Starting AppHost with live Azure provisioning...");
-            await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
+            // Set before starting, not after: `aspire start` detaches the AppHost before it finishes
+            // waiting for startup, so a failure here can still leave a live AppHost provisioning into
+            // the resource group that `finally` is about to delete. The cleanup command is best-effort
+            // (`|| true`), so claiming a session that was never created is harmless.
             appHostStarted = true;
+            await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
 
             output.WriteLine("Step 8: Waiting for the role assignment resource to be running...");
             // `aspire start` returns once the AppHost is detached; run-mode Azure provisioning continues
