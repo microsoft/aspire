@@ -421,6 +421,27 @@ export async function dismissModalDialogIfPresent(expectedMessage: string, butto
         });
         await dialog.pushButton(buttonTitle);
 
+        await VSBrowser.instance.driver.wait(async () => {
+            let currentMessage: string;
+            try {
+                currentMessage = await new ModalDialog().getMessage();
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+                return true;
+            }
+
+            if (!currentMessage) {
+                return true;
+            }
+
+            if (!currentMessage.includes(expectedMessage)) {
+                throw new Error(`Expected modal dialog message to include '${expectedMessage}', but found '${currentMessage}'.`);
+            }
+
+            return false;
+        }, 5000, `Timed out waiting for modal dialog containing '${expectedMessage}' to be dismissed.`);
+
         return { message, details };
     }
 

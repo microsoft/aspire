@@ -120,7 +120,7 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
 
         if (process.platform !== 'win32') {
-            await dismissModalDialogIfPresent('Unable to launch browser', 'Cancel', 15000);
+            await dismissModalDialogIfPresent('Unable to launch browser: "Could not attach to main target"', 'Cancel', 30000);
         }
 
         if (process.platform === 'win32') {

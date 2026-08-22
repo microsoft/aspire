@@ -748,9 +748,10 @@ suite('E2E launch profile', () => {
 
         assert.match(debugDashboard, /import \{[^}]*\bdismissModalDialogIfPresent\b[^}]*\} from '\.\/helpers\/vscode';/);
         assert.ok(vscodeHelpers.includes('export async function dismissModalDialogIfPresent('));
-        assert.ok(debugBrowserTest.includes(`if (process.platform !== 'win32') {
-            await dismissModalDialogIfPresent('Unable to launch browser', 'Cancel', 15000);
-        }`));
+        assert.strictEqual(debugBrowserTest.includes(`if (process.platform !== 'win32') {
+            await dismissModalDialogIfPresent('Unable to launch browser: "Could not attach to main target"', 'Cancel', 30000);
+        }`), true, 'Expected the exact known js-debug modal message and 30000ms late-listener window.');
+        assert.ok(vscodeHelpers.includes("Timed out waiting for modal dialog containing '${expectedMessage}' to be dismissed."));
     });
 
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
