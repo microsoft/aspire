@@ -3,6 +3,8 @@
 @inherits FluentComponentBase
 
 @{
+    var hasText = !string.IsNullOrWhiteSpace(Text);
+    var iconOnly = !hasText && IconStart is null;
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) },
@@ -12,8 +14,8 @@
 }
 
 <div>
-    <FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" IconOnly="@string.IsNullOrWhiteSpace(Text)" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
-        @if (string.IsNullOrWhiteSpace(Text))
+    <FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" IconOnly="@iconOnly" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+        @if (!hasText)
         {
             <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
         }

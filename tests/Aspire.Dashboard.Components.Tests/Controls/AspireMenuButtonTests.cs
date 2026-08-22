@@ -6,6 +6,7 @@ using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -48,6 +49,29 @@ public class AspireMenuButtonTests : DashboardTestContext
         });
 
         Assert.True(cut.Find("#icon-only-button").HasAttribute("icon-only"));
+    }
+
+    [Fact]
+    public void Render_WithoutTextAndWithStartIcon_SizesForBothIcons()
+    {
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentButton(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+
+        var cut = RenderComponent<AspireMenuButton>(builder =>
+        {
+            builder.Add(p => p.MenuButtonId, "icon-only-button");
+            builder.Add(p => p.IconStart, new Icons.Regular.Size16.Delete());
+            builder.Add(p => p.ItemsProvider, () => [new MenuButtonItem { Text = "Action" }]);
+        });
+
+        var button = cut.Find("#icon-only-button");
+        Assert.False(button.HasAttribute("icon-only"));
+        Assert.Collection(
+            button.QuerySelectorAll("svg"),
+            startIcon => Assert.Equal("start", startIcon.GetAttribute("slot")),
+            menuIcon => Assert.Null(menuIcon.GetAttribute("slot")));
     }
 
     [Fact]
