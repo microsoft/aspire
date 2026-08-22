@@ -52,6 +52,8 @@ const oracle = await builder.addOracle("oracle")
                             .withInitFiles("./oracle/startup");
 ```
 
+For compatibility, `WithInitFiles` also accepts a parent directory containing Oracle's `startup` or `setup` subdirectories. Aspire preserves that directory layout under `/opt/oracle/scripts`.
+
 Use `WithDbSetupBindMount` for scripts that should run once while Oracle creates the database. Oracle Database Free images include a pre-built database, so setup scripts run only when the container starts with empty data storage. Configure a new data volume or an empty data bind mount together with the setup scripts:
 
 **C#**

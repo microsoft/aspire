@@ -152,7 +152,10 @@ public static class OracleDatabaseBuilderExtensions
     /// Copies startup files into an Oracle Database server container resource.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="source">The source file or directory on the host to copy into the container's startup scripts directory.</param>
+    /// <param name="source">
+    /// The source file or directory on the host. A directory containing <c>startup</c> or <c>setup</c> subdirectories is copied
+    /// to Oracle's scripts directory for compatibility. Other sources are copied directly to the startup scripts directory.
+    /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// Oracle executes scripts in the startup scripts directory each time the database container starts.
@@ -164,9 +167,13 @@ public static class OracleDatabaseBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(source);
 
-        const string initPath = "/opt/oracle/scripts/startup";
-
         var importFullPath = Path.GetFullPath(source, builder.ApplicationBuilder.AppHostDirectory);
+
+        // WithInitFiles previously targeted Oracle's parent scripts directory. Preserve callers that adopted
+        // Oracle's startup/setup subdirectory layout while making flat files execute as startup scripts.
+        var usesOracleScriptsLayout = Directory.Exists(Path.Combine(importFullPath, "startup"))
+            || Directory.Exists(Path.Combine(importFullPath, "setup"));
+        var initPath = usesOracleScriptsLayout ? "/opt/oracle/scripts" : "/opt/oracle/scripts/startup";
 
         return builder.WithContainerFiles(initPath, importFullPath);
     }

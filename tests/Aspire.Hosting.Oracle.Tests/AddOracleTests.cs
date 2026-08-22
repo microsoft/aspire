@@ -305,6 +305,30 @@ public class AddOracleTests
         }
     }
 
+    [Theory]
+    [InlineData("startup")]
+    [InlineData("setup")]
+    public void WithInitFilesPreservesOracleScriptsDirectoryLayout(string scriptsDirectory)
+    {
+        var sourceDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(sourceDirectory.FullName, scriptsDirectory));
+
+            using var builder = TestDistributedApplicationBuilder.Create();
+            var oracle = builder.AddOracle("oracle")
+                .WithInitFiles(sourceDirectory.FullName);
+
+            var annotation = Assert.Single(oracle.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+            Assert.Equal("/opt/oracle/scripts", annotation.DestinationPath);
+        }
+        finally
+        {
+            sourceDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void WithDbSetupBindMountAddsSetupDirectoryMount()
     {
