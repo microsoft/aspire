@@ -4,6 +4,12 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Represents a text file that belongs to an installable skill.
+/// Identifies an agent asset kind.
 /// </summary>
-internal sealed record SkillAssetFile(string RelativePath, string Content);
+internal enum AgentAssetKind
+{
+    /// <summary>
+    /// Agent skills.
+    /// </summary>
+    Skills,
+}

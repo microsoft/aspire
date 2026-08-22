@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -8,31 +9,32 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Provides the validated Aspire skills bundle embedded in the CLI assembly.
+/// Provides Aspire-skills bundles embedded in the CLI assembly.
 /// </summary>
 internal interface IEmbeddedAspireSkillsBundleProvider
 {
     /// <summary>
-    /// Gets the parsed metadata embedded alongside the Aspire skills bundle archive.
+    /// Gets the metadata embedded alongside the specified bundle.
     /// </summary>
-    EmbeddedAspireSkillsBundleMetadata? Metadata { get; }
+    EmbeddedAspireSkillsBundleMetadata? GetMetadata(AspireSkillsBundleDescriptor descriptor);
 
     /// <summary>
-    /// Creates the embedded Aspire skills bundle in the specified directory.
+    /// Creates the embedded bundle in the specified directory.
     /// </summary>
     Task<AspireSkillsBundle?> CreateBundleAsync(
+        AspireSkillsBundleDescriptor descriptor,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Provides validated Aspire-skills bundles embedded in the CLI assembly.
+/// </summary>
 internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkillsBundleProvider
 {
-    private const string ArchiveResourceName = "aspire-skills.bundle.tgz";
-    private const string MetadataResourceName = "aspire-skills.metadata.json";
-
     private readonly IAspireSkillsBundleProvider _bundleProvider;
     private readonly ILogger<EmbeddedAspireSkillsBundleProvider> _logger;
-    private readonly Lazy<EmbeddedAspireSkillsBundleMetadata?> _metadata;
+    private readonly ConcurrentDictionary<AspireSkillsBundleDescriptor, Lazy<EmbeddedAspireSkillsBundleMetadata?>> _metadata = [];
 
     public EmbeddedAspireSkillsBundleProvider(
         IAspireSkillsBundleProvider bundleProvider,
@@ -43,24 +45,36 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
 
         _bundleProvider = bundleProvider;
         _logger = logger;
-        _metadata = new Lazy<EmbeddedAspireSkillsBundleMetadata?>(LoadMetadata);
     }
 
-    public EmbeddedAspireSkillsBundleMetadata? Metadata => _metadata.Value;
+    /// <summary>
+    /// Gets the parsed metadata embedded alongside the specified Aspire-skills bundle archive.
+    /// </summary>
+    public EmbeddedAspireSkillsBundleMetadata? GetMetadata(AspireSkillsBundleDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return _metadata.GetOrAdd(
+            descriptor,
+            _ => new Lazy<EmbeddedAspireSkillsBundleMetadata?>(
+                () => LoadMetadata(descriptor))).Value;
+    }
 
     public async Task<AspireSkillsBundle?> CreateBundleAsync(
+        AspireSkillsBundleDescriptor descriptor,
         DirectoryInfo bundleDirectory,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var metadata = Metadata;
+        var metadata = GetMetadata(descriptor);
         if (metadata is null || string.IsNullOrWhiteSpace(metadata.Sha512))
         {
             return null;
         }
 
-        await using var archiveStream = OpenArchive();
+        await using var archiveStream = OpenArchive(descriptor);
         if (archiveStream is null)
         {
             return null;
@@ -68,7 +82,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
 
         Directory.CreateDirectory(bundleDirectory.FullName);
         var temporaryDirectoryRoot = bundleDirectory.Parent
-            ?? throw new InvalidOperationException("The Aspire skills bundle staging directory must have a parent directory.");
+            ?? throw new InvalidOperationException($"The {descriptor.DisplayName} bundle staging directory must have a parent directory.");
         // Keep the archive beside the staging directory so a transient Windows file lock during
         // best-effort cleanup cannot prevent the validated staging directory from being published.
         using var temporaryDirectory = TemporaryCacheDirectory.Create(
@@ -84,6 +98,7 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
         }
 
         return await _bundleProvider.CreateAsync(
+            descriptor,
             new FileInfo(archivePath),
             bundleDirectory,
             metadata.Sha512,
@@ -91,23 +106,23 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
             skipCompatibilityCheck: true).ConfigureAwait(false);
     }
 
-    private Stream? OpenArchive()
+    private Stream? OpenArchive(AspireSkillsBundleDescriptor descriptor)
     {
-        var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(ArchiveResourceName);
+        var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(descriptor.EmbeddedArchiveResourceName);
         if (stream is null)
         {
-            _logger.LogDebug("Embedded Aspire skills archive resource {ResourceName} was not found.", ArchiveResourceName);
+            _logger.LogDebug("Embedded {BundleDisplayName} archive resource {ResourceName} was not found.", descriptor.DisplayName, descriptor.EmbeddedArchiveResourceName);
         }
 
         return stream;
     }
 
-    private EmbeddedAspireSkillsBundleMetadata? LoadMetadata()
+    private EmbeddedAspireSkillsBundleMetadata? LoadMetadata(AspireSkillsBundleDescriptor descriptor)
     {
-        using var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(MetadataResourceName);
+        using var stream = typeof(EmbeddedAspireSkillsBundleProvider).Assembly.GetManifestResourceStream(descriptor.EmbeddedMetadataResourceName);
         if (stream is null)
         {
-            _logger.LogDebug("Embedded Aspire skills metadata resource {ResourceName} was not found.", MetadataResourceName);
+            _logger.LogDebug("Embedded {BundleDisplayName} metadata resource {ResourceName} was not found.", descriptor.DisplayName, descriptor.EmbeddedMetadataResourceName);
             return null;
         }
 
@@ -119,14 +134,14 @@ internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkills
 
             if (metadata is null)
             {
-                _logger.LogDebug("Embedded Aspire skills metadata resource {ResourceName} was empty.", MetadataResourceName);
+                _logger.LogDebug("Embedded {BundleDisplayName} metadata resource {ResourceName} was empty.", descriptor.DisplayName, descriptor.EmbeddedMetadataResourceName);
             }
 
             return metadata;
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Embedded Aspire skills metadata resource {ResourceName} could not be parsed.", MetadataResourceName);
+            _logger.LogWarning(ex, "Embedded {BundleDisplayName} metadata resource {ResourceName} could not be parsed.", descriptor.DisplayName, descriptor.EmbeddedMetadataResourceName);
             return null;
         }
     }

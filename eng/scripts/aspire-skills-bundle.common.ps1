@@ -100,11 +100,11 @@ function Get-AspireSkillsHookContent {
     $response = Invoke-AspireSkillsGitHubApi $endpoint | ConvertFrom-Json
 
     if ($response.type -ne 'file') {
-        throw "Aspire skills hook '$path' at commit '$CommitSha' is not a file (type '$($response.type)')."
+        throw "Aspire-skills hook '$path' at commit '$CommitSha' is not a file (type '$($response.type)')."
     }
 
     if ($response.name -ne $FileName) {
-        throw "Aspire skills hook response name '$($response.name)' did not match expected '$FileName'."
+        throw "Aspire-skills hook response name '$($response.name)' did not match expected '$FileName'."
     }
 
     # The contents API returns base64 with embedded newlines; strip all whitespace before decoding.

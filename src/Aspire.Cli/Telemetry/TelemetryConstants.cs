@@ -189,6 +189,31 @@ internal static class TelemetryConstants
         public const string AgentClientName = "aspire.cli.agent.client_name";
 
         /// <summary>
+        /// Tag for the kind of agent asset involved in an operation.
+        /// </summary>
+        public const string AgentAssetKind = "aspire.cli.agent.asset_kind";
+
+        /// <summary>
+        /// Tag for the version of an acquired Aspire-skills bundle.
+        /// </summary>
+        public const string AgentAssetBundleVersion = "aspire.cli.agent.asset_bundle.version";
+
+        /// <summary>
+        /// Tag for the source of an acquired Aspire-skills bundle.
+        /// </summary>
+        public const string AgentAssetBundleSource = "aspire.cli.agent.asset_bundle.source";
+
+        /// <summary>
+        /// Tag indicating whether an Aspire-skills bundle was loaded from cache.
+        /// </summary>
+        public const string AgentAssetBundleCacheHit = "aspire.cli.agent.asset_bundle.cache_hit";
+
+        /// <summary>
+        /// Tag indicating whether remote Aspire-skills bundle acquisition was enabled.
+        /// </summary>
+        public const string AgentAssetBundleRemoteFetchEnabled = "aspire.cli.agent.asset_bundle.remote_fetch_enabled";
+
+        /// <summary>
         /// Tag for the AI agent session identifier. This is an opaque per-session GUID and does
         /// not identify a user or machine.
         /// </summary>

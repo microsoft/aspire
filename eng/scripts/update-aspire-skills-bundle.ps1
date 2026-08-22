@@ -14,7 +14,7 @@ $scriptDir = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
 $metadataPath = Join-Path $embeddedDir 'aspire-skills.metadata.json'
-$installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
+$versionsPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsBundleVersions.cs'
 $cliProjectPath = Join-Path $repoRoot 'src\Aspire.Cli\Aspire.Cli.csproj'
 $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
 
@@ -46,7 +46,7 @@ function Get-UnprefixedVersion([string]$Value) {
 
 function Get-CurrentEmbeddedVersion {
     if (-not (Test-Path $metadataPath)) {
-        throw "Embedded Aspire skills metadata was not found at '$metadataPath'. Pass -Version to choose the initial version."
+        throw "Embedded Aspire-skills metadata was not found at '$metadataPath'. Pass -Version to choose the initial version."
     }
 
     $metadata = Get-Content -Raw -Path $metadataPath | ConvertFrom-Json
@@ -76,7 +76,7 @@ function Get-GitHubRelease([string]$NormalizedVersion) {
         }
     }
 
-    throw "Could not find an Aspire skills release for version '$NormalizedVersion' in '$Repository'."
+    throw "Could not find an Aspire-skills release for version '$NormalizedVersion' in '$Repository'."
 }
 
 function Get-ReleaseAsset($Release, [string]$NormalizedVersion) {
@@ -92,11 +92,11 @@ function Get-ReleaseAsset($Release, [string]$NormalizedVersion) {
         }
     }
 
-    throw "Release '$($Release.tagName)' does not contain a supported Aspire skills archive asset for version '$NormalizedVersion'."
+    throw "Release '$($Release.tagName)' does not contain a supported Aspire-skills archive asset for version '$NormalizedVersion'."
 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw "The GitHub CLI ('gh') is required to update the embedded Aspire skills bundle."
+    throw "The GitHub CLI ('gh') is required to update the embedded Aspire-skills bundle."
 }
 
 $normalizedVersion = if ([string]::IsNullOrWhiteSpace($Version)) {
@@ -108,7 +108,7 @@ else {
 
 New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
 
-Write-Host "Resolving Aspire skills release '$normalizedVersion' from '$Repository'..."
+Write-Host "Resolving Aspire-skills release '$normalizedVersion' from '$Repository'..."
 $release = Get-GitHubRelease $normalizedVersion
 $asset = Get-ReleaseAsset $release $normalizedVersion
 
@@ -192,12 +192,17 @@ try {
     }
     Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json -Depth 10)
 
-    $installerContent = Get-Content -Raw -Path $installerPath
-    $installerContent = [regex]::Replace(
-        $installerContent,
-        'internal const string Version = "[^"]+";',
+    $versionsContent = Get-Content -Raw -Path $versionsPath
+    $versionPattern = 'internal const string Version = "[^"]+";'
+    $versionMatches = [regex]::Matches($versionsContent, $versionPattern)
+    if ($versionMatches.Count -ne 1) {
+        throw "Expected exactly one Aspire-skills bundle version constant in '$versionsPath', but found $($versionMatches.Count)."
+    }
+    $versionsContent = [regex]::Replace(
+        $versionsContent,
+        $versionPattern,
         "internal const string Version = ""$normalizedVersion"";")
-    Set-TextFile -Path $installerPath -Content $installerContent
+    Set-TextFile -Path $versionsPath -Content $versionsContent
 
     $cliProjectContent = Get-Content -Raw -Path $cliProjectPath
     $cliProjectContent = [regex]::Replace(
@@ -206,7 +211,7 @@ try {
         "Agents\AspireSkills\Embedded\$($asset.name)")
     Set-TextFile -Path $cliProjectPath -Content $cliProjectContent
 
-    Write-Host "Embedded Aspire skills bundle updated to '$($asset.name)' with SHA-512 '$hash'."
+    Write-Host "Embedded Aspire-skills bundle updated to '$($asset.name)' with SHA-512 '$hash'."
 }
 finally {
     if (Test-Path $tempDir) {

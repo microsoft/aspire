@@ -4,12 +4,19 @@
 namespace Aspire.Cli.Agents.AspireSkills;
 
 /// <summary>
-/// Resolves and verifies the external Aspire skills bundle.
+/// Resolves and verifies Aspire-skills bundles.
 /// </summary>
 internal interface IAspireSkillsInstaller
 {
     /// <summary>
-    /// Ensures the Aspire skills bundle is available in the local cache.
+    /// Gets whether an Aspire-skills bundle is registered for the specified asset kind.
     /// </summary>
-    Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken);
+    bool HasBundle(AgentAssetKind assetKind);
+
+    /// <summary>
+    /// Ensures the Aspire-skills bundle for the specified asset kind is available in the local cache.
+    /// </summary>
+    Task<AspireSkillsInstallResult> InstallAsync(
+        AgentAssetKind assetKind,
+        CancellationToken cancellationToken);
 }

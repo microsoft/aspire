@@ -52,27 +52,45 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 
     private readonly DirectoryInfo _bundleDirectory;
     private readonly AspireSkillsInstallResult? _result;
+    private readonly bool _hasBundle;
+    private readonly List<AgentAssetKind> _requestedAssetKinds = [];
 
     public FakeAspireSkillsInstaller(CliExecutionContext executionContext)
         : this(executionContext, result: null)
     {
     }
 
-    public FakeAspireSkillsInstaller(CliExecutionContext executionContext, AspireSkillsInstallResult? result)
+    public FakeAspireSkillsInstaller(
+        CliExecutionContext executionContext,
+        AspireSkillsInstallResult? result,
+        bool hasBundle = true)
     {
         _bundleDirectory = new DirectoryInfo(Path.Combine(executionContext.WorkingDirectory.FullName, ".fake-aspire-skills-bundle"));
         _result = result;
+        _hasBundle = hasBundle;
     }
 
-    public async Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
+    public IReadOnlyList<AgentAssetKind> RequestedAssetKinds => _requestedAssetKinds;
+
+    public bool HasBundle(AgentAssetKind assetKind)
     {
+        return _hasBundle && assetKind is AgentAssetKind.Skills;
+    }
+
+    public async Task<AspireSkillsInstallResult> InstallAsync(
+        AgentAssetKind assetKind,
+        CancellationToken cancellationToken)
+    {
+        _requestedAssetKinds.Add(assetKind);
+        Assert.Equal(AgentAssetKind.Skills, assetKind);
+
         if (_result is not null)
         {
             return _result;
         }
 
         await EnsureBundleAsync(cancellationToken);
-        var bundle = await new AspireSkillsBundleProvider().LoadAsync(_bundleDirectory, cancellationToken);
+        var bundle = await new AspireSkillsBundleProvider().LoadAsync(AspireSkillsBundleDescriptor.Skills, _bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 
@@ -83,7 +101,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             return;
         }
 
-        var files = new Dictionary<(string SkillName, string RelativePath), string>
+        var files = new Dictionary<(string AssetName, string RelativePath), string>
         {
             [(CommonAgentApplicators.AspireSkillName, "SKILL.md")] =
                 """
@@ -144,9 +162,9 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 """
         };
 
-        foreach (var ((skillName, relativePath), content) in files)
+        foreach (var ((assetName, relativePath), content) in files)
         {
-            var path = Path.Combine(_bundleDirectory.FullName, "skills", skillName, relativePath);
+            var path = Path.Combine(_bundleDirectory.FullName, "skills", assetName, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, content, cancellationToken);
         }
@@ -159,34 +177,36 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 AspireCli = ">=0.0.0 <999.0.0",
                 AspireSdk = ">=0.0.0 <999.0.0"
             },
-            Skills =
+            Assets =
             [
-                CreateSkill(CommonAgentApplicators.AspireSkillName, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
-                CreateSkill(AspireInitSkillName, ["evals"], files),
-                CreateSkill(AspireMonitoringSkillName, ["evals"], files),
-                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
+                CreateAgentAsset(CommonAgentApplicators.AspireSkillName, ["evals"], files),
+                CreateAgentAsset(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
+                CreateAgentAsset(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
+                CreateAgentAsset(AspireInitSkillName, ["evals"], files),
+                CreateAgentAsset(AspireMonitoringSkillName, ["evals"], files),
+                CreateAgentAsset(AspireOrchestrationSkillName, ["evals"], files)
             ]
         };
 
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(
+            manifest,
+            AspireSkillsBundleProvider.CreateManifestTypeInfo(AspireSkillsBundleDescriptor.Skills));
         await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 
-    private SkillBundleSkill CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    private SkillBundleAsset CreateAgentAsset(string assetName, string[] installExcludedRelativePaths, Dictionary<(string AssetName, string RelativePath), string> files)
     {
-        return new SkillBundleSkill
+        return new SkillBundleAsset
         {
-            Name = skillName,
-            Description = $"{skillName} skill",
+            Name = assetName,
+            Description = $"{assetName} skill",
             InstallExcludedRelativePaths = installExcludedRelativePaths,
             Files = files
-                .Where(entry => string.Equals(entry.Key.SkillName, skillName, StringComparison.Ordinal))
+                .Where(entry => string.Equals(entry.Key.AssetName, assetName, StringComparison.Ordinal))
                 .Select(entry => new SkillBundleFile
                 {
                     RelativePath = entry.Key.RelativePath,
-                    Sha512 = ComputeSha512(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
+                    Sha512 = ComputeSha512(Path.Combine(_bundleDirectory.FullName, "skills", assetName, entry.Key.RelativePath))
                 })
                 .ToArray()
         };
