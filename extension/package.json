@@ -558,6 +558,11 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.installDebuggerExtension",
+        "title": "%command.installDebuggerExtension%",
+        "category": "Aspire"
+      },
+      {
         "command": "aspire-vscode.codeLensDebugPipelineStep",
         "title": "%command.codeLensDebugPipelineStep%",
         "category": "Aspire"
@@ -733,6 +738,10 @@
         },
         {
           "command": "aspire-vscode.executeResourceCommandItem",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.installDebuggerExtension",
           "when": "false"
         },
         {

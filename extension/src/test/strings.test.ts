@@ -157,6 +157,20 @@ suite('utils/strings tests', () => {
         const missingFromXlf = names.filter(name => !xlf.includes(`<trans-unit id="aspire-vscode.strings.${name}">`));
         assert.deepStrictEqual(missingFromXlf, [], 'Regenerate loc/xlf/aspire-vscode.xlf with "yarn run localize" after adding package.nls.json entries.');
     });
+
+    test('debugger setup strings use neutral wording for missing or disabled extensions', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(packageNls['command.installDebuggerExtension'], 'Set up debugger support');
+        assert.strictEqual(locStrings.debuggerSetupAction, 'Set Up');
+        assert.strictEqual(
+            locStrings.rustDebuggerExtensionNotInstalled('vadimcn.vscode-lldb'),
+            'Rust AppHosts require native debugger support. Set up vadimcn.vscode-lldb in the Extensions view, then start the AppHost again.');
+        assert.strictEqual(
+            locStrings.javaDebuggerExtensionNotInstalled('vscjava.vscode-java-debug'),
+            'Java AppHosts require Java debugger support. Set up vscjava.vscode-java-debug in the Extensions view, then start the AppHost again.');
+    });
 });
 
 suite('loc/strings tests', () => {

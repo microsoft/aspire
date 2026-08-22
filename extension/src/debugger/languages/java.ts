@@ -292,7 +292,7 @@ export const javaDebuggerExtension: ResourceDebuggerExtension = {
         debugConfiguration.args = args ?? [];
 
         // `env` is deliberately left alone. prepareDebugSession already set it to
-        // mergeEnvs(getEnvironmentWithoutE2EBridgeVariables(), env), i.e. the full inherited
+        // mergeEnvs(getEnvironmentForChildProcess(), env), i.e. the full inherited
         // environment with the resource's variables layered on top. Reassigning it from `env` alone
         // would launch the JVM without PATH or JAVA_HOME, so the adapter could not find `java`.
     }
