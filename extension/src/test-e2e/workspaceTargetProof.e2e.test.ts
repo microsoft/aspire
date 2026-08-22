@@ -142,8 +142,10 @@ interface FolderFixture {
 
 function createFolderFixture(fixtureRoot: string, folderName: string, withAppHost = false): FolderFixture {
     const folderPath = path.join(fixtureRoot, folderName);
-    const wrapperPath = path.join(folderPath, `aspire-${folderName}`);
-    const invocationLogPath = path.join(folderPath, 'invocations.log');
+    const wrapperDirectory = path.join(fixtureRoot, '.workspace-target-cli-wrappers');
+    const wrapperPath = path.join(wrapperDirectory, `aspire-${folderName}`);
+    const invocationLogPath = path.join(wrapperDirectory, `${folderName}-invocations.log`);
+    fs.mkdirSync(wrapperDirectory, { recursive: true });
     fs.mkdirSync(path.join(folderPath, '.vscode'), { recursive: true });
     if (withAppHost) {
         fs.writeFileSync(

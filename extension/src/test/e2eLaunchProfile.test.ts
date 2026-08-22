@@ -1043,6 +1043,10 @@ suite('E2E launch profile', () => {
         const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
         const workspaceTargetProofSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'workspaceTargetProof.e2e.test.ts'), 'utf8');
 
+        assert.ok(workspaceTargetProofSource.includes("const wrapperDirectory = path.join(fixtureRoot, '.workspace-target-cli-wrappers');"));
+        assert.ok(workspaceTargetProofSource.includes('const wrapperPath = path.join(wrapperDirectory, `aspire-${folderName}`);'));
+        assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
+
         const edgeCases = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
         assert.ok(edgeCases.includes("waitForCodeLensText('apphost.cs', 'Set up Python debugger', 60000)"));
         assert.ok(!edgeCases.includes("waitForWorkbenchText('Set up Python debugger'"));
