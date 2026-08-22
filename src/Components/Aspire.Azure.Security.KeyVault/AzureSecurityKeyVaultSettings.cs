@@ -4,6 +4,7 @@
 using Aspire.Azure.Common;
 using Azure.Core;
 using Azure.Security.KeyVault.Secrets;
+using HealthChecks.Azure.KeyVault.Secrets;
 
 namespace Aspire.Azure.Security.KeyVault;
 
@@ -39,6 +40,14 @@ public sealed class AzureSecurityKeyVaultSettings : IConnectionStringSettings
     /// The default value is <see langword="false"/>.
     /// </value>
     public bool DisableTracing { get; set; }
+
+    /// <summary>
+    /// Gets or sets the <see cref="AzureKeyVaultSecretsHealthCheckOptions"/> used to configure the Key Vault health check.
+    /// </summary>
+    /// <value>
+    /// The default value is a new instance of <see cref="AzureKeyVaultSecretsHealthCheckOptions"/>.
+    /// </value>
+    public AzureKeyVaultSecretsHealthCheckOptions HealthCheckOptions { get; set; } = new();
 
     void IConnectionStringSettings.ParseConnectionString(string? connectionString)
     {
