@@ -1504,6 +1504,169 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         sinon.assert.calledOnce(disposeStartListener);
     });
 
+    test('stopDebugging preserves the AppHost stop reserve after the extension host is unresponsive', async () => {
+        const clock = sinon.useFakeTimers({ now: 0, shouldClearNativeTimers: true });
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            configuration: {},
+        } as unknown as vscode.DebugSession;
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: { type: 'coreclr', request: 'launch', name: 'AppHost' },
+        } as unknown as vscode.DebugSession;
+        const timeline: string[] = [];
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').returns({ dispose: sinon.stub() });
+        sinon.stub(vscode.debug, 'startDebugging').returns(new Promise<boolean>(() => { }));
+        let aspireDebugSession!: AspireDebugSession;
+        const lateResourceSession = {
+            id: 'late-resource-session',
+            session: {
+                id: 'late-resource-session',
+                type: 'coreclr',
+                name: 'Late resource',
+            } as unknown as vscode.DebugSession,
+            stopSession: async () => {
+                timeline.push('late-resource-start');
+                await new Promise<void>(resolve => setTimeout(resolve, 1_000));
+                timeline.push('late-resource-complete');
+            },
+        };
+        const stopDebugging = sinon.stub(vscode.debug, 'stopDebugging').callsFake(async session => {
+            if (session === appHostDebugSession) {
+                timeline.push('apphost-start');
+                await new Promise<void>(resolve => setTimeout(resolve, 2_000));
+                timeline.push('apphost-complete');
+
+                const pendingStart = aspireDebugSession.beginPendingDebugSessionStart('Late pending resource');
+                setTimeout(() => {
+                    timeline.push('pending-start-complete');
+                    pendingStart.dispose();
+                }, 500);
+                (aspireDebugSession as any).stopLateResourceSession(lateResourceSession);
+            } else if (session === parentDebugSession) {
+                timeline.push('parent-start');
+                await new Promise<void>(resolve => setTimeout(resolve, 900));
+                timeline.push('parent-complete');
+            }
+        });
+        aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        (aspireDebugSession as any)._appHostDebugSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession,
+            stopSession: () => vscode.debug.stopDebugging(appHostDebugSession),
+        };
+
+        await aspireDebugSession.openDashboard('https://localhost:1234', 'debugEdge');
+        const stopPromise = aspireDebugSession.stopDebugging();
+
+        // Advancing system time without running timers models a synchronous extension-host stall:
+        // the dashboard timeout cannot fire, but the wall-clock shutdown deadline still expires.
+        clock.setSystemTime(20_000);
+        await clock.tickAsync(2_000);
+        await clock.tickAsync(3_900);
+
+        await stopPromise;
+        assert.deepStrictEqual(timeline, [
+            'apphost-start',
+            'apphost-complete',
+            'late-resource-start',
+            'pending-start-complete',
+            'late-resource-complete',
+            'parent-start',
+            'parent-complete',
+        ]);
+        clock.restore();
+    });
+
+    test('stopDebugging does not renew the AppHost stop reserve before the original deadline expires', async () => {
+        const clock = sinon.useFakeTimers({ now: 0, shouldClearNativeTimers: true });
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            configuration: {},
+        } as unknown as vscode.DebugSession;
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: { type: 'coreclr', request: 'launch', name: 'AppHost' },
+        } as unknown as vscode.DebugSession;
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').returns({ dispose: sinon.stub() });
+        sinon.stub(vscode.debug, 'startDebugging').returns(new Promise<boolean>(() => { }));
+        sinon.stub(vscode.debug, 'stopDebugging').callsFake(async session => {
+            if (session === appHostDebugSession) {
+                await new Promise<void>(resolve => setTimeout(resolve, 1_500));
+            }
+        });
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        (aspireDebugSession as any)._appHostDebugSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession,
+            stopSession: () => vscode.debug.stopDebugging(appHostDebugSession),
+        };
+
+        await aspireDebugSession.openDashboard('https://localhost:1234', 'debugEdge');
+        const stopPromise = aspireDebugSession.stopDebugging();
+
+        // The host recovers before the original ten-second deadline. The remaining one second is
+        // still the bound; only a fully expired wall-clock deadline may grant a fresh reserve.
+        clock.setSystemTime(7_000);
+        await clock.tickAsync(2_000);
+        await clock.tickAsync(2_000);
+
+        await assert.rejects(stopPromise, (error: Error) => {
+            assert.strictEqual(error.message, debugSessionStopTimedOut('AppHost', 1));
+            return true;
+        });
+        clock.restore();
+    });
+
+    test('stopDebugging keeps the renewed AppHost stop reserve shared and capped at four seconds', async () => {
+        const clock = sinon.useFakeTimers({ now: 0, shouldClearNativeTimers: true });
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            configuration: {},
+        } as unknown as vscode.DebugSession;
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: { type: 'coreclr', request: 'launch', name: 'AppHost' },
+        } as unknown as vscode.DebugSession;
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').returns({ dispose: sinon.stub() });
+        sinon.stub(vscode.debug, 'startDebugging').returns(new Promise<boolean>(() => { }));
+        sinon.stub(vscode.debug, 'stopDebugging').callsFake(async session => {
+            const delay = session === appHostDebugSession ? 3_000 : 1_500;
+            await new Promise<void>(resolve => setTimeout(resolve, delay));
+        });
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        (aspireDebugSession as any)._appHostDebugSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession,
+            stopSession: () => vscode.debug.stopDebugging(appHostDebugSession),
+        };
+
+        await aspireDebugSession.openDashboard('https://localhost:1234', 'debugEdge');
+        const stopPromise = aspireDebugSession.stopDebugging();
+
+        clock.setSystemTime(20_000);
+        await clock.tickAsync(2_000);
+        await clock.tickAsync(5_000);
+
+        await assert.rejects(stopPromise, (error: Error) => {
+            assert.strictEqual(error.message, debugSessionStopTimedOut('Aspire', 1));
+            return true;
+        });
+        clock.restore();
+    });
+
     test('a rejected dashboard debug launch disposes its start listener and logs the failure', async () => {
         const parentDebugSession = {
             id: 'aspire-session',

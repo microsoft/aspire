@@ -456,6 +456,15 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     let pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(resourceDeadline, stopFailures);
     await this.drainLateResourceStops(resourceDeadline, stopFailures);
 
+    // A synchronous extension-host stall can prevent the resource-phase timers from firing until
+    // after the original wall-clock deadline. Only in that case, preserve the same critical-stop
+    // reserve promised above instead of issuing AppHost and parent stops with 0ms. Healthy shutdowns
+    // continue to share the original ten-second deadline.
+    const now = Date.now();
+    const criticalStopDeadline = now >= deadline
+      ? now + AspireDebugSession._appHostStopReserveMs
+      : deadline;
+
     // Global/E2E stop requests target the synthetic Aspire session. Stop the real AppHost session
     // explicitly before the parent so we do not rely on VS Code cascading termination before the
     // AppHost registry refresh runs.
@@ -465,7 +474,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         await this.stopWithinBudget(
           () => appHostDebugSession.stopSession(),
           appHostDebugSession.session.name,
-          deadline,
+          criticalStopDeadline,
           () => appHostDebugSession.resetStopSessionAttempt?.());
         this._appHostStopped = true;
         this._resourceDebugSessions = this._resourceDebugSessions.filter(session => session.id !== appHostDebugSession.id);
@@ -488,13 +497,13 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     if (!pendingStartBudgetExhausted) {
-      pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(deadline, stopFailures);
+      pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(criticalStopDeadline, stopFailures);
     }
-    await this.drainLateResourceStops(deadline, stopFailures);
+    await this.drainLateResourceStops(criticalStopDeadline, stopFailures);
 
     if (!this._parentStopped) {
       try {
-        await this.stopWithinBudget(() => this.stopParentDebugSession(), this._session.name, deadline);
+        await this.stopWithinBudget(() => this.stopParentDebugSession(), this._session.name, criticalStopDeadline);
       }
       catch (err) {
         stopFailures.push(err);
@@ -502,9 +511,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     if (!pendingStartBudgetExhausted) {
-      await this.drainPendingDebugSessionStarts(deadline, stopFailures);
+      await this.drainPendingDebugSessionStarts(criticalStopDeadline, stopFailures);
     }
-    await this.drainLateResourceStops(deadline, stopFailures);
+    await this.drainLateResourceStops(criticalStopDeadline, stopFailures);
 
     return stopFailures;
   }
