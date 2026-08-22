@@ -50,6 +50,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, HelmValue> Secrets { get; } = [];
     internal Dictionary<string, HelmValue> Parameters { get; } = [];
     internal Dictionary<string, HelmValue> AdditionalConfigValues { get; } = [];
+    internal Dictionary<string, HelmValue> AdditionalSecretValues { get; } = [];
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
@@ -438,8 +439,20 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void ProcessEnvironmentHelmExpression(HelmValue helmExpression, string key)
     {
+        if (helmExpression.ValueString is { } template &&
+            template.ContainsHelmFlowControlExpression())
+        {
+            helmExpression = HelmValue.Literal(template.ToQuotedHelmTemplateExpression());
+        }
+
         switch (helmExpression)
         {
+            case { ValueContainsSecretValuesExpression: true, ValueString: { } secretValue }:
+                // Parameter-driven conditionals are stored as literal Helm flow-control expressions.
+                // Route the final environment variable through a Secret when either branch references
+                // a secret value, even though the HelmValue itself has no Expression metadata.
+                Secrets[key] = new(key.ToHelmSecretExpression(TargetResource.Name), secretValue);
+                return;
             case { ExpressionContainsHelmSecretExpression: true, ValueContainsSecretValuesExpression: false }:
                 Secrets[key] = helmExpression;
                 return;
@@ -451,6 +464,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void ProcessEnvironmentStringValue(string stringValue, string key, string resourceName)
     {
+        if (stringValue.ContainsHelmFlowControlExpression())
+        {
+            stringValue = stringValue.ToQuotedHelmTemplateExpression();
+        }
+
         if (stringValue.ContainsHelmValuesSecretExpression())
         {
             var secretExpression = stringValue.ToHelmSecretExpression(resourceName);
@@ -527,7 +545,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ParameterResource param)
             {
-                return AllocateParameter(param, TargetResource);
+                var helmValue = AllocateParameter(param, TargetResource, embedded);
+                if (embedded)
+                {
+                    AllocateAdditionalParameter(param, helmValue);
+                }
+
+                return helmValue;
             }
 
             if (value is ConnectionStringReference cs)
@@ -629,31 +653,41 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         var formattedName = conditionParam.Name.ToHelmValuesSectionName();
         var paramExpression = formattedName.ToHelmParameterExpression(TargetResource.Name);
 
-        if (!Parameters.ContainsKey(formattedName))
+        // Keep the original parameter name as the dictionary key so names that normalize to the
+        // same Helm key remain distinct until publishing can report the collision.
+        var conditionValue = new HelmValue(paramExpression, conditionParam)
         {
-            Parameters[formattedName] = conditionParam.Default is null || conditionParam.Secret
-                ? new HelmValue(paramExpression, (string?)null)
-                : new HelmValue(paramExpression, conditionParam);
-        }
+            ValuesKey = formattedName,
+            IsEmbeddedParameter = true
+        };
+        AddParameterMapping(
+            Parameters,
+            conditionParam,
+            conditionValue,
+            HelmExtensions.ParametersKey,
+            "condition parameter");
 
         // Ensure parameter values referenced in branches are populated in values.yaml.
         AllocateBranchParameters(expr.WhenTrue!);
         AllocateBranchParameters(expr.WhenFalse!);
 
-        // Extract the values path (e.g., .Values.parameters.myapp.enable_tls) from {{ expression }}.
-        // Pipe through | lower for case-insensitive comparison, matching .NET's
-        // StringComparison.OrdinalIgnoreCase used in other execution/publish paths.
-        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | lower)";
-        var escapedMatch = (expr.MatchValue ?? string.Empty).ToLowerInvariant().Replace("\\", "\\\\").Replace("\"", "\\\"");
+        // Deploy override YAML can parse values such as "True" as booleans. Convert the value back
+        // to a string before the case-insensitive comparison so both string and boolean values work.
+        // See https://helm.sh/docs/chart_template_guide/function_list/#type-conversion-functions.
+        var conditionPath = $"({HelmExtensions.ScalarExpressionPattern().Match(paramExpression).Value.Trim()} | toString | lower)";
+        var matchValue = System.Text.Json.JsonSerializer.Serialize((expr.MatchValue ?? string.Empty).ToLowerInvariant());
 
-        var ifElseExpression = $"{{{{ if eq {conditionPath} \"{escapedMatch}\" }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
+        // Keep the flow control raw while expressions are composed. Once the complete environment
+        // value is known, ProcessEnvironmentHelmExpression or ProcessEnvironmentStringValue wraps
+        // the whole template in `tpl ... | quote` so nested conditionals remain composable and the
+        // final output is emitted as one YAML-safe scalar.
+        var ifElseExpression = $"{{{{ if eq {conditionPath} {matchValue} }}}}{whenTrueStr}{{{{ else }}}}{whenFalseStr}{{{{ end }}}}";
         return HelmValue.Literal(ifElseExpression);
     }
 
     /// <summary>
     /// Ensures that any <see cref="ParameterResource"/> instances referenced in a branch's
-    /// value providers are allocated in the appropriate dictionary (EnvironmentVariables or
-    /// Secrets) so their values flow to values.yaml via <c>AddValuesToHelmSectionAsync</c>.
+    /// value providers are allocated so their values flow to values.yaml.
     /// </summary>
     private void AllocateBranchParameters(ReferenceExpression branch)
     {
@@ -661,22 +695,53 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         {
             if (vp is ParameterResource branchParam)
             {
-                var helmValue = AllocateParameter(branchParam, TargetResource);
-                var key = branchParam.Name.ToHelmValuesSectionName();
-
-                // Store in AdditionalConfigValues rather than EnvironmentVariables to avoid
-                // case-insensitive key collisions in ToConfigMap's processedKeys. These values
-                // flow to the config section of values.yaml but do not appear as env vars.
-                if (helmValue.ExpressionContainsHelmSecretExpression)
-                {
-                    Secrets.TryAdd(key, helmValue);
-                }
-                else
-                {
-                    AdditionalConfigValues.TryAdd(key, helmValue);
-                }
+                var helmValue = AllocateParameter(branchParam, TargetResource, isEmbedded: true);
+                AllocateAdditionalParameter(branchParam, helmValue);
             }
         }
+    }
+
+    /// <summary>
+    /// Allocates an embedded parameter without adding a synthetic environment variable.
+    /// </summary>
+    private void AllocateAdditionalParameter(ParameterResource parameter, HelmValue helmValue)
+    {
+        var values = parameter.Secret ? AdditionalSecretValues : AdditionalConfigValues;
+
+        // Keep the original parameter name as the dictionary key so names that normalize to the
+        // same Helm key remain distinct until publishing can report the collision.
+        AddParameterMapping(
+            values,
+            parameter,
+            helmValue,
+            parameter.Secret ? HelmExtensions.SecretsKey : HelmExtensions.ConfigKey,
+            "embedded parameter");
+    }
+
+    private void AddParameterMapping(
+        Dictionary<string, HelmValue> mappings,
+        ParameterResource parameter,
+        HelmValue helmValue,
+        string helmKey,
+        string sourceKind)
+    {
+        if (!mappings.TryGetValue(parameter.Name, out var existing))
+        {
+            mappings.Add(parameter.Name, helmValue);
+            return;
+        }
+
+        if (ReferenceEquals(existing.ParameterSource, parameter))
+        {
+            return;
+        }
+
+        var resourceKey = TargetResource.Name.ToHelmValuesSectionName();
+        var valuesKey = helmValue.ValuesKey ?? parameter.Name.ToHelmValuesSectionName();
+        throw new InvalidOperationException(
+            $"Resource '{TargetResource.Name}' maps multiple distinct {sourceKind} sources named '{parameter.Name}' " +
+            $"to Helm values path '{helmKey}.{resourceKey}.{valuesKey}'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.");
     }
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)
@@ -733,7 +798,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private static HelmValue AllocateParameter(ParameterResource parameter, IResource resource)
+    private static HelmValue AllocateParameter(ParameterResource parameter, IResource resource, bool isEmbedded)
     {
         var formattedName = parameter.Name.ToHelmValuesSectionName();
 
@@ -744,7 +809,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         // Always store the parameter reference for deferred resolution.
         // Secrets and parameters without defaults are resolved at deploy time (not publish time).
         // ValuesKey preserves the parameter name so values.yaml key matches the Helm expression path.
-        return new(expression, parameter) { ValuesKey = formattedName };
+        return new(expression, parameter)
+        {
+            ValuesKey = formattedName,
+            IsEmbeddedParameter = isEmbedded
+        };
     }
     
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
@@ -895,6 +964,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         /// the Helm expression path (e.g., parameter name "cache_password" vs env var name "REDIS_PASSWORD").
         /// </summary>
         public string? ValuesKey { get; init; }
+
+        /// <summary>
+        /// Gets a value indicating whether this value supplies a parameter embedded in another Helm value.
+        /// </summary>
+        public bool IsEmbeddedParameter { get; init; }
 
         /// <summary>
         /// Indicates whether the expression contains a Helm secret expression. 

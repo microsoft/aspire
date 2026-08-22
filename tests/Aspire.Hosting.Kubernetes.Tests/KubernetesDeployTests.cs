@@ -1507,6 +1507,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine("=== Override file ===");
         outputHelper.WriteLine(content);
 
+        // Snapshot tests cover YAML scalar style. These assertions only verify that resolution
+        // populated every path, so ignore the quotes required to preserve string values for Helm.
+        content = content.Replace("\"", string.Empty, StringComparison.Ordinal);
+
         // Phase 1: Both cache and server should have the resolved password
         Assert.Contains("cache_password: test-password-123", content);
 
@@ -1571,6 +1575,141 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         // Verify the actual password is in the resolved values
         Assert.Contains("e2e-test-pw-42", content);
+    }
+
+    [Fact]
+    public async Task EmbeddedParametersInEnvironmentExpressions_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        // Numeric-looking strings must retain their lexical form when the deploy values file is
+        // parsed by Helm instead of being normalized as numeric YAML scalars.
+        var host = builder.AddParameter("host", "01", publishValueAsDefault: true);
+        var token = builder.AddParameter("token", "1.0", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "host" &&
+            captured.Parameter == host.Resource);
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "secrets" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "token" &&
+            captured.Parameter == token.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
+    public async Task ConditionalParameterWithoutDefault_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Configuration["Parameters:enable-tls"] = "1.0";
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var enableTls = builder.AddParameter("enable-tls");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["TLS_SUFFIX"] = ReferenceExpression.CreateConditional(
+                    enableTls.Resource,
+                    "1.0",
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Create($",ssl=false"));
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
+    public async Task DeferredValueProvider_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var provider = new TestValueProvider("resolved-value", "{outputs.deferred}");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["DEFERRED_VALUE"] = provider;
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValueProviders, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "DEFERRED_VALUE" &&
+            captured.ValueProvider == provider);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(
+                await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "myapp", "config.yaml")),
+                "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(overridePath), "yaml");
     }
 
     [Fact]
