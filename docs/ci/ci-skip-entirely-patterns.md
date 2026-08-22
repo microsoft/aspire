@@ -52,6 +52,12 @@ To add files whose changes should not trigger CI:
 
 > **Tip:** Changing the patterns file itself is listed as a skippable change (`eng/github-ci/ci-skip-entirely-patterns.txt`), so a PR that only updates this file will not trigger CI.
 
+Paths validated by a dedicated PR workflow can also skip the main CI workflow.
+For example, `.github/extensions/**` is validated by
+`validate-copilot-extensions.yml`. Repository-service metadata such as
+`.github/dependabot.yml` and `.github/policies/**` is also excluded because it
+cannot affect the build or test results.
+
 ## How It Works
 
 The `.github/actions/check-changed-files` composite action:

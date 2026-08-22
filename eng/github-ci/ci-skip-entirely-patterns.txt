@@ -43,6 +43,10 @@ Aspire-Core.slnf
 .github/instructions/**
 .agents/skills/**
 
+# Copilot canvas extensions have a dedicated PR workflow that validates module syntax,
+# manifests, imports, and tests without running the main build/test matrix.
+.github/extensions/**
+
 # GitHub workflow files that do not affect the CI build or test process
 .github/workflows/apply-test-attributes.yml
 .github/workflows/backmerge-release.yml
@@ -88,4 +92,6 @@ dogfood.sh
 # the conventions route to their projects -- they must not skip CI.
 .gitignore
 .github/CODEOWNERS
+.github/dependabot.yml
 .github/ISSUE_TEMPLATE/**
+.github/policies/**
