@@ -3283,6 +3283,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"registerHandleWrapper('{builder.TypeId}', (handle, client) => new {GetImplementationClassName(className)}(handle as {handleType}, client));");
         }
 
+        // Returned aliases keep their marshalled TypeId, so register each one against the retained
+        // implementation. wrapIfHandle uses these registrations for handles nested in callback data.
+        foreach (var aliasTypeId in _concreteTypeIds
+            .Where(mapping => !string.Equals(mapping.Key, mapping.Value, StringComparison.Ordinal))
+            .Select(mapping => mapping.Key)
+            .OrderBy(typeId => typeId, StringComparer.Ordinal))
+        {
+            var className = _wrapperClassNames[aliasTypeId];
+            var handleType = GetConcreteHandleTypeName(aliasTypeId);
+            WriteLine($"registerHandleWrapper('{aliasTypeId}', (handle, client) => new {GetImplementationClassName(className)}(handle as {handleType}, client));");
+        }
+
         WriteLine();
     }
 

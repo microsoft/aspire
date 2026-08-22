@@ -1089,6 +1089,14 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal(1, CountOccurrences(
             aspireTs,
             "class TestVaultResourcePromiseImpl implements TestVaultResourcePromise"));
+        var returnedAliasTypeId = fixtureCapabilities
+            .Single(capability => capability.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestVault")
+            .ReturnType!.TypeId;
+        // wrapIfHandle recursively uses this registry for callback arrays and plain objects, so
+        // the returned alias TypeId must construct the canonical wrapper for nested handles too.
+        Assert.Contains(
+            $"registerHandleWrapper('{returnedAliasTypeId}', (handle, client) => new TestVaultResourceImpl(handle as TestVaultResourceHandle, client));",
+            aspireTs);
         Assert.Contains(
             """
                 async _addTestVaultInternal(name: string): Promise<TestVaultResource> {
