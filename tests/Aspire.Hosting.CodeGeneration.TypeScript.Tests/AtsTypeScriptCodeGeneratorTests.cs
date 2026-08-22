@@ -1004,7 +1004,18 @@ public class AtsTypeScriptCodeGeneratorTests
         // marker interface emits "{ClassName}Promise" as its return type (the reference site),
         // while the wrapper declaration used to be skipped because the builder had no capabilities
         // of its own - a dangling "Cannot find name '...Promise'" in the generated SDK.
-        var atsContext = CreateContextFromTestAssembly();
+        // Also reference the concrete implementation so CreateBuilderModels deduplicates the
+        // interface and concrete builders to the same generated TestMarkerResource class. Wrapper
+        // registration must still honor the interface return type from AddTestMarker.
+        var atsContext = WithAdditionalCapabilities(
+            CreateContextFromTestAssembly(),
+            CreateVoidEntryPointCapability(
+                "inspectTestMarkerResource",
+                new AtsParameterInfo
+                {
+                    Name = "resource",
+                    Type = CreateResourceTypeRef<TestMarkerResource>()
+                }));
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.mts"];
@@ -1114,6 +1125,37 @@ public class AtsTypeScriptCodeGeneratorTests
             "invokeCapability<ITestVaultResourceHandle>"));
     }
 
+    [Fact]
+    public void GenerateDistributedApplication_RejectsUnrelatedResourceTypesWithSameGeneratedName()
+    {
+        var scannedContext = CreateContextFromTestAssembly();
+        var addTestRedis = scannedContext.Capabilities
+            .Single(capability => capability.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
+        var capabilities = scannedContext.Capabilities
+            .Concat(
+            [
+                CreateSameNameResourceCapability<TestTypes.NameCollisionOne.SameNameResource>("addFirstSameNameResource", addTestRedis),
+                CreateSameNameResourceCapability<TestTypes.NameCollisionTwo.SameNameResource>("addSecondSameNameResource", addTestRedis)
+            ])
+            .ToList();
+        var atsContext = new AtsContext
+        {
+            Capabilities = capabilities,
+            HandleTypes = scannedContext.HandleTypes,
+            DtoTypes = scannedContext.DtoTypes,
+            EnumTypes = scannedContext.EnumTypes,
+            ExportedValues = scannedContext.ExportedValues,
+            Diagnostics = scannedContext.Diagnostics
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => _generator.GenerateDistributedApplication(atsContext));
+
+        Assert.Contains("SameNameResource", exception.Message);
+        Assert.Contains(typeof(TestTypes.NameCollisionOne.SameNameResource).FullName!, exception.Message);
+        Assert.Contains(typeof(TestTypes.NameCollisionTwo.SameNameResource).FullName!, exception.Message);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1207,6 +1249,109 @@ public class AtsTypeScriptCodeGeneratorTests
             StripComments(typeScript),
             @"(?s)(?:""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)",
             string.Empty);
+
+    private static AtsCapabilityInfo CreateSameNameResourceCapability<TResource>(
+        string methodName,
+        AtsCapabilityInfo distributedApplicationBuilderCapability)
+        where TResource : IResource
+    {
+        var resourceType = typeof(TResource);
+        var resourceTypeRef = new AtsTypeRef
+        {
+            TypeId = $"{resourceType.Assembly.GetName().Name}/{resourceType.FullName}",
+            ClrType = resourceType,
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsCapabilityInfo
+        {
+            CapabilityId = $"Aspire.Hosting.CodeGeneration.TypeScript.Tests/{methodName}",
+            MethodName = methodName,
+            Parameters = [],
+            ReturnType = resourceTypeRef,
+            TargetTypeId = distributedApplicationBuilderCapability.TargetTypeId,
+            TargetType = distributedApplicationBuilderCapability.TargetType,
+            TargetParameterName = distributedApplicationBuilderCapability.TargetParameterName,
+            ReturnsBuilder = true
+        };
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GenerateDistributedApplication_EveryRpcHandleMatchesTheConstructedWrapper(bool includeHostingAssembly)
+    {
+        // Companion invariant to GenerateDistributedApplication_EveryReferencedPromiseWrapperIsDeclared.
+        // Declaring the wrapper is not enough: the handle flowing out of the RPC must also be
+        // assignable to the wrapper implementation that consumes it. Handle<T> carries its ATS type
+        // ID as a literal-typed $type, so FooHandle and IFooHandle are distinct, non-assignable
+        // types even though CreateBuilderModels collapses IFoo and Foo onto the same generated Foo
+        // class. Emitting invokeCapability<IFooHandle> and then passing that result to
+        // FooImpl's constructor produces "TS2345: Argument of type 'IFooHandle' is not assignable
+        // to parameter of type 'FooHandle'", which breaks "aspire run" just as thoroughly as a
+        // missing declaration.
+        var atsContext = includeHostingAssembly ? CreateContextFromBothAssemblies() : CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+
+        AssertRpcHandlesMatchConstructedWrappers(files["aspire.mts"]);
+    }
+
+    /// <summary>
+    /// Asserts that every RPC result flowing straight into a wrapper implementation constructor uses
+    /// the handle type that constructor declares.
+    /// </summary>
+    private static void AssertRpcHandlesMatchConstructedWrappers(string generatedAspireTs)
+    {
+        var aspireTs = StripComments(generatedAspireTs);
+
+        // class FooImpl extends ResourceBuilderBase<FooHandle> ... { constructor(handle: FooHandle, ...
+        var constructorHandleTypes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match match in s_implementationConstructorPattern.Matches(aspireTs))
+        {
+            constructorHandleTypes[match.Groups[1].Value] = match.Groups[2].Value;
+        }
+
+        // const handle = await client.invokeCapability<FooHandle>( '...', rpcArgs );
+        // return new FooImpl(handle, client);
+        var mismatches = new List<string>();
+        var pairs = 0;
+        foreach (Match match in s_rpcHandleConstructionPattern.Matches(aspireTs))
+        {
+            var invokedHandleType = match.Groups[1].Value;
+            var implementationClass = match.Groups[2].Value;
+            if (!constructorHandleTypes.TryGetValue(implementationClass, out var expectedHandleType))
+            {
+                continue;
+            }
+
+            pairs++;
+            if (!string.Equals(invokedHandleType, expectedHandleType, StringComparison.Ordinal))
+            {
+                mismatches.Add($"{implementationClass} takes {expectedHandleType} but is constructed from invokeCapability<{invokedHandleType}>");
+            }
+        }
+
+        // Guard against a vacuous pass if either pattern stops matching the generated shape.
+        Assert.NotEmpty(constructorHandleTypes);
+        Assert.NotEqual(0, pairs);
+
+        Assert.True(
+            mismatches.Count == 0,
+            $"Generated aspire.mts constructs wrapper implementations from mismatched handle types: {string.Join("; ", mismatches.Order(StringComparer.Ordinal))}");
+    }
+
+    // "class FooImpl extends ResourceBuilderBase<FooHandle> implements Foo {" followed by
+    // "constructor(handle: FooHandle, client: AspireClientRpc) {". Captures the class name and the
+    // handle type its constructor accepts.
+    private static readonly Regex s_implementationConstructorPattern =
+        new(@"\bclass\s+(\w+)\b[^{]*\{\s*constructor\(handle:\s*(\w+)", RegexOptions.Compiled);
+
+    // An RPC result flowing straight into a wrapper implementation constructor. The intervening
+    // capability ID and rpcArgs contain no ';', so [^;]*? stops at the invokeCapability call's own
+    // statement terminator.
+    private static readonly Regex s_rpcHandleConstructionPattern =
+        new(@"invokeCapability<(\w+)>\([^;]*?\);\s*return new (\w+)\(", RegexOptions.Compiled);
 
     [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
@@ -1353,6 +1498,28 @@ public class AtsTypeScriptCodeGeneratorTests
             Diagnostics = context.Diagnostics
         };
     }
+
+    private static AtsTypeRef CreateResourceTypeRef<TResource>() where TResource : IResource =>
+        new()
+        {
+            TypeId = GetAtsTypeId(typeof(TResource)),
+            ClrType = typeof(TResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+    private static AtsCapabilityInfo CreateVoidEntryPointCapability(string methodName, params AtsParameterInfo[] parameters) =>
+        new()
+        {
+            CapabilityId = $"Aspire.Hosting.CodeGeneration.TypeScript.Tests/{methodName}",
+            MethodName = methodName,
+            Parameters = parameters,
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            },
+            CapabilityKind = AtsCapabilityKind.Method
+        };
 
     private static AtsCapabilityInfo CreateDistributedApplicationBuilderCapability(
         AtsContext context,
@@ -2003,6 +2170,32 @@ public class AtsTypeScriptCodeGeneratorTests
         // Also verify the Promise wrapper interface is not duplicated.
         var promiseCount = CountOccurrences(code, "export interface TestVaultResourcePromise ");
         Assert.Equal(1, promiseCount);
+    }
+
+    [Fact]
+    public void Generate_ResourceAndResourceNamedPromise_NoDuplicateDeclarations()
+    {
+        // A zero-capability resource named Foo does not need a Promise wrapper when it is only
+        // referenced as a parameter. Generating one would collide with a real FooPromise resource.
+        var collisionCapability = CreateVoidEntryPointCapability(
+            "inspectPromiseNameCollision",
+            new AtsParameterInfo
+            {
+                Name = "resource",
+                Type = CreateResourceTypeRef<TestPromiseNameCollisionResource>()
+            },
+            new AtsParameterInfo
+            {
+                Name = "promiseResource",
+                Type = CreateResourceTypeRef<TestPromiseNameCollisionResourcePromise>()
+            });
+        var atsContext = WithAdditionalCapabilities(CreateContextFromTestAssembly(), collisionCapability);
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var code = files["aspire.mts"];
+
+        Assert.Equal(1, CountOccurrences(code, "export interface TestPromiseNameCollisionResourcePromise "));
+        Assert.Equal(1, CountOccurrences(code, "class TestPromiseNameCollisionResourcePromiseImpl "));
     }
 
     // ===== Options Interface Merging Tests =====

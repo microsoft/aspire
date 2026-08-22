@@ -981,7 +981,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // 2. Type classes: everything else (context types, wrapper types)
         var resourceBuilders = builders.Where(b => b.TargetType?.IsResourceBuilder == true).ToList();
         var typeClasses = builders.Where(b => b.TargetType?.IsResourceBuilder != true).ToList();
-
         // Build wrapper class name mapping before DTO generation so callback
         // properties can reference wrapper classes instead of raw handle aliases.
         _wrapperClassNames.Clear();
@@ -1015,7 +1014,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 _typeRefsById[builder.TypeId] = targetType;
             }
-
             directlyReturnedResourceTypesByClassName.TryGetValue(builder.BuilderClassName, out var directlyReturnedAliases);
 
             // Builder models are deduplicated by generated class name, so the retained TypeId may
@@ -4649,16 +4647,74 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             builders.Add(builder);
         }
 
-        // Deduplicate builders by class name, preferring concrete types over interfaces.
-        // This handles cases where both a concrete type (e.g. AzureKeyVaultResource) and
-        // its interface (IAzureKeyVaultResource → AzureKeyVaultResource) produce the same class name.
-        // Sort: concrete types first, then interfaces
+        // Deduplicate a concrete type and its interfaces by class name. Unrelated CLR types can have
+        // the same simple name, but treating them as aliases would bind one type's branded handle to
+        // the other's wrapper implementation.
         return builders
-            .OrderBy(b => b.IsInterface)
-            .ThenBy(b => b.BuilderClassName)
-            .GroupBy(b => b.BuilderClassName)
-            .Select(g => g.First())
+            .OrderBy(builder => builder.IsInterface)
+            .ThenBy(builder => builder.BuilderClassName)
+            .GroupBy(builder => builder.BuilderClassName, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var candidates = group
+                    .OrderBy(builder => builder.IsInterface)
+                    .ThenBy(builder => builder.TypeId, StringComparer.Ordinal)
+                    .ToList();
+                var retainedBuilder = candidates[0];
+                var unrelatedBuilder = candidates
+                    .Skip(1)
+                    .FirstOrDefault(candidate => !IsBuilderAlias(retainedBuilder, candidate));
+
+                if (unrelatedBuilder is not null)
+                {
+                    var collidingTypeIds = candidates
+                        .Select(candidate => candidate.TypeId)
+                        .Order(StringComparer.Ordinal);
+                    throw new InvalidOperationException(
+                        $"Resource types {string.Join(", ", collidingTypeIds.Select(typeId => $"'{typeId}'"))} " +
+                        $"all map to the generated TypeScript name '{group.Key}', but they are not a concrete type and its interfaces.");
+                }
+                return retainedBuilder;
+            })
             .ToList();
+    }
+
+    private static bool IsBuilderAlias(BuilderModel retainedBuilder, BuilderModel candidate)
+    {
+        if (string.Equals(retainedBuilder.TypeId, candidate.TypeId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (retainedBuilder.IsInterface == candidate.IsInterface ||
+            retainedBuilder.TargetType is not { } retainedType ||
+            candidate.TargetType is not { } candidateType)
+        {
+            return false;
+        }
+
+        if (retainedType.ClrType is { } retainedClrType && candidateType.ClrType is { } candidateClrType)
+        {
+            return retainedClrType.IsAssignableFrom(candidateClrType) ||
+                candidateClrType.IsAssignableFrom(retainedClrType);
+        }
+
+        return IsTypeInHierarchy(retainedType, candidateType.TypeId) ||
+            IsTypeInHierarchy(candidateType, retainedType.TypeId);
+    }
+
+    private static bool IsTypeInHierarchy(AtsTypeRef typeRef, string typeId)
+    {
+        if (typeRef.ImplementedInterfaces.Any(interfaceType =>
+            string.Equals(interfaceType.TypeId, typeId, StringComparison.Ordinal) ||
+            IsTypeInHierarchy(interfaceType, typeId)))
+        {
+            return true;
+        }
+
+        return typeRef.BaseType is { } baseType &&
+            (string.Equals(baseType.TypeId, typeId, StringComparison.Ordinal) ||
+             IsTypeInHierarchy(baseType, typeId));
     }
 
     /// <summary>
