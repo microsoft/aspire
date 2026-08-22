@@ -6,6 +6,8 @@
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREAZURE001
 
+using System.Text.Json.Nodes;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
@@ -103,13 +105,22 @@ public partial class AzureKubernetesEnvironmentResource :
             var destroyAzureStep = context.GetSteps(azureEnvironment)
                 .Single(step => step.Name == $"destroy-azure-{azureEnvironment.Name}");
 
-            // A never-deployed AKS environment has no isolated kubeconfig to acquire. Remove all of
-            // its tagged cluster cleanup from the aggregate destroy target, and do not add it as a
-            // prerequisite when targeting Azure cleanup directly. Explicitly targeting one of those
-            // Kubernetes cleanup steps still runs through the credential prerequisite and fails rather
-            // than allowing the command to fall back to the caller's ambient Kubernetes context.
+            // A never-deployed AKS environment has no isolated kubeconfig to acquire. Likewise, a
+            // partially deployed environment can persist the cluster ID before any Helm release saves
+            // destroy state. In either case, aggregate Azure cleanup must skip cluster-scoped destroy
+            // steps rather than block on reacquiring credentials when there is nothing known to clean
+            // up. Explicitly targeting one of those Kubernetes cleanup steps still runs through the
+            // credential prerequisite and fails rather than allowing the command to fall back to the
+            // caller's ambient Kubernetes context.
             var targetStep = context.Services.GetRequiredService<IOptions<PipelineOptions>>().Value.Step;
-            if (!HasPersistedAksIdentity(deploymentStateSection.Data))
+            var hasPersistedAksIdentity = HasPersistedAksIdentity(deploymentStateSection.Data);
+            var hasPersistedKubernetesCleanupState = hasPersistedAksIdentity &&
+                await HasPersistedKubernetesCleanupStateAsync(
+                    deploymentStateManager,
+                    context.Model,
+                    k8sEnv).ConfigureAwait(false);
+
+            if (!hasPersistedAksIdentity || !hasPersistedKubernetesCleanupState)
             {
                 if (string.Equals(targetStep, WellKnownPipelineSteps.Destroy, StringComparison.Ordinal))
                 {
@@ -144,6 +155,51 @@ public partial class AzureKubernetesEnvironmentResource :
                 }
             }
         }));
+    }
+
+    private static async Task<bool> HasPersistedKubernetesCleanupStateAsync(
+        IDeploymentStateManager deploymentStateManager,
+        DistributedApplicationModel model,
+        KubernetesEnvironmentResource environment)
+    {
+        var environmentState = await deploymentStateManager
+            .AcquireSectionAsync($"Helm:{environment.Name}")
+            .ConfigureAwait(false);
+        if (HasPersistedHelmReleaseState(environmentState.Data))
+        {
+            return true;
+        }
+
+        foreach (var chart in model.Resources.OfType<KubernetesHelmChartResource>())
+        {
+            if (!chart.DestroyOnUninstall ||
+                !string.Equals(chart.Parent.Name, environment.Name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var chartState = await deploymentStateManager
+                .AcquireSectionAsync($"HelmChart:{environment.Name}:{chart.Name}")
+                .ConfigureAwait(false);
+            if (HasPersistedHelmReleaseState(chartState.Data))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasPersistedHelmReleaseState(JsonObject deploymentState)
+    {
+        try
+        {
+            return !string.IsNullOrEmpty(deploymentState["ReleaseName"]?.GetValue<string>());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

@@ -579,6 +579,11 @@ internal static partial class HelmDeploymentEngine
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment)
     {
+        if (TrySkipDestroyCleanup(context, environment))
+        {
+            return;
+        }
+
         var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
         var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
         await HelmUninstallAsync(context, environment, releaseName, @namespace).ConfigureAwait(false);
@@ -586,11 +591,8 @@ internal static partial class HelmDeploymentEngine
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment, string releaseName, string @namespace)
     {
-        if (environment.SkipDestroyCleanup)
+        if (TrySkipDestroyCleanup(context, environment))
         {
-            context.Logger.LogInformation(
-                "Skipping Helm cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
-                environment.Name);
             return;
         }
 
@@ -647,6 +649,19 @@ internal static partial class HelmDeploymentEngine
                 throw;
             }
         }
+    }
+
+    private static bool TrySkipDestroyCleanup(PipelineStepContext context, KubernetesEnvironmentResource environment)
+    {
+        if (!environment.SkipDestroyCleanup)
+        {
+            return false;
+        }
+
+        context.Logger.LogInformation(
+            "Skipping Helm cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+            environment.Name);
+        return true;
     }
 
     private static async Task ConfirmDestroyAsync(PipelineStepContext context, string message)
