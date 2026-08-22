@@ -30,6 +30,9 @@ internal static partial class HelmDeploymentEngine
     private const string HelmUninstallTag = "helm-uninstall";
     internal const string PrintSummaryTag = "print-summary";
 
+    internal static string GetKubernetesDestroyTag(string environmentName) => $"kubernetes-destroy-{environmentName}";
+    internal static string GetHelmUninstallStepName(string environmentName) => $"helm-uninstall-{environmentName}";
+
     /// <summary>
     /// Gets the environment-specific values file name, mirroring Docker Compose's .env.{envName} pattern.
     /// </summary>
@@ -183,8 +186,17 @@ internal static partial class HelmDeploymentEngine
         {
             Name = $"destroy-helm-{environment.Name}",
             Description = $"Confirms and destroys the Helm deployment for {environment.Name}.",
+            Tags = [GetKubernetesDestroyTag(environment.Name)],
             Action = async ctx =>
             {
+                if (environment.SkipDestroyCleanup)
+                {
+                    ctx.Logger.LogInformation(
+                        "Skipping Helm cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+                        environment.Name);
+                    return;
+                }
+
                 // Check deployment state to verify this environment was actually deployed
                 var deploymentStateManager = ctx.Services.GetRequiredService<IDeploymentStateManager>();
                 var stateSection = await deploymentStateManager.AcquireSectionAsync($"Helm:{environment.Name}", ctx.CancellationToken).ConfigureAwait(false);
@@ -204,11 +216,6 @@ internal static partial class HelmDeploymentEngine
                 var @namespace = savedNamespace ?? "default";
                 await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{savedReleaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
 
-                var helmRunner = ctx.Services.GetRequiredService<IHelmRunner>();
-                // Defer the prereq check until state exists so `aspire destroy` against a
-                // never-deployed environment can still report "Nothing to destroy" without
-                // requiring Helm on PATH.
-                await HelmVersionValidator.EnsureMinimumVersionAsync(helmRunner, ctx.CancellationToken).ConfigureAwait(false);
                 await HelmUninstallAsync(ctx, environment, savedReleaseName, @namespace).ConfigureAwait(false);
 
                 ctx.Summary.Add("🗑️ Helm Release", savedReleaseName);
@@ -225,12 +232,11 @@ internal static partial class HelmDeploymentEngine
         // Step 5: Helm uninstall (teardown, callable directly via aspire do without confirmation)
         var helmUninstallStep = new PipelineStep
         {
-            Name = $"helm-uninstall-{environment.Name}",
+            Name = GetHelmUninstallStepName(environment.Name),
             Description = $"Uninstalls the Helm release for {environment.Name}.",
-            Tags = [HelmUninstallTag],
+            Tags = [HelmUninstallTag, GetKubernetesDestroyTag(environment.Name)],
             Action = ctx => HelmUninstallAsync(ctx, environment)
         };
-        helmUninstallStep.DependsOn($"check-helm-prereqs-{environment.Name}");
         steps.Add(helmUninstallStep);
 
         return Task.FromResult<IReadOnlyList<PipelineStep>>(steps);
@@ -573,6 +579,11 @@ internal static partial class HelmDeploymentEngine
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment)
     {
+        if (TrySkipDestroyCleanup(context, environment))
+        {
+            return;
+        }
+
         var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
         var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
         await HelmUninstallAsync(context, environment, releaseName, @namespace).ConfigureAwait(false);
@@ -580,6 +591,11 @@ internal static partial class HelmDeploymentEngine
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment, string releaseName, string @namespace)
     {
+        if (TrySkipDestroyCleanup(context, environment))
+        {
+            return;
+        }
+
         var uninstallTask = await context.ReportingStep.CreateTaskAsync(
             new MarkdownString($"Uninstalling Helm release **{releaseName}** from namespace **{@namespace}**"),
             context.CancellationToken).ConfigureAwait(false);
@@ -589,7 +605,15 @@ internal static partial class HelmDeploymentEngine
             try
             {
                 var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
-                var arguments = $"uninstall {releaseName} --namespace {@namespace}";
+                // Keep the preflight inside the action so AKS destroy can skip cleanup for a cluster
+                // that no longer exists without requiring Helm on the machine.
+                await HelmVersionValidator.EnsureMinimumVersionAsync(
+                    helmRunner,
+                    context.CancellationToken).ConfigureAwait(false);
+
+                // The release can already be absent after a direct uninstall or a prior destroy whose
+                // state cleanup failed. Keep retries idempotent without masking unrelated Helm errors.
+                var arguments = $"uninstall {releaseName} --namespace {@namespace} --ignore-not-found";
 
                 if (environment.KubeConfigPath is not null)
                 {
@@ -625,6 +649,19 @@ internal static partial class HelmDeploymentEngine
                 throw;
             }
         }
+    }
+
+    private static bool TrySkipDestroyCleanup(PipelineStepContext context, KubernetesEnvironmentResource environment)
+    {
+        if (!environment.SkipDestroyCleanup)
+        {
+            return false;
+        }
+
+        context.Logger.LogInformation(
+            "Skipping Helm cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+            environment.Name);
+        return true;
     }
 
     private static async Task ConfirmDestroyAsync(PipelineStepContext context, string message)
