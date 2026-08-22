@@ -94,9 +94,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint");
 
         // The stamp has to survive for this to exercise the missing-assets guard rather than the
-        // missing-stamp one. Asking WriteRestoreState not to write the assets would leave no stamp
-        // either — it writes none when it cannot fingerprint them — and the assertion would hold
-        // even if the assets were never checked at all.
+        // missing-stamp one, so the assets are written first and deleted afterwards. A workspace
+        // that never held them would leave no stamp either — the writer records none when it cannot
+        // fingerprint them — and the assertion would hold even if the assets were never checked.
         File.Delete(Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "project.assets.json"));
 
         Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
@@ -151,15 +151,24 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WriteRestoreStampAsync_WritesNoStampWhenTheAssetsAreMissing()
+    public async Task WriteRestoreStampAsync_LeavesTheEarlierStampWhenTheAssetsCannotBeRead()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var stampPath = Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "aspire-restore.stamp");
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "old-fingerprint");
+        var earlierStamp = await File.ReadAllTextAsync(stampPath);
 
-        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint", writeAssets: false);
+        // Starting from a completed restore is what makes this test bite: on a workspace that never
+        // held a stamp, "no new stamp" would hold even if the writer did nothing at all.
+        File.Delete(Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "project.assets.json"));
+
+        await PrebuiltAppHostServer.WriteRestoreStampAsync(workspace.WorkspaceRoot.FullName, "new-fingerprint", NullLogger.Instance, CancellationToken.None);
 
         // Vouching for assets that could not be read would restore the very guarantee this stamp
-        // exists to avoid making.
-        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "aspire-restore.stamp")));
+        // exists to avoid making, so the new fingerprint is not recorded at all — neither on its own
+        // nor beside a stale assets hash. The earlier stamp is left alone, which stays safe because
+        // a skip against it still requires the assets on disk to hash to the value it recorded.
+        Assert.Equal(earlierStamp, await File.ReadAllTextAsync(stampPath));
     }
 
     [Fact]
@@ -397,14 +406,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
     // Mirrors a completed restore: the assets on disk plus the stamp vouching for them. The stamp
     // is written through the production writer so the tests cannot drift from its format.
-    private static void WriteRestoreState(string restoreDir, string fingerprint, bool writeAssets = true)
+    private static void WriteRestoreState(string restoreDir, string fingerprint)
     {
         var objDir = Path.Combine(restoreDir, "obj");
         Directory.CreateDirectory(objDir);
-        if (writeAssets)
-        {
-            File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
-        }
+        File.WriteAllText(Path.Combine(objDir, "project.assets.json"), "{}");
 
         PrebuiltAppHostServer.WriteRestoreStampAsync(restoreDir, fingerprint, NullLogger.Instance, CancellationToken.None).GetAwaiter().GetResult();
     }

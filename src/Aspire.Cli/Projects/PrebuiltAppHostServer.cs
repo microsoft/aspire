@@ -720,8 +720,12 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             Directory.CreateDirectory(objDir);
 
             // Without an assets fingerprint the stamp could only vouch for the inputs, which is the
-            // guarantee that let a foreign restore go unnoticed. Leaving no stamp costs a restore on
-            // the next launch; writing a half-stamp would cost correctness.
+            // guarantee that let a foreign restore go unnoticed, so nothing is recorded for this
+            // restore: writing a half-stamp would cost correctness, and not writing one costs a
+            // restore on the next launch. Any stamp an earlier restore left is kept rather than
+            // deleted. It stays safe on its own terms, because a skip against it also requires the
+            // assets on disk to hash to the value it recorded — it can only be trusted while it
+            // still describes them — so deleting it would cost a restore for no gain.
             var assetsFingerprint = TryComputeAssetsFingerprint(Path.Combine(objDir, ProjectAssetsFileName), logger);
             if (assetsFingerprint is null)
             {
