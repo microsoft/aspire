@@ -195,22 +195,29 @@ export async function cancelActiveInput(): Promise<void> {
 }
 
 export async function answerActiveInput(value: string, expectedPlaceholder: string, timeoutMs = 30000): Promise<void> {
+    const input = await waitForActiveInput(expectedPlaceholder, undefined, timeoutMs);
+    await input.setText(value);
+    await input.confirm();
+}
+
+export async function waitForActiveInput(expectedPlaceholder: string, expectedTitle?: string, timeoutMs = 30000): Promise<InputBox> {
     let lastPrompt = '<none>';
-    const input = await VSBrowser.instance.driver.wait(async () => {
+    return await VSBrowser.instance.driver.wait(async () => {
         try {
             const candidate = await InputBox.create();
             const placeholder = await candidate.getPlaceHolder();
             const title = await candidate.getTitle();
             lastPrompt = `${title ?? '<no title>'} / ${placeholder}`;
-            return placeholder === expectedPlaceholder ? candidate : false;
+            return placeholder === expectedPlaceholder
+                && (expectedTitle === undefined || title === expectedTitle)
+                ? candidate
+                : false;
         }
         catch (error) {
             throwIfWebDriverSessionFailure(error);
             return false;
         }
-    }, timeoutMs, `Timed out waiting for input placeholder '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
-    await input.setText(value);
-    await input.confirm();
+    }, timeoutMs, `Timed out waiting for input '${expectedTitle ?? '<any title>'}' / '${expectedPlaceholder}'. Last prompt: ${lastPrompt}.`);
 }
 
 export async function answerActiveInputByMessage(value: string, expectedMessage: string, timeoutMs = 30000): Promise<void> {

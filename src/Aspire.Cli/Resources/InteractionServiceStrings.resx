@@ -260,6 +260,9 @@
   <data name="InteractiveInputNotSupported" xml:space="preserve">
     <value>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</value>
   </data>
+  <data name="InvalidSelection" xml:space="preserve">
+    <value>Invalid selection.</value>
+  </data>
   <data name="NonInteractiveOptionRequired" xml:space="preserve">
     <value>The {0} option must be specified when running in non-interactive mode.</value>
     <comment>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</comment>

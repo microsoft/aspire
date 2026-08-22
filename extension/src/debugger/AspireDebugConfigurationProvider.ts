@@ -1,17 +1,20 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { appHostLifecycleLaunchAlreadyClaimed, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
+import { appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, formatAppHostLanguage, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { findWorkspaceDefaultCandidate, sortCandidatesByPath } from '../utils/appHostCandidateSelection';
 import { compareAppHostIdentity } from '../utils/appHostIdentity';
+import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget, type CliPathResolutionTarget } from '../utils/cliPathVariables';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { isDirectory } from '../utils/io';
 import { appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
 import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
 import { getAspireDebugConfigurationExternalLaunchReservation, getAspireDebugConfigurationResolvedCliPath, getAspireDebugConfigurationResolvedCliPathScope, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from './AspireDebugConfigurationProviderInternal';
+import { removeRootLaunchProfileCliArg } from '../utils/launchProfile';
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
 
@@ -70,6 +73,9 @@ export interface ExternalLaunchReservation {
         token: vscode.CancellationToken,
         cliPath?: string,
         target?: CliPathResolutionTarget,
+        isolated?: boolean,
+        isolationPolicy?: 'explicit-only' | 'linked-worktree-default',
+        launchProfile?: string,
     ): Promise<{ args: string[] | undefined }>;
 }
 
@@ -225,6 +231,57 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
             const command = getAspireDebugConfigurationCommand(aspireConfig);
             const launchTargetPath = telemetryTarget?.path ?? (typeof config.program === 'string' ? config.program : undefined);
+            const effectiveAppHostLanguage = launchTargetPath && await isDirectory(launchTargetPath)
+                ? await classifyAppHostDirectory(launchTargetPath)
+                : classifyAppHostPath(launchTargetPath);
+            const appHostDebuggerSettings = aspireConfig.debuggers?.['apphost'];
+            const projectDebuggerSettings = effectiveAppHostLanguage === 'csharp'
+                ? aspireConfig.debuggers?.['project']
+                : undefined;
+            const nestedLaunchProfile = appHostDebuggerSettings?.launchProfile
+                ?? projectDebuggerSettings?.launchProfile;
+            const nestedDisableLaunchProfile = appHostDebuggerSettings?.disableLaunchProfile
+                ?? projectDebuggerSettings?.disableLaunchProfile;
+            const nestedDebuggerOwnsLaunchProfile = nestedDisableLaunchProfile === true
+                || nestedLaunchProfile !== undefined;
+            const effectiveLaunchProfile = nestedDebuggerOwnsLaunchProfile
+                ? undefined
+                : aspireConfig.launchProfile;
+            const rootArguments = Array.isArray(config.args) ? [...config.args] : undefined;
+            const launchArguments = nestedDebuggerOwnsLaunchProfile
+                ? removeRootLaunchProfileCliArg(rootArguments)
+                : rootArguments;
+            if (launchArguments === undefined) {
+                delete config.args;
+            }
+            else {
+                config.args = launchArguments;
+            }
+            if (!launchedByExtension &&
+                command === undefined &&
+                aspireConfig.command !== undefined &&
+                aspireConfig.command !== null &&
+                launchTargetPath &&
+                effectiveLaunchProfile !== undefined) {
+                throw new Error(appHostLifecycleLaunchProfileRequiresRun);
+            }
+            if (!launchedByExtension && command !== undefined && command !== 'run' && launchTargetPath && effectiveLaunchProfile !== undefined) {
+                const cancellationToken = token ?? {
+                    isCancellationRequested: false,
+                    onCancellationRequested: () => ({ dispose: () => { } }),
+                } as vscode.CancellationToken;
+                await this._launchReservation.prepareLaunchArguments(
+                    launchTargetPath,
+                    command,
+                    launchArguments,
+                    cancellationToken,
+                    undefined,
+                    getCliPathTargetForUri(vscode.Uri.file(launchTargetPath)),
+                    undefined,
+                    undefined,
+                    effectiveLaunchProfile);
+            }
+
             if (!launchedByExtension && command === 'run' && launchTargetPath) {
                 const cliPath = aspireConfig.resolvedCliPath ?? await this.validateAndTrustCliPath(
                     config,
@@ -242,10 +299,13 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                     prepared = await this._launchReservation.prepareLaunchArguments(
                         launchTargetPath,
                         command,
-                        Array.isArray(config.args) ? [...config.args] : undefined,
+                        launchArguments,
                         cancellationToken,
                         cliPath,
-                        getCliPathTargetForUri(vscode.Uri.file(launchTargetPath)));
+                        getCliPathTargetForUri(vscode.Uri.file(launchTargetPath)),
+                        undefined,
+                        undefined,
+                        effectiveLaunchProfile);
                 }
                 catch (error) {
                     if (existingExternalReservation) {

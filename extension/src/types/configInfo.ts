@@ -75,6 +75,13 @@ export const lsJsonStreamCapability = 'ls-json-stream.v1';
 export const isolatedLaunchCapability = 'isolated-launch.v1';
 
 /**
+ * Capability advertised by the CLI when `aspire run` accepts `--launch-profile`.
+ * Tooling uses this to avoid passing the option to older CLIs that reject it.
+ * Keep in sync with `KnownCapabilities.LaunchProfile` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const launchProfileCapability = 'launch-profile.v1';
+
+/**
  * First Aspire CLI version that accepts `aspire run --isolated`.
  */
 export const isolatedLaunchMinimumVersion = '13.2.0';

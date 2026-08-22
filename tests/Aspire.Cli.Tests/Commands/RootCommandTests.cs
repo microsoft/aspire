@@ -227,6 +227,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("--capture-profile", help, StringComparison.Ordinal);
         Assert.DoesNotContain("--capture-profile-output", help, StringComparison.Ordinal);
         Assert.DoesNotContain("--capture-profile-delay", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("--log-file", help, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -244,6 +245,28 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("profile.zip", result.GetValue(RootCommand.CaptureProfileOutputOption)?.Name);
         Assert.Equal(1, result.GetValue(RootCommand.CaptureProfileDelayOption));
         Assert.DoesNotContain("--capture-profile", result.UnmatchedTokens);
+    }
+
+    [Fact]
+    public void InternalLogFileOption_IsConsumedOnSubcommands()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--log-file", "child.log",
+            "--launch-profile=E2E",
+            "--",
+            "--from-profile", "value"
+        ]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("E2E", result.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Equal(["--from-profile", "value"], result.UnmatchedTokens);
     }
 
     [Fact]

@@ -472,8 +472,20 @@
     <trans-unit id="configuration.aspire.dashboardBrowser.debugEdge">
       <source xml:lang="en">Launch Microsoft Edge as a debug session (auto-closes when debugging ends).</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.launchProfileHasInvalidProperties">
+      <source xml:lang="en">Launch profile &apos;{0}&apos; contains property values that dotnet run does not support.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.explicitLaunchProfileNotResolved">
+      <source xml:lang="en">Launch profile &apos;{0}&apos; could not be uniquely resolved from the project launch settings.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.launchProfileUnsupportedCommandName">
+      <source xml:lang="en">Launch profile &apos;{0}&apos; uses a commandName that dotnet run does not support. Use &apos;Project&apos; or &apos;Executable&apos;.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.executableLaunchProfileMissingExecutablePath">
       <source xml:lang="en">Launch profile &apos;{0}&apos; uses commandName &apos;Executable&apos; but does not specify an executablePath. Add an executablePath to the launch profile.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchProfileRequiresRun">
+      <source xml:lang="en">Launch profiles are only supported for the run command.</source>
     </trans-unit>
     <trans-unit id="extension.debug.defaultConfiguration.description">
       <source xml:lang="en">Launch the effective Aspire AppHost in your workspace</source>
@@ -628,6 +640,9 @@
     <trans-unit id="aspire-vscode.strings.installCliViewAllOptionsDescription">
       <source xml:lang="en">Open the installation guide (includes the install script)</source>
     </trans-unit>
+    <trans-unit id="languageModelTool.aspireAppHostStart.launchProfile.description">
+      <source xml:lang="en">Optional launch profile name from the AppHost launchSettings.json. Use the profile name exactly as written.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathLabel">
       <source xml:lang="en">Path</source>
     </trans-unit>
@@ -641,7 +656,7 @@
       <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.modelDescription">
-      <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor&apos;s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in &apos;run&apos; mode (no debugger attached) or &apos;debug&apos; mode (debugger attached). Optional &apos;isolated&apos; starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective &apos;isolated&apos; value; idempotent or uncertain results omit it.</source>
+      <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor&apos;s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in &apos;run&apos; mode (no debugger attached) or &apos;debug&apos; mode (debugger attached). Optional &apos;isolated&apos; starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Optional &apos;launchProfile&apos; selects a profile from the AppHost launchSettings.json by its exact name. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective &apos;isolated&apos; value; idempotent or uncertain results omit it.</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStop.modelDescription">
       <source xml:lang="en">Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Stop a running Aspire AppHost that Aspire has already discovered in the current workspace. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. AppHosts started by this editor stop through the coordinated debug lifecycle. AppHosts started outside the editor stop through &apos;aspire stop --apphost&apos; for the same discovered path. The extension never kills arbitrary processes. If it cannot determine whether the AppHost is running, the call fails rather than reporting that nothing is running.</source>
@@ -826,6 +841,12 @@
     <trans-unit id="languageModelTool.aspireAppHostStart.userDescription">
       <source xml:lang="en">Start an Aspire AppHost from this workspace in run or debug mode.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationMessageWithLaunchProfile">
+      <source xml:lang="en">Start the Aspire AppHost {0} in {1} mode using launch profile {2}?</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationMessageIsolatedWithLaunchProfile">
+      <source xml:lang="en">Start the Aspire AppHost {0} in {1} mode with isolation using launch profile {2}?</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationMessageIsolated">
       <source xml:lang="en">Start the Aspire AppHost {0} in {1} mode with isolation?</source>
     </trans-unit>
@@ -922,6 +943,9 @@
     <trans-unit id="aspire-vscode.strings.debuggerInstalledRestartAppHost">
       <source xml:lang="en">The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.</source>
     </trans-unit>
+    <trans-unit id="extension.debug.launchProfile">
+      <source xml:lang="en">The launch profile to use when running the Aspire AppHost.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. Use &apos;${workspaceFolder}&apos; for the operation&apos;s workspace folder or &apos;${workspaceFolder:name}&apos; for a named folder. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
     </trans-unit>
@@ -931,8 +955,14 @@
     <trans-unit id="aspire-vscode.strings.appHostLifecycleIsolationModeNotSupported">
       <source xml:lang="en">The selected Aspire CLI does not support the requested isolation mode.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchProfileNotSupported">
+      <source xml:lang="en">The selected Aspire CLI does not support the requested launch profile.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleIsolationCapabilityCouldNotBeVerified">
       <source xml:lang="en">The selected Aspire CLI isolation capability could not be verified.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified">
+      <source xml:lang="en">The selected Aspire CLI launch profile capability could not be verified.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleLaunchAlreadyClaimed">
       <source xml:lang="en">This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.</source>
@@ -1071,6 +1101,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustBuildOutputRedacted">
       <source xml:lang="en">[redacted]</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleInvalidLaunchProfile">
+      <source xml:lang="en">an invalid launch profile</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleUnresolvedPath">
       <source xml:lang="en">an unresolved path</source>

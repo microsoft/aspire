@@ -234,6 +234,9 @@ export const failedToInspectRuntimeConfig = (outputPath: string, error: string) 
 export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
 export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string, projectPath: string) => vscode.l10n.t('The default launch profile \'{0}\' is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', profileName, projectPath);
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
+export const explicitLaunchProfileNotResolved = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' could not be uniquely resolved from the project launch settings.', profileName);
+export const launchProfileUnsupportedCommandName = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses a commandName that dotnet run does not support. Use \'Project\' or \'Executable\'.', profileName);
+export const launchProfileHasInvalidProperties = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' contains property values that dotnet run does not support.', profileName);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const javaDebuggerExtensionNotInstalled = (extensionId: string) => vscode.l10n.t('Java AppHosts require Java debugger support. Set up {0} in the Extensions view, then start the AppHost again.', extensionId);
 export const javaAppHostCommandNotRecognized = () => vscode.l10n.t('The Java AppHost launch command was not recognized and cannot be debugged.');
@@ -311,6 +314,8 @@ export const appHostLifecycleStartConfirmationTitle = vscode.l10n.t('Start Aspir
 export const appHostLifecycleStopConfirmationTitle = vscode.l10n.t('Stop Aspire AppHost');
 export const appHostLifecycleStartConfirmationMessage = (appHostPath: string, mode: string) => vscode.l10n.t('Start the Aspire AppHost {0} in {1} mode?', appHostPath, mode);
 export const appHostLifecycleStartConfirmationMessageIsolated = (appHostPath: string, mode: string) => vscode.l10n.t('Start the Aspire AppHost {0} in {1} mode with isolation?', appHostPath, mode);
+export const appHostLifecycleStartConfirmationMessageWithLaunchProfile = (appHostPath: string, mode: string, launchProfile: string) => vscode.l10n.t('Start the Aspire AppHost {0} in {1} mode using launch profile {2}?', appHostPath, mode, launchProfile);
+export const appHostLifecycleStartConfirmationMessageIsolatedWithLaunchProfile = (appHostPath: string, mode: string, launchProfile: string) => vscode.l10n.t('Start the Aspire AppHost {0} in {1} mode with isolation using launch profile {2}?', appHostPath, mode, launchProfile);
 export const appHostLifecycleStopConfirmationMessage = (appHostPath: string) => vscode.l10n.t('Stop the Aspire AppHost {0}?', appHostPath);
 export const appHostLifecycleStartInvocationMessage = (appHostPath: string) => vscode.l10n.t('Starting Aspire AppHost {0}...', appHostPath);
 export const appHostLifecycleStopInvocationMessage = (appHostPath: string) => vscode.l10n.t('Stopping Aspire AppHost {0}...', appHostPath);
@@ -319,5 +324,9 @@ export const appHostLifecycleUnresolvedPath = vscode.l10n.t('an unresolved path'
 export const appHostLifecycleBusy = vscode.l10n.t('Another start or stop operation for this Aspire AppHost is still in progress. Wait for it to finish and try again.');
 export const appHostLifecycleIsolationModeNotSupported = vscode.l10n.t('The selected Aspire CLI does not support the requested isolation mode.');
 export const appHostLifecycleIsolationCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI isolation capability could not be verified.');
+export const appHostLifecycleLaunchProfileNotSupported = vscode.l10n.t('The selected Aspire CLI does not support the requested launch profile.');
+export const appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI launch profile capability could not be verified.');
+export const appHostLifecycleInvalidLaunchProfile = vscode.l10n.t('an invalid launch profile');
+export const appHostLifecycleLaunchProfileRequiresRun = vscode.l10n.t('Launch profiles are only supported for the run command.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
 export const appHostOperationAlreadyInProgress = vscode.l10n.t('Another operation is already in progress for this Aspire AppHost. The new operation was cancelled.');

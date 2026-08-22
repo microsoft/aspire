@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -21,7 +21,9 @@ import {
     LaunchProfileCommandName,
     LaunchProfile,
     LaunchSettings,
-    expandEnvironmentVariables
+    expandEnvironmentVariables,
+    expandSdkEnvironmentVariables,
+    hasSdkCompatibleLaunchProfileProperties
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
 import { createResolvedAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
@@ -29,6 +31,7 @@ import { resolveCliPath } from '../../utils/cliPath';
 import { getCliPathTargetForUri } from '../../utils/cliPathVariables';
 import { getHotReloadDiagnostics, logHotReloadDiagnostics, showHotReloadDisabledAdvisoryIfNeeded } from '../hotReload';
 import { deleteEnvironmentVariable, getEnvironmentForChildProcess, setEnvironmentVariable } from '../../utils/environment';
+import { getAppHostLaunchProfileOptions } from '../../utils/launchProfile';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -511,19 +514,9 @@ function createProjectEnvironment(
         ));
     }
 
-    const environment = getEnvironmentForChildProcess();
-    const { profile: defaultProfile, profileName: defaultProfileName } = determineDefaultLaunchProfile(launchSettings);
-    applyEnvironmentVariables(environment, runApiEnvironment, defaultProfile, defaultProfileName);
-    for (const envVar of runSessionEnvironment) {
-        if (!isDefaultLaunchProfileEnvironmentVariable(envVar.name, envVar.value, defaultProfile, defaultProfileName)) {
-            setEnvironmentVariable(environment, envVar.name, envVar.value);
-        }
-    }
+    const environment = createAppHostBaseEnvironment(launchSettings, runSessionEnvironment, runApiEnvironment);
+    const profileExpansionEnvironment = { ...environment };
 
-    // Older CLIs send one flattened AppHost environment that can include the SDK default profile's
-    // values. Filter only entries whose names and values match that profile before applying the profile
-    // selected by launch.json. This preserves inherited values and explicit CLI overrides using the same keys.
-    // See https://github.com/microsoft/aspire/issues/19387.
     if (disableLaunchProfile) {
         deleteEnvironmentVariable(environment, 'DOTNET_LAUNCH_PROFILE');
     }
@@ -531,7 +524,14 @@ function createProjectEnvironment(
     if (baseProfile?.applicationUrl) {
         setEnvironmentVariable(environment, 'ASPNETCORE_URLS', baseProfile.applicationUrl);
     }
-    applyEnvironmentVariables(environment, baseProfile?.environmentVariables);
+    applyEnvironmentVariables(
+        environment,
+        baseProfile?.environmentVariables,
+        undefined,
+        undefined,
+        baseProfile?.commandName === LaunchProfileCommandName.project
+            ? value => expandSdkEnvironmentVariables(value, profileExpansionEnvironment)
+            : undefined);
     applyEnvironmentVariables(environment, launchOptions.debugSession.configuration?.debuggers?.['project']?.env);
 
     // The AppHost uses DOTNET_LAUNCH_PROFILE to determine which launch profile to use for project resources.
@@ -546,15 +546,141 @@ function createProjectEnvironment(
     return environment;
 }
 
+function createAppHostBaseEnvironment(
+    launchSettings: LaunchSettings | null,
+    runSessionEnvironment: EnvVar[],
+    runApiEnvironment?: { [key: string]: string }
+): NodeJS.ProcessEnv {
+    const environment = getEnvironmentForChildProcess();
+    const runPayloadEnvironment = { ...environment };
+    applyEnvironmentVariables(runPayloadEnvironment, runApiEnvironment);
+    for (const envVar of runSessionEnvironment) {
+        setEnvironmentVariable(runPayloadEnvironment, envVar.name, envVar.value);
+    }
+
+    // Older CLIs send one flattened AppHost environment that can include the SDK default profile's
+    // expanded values. Use the unfiltered payload as the expansion source while identifying those
+    // entries, then omit them from the environment used by the profile selected in launch.json.
+    // See https://github.com/microsoft/aspire/issues/19387.
+    const { profile: defaultProfile, profileName: defaultProfileName } = determineDefaultLaunchProfile(launchSettings);
+    const defaultProfileExpansionEnvironment = createDefaultProfileExpansionEnvironment(
+        runPayloadEnvironment,
+        environment,
+        defaultProfile,
+        defaultProfileName);
+    applyEnvironmentVariables(
+        environment,
+        runApiEnvironment,
+        defaultProfile,
+        defaultProfileName,
+        undefined,
+        defaultProfileExpansionEnvironment);
+    for (const envVar of runSessionEnvironment) {
+        if (!isDefaultLaunchProfileEnvironmentVariable(
+            envVar.name,
+            envVar.value,
+            defaultProfile,
+            defaultProfileName,
+            defaultProfileExpansionEnvironment)) {
+            setEnvironmentVariable(environment, envVar.name, envVar.value);
+        }
+    }
+
+    return environment;
+}
+
+function createDefaultProfileExpansionEnvironment(
+    runPayloadEnvironment: NodeJS.ProcessEnv,
+    inheritedEnvironment: NodeJS.ProcessEnv,
+    defaultProfile: LaunchProfile | null,
+    defaultProfileName: string | null
+): NodeJS.ProcessEnv {
+    if (!defaultProfile) {
+        return { ...runPayloadEnvironment };
+    }
+
+    const expansionEnvironment = { ...inheritedEnvironment };
+    const pendingNames = new Set([
+        ...Object.keys(defaultProfile.environmentVariables ?? {}),
+        'ASPNETCORE_URLS',
+        'DOTNET_LAUNCH_PROFILE'
+    ]);
+    const namesEqual = (left: string, right: string) =>
+        process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
+
+    for (const [name, value] of Object.entries(runPayloadEnvironment)) {
+        if (!Array.from(pendingNames).some(profileName => namesEqual(profileName, name))) {
+            setEnvironmentVariable(expansionEnvironment, name, value);
+        }
+    }
+
+    // Profile values are expanded against the environment inherited by the SDK process, not against
+    // values introduced by the same profile. Resolve stale entries before treating unmatched values
+    // as explicit CLI overrides, then repeat because those overrides can affect dependent values.
+    let pendingValuesApplied = false;
+    while (pendingNames.size > 0) {
+        let removedStaleValue = false;
+        for (const name of pendingNames) {
+            const payloadValue = getEnvironmentVariable(runPayloadEnvironment, name);
+            if (payloadValue === undefined) {
+                pendingNames.delete(name);
+            } else if (isDefaultLaunchProfileEnvironmentVariable(
+                name,
+                payloadValue,
+                defaultProfile,
+                defaultProfileName,
+                expansionEnvironment)) {
+                if (pendingValuesApplied) {
+                    deleteEnvironmentVariable(expansionEnvironment, name);
+                }
+
+                const inheritedValue = getEnvironmentVariable(inheritedEnvironment, name);
+                if (inheritedValue !== undefined) {
+                    setEnvironmentVariable(expansionEnvironment, name, inheritedValue);
+                }
+
+                pendingNames.delete(name);
+                removedStaleValue = true;
+            }
+        }
+
+        if (removedStaleValue) {
+            continue;
+        }
+
+        if (!pendingValuesApplied) {
+            for (const name of pendingNames) {
+                const payloadValue = getEnvironmentVariable(runPayloadEnvironment, name);
+                if (payloadValue !== undefined) {
+                    setEnvironmentVariable(expansionEnvironment, name, payloadValue);
+                }
+            }
+            pendingValuesApplied = true;
+            continue;
+        }
+
+        break;
+    }
+
+    return expansionEnvironment;
+}
+
 function applyEnvironmentVariables(
     environment: NodeJS.ProcessEnv,
     variables: { [key: string]: string } | undefined,
     defaultProfile?: LaunchProfile | null,
-    defaultProfileName?: string | null
+    defaultProfileName?: string | null,
+    expandValue?: (value: string) => string,
+    defaultProfileExpansionEnvironment?: NodeJS.ProcessEnv
 ): void {
     for (const [name, value] of Object.entries(variables ?? {})) {
-        if (!isDefaultLaunchProfileEnvironmentVariable(name, value, defaultProfile, defaultProfileName)) {
-            setEnvironmentVariable(environment, name, value);
+        if (!isDefaultLaunchProfileEnvironmentVariable(
+            name,
+            value,
+            defaultProfile,
+            defaultProfileName,
+            defaultProfileExpansionEnvironment)) {
+            setEnvironmentVariable(environment, name, expandValue ? expandValue(value) : value);
         }
     }
 }
@@ -563,7 +689,8 @@ function isDefaultLaunchProfileEnvironmentVariable(
     name: string,
     value: string | undefined,
     defaultProfile: LaunchProfile | null | undefined,
-    defaultProfileName: string | null | undefined
+    defaultProfileName: string | null | undefined,
+    expansionEnvironment: NodeJS.ProcessEnv = process.env
 ): boolean {
     if (!defaultProfile) {
         return false;
@@ -573,13 +700,26 @@ function isDefaultLaunchProfileEnvironmentVariable(
         process.platform === 'win32' ? candidate.toLowerCase() === name.toLowerCase() : candidate === name;
 
     for (const [profileVariableName, profileVariableValue] of Object.entries(defaultProfile.environmentVariables ?? {})) {
-        if (namesEqual(profileVariableName) && profileVariableValue === value) {
+        if (namesEqual(profileVariableName) &&
+            typeof profileVariableValue === 'string' &&
+            (profileVariableValue === value ||
+                expandSdkEnvironmentVariables(profileVariableValue, expansionEnvironment) === value)) {
             return true;
         }
     }
 
     return (namesEqual('ASPNETCORE_URLS') && defaultProfile.applicationUrl === value)
         || (namesEqual('DOTNET_LAUNCH_PROFILE') && defaultProfileName === value);
+}
+
+function getEnvironmentVariable(environment: NodeJS.ProcessEnv, name: string): string | undefined {
+    if (process.platform !== 'win32') {
+        return environment[name];
+    }
+
+    const normalizedName = name.toLowerCase();
+    const matchingName = Object.keys(environment).find(candidate => candidate.toLowerCase() === normalizedName);
+    return matchingName ? environment[matchingName] : undefined;
 }
 
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
@@ -619,30 +759,73 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
             // AppHost-specific launch profile settings override generic project settings. prepareDebugSession
             // applies resource-type settings last, so resolve these directly from launch.json instead.
-            const projectDebuggerSettings = launchOptions.debugSession.configuration?.debuggers?.['project'];
-            const appHostDebuggerSettings = launchOptions.debugSession.configuration?.debuggers?.['apphost'];
+            const appHostLaunchProfileOptions = getAppHostLaunchProfileOptions(
+                launchOptions.debugSession.configuration,
+                true);
             const effectiveLaunchConfig: ProjectLaunchConfiguration = launchOptions.isApphost ? {
                 ...launchConfig,
-                disable_launch_profile: appHostDebuggerSettings?.disableLaunchProfile
-                    ?? projectDebuggerSettings?.disableLaunchProfile
+                disable_launch_profile: appHostLaunchProfileOptions.disableLaunchProfile
                     ?? debugConfiguration.disableLaunchProfile,
-                launch_profile: appHostDebuggerSettings?.launchProfile
-                    ?? projectDebuggerSettings?.launchProfile
+                launch_profile: appHostLaunchProfileOptions.launchProfile
                     ?? debugConfiguration.launchProfile
+                    ?? launchConfig.launch_profile
             } : launchConfig;
 
-            const { profile: baseProfile, profileName } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);
+            const { profile: baseProfile, profileName, hasInvalidProperties } = determineBaseLaunchProfile(effectiveLaunchConfig, launchSettings);
+
+            if (launchOptions.isApphost &&
+                effectiveLaunchConfig.disable_launch_profile !== true &&
+                effectiveLaunchConfig.launch_profile &&
+                !baseProfile) {
+                throw new Error(explicitLaunchProfileNotResolved(effectiveLaunchConfig.launch_profile));
+            }
+
+            if (launchOptions.isApphost &&
+                baseProfile &&
+                baseProfile.commandName !== LaunchProfileCommandName.project &&
+                baseProfile.commandName !== LaunchProfileCommandName.executable) {
+                throw new Error(launchProfileUnsupportedCommandName(profileName ?? ''));
+            }
+
+            if (launchOptions.isApphost &&
+                baseProfile &&
+                (hasInvalidProperties || !hasSdkCompatibleLaunchProfileProperties(baseProfile))) {
+                throw new Error(launchProfileHasInvalidProperties(profileName ?? ''));
+            }
 
             extensionLogOutputChannel.info(profileName
                 ? `Using launch profile '${profileName}' for project: ${projectPath}`
                 : `No launch profile selected for project: ${projectPath}`);
 
             // Configure debug session with launch profile settings
-            debugConfiguration.cwd = determineWorkingDirectory(projectPath, baseProfile);
-            let resolvedArguments = determineArguments(baseProfile?.commandLineArgs, args);
+            // ProjectLaunchProfile does not consume workingDirectory or executablePath, and neither
+            // SDK provider consumes useSSL. Ignore them here too so bypassing dotnet run preserves
+            // the provider semantics. File-based apps are the exception: their fallback explicitly
+            // disables the SDK profile and forwards a valid workingDirectory through MSBuild.
+            const isAppHostProjectProfile = launchOptions.isApphost &&
+                baseProfile?.commandName === LaunchProfileCommandName.project;
+            const shouldApplyProfileWorkingDirectory = !isAppHostProjectProfile || isFileBasedProject;
+            const workingDirectoryProfile = shouldApplyProfileWorkingDirectory &&
+                typeof baseProfile?.workingDirectory === 'string' ? baseProfile : null;
+            const launchSettingsDirectory = baseProfile?.commandName === LaunchProfileCommandName.executable
+                ? launchSettings?.sourceDirectory
+                : undefined;
+            const appHostProfileExpansionEnvironment = launchOptions.isApphost
+                ? createAppHostBaseEnvironment(launchSettings, env)
+                : undefined;
+            debugConfiguration.cwd = determineWorkingDirectory(
+                projectPath,
+                workingDirectoryProfile,
+                launchSettingsDirectory);
+            const profileCommandLineArgs = isAppHostProjectProfile && baseProfile.commandLineArgs
+                ? expandSdkEnvironmentVariables(baseProfile.commandLineArgs, appHostProfileExpansionEnvironment)
+                : baseProfile?.commandLineArgs;
+            let resolvedArguments = determineArguments(profileCommandLineArgs, args);
             debugConfiguration.args = resolvedArguments;
-            debugConfiguration.executablePath = baseProfile?.executablePath;
-            debugConfiguration.checkForDevCert = baseProfile?.useSSL;
+            debugConfiguration.executablePath = launchOptions.isApphost
+                ? baseProfile?.commandName === LaunchProfileCommandName.executable ? baseProfile.executablePath : undefined
+                : baseProfile?.executablePath;
+            debugConfiguration.checkForDevCert = launchOptions.isApphost ? undefined : baseProfile?.useSSL;
 
             // `launchBrowser` from launchSettings.json is deliberately not honoured here. Every project that
             // reaches this callback is started by the app host, and the app host owns its endpoints: it
@@ -717,7 +900,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
 
                     configureDotNetRunDebugConfiguration(
                         debugConfiguration,
-                        createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args),
+                        createDotNetRunArguments(projectPath, profileCommandLineArgs, args),
                         createProjectEnvironment(launchSettings, baseProfile, profileName, effectiveLaunchConfig.disable_launch_profile === true, debugConfiguration.env, env, launchOptions));
                 } else {
                     debugConfiguration.program = outputPath;
@@ -765,7 +948,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         debugConfiguration,
                         createDotNetRunArguments(
                             projectPath,
-                            baseProfile?.commandLineArgs,
+                            profileCommandLineArgs,
                             args,
                             /* fileBased */ true,
                             /* skipBuild */ !shouldBuildProject,

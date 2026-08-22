@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -191,7 +192,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         }
     }
 
-    public async Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public async Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -206,48 +207,58 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
 
             if (hasFilePickersCapability)
             {
-                var tcs = new TaskCompletionSource<string?>();
-
-                await _extensionTaskChannel.Writer.WriteAsync(async () =>
+                while (true)
                 {
-                    try
+                    var tcs = new TaskCompletionSource<string?>();
+
+                    await _extensionTaskChannel.Writer.WriteAsync(async () =>
                     {
-                        var result = await Backchannel.PromptForFilePathAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, directory, _cancellationToken).ConfigureAwait(false);
-                        tcs.SetResult(result);
-                    }
-                    catch (Exception ex)
+                        try
+                        {
+                            var result = await Backchannel.PromptForFilePathAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, directory, _cancellationToken).ConfigureAwait(false);
+                            tcs.SetResult(result);
+                        }
+                        catch (Exception ex)
+                        {
+                            tcs.SetException(ex);
+                        }
+                    }, cancellationToken).ConfigureAwait(false);
+
+                    var picked = await tcs.Task.ConfigureAwait(false);
+
+                    if (picked is null)
                     {
-                        tcs.SetException(ex);
+                        throw new ExtensionOperationCanceledException(promptText);
                     }
-                }, cancellationToken).ConfigureAwait(false);
 
-                var picked = await tcs.Task.ConfigureAwait(false);
+                    if (validator is null)
+                    {
+                        return picked;
+                    }
 
-                if (picked is null)
-                {
-                    throw new ExtensionOperationCanceledException(promptText);
-                }
-
-                if (validator is not null)
-                {
                     var validationResult = validator(picked);
-
-                    if (!validationResult.Successful)
+                    if (validationResult.Successful)
                     {
-                        var errorMessage = validationResult.Message ?? "Invalid selection.";
-                        DisplayError(errorMessage);
+                        return picked;
+                    }
+
+                    // VS Code file pickers can't show inline validation, so keep the wizard alive
+                    // by displaying the error before reopening the picker.
+                    var errorMessage = validationResult.Message ?? InteractionServiceStrings.InvalidSelection;
+                    DisplayError(errorMessage);
+
+                    if (!retryOnValidationFailure)
+                    {
                         throw new InvalidOperationException(errorMessage);
                     }
                 }
-
-                return picked;
             }
 
             // Fall back to string prompt for older extensions without file picker support
             return await PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken).ConfigureAwait(false);
         }
 
-        return await _consoleInteractionService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken).ConfigureAwait(false);
+        return await _consoleInteractionService.PromptForFilePathAsync(promptText, validator, directory, required, binding, retryOnValidationFailure, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)

@@ -165,6 +165,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LaunchProfileOptionDescription {
+            get {
+                return ResourceManager.GetString("LaunchProfileOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LaunchProfileNotSupported {
+            get {
+                return ResourceManager.GetString("LaunchProfileNotSupported", resourceCulture);
+            }
+        }
+
         internal static string UsingAppHost {
             get {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);

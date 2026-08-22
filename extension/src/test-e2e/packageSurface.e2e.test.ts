@@ -27,6 +27,8 @@ interface PackageJson {
                     type?: string;
                     description?: string;
                     enum?: string[];
+                    minLength?: number;
+                    maxLength?: number;
                 }>;
                 required?: string[];
                 additionalProperties?: boolean;
@@ -44,7 +46,7 @@ interface PackageJson {
             configurationAttributes?: {
                 launch?: {
                     required?: string[];
-                    properties?: Record<string, { type?: string; enum?: string[]; items?: { type?: string }; additionalProperties?: { type?: string } }>;
+                    properties?: Record<string, { type?: string; description?: string; enum?: string[]; minLength?: number; maxLength?: number; items?: { type?: string }; additionalProperties?: { type?: string } }>;
                 };
             };
             configurationSnippets?: Array<{ body?: Record<string, unknown> }>;
@@ -158,6 +160,10 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.command?.enum, ['run', 'deploy', 'publish', 'do']);
         assert.strictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.args?.items?.type, 'string');
         assert.strictEqual(debuggerContribution.configurationAttributes?.launch?.properties?.env?.additionalProperties?.type, 'string');
+        const launchProfileProperty = debuggerContribution.configurationAttributes?.launch?.properties?.launchProfile;
+        assert.strictEqual(launchProfileProperty?.type, 'string');
+        assert.strictEqual(launchProfileProperty?.description, 'The launch profile to use when running the Aspire AppHost.');
+        assert.strictEqual(launchProfileProperty?.minLength, 1);
         assert.ok(debuggerContribution.configurationSnippets?.some(snippet => snippet.body?.type === 'aspire' && snippet.body.program === '${workspaceFolder}'));
         assert.ok(debuggerContribution.initialConfigurations?.some(configuration => configuration.type === 'aspire' && configuration.program === '${workspaceFolder}'));
 
@@ -498,6 +504,7 @@ const expectedSourceLanguageModelTools = createExpectedLanguageModelTools({
     startUserDescription: '%languageModelTool.aspireAppHostStart.userDescription%',
     startModeDescription: '%languageModelTool.aspireAppHostStart.mode.description%',
     startIsolatedDescription: '%languageModelTool.aspireAppHostStart.isolated.description%',
+    startLaunchProfileDescription: '%languageModelTool.aspireAppHostStart.launchProfile.description%',
     stopDisplayName: '%languageModelTool.aspireAppHostStop.displayName%',
     stopModelDescription: '%languageModelTool.aspireAppHostStop.modelDescription%',
     stopUserDescription: '%languageModelTool.aspireAppHostStop.userDescription%',
@@ -506,10 +513,11 @@ const expectedSourceLanguageModelTools = createExpectedLanguageModelTools({
 
 const expectedInstalledLanguageModelTools = createExpectedLanguageModelTools({
     startDisplayName: 'Start Aspire AppHost',
-    startModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor\'s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in \'run\' mode (no debugger attached) or \'debug\' mode (debugger attached). Optional \'isolated\' starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective \'isolated\' value; idempotent or uncertain results omit it.',
+    startModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Start an Aspire AppHost that Aspire has already discovered in the current workspace, using the editor\'s own debug lifecycle. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. Also requires whether to start it in \'run\' mode (no debugger attached) or \'debug\' mode (debugger attached). Optional \'isolated\' starts the AppHost with randomized ports and isolated user secrets; when omitted, linked git worktrees start isolated automatically so they do not collide with the primary checkout. Explicit true or false overrides that inference. Optional \'launchProfile\' selects a profile from the AppHost launchSettings.json by its exact name. Does not create, pick, or guess an AppHost: if the path does not name a discovered AppHost, or names more than one, the call fails and the result lists the AppHosts you can pass. If the AppHost is already starting or already running, no second process is started. A successful new launch includes the verified effective \'isolated\' value; idempotent or uncertain results omit it.',
     startUserDescription: 'Start an Aspire AppHost from this workspace in run or debug mode.',
     startModeDescription: 'How to start the AppHost: \'run\' starts it without attaching the debugger, \'debug\' starts it with the debugger attached.',
     startIsolatedDescription: 'When true, start with randomized ports and isolated user secrets. When false, do not isolate. When omitted, linked git worktrees start isolated automatically.',
+    startLaunchProfileDescription: 'Optional launch profile name from the AppHost launchSettings.json. Use the profile name exactly as written.',
     stopDisplayName: 'Stop Aspire AppHost',
     stopModelDescription: 'Prefer this tool over invoking Aspire AppHost lifecycle commands in a terminal whenever VS Code is active. Stop a running Aspire AppHost that Aspire has already discovered in the current workspace. Requires the workspace-relative path of one of the discovered AppHosts; absolute paths are rejected. AppHosts started by this editor stop through the coordinated debug lifecycle. AppHosts started outside the editor stop through \'aspire stop --apphost\' for the same discovered path. The extension never kills arbitrary processes. If it cannot determine whether the AppHost is running, the call fails rather than reporting that nothing is running.',
     stopUserDescription: 'Stop a running Aspire AppHost from this workspace.',
@@ -522,6 +530,7 @@ function createExpectedLanguageModelTools(strings: {
     startUserDescription: string;
     startModeDescription: string;
     startIsolatedDescription?: string;
+    startLaunchProfileDescription: string;
     stopDisplayName: string;
     stopModelDescription: string;
     stopUserDescription: string;
@@ -550,6 +559,12 @@ function createExpectedLanguageModelTools(strings: {
                     isolated: {
                         type: 'boolean',
                         description: strings.startIsolatedDescription,
+                    },
+                    launchProfile: {
+                        type: 'string',
+                        minLength: 1,
+                        maxLength: 256,
+                        description: strings.startLaunchProfileDescription,
                     },
                 },
                 required: ['appHostPath', 'mode'],

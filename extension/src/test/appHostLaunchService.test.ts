@@ -12,7 +12,7 @@ import { appHostLifecycleBusy } from '../loc/strings';
 import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchCapabilityProvider, type AppHostLaunchRequestedEvent, type AppHostLaunchSession } from '../services/AppHostLaunchService';
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
-import { isolatedLaunchCapability, type CapabilityStatus } from '../types/configInfo';
+import { isolatedLaunchCapability, launchProfileCapability, type CapabilityStatus } from '../types/configInfo';
 import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { writeLinkedWorktreeMetadata } from './testGitWorktree';
@@ -74,13 +74,16 @@ class FakeCapabilityProvider implements AppHostLaunchCapabilityProvider {
         options: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string; target?: import('../utils/cliPathVariables').CliPathResolutionTarget } | undefined;
     }> = [];
     capabilityStatus: CapabilityStatus = 'supported';
+    launchProfileCapabilityStatus: CapabilityStatus = 'supported';
 
     async getCapabilityStatus(
         capability: string,
         options?: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string; target?: import('../utils/cliPathVariables').CliPathResolutionTarget },
     ): Promise<CapabilityStatus> {
         this.calls.push({ capability, options });
-        return capability === isolatedLaunchCapability ? this.capabilityStatus : 'unsupported';
+        return capability === isolatedLaunchCapability
+            ? this.capabilityStatus
+            : capability === launchProfileCapability ? this.launchProfileCapabilityStatus : 'unsupported';
     }
 }
 
@@ -94,6 +97,7 @@ interface LaunchArgumentPreparer {
         target?: import('../utils/cliPathVariables').CliPathResolutionTarget,
         isolated?: boolean,
         isolationPolicy?: 'explicit-only' | 'linked-worktree-default',
+        launchProfile?: string,
     ): Promise<{
         args: string[] | undefined;
         isolation: {
@@ -268,6 +272,108 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.deepStrictEqual(config.args, ['--isolated']);
+    });
+
+    test('lifecycle-owned launch forwards a selected launch profile', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        await service.launchFromLifecycleOwner(
+            appHostPath,
+            'run',
+            true,
+            undefined,
+            new vscode.CancellationTokenSource().token,
+            'Development HTTPS');
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.launchProfile, 'Development HTTPS');
+        assert.deepStrictEqual(config.args, ['--launch-profile=Development HTTPS']);
+        assert.strictEqual(capabilityProvider.calls.at(-1)?.capability, launchProfileCapability);
+        assert.strictEqual(capabilityProvider.calls.at(-1)?.options?.cliPath, '/path/bin/aspire');
+    });
+
+    test('typed launch profile replaces root profile options and preserves AppHost arguments', async () => {
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/AppHost.csproj',
+            'run',
+            [
+                '--verbose',
+                '--launch-profile', 'First',
+                '--launch-profile=Second',
+                '-lp', 'Third',
+                '-lp=Fourth',
+                '--',
+                '--launch-profile', 'AppHostValue',
+            ],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire',
+            undefined,
+            undefined,
+            undefined,
+            'Development HTTPS');
+
+        assert.deepStrictEqual(prepared.args, [
+            '--verbose',
+            '--launch-profile=Development HTTPS',
+            '--',
+            '--launch-profile', 'AppHostValue',
+        ]);
+    });
+
+    test('typed launch profile preserves root options after a valueless profile option', async () => {
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/AppHost.csproj',
+            'run',
+            ['--launch-profile', '--isolated'],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire',
+            undefined,
+            undefined,
+            undefined,
+            'Development HTTPS');
+
+        assert.deepStrictEqual(prepared.args, [
+            '--isolated',
+            '--launch-profile=Development HTTPS',
+        ]);
+    });
+
+    test('typed launch profile rejects an older or unverifiable exact CLI', async () => {
+        for (const status of ['unsupported', 'unavailable'] as const) {
+            capabilityProvider.launchProfileCapabilityStatus = status;
+
+            await assert.rejects(
+                (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+                    '/repo/AppHost.csproj',
+                    'run',
+                    undefined,
+                    new vscode.CancellationTokenSource().token,
+                    '/path/bin/aspire',
+                    undefined,
+                    undefined,
+                    undefined,
+                    'Development HTTPS'),
+                status === 'unsupported'
+                    ? /does not support the requested launch profile/
+                    : /launch profile capability could not be verified/);
+        }
+    });
+
+    test('non-run launch rejects a typed launch profile', async () => {
+        await assert.rejects(
+            (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+                '/repo/AppHost.csproj',
+                'publish',
+                ['--verbose'],
+                new vscode.CancellationTokenSource().token,
+                '/path/bin/aspire',
+                undefined,
+                undefined,
+                undefined,
+                'Development HTTPS'),
+            /Launch profiles are only supported for the run command/);
+        assert.deepStrictEqual(capabilityProvider.calls, []);
     });
 
     test('prepareLaunchArguments does not infer root isolation when only app args specify isolated', async () => {

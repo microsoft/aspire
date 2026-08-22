@@ -17,7 +17,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
-import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration } from '../dcp/types';
+import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, JavaLaunchConfiguration, ProjectLaunchConfiguration, RustLaunchConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
 import { registerRunCleanup } from '../debugger/runCleanupRegistry';
@@ -321,7 +321,146 @@ suite('AspireDebugSession tests', () => {
             true,
             { forceBuild: false });
 
-        assert.deepStrictEqual(createDebugSessionConfiguration.firstCall.args[2], []);
+        assert.strictEqual(createDebugSessionConfiguration.firstCall.args[2], undefined);
+    });
+
+    test('forwards the typed launch profile to the AppHost project debugger', async () => {
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'coreclr',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        } as AspireResourceExtendedDebugConfiguration);
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession.configuration as AspireExtendedDebugConfiguration).launchProfile = 'Development HTTPS';
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/AppHost.csproj',
+            ['run', '--launch-profile=Development HTTPS'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(
+            (createDebugSessionConfiguration.firstCall.args[1] as ProjectLaunchConfiguration).launch_profile,
+            'Development HTTPS');
+        assert.strictEqual(createDebugSessionConfiguration.firstCall.args[2], undefined);
+    });
+
+    test('forwards the CLI launch profile to the AppHost project debugger', async () => {
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'coreclr',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        } as AspireResourceExtendedDebugConfiguration);
+        const aspireDebugSession = createSessionForSpawn();
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/AppHost.csproj',
+            ['run', '--launch-profile=Terminal Profile', '--', '--app-argument'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(
+            (createDebugSessionConfiguration.firstCall.args[1] as ProjectLaunchConfiguration).launch_profile,
+            'Terminal Profile');
+        assert.deepStrictEqual(createDebugSessionConfiguration.firstCall.args[2], ['--app-argument']);
+    });
+
+    test('nested AppHost settings override the CLI launch profile at the AppHost debugger boundary', async () => {
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'coreclr',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        } as AspireResourceExtendedDebugConfiguration);
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession.configuration as AspireExtendedDebugConfiguration).debuggers = {
+            apphost: {
+                launchProfile: 'AppHost Override',
+            },
+        };
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/AppHost.csproj',
+            ['run', '--launch-profile=Terminal Profile'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(
+            (createDebugSessionConfiguration.firstCall.args[1] as ProjectLaunchConfiguration).launch_profile,
+            'AppHost Override');
+    });
+
+    test('nested AppHost settings can disable a CLI launch profile at the AppHost debugger boundary', async () => {
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'coreclr',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        } as AspireResourceExtendedDebugConfiguration);
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession.configuration as AspireExtendedDebugConfiguration).launchProfile = 'Top Level';
+        (aspireDebugSession.configuration as AspireExtendedDebugConfiguration).debuggers = {
+            apphost: {
+                disableLaunchProfile: true,
+            },
+        };
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/AppHost.csproj',
+            ['run', '--launch-profile=Terminal Profile'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(
+            (createDebugSessionConfiguration.firstCall.args[1] as ProjectLaunchConfiguration).launch_profile,
+            undefined);
+    });
+
+    test('does not apply project debugger launch profiles to non-dotnet AppHosts', async () => {
+        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
+            type: 'node',
+            request: 'launch',
+            name: 'AppHost',
+            runId: '',
+            debugSessionId: 'aspire-session',
+        } as AspireResourceExtendedDebugConfiguration);
+        const aspireDebugSession = createSessionForSpawn();
+        (aspireDebugSession.configuration as AspireExtendedDebugConfiguration).debuggers = {
+            project: {
+                launchProfile: 'Project Resource Profile',
+            },
+        };
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        await aspireDebugSession.startAppHost(
+            '/workspace/apphost.ts',
+            ['run', '--launch-profile=Terminal Profile'],
+            [],
+            true,
+            { forceBuild: false });
+
+        assert.strictEqual(
+            (createDebugSessionConfiguration.firstCall.args[1] as ProjectLaunchConfiguration).launch_profile,
+            undefined);
     });
 
     test('terminateCliProcessTree signals a running CLI process and still collects an exited one', async () => {

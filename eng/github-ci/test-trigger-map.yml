@@ -19,7 +19,6 @@
 #   job:typescript-api-compat  tests.yml -> typescript-api-compat.yml
 #   job:extension-unit         tests.yml extension_tests_win + extension_bootstrap_linux
 #   job:extension-e2e          tests.yml -> extension-e2e-tests.yml
-#   job:cli-starter            tests.yml cli_starter_validation_windows
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:nix-package            tests.yml nix_package
@@ -34,7 +33,6 @@ version: 1
 groups:
   CLI_BUNDLE:
     - test:Aspire.Cli.EndToEnd.Tests
-    - job:cli-starter
     - job:extension-e2e
     # The WinGet/Homebrew installer artifacts package and ship this CLI bundle, so a change to the
     # bundle (eng/Bundle.proj) must regenerate/validate them too.
@@ -220,11 +218,6 @@ path_rules:
       (transitive coverage when Layer 1 runs), but these path globs keep the gate working without
       Layer 1 -- a src/Aspire.Cli|Hosting*|Dashboard* change still fires it via pure path match.
   - paths:
-      - eng/scripts/get-aspire-cli-pr.ps1
-      - eng/scripts/cli-starter-validation.ps1
-    targets: [job:cli-starter]
-    reason: Windows starter-app smoke installing the PR CLI via dogfood script; Cli/TypeSystem/Managed production projects are in affected_project_rules
-  - paths:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
@@ -245,7 +238,7 @@ path_rules:
       - eng/scripts/get-aspire-cli.ps1
       - eng/scripts/get-aspire-cli-pr.sh
       - eng/scripts/get-aspire-cli-pr.ps1
-    targets: [test:Aspire.Acquisition.Tests, test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e]
+    targets: [test:Aspire.Acquisition.Tests, test:Aspire.Cli.EndToEnd.Tests, job:extension-e2e]
     reason: Acquisition.Tests asserts script behavior; CliE2EAutomatorHelpers.cs:406,415 invokes get-aspire-cli*.sh at runtime
   - paths:
       - eng/clipack/**
@@ -366,9 +359,6 @@ affected_project_rules:
   - projects: [Aspire.Cli, Aspire.Hosting*, Aspire.Dashboard*]
     targets: [job:extension-e2e]
     reason: mirrors the production-project half of tests.yml extension_e2e_changes
-  - projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
-    targets: [job:cli-starter]
-    reason: Windows starter-app smoke installing the PR CLI via dogfood script
   - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
@@ -383,9 +373,6 @@ affected_project_rules:
 # Layer 2 selected tests, to a fixpoint (a derived test is itself expanded; cycle-safe). This is how
 # a job fires based on WHICH tests run, regardless of which file triggered them.
 derived_targets:
-  - tests: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests]
-    targets: [job:cli-starter]
-    reason: if the CLI is under test, validate the Windows starter-app install path
   - tests: [test:Aspire.Acquisition.Tests]
-    targets: [job:cli-starter, job:winget-installer, job:homebrew-installer]
+    targets: [job:winget-installer, job:homebrew-installer]
     reason: acquisition covers the installers; prepare the WinGet/Homebrew installer artifacts too
