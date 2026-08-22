@@ -13,7 +13,7 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AddRedis(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the canonical addRedis export with options.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the canonical addRedis export with options.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> AddRedis(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
         [AspireExport]
@@ -38,6 +38,9 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> WithHostPort(this ApplicationModel.IResourceBuilder<Redis.RedisInsightResource> builder, int? port) { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithModule(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, string path) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password) { throw null; }
 
         [AspireExport]
@@ -48,6 +51,18 @@ namespace Aspire.Hosting
 
         [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> WithRedisInsight(this ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<Redis.RedisInsightResource>>? configureContainer = null, string? containerName = null) { throw null; }
+    }
+
+    public static partial class RedisModules
+    {
+        [AspireValue("RedisModules")]
+        public const string BloomFilter = "/usr/local/lib/redis/modules/redisbloom.so";
+        [AspireValue("RedisModules")]
+        public const string Json = "/usr/local/lib/redis/modules/rejson.so";
+        [AspireValue("RedisModules")]
+        public const string Search = "/usr/local/lib/redis/modules/redisearch.so";
+        [AspireValue("RedisModules")]
+        public const string TimeSeries = "/usr/local/lib/redis/modules/redistimeseries.so";
     }
 }
 
