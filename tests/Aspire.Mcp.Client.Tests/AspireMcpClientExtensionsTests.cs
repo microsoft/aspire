@@ -16,6 +16,8 @@ using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;
 using Json.Schema;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using Xunit;
 
 namespace Aspire.Mcp.Client.Tests;
@@ -213,8 +215,46 @@ public class AspireMcpClientExtensionsTests
         using var host = builder.Build();
         var options = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value;
 
-        Assert.Contains(options.Registrations, registration => registration.Name == "Mcp.Client_mcp");
-        Assert.Contains(options.Registrations, registration => registration.Name == "Mcp.Client_mcp_mcp");
+        Assert.Contains(options.Registrations, registration => registration.Name == "Mcp.Client:unkeyed:mcp");
+        Assert.Contains(options.Registrations, registration => registration.Name == "Mcp.Client:keyed:mcp:mcp");
+    }
+
+    [Fact]
+    public void AddMcpClientUsesDistinctHealthCheckNamesForKeyedAndUnkeyedRegistrations()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("default");
+        builder.AddKeyedMcpClient("default");
+
+        using var host = builder.Build();
+        var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+
+        Assert.Contains(registrations, registration => registration.Name == "Mcp.Client:unkeyed:default");
+        Assert.Contains(registrations, registration => registration.Name == "Mcp.Client:keyed:default:default");
+    }
+
+    [Fact]
+    public void AddMcpClientConfiguresMcpTelemetryByDefault()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("mcp");
+
+        Assert.Contains(builder.Services, static service => service.ServiceType == typeof(TracerProvider));
+        Assert.Contains(builder.Services, static service => service.ServiceType == typeof(MeterProvider));
+    }
+
+    [Fact]
+    public void AddMcpClientCanDisableMcpTelemetry()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("mcp", settings =>
+        {
+            settings.DisableTracing = true;
+            settings.DisableMetrics = true;
+        });
+
+        Assert.DoesNotContain(builder.Services, static service => service.ServiceType == typeof(TracerProvider));
+        Assert.DoesNotContain(builder.Services, static service => service.ServiceType == typeof(MeterProvider));
     }
 
     [Fact]
@@ -680,7 +720,7 @@ public class AspireMcpClientExtensionsTests
         Assert.Null(resolveException);
         Assert.Null(Record.Exception(host.Dispose));
         Assert.True(handler.Disposed);
-        Assert.Equal("Aspire.Mcp.Client:mcp:default", factory.Name);
+        Assert.Equal("Aspire.Mcp.Client:unkeyed:mcp", factory.Name);
     }
 
     [Fact]

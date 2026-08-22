@@ -39,6 +39,17 @@ builder.AddServiceDefaults();
 builder.AddMcpClient("mcp");
 ```
 
+The registered client can be injected into a controller:
+
+```csharp
+private readonly McpClient _client;
+
+public ProductsController(McpClient client)
+{
+    _client = client;
+}
+```
+
 By default the client resolves `https://{connectionName}/mcp`, and falls back to HTTP when only HTTP endpoints are available.
 
 ## Builder API
@@ -107,6 +118,33 @@ Settings bind from:
 2. `Aspire:Mcp:Client:{connectionName}`
 3. `ConnectionStrings:{connectionName}`
 4. `configureSettings` delegate
+
+### Use a connection string
+
+The connection name is resolved from `ConnectionStrings` when no explicit endpoint is configured:
+
+```csharp
+builder.AddMcpClient("mcp");
+```
+
+```json
+{
+  "ConnectionStrings": {
+    "mcp": "https://my-mcp-server.example.com/mcp"
+  }
+}
+```
+
+### Use inline delegates
+
+Use the `configureSettings` delegate for settings that are easier to provide in code:
+
+```csharp
+builder.AddMcpClient("mcp", settings =>
+{
+    settings.DisableHealthChecks = true;
+});
+```
 
 ```json
 {

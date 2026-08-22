@@ -22,7 +22,7 @@ public sealed class AspireMcpClientBuilder
     internal AspireMcpClientBuilder(
         IHostApplicationBuilder hostBuilder,
         string connectionName,
-        object? serviceKey,
+        string? serviceKey,
         McpClientSettings settings,
         string httpClientName,
         Action<Action<McpClientOptions>> addClientOptionsAction,
@@ -54,7 +54,7 @@ public sealed class AspireMcpClientBuilder
     /// <summary>
     /// Gets the service key used to register the client, when using keyed registration.
     /// </summary>
-    public object? ServiceKey { get; }
+    public string? ServiceKey { get; }
 
     /// <summary>
     /// Gets the Aspire settings used by the registration.

@@ -24,6 +24,7 @@ namespace Microsoft.Extensions.Hosting;
 public static class AspireMcpClientExtensions
 {
     private const string DefaultConfigSectionName = "Aspire:Mcp:Client";
+    private const string McpTelemetrySourceName = "Experimental.ModelContextProtocol";
 
     /// <summary>
     /// Registers an <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
@@ -172,7 +173,7 @@ public static class AspireMcpClientExtensions
     private static AspireMcpClientBuilder AddMcpClientCore(
         IHostApplicationBuilder builder,
         string connectionName,
-        object? serviceKey,
+        string? serviceKey,
         Action<McpClientOptions>? configureClientOptions,
         Action<HttpClientTransportOptions>? configureTransportOptions,
         Action<McpClientSettings>? configureSettings)
@@ -257,9 +258,7 @@ public static class AspireMcpClientExtensions
 
         if (!settings.DisableHealthChecks)
         {
-            var healthCheckName = serviceKey is null
-                ? $"Mcp.Client_{connectionName}"
-                : $"Mcp.Client_{connectionName}_{serviceKey}";
+            var healthCheckName = GetHealthCheckName(connectionName, serviceKey);
 
             builder.TryAddHealthCheck(new HealthCheckRegistration(
                 healthCheckName,
@@ -267,6 +266,18 @@ public static class AspireMcpClientExtensions
                 failureStatus: default,
                 tags: default,
                 timeout: default));
+        }
+
+        if (!settings.DisableTracing)
+        {
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing.AddSource(McpTelemetrySourceName));
+        }
+
+        if (!settings.DisableMetrics)
+        {
+            builder.Services.AddOpenTelemetry()
+                .WithMetrics(metrics => metrics.AddMeter(McpTelemetrySourceName));
         }
 
         return new AspireMcpClientBuilder(
@@ -308,10 +319,15 @@ public static class AspireMcpClientExtensions
         return new Uri($"https+http://{connectionName}/mcp", UriKind.Absolute);
     }
 
-    private static string GetHttpClientName(string connectionName, object? serviceKey)
+    private static string GetHttpClientName(string connectionName, string? serviceKey)
         => serviceKey is null
-            ? $"Aspire.Mcp.Client:{connectionName}:default"
-            : $"Aspire.Mcp.Client:{connectionName}:{serviceKey}";
+            ? $"Aspire.Mcp.Client:unkeyed:{connectionName}"
+            : $"Aspire.Mcp.Client:keyed:{connectionName}:{serviceKey}";
+
+    private static string GetHealthCheckName(string connectionName, string? serviceKey)
+        => serviceKey is null
+            ? $"Mcp.Client:unkeyed:{connectionName}"
+            : $"Mcp.Client:keyed:{connectionName}:{serviceKey}";
 
     private static void ThrowIfDuplicateRegistration(IServiceCollection services, object? serviceKey, string connectionName)
     {
