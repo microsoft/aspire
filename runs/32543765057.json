@@ -1,0 +1,38 @@
+{
+  "run_id": 32543765057,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32543765057",
+  "analyzed_at": "2026-08-22T02:04:26Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19131,
+    "title": "Show debugger setup hints for missing VS Code extensions",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/issue17845-missing-debugger-install-hint",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19131"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "id": 96960020838,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32543765057/job/96960020838",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' and no retrievable job logs or TRX test failures. Matches prior recurring cause 'vscode-e2e-linux-debug-dashboard-flaky' (issue #19588), which has been seen unrelated to various PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 96960020845,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32543765057/job/96960020845",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic 'Process completed with exit code 1' and no retrievable job logs or TRX test failures. Matches prior recurring cause 'vscode-e2e-windows-edge-cases-flaky' (issue #19547), a known flaky shard.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-linux-debug-dashboard-flaky", "vscode-e2e-windows-edge-cases-flaky"]
+}

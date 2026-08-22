@@ -11,6 +11,13 @@
       "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
       "pr_number": 19238,
       "observed_at": "2026-08-20T19:25:00Z"
+    },
+    {
+      "run_id": 32543765057,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32543765057",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "pr_number": 19131,
+      "observed_at": "2026-08-22T02:04:26Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"
