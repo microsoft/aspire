@@ -95,7 +95,8 @@ suite('Aspire dynamic debug configuration E2E', function () {
         assert.ok(isSamePath(secondLaunch.appHostPath, appHostPath));
     });
 
-    test('launches the selected AppHost from an ambiguous single-folder workspace', async () => {
+    test('launches the selected AppHost from an ambiguous single-folder workspace', async function () {
+        this.timeout(300000);
         createAmbiguousWorkspaceFixture();
         await openAmbiguousWorkspace();
 

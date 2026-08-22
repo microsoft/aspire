@@ -1028,6 +1028,16 @@ suite('E2E launch profile', () => {
         assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
     });
 
+    test('keeps the ambiguous dynamic debug launch timeout above its process-state wait', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const dynamicDebugConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'dynamicDebugConfiguration.e2e.test.ts'), 'utf8');
+        const ambiguousLaunchTest = getTestBlock(dynamicDebugConfiguration, 'launches the selected AppHost from an ambiguous single-folder workspace');
+
+        assert.ok(dynamicDebugConfiguration.includes('const appHostProcessStateTimeoutMs = 120000;'));
+        assert.ok(ambiguousLaunchTest.includes('this.timeout(300000);'));
+        assert.ok(ambiguousLaunchTest.includes('appHostProcessStateTimeoutMs'));
+    });
+
     test('uses integrated-browser webview text instead of editor title waits', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
