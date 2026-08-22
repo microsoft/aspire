@@ -142,23 +142,7 @@ internal class MauiBuildQueueEventSubscriber(
                 "Cannot proceed with build — the semaphore would be held indefinitely.");
         }
 
-        // Match DCP's launch configuration so the no-build Run target starts the exact outputs
-        // produced by this serialized build.
-        var args = new List<string> { "build", buildInfo.ProjectPath };
-
-        if (!string.IsNullOrEmpty(buildInfo.TargetFramework))
-        {
-            args.Add("-f");
-            args.Add(buildInfo.TargetFramework);
-        }
-
-        if (!string.IsNullOrEmpty(buildInfo.Configuration))
-        {
-            args.Add("--configuration");
-            args.Add(buildInfo.Configuration);
-        }
-
-        args.AddRange(buildInfo.AdditionalBuildArguments);
+        var args = GetBuildArguments(resource, buildInfo);
 
         var psi = new ProcessStartInfo("dotnet")
         {
@@ -219,6 +203,33 @@ internal class MauiBuildQueueEventSubscriber(
         }
 
         logger.LogInformation("Build succeeded for resource '{ResourceName}'.", resource.Name);
+    }
+
+    internal static IReadOnlyList<string> GetBuildArguments(IResource resource, MauiBuildInfoAnnotation buildInfo)
+    {
+        // Match DCP's launch configuration so the no-build Run target starts the exact outputs
+        // produced by this serialized build.
+        var args = new List<string> { "build", buildInfo.ProjectPath };
+
+        if (!string.IsNullOrEmpty(buildInfo.TargetFramework))
+        {
+            args.Add("-f");
+            args.Add(buildInfo.TargetFramework);
+        }
+
+        if (!string.IsNullOrEmpty(buildInfo.Configuration))
+        {
+            args.Add("--configuration");
+            args.Add(buildInfo.Configuration);
+        }
+
+        args.AddRange(buildInfo.AdditionalBuildArguments);
+        if (MauiPlatformHelper.GetSelectedTargetMsBuildArgument(resource) is { } selectedTargetArgument)
+        {
+            args.Add(selectedTargetArgument);
+        }
+
+        return args;
     }
 
     private static async Task PipeOutputAsync(System.IO.StreamReader reader, ILogger logger, LogLevel level, CancellationToken cancellationToken)
