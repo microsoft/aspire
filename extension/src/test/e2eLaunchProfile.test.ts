@@ -740,6 +740,19 @@ suite('E2E launch profile', () => {
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
+    test('dismisses only the expected non-Windows debug browser failure modal', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+
+        assert.match(debugDashboard, /import \{[^}]*\bdismissModalDialogIfPresent\b[^}]*\} from '\.\/helpers\/vscode';/);
+        assert.ok(vscodeHelpers.includes('export async function dismissModalDialogIfPresent('));
+        assert.ok(debugBrowserTest.includes(`if (process.platform !== 'win32') {
+            await dismissModalDialogIfPresent('Unable to launch browser', 'Cancel', 15000);
+        }`));
+    });
+
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
