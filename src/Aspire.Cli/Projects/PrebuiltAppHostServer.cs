@@ -619,18 +619,24 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     /// filesystems, clock skew, and caches that restore mtimes.
     /// <para>
     /// Matching inputs alone are not enough, because the stamp records what this CLI restored and
-    /// nothing stops another writer from replacing the assets afterwards. Switching CLI versions
-    /// does exactly that: an older CLI restores the same synthesized project against its own
-    /// package versions, and switching back reproduces a byte-identical project file and therefore
-    /// the earlier fingerprint. A skip on the input fingerprint alone would then build against the
-    /// other version's closure and report success. So the stamp also records a fingerprint of the
-    /// assets file it produced, and a skip requires the assets still to be the ones it vouches for.
+    /// nothing stops another writer from replacing the assets afterwards. A CLI version without this
+    /// stamp logic is exactly such a writer: it restores the same synthesized project against its
+    /// own package versions and leaves the stamp alone. Switching back then reproduces a project
+    /// file byte-identical to the one this CLI itself wrote earlier — not to the other version's —
+    /// and therefore reproduces this CLI's own earlier fingerprint, which the untouched stamp still
+    /// matches. A skip on the input fingerprint alone would build against the other version's
+    /// closure and report success. So the stamp also records a fingerprint of the assets file it
+    /// produced, and a skip requires the assets still to be the ones it vouches for.
     /// </para>
     /// </remarks>
     internal static bool CanSkipIntegrationRestore(string restoreDir, string expectedFingerprint, ILogger logger)
     {
         var assetsPath = Path.Combine(restoreDir, "obj", ProjectAssetsFileName);
         var stampPath = Path.Combine(restoreDir, "obj", RestoreStampFileName);
+
+        // The assets half of this is a fast path rather than a guarantee: TryComputeAssetsFingerprint
+        // below also answers "restore" for a file it cannot open, missing included. Checking first
+        // keeps the cold-start launch off the exception path.
         if (!File.Exists(assetsPath) || !File.Exists(stampPath))
         {
             return false;
@@ -650,12 +656,29 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // A stamp left by a CLI that recorded only the inputs cannot vouch for the assets, so it is
         // treated as stale rather than trusted. That costs one restore on first launch after an
         // upgrade, which is the safe direction.
-        if (stampLines.Length != StampLineCount || !string.Equals(stampLines[0], expectedFingerprint, StringComparison.Ordinal))
+        if (stampLines.Length != StampLineCount)
         {
+            logger.LogDebug("The integration restore stamp does not vouch for the assets it produced; restoring.");
+            return false;
+        }
+
+        // Split from the check above so the log says which of the two happened: an upgrade from a
+        // stamp that predates the assets fingerprint, or a genuine change to the restore inputs.
+        if (!string.Equals(stampLines[0], expectedFingerprint, StringComparison.Ordinal))
+        {
+            logger.LogDebug("The integration restore inputs changed since the last restore; restoring.");
             return false;
         }
 
         var assetsFingerprint = TryComputeAssetsFingerprint(assetsPath, logger);
+        if (assetsFingerprint is null)
+        {
+            // TryComputeAssetsFingerprint has already logged why it could not be read. Falling
+            // through would report an unreadable file as a replaced one, contradicting that log and
+            // pointing anyone diagnosing repeated restores at a writer that was never involved.
+            return false;
+        }
+
         if (!string.Equals(stampLines[1], assetsFingerprint, StringComparison.Ordinal))
         {
             logger.LogDebug("The integration restore assets were replaced since the last restore by this CLI; restoring.");
@@ -680,7 +703,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogDebug(ex, "Unable to fingerprint the integration restore assets; restoring.");
+            logger.LogDebug(ex, "Unable to fingerprint the integration restore assets.");
             return null;
         }
     }
@@ -858,11 +881,17 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             packageRefs.Count, projectRefs.Count, skipRestore ? "skipped" : "requested");
 
         var (exitCode, buildOutput) = await BuildIntegrationProjectAsync(projectFilePath, noRestore: skipRestore, cancellationToken).ConfigureAwait(false);
+
+        // Tracked separately from skipRestore, which only says whether the *first* attempt skipped
+        // restore. The retry below does restore, and a stamp still describing the assets that
+        // restore replaced would fail its own check on the next launch and force a full restore.
+        var restoreRan = !skipRestore;
         if (exitCode != 0 && skipRestore && ShouldRetryWithRestore(buildOutput))
         {
             _logger.LogDebug("Integration project build failed on the restore assets; retrying with restore. First attempt output:\n{BuildOutput}",
                 string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line)));
             (exitCode, buildOutput) = await BuildIntegrationProjectAsync(projectFilePath, noRestore: false, cancellationToken).ConfigureAwait(false);
+            restoreRan = true;
         }
 
         if (exitCode != 0)
@@ -872,7 +901,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
         }
 
-        if (restoreFingerprint is not null && !skipRestore)
+        if (restoreFingerprint is not null && restoreRan)
         {
             await WriteRestoreStampAsync(restoreDir, restoreFingerprint, _logger, cancellationToken).ConfigureAwait(false);
         }

@@ -91,7 +91,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public void CanSkipIntegrationRestore_RestoresWhenTheAssetsAreMissing()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint", writeAssets: false);
+        WriteRestoreState(workspace.WorkspaceRoot.FullName, fingerprint: "fingerprint");
+
+        // The stamp has to survive for this to exercise the missing-assets guard rather than the
+        // missing-stamp one. Asking WriteRestoreState not to write the assets would leave no stamp
+        // either — it writes none when it cannot fingerprint them — and the assertion would hold
+        // even if the assets were never checked at all.
+        File.Delete(Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "project.assets.json"));
 
         Assert.False(PrebuiltAppHostServer.CanSkipIntegrationRestore(workspace.WorkspaceRoot.FullName, "fingerprint", NullLogger.Instance));
     }
