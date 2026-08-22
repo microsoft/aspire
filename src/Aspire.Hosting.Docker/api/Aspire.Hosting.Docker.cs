@@ -40,13 +40,13 @@ namespace Aspire.Hosting
 
     public static partial class DockerComposeServiceExtensions
     {
-        [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot AppHosts.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.IManifestExpressionProvider manifestExpressionProvider, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
         [AspireExport]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
-        [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot app hosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
+        [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot AppHosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.ParameterResource parameter, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
         [AspireExport]
