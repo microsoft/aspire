@@ -102,6 +102,11 @@ export class AppHostParentOutputFilter {
     this._continuingDroppedLog = false;
     this._continuingErrorBlock = false;
   }
+
+  reset(): void {
+    this.resetState();
+    this._lastCategory = undefined;
+  }
 }
 
 function getConsoleLogSeverity(line: string): 'low' | 'normal' | 'severe' | undefined {
@@ -135,11 +140,14 @@ function isIndentedContinuation(line: string): boolean {
   return /^\s+\S/.test(line);
 }
 
-function isSevereRuntimeOutputLine(line: string): boolean {
+export function isSevereRuntimeOutputLine(line: string): boolean {
   // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
   return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
     // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
     || /^(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
+    // Python tracebacks begin with a fixed preamble and end with an Error/Exception type.
+    || /^Traceback \(most recent call last\):$/.test(line)
+    || /^(?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*(?:Error|Exception):/.test(line)
     // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
     // false positives on user stdout (`"Failed payment retry queued"`, file paths
     // containing "error", etc.).
