@@ -218,6 +218,34 @@ public static class ParameterResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Sets the description of a connection string parameter resource.
+    /// </summary>
+    /// <param name="builder">Resource builder for the connection string parameter.</param>
+    /// <param name="description">The parameter description.</param>
+    /// <param name="enableMarkdown">
+    /// A value indicating whether the description should be rendered as Markdown.
+    /// <c>true</c> allows the description to contain Markdown elements such as links, text decoration and lists.
+    /// </param>
+    /// <returns>Resource builder for the connection string parameter.</returns>
+    /// <exception cref="ArgumentException">The resource is not a parameter resource.</exception>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
+    public static IResourceBuilder<IResourceWithConnectionString> WithDescription(this IResourceBuilder<IResourceWithConnectionString> builder, string description, bool enableMarkdown = false)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(description);
+
+        if (builder.Resource is not ParameterResource parameter)
+        {
+            throw new ArgumentException("The resource must be a parameter resource.", nameof(builder));
+        }
+
+        parameter.Description = description;
+        parameter.EnableDescriptionMarkdown = enableMarkdown;
+
+        return builder;
+    }
+
+    /// <summary>
     /// Sets a custom input generator function for the parameter resource.
     /// </summary>
     /// <param name="builder">Resource builder for the parameter.</param>

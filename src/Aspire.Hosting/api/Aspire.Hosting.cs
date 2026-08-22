@@ -982,6 +982,9 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithDescription(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, string description, bool enableMarkdown = false) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> WithDescription(this ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> builder, string description, bool enableMarkdown = false) { throw null; }
     }
 
     public static partial class ProjectResourceBuilderExtensions
