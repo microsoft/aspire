@@ -36,6 +36,76 @@ public class KafkaPublicApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(nameof(name), exception.ParamName);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddKafkaWithParametersShouldThrowWhenBuilderIsNull(bool includePort)
+    {
+        IDistributedApplicationBuilder builder = null!;
+        const string name = "Kafka";
+        IResourceBuilder<ParameterResource>? userName = null;
+        IResourceBuilder<ParameterResource>? password = null;
+
+        var action = () => includePort
+            ? builder.AddKafka(name, 9092, userName: userName, password: password)
+            : builder.AddKafka(name, userName: userName, password: password);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddKafkaWithParametersShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var name = isNull ? null! : string.Empty;
+
+        var action = () => builder.AddKafka(name, userName: null, password: null);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithPasswordShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<KafkaServerResource> builder = null!;
+
+        var action = () => builder.WithPassword(null);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithUserNameShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<KafkaServerResource> builder = null!;
+        IResourceBuilder<ParameterResource> userName = null!;
+
+        var action = () => builder.WithUserName(userName);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithUserNameShouldThrowWhenUserNameIsNull()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddKafka("kafka");
+        IResourceBuilder<ParameterResource> userName = null!;
+
+        var action = () => builder.WithUserName(userName);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(userName), exception.ParamName);
+    }
+
     [Fact]
     public void WithKafkaUIShouldThrowWhenBuilderIsNull()
     {
@@ -107,6 +177,29 @@ public class KafkaPublicApiTests(ITestOutputHelper testOutputHelper)
         var name = isNull ? null! : string.Empty;
 
         var action = () => new KafkaServerResource(name);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, false, false)]
+    public void CtorKafkaServerResourceWithParametersShouldThrowWhenNameIsNullOrEmpty(bool isNull, bool isNullUserName, bool isNullPassword)
+    {
+        var name = isNull ? null! : string.Empty;
+        var userName = isNullUserName ? null : new ParameterResource("user", _ => "usr");
+        var password = isNullPassword ? null : new ParameterResource("pass", _ => "p@ssw0rd1", secret: true);
+
+        var action = () => new KafkaServerResource(name, userName, password);
 
         var exception = isNull
             ? Assert.Throws<ArgumentNullException>(action)

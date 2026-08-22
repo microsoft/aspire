@@ -75,6 +75,19 @@ And then the connection string will be retrieved from the `ConnectionStrings` co
 
 The value provided as connection string will be set to the `BootstrapServers`  property of the produced `IProducer<TKey, TValue>` or `IConsumer<TKey, TValue>` instance. Refer to [BootstrapServers](https://docs.confluent.io/platform/current/clients/confluent-kafka-dotnet/_site/api/Confluent.Kafka.ClientConfig.html#Confluent_Kafka_ClientConfig_BootstrapServers) for more information.
 
+A connection string may also be a semicolon separated list of client configuration properties, which is what
+`Aspire.Hosting.Kafka` produces when the broker is password protected:
+
+```json
+{
+  "ConnectionStrings": {
+    "myConnection": "BootstrapServers=broker:9092;SecurityProtocol=SaslPlaintext;SaslMechanism=Plain;SaslUsername=kafka;SaslPassword=\"secret\""
+  }
+}
+```
+
+The supported keys are `BootstrapServers`, `SecurityProtocol`, `SaslMechanism`, `SaslUsername` and `SaslPassword`, and each one is applied to the corresponding property of the produced client configuration. Values may be quoted so that they can contain `;` and `=`. Any other client configuration option is set through the configuration providers described below.
+
 ### Use configuration providers
 
 The Aspire Confluent Kafka component supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration). It loads the `KafkaProducerSettings` or `KafkaConsumerSettings` from configuration by respectively using the `Aspire:Confluent:Kafka:Producer` and `Aspire.Confluent:Kafka:Consumer` keys. Example `appsettings.json` that configures some of the options:
