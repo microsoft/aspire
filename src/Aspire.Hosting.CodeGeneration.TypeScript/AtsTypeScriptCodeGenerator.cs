@@ -115,6 +115,17 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private readonly Dictionary<string, string> _wrapperClassNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AtsTypeRef> _typeRefsById = new(StringComparer.Ordinal);
 
+    // Mapping of an alias builder type ID (for example "...IFoo") -> the type ID of the builder
+    // model CreateBuilderModels retained in its place (for example "...Foo"). Both derive the same
+    // wrapper class name, but each type ID gets its own handle alias:
+    //   type IFooHandle = Handle<'...IFoo'>;
+    //   type FooHandle  = Handle<'...Foo'>;
+    // Handle<T> carries the type ID as a literal-typed $type, so those aliases are not mutually
+    // assignable. Anything that pairs a wrapper class with a handle alias must therefore use the
+    // retained builder's handle alias, or the generated SDK fails to type check with
+    // "Argument of type 'IFooHandle' is not assignable to parameter of type 'FooHandle'".
+    private readonly Dictionary<string, string> _canonicalBuilderTypeIds = new(StringComparer.Ordinal);
+
     // Set of type IDs that have Promise wrappers (types with chainable methods or resource
     // builders returned directly by capabilities)
     // Used to determine return types for methods
@@ -168,6 +179,16 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private string GetConcreteClassName(string typeId) => _wrapperClassNames.GetValueOrDefault(typeId)
         ?? DeriveClassName(typeId);
+
+    /// <summary>
+    /// Gets the handle type alias that matches the wrapper class <see cref="GetConcreteClassName"/>
+    /// resolves for <paramref name="typeId"/>, following deduplicated builder aliases to the
+    /// retained builder's handle alias. Use this wherever a handle value flows into a wrapper
+    /// implementation constructor; use <see cref="GetHandleTypeName"/> only when declaring or
+    /// registering the alias for the type ID itself.
+    /// </summary>
+    private string GetWrapperHandleTypeName(string typeId) =>
+        GetHandleTypeName(_canonicalBuilderTypeIds.GetValueOrDefault(typeId) ?? typeId);
 
     private string GetPublicPromiseInterfaceName(string typeId) => GetPromiseInterfaceName(GetConcreteClassName(typeId));
 
@@ -978,6 +999,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // properties can reference wrapper classes instead of raw handle aliases.
         _wrapperClassNames.Clear();
         _typeRefsById.Clear();
+        _canonicalBuilderTypeIds.Clear();
         _typesWithPromiseWrappers.Clear();
         _generatedOptionsInterfaces.Clear();
         _optionsInterfacesToGenerate.Clear();
@@ -1017,12 +1039,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
         // CreateBuilderModels deduplicates IFoo and Foo to one generated Foo builder. Preserve
         // directly returned aliases so an export returning IFoo still resolves FooPromise even when
-        // the retained builder model represents Foo.
+        // the retained builder model represents Foo, and record the retained builder's type ID so
+        // handle aliases stay assignable to the wrapper implementation constructor.
         foreach (var returnedBuilderType in returnedBuilderTypes)
         {
             var builder = resourceBuilders.FirstOrDefault(candidate =>
                 string.Equals(candidate.BuilderClassName, DeriveClassName(returnedBuilderType.TypeId), StringComparison.Ordinal));
-            if (builder is null || !_typesWithPromiseWrappers.Contains(builder.TypeId))
+            // When the return type is the retained builder itself, the loop above already registered
+            // it. Re-registering would overwrite _typeRefsById with the capability's return type ref,
+            // which carries less interface metadata than the builder's own target type.
+            if (builder is null ||
+                string.Equals(returnedBuilderType.TypeId, builder.TypeId, StringComparison.Ordinal) ||
+                !_typesWithPromiseWrappers.Contains(builder.TypeId))
             {
                 continue;
             }
@@ -1030,6 +1058,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             _wrapperClassNames[returnedBuilderType.TypeId] = builder.BuilderClassName;
             _typeRefsById[returnedBuilderType.TypeId] = returnedBuilderType;
             _typesWithPromiseWrappers.Add(returnedBuilderType.TypeId);
+            _canonicalBuilderTypeIds[returnedBuilderType.TypeId] = builder.TypeId;
         }
         foreach (var typeClass in typeClasses)
         {
@@ -2169,7 +2198,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 ?? DeriveClassName(returnTypeId);
         }
         var returnHandle = capability.ReturnsBuilder
-            ? GetHandleTypeName(returnTypeId)
+            ? GetWrapperHandleTypeName(returnTypeId)
             : "void";
         var returnsBuilder = capability.ReturnsBuilder;
         var returnImplementationClassName = GetImplementationClassName(returnClassName);
@@ -2183,7 +2212,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 var wrappedReturnTypeId = capability.ReturnType!.TypeId;
                 var wrappedReturnClassName = GetConcreteClassName(wrappedReturnTypeId);
                 var returnImplementationClassNameForWrapper = GetImplementationClassName(wrappedReturnClassName);
-                var returnHandleType = GetHandleTypeName(wrappedReturnTypeId);
+                var returnHandleType = GetWrapperHandleTypeName(wrappedReturnTypeId);
 
                 WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
                 Write($"    {methodName}(");
@@ -2882,7 +2911,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 ?? DeriveClassName(capReturnTypeId);
             var returnWrapperImplementationClass = GetImplementationClassName(returnWrapperClass);
             var returnPromiseImplementationClass = GetImplementationPromiseClassName(returnWrapperClass);
-            var handleType = GetHandleTypeName(capReturnTypeId);
+            var handleType = GetWrapperHandleTypeName(capReturnTypeId);
 
             Write($"export function {methodName}(");
             Write(paramsString);
@@ -3100,7 +3129,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
         else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
         {
-            var handleType = GetHandleTypeName(cbTypeId);
+            var handleType = GetWrapperHandleTypeName(cbTypeId);
             WriteLine($"{indent}const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
             WriteLine($"{indent}const {callbackParameter.Name} = new {GetImplementationClassName(wrapperClassName)}({callbackParameter.Name}Handle, {clientExpression});");
         }
@@ -3583,7 +3612,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private void GenerateWrapperGetterOnlyPropertyMethod(string propertyName, AtsCapabilityInfo getter, string wrapperClassName)
     {
-        var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
+        var handleType = GetWrapperHandleTypeName(getter.ReturnType!.TypeId);
         var wrapperImplementationClassName = GetImplementationClassName(wrapperClassName);
 
         if (TryGetPromiseWrapperType(getter.ReturnType, out var promiseInterfaceName, out var promiseImplementationClassName))
@@ -3637,7 +3666,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// </remarks>
     private void GenerateWrapperPropertyObject(string propertyName, AtsCapabilityInfo getter, AtsCapabilityInfo? setter, string wrapperClassName)
     {
-        var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
+        var handleType = GetWrapperHandleTypeName(getter.ReturnType!.TypeId);
         var wrapperImplementationClassName = GetImplementationClassName(wrapperClassName);
 
         WriteLine($"    {propertyName} = {{");
@@ -3879,7 +3908,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var returnTypeId = method.ReturnType!.TypeId;
             var returnClassName = GetConcreteClassName(returnTypeId);
             var returnImplementationClassName = GetImplementationClassName(returnClassName);
-            var returnHandleType = GetHandleTypeName(returnTypeId);
+            var returnHandleType = GetWrapperHandleTypeName(returnTypeId);
 
             WriteCapabilityDocComment("    ", method, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    {methodName}(");
@@ -3992,7 +4021,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var returnTypeId = capability.ReturnType!.TypeId;
             var returnClassName = GetConcreteClassName(returnTypeId);
             var returnImplementationClassName = GetImplementationClassName(returnClassName);
-            var returnHandleType = GetHandleTypeName(returnTypeId);
+            var returnHandleType = GetWrapperHandleTypeName(returnTypeId);
 
             WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    {methodName}(");
@@ -4124,7 +4153,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 ?? DeriveClassName(capability.ReturnType.TypeId);
             var returnWrapperImplementationClass = GetImplementationClassName(returnWrapperClass);
             var returnPromiseImplementationClass = GetImplementationPromiseClassName(returnWrapperClass);
-            var returnHandleType = GetHandleTypeName(capability.ReturnType.TypeId);
+            var returnHandleType = GetWrapperHandleTypeName(capability.ReturnType.TypeId);
 
             // Generate internal async method
             WriteLine($"    /** @internal */");

@@ -1030,6 +1030,14 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(
             "class TestMarkerResourcePromiseImpl implements TestMarkerResourcePromise",
             aspireTs);
+
+        // The interface return type must resolve to the retained concrete builder's handle alias.
+        // ITestMarkerResourceHandle is not assignable to TestMarkerResourceHandle, so emitting the
+        // interface alias here would make the generated SDK fail to compile.
+        Assert.Contains(
+            "const result = await this._client.invokeCapability<TestMarkerResourceHandle>(",
+            aspireTs);
+        AssertRpcHandlesMatchConstructedWrappers(aspireTs);
     }
 
     [Theory]
@@ -1099,6 +1107,83 @@ public class AtsTypeScriptCodeGeneratorTests
     /// </summary>
     private static string StripComments(string typeScript) =>
         Regex.Replace(Regex.Replace(typeScript, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline), @"//[^\n]*", string.Empty);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GenerateDistributedApplication_EveryRpcHandleMatchesTheConstructedWrapper(bool includeHostingAssembly)
+    {
+        // Companion invariant to GenerateDistributedApplication_EveryReferencedPromiseWrapperIsDeclared.
+        // Declaring the wrapper is not enough: the handle flowing out of the RPC must also be
+        // assignable to the wrapper implementation that consumes it. Handle<T> carries its ATS type
+        // ID as a literal-typed $type, so FooHandle and IFooHandle are distinct, non-assignable
+        // types even though CreateBuilderModels collapses IFoo and Foo onto the same generated Foo
+        // class. Emitting invokeCapability<IFooHandle> and then passing that result to
+        // FooImpl's constructor produces "TS2345: Argument of type 'IFooHandle' is not assignable
+        // to parameter of type 'FooHandle'", which breaks "aspire run" just as thoroughly as a
+        // missing declaration.
+        var atsContext = includeHostingAssembly ? CreateContextFromBothAssemblies() : CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+
+        AssertRpcHandlesMatchConstructedWrappers(files["aspire.mts"]);
+    }
+
+    /// <summary>
+    /// Asserts that every RPC result flowing straight into a wrapper implementation constructor uses
+    /// the handle type that constructor declares.
+    /// </summary>
+    private static void AssertRpcHandlesMatchConstructedWrappers(string generatedAspireTs)
+    {
+        var aspireTs = StripComments(generatedAspireTs);
+
+        // class FooImpl extends ResourceBuilderBase<FooHandle> ... { constructor(handle: FooHandle, ...
+        var constructorHandleTypes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match match in s_implementationConstructorPattern.Matches(aspireTs))
+        {
+            constructorHandleTypes[match.Groups[1].Value] = match.Groups[2].Value;
+        }
+
+        // const handle = await client.invokeCapability<FooHandle>( '...', rpcArgs );
+        // return new FooImpl(handle, client);
+        var mismatches = new List<string>();
+        var pairs = 0;
+        foreach (Match match in s_rpcHandleConstructionPattern.Matches(aspireTs))
+        {
+            var invokedHandleType = match.Groups[1].Value;
+            var implementationClass = match.Groups[2].Value;
+            if (!constructorHandleTypes.TryGetValue(implementationClass, out var expectedHandleType))
+            {
+                continue;
+            }
+
+            pairs++;
+            if (!string.Equals(invokedHandleType, expectedHandleType, StringComparison.Ordinal))
+            {
+                mismatches.Add($"{implementationClass} takes {expectedHandleType} but is constructed from invokeCapability<{invokedHandleType}>");
+            }
+        }
+
+        // Guard against a vacuous pass if either pattern stops matching the generated shape.
+        Assert.NotEmpty(constructorHandleTypes);
+        Assert.NotEqual(0, pairs);
+
+        Assert.True(
+            mismatches.Count == 0,
+            $"Generated aspire.mts constructs wrapper implementations from mismatched handle types: {string.Join("; ", mismatches.Order(StringComparer.Ordinal))}");
+    }
+
+    // "class FooImpl extends ResourceBuilderBase<FooHandle> implements Foo {" followed by
+    // "constructor(handle: FooHandle, client: AspireClientRpc) {". Captures the class name and the
+    // handle type its constructor accepts.
+    private static readonly Regex s_implementationConstructorPattern =
+        new(@"\bclass\s+(\w+)\b[^{]*\{\s*constructor\(handle:\s*(\w+)", RegexOptions.Compiled);
+
+    // An RPC result flowing straight into a wrapper implementation constructor. The intervening
+    // capability ID and rpcArgs contain no ';', so [^;]*? stops at the invokeCapability call's own
+    // statement terminator.
+    private static readonly Regex s_rpcHandleConstructionPattern =
+        new(@"invokeCapability<(\w+)>\([^;]*?\);\s*return new (\w+)\(", RegexOptions.Compiled);
 
     [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
