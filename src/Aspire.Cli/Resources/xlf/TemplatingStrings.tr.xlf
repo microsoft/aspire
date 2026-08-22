@@ -102,6 +102,11 @@
         <target state="translated">Hayır</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoMatchingLocalTemplatePackage">
+        <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
+        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoTemplateVersionsFound">
         <source>No template versions were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Herhangi bir şablon sürümü bulunamadı. Lütfen internet bağlantınızı veya NuGet kaynak yapılandırmanızı kontrol edin.</target>
@@ -176,6 +181,11 @@
         <source>The template installation failed with exit code {0}.</source>
         <target state="new">The template installation failed with exit code {0}.</target>
         <note>{0} is a number</note>
+      </trans-unit>
+      <trans-unit id="TemplateVersionNotFound">
+        <source>Template version '{0}' was not found.</source>
+        <target state="new">Template version '{0}' was not found.</target>
+        <note />
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>

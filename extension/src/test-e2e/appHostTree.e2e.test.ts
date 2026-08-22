@@ -35,6 +35,7 @@ suite('Aspire AppHost tree E2E', function () {
 
         const item = await waitForTreeItem(section, label);
         assert.strictEqual(await item.getLabel(), label);
+        assert.ok(await waitForChildTreeItem(item, 'Run AppHost'));
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
     });
 
@@ -261,6 +262,10 @@ suite('Aspire AppHost tree E2E', function () {
         // it before starting the AppHost. See https://github.com/microsoft/aspire/issues/18578.
         const idleItem = await waitForTreeItem(section, appHostLabel);
         await idleItem.expand();
+
+        for (const actionLabel of ['Deploy AppHost', 'Publish AppHost', 'Run pipeline step', 'Debug pipeline step']) {
+            assert.ok(await waitForChildTreeItem(idleItem, actionLabel), `Expected '${actionLabel}' under the idle AppHost.`);
+        }
 
         // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
         // E2E host runs in English so the literals are stable, mirroring other tree-item labels

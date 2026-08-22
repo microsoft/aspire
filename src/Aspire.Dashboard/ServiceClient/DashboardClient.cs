@@ -9,7 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
@@ -21,7 +20,6 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Semver;
 using DashboardResources = Aspire.Dashboard.Resources.Resources;
-using ResourceHealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -52,11 +50,7 @@ internal sealed class DashboardClient : IDashboardClient
     // the minimum version required by the AppHost.
     private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
-    // _resourceByName is the displayed model exposed through IDashboardClient. Keep the raw AppHost
-    // snapshots separately so a parent row that temporarily displays a replica's state can fall back
-    // to its own state as soon as the replica disappears.
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly Dictionary<string, ResourceViewModel> _sourceResourceByName = new(StringComparers.ResourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -547,7 +541,7 @@ internal sealed class DashboardClient : IDashboardClient
 
         // There is no consistent way to know which replica is instance 1 vs instance 2. It shouldn't ever matter.
         // This index provides an easy way to identify resources across app runs that takes into account replicas.
-        var replicas = _sourceResourceByName.Values.Count(r => r.DisplayName == displayName);
+        var replicas = _resourceByName.Values.Count(r => r.DisplayName == displayName);
         return replicas + 1;
     }
 
@@ -563,9 +557,6 @@ internal sealed class DashboardClient : IDashboardClient
 
             lock (_lock)
             {
-                var previousDisplayedResources = new Dictionary<string, ResourceViewModel>(_resourceByName, StringComparers.ResourceName);
-                List<ResourceViewModelChange>? sourceChanges = null;
-
                 // We received a message, which means we are connected. Clear the error count.
                 if (retryContext.ErrorCount > 0)
                 {
@@ -576,23 +567,19 @@ internal sealed class DashboardClient : IDashboardClient
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
                 {
                     // Populate our map using the initial data.
-                    _sourceResourceByName.Clear();
                     _resourceByName.Clear();
 
-                    // An initial snapshot replaces everything subscribers currently display, so the diff below has
-                    // to run even when the snapshot carries no resources. Leaving this null for an empty snapshot
-                    // would skip the diff entirely, so reconnecting to an AppHost that no longer reports a resource
-                    // would never emit its delete and subscribers would keep showing the stale row.
-                    sourceChanges = [];
+                    // TODO send a "clear" event via outgoing channels, in case consumers have extra items to be removed
 
                     foreach (var resource in response.InitialData.Resources)
                     {
                         // Add to map.
                         var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
-                        _sourceResourceByName[resource.Name] = viewModel;
+                        _resourceByName[resource.Name] = viewModel;
 
                         // Send this update to any subscribers too.
-                        sourceChanges.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
+                        changes ??= [];
+                        changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                     }
 
                     _initialDataReceivedTcs.TrySetResult();
@@ -602,21 +589,21 @@ internal sealed class DashboardClient : IDashboardClient
                     // Apply changes to the model.
                     foreach (var change in response.Changes.Value)
                     {
-                        sourceChanges ??= [];
+                        changes ??= [];
 
                         if (change.KindCase == WatchResourcesChange.KindOneofCase.Upsert)
                         {
                             // Upsert (i.e. add or replace)
                             var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
-                            _sourceResourceByName[change.Upsert.Name] = viewModel;
-                            sourceChanges.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
+                            _resourceByName[change.Upsert.Name] = viewModel;
+                            changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                         }
                         else if (change.KindCase == WatchResourcesChange.KindOneofCase.Delete)
                         {
                             // Remove
-                            if (_sourceResourceByName.Remove(change.Delete.ResourceName, out var removed))
+                            if (_resourceByName.Remove(change.Delete.ResourceName, out var removed))
                             {
-                                sourceChanges.Add(new(ResourceViewModelChangeType.Delete, removed));
+                                changes.Add(new(ResourceViewModelChangeType.Delete, removed));
                             }
                             else
                             {
@@ -632,18 +619,6 @@ internal sealed class DashboardClient : IDashboardClient
                 else
                 {
                     throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {response.KindCase}");
-                }
-
-                if (sourceChanges is not null)
-                {
-                    var displayedResources = CreateDisplayedResources(_sourceResourceByName.Values);
-                    changes = CreateDisplayedResourceChanges(previousDisplayedResources, displayedResources, sourceChanges);
-
-                    _resourceByName.Clear();
-                    foreach (var resource in displayedResources.Values)
-                    {
-                        _resourceByName[resource.Name] = resource;
-                    }
                 }
 
                 // Resolve resource colors for all resources so that color assignment is
@@ -678,157 +653,6 @@ internal sealed class DashboardClient : IDashboardClient
         }
 
         return RetryResult.Retry;
-    }
-
-    private static Dictionary<string, ResourceViewModel> CreateDisplayedResources(IEnumerable<ResourceViewModel> sourceResources)
-    {
-        var sourceResourceList = sourceResources.ToList();
-        var childrenByParentName = sourceResourceList
-            .Where(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { Length: > 0 })
-            .ToLookup(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)!, StringComparers.ResourceName);
-
-        var displayedResources = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
-        foreach (var resource in sourceResourceList)
-        {
-            var stateSource = GetReplicaStateSource(resource, childrenByParentName);
-            displayedResources[resource.Name] = stateSource is not null ? resource.WithStateFrom(stateSource) : resource;
-        }
-
-        return displayedResources;
-    }
-
-    private static List<ResourceViewModelChange>? CreateDisplayedResourceChanges(
-        IReadOnlyDictionary<string, ResourceViewModel> previousDisplayedResources,
-        IReadOnlyDictionary<string, ResourceViewModel> displayedResources,
-        IReadOnlyList<ResourceViewModelChange> sourceChanges)
-    {
-        var changes = new List<ResourceViewModelChange>();
-        var emittedResourceNames = new HashSet<string>(StringComparers.ResourceName);
-
-        foreach (var (changeType, sourceResource) in sourceChanges)
-        {
-            if (changeType == ResourceViewModelChangeType.Upsert)
-            {
-                if (displayedResources.TryGetValue(sourceResource.Name, out var displayedResource))
-                {
-                    changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, displayedResource));
-                    emittedResourceNames.Add(sourceResource.Name);
-                }
-            }
-            else if (changeType == ResourceViewModelChangeType.Delete)
-            {
-                if (!displayedResources.ContainsKey(sourceResource.Name) &&
-                    previousDisplayedResources.TryGetValue(sourceResource.Name, out var previousDisplayedResource))
-                {
-                    changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, previousDisplayedResource));
-                    emittedResourceNames.Add(sourceResource.Name);
-                }
-            }
-        }
-
-        foreach (var (resourceName, displayedResource) in displayedResources)
-        {
-            if (emittedResourceNames.Contains(resourceName))
-            {
-                continue;
-            }
-
-            if (!previousDisplayedResources.TryGetValue(resourceName, out var previousDisplayedResource) ||
-                !HasSameDisplayedReplicaState(previousDisplayedResource, displayedResource))
-            {
-                changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, displayedResource));
-                emittedResourceNames.Add(resourceName);
-            }
-        }
-
-        foreach (var (resourceName, previousDisplayedResource) in previousDisplayedResources)
-        {
-            if (!emittedResourceNames.Contains(resourceName) && !displayedResources.ContainsKey(resourceName))
-            {
-                changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, previousDisplayedResource));
-            }
-        }
-
-        return changes.Count > 0 ? changes : null;
-    }
-
-    private static bool HasSameDisplayedReplicaState(ResourceViewModel previousResource, ResourceViewModel resource)
-    {
-        return string.Equals(previousResource.State, resource.State, StringComparison.Ordinal) &&
-            previousResource.KnownState == resource.KnownState &&
-            string.Equals(previousResource.StateStyle, resource.StateStyle, StringComparison.Ordinal) &&
-            previousResource.StartTimeStamp == resource.StartTimeStamp &&
-            previousResource.StopTimeStamp == resource.StopTimeStamp &&
-            previousResource.HealthStatus == resource.HealthStatus &&
-            previousResource.HealthReports.SequenceEqual(resource.HealthReports) &&
-            previousResource.HasSameStateOwnedProperties(resource);
-    }
-
-    private static ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent, ILookup<string, ResourceViewModel> childrenByParentName)
-    {
-        // The legacy Hidden state controls parent visibility and downstream filtering, so a replica must not replace it.
-        if (parent.KnownState is KnownResourceState.Hidden)
-        {
-            return null;
-        }
-
-        ResourceViewModel? best = null;
-        var bestTier = int.MaxValue;
-
-        foreach (var child in childrenByParentName[parent.Name])
-        {
-            if (ReferenceEquals(child, parent) || !IsReplicaChild(parent, child))
-            {
-                continue;
-            }
-
-            var tier = GetReplicaPriorityTier(child);
-            if (tier is null)
-            {
-                continue;
-            }
-
-            if (tier < bestTier || (tier == bestTier && CompareReplicaRelevance(child, best!) < 0))
-            {
-                best = child;
-                bestTier = tier.Value;
-            }
-        }
-
-        return best;
-
-        static int? GetReplicaPriorityTier(ResourceViewModel r) => r switch
-        {
-            _ when r.IsRunningState() => 0,
-            _ when r.IsUnusableTransitoryState() => 1,
-            _ when r.IsRuntimeUnhealthy() || r.IsFailedToStart() => 2,
-            // Hidden is only meaningful on the row that owns it. Projecting it onto the logical parent
-            // would make an otherwise visible resource disappear as soon as one replica opts out of display.
-            _ when r.KnownState is KnownResourceState.Hidden => null,
-            _ when !r.HasNoState() => 3,
-            _ => null
-        };
-
-        static int CompareReplicaRelevance(ResourceViewModel a, ResourceViewModel b)
-        {
-            var healthComparison = (a.HealthStatus ?? ResourceHealthStatus.Unhealthy).CompareTo(b.HealthStatus ?? ResourceHealthStatus.Unhealthy);
-            if (healthComparison != 0)
-            {
-                return healthComparison;
-            }
-
-            // CalculateReplicaIndex derives the index from the current number of resources sharing the
-            // display name. An inserted resource gets a different index on its first replacement, and
-            // later replacements can change it again after that count changes, so it is not stable across
-            // upserts. Tie-break on the immutable resource name so update order cannot change the parent state.
-            return StringComparers.ResourceName.Compare(a.Name, b.Name);
-        }
-    }
-
-    private static bool IsReplicaChild(ResourceViewModel parent, ResourceViewModel child)
-    {
-        return string.Equals(child.GetResourcePropertyValue(KnownProperties.Resource.ParentName), parent.Name, StringComparisons.ResourceName) &&
-            string.Equals(child.DisplayName, parent.DisplayName, StringComparisons.ResourceName);
     }
 
     private async Task<RetryResult> WatchInteractionsAsync(RetryContext retryContext, CancellationToken cancellationToken)
@@ -1292,18 +1116,9 @@ internal sealed class DashboardClient : IDashboardClient
         {
             lock (_lock)
             {
-                _sourceResourceByName.Clear();
-                _resourceByName.Clear();
-
                 foreach (var data in initialData)
                 {
-                    var resource = data.ToViewModel(CalculateReplicaIndex(data.DisplayName), _knownPropertyLookup, _logger);
-                    _sourceResourceByName[data.Name] = resource;
-                }
-
-                foreach (var (name, resource) in CreateDisplayedResources(_sourceResourceByName.Values))
-                {
-                    _resourceByName[name] = resource;
+                    _resourceByName[data.Name] = data.ToViewModel(CalculateReplicaIndex(data.DisplayName), _knownPropertyLookup, _logger);
                 }
             }
         }

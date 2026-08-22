@@ -7,5 +7,5 @@ from aspire_app import create_builder
 with create_builder() as builder:
     api_key = builder.add_parameter("parameter")
     openai = builder.add_open_ai("resource")
-    openai.add_model("resource")
+    openai.add_model("resource", "gpt-4o")
     builder.run()

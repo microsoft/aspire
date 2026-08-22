@@ -252,22 +252,25 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @param target The resolution scope to check availability for: the workspace folder that
  * owns the operation, or the window scope for operations with no single owning folder.
- * @param pinnedCliPath The exact CLI previously selected for a restart or resumed operation.
+ * @param options Optional exact CLI previously selected for a restart or resumed operation.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
 export async function checkCliAvailableOrRedirect(
     operation: 'command_gate' | 'debug_gate',
     target: CliPathResolutionTarget,
-    pinnedCliPath?: string,
+    options?: {
+        pinnedCliPath?: string;
+    },
 ): Promise<{ cliPath: string; available: boolean }> {
-    // A restart must validate the executable that its already-negotiated arguments target.
-    // Ordinary launches still resolve fresh because settings or PATH may have changed.
+    // A restart validates the executable that its already-negotiated arguments target.
+    // Ordinary launches resolve fresh through the canonical CLI path resolver because settings or
+    // PATH may have changed.
     const startTime = Date.now();
-    const result: CliPathResolutionResult = pinnedCliPath === undefined
+    const result: CliPathResolutionResult = options?.pinnedCliPath === undefined
         ? await resolveCliPath(target)
         : {
-            cliPath: pinnedCliPath,
-            available: await tryExecuteCli(pinnedCliPath),
+            cliPath: options.pinnedCliPath,
+            available: await tryExecuteCli(options.pinnedCliPath),
             source: 'configured',
         };
     sendTelemetryEvent('aspire/vscode/cli/availability', {

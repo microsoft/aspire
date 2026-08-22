@@ -204,120 +204,6 @@ public sealed class ResourceViewModel
               ?? Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy;
     }
 
-    /// <summary>
-    /// Properties whose values describe the current run of a resource rather than its identity or
-    /// configuration. When a parent row displays a replica's state these have to travel with that state,
-    /// otherwise the parent shows a state derived from the replica alongside stale values of its own
-    /// (for example a leftover non-zero exit code, or a "waiting for" list the replica has moved past).
-    /// </summary>
-    private static readonly string[] s_stateOwnedPropertyNames =
-    [
-        KnownProperties.Resource.State,
-        KnownProperties.Resource.ExitCode,
-        KnownProperties.Resource.StartTime,
-        KnownProperties.Resource.StopTime,
-        KnownProperties.Resource.HealthState,
-        KnownProperties.Resource.WaitingFor
-    ];
-
-    /// <summary>
-    /// Determines whether this resource and <paramref name="other"/> agree on every property in
-    /// <see cref="s_stateOwnedPropertyNames"/>, treating a property either side is missing as absent.
-    /// </summary>
-    internal bool HasSameStateOwnedProperties(ResourceViewModel other)
-    {
-        foreach (var name in s_stateOwnedPropertyNames)
-        {
-            var hasValue = Properties.TryGetValue(name, out var property);
-            var otherHasValue = other.Properties.TryGetValue(name, out var otherProperty);
-
-            if (hasValue != otherHasValue)
-            {
-                return false;
-            }
-
-            if (hasValue && !HasSameProjectedProperty(property!, otherProperty!))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Compares the fields of a state-owned property that <see cref="ProjectStateOwnedProperties"/> carries onto
-    /// a derived parent row.
-    /// </summary>
-    private static bool HasSameProjectedProperty(ResourcePropertyViewModel property, ResourcePropertyViewModel other)
-    {
-        // ResourcePropertyViewModel is a plain class with reference equality, and every snapshot allocates new
-        // instances, so comparing the wrappers themselves would report a change on every batch. The projection
-        // copies the whole wrapper, not just its value, so compare each field the AppHost snapshot owns: a
-        // metadata-only move (sensitivity, display name, highlighting, sort order) is still a visible change to
-        // the parent's resource details. IsValueMasked is excluded on purpose because it is view state the
-        // details grid toggles on the instance it was handed, not something the snapshot decides.
-        return string.Equals(property.Name, other.Name, StringComparisons.ResourcePropertyName) &&
-            Equals(property.Value, other.Value) &&
-            Equals(property.KnownProperty, other.KnownProperty) &&
-            string.Equals(property.DisplayName, other.DisplayName, StringComparison.Ordinal) &&
-            property.IsValueSensitive == other.IsValueSensitive &&
-            property.IsHighlighted == other.IsHighlighted &&
-            property.SortOrder == other.SortOrder;
-    }
-
-    internal ResourceViewModel WithStateFrom(ResourceViewModel stateSource)
-    {
-        return new ResourceViewModel
-        {
-            Name = Name,
-            ResourceType = ResourceType,
-            DisplayName = DisplayName,
-            Uid = Uid,
-            ReplicaIndex = ReplicaIndex,
-            State = stateSource.State,
-            KnownState = stateSource.KnownState,
-            StateStyle = stateSource.StateStyle,
-            CreationTimeStamp = CreationTimeStamp,
-            StartTimeStamp = stateSource.StartTimeStamp,
-            StopTimeStamp = stateSource.StopTimeStamp,
-            Environment = Environment,
-            Urls = Urls,
-            Volumes = Volumes,
-            Relationships = Relationships,
-            Properties = ProjectStateOwnedProperties(stateSource),
-            Commands = Commands,
-            HealthReports = stateSource.HealthReports,
-            IsHidden = IsHidden,
-            SupportsDetailedTelemetry = SupportsDetailedTelemetry,
-            IconName = IconName,
-            IconVariant = IconVariant
-        };
-    }
-
-    /// <summary>
-    /// Keeps this resource's identity and configuration properties (name, uid, source, parent name,
-    /// connection string, and so on) and replaces only the state-owned ones with the state source's
-    /// values. A state-owned property the state source doesn't have is dropped rather than inherited.
-    /// </summary>
-    private ImmutableDictionary<string, ResourcePropertyViewModel> ProjectStateOwnedProperties(ResourceViewModel stateSource)
-    {
-        var builder = Properties.ToBuilder();
-        foreach (var name in s_stateOwnedPropertyNames)
-        {
-            if (stateSource.Properties.TryGetValue(name, out var property))
-            {
-                builder[name] = property.CloneForProjection();
-            }
-            else
-            {
-                builder.Remove(name);
-            }
-        }
-
-        return builder.ToImmutable();
-    }
-
     public static string GetResourceName(ResourceViewModel resource, IDictionary<string, ResourceViewModel> allResources)
     {
         return GetResourceName(resource, allResources.Values);
@@ -566,16 +452,6 @@ public sealed class ResourcePropertyViewModel
         IsHighlighted = isHighlighted;
         SortOrder = sortOrder;
         IsValueMasked = isValueSensitive;
-    }
-
-    internal ResourcePropertyViewModel CloneForProjection()
-    {
-        return new ResourcePropertyViewModel(Name, Value, IsValueSensitive, KnownProperty, SortOrder, DisplayName, IsHighlighted)
-        {
-            // The projected parent row should start from the same masking state, but future
-            // toggles are row-local UI state and must not mutate the replica row's property.
-            IsValueMasked = IsValueMasked
-        };
     }
 }
 

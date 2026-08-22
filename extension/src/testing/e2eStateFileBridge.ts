@@ -24,6 +24,7 @@ import { ResourceItem } from '../views/treeItems/resourceItems';
 import { ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
+import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 let atomicWriteSequence = 0;
 
@@ -370,7 +371,7 @@ function getE2eErrorMessage(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }
 
-async function executeE2eControlCommand(
+export async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
   dataRepository: AppHostDataRepository,
@@ -425,6 +426,30 @@ async function executeE2eControlCommand(
     case 'debugAppHost': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'deployAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.deployAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'publishAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.publishAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'runPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.runPipelineStepAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'debugPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugPipelineStepAppHost', element);
       markStarted();
       return await commandPromise;
     }
@@ -588,7 +613,14 @@ async function executeE2eControlCommand(
         throw new Error('Aspire extension E2E startDebugging requires an open workspace folder.');
       }
 
-      const commandPromise = vscode.debug.startDebugging(workspaceFolder, command.configurationName);
+      // Passing a name only searches launch.json. Resolve a matching dynamic configuration first so
+      // the control command can await the same provider pipeline that VS Code's debug picker starts.
+      const dynamicConfigurations = await aspireContext.debugConfigProvider?.provideDebugConfigurations(workspaceFolder);
+      const configuration = dynamicConfigurations?.find(configuration =>
+        configuration.name === command.configurationName ||
+        configuration.name.startsWith(`${command.configurationName} (`))
+        ?? command.configurationName;
+      const commandPromise = vscode.debug.startDebugging(workspaceFolder, configuration);
       markStarted();
       return await commandPromise;
     }
@@ -807,6 +839,26 @@ async function executeE2eControlCommand(
       const folders = getE2eWorkspaceFolderEntries(command.folders);
       markStarted();
       return await setE2eWorkspaceFolders(folders);
+    }
+    case 'setWorkspaceFolderCliPath': {
+      const folderPath = getE2eWorkspacePath(command.folderPath);
+      const cliPath = getE2eRunPath(command.cliPath);
+      const workspaceFolder = vscode.workspace.workspaceFolders?.find(folder => isSamePath(folder.uri.fsPath, folderPath));
+      if (!workspaceFolder) {
+        throw new Error(`Aspire extension E2E setWorkspaceFolderCliPath requires an exact open workspace folder: ${folderPath}`);
+      }
+
+      markStarted();
+      const targetKey = getCliPathTargetKey(workspaceFolderCliPathTarget(workspaceFolder));
+      const cliPaths = getE2eWorkspaceFolderCliPaths();
+      cliPaths[targetKey] = cliPath;
+      process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS = JSON.stringify(cliPaths);
+      return { targetKey, cliPath };
+    }
+    case 'clearWorkspaceFolderCliPaths': {
+      markStarted();
+      delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+      return undefined;
     }
     case 'stopOwnedDebugSessionProcesses': {
       markStarted();
@@ -1667,6 +1719,27 @@ function getE2eCommandArguments(args: unknown): readonly unknown[] {
   return args;
 }
 
+function getE2eWorkspaceFolderCliPaths(): Record<string, string> {
+  const value = process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+    }
+  }
+  catch {
+    return {};
+  }
+
+  return {};
+}
+
 function getE2eWorkspacePath(filePath: unknown): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
     throw new Error('Aspire extension E2E workspace path arguments must be absolute paths.');
@@ -1929,6 +2002,19 @@ function getAppHostElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   return appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) ?? { appHostPath } : undefined;
 }
 
+function getRequiredAppHostActionElement(
+  appHostTreeProvider: AspireAppHostTreeProvider,
+  commandName: string,
+  appHostPath: string,
+): unknown {
+  const element = appHostTreeProvider.findAppHostElement(appHostPath);
+  if (!element) {
+    throw new Error(`Aspire extension E2E ${commandName} could not find AppHost '${appHostPath}'.`);
+  }
+
+  return element;
+}
+
 function getAppHostPathForClipboard(element: unknown): string {
   if (hasAppHostPath(element)) {
     return element.appHostPath;
@@ -2130,6 +2216,8 @@ function cloneDebugLaunchEvent(event: AppHostLaunchRequestedEvent, sequence: num
     command: event.command,
     noDebug: event.noDebug,
     doStep: event.doStep,
+    cliPath: event.cliPath,
+    cliTargetKey: event.cliTargetKey,
     executionSuppressed: event.executionSuppressed,
   };
 }

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { type AppHostLaunchIsolation, type AppHostStopResult } from '../services/AppHostLaunchService';
+import { isValidLaunchProfile } from '../utils/launchProfile';
 
 /**
  * Names of the contributed language model tools. These must match the `name`
@@ -50,6 +51,8 @@ export interface AppHostStartToolInput {
     mode: AppHostLifecycleMode;
     /** When omitted, linked git worktrees start isolated. Explicit true/false overrides that. */
     isolated?: boolean;
+    /** Optional profile name from the AppHost launchSettings.json. */
+    launchProfile?: string;
 }
 
 export interface AppHostStopToolInput {
@@ -99,7 +102,7 @@ export interface AppHostLifecycleLaunchService {
     compareAppHostIdentity(left: string | undefined, right: string | undefined): AppHostIdentityRelation;
     runWithAppHostLifecycleLock<T>(appHostPath: string, token: vscode.CancellationToken, action: (token: vscode.CancellationToken) => Promise<T>): Promise<T>;
     resolveLaunchIsolation(appHostPath: string, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation>;
-    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation | undefined>;
+    launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken, launchProfile?: string): Promise<AppHostLaunchIsolation | undefined>;
     stopAppHost(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
     stopAppHostFromLifecycleOwner(appHostPath: string, token: vscode.CancellationToken): Promise<AppHostStopResult>;
 }
@@ -196,13 +199,14 @@ export function parseMode(value: unknown): AppHostLifecycleMode | undefined {
 }
 
 export function isValidStartInput(value: unknown): value is AppHostStartToolInput {
-    if (!hasOnlyProperties(value, ['appHostPath', 'mode'], ['isolated']) ||
+    if (!hasOnlyProperties(value, ['appHostPath', 'mode'], ['isolated', 'launchProfile']) ||
         typeof value.appHostPath !== 'string' ||
         parseMode(value.mode) === undefined) {
         return false;
     }
 
-    return !('isolated' in value) || typeof value.isolated === 'boolean';
+    return (!('isolated' in value) || typeof value.isolated === 'boolean') &&
+        (!('launchProfile' in value) || isValidLaunchProfile(value.launchProfile));
 }
 
 export function isValidStopInput(value: unknown): value is AppHostStopToolInput {

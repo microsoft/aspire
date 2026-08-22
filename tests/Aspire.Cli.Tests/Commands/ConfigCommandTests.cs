@@ -32,6 +32,18 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesLaunchProfiles()
+    {
+        Assert.Contains(KnownCapabilities.LaunchProfile, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesPipelineStepListJson()
+    {
+        Assert.Contains(KnownCapabilities.PipelineStepListJson, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
         var info = new Aspire.Cli.Commands.ConfigInfo(

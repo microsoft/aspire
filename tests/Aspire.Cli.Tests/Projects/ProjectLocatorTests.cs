@@ -2193,6 +2193,7 @@ builder.Build().Run();");
             public bool IsUnsupported { get; set; }
             public string LanguageId => "typescript";
             public string DisplayName => "TypeScript";
+            public bool SupportsLaunchProfiles => false;
             public string? AppHostFileName => supportedFileName;
 
             public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
