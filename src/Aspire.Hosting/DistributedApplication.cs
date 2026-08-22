@@ -36,7 +36,7 @@ namespace Aspire.Hosting;
 /// </para>
 /// <para>
 /// The <see cref="CreateBuilder(Aspire.Hosting.DistributedApplicationOptions)"/> method provides additional options for
-/// constructing the <see cref="IDistributedApplicationBuilder"/> including disabling the Aspire dashboard (see <see cref="DistributedApplicationOptions.DisableDashboard"/>) or
+/// constructing the <see cref="IDistributedApplicationBuilder"/> including disabling Aspire dashboard auto-start in run mode (see <see cref="DistributedApplicationOptions.DisableDashboard"/>) or
 /// allowing unsecured communication between the browser and dashboard, and dashboard and app host (see <see cref="DistributedApplicationOptions.AllowUnsecuredTransport"/>.
 /// </para>
 /// <example>
@@ -178,7 +178,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// greater control over the behavior of the distributed application at runtime. For example providing
     /// an <paramref name="options"/> argument allows developers to force all container images to be loaded
     /// from a specified container registry by using the <see cref="DistributedApplicationOptions.ContainerRegistryOverride"/>
-    /// property, or disabling the dashboard by using the <see cref="DistributedApplicationOptions.DisableDashboard"/>
+    /// property, or disabling dashboard auto-start in run mode by using the <see cref="DistributedApplicationOptions.DisableDashboard"/>
     /// property. Refer to the <see cref="DistributedApplicationOptions"/> class for more details on
     /// each option that may be provided.
     /// </para>
