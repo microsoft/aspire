@@ -1,0 +1,56 @@
+{
+  "run_id": 32548071306,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32548071306",
+  "analyzed_at": "2026-08-22T03:36:57Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19300,
+    "title": "Retry invalid project locations and require matching local templates",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/issue19283-output-path-retry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19300"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 96971173842,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32548071306/job/96971173842",
+      "classification": "code-issue",
+      "reason": "Failed at 'Smoke test installed CLI (aspire new + restore)'. The PR makes substantial changes to src/Aspire.Cli/Commands/NewCommand.cs, src/Aspire.Cli/Packaging/PackageChannel.cs, and src/Aspire.Cli/Templating/TemplateNuGetConfigService.cs, which directly implement the 'aspire new' command and NuGet config/channel resolution exercised by this smoke test. No infra error patterns (network/registry/runner) were found in annotations; the only annotations are unrelated Homebrew tap-trust warnings, so the failure most likely stems from the PR's CLI behavior changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 96971405255,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32548071306/job/96971405255",
+      "classification": "flaky-test",
+      "reason": "Generic 'Process completed with exit code 1' with no retrievable job logs or TRX failures. This matches the prior recurring cause 'vscode-e2e-windows-edge-cases-flaky' (2 prior occurrences), a known intermittent shard failure unrelated to specific PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 96971405336,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32548071306/job/96971405336",
+      "classification": "code-issue",
+      "reason": "The PR directly modifies extension/src/test-e2e/workspaceTargetProof.e2e.test.ts (+49/-3) and extension/src/test-e2e/helpers/vscode.ts (+12/-5), which is exactly the test suite exercised by this shard ('workspace-target-proof'). No job logs were retrievable, but the direct correspondence between the failing shard name and the PR-modified test file strongly indicates this is a code issue introduced by the PR rather than an unrelated flaky failure.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 96971685297,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32548071306/job/96971685297",
+      "classification": "code-issue",
+      "reason": "Failed at the same 'Smoke test installed CLI (aspire new + restore)' step as the Homebrew job. Given the PR's large changes to NewCommand.cs, ProjectUpdater.cs, PackageChannel.cs, and TemplateNuGetConfigService.cs (the exact code paths exercised by 'aspire new' and package restore/channel resolution), this failure is attributed to the PR's CLI changes rather than infrastructure.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-edge-cases-flaky"]
+}
