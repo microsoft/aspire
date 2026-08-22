@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ChaosProxy.Container</RootNamespace>
+    <AssemblyName>ChaosProxy.Container</AssemblyName>
+    <!-- This project is NOT part of the Aspire.Hosting.Chaos NuGet package; it's built by docker via Dockerfile -->
+    <IsPackable>false</IsPackable>
+    <!-- Avoid CPM since this is an isolated docker build context. Container-image deps stay pinned here. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!-- Reference drop: this is the Chaos repo's container source, carried over as-is so the
+         branch mirrors what exists today. It keeps the Chaos copyright headers and house style
+         rather than being restyled to Aspire's conventions. CA2007 is not meaningful here —
+         ASP.NET Core has no synchronization context. -->
+    <NoWarn>$(NoWarn);CS1573;CS1574;CS1591;IDE0005;IDE0011;IDE0060;IDE0073;IDE1006;IDE2000;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Aspire strong-names assemblies, so use the MSBuild item (which injects the public key)
+         rather than a hand-written InternalsVisibleTo attribute. -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Chaos.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Aspire's src/Directory.Build.props injects a versionless GenAPI reference that relies
+         on CPM. This project is an isolated docker build context and opts out of CPM, so drop it. -->
+    <PackageReference Remove="Microsoft.DotNet.GenAPI.Task" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Fault profiles (resource-aware random chaos): embedded so the single container binary can sample them. -->
+    <EmbeddedResource Include="Policy\Profiles\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
+  </ItemGroup>
+
+</Project>
