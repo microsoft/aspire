@@ -6,7 +6,7 @@ const { buildAspireCommand } = require('./aspire-command');
 const { ShellSession } = require('./shell-session');
 
 const defaultTimeoutMs = 600_000;
-const cleanupTimeoutMs = 130_000;
+const cleanupTimeoutMs = 150_000;
 const callbackSettlementTimeoutMs = 5_000;
 
 async function runScenario(scenario, context) {
