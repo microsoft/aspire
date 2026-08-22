@@ -2254,6 +2254,12 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
             return true;
         }
 
+        // IAtsConvertible<T> implementations provide their own JSON conversion and are represented as ATS 'any'.
+        if (IsAtsConvertibleType(type))
+        {
+            return true;
+        }
+
         // Types with [AspireExport] or [AspireDto] attribute
         if (aspireExportAttribute != null && HasAspireExportAttribute(type, aspireExportAttribute, currentAssemblyExportedTypes))
         {
@@ -2267,6 +2273,16 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static bool IsAtsConvertibleType(ITypeSymbol type)
+    {
+        return type is INamedTypeSymbol namedType &&
+            namedType.AllInterfaces.Any(implementedInterface =>
+                implementedInterface.OriginalDefinition.MetadataName == "IAtsConvertible`1" &&
+                implementedInterface.ContainingNamespace?.ToDisplayString() == "Aspire.Hosting" &&
+                implementedInterface.TypeArguments.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(implementedInterface.TypeArguments[0], namedType));
     }
 
     private static bool IsSimpleType(ITypeSymbol type, WellKnownTypes wellKnownTypes)

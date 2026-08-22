@@ -106,6 +106,33 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     }
 
     /// <summary>
+    /// Adds an arbitrary Kubernetes manifest using a native object supplied by a polyglot AppHost.
+    /// </summary>
+    /// <param name="apiVersion">The Kubernetes API version for the manifest.</param>
+    /// <param name="kind">The Kubernetes resource kind for the manifest.</param>
+    /// <param name="name">The Kubernetes metadata name for the manifest.</param>
+    /// <param name="fields">The additional top-level manifest fields.</param>
+    /// <returns>The added Kubernetes manifest resource.</returns>
+    /// <ats-summary>Adds a Kubernetes manifest from a native object.</ats-summary>
+    [AspireExport]
+    internal KubernetesManifestResource AddManifestObject(
+        string apiVersion,
+        string kind,
+        string name,
+        CustomAtsObjectDto fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+
+        var manifest = AddManifest(apiVersion, kind, name);
+        foreach (var (fieldName, value) in fields.Value)
+        {
+            manifest.WithField(fieldName, value!);
+        }
+
+        return manifest;
+    }
+
+    /// <summary>
     /// Gets the resource that is the target of this Kubernetes service.
     /// </summary>
     internal IResource TargetResource => resource;

@@ -117,6 +117,22 @@ await serviceContainer.publishAsKubernetesService(async (service) => {
             await manifest.withField('spec.maxReplicaCount', 3);
         },
     });
+    await service.addManifestObject('keda.sh/v1alpha1', 'ScaledObject', 'kube-service-object-scaler', {
+        spec: {
+            scaleTargetRef: {
+                kind: 'Deployment',
+                name: 'kube-service',
+            },
+            triggers: [
+                {
+                    type: 'cpu',
+                    metadata: {
+                        value: '50',
+                    },
+                },
+            ],
+        },
+    });
 });
 
 await builder.build().run();

@@ -64,6 +64,27 @@ with create_builder() as builder:
             manifest.with_field("spec.maxReplicaCount", 3)
 
         service.add_manifest("keda.sh/v1alpha1", "ScaledObject", "resource-scaler", configure=configure_manifest)
+        service.add_manifest_object(
+            "keda.sh/v1alpha1",
+            "ScaledObject",
+            "resource-object-scaler",
+            {
+                "spec": {
+                    "scaleTargetRef": {
+                        "kind": "Deployment",
+                        "name": "resource",
+                    },
+                    "triggers": [
+                        {
+                            "type": "cpu",
+                            "metadata": {
+                                "value": "50",
+                            },
+                        }
+                    ],
+                }
+            },
+        )
 
     service_container.publish_as_kubernetes_service(configure_service)
     builder.run()

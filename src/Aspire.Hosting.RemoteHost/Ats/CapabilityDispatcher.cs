@@ -768,6 +768,12 @@ internal sealed class CapabilityDispatcher
                 unionMemberTypes);
         }
 
+        // Let converters interpret protocol-shaped keys such as "$handle" as ordinary payload data.
+        if (HostingTypeHelpers.IsAtsConvertibleType(parameterType))
+        {
+            return _marshaller.UnmarshalFromJson(argNode, parameterType, context);
+        }
+
         var handleRef = HandleRef.FromJsonNode(argNode);
         if (handleRef is null)
         {
@@ -802,6 +808,29 @@ internal sealed class CapabilityDispatcher
         var handleRef = HandleRef.FromJsonNode(argNode);
         if (handleRef is not null)
         {
+            // A convertible union member owns its object wire shape, so let it interpret protocol-shaped
+            // properties such as "$handle" before treating the same object as an ATS handle reference.
+            foreach (var unionMemberType in unionMemberTypes)
+            {
+                if (!HostingTypeHelpers.IsAtsConvertibleType(unionMemberType))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var unmarshalledValue = _marshaller.UnmarshalFromJson(argNode, unionMemberType, context);
+                    if (unmarshalledValue is not null)
+                    {
+                        return unmarshalledValue;
+                    }
+                }
+                catch (CapabilityException ex) when (ex.Error.Code is AtsErrorCodes.InvalidArgument or AtsErrorCodes.TypeMismatch)
+                {
+                    continue;
+                }
+            }
+
             if (!handles.TryGet(handleRef.HandleId, out var handleObject, out _))
             {
                 throw CapabilityException.HandleNotFound(handleRef.HandleId, capability.CapabilityId);

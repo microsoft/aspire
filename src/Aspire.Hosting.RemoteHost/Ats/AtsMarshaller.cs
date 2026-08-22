@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -60,7 +61,7 @@ internal sealed class AtsMarshaller
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(), new AtsConvertibleJsonConverterFactory() },
         ReferenceHandler = ReferenceHandler.IgnoreCycles,
         TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
@@ -137,6 +138,11 @@ internal sealed class AtsMarshaller
             return null;
         }
 
+        if (typeRef.ClrType is { } clrType && HostingTypeHelpers.IsAtsConvertibleType(clrType))
+        {
+            return SerializeAtsConvertible(value, clrType);
+        }
+
         if (typeRef.TypeId == AtsConstants.CancellationToken && value is CancellationToken cancellationToken)
         {
             return SerializeCancellationToken(cancellationToken);
@@ -172,6 +178,11 @@ internal sealed class AtsMarshaller
         if (value == null)
         {
             return null;
+        }
+
+        if (HostingTypeHelpers.IsAtsConvertibleType(declaredType))
+        {
+            return SerializeAtsConvertible(value, declaredType);
         }
 
         if (declaredType == typeof(object))
@@ -357,6 +368,53 @@ internal sealed class AtsMarshaller
         }
     }
 
+    private sealed class AtsConvertibleJsonConverterFactory : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return HostingTypeHelpers.IsAtsConvertibleType(typeToConvert);
+        }
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+        {
+            return (JsonConverter)Activator.CreateInstance(typeof(AtsConvertibleJsonConverter<>).MakeGenericType(typeToConvert))!;
+        }
+    }
+
+    private sealed class AtsConvertibleJsonConverter<T> : JsonConverter<T>
+    {
+        public override T? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var node = JsonNode.Parse(ref reader);
+            if (node is not JsonObject jsonObject)
+            {
+                throw new JsonException($"ATS convertible type '{typeToConvert.Name}' requires a JSON object.");
+            }
+
+            try
+            {
+                return (T)DeserializeAtsConvertibleCore(jsonObject, typeToConvert);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new JsonException(ex.Message, ex);
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        {
+            var node = SerializeAtsConvertible(value!, typeof(T));
+            if (node is null)
+            {
+                writer.WriteNullValue();
+            }
+            else
+            {
+                node.WriteTo(writer, options);
+            }
+        }
+    }
+
     private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
     {
         var jsonArray = new JsonArray();
@@ -419,6 +477,11 @@ internal sealed class AtsMarshaller
         }
 
         var type = value.GetType();
+        if (HostingTypeHelpers.IsAtsConvertibleType(type))
+        {
+            return SerializeAtsConvertible(value, type);
+        }
+
         if (type == typeof(CancellationToken))
         {
             return SerializeCancellationToken((CancellationToken)value);
@@ -512,6 +575,18 @@ internal sealed class AtsMarshaller
 
         var capabilityId = context.CapabilityId ?? "unknown";
         var paramName = context.ParameterName ?? "unknown";
+
+        // Converter payloads own the entire JSON object, including keys that resemble ATS protocol metadata.
+        if (HostingTypeHelpers.IsAtsConvertibleType(targetType))
+        {
+            if (node is not JsonObject jsonObject)
+            {
+                throw CapabilityException.TypeMismatch(
+                    capabilityId, paramName, "object", DescribeJsonNode(node));
+            }
+
+            return DeserializeAtsConvertible(jsonObject, targetType, capabilityId, paramName);
+        }
 
         // Check for handle reference
         var handleRef = HandleRef.FromJsonNode(node);
@@ -655,6 +730,7 @@ internal sealed class AtsMarshaller
                         capabilityId, paramName,
                         $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
                 }
+
                 return DeserializeDto(jsonObj, targetType, context);
             }
 
@@ -675,6 +751,84 @@ internal sealed class AtsMarshaller
                 capabilityId, paramName, $"Failed to deserialize '{paramName}' as {DescribeType(targetType)}: {ex.Message}");
         }
     }
+
+    private static object DeserializeAtsConvertible(JsonObject jsonObject, Type targetType, string capabilityId, string paramName)
+    {
+        try
+        {
+            return DeserializeAtsConvertibleCore(jsonObject, targetType);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw CapabilityException.InvalidArgument(
+                capabilityId,
+                paramName,
+                ex.Message);
+        }
+    }
+
+    private static object DeserializeAtsConvertibleCore(JsonObject jsonObject, Type targetType)
+    {
+        // RemoteHost is compiled into the generated managed AppHost and loads integration assemblies dynamically.
+        // The Native AOT CLI only orchestrates that process, so reflection is required here and is not trimmed by the CLI.
+        var method = FindAtsConversionMethod(targetType, AtsDeserializeMethodName, typeof(JsonObject), targetType);
+        if (method is null)
+        {
+            throw new InvalidOperationException(
+                $"Type '{targetType.Name}' implements IAtsConvertible but does not expose Deserialize(JsonObject).");
+        }
+
+        try
+        {
+            var result = method.Invoke(null, [jsonObject]);
+            if (result is null || !targetType.IsInstanceOfType(result))
+            {
+                throw new InvalidOperationException(
+                    $"Type '{targetType.Name}' returned an incompatible value from Deserialize(JsonObject).");
+            }
+
+            return result;
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to deserialize ATS convertible type '{targetType.FullName}'.",
+                ex.InnerException ?? ex);
+        }
+    }
+
+    private static JsonNode? SerializeAtsConvertible(object value, Type targetType)
+    {
+        var method = FindAtsConversionMethod(targetType, AtsSerializeMethodName, targetType, typeof(JsonNode))
+            ?? throw new InvalidOperationException(
+                $"Type '{targetType.FullName}' implements IAtsConvertible but does not expose Serialize({targetType.Name}).");
+
+        try
+        {
+            return method.Invoke(null, [value]) as JsonNode;
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to serialize ATS convertible type '{targetType.FullName}'.",
+                ex.InnerException ?? ex);
+        }
+    }
+
+    private static MethodInfo? FindAtsConversionMethod(Type targetType, string methodName, Type parameterType, Type returnType)
+    {
+        return targetType
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .SingleOrDefault(method =>
+                (string.Equals(method.Name, methodName, StringComparison.Ordinal) ||
+                    method.Name.EndsWith($".{methodName}", StringComparison.Ordinal)) &&
+                method.GetParameters() is [{ ParameterType: var actualParameterType }] &&
+                actualParameterType == parameterType &&
+                method.ReturnType == returnType);
+    }
+
+    private const string AtsDeserializeMethodName = "Deserialize";
+    private const string AtsSerializeMethodName = "Serialize";
 
     /// <summary>
     /// Checks if an exception indicates a type mismatch.

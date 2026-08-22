@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
@@ -30,6 +31,7 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithInitListProperties", Name = "DtoWithInitListProperties", ClrType = typeof(DtoWithInitListProperties), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithAtsConvertible", Name = "DtoWithAtsConvertible", ClrType = typeof(DtoWithAtsConvertible), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -762,6 +764,96 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void UnmarshalFromJson_UnmarshalsCustomAtsObjectDto()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var jsonContent = """
+        {
+            "name": "test",
+            "count": 5,
+            "complex": {
+                "nestedProperty": true
+            }
+        }
+        """;
+
+        var json = JsonNode.Parse(jsonContent);
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(CustomAtsObjectDto), context);
+
+        var dto = Assert.IsType<CustomAtsObjectDto>(result);
+        Assert.Equal("test", dto.Value["name"]);
+        Assert.Equal(5L, dto.Value["count"]);
+        var complex = Assert.IsType<Dictionary<string, object?>>(dto.Value["complex"]);
+        Assert.Equal(true, complex["nestedProperty"]);
+    }
+
+    [Fact]
+    public void MarshalToJson_MarshalsCustomAtsObjectDto()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = CustomAtsObjectDto.Deserialize(new JsonObject
+        {
+            ["name"] = "test",
+            ["values"] = new JsonArray(1, 2, 3)
+        });
+
+        var result = marshaller.MarshalToJson(dto);
+
+        var json = Assert.IsType<JsonObject>(result);
+        Assert.Equal("test", json["name"]?.GetValue<string>());
+        Assert.Equal([1, 2, 3], json["values"]?.AsArray().Select(value => value!.GetValue<int>()));
+    }
+
+    [Fact]
+    public void MarshalToJson_CustomAtsObjectDtoPreservesNumericValues()
+    {
+        var marshaller = CreateMarshaller();
+        const string jsonContent = """{"unsignedInteger":18446744073709551615,"preciseFraction":0.1234567890123456789012345678,"largeExponent":1e100}""";
+        var source = JsonNode.Parse(jsonContent)!.AsObject();
+
+        var dto = CustomAtsObjectDto.Deserialize(source);
+        var result = marshaller.MarshalToJson(dto);
+
+        Assert.Equal(18446744073709551615m, dto.Value["unsignedInteger"]);
+        Assert.Equal(0.1234567890123456789012345678m, dto.Value["preciseFraction"]);
+        var largeExponent = Assert.IsType<JsonElement>(dto.Value["largeExponent"]);
+        Assert.Equal("1e100", largeExponent.GetRawText());
+        Assert.Equal(jsonContent, result?.ToJsonString());
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_UsesCustomAtsConvertible()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject { ["value"] = "converted" };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(TestAtsConvertible), context);
+
+        var converted = Assert.IsType<TestAtsConvertible>(result);
+        Assert.Equal("converted", converted.Value);
+    }
+
+    [Fact]
+    public void MarshalToJson_RoundTripsAtsConvertibleNestedInDto()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["payload"] = new JsonObject
+            {
+                ["$handle"] = "literal-handle",
+                ["name"] = "nested"
+            }
+        };
+
+        var unmarshalled = marshaller.UnmarshalFromJson(json, typeof(DtoWithAtsConvertible), context);
+        var result = marshaller.MarshalToJson(unmarshalled);
+
+        Assert.Equal(json.ToJsonString(), result?.ToJsonString());
+    }
+
+    [Fact]
     public void MarshalToJson_MarshalsDto()
     {
         var marshaller = CreateMarshaller();
@@ -1048,11 +1140,32 @@ public class AtsMarshallerTests
         public int Value { get; set; }
     }
 
+    private sealed class TestAtsConvertible(string value) : IAtsConvertible<TestAtsConvertible>
+    {
+        public string Value { get; } = value;
+
+        public static TestAtsConvertible Deserialize(JsonObject jsonObject)
+        {
+            return new TestAtsConvertible(jsonObject["value"]!.GetValue<string>());
+        }
+
+        public static JsonNode? Serialize(TestAtsConvertible value)
+        {
+            return new JsonObject { ["value"] = value.Value };
+        }
+    }
+
     [AspireDto]
     private sealed class TestDto
     {
         public string? Name { get; set; }
         public int Count { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class DtoWithAtsConvertible
+    {
+        public required CustomAtsObjectDto Payload { get; init; }
     }
 
     [AspireDto]
