@@ -100,7 +100,7 @@ resource env_ra 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 
 resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('env')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take('${toLower('env')}-${toLower('aspiredashboard')}', 46)}-${uniqueString(toLower('env'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_asplan.id
@@ -174,8 +174,6 @@ output name string = env_asplan.name
 
 output planId string = env_asplan.id
 
-output webSiteSuffix string = uniqueString(resourceGroup().id)
-
 output AZURE_CONTAINER_REGISTRY_NAME string = env_acr.name
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = env_acr.properties.loginServer
@@ -188,7 +186,7 @@ output AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID string = env_contributor_mi
 
 output AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_PRINCIPAL_ID string = env_contributor_mi.properties.principalId
 
-output AZURE_APP_SERVICE_DASHBOARD_URI string = 'https://${take('${toLower('env')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+output AZURE_APP_SERVICE_DASHBOARD_URI string = 'https://${'${take('${toLower('env')}-${toLower('aspiredashboard')}', 46)}-${uniqueString(toLower('env'), resourceGroup().id)}'}.azurewebsites.net'
 
 // App Service website
 @description('The location for the resource(s) to be deployed.')
@@ -227,7 +225,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
 }
 
 resource webapp 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('api')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take(toLower('api'), 46)}-${uniqueString(toLower('api'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_outputs_planid
@@ -312,3 +310,5 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
   }
   parent: webapp
 }
+
+output name string = '${take(toLower('api'), 46)}-${uniqueString(toLower('api'), resourceGroup().id)}'

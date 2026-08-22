@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_registry_endpoint string
@@ -30,7 +30,7 @@ resource mainContainer 'Microsoft.Web/sites/sitecontainers@2025-03-01' = {
 }
 
 resource webapp 'Microsoft.Web/sites@2025-03-01' = {
-  name: take('${toLower('container1')}-${uniqueString(resourceGroup().id)}', 60)
+  name: '${take(toLower('container1'), 46)}-${uniqueString(toLower('container1'), resourceGroup().id)}'
   location: location
   properties: {
     serverFarmId: env_outputs_planid
@@ -102,3 +102,5 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
   }
   parent: webapp
 }
+
+output name string = '${take(toLower('container1'), 46)}-${uniqueString(toLower('container1'), resourceGroup().id)}'
