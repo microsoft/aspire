@@ -1320,12 +1320,13 @@ public class AtsTypeScriptCodeGeneratorTests
         {
             var invokedHandleType = match.Groups[1].Value;
             var implementationClass = match.Groups[2].Value;
+            pairs++;
             if (!constructorHandleTypes.TryGetValue(implementationClass, out var expectedHandleType))
             {
+                mismatches.Add($"{implementationClass} is constructed from invokeCapability<{invokedHandleType}> but its constructor handle type was not recognized");
                 continue;
             }
 
-            pairs++;
             if (!string.Equals(invokedHandleType, expectedHandleType, StringComparison.Ordinal))
             {
                 mismatches.Add($"{implementationClass} takes {expectedHandleType} but is constructed from invokeCapability<{invokedHandleType}>");
@@ -1341,11 +1342,12 @@ public class AtsTypeScriptCodeGeneratorTests
             $"Generated aspire.mts constructs wrapper implementations from mismatched handle types: {string.Join("; ", mismatches.Order(StringComparer.Ordinal))}");
     }
 
-    // "class FooImpl extends ResourceBuilderBase<FooHandle> implements Foo {" followed by
-    // "constructor(handle: FooHandle, client: AspireClientRpc) {". Captures the class name and the
-    // handle type its constructor accepts.
+    // Resource wrappers use "constructor(handle: FooHandle, ...)", while type-class wrappers use
+    // "constructor(private _handle: FooHandle, ...)". Capture the class and its first handle type.
     private static readonly Regex s_implementationConstructorPattern =
-        new(@"\bclass\s+(\w+)\b[^{]*\{\s*constructor\(handle:\s*(\w+)", RegexOptions.Compiled);
+        new(
+            @"\bclass\s+(\w+)\b[^{]*\{\s*constructor\((?:(?:public|private|protected|readonly)\s+)*\w+:\s*(\w+)",
+            RegexOptions.Compiled);
 
     // An RPC result flowing straight into a wrapper implementation constructor. The intervening
     // capability ID and rpcArgs contain no ';', so [^;]*? stops at the invokeCapability call's own
