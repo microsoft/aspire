@@ -16,9 +16,51 @@ internal static class DistributedApplicationTestFactory
     /// <summary>
     /// Creates an <see cref="IDistributedApplicationTestingBuilder"/> for the specified app host assembly.
     /// </summary>
-    public static async Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput)
+    /// <remarks>
+    /// <paramref name="configureBuilder"/> runs after the AppHost's Program.cs has executed. It can customize the
+    /// testing builder's services, configuration, and application model before <c>BuildAsync</c>, but it cannot
+    /// influence values Program.cs already read while constructing resources. Use <see cref="CreateWithArgsAsync"/>
+    /// for construction-time configuration.
+    /// </remarks>
+    public static Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput, Action<IDistributedApplicationTestingBuilder>? configureBuilder = null)
+        => CreateCoreAsync(appHostProgramType, testOutput, args: [], configureBuilder);
+
+    /// <summary>
+    /// Creates an <see cref="IDistributedApplicationTestingBuilder"/> for the specified app host assembly, passing
+    /// <paramref name="args"/> to the AppHost as command-line arguments.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Command-line arguments are the correct way to seed configuration an AppHost reads while it builds its resources
+    /// (for example <c>builder.Configuration["SOME_TOOL_PATH"]</c>, <c>AppHost:Operation</c>, or
+    /// <c>Publishing:Publisher</c>). They are applied before Program.cs runs, and the command-line configuration
+    /// provider is added last, so they outrank ambient environment variables of the test process.
+    /// </para>
+    /// <para>
+    /// Args are additive: <c>DistributedApplicationFactory</c> appends them to
+    /// <c>HostApplicationBuilderSettings.Args</c> and leaves <c>HostApplicationBuilderSettings.Configuration</c>
+    /// untouched, so the testing defaults it seeds there (<c>DcpPublisher:RandomizePorts</c>,
+    /// <c>DcpPublisher:WaitForResourceCleanup</c>, the container runtime timeout, dashboard/OTLP URLs and
+    /// unsecured transport) are all retained. Assigning <c>settings.Configuration</c> would discard them.
+    /// </para>
+    /// </remarks>
+    public static Task<IDistributedApplicationTestingBuilder> CreateWithArgsAsync(Type appHostProgramType, ITestOutputHelper? testOutput, string[] args)
     {
-        var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType);
+        ArgumentNullException.ThrowIfNull(args);
+
+        return CreateCoreAsync(appHostProgramType, testOutput, args, configureBuilder: null);
+    }
+
+    private static async Task<IDistributedApplicationTestingBuilder> CreateCoreAsync(
+        Type appHostProgramType,
+        ITestOutputHelper? testOutput,
+        string[] args,
+        Action<IDistributedApplicationTestingBuilder>? configureBuilder)
+    {
+        // Route both empty and explicit argument lists through the same overload so the testing
+        // builder preserves its construction-time defaults while still letting scenario tests supply
+        // AppHost command-line configuration.
+        var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType, args);
 
         // Custom hook needed because we want to only override the registry when
         // the original is from `docker.io`, but the options.ContainerRegistryOverride will
@@ -27,6 +69,8 @@ internal static class DistributedApplicationTestFactory
 
         builder.WithRandomParameterValues();
         builder.WithRandomVolumeNames();
+
+        configureBuilder?.Invoke(builder);
 
         builder.Services.AddLogging(logging =>
         {
