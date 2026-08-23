@@ -384,6 +384,16 @@ public sealed class OpenIdConnectOptions
 
 public sealed class ClaimAction
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ClaimAction"/> class.
+    /// </summary>
+    [SetsRequiredMembers]
+    public ClaimAction()
+    {
+        ClaimType = null!;
+        JsonKey = null!;
+    }
+
     public required string ClaimType { get; set; }
     public required string JsonKey { get; set; }
     public string? SubKey { get; set; }
@@ -420,7 +430,7 @@ public sealed class DebugSessionOptions
 
             try
             {
-                _serverCertificate = new X509Certificate2(data);
+                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
             }
             catch (Exception ex)
             {

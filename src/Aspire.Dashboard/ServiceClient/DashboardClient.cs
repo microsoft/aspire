@@ -158,7 +158,9 @@ internal sealed class DashboardClient : IDashboardClient
                     ClientCertificates = certificates
                 };
 
-                configuration.Bind("Dashboard:ResourceServiceClient:Ssl", httpHandler.SslOptions);
+                BindSslClientAuthenticationOptions(
+                    configuration.GetSection("Dashboard:ResourceServiceClient:Ssl"),
+                    httpHandler.SslOptions);
             }
 
             // https://learn.microsoft.com/aspnet/core/grpc/retries
@@ -200,7 +202,7 @@ internal sealed class DashboardClient : IDashboardClient
                 var filePath = _dashboardOptions.ResourceServiceClient.ClientCertificate.FilePath;
                 var password = _dashboardOptions.ResourceServiceClient.ClientCertificate.Password;
 
-                return [new X509Certificate2(filePath, password)];
+                return [X509CertificateLoader.LoadPkcs12FromFile(filePath, password)];
             }
 
             X509CertificateCollection GetKeyStoreCertificate()
@@ -227,6 +229,34 @@ internal sealed class DashboardClient : IDashboardClient
                 return certificates;
             }
         }
+
+    }
+
+    internal static void BindSslClientAuthenticationOptions(
+        IConfigurationSection configuration,
+        SslClientAuthenticationOptions options)
+    {
+        // SslClientAuthenticationOptions exposes certificate collections and callback properties
+        // that the configuration binding generator cannot construct. Preserve the supported scalar
+        // overrides without falling back to reflection under Native AOT.
+        options.AllowRenegotiation = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.AllowRenegotiation),
+            options.AllowRenegotiation);
+        options.AllowTlsResume = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.AllowTlsResume),
+            options.AllowTlsResume);
+        options.CertificateRevocationCheckMode = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.CertificateRevocationCheckMode),
+            options.CertificateRevocationCheckMode);
+        options.EnabledSslProtocols = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.EnabledSslProtocols),
+            options.EnabledSslProtocols);
+        options.EncryptionPolicy = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.EncryptionPolicy),
+            options.EncryptionPolicy);
+        options.TargetHost = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.TargetHost),
+            options.TargetHost);
     }
 
     internal sealed class KeyStoreProperties

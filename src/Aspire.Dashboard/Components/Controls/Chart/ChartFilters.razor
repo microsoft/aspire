@@ -11,7 +11,7 @@
             <h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
             <FluentDataGrid Items="@Queryable.AsQueryable(DimensionFilters)"
                             GridTemplateColumns="200px 1fr auto"
-                            GenerateHeader="GenerateHeaderOption.None"
+                            GenerateHeader="DataGridGeneratedHeaderType.None"
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>

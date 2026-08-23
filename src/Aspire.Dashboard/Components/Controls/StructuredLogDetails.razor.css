@@ -8,6 +8,6 @@
     gap: calc(var(--design-unit) * 1px);
 }
 
-::deep.structured-log-details-layout > fluent-toolbar {
+::deep.structured-log-details-layout > .details-toolbar {
     grid-area: toolbar;
 }

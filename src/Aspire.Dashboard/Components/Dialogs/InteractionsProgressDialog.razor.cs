@@ -13,7 +13,7 @@ public partial class InteractionsProgressDialog
     public InteractionsProgressDialogViewModel Content { get; set; } = default!;
 
     [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
+    public IDialogInstance Dialog { get; set; } = default!;
 
     private async Task CancelAsync()
     {

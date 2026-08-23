@@ -24,7 +24,7 @@ public partial class FilterDialog : IAsyncDisposable
         new SelectViewModel<FilterCondition> { Id = condition, Name = FieldTelemetryFilter.ConditionToString(condition, FilterLoc) };
 
     [CascadingParameter]
-    public FluentDialog? Dialog { get; set; }
+    public IDialogInstance? Dialog { get; set; }
 
     [Parameter]
     public FilterDialogViewModel Content { get; set; } = default!;
@@ -41,6 +41,7 @@ public partial class FilterDialog : IAsyncDisposable
     private List<SelectViewModel<string>> _parameters = default!;
     private List<SelectViewModel<FieldValue>> _filteredValues = default!;
     private List<SelectViewModel<FieldValue>>? _allValues;
+    private SelectViewModel<FieldValue>? _selectedValue;
 
     public EditContext EditContext { get; private set; } = default!;
 
@@ -173,10 +174,19 @@ public partial class FilterDialog : IAsyncDisposable
                 .ThenBy(v => v.Value, StringComparers.OtlpFieldValue)
                 .Select(v => new SelectViewModel<FieldValue> { Id = v, Name = v.Value })
                 .ToList();
+
+            _selectedValue = _formModel.Value is { Length: > 0 } value
+                ? _allValues.FirstOrDefault(vm => vm.Name == value) ?? new SelectViewModel<FieldValue>
+                {
+                    Id = new FieldValue { Value = value, Count = 0 },
+                    Name = value
+                }
+                : null;
         }
         else
         {
             _allValues = null;
+            _selectedValue = null;
         }
     }
 
@@ -228,6 +238,19 @@ public partial class FilterDialog : IAsyncDisposable
         {
             _filteredValues = [];
         }
+    }
+
+    private void OnValueInput(ChangeEventArgs e)
+    {
+        _selectedValue = null;
+        _formModel.Value = e.Value?.ToString();
+        ValueChanged();
+    }
+
+    private void SelectedValueChanged()
+    {
+        _formModel.Value = _selectedValue?.Name;
+        ValueChanged();
     }
 
     private void Cancel()

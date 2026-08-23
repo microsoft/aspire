@@ -11,9 +11,17 @@ namespace Aspire.Dashboard.Components;
 
 public partial class AspireMenu : FluentComponentBase
 {
+    public AspireMenu(LibraryConfiguration configuration)
+        : base(configuration)
+    {
+    }
+
     private FluentMenu? _menu;
     private IReadOnlyList<MenuButtonItem>? _renderedItems;
     private bool _refreshMenuAfterRender;
+    private bool? _appliedOpen;
+    private int _targetOffsetLeft;
+    private int _targetOffsetTop;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -52,9 +60,6 @@ public partial class AspireMenu : FluentComponentBase
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    [Inject]
-    public required IMenuService MenuService { get; init; }
-
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
     private const int MenuVerticalPadding = 16;
@@ -66,6 +71,11 @@ public partial class AspireMenu : FluentComponentBase
         {
             _renderedItems = Items;
             _refreshMenuAfterRender = Open;
+        }
+
+        if (_appliedOpen != Open)
+        {
+            _refreshMenuAfterRender = true;
         }
     }
 
@@ -80,9 +90,27 @@ public partial class AspireMenu : FluentComponentBase
         {
             _refreshMenuAfterRender = false;
 
-            if (_menu is { Id: { } menuId })
+            if (_menu is not null)
             {
-                await MenuService.RefreshMenuAsync(menuId, Open);
+                if (Open)
+                {
+                    if (Anchored)
+                    {
+                        // Trigger already identifies the anchor. The parameterless path leaves placement
+                        // to Fluent's CSS anchor positioning, including block and inline viewport fallbacks.
+                        await _menu.OpenMenuAsync();
+                    }
+                    else
+                    {
+                        await _menu.OpenMenuAsync(Anchor, _targetOffsetLeft, _targetOffsetTop);
+                    }
+                }
+                else
+                {
+                    await _menu.CloseMenuAsync();
+                }
+
+                _appliedOpen = Open;
             }
         }
     }
@@ -94,46 +122,27 @@ public partial class AspireMenu : FluentComponentBase
 
     public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
     {
-        if (_menu is { } menu)
+        if (_menu is not null)
         {
             // Calculate the position to display the context menu using the cursor position (clientX, clientY)
             // together with the screen width and height.
             // The menu may need to be displayed above or left of the cursor to fit in the screen.
-            var left = 0;
-            var right = 0;
-            var top = 0;
-            var bottom = 0;
+            const int estimatedMenuWidth = 200;
+            _targetOffsetLeft = clientX + estimatedMenuWidth > screenWidth
+                ? Math.Max(0, clientX - estimatedMenuWidth)
+                : clientX;
+            _targetOffsetTop = clientY + CalculatedVerticalThreshold > screenHeight
+                ? Math.Max(0, clientY - CalculatedVerticalThreshold)
+                : clientY;
 
-            if (clientX + menu.HorizontalThreshold > screenWidth)
-            {
-                right = screenWidth - clientX;
-            }
-            else
-            {
-                left = clientX;
-            }
-
-            if (clientY + CalculatedVerticalThreshold > screenHeight)
-            {
-                bottom = screenHeight - clientY;
-            }
-            else
-            {
-                top = clientY;
-            }
-
-            // Overwrite the style. We don't want to add new position values each time the menu is opened.
             Style = new StyleBuilder()
-                .AddStyle("left", $"{left}px", left != 0)
-                .AddStyle("right", $"{right}px", right != 0)
-                .AddStyle("top", $"{top}px", top != 0)
-                .AddStyle("bottom", $"{bottom}px", bottom != 0)
-                // Width values come from fluentui-blazor stylesheet; max-width uses an app CSS variable so nested submenus stay in sync.
-                // Explicitly set to override min-width: fit-content applied by library to some menus.
-                .AddStyle("max-width", "var(--aspire-menu-max-width)")
+                .AddStyle("max-width", "368px")
                 .AddStyle("min-width", "64px")
                 .Build();
 
+            // Escape and light-dismiss can close the browser popover without raising OpenedChanged.
+            // Treat every cursor request as a new open/position request even when Open is still true.
+            _refreshMenuAfterRender = true;
             await SetOpenAsync(true);
 
             StateHasChanged();
@@ -159,6 +168,7 @@ public partial class AspireMenu : FluentComponentBase
 
     private async Task OnOpenChanged(bool open)
     {
+        _appliedOpen = open;
         await SetOpenAsync(open);
     }
 

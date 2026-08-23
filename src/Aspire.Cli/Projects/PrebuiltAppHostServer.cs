@@ -1492,10 +1492,31 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         // Set the dashboard path so the AppHost can locate and launch the dashboard binary
-        var managedPath = _layout.GetManagedPath();
-        if (managedPath is not null)
+        var dashboardPath = _layout.GetDashboardPath();
+        if (dashboardPath is not null)
         {
-            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = managedPath;
+            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = dashboardPath;
+        }
+
+        // New bundles launch the Dashboard from its standalone executable, so the Dashboard path can
+        // no longer double as the terminal host. Supply aspire-managed and its dispatch argument as
+        // defaults while retaining inherited and apphost.run.json overrides as a pair.
+        bool HasEnvironmentOverride(string name)
+        {
+            var value = environmentVariables is not null && environmentVariables.TryGetValue(name, out var configuredValue)
+                ? configuredValue
+                : startInfo.Environment.TryGetValue(name, out var inheritedValue) ? inheritedValue : null;
+            return !string.IsNullOrWhiteSpace(value);
+        }
+
+        if (!HasEnvironmentOverride(BundleDiscovery.TerminalHostPathEnvVar) &&
+            _layout.GetManagedPath() is { } terminalHostPath)
+        {
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
+            if (!HasEnvironmentOverride(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            {
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+            }
         }
 
         // Apply environment variables from apphost.run.json

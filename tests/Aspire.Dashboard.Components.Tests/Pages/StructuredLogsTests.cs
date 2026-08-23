@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -112,6 +113,11 @@ public partial class StructuredLogsTests : DashboardTestContext
                 Assert.Equal(KnownStructuredLogFields.SpanIdField, f.Field);
                 Assert.Equal("456", f.Value);
             });
+
+            var counterBadge = Assert.Single(cut.FindComponents<FluentCounterBadge>()).Instance;
+            Assert.NotNull(counterBadge.AnchorContent);
+            Assert.Null(counterBadge.ChildContent);
+            Assert.Equal(2, counterBadge.Count);
     }
 
     [Fact]

@@ -18,7 +18,6 @@
 <div id="metric-table-container" style="height: 40vh; overflow-y: auto; width:1200px;">
     @* ItemKey is to preserve row focus by associating rows with their associated time *@
     <FluentDataGrid
-        @ref="_dataGrid"
         Items="@_metricsView"
         ItemSize="46"
         Virtualize="true"
@@ -82,7 +81,7 @@
                     @if (context.Exemplars.Count > 0)
                     {
                         @* min-width ensures a consistent button width up to 999 metrics *@
-                        <FluentButton Appearance="Appearance.Accent"
+                        <FluentButton Appearance="ButtonAppearance.Primary"
                                       aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
                                       @onclick="() => OpenExemplarsDialogAsync(context)"
                                       Style="min-width: 45px">@context.Exemplars.Count</FluentButton>

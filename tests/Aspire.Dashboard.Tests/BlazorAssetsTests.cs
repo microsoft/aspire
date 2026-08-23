@@ -7,20 +7,34 @@ namespace Aspire.Dashboard.Tests;
 
 public class BlazorAssetsTests
 {
-    [Theory]
-    [InlineData("10")]
-    [InlineData("11")]
-    public void BlazorWebJs_DoesNotSendUnsupportedKeyboardEventProperties(string runtimeMajorVersion)
+    [Fact]
+    public void IMask_IsBundledAndLoadedBeforeBlazor()
     {
-        var blazorWebJsPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "wwwroot", "framework", $"blazor.web.{runtimeMajorVersion}.js");
-        Assert.True(File.Exists(blazorWebJsPath), $"Expected generated Blazor asset at {blazorWebJsPath}");
+        var repoRoot = GetRepoRoot();
+        var imaskPath = Path.Combine(repoRoot, "src", "Aspire.Dashboard", "wwwroot", "js", "imask-7.6.1.min.js");
+        var appPath = Path.Combine(repoRoot, "src", "Aspire.Dashboard", "Components", "App.razor");
 
-        var blazorWebJs = File.ReadAllText(blazorWebJsPath);
+        Assert.True(File.Exists(imaskPath), $"Expected bundled IMask asset at {imaskPath}");
 
-        Assert.Contains("keydown", blazorWebJs, StringComparison.Ordinal);
-        Assert.False(
-            blazorWebJs.Contains("isComposing", StringComparison.Ordinal),
-            "The dashboard Blazor script must not emit KeyboardEvent.isComposing because the server event parser rejects the unknown property.");
+        var imask = File.ReadAllText(imaskPath);
+        Assert.Contains("globalThis", imask, StringComparison.Ordinal);
+        Assert.Contains(".IMask", imask, StringComparison.Ordinal);
+
+        var app = File.ReadAllText(appPath);
+        var imaskScriptIndex = app.IndexOf("<script src=\"js/imask-7.6.1.min.js\"></script>", StringComparison.Ordinal);
+        var blazorScriptIndex = app.IndexOf("<BlazorScript />", StringComparison.Ordinal);
+        Assert.True(imaskScriptIndex >= 0, "Expected App.razor to load the bundled IMask script.");
+        Assert.True(blazorScriptIndex > imaskScriptIndex, "IMask must load before Blazor renders FluentNumberInput components.");
+    }
+
+    [Fact]
+    public void BlazorScript_UsesTargetFrameworkStaticWebAsset()
+    {
+        var blazorScriptPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "Components", "BlazorScript.razor");
+
+        var blazorScript = File.ReadAllText(blazorScriptPath).Trim();
+
+        Assert.Equal("<script src=\"_framework/blazor.web.js\"></script>", blazorScript);
     }
 
     private static string GetRepoRoot()
