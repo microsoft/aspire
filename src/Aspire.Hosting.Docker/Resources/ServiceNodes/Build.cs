@@ -76,6 +76,7 @@ public sealed class Build
     /// builder.AddProject&lt;Projects.MyApi&gt;("api")
     ///     .PublishAsDockerComposeService((resource, service) =>
     ///     {
+    ///         service.Build ??= new Build();
     ///         service.Build.CacheTo.Add("type=registry,ref=cr.example.com/api:cache");
     ///     });
     /// </code>
