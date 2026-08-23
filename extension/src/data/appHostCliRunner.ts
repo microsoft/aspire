@@ -17,6 +17,7 @@ export interface RunCliCommandOptions {
     cancellationToken?: vscode.CancellationToken;
     env?: { name: string; value: string }[];
     target?: CliPathResolutionTarget;
+    cliPath?: string;
 }
 
 export class AppHostCliRunner implements vscode.Disposable {
@@ -77,9 +78,10 @@ export class AppHostCliRunner implements vscode.Disposable {
     }
 
     async runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
-            throw new AspireCliNotInstalledError(String(error));
-        });
+        const cliPath = options.cliPath
+            ?? await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
+                throw new AspireCliNotInstalledError(String(error));
+            });
 
         if (options.cancellationToken?.isCancellationRequested) {
             throw new vscode.CancellationError();
@@ -117,7 +119,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
-                        terminateCliProcess(cliProcess, command);
+                        void terminateCliProcess(cliProcess, command).catch(error => {
+                            extensionLogOutputChannel.error(`Failed to terminate ${command}: ${String(error)}`);
+                        });
                     }
                 } else {
                     settledBeforeTracking = true;
@@ -135,28 +139,31 @@ export class AppHostCliRunner implements vscode.Disposable {
                 settle(() => reject(new vscode.CancellationError()));
             });
 
+            const completionCallback = (code: number | null) => {
+                if (code !== 0) {
+                    const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
+                    if (retryArgs) {
+                        settle(() => {
+                            this.runCliCommand(command, retryArgs, options).then(resolve, reject);
+                        });
+                        return;
+                    }
+
+                    settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
+                    return;
+                }
+
+                settle(() => resolve({ stdout: stdout.value, stderr: stderr.value }));
+            };
+
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
                 createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
                 stderrCallback: (data) => { stderr.append(data); },
-                exitCallback: (code) => {
-                    if (code !== 0) {
-                        const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
-                        if (retryArgs) {
-                            settle(() => {
-                                this.runCliCommand(command, retryArgs, options).then(resolve, reject);
-                            });
-                            return;
-                        }
-
-                        settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
-                        return;
-                    }
-
-                    settle(() => resolve({ stdout: stdout.value, stderr: stderr.value }));
-                },
+                processExitCallback: completionCallback,
+                exitCallback: completionCallback,
                 errorCallback: (error) => {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
                 },
@@ -166,7 +173,9 @@ export class AppHostCliRunner implements vscode.Disposable {
                 // never track it, and terminate it if it is somehow still alive (a cancellation or
                 // timeout that raced the spawn would otherwise orphan a live process).
                 if (cliProcess.exitCode === null && !cliProcess.killed) {
-                    terminateCliProcess(cliProcess, command);
+                    void terminateCliProcess(cliProcess, command).catch(error => {
+                        extensionLogOutputChannel.error(`Failed to terminate ${command}: ${String(error)}`);
+                    });
                 }
 
                 return;
@@ -178,7 +187,9 @@ export class AppHostCliRunner implements vscode.Disposable {
 
     stopOneShotProcesses(): void {
         for (const process of this._oneShotProcesses) {
-            terminateCliProcess(process, 'one-shot aspire command');
+            void terminateCliProcess(process, 'one-shot aspire command').catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate one-shot aspire command: ${String(error)}`);
+            });
         }
         this._oneShotProcesses.clear();
     }
@@ -258,15 +269,14 @@ export function parseCliJsonOutput<T>(stdout: string): T {
         // Some CLI invocations can emit startup diagnostics before the final JSON payload:
         //   Starting AppHost...
         //   {"resources":[{"name":"api", ...}]}
-        // Parse the whole output first for the normal deterministic path, then fall back to
-        // the last JSON-looking line so older or chatty CLIs do not poison the snapshot.
-        for (const line of stdout.split(/\r?\n/).reverse()) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        // Parse the whole output first for the normal deterministic path, then try each trailing
+        // JSON-looking document start so pretty-printed payloads remain intact.
+        for (let index = stdout.length - 1; index >= 0; index--) {
+            if (stdout[index] === '{' || stdout[index] === '[') {
                 try {
-                    return JSON.parse(trimmed);
+                    return JSON.parse(stdout.slice(index).trim());
                 } catch {
-                    // Keep scanning in case the CLI wrote a JSON-looking diagnostic after the payload.
+                    // Keep scanning toward the root of a nested or multiline JSON document.
                 }
             }
         }

@@ -136,6 +136,24 @@ type ResourceWithConnectionString interface {
 	handleReference
 }
 
+// TestMutablePromiseCollisionResourcePromise marks types implementing ITestMutablePromiseCollisionResourcePromise.
+// Marker interface.
+type TestMutablePromiseCollisionResourcePromise interface {
+	handleReference
+}
+
+// TestPromiseCollisionResource marks types implementing ITestPromiseCollisionResource.
+// Marker interface.
+type TestPromiseCollisionResource interface {
+	handleReference
+}
+
+// TestPromiseCollisionResourcePromise marks types implementing ITestPromiseCollisionResourcePromise.
+// Marker interface.
+type TestPromiseCollisionResourcePromise interface {
+	handleReference
+}
+
 // TestVaultResource marks types implementing ITestVaultResource.
 // Methods are emitted on concrete impls; this interface is a marker for type assertions.
 type TestVaultResource interface {
@@ -566,7 +584,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirec
 type IDistributedApplicationBuilder interface {
 	handleReference
 	AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource
-	AddTestVault(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	AddTestVault(name string) TestVaultResource
 	Build() (DistributedApplication, error)
 	Err() error
 }
@@ -609,23 +627,21 @@ func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*A
 }
 
 // AddTestVault adds a test vault resource
-func (s *iDistributedApplicationBuilder) AddTestVault(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+func (s *iDistributedApplicationBuilder) AddTestVault(name string) TestVaultResource {
+	if s.err != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/addTestVault", reqArgs)
-	if err != nil {
-		return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(TestVaultResource)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/addTestVault returned unexpected type %T", result)
-		return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/addTestVault returned unexpected type %T", result))
+		return nil
 	}
-	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	return typed
 }
 
 // IResourceWithEnvironment is the public interface for handle type IResourceWithEnvironment.
@@ -1382,6 +1398,51 @@ func (s *testMutableCollectionContext) Tags() *List[string] {
 	return s.tags
 }
 
+// TestMutablePromiseCollisionResource is the public interface for handle type TestMutablePromiseCollisionResource.
+type TestMutablePromiseCollisionResource interface {
+	handleReference
+	SetValue(value string) TestMutablePromiseCollisionResource
+	Value() (string, error)
+	Err() error
+}
+
+// testMutablePromiseCollisionResource is the unexported impl of TestMutablePromiseCollisionResource.
+type testMutablePromiseCollisionResource struct {
+	*resourceBuilderBase
+}
+
+// newTestMutablePromiseCollisionResourceFromHandle wraps an existing handle as TestMutablePromiseCollisionResource.
+func newTestMutablePromiseCollisionResourceFromHandle(h *handle, c *client) TestMutablePromiseCollisionResource {
+	return &testMutablePromiseCollisionResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// SetValue sets the Value property
+func (s *testMutablePromiseCollisionResource) SetValue(value string) TestMutablePromiseCollisionResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// Value gets or sets the test value.
+func (s *testMutablePromiseCollisionResource) Value() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.value", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // TestRedisResource is the public interface for handle type TestRedisResource.
 type TestRedisResource interface {
 	handleReference
@@ -1392,6 +1453,7 @@ type TestRedisResource interface {
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource
 	WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error)
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource
+	WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource
 	WithConfig(config *TestConfigDto) TestRedisResource
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
 	WithConnectionStringDirect(connectionString string) TestRedisResource
@@ -1411,10 +1473,12 @@ type TestRedisResource interface {
 	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource
 	WithModifiedAt(modifiedAt string) TestRedisResource
 	WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource
+	WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource
 	WithNestedConfig(config *TestNestedDto) TestRedisResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource
 	WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource
 	WithPersistence(options ...*WithPersistenceOptions) TestRedisResource
+	WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource
 	WithRedisSpecific(option string) TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
@@ -1599,6 +1663,19 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithConcreteVaultResource configures a Redis resource with the concrete vault resource as a parameter.
+func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource {
+	if s.err != nil { return s }
+	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resource"] = serializeValue(resource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConcreteVaultResource", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1871,6 +1948,21 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 	return s
 }
 
+// WithMutablePromiseCollisionResources configures a Redis resource with mutable-property and parameter-only resources whose generated names collide.
+func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource {
+	if s.err != nil { return s }
+	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resource"] = serializeValue(resource)
+	reqArgs["resourcePromise"] = serializeValue(resourcePromise)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMutablePromiseCollisionResources", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithNestedConfig configures with nested DTO
 func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisResource {
 	if s.err != nil { return s }
@@ -1942,6 +2034,21 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPromiseCollisionResources configures a Redis resource with parameter-only resources whose generated names collide.
+func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
+	if s.err != nil { return s }
+	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resource"] = serializeValue(resource)
+	reqArgs["resourcePromise"] = serializeValue(resourcePromise)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPromiseCollisionResources", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2296,6 +2403,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", func(h *handle, c *client) any {
 		return newTestMutableCollectionContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource", func(h *handle, c *client) any {
+		return newTestMutablePromiseCollisionResourceFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", func(h *handle, c *client) any {
 		return newTestRedisResourceFromHandle(h, c)

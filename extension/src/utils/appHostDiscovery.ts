@@ -637,7 +637,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             const cancel = (error: Error) => {
                 settle(() => reject(error));
                 if (childProcess) {
-                    terminateCliProcess(childProcess, `AppHost discovery command: aspire ${cliArgs.join(' ')}`);
+                    void terminateCliProcess(childProcess, `AppHost discovery command: aspire ${cliArgs.join(' ')}`).catch(terminationError => {
+                        extensionLogOutputChannel.error(`Failed to terminate AppHost discovery command: ${String(terminationError)}`);
+                    });
                 }
             };
             const cleanup = () => {

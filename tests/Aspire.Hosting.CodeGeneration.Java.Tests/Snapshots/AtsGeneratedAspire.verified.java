@@ -1222,16 +1222,20 @@ import java.util.List;
 public class AspireRegistrations {
     static {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", (h, c) -> new TestCallbackContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource", (h, c) -> new ITestMutablePromiseCollisionResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", (h, c) -> new TestResourceContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource", (h, c) -> new ITestPromiseCollisionResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise", (h, c) -> new ITestPromiseCollisionResourcePromise(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise", (h, c) -> new ITestMutablePromiseCollisionResourcePromise(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", (h, c) -> new TestDatabaseResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", (h, c) -> new IResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString", (h, c) -> new IResourceWithConnectionString(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", (h, c) -> new TestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", (h, c) -> new ITestVaultResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", (h, c) -> new TestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", (h, c) -> new IDistributedApplicationBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment", (h, c) -> new IResourceWithEnvironment(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList<>(h, c));
@@ -1496,12 +1500,12 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a test vault resource */
-    public TestVaultResource addTestVault(String name) {
+    public ITestVaultResource addTestVault(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
         var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestVault", reqArgs);
-        return (TestVaultResource) result;
+        return (ITestVaultResource) result;
     }
 
 }
@@ -1543,6 +1547,82 @@ package aspire;
 @SuppressWarnings({"all", "unchecked", "serial"})
 public class IResourceWithEnvironment extends HandleWrapperBase {
     IResourceWithEnvironment(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestMutablePromiseCollisionResource.java =====
+// ITestMutablePromiseCollisionResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestMutablePromiseCollisionResource extends ResourceBuilderBase {
+    ITestMutablePromiseCollisionResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets or sets the test value. */
+    public String value() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.value", reqArgs);
+        return (String) result;
+    }
+
+    /** Sets the Value property */
+    public ITestMutablePromiseCollisionResource setValue(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", reqArgs);
+        return (ITestMutablePromiseCollisionResource) result;
+    }
+
+}
+
+// ===== aspire/ITestMutablePromiseCollisionResourcePromise.java =====
+// ITestMutablePromiseCollisionResourcePromise.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestMutablePromiseCollisionResourcePromise extends ResourceBuilderBase {
+    ITestMutablePromiseCollisionResourcePromise(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestPromiseCollisionResource.java =====
+// ITestPromiseCollisionResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestPromiseCollisionResource extends ResourceBuilderBase {
+    ITestPromiseCollisionResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== aspire/ITestPromiseCollisionResourcePromise.java =====
+// ITestPromiseCollisionResourcePromise.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ITestPromiseCollisionResourcePromise extends ResourceBuilderBase {
+    ITestPromiseCollisionResourcePromise(Handle handle, AspireClient client) {
         super(handle, client);
     }
 
@@ -2517,6 +2597,50 @@ public class TestRedisResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures a Redis resource with parameter-only resources whose generated names collide. */
+    public TestRedisResource withPromiseCollisionResources(ITestPromiseCollisionResource resource, ITestPromiseCollisionResourcePromise resourcePromise) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("resourcePromise", AspireClient.serializeValue(resourcePromise));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withPromiseCollisionResources", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ResourceBuilderBase resource, ITestPromiseCollisionResourcePromise resourcePromise) {
+        return withPromiseCollisionResources(new ITestPromiseCollisionResource(resource.getHandle(), resource.getClient()), resourcePromise);
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ITestPromiseCollisionResource resource, ResourceBuilderBase resourcePromise) {
+        return withPromiseCollisionResources(resource, new ITestPromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    public TestRedisResource withPromiseCollisionResources(ResourceBuilderBase resource, ResourceBuilderBase resourcePromise) {
+        return withPromiseCollisionResources(new ITestPromiseCollisionResource(resource.getHandle(), resource.getClient()), new ITestPromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    /** Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide. */
+    public TestRedisResource withMutablePromiseCollisionResources(ITestMutablePromiseCollisionResource resource, ITestMutablePromiseCollisionResourcePromise resourcePromise) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("resourcePromise", AspireClient.serializeValue(resourcePromise));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMutablePromiseCollisionResources", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withMutablePromiseCollisionResources(ResourceBuilderBase resource, ITestMutablePromiseCollisionResourcePromise resourcePromise) {
+        return withMutablePromiseCollisionResources(new ITestMutablePromiseCollisionResource(resource.getHandle(), resource.getClient()), resourcePromise);
+    }
+
+    public TestRedisResource withMutablePromiseCollisionResources(ITestMutablePromiseCollisionResource resource, ResourceBuilderBase resourcePromise) {
+        return withMutablePromiseCollisionResources(resource, new ITestMutablePromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
+    public TestRedisResource withMutablePromiseCollisionResources(ResourceBuilderBase resource, ResourceBuilderBase resourcePromise) {
+        return withMutablePromiseCollisionResources(new ITestMutablePromiseCollisionResource(resource.getHandle(), resource.getClient()), new ITestMutablePromiseCollisionResourcePromise(resourcePromise.getHandle(), resourcePromise.getClient()));
+    }
+
     public TestDatabaseResource addTestChildDatabase(String name) {
         return addTestChildDatabase(name, null);
     }
@@ -2882,6 +3006,15 @@ public class TestRedisResource extends ResourceBuilderBase {
             reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
         }
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withDataVolume", reqArgs);
+        return this;
+    }
+
+    /** Configures a Redis resource with the concrete vault resource as a parameter. */
+    public TestRedisResource withConcreteVaultResource(TestVaultResource resource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withConcreteVaultResource", reqArgs);
         return this;
     }
 
@@ -3603,6 +3736,10 @@ public final class WithOptionalStringOptions {
 .aspire/modules/aspire/IResource.java
 .aspire/modules/aspire/IResourceWithConnectionString.java
 .aspire/modules/aspire/IResourceWithEnvironment.java
+.aspire/modules/aspire/ITestMutablePromiseCollisionResource.java
+.aspire/modules/aspire/ITestMutablePromiseCollisionResourcePromise.java
+.aspire/modules/aspire/ITestPromiseCollisionResource.java
+.aspire/modules/aspire/ITestPromiseCollisionResourcePromise.java
 .aspire/modules/aspire/ITestVaultResource.java
 .aspire/modules/aspire/JsonSerializable.java
 .aspire/modules/aspire/ReferenceExpression.java

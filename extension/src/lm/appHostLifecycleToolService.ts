@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import { appHostLifecycleUnresolvedPath } from '../loc/strings';
 import { canonicalizeAppHostPath } from '../utils/appHostIdentity';
+import { isLinkedGitWorktree } from '../utils/gitWorktree';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isCommandCancellation } from '../utils/telemetry';
 import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, type AppHostStopResult } from '../services/AppHostLaunchService';
@@ -135,6 +136,32 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
         return resolution.resolved ? resolution.target.displayPath : appHostLifecycleUnresolvedPath;
     }
 
+    async describeStartTarget(input: AppHostStartToolInput | undefined, token: vscode.CancellationToken): Promise<{ displayPath: string; isolated: boolean }> {
+        if (!vscode.workspace.isTrusted) {
+            return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
+        }
+
+        const resolution = await this.resolveTarget(input?.appHostPath, token);
+        if (!resolution.resolved) {
+            return { displayPath: appHostLifecycleUnresolvedPath, isolated: false };
+        }
+
+        // Confirmation reports the isolation the launch will actually request. Lifecycle-tool
+        // launches go through `launchFromLifecycleOwner`, which applies the
+        // `linked-worktree-default` policy, so an omitted `isolated` becomes true in a linked
+        // worktree. That half of the inference is a synchronous filesystem check, so it can be
+        // shown here and must be: this dialog gates "Always allow", and consenting to a
+        // non-isolated launch that then runs isolated is a consent mismatch. Only the CLI
+        // *capability* half stays deferred - it spawns the CLI, and degradation for older CLIs
+        // is negotiated at launch.
+        //
+        // `prepareInvocation` receives unvalidated model input, so only a real boolean counts as
+        // an explicit choice; anything else is rejected by `isValidStartInput` at invoke time.
+        const explicitIsolation = typeof input?.isolated === 'boolean' ? input.isolated : undefined;
+        const isolated = explicitIsolation ?? isLinkedGitWorktree(resolution.target.absolutePath);
+        return { displayPath: resolution.target.displayPath, isolated };
+    }
+
     async start(input: AppHostStartToolInput, token: vscode.CancellationToken): Promise<AppHostLifecycleToolResult> {
         if (!isValidStartInput(input)) {
             return createResult(aspireAppHostStartToolName, 'invalidInput', '', 'none', undefined, undefined);
@@ -177,6 +204,10 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
 
                 const current = recheck.target;
                 const owned = this.findEditorSessions(current.absolutePath);
+                // These outcomes observe an existing launch rather than creating one. The
+                // tool therefore knows only that *some* process owns the AppHost, not
+                // which effective isolation its launcher negotiated, so `isolated` stays
+                // absent on each of them.
                 // A session that finished startup is checked before the launching flag on
                 // purpose. That flag is only cleared once `aspire ps` reconciliation observes
                 // the process, which can lag far behind the session itself.
@@ -220,11 +251,14 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                 try {
                     // `noDebug` is the only lever the tool exposes; the Aspire command is pinned
                     // to `run` so an agent can never reach deploy/publish/do through this surface.
-                    await this._dependencies.launchService.launchFromLifecycleOwner(
+                    const launchedIsolation = await this._dependencies.launchService.launchFromLifecycleOwner(
                         current.absolutePath,
                         'run',
                         requestedMode === 'run',
-                        lockToken);
+                        input.isolated,
+                        lockToken,
+                        input.launchProfile);
+                    return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, launchedIsolation?.effective);
                 }
                 catch (error) {
                     // The launch path clears its own reservation once it owns it, but a
@@ -233,8 +267,6 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                     this._dependencies.launchService.clearLaunching(current.absolutePath);
                     return this.createErrorResult(aspireAppHostStartToolName, error, current.relativePath, 'editor', requestedMode, undefined);
                 }
-
-                return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode);
             });
         }
         catch (error) {

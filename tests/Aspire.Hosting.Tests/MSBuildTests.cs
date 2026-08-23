@@ -578,7 +578,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         Assert.Contains("ASPIRE009", output);
         Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
-        Assert.Contains("The command timed out after 100 milliseconds.", output);
+        Assert.Contains("The command timed out", output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1374,6 +1374,52 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var nuspec = nuspecReader.ReadToEnd();
 
         Assert.DoesNotContain("<dependency", nuspec, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AspireHostingBlazorPackageContainsScriptsForBuildAndDirectLoading()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var packageOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "packages");
+        Directory.CreateDirectory(packageOutputPath);
+
+        var packagePath = PackProject(
+            Path.Combine(repoRoot, "src", "Aspire.Hosting.Blazor", "Aspire.Hosting.Blazor.csproj"),
+            packageOutputPath,
+            "Aspire.Hosting.Blazor");
+
+        using var archive = ZipFile.OpenRead(packagePath);
+
+        var assemblyEntry = Assert.Single(
+            archive.Entries,
+            entry => entry.FullName.StartsWith("lib/", StringComparison.Ordinal)
+                && entry.Name == "Aspire.Hosting.Blazor.dll");
+        var targetFramework = assemblyEntry.FullName.Split('/')[1];
+
+        Assert.Contains(
+            archive.Entries,
+            entry => entry.FullName == $"buildTransitive/{targetFramework}/Aspire.Hosting.Blazor.targets");
+
+        foreach (var scriptName in new[] { "Gateway.cs", "PrefixEndpoints.cs" })
+        {
+            var buildTransitiveEntry = Assert.Single(
+                archive.Entries,
+                entry => entry.FullName == $"buildTransitive/{targetFramework}/Scripts/{scriptName}");
+            var directLoadEntry = Assert.Single(
+                archive.Entries,
+                entry => entry.FullName == $"lib/{targetFramework}/Scripts/{scriptName}");
+
+            using var buildTransitiveStream = buildTransitiveEntry.Open();
+            using var directLoadStream = directLoadEntry.Open();
+            using var buildTransitiveContent = new MemoryStream();
+            using var directLoadContent = new MemoryStream();
+            buildTransitiveStream.CopyTo(buildTransitiveContent);
+            directLoadStream.CopyTo(directLoadContent);
+
+            Assert.Equal(buildTransitiveContent.ToArray(), directLoadContent.ToArray());
+        }
     }
 
     [Fact]

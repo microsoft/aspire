@@ -97,6 +97,11 @@
         <target state="needs-review-translation">此環境不支援互動輸入。請使用 --non-interactive 旗標，或確保 CLI 在互動終端中執行。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]如需詳細資訊，請參閱: [link]{0}[/][/]</target>

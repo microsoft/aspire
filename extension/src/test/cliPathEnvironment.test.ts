@@ -439,7 +439,10 @@ suite('cliPathEnvironment.registerCliPathEnvironmentSync tests', () => {
 
     test('re-applies the contributed path when CLI resolution rejects and later accepts the setting', async () => {
         const collection = createFakeCollection();
-        const configuredPath = '/abs/aspire';
+        const configuredPath = path.join(
+            path.parse(process.cwd()).root,
+            'abs',
+            process.platform === 'win32' ? 'aspire.exe' : 'aspire');
         const onForwardedPathChanged = sinon.stub();
         let configuredPathWorks = false;
 

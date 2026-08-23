@@ -134,6 +134,126 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetTemplatePackagesAsync_PinnedChannelWithLocalMappingsOverride_DoesNotFilterToPinnedVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(
+            packagesDirectory.FullName,
+            "aspire.projecttemplates",
+            "13.6.0"));
+
+        File.WriteAllText(
+            Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.13.6.0.nupkg"),
+            string.Empty);
+
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            "local",
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packageSource)],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "13.7.0");
+
+        var package = Assert.Single(await channel.GetTemplatePackagesAsync(
+            workspace.WorkspaceRoot,
+            PackageSourceOverrideMappings.CreateForTemplateOperations(packageSource),
+            CancellationToken.None).DefaultTimeout());
+
+        Assert.Equal("13.6.0", package.Version);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetTemplatePackagesAsync_PinnedLocalChannel_RequiresMatchingPackageFile(bool packageFileExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        const string pinnedVersion = "13.6.0-dev";
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.5.0.nupkg"), string.Empty);
+
+        if (packageFileExists)
+        {
+            File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
+        }
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "local",
+            PackageChannelQuality.Both,
+            [
+                new PackageMapping("Aspire*", packageSource),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: pinnedVersion);
+
+        var packages = (await channel.GetTemplatePackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        if (!packageFileExists)
+        {
+            Assert.Empty(packages);
+            return;
+        }
+
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.ProjectTemplates", package.Id);
+        Assert.Equal(pinnedVersion, package.Version);
+        Assert.Equal(packageSource, package.Source);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetTemplatePackagesAsync_PinnedRemoteChannelWithLocalMappingsOverride_RequiresMatchingPackageFile(bool packageFileExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        const string pinnedVersion = "13.6.0-dev";
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.5.0.nupkg"), string.Empty);
+        if (packageFileExists)
+        {
+            File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
+        }
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            "staging",
+            PackageChannelQuality.Prerelease,
+            [new PackageMapping("Aspire*", "https://example.invalid/staging/v3/index.json")],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: pinnedVersion);
+
+        var packages = (await channel.GetTemplatePackagesAsync(
+            workspace.WorkspaceRoot,
+            PackageSourceOverrideMappings.CreateForTemplateOperations(packageSource),
+            CancellationToken.None).DefaultTimeout()).ToArray();
+
+        if (!packageFileExists)
+        {
+            Assert.Empty(packages);
+            return;
+        }
+
+        var package = Assert.Single(packages);
+        Assert.Equal(pinnedVersion, package.Version);
+        Assert.Equal(packageSource, package.Source);
+    }
+
+    [Fact]
     public async Task GetTemplatePackagesAsync_UnpinnedChannelWithLocalMappingsOverride_EnumeratesOverrideDirectory()
     {
         // `aspire new --source <dir>` hands per-call mappings to an unpinned explicit channel. Local
@@ -174,6 +294,31 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         Assert.Equal("Aspire.ProjectTemplates", package.Id);
         Assert.Equal("13.5.0-preview.2", package.Version);
         Assert.Equal(overrideSource, package.Source);
+    }
+
+    [Fact]
+    public async Task GetTemplatePackagesAsync_ImplicitChannelWithLocalMappingsOverride_EnumeratesOverrideDirectory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(packagesDirectory.FullName, "aspire.projecttemplates", "13.5.0-preview.2"));
+        File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.13.5.0-preview.2.nupkg"), string.Empty);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = packagesDirectory.FullName.Replace('\\', '/');
+
+        var package = Assert.Single(await channel.GetTemplatePackagesAsync(
+            workspace.WorkspaceRoot,
+            PackageSourceOverrideMappings.CreateForTemplateOperations(source),
+            CancellationToken.None).DefaultTimeout());
+
+        Assert.Equal("Aspire.ProjectTemplates", package.Id);
+        Assert.Equal("13.5.0-preview.2", package.Version);
+        Assert.Equal(source, package.Source);
     }
 
     [Fact]
@@ -276,6 +421,35 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             .ToArray();
 
         Assert.Equal(["Aspire.Hosting.Redis"], packageIds);
+    }
+
+    [Fact]
+    public async Task GetPolyglotCompatiblePackageIdsAsync_LocalFolderSource_UsesConfiguredSdkVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", "13.6.0-dev", "aspire integration hosting cache");
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", "99.0.0", "aspire integration hosting cache polyglot");
+
+        var config = AspireConfigFile.LoadOrCreate(workspace.WorkspaceRoot.FullName);
+        config.Channel = PackageChannelNames.Local;
+        config.SdkVersion = "13.6.0-dev";
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packageSource)],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0",
+            currentCliVersion: "13.6.0-dev");
+
+        var packageIds = await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(packageIds);
     }
 
     [Fact]
@@ -562,6 +736,68 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Dapr", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Sql", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_LocalFolderSource_UsesConfiguredSdkVersionInsteadOfStaleChannelPin()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", "13.6.0-dev", string.Empty);
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", "99.0.0", string.Empty);
+
+        var config = AspireConfigFile.LoadOrCreate(workspace.WorkspaceRoot.FullName);
+        config.Channel = PackageChannelNames.Local;
+        config.SdkVersion = "13.6.0-dev";
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packageSource)],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0",
+            currentCliVersion: "13.6.0-dev");
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.Hosting.Redis", package.Id);
+        Assert.Equal("13.6.0-dev", package.Version);
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_LocalFolderSource_BlankConfiguredSdkVersionUsesChannelPin()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", "13.6.0-dev", string.Empty);
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", "99.0.0", string.Empty);
+
+        var config = AspireConfigFile.LoadOrCreate(workspace.WorkspaceRoot.FullName);
+        config.Channel = PackageChannelNames.Local;
+        config.SdkVersion = " ";
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packageSource)],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0",
+            currentCliVersion: "13.6.0-dev");
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        var package = Assert.Single(packages);
+        Assert.Equal("Aspire.Hosting.Redis", package.Id);
+        Assert.Equal("99.0.0", package.Version);
     }
 
     [Fact]

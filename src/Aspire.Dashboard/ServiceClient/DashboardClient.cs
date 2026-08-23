@@ -552,6 +552,7 @@ internal sealed class DashboardClient : IDashboardClient
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             List<ResourceViewModelChange>? changes = null;
+            ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
 
             lock (_lock)
@@ -627,6 +628,10 @@ internal sealed class DashboardClient : IDashboardClient
                     var resolvedNames = _resourceByName.Values
                         .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
+
+                    // Capture subscribers atomically with the model transition. A subscriber added after this
+                    // point receives the updated model in its initial snapshot and must not also receive this change.
+                    resourceChannels = _outgoingResourceChannels;
                 }
             }
 
@@ -639,7 +644,7 @@ internal sealed class DashboardClient : IDashboardClient
 
             if (changes is not null)
             {
-                foreach (var channel in _outgoingResourceChannels)
+                foreach (var channel in resourceChannels)
                 {
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(changes);

@@ -7,7 +7,7 @@ from aspire_app import create_builder
 with create_builder() as builder:
     storage = builder.add_azure_storage("resource")
     storage.run_as_emulator()
-    storage.with_storage_role_assignments()
+    storage.with_storage_role_assignments(storage, ["StorageBlobDataReader"])
     # });
     storage.add_blobs("resource")
     storage.add_tables("resource")

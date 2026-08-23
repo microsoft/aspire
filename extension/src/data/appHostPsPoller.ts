@@ -119,7 +119,9 @@ export class AppHostPsPoller implements vscode.Disposable {
             extensionLogOutputChannel.info(`aspire ps polling stopped`);
         }
         for (const psProcess of this._psProcesses) {
-            terminateCliProcess(psProcess, 'aspire ps');
+            void terminateCliProcess(psProcess, 'aspire ps').catch(error => {
+                extensionLogOutputChannel.error(`Failed to terminate aspire ps: ${String(error)}`);
+            });
         }
         this._psProcesses.clear();
     }

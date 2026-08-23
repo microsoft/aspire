@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOSMOSDB001
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -14,7 +12,7 @@ public class AzureRunAsEmulatorModeTests
     {
         { "Azure App Configuration", (builder, configure) => builder.AddAzureAppConfiguration("appconfig").RunAsEmulator(_ => configure()).Resource },
         { "Azure Cosmos DB", (builder, configure) => builder.AddAzureCosmosDB("cosmos").RunAsEmulator(_ => configure()).Resource },
-        { "Azure Cosmos DB preview", (builder, configure) => builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator(_ => configure()).Resource },
+        { "Azure Cosmos DB classic", (builder, configure) => builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator(_ => configure()).Resource },
         { "Azure Event Hubs", (builder, configure) => builder.AddAzureEventHubs("eventhubs").RunAsEmulator(_ => configure()).Resource },
         { "Azure Kusto", (builder, configure) => builder.AddAzureKustoCluster("kusto").RunAsEmulator(_ => configure()).Resource },
         { "Azure Service Bus", (builder, configure) => builder.AddAzureServiceBus("servicebus").RunAsEmulator(_ => configure()).Resource },

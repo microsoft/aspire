@@ -97,6 +97,11 @@
         <target state="needs-review-translation">이 환경에서는 대화형 입력이 지원되지 않습니다. --non-interactive 플래그를 사용하거나 CLI가 대화형 터미널에서 실행되고 있는지 확인합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]자세한 내용은 [link]{0}[/][/]을(를) 참조하세요.</target>

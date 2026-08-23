@@ -58,7 +58,7 @@ public static class AzureProvisionerExtensions
             new DefaultArmClientProvider(new ArmClientOptions(), sp.GetService<TimeProvider>() ?? TimeProvider.System));
         builder.Services.TryAddSingleton<ISecretClientProvider, DefaultSecretClientProvider>();
         builder.Services.TryAddSingleton<IBicepCompiler, BicepCliCompiler>();
-        builder.Services.TryAddSingleton<IUserPrincipalProvider, DefaultUserPrincipalProvider>();
+        builder.Services.TryAddSingleton<IAzurePrincipalProvider, DefaultAzurePrincipalProvider>();
 
         if (builder.ExecutionContext.IsPublishMode)
         {

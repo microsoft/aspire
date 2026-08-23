@@ -545,7 +545,7 @@ public sealed class ParameterProcessor(
     }
 
     // Internal for testing purposes - allows passing specific parameters to test.
-    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken cancellationToken)
+    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken allParametersResolvedToken)
     {
         var stateModified = false;
 
@@ -568,7 +568,20 @@ public sealed class ParameterProcessor(
                         Intent = MessageIntent.Warning,
                         PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    allParametersResolvedToken).ConfigureAwait(false);
+
+                if (result.Canceled)
+                {
+                    logger.LogDebug("Unresolved parameters notification was dismissed. The notification will not be shown again.");
+
+                    // OnParameterResolved cancels this token after the last parameter is resolved. Convert that
+                    // cancellation into successful task completion so waitForResolution callers remain blocked
+                    // without surfacing an OperationCanceledException.
+                    var allParametersResolved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    using var registration = allParametersResolvedToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), allParametersResolved);
+                    await allParametersResolved.Task.ConfigureAwait(false);
+                    break;
+                }
 
                 proceedToInputs = result.Data;
             }
@@ -608,7 +621,7 @@ public sealed class ParameterProcessor(
                         ShowDismiss = true,
                         EnableMessageMarkdown = true,
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    allParametersResolvedToken).ConfigureAwait(false);
 
                 if (!valuesPrompt.Canceled)
                 {
@@ -627,7 +640,7 @@ public sealed class ParameterProcessor(
                             continue;
                         }
 
-                        await ApplyParameterValueAsync(parameter, inputValue, shouldSave, cancellationToken).ConfigureAwait(false);
+                        await ApplyParameterValueAsync(parameter, inputValue, shouldSave, allParametersResolvedToken).ConfigureAwait(false);
 
                         if (shouldSave)
                         {

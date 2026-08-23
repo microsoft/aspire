@@ -728,12 +728,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenActiveCustomDebugSupportOffersProcessFallback()
+    public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenActiveCustomDebugSupportDoesNotOwnInvocation()
     {
         // SupportsDebugging() consults only the LAST SupportsDebuggingAnnotation. When a caller stacks a
-        // custom, non-"project" WithDebugSupport that does NOT rewrite args, ExecutableCreator offers a
-        // Process fallback built from Spec.Args. The `dotnet run …` scaffolding must therefore be preserved
-        // so that fallback launches the app instead of a bare `dotnet`.
+        // custom, non-"project" WithDebugSupport that does not own the .NET SDK invocation, the selected launch
+        // still needs the complete `dotnet run …` scaffolding.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
@@ -763,9 +762,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenActiveCustomDebugSupportOwnsLaunchToolArgs()
     {
-        // A stacked custom debug configuration with launch tool arguments owns the tool invocation, so no
-        // Process fallback is offered and Spec.Args is composed from that prefix plus the program arguments.
-        // The `dotnet run …` scaffolding must be omitted; re-emitting it would duplicate the tool invocation.
+        // A stacked custom debug configuration with launch tool arguments owns the tool invocation.
+        // The `dotnet run …` scaffolding must be omitted; re-emitting it would duplicate that invocation.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
@@ -794,9 +792,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffolding_WhenOwnedLaunchToolArgsAreEmpty()
     {
-        // Launch tool argument ownership, rather than the number of values produced, determines who supplies the project
-        // launch. A no-op custom tool invocation must still suppress `dotnet run`; DCP consequently cannot offer this
-        // IDE-only command line as a Process fallback.
+        // Launch tool argument ownership, rather than the number of values produced, determines who supplies the
+        // project launch. A no-op custom tool invocation must still suppress `dotnet run`.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";

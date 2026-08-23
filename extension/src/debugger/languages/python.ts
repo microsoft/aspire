@@ -26,7 +26,7 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
 export const pythonDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'python',
     debugAdapter: 'debugpy',
-    extensionId: 'ms-python.python',
+    extensionId: 'ms-python.debugpy',
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => `Python: ${vscode.workspace.asRelativePath(getProjectFile(launchConfiguration))}`,
     getSupportedFileTypes: () => ['.py'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),
