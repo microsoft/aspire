@@ -1,9 +1,4 @@
 <linker>
-  <assembly fullname="Microsoft.FluentUI.AspNetCore.Components">
-    <!-- FluentRadioGroup registers this internal type for browser event deserialization.
-         Remove this workaround when https://github.com/microsoft/fluentui-blazor/pull/5192 is available. -->
-    <type fullname="Microsoft.FluentUI.AspNetCore.Components.RadioEventArgs" preserve="all" />
-  </assembly>
   <!-- IconResolver dynamically resolves resource and command icons at sizes 16, 20, and 24. -->
   <assembly fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Filled">
     <type fullname="Microsoft.FluentUI.AspNetCore.Components.Icons.Filled.Size16*" preserve="all" />

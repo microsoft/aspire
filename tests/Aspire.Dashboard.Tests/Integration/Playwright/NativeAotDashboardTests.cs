@@ -24,6 +24,11 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             string.IsNullOrEmpty(dashboardPath),
             "ASPIRE_NATIVE_DASHBOARD_PATH must identify the Native AOT Dashboard executable.");
 
+        var dashboardBytes = File.ReadAllBytes(dashboardPath);
+        Assert.True(
+            dashboardBytes.AsSpan().IndexOf("Aspire.Dashboard.Resources.Columns.resources"u8) >= 0,
+            "The Native AOT Dashboard must preserve its manifest resources.");
+
         var workingDirectory = Directory.CreateTempSubdirectory();
         var dashboardUrl = $"http://127.0.0.1:{GetFreePort()}";
         var startInfo = new ProcessStartInfo
@@ -53,7 +58,12 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             await using var browser = await PlaywrightProvider.CreateBrowserAsync();
             await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
             {
-                BaseURL = dashboardUrl
+                BaseURL = dashboardUrl,
+                ViewportSize = new ViewportSize
+                {
+                    Width = 390,
+                    Height = 844
+                }
             });
             var page = await context.NewPageAsync();
             var browserErrors = new ConcurrentQueue<string>();
@@ -71,7 +81,8 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             Assert.Equal(HttpStatusCode.OK, (HttpStatusCode)response.Status);
             await page.GetByRole(AriaRole.Heading, new() { Name = "Structured logs" }).WaitForAsync();
 
-            await page.GetByRole(AriaRole.Button, new() { Name = Layout.MainLayoutLaunchSettings }).ClickAsync();
+            await page.GetByTitle(Dialogs.HelpDialogCategoryNavigation).ClickAsync();
+            await page.GetByRole(AriaRole.Menuitem, new() { Name = Layout.MainLayoutLaunchSettings }).ClickAsync();
             var darkThemeLabel = page.GetByText(Dialogs.SettingsDialogDarkTheme, new() { Exact = true }).First;
             var darkThemeRadioId = await darkThemeLabel.GetAttributeAsync("for");
             Assert.False(string.IsNullOrEmpty(darkThemeRadioId));

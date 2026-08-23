@@ -31,7 +31,6 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(float))]
 [JsonSerializable(typeof(Orientation))]
-[JsonSerializable(typeof(OverflowChangedEventArgs))]
 [JsonSerializable(typeof(PlotlyTrace[]))]
 [JsonSerializable(typeof(PlotlyTrace))]
 [JsonSerializable(typeof(PlotlyUserLocale))]

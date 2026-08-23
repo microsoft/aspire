@@ -20,4 +20,24 @@ public class VersionHelpersTests
         Assert.False(string.IsNullOrWhiteSpace(version), "Version should not be null or empty");
         Assert.Matches(s_versionRegex, version);
     }
+
+    [Theory]
+    [InlineData(false, ".NET 11.0.0")]
+    [InlineData(true, ".NET 11.0.0 (Native AOT)")]
+    public void GetRuntimeDisplayName_ReturnsExpectedValue(bool isNativeAot, string expected)
+    {
+        var displayName = VersionHelpers.GetRuntimeDisplayName(".NET 11.0.0", isNativeAot);
+
+        Assert.Equal(expected, displayName);
+    }
+
+    [Theory]
+    [InlineData(false, "JIT")]
+    [InlineData(true, "Native AOT")]
+    public void GetRuntimeMode_ReturnsExpectedValue(bool isNativeAot, string expected)
+    {
+        var mode = VersionHelpers.GetRuntimeMode(isNativeAot);
+
+        Assert.Equal(expected, mode);
+    }
 }
