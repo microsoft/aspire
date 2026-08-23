@@ -265,6 +265,34 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DockerComposeBuildCacheFromAndCacheToSerializedCorrectly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("cache-env");
+
+        builder.AddContainer("my-service", "my-image:latest")
+            .PublishAsDockerComposeService((resource, service) =>
+            {
+                service.Build ??= new Aspire.Hosting.Docker.Resources.ServiceNodes.Build();
+                service.Build.CacheFrom.Add("type=registry,ref=cr.example.com/my-service:cache");
+                service.Build.CacheTo.Add("type=registry,ref=cr.example.com/my-service:cache,mode=max");
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
+        var composeContent = File.ReadAllText(composeFile);
+
+        await Verify(composeContent, "yaml");
+    }
+
+    [Fact]
     public async Task GetHostAddressExpression()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

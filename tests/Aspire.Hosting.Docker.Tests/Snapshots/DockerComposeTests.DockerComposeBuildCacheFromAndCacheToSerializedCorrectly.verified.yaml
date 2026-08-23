@@ -1,0 +1,23 @@
+﻿services:
+  cache-env-dashboard:
+    image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
+    ports:
+      - "18888"
+    expose:
+      - "18889"
+      - "18890"
+    networks:
+      - "aspire"
+    restart: "always"
+  my-service:
+    image: "my-image:latest"
+    build:
+      cache_from:
+        - "type=registry,ref=cr.example.com/my-service:cache"
+      cache_to:
+        - "type=registry,ref=cr.example.com/my-service:cache,mode=max"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"

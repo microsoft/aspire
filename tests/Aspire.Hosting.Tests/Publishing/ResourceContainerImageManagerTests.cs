@@ -473,6 +473,44 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BuildImageAsync_FlowsAdditionalArgumentsToContainerRuntime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
+
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
+        var container = builder.AddDockerfile("container", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.AdditionalArguments.Add("--cache-from");
+                ctx.AdditionalArguments.Add("type=registry,ref=cr.example.com/container:cache");
+                ctx.AdditionalArguments.Add("--cache-to");
+                ctx.AdditionalArguments.Add("type=registry,ref=cr.example.com/container:cache,mode=max");
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        await imageBuilder.BuildImageAsync(container.Resource, cts.Token);
+
+        // Assert
+        Assert.True(fakeContainerRuntime.WasBuildImageCalled);
+        var buildCall = Assert.Single(fakeContainerRuntime.BuildImageCalls);
+        Assert.NotNull(buildCall.options?.AdditionalArguments);
+        Assert.Equal(
+            [
+                "--cache-from",
+                "type=registry,ref=cr.example.com/container:cache",
+                "--cache-to",
+                "type=registry,ref=cr.example.com/container:cache,mode=max"
+            ],
+            buildCall.options.AdditionalArguments);
+    }
+
+    [Fact]
     public async Task PushImageAsync_ThrowsWhenContainerRuntimeFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create(output);

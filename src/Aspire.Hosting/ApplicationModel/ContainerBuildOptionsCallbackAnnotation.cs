@@ -121,4 +121,32 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// Gets or sets the local image tag for the built container.
     /// </summary>
     public string? LocalImageTag { get; set; }
+
+    /// <summary>
+    /// Gets the list of additional arguments appended verbatim to the container
+    /// build command. Use this for builder flags that are not represented by the
+    /// typed properties above, such as BuildKit cache configuration
+    /// (<c>--cache-from</c>/<c>--cache-to</c>) or <c>--secret</c> mounts.
+    /// </summary>
+    /// <remarks>
+    /// Each entry must be a complete argument token, including its flag. For example,
+    /// to export build cache to a registry, add <c>"--cache-to"</c> followed by
+    /// <c>"type=registry,ref=myregistry/myimage:cache"</c>.
+    /// Entries are only applied to builder-based builds (docker buildx / podman build).
+    /// They do not apply to project resources built via <c>dotnet publish /t:PublishContainer</c>,
+    /// which does not invoke a container builder directly.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddDockerfile("api", "./src")
+    ///     .WithContainerBuildOptions(ctx =>
+    ///     {
+    ///         ctx.AdditionalArguments.Add("--cache-from");
+    ///         ctx.AdditionalArguments.Add("type=registry,ref=cr.example.com/api:cache");
+    ///         ctx.AdditionalArguments.Add("--cache-to");
+    ///         ctx.AdditionalArguments.Add("type=registry,ref=cr.example.com/api:cache,mode=max");
+    ///     });
+    /// </code>
+    /// </example>
+    public List<string> AdditionalArguments { get; } = [];
 }

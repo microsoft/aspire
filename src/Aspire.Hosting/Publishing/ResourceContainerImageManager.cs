@@ -127,6 +127,13 @@ public class ContainerImageBuildOptions
     /// Gets the target platform for the container.
     /// </summary>
     public ContainerTargetPlatform? TargetPlatform { get; init; }
+
+    /// <summary>
+    /// Gets the additional arguments appended verbatim to the container build command.
+    /// Each entry must be a complete argument token, including its flag
+    /// (for example "--cache-from" or "type=registry,ref=myregistry/myimage:cache").
+    /// </summary>
+    public IReadOnlyList<string>? AdditionalArguments { get; init; }
 }
 
 /// <summary>
@@ -178,6 +185,7 @@ internal sealed class ResourceContainerImageManager(
         public ContainerImageDestination? Destination { get; set; }
         public string LocalImageName { get; set; } = string.Empty;
         public string LocalImageTag { get; set; } = "latest";
+        public IReadOnlyList<string> AdditionalArguments { get; set; } = [];
     }
 
     private async Task<ResolvedContainerBuildOptions> ResolveContainerBuildOptionsAsync(
@@ -202,6 +210,7 @@ internal sealed class ResourceContainerImageManager(
         options.Destination = context.Destination;
         options.LocalImageName = context.LocalImageName ?? options.LocalImageName;
         options.LocalImageTag = context.LocalImageTag ?? options.LocalImageTag;
+        options.AdditionalArguments = [.. context.AdditionalArguments];
 
         return options;
     }
@@ -493,7 +502,8 @@ internal sealed class ResourceContainerImageManager(
             Tag = imageTag,
             OutputPath = options.OutputPath,
             ImageFormat = options.ImageFormat,
-            TargetPlatform = options.TargetPlatform
+            TargetPlatform = options.TargetPlatform,
+            AdditionalArguments = options.AdditionalArguments
         };
 
         try
