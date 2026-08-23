@@ -1,0 +1,107 @@
+# Copilot review dispatcher (see microsoft/aspire#19581).
+#
+# GitHub's native "automatic code review" ruleset rule (copilot_code_review)
+# cannot express a head-branch/author exclusion: its branch condition matches
+# the PR's *base* branch, not the head branch, and it has no label or
+# changed-path predicate. That means the bot-authored extension-release PR
+# (base=main, head=extension-release/vX.Y.Z, two-file diff) currently gets the
+# same automatic Copilot review as every ordinary PR, including a fresh
+# review on every changelog-finalization push.
+#
+# This workflow replaces the native rule (copilot_code_review is removed from
+# ruleset 3659502) with an explicit dispatcher that:
+#   - requests a Copilot review for every PR, EXCEPT
+#   - the trusted, bot-authored extension-release PR, which gets no Copilot
+#     review at all.
+#
+# Deliberately pull_request_target, not pull_request: this needs to write a
+# review request, which requires a token with write access, and
+# pull_request_target grants that even for fork-authored PRs while running
+# the workflow definition from the base branch. To keep that safe:
+#   - PR code is NEVER checked out or executed. The only checkout is a sparse
+#     checkout of this workflow's own composite action, taken at the base-ref
+#     commit that GitHub resolved the workflow from (github.sha here is the
+#     base branch's commit, not the PR head or a merge commit).
+#   - No PR-controlled value is interpolated into a shell command. Every
+#     PR-derived value (base ref, head repo, head ref, author) is passed as an
+#     action `input:` / step `env:`, then compared with plain '==' inside
+#     '[[ ]]' — never substituted into command text.
+#   - The only side effect is a REST call to request a review; nothing is
+#     written back to the PR branch.
+name: Copilot Review Dispatch
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  # Keyed by PR number so rapid pushes (e.g. repeated changelog-finalization
+  # commits) don't create overlapping review-request jobs for the same PR.
+  group: copilot-review-dispatch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    name: Request Copilot review (unless trusted extension release PR)
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      # Sparse-checkout only the composite action, and only at the base-ref
+      # commit github.sha already points to for pull_request_target events.
+      # This never resolves to the PR's head or a merge commit.
+      - name: Checkout composite action (base ref only, no PR code)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/is-trusted-extension-release-pr
+          sparse-checkout-cone-mode: false
+
+      - name: Classify PR
+        id: classify
+        # A classification failure must default to the safe path (request
+        # review), never to silently skipping it. continue-on-error, combined
+        # with the `!= 'true'` check below treating a missing/empty output as
+        # "not trusted", makes that the automatic outcome of any failure here.
+        continue-on-error: true
+        uses: ./.github/actions/is-trusted-extension-release-pr
+        with:
+          repository: ${{ github.repository }}
+          base_ref: ${{ github.event.pull_request.base.ref }}
+          head_repo: ${{ github.event.pull_request.head.repo.full_name }}
+          head_ref: ${{ github.event.pull_request.head.ref }}
+          author: ${{ github.event.pull_request.user.login }}
+
+      # Ordinary PR path: reproduce the native rule's behavior by requesting
+      # Copilot through the documented review-request REST API. A failure
+      # here fails visibly (no continue-on-error) since a silently-skipped
+      # review request would be an unnoticed regression for every other PR.
+      - name: Request Copilot review
+        if: ${{ steps.classify.outputs.is_trusted != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eo pipefail
+
+          echo "Requesting Copilot review for ${REPOSITORY}#${PR_NUMBER}..."
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+            -f "reviewers[]=copilot-pull-request-reviewer[bot]"
+          echo "✓ Copilot review requested"
+
+      - name: Skip Copilot review (trusted extension release PR)
+        if: ${{ steps.classify.outputs.is_trusted == 'true' }}
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "PR #${PR_NUMBER} matched the trusted extension-release fast path (base=main, same-repo, aspire-repo-bot[bot], extension-release/* head branch)."
+          echo "Skipping Copilot review request for this PR."
+          

@@ -1,0 +1,76 @@
+name: 'Is Trusted Extension Release PR'
+description: |
+  Classifies whether a pull request is the trusted, bot-authored VS Code
+  extension release PR that is allowed onto the release fast path (see
+  microsoft/aspire#19581).
+
+  This is the SINGLE predicate shared by:
+    - the Copilot review dispatcher (.github/workflows/copilot-review-dispatch.yml)
+    - the CI fast-path classifier (.github/workflows/ci.yml, prepare_for_ci)
+
+  A PR is trusted only when ALL of the following server-provided fields match:
+    - base branch is 'main'
+    - head repository is the same repository this workflow runs in (blocks forks)
+    - PR author is 'aspire-repo-bot[bot]'
+    - head branch starts with 'extension-release/'
+
+  The same-repository + bot-author checks are what make the branch-prefix check
+  safe: a fork cannot bypass Copilot review or full CI by simply naming its
+  branch 'extension-release/*', because it can never make head_repo equal the
+  base repository or make the PR author equal the bot's App slug.
+
+  This action performs no checkout of PR-controlled code and does no
+  interpolation of untrusted values into shell commands; all comparisons are
+  done with '==' inside a bash '[[ ]]' test using values passed in as
+  action inputs (which the calling workflow reads from the GitHub event
+  payload, not from PR content).
+
+inputs:
+  repository:
+    description: "The base repository, e.g. 'microsoft/aspire' (github.repository)."
+    required: true
+  base_ref:
+    description: "The PR's base branch name (github.event.pull_request.base.ref)."
+    required: true
+  head_repo:
+    description: "The PR head repository full name (github.event.pull_request.head.repo.full_name)."
+    required: true
+  head_ref:
+    description: "The PR head branch name (github.event.pull_request.head.ref)."
+    required: true
+  author:
+    description: "The PR author's login (github.event.pull_request.user.login)."
+    required: true
+
+outputs:
+  is_trusted:
+    description: "'true' if this PR matches the trusted extension-release fast-path predicate, otherwise 'false'."
+    value: ${{ steps.classify.outputs.is_trusted }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: classify
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        BASE_REF: ${{ inputs.base_ref }}
+        HEAD_REPO: ${{ inputs.head_repo }}
+        HEAD_REF: ${{ inputs.head_ref }}
+        AUTHOR: ${{ inputs.author }}
+      run: |
+        set -eo pipefail
+
+        IS_TRUSTED=false
+
+        if [[ "$BASE_REF" == "main" \
+              && "$HEAD_REPO" == "$REPOSITORY" \
+              && "$AUTHOR" == "aspire-repo-bot[bot]" \
+              && "$HEAD_REF" == extension-release/* ]]; then
+          IS_TRUSTED=true
+        fi
+
+        echo "base_ref=$BASE_REF, head_repo=$HEAD_REPO, repository=$REPOSITORY, author=$AUTHOR, head_ref=$HEAD_REF"
+        echo "is_trusted=$IS_TRUSTED"
+        echo "is_trusted=$IS_TRUSTED" >> "$GITHUB_OUTPUT"
+        
