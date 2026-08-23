@@ -452,6 +452,35 @@ public class ContainerRuntimeBaseTests
         Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
+    [Fact]
+    public void BuildAdditionalArguments_EmptyOrNull_ReturnsEmpty()
+    {
+        Assert.Empty(TestContainerRuntime.FormatAdditionalArguments(null));
+        Assert.Empty(TestContainerRuntime.FormatAdditionalArguments([]));
+    }
+
+    [Fact]
+    public void BuildAdditionalArguments_PreservesEntriesAsTokens()
+    {
+        // Entries must not be quoted or joined: cache flags like
+        // --cache-to take comma-separated key=value lists, and values may contain spaces.
+        var result = TestContainerRuntime.FormatAdditionalArguments(
+        [
+            "--cache-from",
+            "type=registry,ref=cr.example.com/app:cache",
+            "--cache-to",
+            "type=registry,ref=cr.example.com/app:cache,mode=max"
+        ]);
+
+        Assert.Equal(
+        [
+            "--cache-from",
+            "type=registry,ref=cr.example.com/app:cache",
+            "--cache-to",
+            "type=registry,ref=cr.example.com/app:cache,mode=max"
+        ], result);
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
@@ -478,6 +507,11 @@ public class ContainerRuntimeBaseTests
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
                 cancellationToken);
+        }
+
+        public static List<string> FormatAdditionalArguments(IReadOnlyList<string>? additionalArguments)
+        {
+            return BuildAdditionalArguments(additionalArguments);
         }
 
         public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)
