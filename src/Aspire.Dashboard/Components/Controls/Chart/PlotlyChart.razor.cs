@@ -65,7 +65,7 @@ public partial class PlotlyChart : ChartBase
             Y = t.DiffValues,
             X = xValues,
             Tooltips = t.Tooltips,
-            TraceData = new List<object?>()
+            TraceData = []
         }).ToArray();
 
         var exemplarTraceDto = CalculateExemplarsTrace(xValues, exemplars);
@@ -151,7 +151,7 @@ public partial class PlotlyChart : ChartBase
             Y = new List<double?>(),
             X = new List<DateTimeOffset>(),
             Tooltips = new List<string?>(),
-            TraceData = new List<object?>()
+            TraceData = []
         };
 
         foreach (var exemplar in exemplarGroups.SelectMany(g => g.Value))
@@ -177,7 +177,7 @@ public partial class PlotlyChart : ChartBase
             exemplarTraceDto.X.Add(exemplar.Start);
             exemplarTraceDto.Y.Add(exemplar.Value);
             exemplarTraceDto.Tooltips.Add(tooltip);
-            exemplarTraceDto.TraceData.Add(new { TraceId = exemplar.TraceId, SpanId = exemplar.SpanId });
+            exemplarTraceDto.TraceData.Add(new PlotlyTraceData(exemplar.TraceId, exemplar.SpanId));
         }
 
         return exemplarTraceDto;

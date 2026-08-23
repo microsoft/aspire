@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using Aspire.Dashboard.Resources;
 using Aspire.TestUtilities;
 using Aspire.Templates.Tests;
 using Microsoft.Playwright;
@@ -69,6 +70,14 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
             Assert.NotNull(response);
             Assert.Equal(HttpStatusCode.OK, (HttpStatusCode)response.Status);
             await page.GetByRole(AriaRole.Heading, new() { Name = "Structured logs" }).WaitForAsync();
+
+            await page.GetByRole(AriaRole.Button, new() { Name = Layout.MainLayoutLaunchSettings }).ClickAsync();
+            var darkThemeLabel = page.GetByText(Dialogs.SettingsDialogDarkTheme, new() { Exact = true }).First;
+            var darkThemeRadioId = await darkThemeLabel.GetAttributeAsync("for");
+            Assert.False(string.IsNullOrEmpty(darkThemeRadioId));
+            await page.Locator($"fluent-radio[id='{darkThemeRadioId}']").ClickAsync();
+            await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
+
             await page.WaitForTimeoutAsync(1_000);
 
             Assert.True(browserErrors.IsEmpty, string.Join(Environment.NewLine, browserErrors));

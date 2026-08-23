@@ -24,6 +24,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(ConsoleLogs.ConsoleLogConsoleSettings))]
 [JsonSerializable(typeof(TextVisualizerDialog.TextVisualizerDialogSettings))]
 [JsonSerializable(typeof(TimeFormat))]
+[JsonSerializable(typeof(List<int>))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(List<FileReferenceViewModel>))]
 [JsonSerializable(typeof(StatusResponse))]
@@ -31,6 +32,9 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(float))]
 [JsonSerializable(typeof(Orientation))]
 [JsonSerializable(typeof(OverflowChangedEventArgs))]
+[JsonSerializable(typeof(PlotlyTrace[]))]
+[JsonSerializable(typeof(PlotlyTrace))]
+[JsonSerializable(typeof(PlotlyUserLocale))]
 internal sealed partial class DashboardJsonSerializerContext : JsonSerializerContext
 {
     public static JsonSerializerOptions DefaultOptions { get; } = new()

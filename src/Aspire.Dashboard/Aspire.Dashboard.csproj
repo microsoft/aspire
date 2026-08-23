@@ -61,6 +61,8 @@
 
   <ItemGroup>
     <TrimmerRootAssembly Include="$(AssemblyName)" />
+    <!-- Preserve Fluent UI types discovered through reflection for Native AOT. -->
+    <TrimmerRootDescriptor Include="ILLink.Descriptors.xml" />
 
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Components.Tests" />
