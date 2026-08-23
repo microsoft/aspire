@@ -128,26 +128,42 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        return GetTemplatePackagesAsync(workingDirectory, Mappings, cancellationToken);
+        return GetTemplatePackagesAsync(workingDirectory, Mappings, filterLocalPackagesToPinnedVersion: true, cancellationToken);
     }
 
     /// <summary>
     /// Gets template packages using the specified mappings without changing this channel's identity.
     /// </summary>
-    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, PackageMapping[]? mappings, CancellationToken cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, PackageMapping[]? mappings, CancellationToken cancellationToken)
+    {
+        return GetTemplatePackagesAsync(workingDirectory, mappings, filterLocalPackagesToPinnedVersion: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets template packages using the specified mappings, optionally retaining every version
+    /// found in a local package directory instead of applying this channel's pinned version.
+    /// </summary>
+    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[]? mappings,
+        bool filterLocalPackagesToPinnedVersion,
+        CancellationToken cancellationToken)
     {
         validateTemplatePackageMetadataPrefetching?.Invoke();
-
-        if (PinnedVersion is not null)
-        {
-            return [new NuGetPackage { Id = TemplatePackageId, Version = PinnedVersion, Source = ComputeSourceDetails(mappings) }];
-        }
 
         // Local directory discovery must follow the caller-supplied mappings (e.g. `--source <dir>`),
         // not this channel's own mappings, otherwise the override is silently ignored.
         if (GetLocalAspirePackageSource(mappings) is { } localPackageSource)
         {
-            return GetTemplatePackagesFromLocalPackageSource(localPackageSource.Source, localPackageSource.PackageSource, cancellationToken);
+            var localPackages = GetTemplatePackagesFromLocalPackageSource(localPackageSource.Source, localPackageSource.PackageSource, cancellationToken);
+            return PinnedVersion is null || !filterLocalPackagesToPinnedVersion
+                ? localPackages
+                : localPackages.Where(package => string.Equals(package.Version, PinnedVersion, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (PinnedVersion is not null)
+        {
+            return [new NuGetPackage { Id = TemplatePackageId, Version = PinnedVersion, Source = ComputeSourceDetails(mappings) }];
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
@@ -192,7 +208,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         if (GetLocalAspirePackageSource() is { } localPackageSource)
         {
-            return GetIntegrationPackagesFromLocalPackageSource(localPackageSource.Source, localPackageSource.PackageSource, cancellationToken);
+            return GetIntegrationPackagesFromLocalPackageSource(
+                localPackageSource.Source,
+                localPackageSource.PackageSource,
+                GetLocalPackageVersion(workingDirectory),
+                cancellationToken);
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
@@ -237,9 +257,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     private (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource() => GetLocalAspirePackageSource(Mappings);
 
-    private (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
+    private static (string Source, DirectoryInfo PackageSource)? GetLocalAspirePackageSource(PackageMapping[]? mappings)
     {
-        if (Type is not PackageChannelType.Explicit || mappings is null)
+        if (mappings is null)
         {
             return null;
         }
@@ -278,7 +298,31 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .ToArray();
     }
 
-    private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(string source, DirectoryInfo packageSource, CancellationToken cancellationToken)
+    private string? GetLocalPackageVersion(DirectoryInfo workingDirectory)
+    {
+        // `aspire new` records an exact local selection as:
+        //   { "channel": "local", "sdk": { "version": "13.6.0-dev" } }
+        // A local hive can also contain stale higher-version packages, so use the project-scoped
+        // version when the persisted channel matches this channel. Projects created before that
+        // version was persisted continue to use the channel's discovered pin.
+        var configPath = ConfigurationHelper.FindNearestConfigFilePath(workingDirectory);
+        if (configPath is null ||
+            !ConfigurationHelper.TryLoadSettingsFile(configPath, out var configuration) ||
+            !string.Equals(configuration["channel"], Name, StringComparisons.ChannelName))
+        {
+            return PinnedVersion;
+        }
+
+        var configuredVersion = configuration["sdk:version"];
+        if (string.IsNullOrWhiteSpace(configuredVersion))
+        {
+            configuredVersion = configuration["sdkVersion"];
+        }
+
+        return string.IsNullOrWhiteSpace(configuredVersion) ? PinnedVersion : configuredVersion;
+    }
+
+    private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(string source, DirectoryInfo packageSource, string? packageVersion, CancellationToken cancellationToken)
     {
         // Mirror NuGetPackageCache.GetIntegrationPackagesAsync: a user who flipped
         // ShowDeprecatedPackages to see deprecated packages on stable/staging/daily
@@ -293,17 +337,17 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
             .Where(IsAllowedByQuality);
 
-        if (PinnedVersion is not null)
+        if (packageVersion is not null)
         {
             packageMetadata = packageMetadata
-                .Where(metadata => string.Equals(metadata.Version.ToString(), PinnedVersion, StringComparison.OrdinalIgnoreCase));
+                .Where(metadata => string.Equals(metadata.Version.ToString(), packageVersion, StringComparison.OrdinalIgnoreCase));
         }
 
         return packageMetadata
             .GroupBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
             .Select(group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First())
             .OrderBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
-            .Select(metadata => new NuGetPackage { Id = metadata.PackageId, Version = PinnedVersion ?? metadata.Version.ToString(), Source = source })
+            .Select(metadata => new NuGetPackage { Id = metadata.PackageId, Version = packageVersion ?? metadata.Version.ToString(), Source = source })
             .ToArray();
 
         bool IsAllowedByQuality(PackageFileMetadata metadata) => new { metadata.Version, Quality } switch
@@ -334,7 +378,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         if (GetLocalAspirePackageSource() is { } localPackageSource)
         {
-            return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(localPackageSource.PackageSource, cancellationToken);
+            return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
+                localPackageSource.PackageSource,
+                GetLocalPackageVersion(workingDirectory),
+                cancellationToken);
         }
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
@@ -359,13 +406,19 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .ToHashSet(StringComparers.NuGetPackageId);
     }
 
-    private IReadOnlySet<string> GetPolyglotCompatiblePackageIdsFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
+    private IReadOnlySet<string> GetPolyglotCompatiblePackageIdsFromLocalPackageSource(
+        DirectoryInfo packageSource,
+        string? packageVersion,
+        CancellationToken cancellationToken)
     {
         var ids = new HashSet<string>(StringComparers.NuGetPackageId);
 
         foreach (var file in EnumerateLocalPackageFiles(packageSource, cancellationToken))
         {
-            if (GetPackageFileMetadata(file.FullName) is not { } metadata || !PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
+            if (GetPackageFileMetadata(file.FullName) is not { } metadata ||
+                !PackageIdFilters.IsIntegrationPackageId(metadata.PackageId) ||
+                packageVersion is not null &&
+                !string.Equals(metadata.Version.ToString(), packageVersion, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

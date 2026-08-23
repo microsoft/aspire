@@ -15,6 +15,7 @@ import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { launchConfigurationTypePropertyName } from '../debugger/debuggerInstallHints';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
@@ -92,6 +93,7 @@ function createHarness(opts: {
         repository,
         treeProvider,
         dispose() {
+            provider.dispose();
             workspaceAppHostPathStub.restore();
             workspaceResourcesStub.restore();
             appHostsStub.restore();
@@ -635,6 +637,103 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
     function getStateLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
         return lenses.filter(l => l.command?.command === 'aspire-vscode.codeLensRevealResource');
     }
+
+    test('emits an install lens for a running resource with a missing debugger', async () => {
+        const getExtensionStub = sinon.stub(vscode.extensions, 'getExtension').returns(undefined);
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [
+                makeResource('python', {
+                    properties: { [launchConfigurationTypePropertyName]: 'python' },
+                }),
+            ],
+        });
+
+        try {
+            const doc = createMockDocument(
+                'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddPythonApp("python", "../python", "app.py");',
+                docPath);
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const installLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension');
+
+            assert.strictEqual(installLenses.length, 1);
+            assert.strictEqual(installLenses[0].command?.title, '⚠️ Set up Python debugger');
+        } finally {
+            harness.dispose();
+            getExtensionStub.restore();
+        }
+    });
+
+    test('emits a Java install lens for a running resource with both missing debugger extensions', async () => {
+        const getExtensionStub = sinon.stub(vscode.extensions, 'getExtension').returns(undefined);
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [
+                makeResource('java', {
+                    properties: { [launchConfigurationTypePropertyName]: 'java' },
+                }),
+            ],
+        });
+
+        try {
+            const doc = createMockDocument(
+                'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddProject("java", "../java");',
+                docPath);
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const installLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension');
+
+            assert.strictEqual(installLenses.length, 1);
+            assert.strictEqual(installLenses[0].command?.title, '⚠️ Set up Java debugger');
+            assert.deepStrictEqual(installLenses[0].command?.arguments?.[0], {
+                debuggerName: 'Java',
+                debuggerType: 'java',
+                extensionIds: ['redhat.java', 'vscjava.vscode-java-debug'],
+            });
+        } finally {
+            harness.dispose();
+            getExtensionStub.restore();
+        }
+    });
+
+    test('emits an Azure Functions install lens when one required debugger extension is missing', async () => {
+        const getExtensionStub = sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+            extensionId === 'ms-dotnettools.csharp'
+                ? { id: extensionId } as vscode.Extension<unknown>
+                : undefined);
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [
+                makeResource('functions', {
+                    properties: { [launchConfigurationTypePropertyName]: 'azure-functions' },
+                }),
+            ],
+        });
+
+        try {
+            const doc = createMockDocument(
+                'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddAzureFunctionsProject("functions", "../functions");',
+                docPath);
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const installLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.installDebuggerExtension');
+
+            assert.strictEqual(installLenses.length, 1);
+            assert.strictEqual(installLenses[0].command?.title, '⚠️ Set up Azure Functions debugger');
+            assert.deepStrictEqual(installLenses[0].command?.arguments?.[0], {
+                debuggerName: 'Azure Functions',
+                debuggerType: 'azure-functions',
+                extensionIds: ['ms-dotnettools.csharp', 'ms-azuretools.vscode-azurefunctions'],
+            });
+        } finally {
+            harness.dispose();
+            getExtensionStub.restore();
+        }
+    });
 
     test('emits resource state and action lenses for a running Rust AppHost', async () => {
         const appHostPath = p('repo', 'AppHost', 'apphost.rs');

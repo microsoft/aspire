@@ -644,6 +644,59 @@ suite('E2E launch profile', () => {
         assert.ok(runTests.includes('extestEnv'));
     });
 
+    test('persists E2E NuGet packages while purging repo-built Aspire packages', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const nuGetPathDeclaration = "const e2eNuGetPackages = path.join(downloadCacheRoot, 'nuget-packages', shardName);";
+        const nuGetPathIndex = runner.indexOf(nuGetPathDeclaration);
+        const restoreWorkspaceIndex = runner.indexOf('restoreWorkspaceFixture();');
+        const prepareCacheStart = runner.indexOf('function prepareNuGetPackageCache()');
+        const prepareCacheEnd = runner.indexOf('\nfunction ', prepareCacheStart + 1);
+        const prepareCache = runner.slice(prepareCacheStart, prepareCacheEnd);
+        const mainStart = runner.indexOf('async function main()');
+        const mainBody = runner.slice(mainStart, runner.indexOf('\n  finally {', mainStart));
+        const cliEnvironmentStart = runner.indexOf('function getAspireCliEnvironment');
+        const cliEnvironmentEnd = runner.indexOf('\nfunction ', cliEnvironmentStart + 1);
+        const cliEnvironment = runner.slice(cliEnvironmentStart, cliEnvironmentEnd);
+        const extestEnvironmentStart = runner.indexOf('const extestEnv = getAspireCliEnvironment({');
+        const extestEnvironmentEnd = runner.indexOf('\n    });', extestEnvironmentStart);
+        const extestEnvironment = runner.slice(extestEnvironmentStart, extestEnvironmentEnd);
+        const javaSdkGenerationStart = runner.indexOf('function ensureJavaAppHostSdkGenerated');
+        const javaSdkGenerationEnd = runner.indexOf('\nfunction ', javaSdkGenerationStart + 1);
+        const javaSdkGeneration = runner.slice(javaSdkGenerationStart, javaSdkGenerationEnd);
+        const javaRestoreStart = javaSdkGeneration.indexOf("spawnSync(bundledCliPath, ['restore'], {");
+        const javaRestoreEnd = javaSdkGeneration.indexOf('\n  });', javaRestoreStart);
+        const javaRestore = javaSdkGeneration.slice(javaRestoreStart, javaRestoreEnd);
+
+        assert.ok(nuGetPathIndex >= 0);
+        assert.ok(nuGetPathIndex < restoreWorkspaceIndex);
+        assert.ok(prepareCacheStart >= 0);
+        assert.ok(prepareCacheEnd > prepareCacheStart);
+        assert.ok(prepareCache.includes("fs.mkdirSync(e2eNuGetPackages, { recursive: true });"));
+        assert.ok(prepareCache.includes("fs.readdirSync(e2eNuGetPackages, { withFileTypes: true })"));
+        assert.ok(prepareCache.includes("/^aspire(?:\\.|$)/i.test(entry.name)"));
+        assert.ok(prepareCache.includes("removePathWithoutFollowingLinks(path.join(e2eNuGetPackages, entry.name), { recursive: true, force: true });"));
+        assert.ok(mainBody.includes('prepareNuGetPackageCache();'));
+        assert.ok(cliEnvironment.includes('NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(extestEnvironment.includes('NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(extestEnvironment.includes('ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(javaRestoreStart >= 0);
+        assert.ok(javaRestoreEnd > javaRestoreStart);
+        assert.ok(javaRestore.includes('env: getAspireCliEnvironment(),'));
+    });
+
+    test('makes local NuGet sources available to external AppHosts', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const writeConfigStart = runner.indexOf('function writeNuGetConfigIfLocalPackageSourcesExist');
+        const writeConfigEnd = runner.indexOf('\nfunction ', writeConfigStart + 1);
+        const writeConfig = runner.slice(writeConfigStart, writeConfigEnd);
+
+        assert.ok(runner.includes("const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');"));
+        assert.ok(writeConfig.includes('fs.writeFileSync(runRootNuGetConfigPath, nugetConfig);'));
+        assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
+    });
+
     test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
@@ -1118,13 +1171,17 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.indexOf('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)') > zeroToRunning.indexOf('await runE2eTeardown(['));
         assert.ok(zeroToRunning.indexOf('appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);') < zeroToRunning.lastIndexOf("executeE2eControlCommand({ name: 'stopDebugging' })"));
         assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
-        assert.ok(dynamicDebugConfiguration.includes('let appHostPidBeforeStop: number | undefined;'));
-        assert.ok(dynamicDebugConfiguration.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(firstAppHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes('() => stopAppHostIfRunning(appHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes('() => stopAppHostIfRunning(firstAppHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes("waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000)"));
-        assert.ok(dynamicDebugConfiguration.indexOf("waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000)") < dynamicDebugConfiguration.indexOf('removePath(fixtureRoot, { recursive: true, force: true })'));
+        assert.ok(dynamicDebugConfiguration.includes('let appHostPidsBeforeStop: number[];'));
+        assert.ok(dynamicDebugConfiguration.includes('appHostPidsBeforeStop = [];'));
+        const captureFixtureAppHostPids = dynamicDebugConfiguration.indexOf('appHostPidsBeforeStop = fixtureAppHostPaths');
+        const stopFixtureAppHosts = dynamicDebugConfiguration.indexOf('...fixtureAppHostPaths.map(appHostPath => () => fs.existsSync(appHostPath) ? stopAppHostIfRunning(appHostPath) : undefined)');
+        const waitForFixtureAppHostPids = dynamicDebugConfiguration.indexOf('Promise.all(appHostPidsBeforeStop.map(appHostPid =>');
+        const removeFixtureRoot = dynamicDebugConfiguration.indexOf('removePath(fixtureRoot, { recursive: true, force: true })');
+        assert.ok(captureFixtureAppHostPids >= 0);
+        assert.ok(stopFixtureAppHosts > captureFixtureAppHostPids);
+        assert.ok(dynamicDebugConfiguration.includes("waitForKnownProcessExit(appHostPid, 'a dynamic debug configuration AppHost process', 30000)"));
+        assert.ok(waitForFixtureAppHostPids > stopFixtureAppHosts);
+        assert.ok(removeFixtureRoot > waitForFixtureAppHostPids);
         assert.ok(commandPalette.includes('runE2eTeardown'));
         assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
         assert.ok(!commandPalette.includes('throw new AggregateError'));
@@ -1148,6 +1205,32 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes("code === 'ENOTEMPTY'"));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
+    });
+
+    test('keeps the gated deploy test-controlled and cleans its fixture in finally', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+        const gatedDeployFixture = fixtures.slice(
+            fixtures.indexOf('export function writeGatedDeployActionCliWrapper'),
+            fixtures.indexOf('export function writeLegacyPipelineActionCliWrapper'));
+        const durableOperationTest = getTestBlock(treeActions, 'keeps one durable operation per AppHost while a deploy session is in flight');
+
+        assert.ok(gatedDeployFixture.includes('cleanup: () => void;'));
+        assert.ok(gatedDeployFixture.includes('removePath(gateDirectory, { recursive: true, force: true });'));
+        assert.ok(gatedDeployFixture.includes('removePath(cliPath, { force: true });'));
+        assert.ok(gatedDeployFixture.includes('removePath(scriptPath, { force: true });'));
+        assert.ok(fixtures.includes("waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});"));
+        assert.ok(fixtures.includes('if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {'));
+        assert.ok(durableOperationTest.replace(/\r\n/g, '\n').includes(`finally {
+            try {
+                gatedCli.releaseDeploy();
+            }
+            finally {
+                gatedCli.cleanup();
+            }
+            await waitForNoDebugSessions(120000);
+        }`));
     });
 
     test('keeps tree action resource lifecycle commands as terminal routing assertions', () => {

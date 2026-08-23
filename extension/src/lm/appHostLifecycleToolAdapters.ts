@@ -3,8 +3,11 @@ import * as vscode from 'vscode';
 import {
     appHostLifecycleStartConfirmationMessage,
     appHostLifecycleStartConfirmationMessageIsolated,
+    appHostLifecycleStartConfirmationMessageIsolatedWithLaunchProfile,
+    appHostLifecycleStartConfirmationMessageWithLaunchProfile,
     appHostLifecycleStartConfirmationTitle,
     appHostLifecycleStartInvocationMessage,
+    appHostLifecycleInvalidLaunchProfile,
     appHostLifecycleStopConfirmationMessage,
     appHostLifecycleStopConfirmationTitle,
     appHostLifecycleStopInvocationMessage,
@@ -22,6 +25,7 @@ import {
     type PreparableAppHostLifecycleTool,
 } from './appHostLifecycleToolContracts';
 import { AppHostLifecycleToolService } from './appHostLifecycleToolService';
+import { isValidLaunchProfile } from '../utils/launchProfile';
 
 export class AppHostStartLanguageModelTool implements vscode.LanguageModelTool<AppHostStartToolInput> {
     constructor(private readonly _service: AppHostLifecycleToolService) {
@@ -34,13 +38,18 @@ export class AppHostStartLanguageModelTool implements vscode.LanguageModelTool<A
         const description = await this._service.describeStartTarget(options.input, token);
         const displayPath = escapeMarkdown(description.displayPath);
         const displayMode = describeRequestedMode(options.input?.mode);
+        const displayLaunchProfile = describeLaunchProfile(options.input?.launchProfile);
         return {
             invocationMessage: appHostLifecycleStartInvocationMessage(displayPath),
             confirmationMessages: {
                 title: appHostLifecycleStartConfirmationTitle,
-                message: description.isolated
-                    ? appHostLifecycleStartConfirmationMessageIsolated(displayPath, displayMode)
-                    : appHostLifecycleStartConfirmationMessage(displayPath, displayMode),
+                message: displayLaunchProfile === undefined
+                    ? description.isolated
+                        ? appHostLifecycleStartConfirmationMessageIsolated(displayPath, displayMode)
+                        : appHostLifecycleStartConfirmationMessage(displayPath, displayMode)
+                    : description.isolated
+                        ? appHostLifecycleStartConfirmationMessageIsolatedWithLaunchProfile(displayPath, displayMode, displayLaunchProfile)
+                        : appHostLifecycleStartConfirmationMessageWithLaunchProfile(displayPath, displayMode, displayLaunchProfile),
             },
         };
     }
@@ -127,6 +136,14 @@ function createToolResult(result: AppHostLifecycleToolResult): vscode.LanguageMo
 
 function describeRequestedMode(value: unknown): string {
     return parseMode(value) ?? appHostLifecycleUnspecifiedMode;
+}
+
+function describeLaunchProfile(value: unknown): string | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    return isValidLaunchProfile(value) ? escapeMarkdown(value) : appHostLifecycleInvalidLaunchProfile;
 }
 
 /**

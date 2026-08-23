@@ -431,7 +431,7 @@ export class CliPathResolver implements vscode.Disposable {
         const state = scopeState;
 
         const configuredPathSnapshot = this.getConfiguredCliPathSnapshot(deps, target);
-        const e2eCliPath = process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim();
+        const e2eCliPath = getE2eCliPath(target);
 
         // Different test-provided `deps` objects targeting the same scope must never
         // coalesce with each other's in-flight probe, even when their snapshots match.
@@ -465,7 +465,7 @@ export class CliPathResolver implements vscode.Disposable {
                 if (generation !== state.generation
                     || (!this.areConfiguredCliPathSnapshotsEqual(currentConfiguredPathSnapshot, configuredPathSnapshot)
                     && !this.areConfiguredCliPathSnapshotsEqual(currentConfiguredPathSnapshot, writtenConfiguredPathSnapshot))
-                    || process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim() !== e2eCliPath) {
+                    || getE2eCliPath(target) !== e2eCliPath) {
                     return this.resolve(target, depsOverrideForTests);
                 }
 
@@ -788,6 +788,27 @@ export function resolveCliPath(
     }
 
     return cliPathResolver.resolve(windowCliPathTarget, targetOrDeps);
+}
+
+function getE2eCliPath(target: CliPathResolutionTarget): string | undefined {
+    // Keep multi-root E2E CLI identities isolated without changing persisted workspace settings.
+    const scopedPaths = process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+    if (scopedPaths) {
+        try {
+            const parsed = JSON.parse(scopedPaths) as unknown;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const scopedPath = (parsed as Record<string, unknown>)[getCliPathTargetKey(target)];
+                if (typeof scopedPath === 'string' && scopedPath.trim().length > 0) {
+                    return scopedPath.trim();
+                }
+            }
+        }
+        catch {
+            // Ignore malformed test-only state and retain the established global E2E fallback.
+        }
+    }
+
+    return process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim();
 }
 
 /**

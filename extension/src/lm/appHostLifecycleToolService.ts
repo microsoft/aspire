@@ -256,7 +256,8 @@ export class AppHostLifecycleToolService implements vscode.Disposable {
                         'run',
                         requestedMode === 'run',
                         input.isolated,
-                        lockToken);
+                        lockToken,
+                        input.launchProfile);
                     return createResult(aspireAppHostStartToolName, 'started', current.relativePath, 'editor', requestedMode, requestedMode, undefined, launchedIsolation?.effective);
                 }
                 catch (error) {

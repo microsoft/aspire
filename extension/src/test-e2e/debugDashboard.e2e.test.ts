@@ -90,16 +90,7 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
     });
 
-    test('closes the dashboard debug browser when the AppHost debug session stops', async function () {
-        // js-debug cannot launch Chrome under the Linux xvfb runner: it activates on
-        // `onDebugResolve:pwa-chrome` and then never resolves `startDebugging`. Because
-        // `openDashboard` awaits that launch, the AppHost startup handshake stalls and every
-        // later test in this file fails too. Windows runs the real browser, so the shutdown
-        // behavior still gets end-to-end coverage there.
-        if (process.platform !== 'win32') {
-            this.skip();
-        }
-
+    test('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows', async () => {
         writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome');
 
         await openAspireView();
@@ -118,20 +109,24 @@ suite('Aspire debug dashboard E2E', function () {
         // look like a missing browser session.
         await waitForDebugDashboardUrl();
 
-        const browserSession = await waitForBrowserDebugSession();
-        assert.deepStrictEqual(
-            getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
-            [{ id: browserSession.id, type: 'pwa-chrome' }]);
+        if (process.platform === 'win32') {
+            const browserSession = await waitForBrowserDebugSession();
+            assert.deepStrictEqual(
+                getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
+                [{ id: browserSession.id, type: 'pwa-chrome' }]);
+        }
 
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
 
-        // The Aspire session ending is not enough on its own. VS Code leaves the child browser
-        // session running unless the extension stops it explicitly, which is what left orphaned
-        // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
-        // on the extension's own debugSessions cannot catch that regression: it was already empty
-        // while the browser kept running.
-        await waitForNoBrowserDebugSessions();
+        if (process.platform === 'win32') {
+            // The Aspire session ending is not enough on its own. VS Code leaves the child browser
+            // session running unless the extension stops it explicitly, which is what left orphaned
+            // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
+            // on the extension's own debugSessions cannot catch that regression: it was already empty
+            // while the browser kept running.
+            await waitForNoBrowserDebugSessions();
+        }
     });
 
     test('workspace debug stop removes running apphost', async () => {
@@ -210,7 +205,9 @@ suite('Aspire debug dashboard E2E', function () {
         const beforeDebugLaunch = getDebugLaunchCount();
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'publishAppHost', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            const beforePublish = getCommandInvocationCount('aspire-vscode.publishAppHost');
+            await executeE2eControlCommand({ name: 'publishAppHostAction', appHostPath }, { waitFor: 'started', timeoutMs: 30000 });
+            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'success', 60000, beforePublish);
             await waitForDebugLaunch(
                 event => event.command === 'publish' && event.appHostPath !== undefined && isSamePath(event.appHostPath, appHostPath),
                 `publish launch for AppHost '${appHostPath}'`,

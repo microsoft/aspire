@@ -713,13 +713,22 @@ public class Program
         var nugetServiceIndexOverride = identityResolver.ResolveNuGetServiceIndexOverride();
         var packagesOverride = identityResolver.ResolvePackagesDirectory();
 
-        // The CLI is "emulating" another build whenever any identity field was supplied by an
-        // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
-        // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
-        // Every override source participates — including the NuGet service-index override — so a run
-        // that sets only ASPIRE_CLI_NUGET_SERVICE_INDEX is still flagged as a diagnostic emulation.
         static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
         var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetServiceIndexOverride.Source) || IsOverride(packagesOverride.Source);
+
+        // Installer-authored channel/version/commit fields describe the installed CLI and should not
+        // be presented as diagnostic emulation. Environment variables always require a notice, as do
+        // the sidecar-only package and service-index knobs used to redirect package resolution.
+        static bool IsEnvironmentOverride(IdentitySource source) => source is IdentitySource.Environment;
+        static bool IsDeveloperSidecarOverride(IdentitySource source) => source is IdentitySource.Sidecar;
+        var identityOverrideNoticeRequired =
+            IsEnvironmentOverride(channel.Source) ||
+            IsEnvironmentOverride(version.Source) ||
+            IsEnvironmentOverride(commit.Source) ||
+            IsEnvironmentOverride(nugetServiceIndexOverride.Source) ||
+            IsEnvironmentOverride(packagesOverride.Source) ||
+            IsDeveloperSidecarOverride(nugetServiceIndexOverride.Source) ||
+            IsDeveloperSidecarOverride(packagesOverride.Source);
 
         // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
         // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
@@ -740,6 +749,7 @@ public class Program
             nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
+            identityOverrideNoticeRequired: identityOverrideNoticeRequired,
             debugMode: debugMode,
             consoleLogLevel: consoleLogLevel,
             packagesDirectory: packagesDirectory,
@@ -849,11 +859,11 @@ public class Program
         }
 
         // Surface a notice whenever the CLI is emulating another build via ASPIRE_CLI_* env vars
-        // or the install sidecar, so a diagnostic run is never mistaken for a real installed build.
+        // or developer-only sidecar overrides, so a diagnostic run is never mistaken for a real install.
         // This is independent of first-run/banner state but is suppressed for machine-readable
         // output so structured payloads stay clean. Written to stderr for the same reason.
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        if (executionContext.IdentityOverridden && !isMachineReadableOutput)
+        if (executionContext.IdentityOverrideNoticeRequired && !isMachineReadableOutput)
         {
             var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
             var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
