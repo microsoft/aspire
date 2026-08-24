@@ -189,6 +189,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private readonly List<MenuButtonItem> _logsMenuItems = new();
     private readonly List<MenuButtonItem> _resourceMenuItems = new();
 
+    // Indents a menu item so it reads as a sub-option of the item above it. Defined in app.css.
+    internal const string SubOptionMenuItemClass = "sub-option-menu-item";
+
+    // Stable id for the "Show timestamps" menu item so the UTC sub-option can reference it with
+    // aria-describedby. Menu item ids are otherwise generated per render.
+    internal const string ShowTimestampMenuItemId = "console-logs-show-timestamps-menu-item";
+
     // State
     private bool _showHiddenResources;
     private bool _showTimestamp;
@@ -731,17 +738,31 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             _logsMenuItems.Add(new()
             {
+                Id = ShowTimestampMenuItemId,
                 OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
                 Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
                 Icon = new Icons.Regular.Size16.CalendarClock()
             });
 
+            // UTC only applies to timestamps that are actually rendered, so the item is disabled
+            // while timestamps are hidden. It intentionally stays visible rather than being hidden
+            // so someone who turns timestamps on doesn't have to reopen the menu to discover it.
+            // The indent class makes it read as a sub-option of the timestamp toggle above; without
+            // it the greyed-out checkbox looks like a standalone (or broken) entry. The indent is
+            // only visual, so aria-describedby points at the toggle above to give assistive
+            // technology the same relationship.
+            // See https://github.com/microsoft/aspire/issues/19019.
             _logsMenuItems.Add(new()
             {
                 OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
                 Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
-                IsDisabled = !_showTimestamp
+                IsDisabled = !_showTimestamp,
+                Class = SubOptionMenuItemClass,
+                AdditionalAttributes = new Dictionary<string, object>
+                {
+                    ["aria-describedby"] = ShowTimestampMenuItemId
+                }
             });
 
             _logsMenuItems.Add(new()
