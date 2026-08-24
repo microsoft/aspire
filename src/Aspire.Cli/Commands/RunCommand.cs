@@ -609,7 +609,10 @@ internal sealed class RunCommand : BaseCommand
                 }
             }
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
+        catch (OperationCanceledException ex) when (
+            ex.CancellationToken == cancellationToken ||
+            ex is ExtensionOperationCanceledException ||
+            (runCts is not null && ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested))
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
