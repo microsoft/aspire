@@ -53,6 +53,13 @@
       "job": "Tests / Acquisition / Acquisition (windows-latest)",
       "pr_number": 19592,
       "observed_at": "2026-08-24T18:16:20Z"
+    },
+    {
+      "run_id": 32758526447,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32758526447",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 19590,
+      "observed_at": "2026-08-24T18:44:31Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19597"

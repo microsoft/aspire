@@ -1,0 +1,60 @@
+{
+  "run_id": 32758526447,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32758526447",
+  "analyzed_at": "2026-08-24T18:44:31Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19590,
+    "title": "Fix DevTunnel endpoint URL publication",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/fix-devtunnel-endpoints",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19590"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97542939770,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32758526447/job/97542939770",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) fails during Homebrew cask preparation, unrelated to PR changes which only touch DcpExecutor and DevTunnel tests. Matches known recurring flaky pattern (8 prior occurrences).",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97543253597,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32758526447/job/97543253597",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure with unavailable job logs, unrelated to PR changes (DcpExecutor/DevTunnel only). Matches known recurring flaky shard (10 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97543253602,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32758526447/job/97543253602",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure with unavailable job logs, unrelated to PR changes (DcpExecutor/DevTunnel only). Matches known recurring flaky shard (7 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97543740765,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32758526447/job/97543740765",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) fails during WinGet manifest preparation, unrelated to PR changes which only touch DcpExecutor and DevTunnel tests. Matches known recurring flaky pattern (8 prior occurrences).",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-windows-edge-cases-flaky",
+    "vscode-e2e-linux-workspace-target-proof-flaky"
+  ]
+}
