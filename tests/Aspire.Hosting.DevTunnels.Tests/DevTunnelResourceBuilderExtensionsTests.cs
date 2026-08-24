@@ -409,7 +409,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         const int targetPort = 3000;
         const string tunnelUrl = "https://n4skq32k-3000.use.devtunnels.ms";
-        const string inspectUrl = "https://n4skq32k-3000-inspect.use.devtunnels.ms";
+        const string inspectUrl = "https://n4skq32k-3000-inspect.use.devtunnels.ms/";
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         var client = new TestDevTunnelClient
         {
