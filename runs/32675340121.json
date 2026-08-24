@@ -1,0 +1,60 @@
+{
+  "run_id": 32675340121,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32675340121",
+  "analyzed_at": "2026-08-24T00:33:41Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19044,
+    "title": "Disable autocomplete for dashboard filters",
+    "author": "vivekjm",
+    "state": "closed",
+    "head_branch": "fix/structured-log-filter-autocomplete",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19044"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97283808699,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32675340121/job/97283808699",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring flaky shard 'vscode-e2e-linux-workspace-target-proof-flaky' (3 prior occurrences). Job logs unavailable, generic exit code 1, unrelated to PR changes which only touch Aspire.Dashboard Razor components.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97283808737,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32675340121/job/97283808737",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring flaky shard 'vscode-e2e-windows-edge-cases-flaky' (6 prior occurrences). Job logs unavailable, generic exit code, unrelated to PR changes which only touch Aspire.Dashboard Razor components.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97283885180,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32675340121/job/97283885180",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause 'cli-smoke-test-homebrew-winget-unrelated' (3 prior occurrences). Smoke test installed CLI step fails with exit code 4 and unrelated Homebrew tap-trust warnings, unrelated to PR changes touching only dashboard Razor components.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97284182293,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32675340121/job/97284182293",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause 'cli-smoke-test-homebrew-winget-unrelated' (3 prior occurrences). Smoke test installed CLI step fails with exit code 1, unrelated to PR changes touching only dashboard Razor components.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky",
+    "cli-smoke-test-homebrew-winget-unrelated"
+  ]
+}
