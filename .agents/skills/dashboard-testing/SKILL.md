@@ -324,6 +324,22 @@ var resource = ModelTestHelpers.CreateResource(
     state: KnownResourceState.Running);
 ```
 
+## Stock/baseline dashboard verification
+
+Use this when verifying the installed/released dashboard instead of the repo-local one.
+
+- TestShop adds `Projects.Aspire_Dashboard` by default for local dashboard development.
+- The MSBuild opt-out property is `SkipDashboardProjectReference=true`.
+- Running installed `aspire` from inside this repo is not enough by itself; without the opt-out, TestShop still references the local dashboard project.
+
+```powershell
+$dashboard = "$HOME\.aspire\bundle\managed\aspire-managed.exe"
+dotnet build .\playground\TestShop\TestShop.AppHost\TestShop.AppHost.csproj /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
+aspire run --no-build --apphost .\playground\TestShop\TestShop.AppHost\TestShop.AppHost.csproj
+```
+
+- Verify the dashboard resource in Aspire metadata/logs before treating screenshots as baseline. The source/executable must be `aspire-managed.exe`, not `Aspire.Dashboard.csproj`.
+
 ## Test Conventions
 
 ### DO: Use `[UseCulture("en-US")]` for Culture-Sensitive Component Tests
