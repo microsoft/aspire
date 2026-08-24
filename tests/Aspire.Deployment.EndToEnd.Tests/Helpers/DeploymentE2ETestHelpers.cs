@@ -180,18 +180,28 @@ internal static class DeploymentE2ETestHelpers
     }
 
     /// <summary>
-    /// Locates the installed aspire CLI, checking both the current and legacy install layouts.
+    /// Locates the installed aspire CLI, checking the PR-isolated, current, and legacy install layouts.
     /// </summary>
     private static string? ResolveAspireCliPath()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        string[] candidates =
-        [
-            Path.Combine(home, ".aspire", "bin", "aspire"),
-            Path.Combine(home, ".aspire", "aspire")
-        ];
+        var candidates = new List<string>();
 
-        return Array.Find(candidates, File.Exists);
+        // The PR install route isolates the CLI under a per-PR directory rather than the shared bin dir:
+        //   compute_cli_install_dir() -> "$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"  (INSTALL_PREFIX=$HOME/.aspire)
+        // See eng/scripts/get-aspire-cli-pr.sh. CliInstallStrategy.Detect() selects that route whenever
+        // GITHUB_PR_NUMBER and GITHUB_PR_HEAD_SHA are set, so probe it first: a PR-route machine may have
+        // no CLI in the shared layout at all, and falling through would silently skip the AppHost stop.
+        var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER");
+        if (!string.IsNullOrEmpty(prNumber))
+        {
+            candidates.Add(Path.Combine(home, ".aspire", "dogfood", $"pr-{prNumber}", "bin", "aspire"));
+        }
+
+        candidates.Add(Path.Combine(home, ".aspire", "bin", "aspire"));
+        candidates.Add(Path.Combine(home, ".aspire", "aspire"));
+
+        return candidates.Find(File.Exists);
     }
 }

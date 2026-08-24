@@ -147,8 +147,8 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             output.WriteLine("Step 7: Starting AppHost with live Azure provisioning...");
             // Set before starting, not after: `aspire start` detaches the AppHost before it finishes
             // waiting for startup, so a failure here can still leave a live AppHost provisioning into
-            // the resource group that `finally` is about to delete. The cleanup command is best-effort
-            // (`|| true`), so claiming a session that was never created is harmless.
+            // the resource group that `finally` is about to delete. StopAppHostAsync swallows and logs
+            // its own failures, so claiming a session that was never created is harmless.
             appHostStarted = true;
             await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
 

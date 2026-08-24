@@ -126,6 +126,8 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
                 # `az account show` reports the kind of the signed-in identity:
                 #   { "user": { "name": "<appId or upn>", "type": "servicePrincipal" } }  # az login --service-principal
                 #   { "user": { "name": "someone@example.com", "type": "user" } }         # interactive az login
+                # This is a valid oracle for the AppHost's principal only because the run-mode context
+                # pins AZURE__CREDENTIALSOURCE=AzureCli, so both sides read the same `az` identity.
                 account_type = account["user"]["type"]
 
                 # In CI the workflow logs in with `az login --service-principal --federated-token`, so a
@@ -145,7 +147,14 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
             // When Azure:ResourceGroup is supplied explicitly, run mode treats it as an existing
             // group unless Azure:AllowResourceGroupCreation is enabled. This test owns a unique
             // group name, so allow provisioning to create it instead of waiting on a non-existent group.
-            var contextCommand = $"unset ASPIRE_PLAYGROUND && export AZURE__SUBSCRIPTIONID={subscriptionId} && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName} && export AZURE__ALLOWRESOURCEGROUPCREATION=true";
+            // Pin the credential source to AzureCli so the principal the AppHost provisions with is the
+            // same one `az account show` reports below. Left at the default, run mode builds a
+            // DefaultAzureCredential whose chain tries EnvironmentCredential first, so a developer with
+            // AZURE_CLIENT_ID/AZURE_CLIENT_SECRET exported *and* an interactive `az login` would provision
+            // as a service principal while the oracle read a user, failing on a correct principalType.
+            // CI already resolves to AzureCliCredential (it authenticates with `az login --service-principal`
+            // and exports no client secret), so this pins existing behavior rather than changing it.
+            var contextCommand = $"unset ASPIRE_PLAYGROUND && export AZURE__SUBSCRIPTIONID={subscriptionId} && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName} && export AZURE__ALLOWRESOURCEGROUPCREATION=true && export AZURE__CREDENTIALSOURCE=AzureCli";
             if (!string.IsNullOrEmpty(tenantId))
             {
                 contextCommand += $" && export AZURE__TENANTID={tenantId}";
@@ -155,8 +164,8 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
             output.WriteLine("Step 7: Starting AppHost with live Azure provisioning...");
             // Set before starting, not after: `aspire start` detaches the AppHost before it finishes
             // waiting for startup, so a failure here can still leave a live AppHost provisioning into
-            // the resource group that `finally` is about to delete. The cleanup command is best-effort
-            // (`|| true`), so claiming a session that was never created is harmless.
+            // the resource group that `finally` is about to delete. StopAppHostAsync swallows and logs
+            // its own failures, so claiming a session that was never created is harmless.
             appHostStarted = true;
             await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
 
