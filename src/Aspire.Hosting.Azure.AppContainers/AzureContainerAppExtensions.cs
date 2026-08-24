@@ -11,11 +11,14 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Pipelines;
+using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Network;
 using Azure.Provisioning.OperationalInsights;
+using Azure.Provisioning.PrivateDns;
 using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
@@ -403,8 +406,14 @@ public static class AzureContainerAppExtensions
             {
                 containerAppEnvironment.VnetConfiguration = new ContainerAppVnetConfiguration
                 {
-                    InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra)
+                    InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra),
+                    IsInternal = appEnvResource.InternalLoadBalancerVirtualNetwork is not null,
                 };
+            }
+            else if (appEnvResource.InternalLoadBalancerVirtualNetwork is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container App environment '{appEnvResource.Name}' must use a delegated subnet before it can use an internal load balancer.");
             }
 
             infra.Add(containerAppEnvironment);
@@ -895,6 +904,55 @@ public static class AzureContainerAppExtensions
         {
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
         });
+
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+        {
+            Value = containerAppEnvironment.StaticIP.ToBicepExpression()
+        });
+    }
+
+    private static void AddInternalEnvironmentPrivateDns(
+        AzureResourceInfrastructure infrastructure,
+        AzureContainerAppEnvironmentResource environment,
+        AzureVirtualNetworkResource virtualNetwork)
+    {
+        var virtualNetworkResource = (VirtualNetwork)virtualNetwork.AddAsExistingResource(infrastructure);
+        var dnsZone = new PrivateDnsZone(
+            Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_privateDns"))
+        {
+            // The environment domain is a runtime output. Keeping DNS in a separate deployment
+            // turns it into a module parameter, which Bicep permits as a resource name.
+            Name = environment.ContainerAppDomain.AsProvisioningParameter(infrastructure),
+            Location = new AzureLocation("global"),
+        };
+        infrastructure.Add(dnsZone);
+
+        var wildcardRecord = new PrivateDnsARecord(
+            Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_wildcard"))
+        {
+            Name = "*",
+            Parent = dnsZone,
+            TtlInSeconds = 3600,
+            PrivateDnsARecords =
+            {
+                new PrivateDnsARecordInfo
+                {
+                    IPv4Address = environment.ContainerAppStaticIp.AsProvisioningParameter(infrastructure),
+                },
+            },
+        };
+        infrastructure.Add(wildcardRecord);
+
+        var vnetLink = new VirtualNetworkLink(
+            Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_vnetLink"))
+        {
+            Name = $"{infrastructure.AspireResource.Name}-link",
+            Parent = dnsZone,
+            Location = new AzureLocation("global"),
+            RegistrationEnabled = false,
+            VirtualNetworkId = virtualNetworkResource.Id,
+        };
+        infrastructure.Add(vnetLink);
     }
 
     /// <summary>
@@ -1036,6 +1094,64 @@ public static class AzureContainerAppExtensions
     {
         builder.Resource.PreserveHttpEndpoints = !upgrade;
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the Container Apps environment with an internal load balancer and private DNS.
+    /// </summary>
+    /// <param name="builder">The Container Apps environment resource builder.</param>
+    /// <param name="virtualNetwork">The virtual network that contains the environment's delegated subnet.</param>
+    /// <returns>The Container Apps environment resource builder.</returns>
+    /// <remarks>
+    /// The environment must also be configured with <c>WithDelegatedSubnet</c>. A private DNS zone named
+    /// after the environment's generated default domain is linked to <paramref name="virtualNetwork"/>,
+    /// and a wildcard record resolves Container App hostnames to the environment's private static IP.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithInternalLoadBalancer(
+        this IResourceBuilder<AzureContainerAppEnvironmentResource> builder,
+        IResourceBuilder<AzureVirtualNetworkResource> virtualNetwork)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(virtualNetwork);
+
+        if (!builder.Resource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var delegatedSubnet))
+        {
+            throw new InvalidOperationException(
+                $"Azure Container App environment '{builder.Resource.Name}' must use a delegated subnet before it can use an internal load balancer.");
+        }
+
+        var subnet = builder.ApplicationBuilder.Resources
+            .OfType<AzureSubnetResource>()
+            .SingleOrDefault(candidate =>
+                ReferenceExpression.Create($"{candidate.Id}").ValueExpression == delegatedSubnet.SubnetId.ValueExpression);
+        if (subnet is null || !ReferenceEquals(subnet.Parent, virtualNetwork.Resource))
+        {
+            throw new InvalidOperationException(
+                $"The delegated subnet for Azure Container App environment '{builder.Resource.Name}' must belong to virtual network '{virtualNetwork.Resource.Name}'.");
+        }
+
+        if (builder.Resource.InternalLoadBalancerVirtualNetwork is { } existing)
+        {
+            if (!ReferenceEquals(existing, virtualNetwork.Resource))
+            {
+                throw new InvalidOperationException(
+                    $"Azure Container App environment '{builder.Resource.Name}' is already linked to virtual network '{existing.Name}'.");
+            }
+
+            return builder;
+        }
+
+        builder.Resource.InternalLoadBalancerVirtualNetwork = virtualNetwork.Resource;
+
+        builder.ApplicationBuilder
+            .AddAzureInfrastructure(
+                $"{builder.Resource.Name}-private-dns",
+                infrastructure => AddInternalEnvironmentPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource))
+            .WithParentRelationship(builder.Resource)
+            .WithRelationship(virtualNetwork.Resource, "Virtual network link");
+
+        return builder.WithRelationship(virtualNetwork.Resource, "Internal network");
     }
 
     /// <summary>

@@ -11,7 +11,11 @@ using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
+using Aspire.Hosting.Foundry;
 using Azure.Provisioning;
+using Azure.Provisioning.Authorization;
+using Azure.Provisioning.CognitiveServices;
+using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Resources;
 
 namespace Aspire.Hosting;
@@ -71,7 +75,10 @@ public static class AzureApiManagementExtensions
     /// <typeparam name="T">The backend compute resource type.</typeparam>
     /// <param name="builder">The Azure API Management resource builder.</param>
     /// <param name="name">The globally unique Aspire resource name and default physical API name.</param>
-    /// <param name="target">The backend compute resource. It must expose an external HTTP or HTTPS endpoint.</param>
+    /// <param name="target">
+    /// The backend compute resource. It must expose an HTTP or HTTPS endpoint. Internal endpoints require the
+    /// API Management service to have virtual network connectivity to the target.
+    /// </param>
     /// <param name="path">The public path beneath the API Management gateway hostname.</param>
     /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
     /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key.</param>
@@ -119,6 +126,125 @@ public static class AzureApiManagementExtensions
             .WithParentRelationship(builder.Resource)
             .ExcludeFromManifest()
             .WithIconName("DocumentTableArrowRight");
+    }
+
+    /// <summary>
+    /// Adds an OpenAI-compatible API backed by an API Management load-balancing pool.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical API name.</param>
+    /// <param name="path">The public path beneath the API Management gateway hostname.</param>
+    /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
+    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key.</param>
+    /// <returns>A builder for the API resource.</returns>
+    /// <remarks>
+    /// Add one or more pool members with <see cref="WithAzureOpenAIBackend"/> or
+    /// <see cref="WithFoundryBackend"/>. Requests beneath <paramref name="path"/> are appended to each
+    /// selected deployment URL. For example, <c>/chat/completions</c> is forwarded to
+    /// <c>/openai/deployments/{deployment}/chat/completions</c>.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementApiResource> AddOpenAIApi(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        string path,
+        string? displayName = null,
+        bool subscriptionRequired = false)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        var normalizedPath = path.Trim('/');
+        ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
+
+        var resource = new AzureApiManagementApiResource(
+            name,
+            apiName: name,
+            normalizedPath,
+            displayName ?? name,
+            subscriptionRequired,
+            builder.Resource);
+
+        builder.Resource.Apis.Add(resource);
+
+        var resourceBuilder = builder.ApplicationBuilder.ExecutionContext.IsRunMode
+            ? builder.ApplicationBuilder.CreateResourceBuilder(resource)
+            : builder.ApplicationBuilder.AddResource(resource);
+
+        var apiBuilder = resourceBuilder
+            .WithParentRelationship(builder.Resource)
+            .ExcludeFromManifest()
+            .WithIconName("DocumentTableArrowRight");
+
+        apiBuilder.AddOperation(
+            $"{name}-chat-completions",
+            method: "POST",
+            urlTemplate: "/chat/completions",
+            displayName: "Create chat completion");
+
+        return apiBuilder;
+    }
+
+    /// <summary>
+    /// Adds an Azure OpenAI deployment to an OpenAI-compatible API backend pool.
+    /// </summary>
+    /// <param name="builder">The API resource builder.</param>
+    /// <param name="deployment">The Azure OpenAI deployment.</param>
+    /// <param name="priority">The failover priority. Lower values are selected first.</param>
+    /// <param name="weight">The relative traffic weight among healthy members at the same priority.</param>
+    /// <returns>The API resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementApiResource> WithAzureOpenAIBackend(
+        this IResourceBuilder<AzureApiManagementApiResource> builder,
+        IResourceBuilder<AzureOpenAIDeploymentResource> deployment,
+        int priority = 1,
+        int weight = 1)
+    {
+        ArgumentNullException.ThrowIfNull(deployment);
+
+        return WithOpenAIBackend(
+            builder,
+            deployment.Resource,
+            deployment.Resource.Parent,
+            ReferenceExpression.Create($"{deployment.Resource.Parent.Endpoint}"),
+            deployment.Resource.DeploymentName,
+            priority,
+            weight);
+    }
+
+    /// <summary>
+    /// Adds a Microsoft Foundry OpenAI deployment to an OpenAI-compatible API backend pool.
+    /// </summary>
+    /// <param name="builder">The API resource builder.</param>
+    /// <param name="deployment">The Microsoft Foundry deployment. Its format must be <c>OpenAI</c>.</param>
+    /// <param name="priority">The failover priority. Lower values are selected first.</param>
+    /// <param name="weight">The relative traffic weight among healthy members at the same priority.</param>
+    /// <returns>The API resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementApiResource> WithFoundryBackend(
+        this IResourceBuilder<AzureApiManagementApiResource> builder,
+        IResourceBuilder<FoundryDeploymentResource> deployment,
+        int priority = 1,
+        int weight = 1)
+    {
+        ArgumentNullException.ThrowIfNull(deployment);
+
+        if (!string.Equals(deployment.Resource.Format, "OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+               $"Foundry deployment '{deployment.Resource.Name}' uses format '{deployment.Resource.Format}'. " +
+               "Only OpenAI-format deployments can be added to an OpenAI-compatible API.");
+        }
+
+        return WithOpenAIBackend(
+            builder,
+            deployment.Resource,
+            deployment.Resource.Parent,
+            ReferenceExpression.Create($"{deployment.Resource.Parent.Endpoint}"),
+            deployment.Resource.DeploymentName,
+            priority,
+            weight);
     }
 
     /// <summary>
@@ -371,9 +497,10 @@ public static class AzureApiManagementExtensions
 
         AddServicePolicy(infrastructure, azureResource, service);
 
+        var roleAssignedAccounts = new HashSet<AzureProvisioningResource>();
         foreach (var apiResource in azureResource.Apis)
         {
-            AddApi(infrastructure, apiResource, service);
+            AddApi(infrastructure, apiResource, service, roleAssignedAccounts);
         }
 
         infrastructure.Add(new ProvisioningOutput("gatewayUrl", typeof(string))
@@ -417,47 +544,13 @@ public static class AzureApiManagementExtensions
     private static void AddApi(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementApiResource apiResource,
-        ApiManagementServiceProvisioningResource service)
+        ApiManagementServiceProvisioningResource service,
+        HashSet<AzureProvisioningResource> roleAssignedAccounts)
     {
-        if (apiResource.Target is not IResourceWithEndpoints endpointResource)
-        {
-            throw new InvalidOperationException(
-                $"Resource '{apiResource.Target.Name}' does not expose endpoints and cannot be used as an API Management backend.");
-        }
-
-        var endpoint = endpointResource.GetEndpoints()
-            .FirstOrDefault(e => e.EndpointAnnotation.IsExternal &&
-                e.EndpointAnnotation.UriScheme is "http" or "https")
-            ?? throw new InvalidOperationException(
-                $"Resource '{apiResource.Target.Name}' does not have an external HTTP or HTTPS endpoint. " +
-                "Call .WithExternalHttpEndpoints() before adding it to API Management.");
-
-        if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(apiResource.Target, out var computeEnvironment))
-        {
-            throw new InvalidOperationException(
-                $"Resource '{apiResource.Target.Name}' does not have a compute environment. " +
-                "Configure an Azure deployment environment before adding it to API Management.");
-        }
-
         var apiIdentifier = Infrastructure.NormalizeBicepIdentifier(apiResource.Name);
-        var backendIdentifier = $"{apiIdentifier}Backend";
-        var endpointExpression = computeEnvironment.GetEndpointPropertyExpression(
-            endpoint.Property(EndpointProperty.Url));
-        var backendUrl = endpointExpression.AsProvisioningParameter(infrastructure, $"{apiIdentifier}_url");
-
-        var backend = new ApiManagementBackendProvisioningResource(
-            backendIdentifier)
-        {
-            Parent = service,
-            Name = backendIdentifier,
-            Protocol = "http",
-            Uri = backendUrl,
-            Title = apiResource.DisplayName,
-            Type = "Single",
-            ValidateCertificateChain = true,
-            ValidateCertificateName = true,
-        };
-        infrastructure.Add(backend);
+        var (backendIdentifier, backend, authenticateWithManagedIdentity) = apiResource.Target is not null
+            ? AddComputeBackend(infrastructure, apiResource, service, apiIdentifier)
+            : AddOpenAIBackendPool(infrastructure, apiResource, service, apiIdentifier, roleAssignedAccounts);
 
         var api = new ApiManagementApiProvisioningResource(
             apiIdentifier)
@@ -492,7 +585,10 @@ public static class AzureApiManagementExtensions
         }
 
         var policyXml = apiResource.PolicyXml ??
-            CreatePolicyDocument(apiResource.InboundPolicyStatements, backendIdentifier);
+            CreatePolicyDocument(
+                apiResource.InboundPolicyStatements,
+                backendIdentifier,
+                authenticateWithManagedIdentity: authenticateWithManagedIdentity);
 
         var policy = new ApiManagementApiPolicyProvisioningResource(
             $"{apiIdentifier}Policy")
@@ -505,6 +601,163 @@ public static class AzureApiManagementExtensions
         policy.DependsOn.Add(backend);
         infrastructure.Add(policy);
     }
+
+    private static (string Identifier, ApiManagementBackendProvisioningResource Backend, bool AuthenticateWithManagedIdentity)
+        AddComputeBackend(
+            AzureResourceInfrastructure infrastructure,
+            AzureApiManagementApiResource apiResource,
+            ApiManagementServiceProvisioningResource service,
+            string apiIdentifier)
+    {
+        Debug.Assert(apiResource.Target is not null);
+
+        if (apiResource.Target is not IResourceWithEndpoints endpointResource)
+        {
+            throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' does not expose endpoints and cannot be used as an API Management backend.");
+        }
+
+        var httpEndpoints = endpointResource.GetEndpoints()
+            .Where(e => e.EndpointAnnotation.UriScheme is "http" or "https")
+            .ToArray();
+        var endpoint = httpEndpoints.FirstOrDefault(e => e.EndpointAnnotation.IsExternal)
+            ?? httpEndpoints.FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' does not have an HTTP or HTTPS endpoint.");
+
+        if (!endpoint.EndpointAnnotation.IsExternal && apiResource.Parent.VirtualNetworkConfiguration is null)
+        {
+            throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' exposes only internal HTTP endpoints. " +
+                $"Configure virtual network connectivity for API Management resource '{apiResource.Parent.Name}' before adding it as a backend.");
+        }
+
+        if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(apiResource.Target, out var computeEnvironment))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' does not have a compute environment. " +
+                "Configure an Azure deployment environment before adding it to API Management.");
+        }
+
+        var backendIdentifier = $"{apiIdentifier}Backend";
+        var endpointExpression = computeEnvironment.GetEndpointPropertyExpression(
+            endpoint.Property(EndpointProperty.Url));
+        var backendUrl = endpointExpression.AsProvisioningParameter(infrastructure, $"{apiIdentifier}_url");
+
+        var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
+        {
+            Parent = service,
+            Name = backendIdentifier,
+            Protocol = "http",
+            Uri = backendUrl,
+            Title = apiResource.DisplayName,
+            Type = "Single",
+            ValidateCertificateChain = true,
+            ValidateCertificateName = true,
+        };
+        infrastructure.Add(backend);
+
+        return (backendIdentifier, backend, false);
+    }
+
+    private static (string Identifier, ApiManagementBackendProvisioningResource Backend, bool AuthenticateWithManagedIdentity)
+        AddOpenAIBackendPool(
+            AzureResourceInfrastructure infrastructure,
+            AzureApiManagementApiResource apiResource,
+            ApiManagementServiceProvisioningResource service,
+            string apiIdentifier,
+            HashSet<AzureProvisioningResource> roleAssignedAccounts)
+    {
+        if (apiResource.OpenAIBackends.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"OpenAI API '{apiResource.Name}' does not have any backend deployments. " +
+                $"Call {nameof(WithAzureOpenAIBackend)} or {nameof(WithFoundryBackend)} at least once.");
+        }
+
+        var poolIdentifier = $"{apiIdentifier}Pool";
+        var pool = new ApiManagementBackendProvisioningResource(poolIdentifier)
+        {
+            Parent = service,
+            Name = poolIdentifier,
+            Title = apiResource.DisplayName,
+            Type = "Pool",
+            Pool = new ApiManagementBackendPoolProvisioningModel(),
+        };
+
+        foreach (var backendResource in apiResource.OpenAIBackends)
+        {
+            var backendIdentifier = Infrastructure.NormalizeBicepIdentifier(
+                $"{apiIdentifier}_{backendResource.Name}_Backend");
+            var backendUrl = ReferenceExpression.Create(
+                $"{backendResource.Endpoint}openai/deployments/{backendResource.DeploymentName}");
+            var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
+            {
+                Parent = service,
+                Name = backendIdentifier,
+                Protocol = "http",
+                Uri = backendUrl.AsProvisioningParameter(infrastructure, $"{backendIdentifier}_url"),
+                Title = backendResource.Name,
+                Type = "Single",
+                ValidateCertificateChain = true,
+                ValidateCertificateName = true,
+                CircuitBreaker = CreateOpenAICircuitBreaker(),
+            };
+            infrastructure.Add(backend);
+
+            pool.Pool.Services.Add(new ApiManagementBackendPoolMemberProvisioningModel
+            {
+                Id = backend.Id,
+                Priority = backendResource.Priority,
+                Weight = backendResource.Weight,
+            });
+            pool.DependsOn.Add(backend);
+        }
+
+        infrastructure.Add(pool);
+
+        foreach (var accountResource in apiResource.OpenAIBackends
+            .Select(backend => backend.Account)
+            .Where(roleAssignedAccounts.Add))
+        {
+            var account = (CognitiveServicesAccount)accountResource.AddAsExistingResource(infrastructure);
+            var roleAssignment = account.CreateRoleAssignment(
+                CognitiveServicesBuiltInRole.CognitiveServicesUser,
+                RoleManagementPrincipalType.ServicePrincipal,
+                service.Identity.PrincipalId);
+            roleAssignment.Name = BicepFunction.CreateGuid(account.Id, service.Id, roleAssignment.RoleDefinitionId);
+            infrastructure.Add(roleAssignment);
+        }
+
+        return (poolIdentifier, pool, true);
+    }
+
+    private static ApiManagementCircuitBreakerProvisioningModel CreateOpenAICircuitBreaker() =>
+        new()
+        {
+            Rules =
+            {
+                new ApiManagementCircuitBreakerRuleProvisioningModel
+                {
+                    Name = "openAIThrottling",
+                    FailureCondition = new ApiManagementCircuitBreakerFailureConditionProvisioningModel
+                    {
+                        Count = 1,
+                        Interval = "PT10S",
+                        StatusCodeRanges =
+                        {
+                            new ApiManagementStatusCodeRangeProvisioningModel
+                            {
+                                Minimum = 429,
+                                Maximum = 429,
+                            },
+                        },
+                    },
+                    TripDuration = "PT10S",
+                    AcceptRetryAfter = true,
+                },
+            },
+        };
 
     private static void AddOperation(
         AzureResourceInfrastructure infrastructure,
@@ -553,10 +806,56 @@ public static class AzureApiManagementExtensions
         infrastructure.Add(policy);
     }
 
+    private static IResourceBuilder<AzureApiManagementApiResource> WithOpenAIBackend(
+        IResourceBuilder<AzureApiManagementApiResource> builder,
+        IResource deployment,
+        AzureProvisioningResource account,
+        ReferenceExpression endpoint,
+        string deploymentName,
+        int priority,
+        int weight)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentOutOfRangeException.ThrowIfLessThan(priority, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(priority, 100);
+        ArgumentOutOfRangeException.ThrowIfLessThan(weight, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(weight, 100);
+
+        if (builder.Resource.Target is not null)
+        {
+            throw new InvalidOperationException(
+                $"API '{builder.Resource.Name}' already routes to compute resource '{builder.Resource.Target.Name}' and cannot also use a backend pool.");
+        }
+
+        if (builder.Resource.OpenAIBackends.Any(backend => ReferenceEquals(backend.Account, account) &&
+            string.Equals(backend.DeploymentName, deploymentName, StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                $"Deployment '{deploymentName}' from account '{account.Name}' is already a backend of API '{builder.Resource.Name}'.");
+        }
+
+        if (builder.Resource.OpenAIBackends.Count == 30)
+        {
+            throw new InvalidOperationException(
+                $"API Management backend pool '{builder.Resource.Name}' cannot contain more than 30 backends.");
+        }
+
+        builder.Resource.OpenAIBackends.Add(new(
+            deployment.Name,
+            account,
+            endpoint,
+            deploymentName,
+            priority,
+            weight));
+
+        return builder.WithRelationship(deployment, "Backend pool");
+    }
+
     private static string? CreatePolicyDocument(
         IReadOnlyList<string> inboundStatements,
         string? backendIdentifier = null,
-        bool inheritParentPolicy = true)
+        bool inheritParentPolicy = true,
+        bool authenticateWithManagedIdentity = false)
     {
         if (backendIdentifier is null && inboundStatements.Count == 0)
         {
@@ -569,6 +868,11 @@ public static class AzureApiManagementExtensions
         if (inheritParentPolicy)
         {
             builder.AppendLine("    <base />");
+        }
+
+        if (authenticateWithManagedIdentity)
+        {
+            builder.AppendLine("    <authentication-managed-identity resource=\"https://cognitiveservices.azure.com\" />");
         }
 
         if (backendIdentifier is not null)

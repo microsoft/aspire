@@ -13,8 +13,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.CognitiveServices\Aspire.Hosting.Azure.CognitiveServices.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <PackageReference Include="Azure.Provisioning" />
+    <PackageReference Include="Azure.Provisioning.CognitiveServices" />
   </ItemGroup>
 
   <ItemGroup>

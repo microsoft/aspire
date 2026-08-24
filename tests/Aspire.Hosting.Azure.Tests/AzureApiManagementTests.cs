@@ -223,6 +223,56 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public async Task AddAzureApiManagementWithInternalContainerAppBackendGeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24");
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(containerAppsSubnet)
+            .WithInternalLoadBalancer(vnet);
+        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithComputeEnvironment(environment);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.Premium,
+        }).WithClassicVirtualNetwork(apimSubnet, AzureApiManagementVirtualNetworkMode.External);
+        apim.AddApi("catalog-api", backend, "catalog");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (manifest, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        Assert.Contains("param catalog_api_url string", bicep);
+        Assert.Contains("catalog-backend.internal", manifest.ToJsonString());
+    }
+
+    [Fact]
+    public async Task InternalBackendRequiresApiManagementVirtualNetworkConnectivity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithComputeEnvironment(environment);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddApi("catalog-api", backend, "catalog");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("exposes only internal HTTP endpoints", exception.Message);
+    }
+
+    [Fact]
     public async Task AddAzureApiManagementWithClassicVirtualNetworkGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -241,6 +291,121 @@ public class AzureApiManagementTests
         var (_, bicep) = await GetManifestWithBicep(apim.Resource);
 
         await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddOpenAIApiWithFoundryBackendsGeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var primaryFoundry = builder.AddFoundry("foundry-primary");
+        var primary = primaryFoundry.AddDeployment("chat-primary", "gpt-5-mini", "2025-08-07", "OpenAI");
+        var secondaryFoundry = builder.AddFoundry("foundry-secondary");
+        var secondary = secondaryFoundry.AddDeployment("chat-secondary", "gpt-5-mini", "2025-08-07", "OpenAI");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.StandardV2,
+        });
+        apim.AddOpenAIApi("openai-api", "openai")
+            .WithFoundryBackend(primary, priority: 1, weight: 3)
+            .WithFoundryBackend(secondary, priority: 2, weight: 1);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (manifest, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        Assert.Contains("openai/deployments/chat-primary", manifest.ToJsonString());
+        Assert.Contains("openai/deployments/chat-secondary", manifest.ToJsonString());
+        Assert.Contains("foundry-primary.outputs.endpoint", manifest.ToJsonString());
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AzureOpenAIBackendUsesAccountEndpointAndDeduplicatesRoleAssignments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var account = builder.AddAzureOpenAI("openai");
+        var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddOpenAIApi("chat-api", "chat")
+            .WithAzureOpenAIBackend(deployment);
+        apim.AddOpenAIApi("responses-api", "responses")
+            .WithAzureOpenAIBackend(deployment);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (manifest, bicep) = await GetManifestWithBicep(apim.Resource);
+        var manifestJson = manifest.ToJsonString();
+
+        Assert.Contains("openai.outputs.endpoint", manifestJson);
+        Assert.Contains("openai/deployments/chat", manifestJson);
+        Assert.Single(bicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Skip(1));
+    }
+
+    [Fact]
+    public void FoundryBackendMustUseOpenAIFormat()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var foundry = builder.AddFoundry("foundry");
+        var model = foundry.AddDeployment("embedding", "embedding-model", "1", "Microsoft");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var api = apim.AddOpenAIApi("openai-api", "openai");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => api.WithFoundryBackend(model));
+
+        Assert.Contains("Only OpenAI-format deployments", exception.Message);
+    }
+
+    [Fact]
+    public async Task InternalContainerAppEnvironmentGeneratesPrivateDns()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithInternalLoadBalancer(vnet);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var privateDns = builder.Resources
+            .OfType<AzureProvisioningResource>()
+            .Single(resource => resource.Name == "env-private-dns");
+
+        var (_, environmentBicep) = await GetManifestWithBicep(environment.Resource);
+        var (_, privateDnsBicep) = await GetManifestWithBicep(privateDns);
+
+        Assert.Contains("internal: true", environmentBicep);
+        Assert.Contains("output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string", environmentBicep);
+        Assert.Contains("Microsoft.Network/privateDnsZones@2024-06-01", privateDnsBicep);
+        Assert.Contains("name: '*'", privateDnsBicep);
+        Assert.Contains("ipv4Address:", privateDnsBicep);
+        Assert.Contains("Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01", privateDnsBicep);
+    }
+
+    [Fact]
+    public void InternalContainerAppEnvironmentRejectsDifferentVirtualNetwork()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var otherVnet = builder.AddAzureVirtualNetwork("other-vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => environment.WithInternalLoadBalancer(otherVnet));
+
+        Assert.Contains("must belong to virtual network 'other-vnet'", exception.Message);
     }
 
     private sealed class Project : IProjectMetadata

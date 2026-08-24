@@ -51,6 +51,40 @@ await apim.addApi("catalog-api", catalog, "catalog");
 
 API Management resources are automatically omitted during `aspire run`. Azure compute environments do not materialize their public endpoints in run mode, and a cloud-hosted APIM instance cannot reach a backend running on localhost. Use `aspire deploy` to provision APIM and exercise its routing; no execution-mode guard is required around the APIM resources.
 
+## OpenAI backend pools
+
+Use `AddOpenAIApi` to load balance an OpenAI-compatible API across Azure OpenAI or Microsoft Foundry deployments:
+
+```csharp
+var primaryFoundry = builder.AddFoundry("foundry-primary");
+var primary = primaryFoundry.AddDeployment(
+    "chat-primary",
+    FoundryModel.OpenAI.Gpt5Mini);
+
+var secondaryFoundry = builder.AddFoundry("foundry-secondary");
+var secondary = secondaryFoundry.AddDeployment(
+    "chat-secondary",
+    FoundryModel.OpenAI.Gpt5Mini);
+
+apim.AddOpenAIApi("openai-api", path: "openai")
+    .WithFoundryBackend(primary, priority: 1, weight: 3)
+    .WithFoundryBackend(secondary, priority: 1, weight: 1);
+```
+
+The generated APIM backend pool uses weighted routing between healthy members at the same priority. A lower priority number is preferred; members at the next priority are used when every member in a preferred group has an open circuit. Each backend has a circuit breaker that opens on HTTP 429 and honors the Azure OpenAI `Retry-After` response header.
+
+The API authenticates with the APIM system-assigned managed identity. Aspire grants that identity the Cognitive Services User role on every backend account. Backend URLs include each physical deployment name, so a request such as:
+
+```text
+POST https://<gateway>.azure-api.net/openai/chat/completions?api-version=<version>
+```
+
+is forwarded to the selected account at:
+
+```text
+POST https://<account>/openai/deployments/<deployment>/chat/completions?api-version=<version>
+```
+
 ## Policies
 
 Append policy statements to the generated inbound section at the service, API, or operation scope:
@@ -80,6 +114,34 @@ apim.WithClassicVirtualNetwork(
 ```
 
 The subnet must be undelegated and should have the APIM-required network security rules. Standard v2 outbound integration and Premium v2 injection use different subnet delegation and lifecycle models and are not configured by `WithClassicVirtualNetwork`.
+
+### Private Container Apps backends
+
+Place the Container Apps environment and APIM in separate subnets of the same virtual network. Configure the Container Apps environment with an internal load balancer and APIM with classic external VNet injection:
+
+```csharp
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+var apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24");
+
+var environment = builder.AddAzureContainerAppEnvironment("env")
+    .WithDelegatedSubnet(containerAppsSubnet)
+    .WithInternalLoadBalancer(vnet);
+
+var catalog = builder.AddProject<Projects.Catalog>("catalog")
+    .WithComputeEnvironment(environment)
+    .WithExternalHttpEndpoints();
+
+apim.WithClassicVirtualNetwork(
+    apimSubnet,
+    AzureApiManagementVirtualNetworkMode.External);
+
+apim.AddApi("catalog-api", catalog, "catalog");
+```
+
+`WithInternalLoadBalancer` gives the Container Apps environment a private VIP and creates a private DNS zone, wildcard A record, and virtual-network link for its generated default domain. Although `WithExternalHttpEndpoints` enables ingress outside the Container Apps environment, the environment itself has no public endpoint; APIM reaches the app over the virtual network and is the public gateway.
+
+Classic APIM VNet injection requires an NSG on the APIM subnet. Allow inbound TCP 3443 from the `ApiManagement` service tag, TCP 6390 from `AzureLoadBalancer`, and TCP 443 from `Internet` when the APIM gateway remains public.
 
 API Management also supports inbound private endpoints through the Azure network integration:
 

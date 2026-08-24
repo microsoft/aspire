@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureApiManagementOpenAI.AppHost/AzureApiManagementOpenAI.AppHost.csproj"
+  }
+}

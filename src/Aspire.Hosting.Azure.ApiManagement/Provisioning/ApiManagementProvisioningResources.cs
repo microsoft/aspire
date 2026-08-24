@@ -124,6 +124,9 @@ internal sealed class ApiManagementBackendProvisioningResource(string bicepIdent
     private BicepValue<string>? _type;
     private BicepValue<bool>? _validateCertificateChain;
     private BicepValue<bool>? _validateCertificateName;
+    private ApiManagementBackendPoolProvisioningModel? _pool;
+    private ApiManagementCircuitBreakerProvisioningModel? _circuitBreaker;
+    private BicepValue<ResourceIdentifier>? _id;
     private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
 
     public BicepValue<string> Name
@@ -168,6 +171,23 @@ internal sealed class ApiManagementBackendProvisioningResource(string bicepIdent
         set { Initialize(); _validateCertificateName!.Assign(value); }
     }
 
+    public ApiManagementBackendPoolProvisioningModel Pool
+    {
+        get { Initialize(); return _pool!; }
+        set { Initialize(); AssignOrReplace(ref _pool, value); }
+    }
+
+    public ApiManagementCircuitBreakerProvisioningModel CircuitBreaker
+    {
+        get { Initialize(); return _circuitBreaker!; }
+        set { Initialize(); AssignOrReplace(ref _circuitBreaker, value); }
+    }
+
+    public BicepValue<ResourceIdentifier> Id
+    {
+        get { Initialize(); return _id!; }
+    }
+
     public ApiManagementServiceProvisioningResource? Parent
     {
         get { Initialize(); return _parent!.Value; }
@@ -178,13 +198,179 @@ internal sealed class ApiManagementBackendProvisioningResource(string bicepIdent
     {
         base.DefineProvisionableProperties();
         _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
-        _protocol = DefineProperty<string>(nameof(Protocol), ["properties", "protocol"], isRequired: true);
-        _uri = DefineProperty<string>(nameof(Uri), ["properties", "url"], isRequired: true);
+        // Pool backends omit protocol and URL; both are required only for Single backends.
+        _protocol = DefineProperty<string>(nameof(Protocol), ["properties", "protocol"]);
+        _uri = DefineProperty<string>(nameof(Uri), ["properties", "url"]);
         _title = DefineProperty<string>(nameof(Title), ["properties", "title"]);
         _type = DefineProperty<string>(nameof(Type), ["properties", "type"]);
         _validateCertificateChain = DefineProperty<bool>(nameof(ValidateCertificateChain), ["properties", "tls", "validateCertificateChain"]);
         _validateCertificateName = DefineProperty<bool>(nameof(ValidateCertificateName), ["properties", "tls", "validateCertificateName"]);
+        _pool = DefineModelProperty<ApiManagementBackendPoolProvisioningModel>(nameof(Pool), ["properties", "pool"]);
+        _circuitBreaker = DefineModelProperty<ApiManagementCircuitBreakerProvisioningModel>(nameof(CircuitBreaker), ["properties", "circuitBreaker"]);
+        _id = DefineProperty<ResourceIdentifier>(nameof(Id), ["id"], isOutput: true);
         _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementBackendPoolProvisioningModel : ProvisionableConstruct
+{
+    private BicepList<ApiManagementBackendPoolMemberProvisioningModel>? _services;
+
+    public BicepList<ApiManagementBackendPoolMemberProvisioningModel> Services
+    {
+        get { Initialize(); return _services!; }
+        set { Initialize(); _services!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _services = DefineListProperty<ApiManagementBackendPoolMemberProvisioningModel>(nameof(Services), ["services"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementBackendPoolMemberProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<ResourceIdentifier>? _id;
+    private BicepValue<int>? _priority;
+    private BicepValue<int>? _weight;
+
+    public BicepValue<ResourceIdentifier> Id
+    {
+        get { Initialize(); return _id!; }
+        set { Initialize(); _id!.Assign(value); }
+    }
+
+    public BicepValue<int> Priority
+    {
+        get { Initialize(); return _priority!; }
+        set { Initialize(); _priority!.Assign(value); }
+    }
+
+    public BicepValue<int> Weight
+    {
+        get { Initialize(); return _weight!; }
+        set { Initialize(); _weight!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _id = DefineProperty<ResourceIdentifier>(nameof(Id), ["id"], isRequired: true);
+        _priority = DefineProperty<int>(nameof(Priority), ["priority"]);
+        _weight = DefineProperty<int>(nameof(Weight), ["weight"]);
+    }
+}
+
+internal sealed class ApiManagementCircuitBreakerProvisioningModel : ProvisionableConstruct
+{
+    private BicepList<ApiManagementCircuitBreakerRuleProvisioningModel>? _rules;
+
+    public BicepList<ApiManagementCircuitBreakerRuleProvisioningModel> Rules
+    {
+        get { Initialize(); return _rules!; }
+        set { Initialize(); _rules!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _rules = DefineListProperty<ApiManagementCircuitBreakerRuleProvisioningModel>(nameof(Rules), ["rules"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementCircuitBreakerRuleProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<string>? _name;
+    private ApiManagementCircuitBreakerFailureConditionProvisioningModel? _failureCondition;
+    private BicepValue<string>? _tripDuration;
+    private BicepValue<bool>? _acceptRetryAfter;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public ApiManagementCircuitBreakerFailureConditionProvisioningModel FailureCondition
+    {
+        get { Initialize(); return _failureCondition!; }
+        set { Initialize(); AssignOrReplace(ref _failureCondition, value); }
+    }
+
+    public BicepValue<string> TripDuration
+    {
+        get { Initialize(); return _tripDuration!; }
+        set { Initialize(); _tripDuration!.Assign(value); }
+    }
+
+    public BicepValue<bool> AcceptRetryAfter
+    {
+        get { Initialize(); return _acceptRetryAfter!; }
+        set { Initialize(); _acceptRetryAfter!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _failureCondition = DefineModelProperty<ApiManagementCircuitBreakerFailureConditionProvisioningModel>(
+            nameof(FailureCondition), ["failureCondition"], isRequired: true);
+        _tripDuration = DefineProperty<string>(nameof(TripDuration), ["tripDuration"], isRequired: true);
+        _acceptRetryAfter = DefineProperty<bool>(nameof(AcceptRetryAfter), ["acceptRetryAfter"]);
+    }
+}
+
+internal sealed class ApiManagementCircuitBreakerFailureConditionProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<int>? _count;
+    private BicepValue<string>? _interval;
+    private BicepList<ApiManagementStatusCodeRangeProvisioningModel>? _statusCodeRanges;
+
+    public BicepValue<int> Count
+    {
+        get { Initialize(); return _count!; }
+        set { Initialize(); _count!.Assign(value); }
+    }
+
+    public BicepValue<string> Interval
+    {
+        get { Initialize(); return _interval!; }
+        set { Initialize(); _interval!.Assign(value); }
+    }
+
+    public BicepList<ApiManagementStatusCodeRangeProvisioningModel> StatusCodeRanges
+    {
+        get { Initialize(); return _statusCodeRanges!; }
+        set { Initialize(); _statusCodeRanges!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _count = DefineProperty<int>(nameof(Count), ["count"], isRequired: true);
+        _interval = DefineProperty<string>(nameof(Interval), ["interval"], isRequired: true);
+        _statusCodeRanges = DefineListProperty<ApiManagementStatusCodeRangeProvisioningModel>(
+            nameof(StatusCodeRanges), ["statusCodeRanges"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementStatusCodeRangeProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<int>? _minimum;
+    private BicepValue<int>? _maximum;
+
+    public BicepValue<int> Minimum
+    {
+        get { Initialize(); return _minimum!; }
+        set { Initialize(); _minimum!.Assign(value); }
+    }
+
+    public BicepValue<int> Maximum
+    {
+        get { Initialize(); return _maximum!; }
+        set { Initialize(); _maximum!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _minimum = DefineProperty<int>(nameof(Minimum), ["min"], isRequired: true);
+        _maximum = DefineProperty<int>(nameof(Maximum), ["max"], isRequired: true);
     }
 }
 

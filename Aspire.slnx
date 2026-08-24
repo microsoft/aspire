@@ -158,6 +158,9 @@
     <Project Path="playground/AzureApiManagement/AzureApiManagement.ApiService/AzureApiManagement.ApiService.csproj" />
     <Project Path="playground/AzureApiManagement/AzureApiManagement.AppHost/AzureApiManagement.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/AzureApiManagementOpenAI/">
+    <Project Path="playground/AzureApiManagementOpenAI/AzureApiManagementOpenAI.AppHost/AzureApiManagementOpenAI.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/AzureContainerApps/">
     <Project Path="playground/AzureContainerApps/AzureContainerApps.ApiService/AzureContainerApps.ApiService.csproj" />
     <Project Path="playground/AzureContainerApps/AzureContainerApps.AppHost/AzureContainerApps.AppHost.csproj" />
