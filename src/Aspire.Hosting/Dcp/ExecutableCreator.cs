@@ -128,7 +128,26 @@ internal sealed class ExecutableCreator(
         // rather than replacing it outright. Follow the same "last annotation wins" convention used for every
         // other resource annotation in this file (see TryGetLastAnnotation usages) instead of treating the
         // resource as invalid.
-        if (!resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out var recipeAnnotation))
+        //
+        // A resource can also have none at all: ExecutableLaunchRecipeAnnotation is only attached by the
+        // ExecutableResource/ProjectResource constructors, but GetProjectAnnotatedResources/
+        // GetExecutableAnnotatedResources (and therefore PrepareProjectExecutables/PreparePlainExecutables) accept
+        // any IResource carrying the matching annotation directly, regardless of its concrete type. Derive the
+        // recipe in that case using the exact same project-wins precedence those two lookups already use.
+        IExecutableLaunchRecipe recipe;
+        if (resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out var recipeAnnotation))
+        {
+            recipe = recipeAnnotation.Recipe;
+        }
+        else if (resource.TryGetProjectAnnotation(out _))
+        {
+            recipe = ProjectExecutableLaunchRecipe.Instance;
+        }
+        else if (resource.TryGetExecutableAnnotation(out _))
+        {
+            recipe = DirectExecutableLaunchRecipe.Instance;
+        }
+        else
         {
             throw new InvalidOperationException(
                 $"Resource '{resource.Name}' must have an executable launch recipe, but none were found.");
@@ -143,7 +162,7 @@ internal sealed class ExecutableCreator(
             decision,
             resourceLogger,
             cancellationToken);
-        var plan = await recipeAnnotation.Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
+        var plan = await recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
 
         if (plan.Mechanism != decision.Mechanism)
         {

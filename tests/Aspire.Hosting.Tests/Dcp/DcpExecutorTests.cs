@@ -5524,48 +5524,31 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_MultipleLaunchRecipes_ReportsLaunchPlanFailure()
+    public async Task PlainExecutable_MultipleLaunchRecipes_UsesLastRecipe()
     {
+        // A resource can end up with more than one ExecutableLaunchRecipeAnnotation when a substitution helper
+        // (e.g. the ResourceSubstitution playground's RunAsTool) layers a donor resource's annotations onto an
+        // existing project/executable resource rather than replacing it outright. ResolveLaunchPlanAsync follows
+        // the same "last annotation wins" convention used for every other annotation on the resource, so the
+        // second recipe here — not the one added by AddExecutable — determines the launch plan.
         var builder = DistributedApplication.CreateBuilder();
         var resource = builder.AddExecutable("app", "tool", Environment.CurrentDirectory)
             .WithExplicitStart();
         resource.Resource.Annotations.Add(
-            new ExecutableLaunchRecipeAnnotation(DirectExecutableLaunchRecipe.Instance));
+            new ExecutableLaunchRecipeAnnotation(new StubExecutableLaunchRecipe("second-command")));
 
         var kubernetesService = new TestKubernetesService();
-        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
-        var events = new DcpExecutorEvents();
-        events.Subscribe<OnResourceFailedToStartContext>(context =>
-        {
-            failures.Enqueue(context);
-            return Task.CompletedTask;
-        });
-
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(
-            distributedAppModel,
-            kubernetesService: kubernetesService,
-            events: events);
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
 
         await appExecutor.RunApplicationAsync();
 
         var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
-        var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
-            () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
-        const string innerMessage =
-            "Resource 'app' must have exactly one executable launch recipe, but 2 were found.";
-        const string expectedMessage =
-            "Failed to create executable launch plan for resource 'app'. " + innerMessage;
-        Assert.Equal(expectedMessage, exception.Message);
-        var innerException = Assert.IsType<InvalidOperationException>(exception.InnerException);
-        Assert.Equal(innerMessage, innerException.Message);
-
-        var failure = Assert.Single(failures);
-        Assert.Same(resource.Resource, failure.Resource);
-        Assert.Equal(expectedMessage, failure.ErrorMessage);
-        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        var exe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "app"));
+        Assert.Equal("second-command", exe.Spec.ExecutablePath);
     }
 
     [Fact]

@@ -3,7 +3,6 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREDOTNETTOOL // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,8 +24,7 @@ public static class Extensions
 
         return builder
             .WaitForCompletion(imagePublisher)
-            .WithDotnetContainerDefaults()
-            .WithInitialState(new CustomResourceSnapshot { ResourceType = KnownResourceTypes.Container, Properties = [] });
+            .WithDotnetContainerDefaults();
 
         void TransmuteResourceAnnotations()
         {

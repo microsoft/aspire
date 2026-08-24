@@ -450,7 +450,14 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             throw new InvalidOperationException($"Project resource '{resource.Name}' is missing required metadata.");
         }
 
-        resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation);
+        // ExecutableAnnotation is a deliberate command/argument override for a real ProjectResource (e.g. MAUI
+        // attaches it to launch via `adb`/`xcrun` instead of `dotnet run --project`). A resource that merely
+        // carries project metadata without being a genuine ProjectResource (e.g. RunAsProject substituting a
+        // ContainerResource) has no such established override contract, so it always gets plain project launch
+        // semantics regardless of any incidental ExecutableAnnotation.
+        var executableAnnotation = resource is ProjectResource && resource.TryGetLastAnnotation<ExecutableAnnotation>(out var annotation)
+            ? annotation
+            : null;
         resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride);
 
         var command = executableAnnotation?.Command ?? "dotnet";
