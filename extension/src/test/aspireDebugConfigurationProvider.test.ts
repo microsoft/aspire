@@ -7,13 +7,13 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from '../debugger/AspireDebugConfigurationProvider';
-import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
 import type { AspireExtendedDebugConfiguration } from '../dcp/types';
-import { defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
-import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
 import { removeDirectorySafely } from './testHelpers';
 /** Captures the AppHost paths the provider claims for `launch.json`/F5 launches. */
@@ -23,7 +23,12 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
     readonly replacements: { previousAppHostPath: string; previousReservationId: string; appHostPath: string }[] = [];
     readonly validations: { appHostPath: string; reservationId: string; isDirectoryScope: boolean }[] = [];
     readonly released: { appHostPath: string; reservationId: string }[] = [];
-    readonly prepared: { appHostPath: string; command: string; args: string[] | undefined; cliPath: string | undefined }[] = [];
+    readonly reservedOperations: { appHostPath: string; command: string; noDebug: boolean; doStep: string | undefined; isDirectoryScope: boolean }[] = [];
+    readonly validatedOperations: { appHostPath: string; reservationId: string; command: string; noDebug: boolean; doStep: string | undefined; isDirectoryScope: boolean }[] = [];
+    readonly replacedOperations: { previousAppHostPath: string; previousReservationId: string; appHostPath: string; command: string; noDebug: boolean; doStep: string | undefined; isDirectoryScope: boolean }[] = [];
+    readonly releasedOperations: { appHostPath: string; reservationId: string }[] = [];
+    readonly prepared: { appHostPath: string; command: string; args: string[] | undefined; cliPath: string | undefined; launchProfile?: string }[] = [];
+    readonly activeReservations = new Map<string, string>();
     /** When set, the claim is refused as if a lifecycle-owned launch already held it. */
     claimedByLifecycle = false;
     validationResult: string | false | undefined;
@@ -35,11 +40,20 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
         if (isDirectoryScope) {
             this.directoryScoped.push(appHostPath);
         }
-        return this.claimedByLifecycle ? false : `reservation-${this.reserved.length}`;
+        if (this.claimedByLifecycle) {
+            return false;
+        }
+
+        const reservationId = `reservation-${this.reserved.length}`;
+        this.activeReservations.set(appHostPath, reservationId);
+        return reservationId;
     }
 
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope = false): string | false {
         this.replacements.push({ previousAppHostPath, previousReservationId, appHostPath });
+        if (this.activeReservations.get(previousAppHostPath) === previousReservationId) {
+            this.activeReservations.delete(previousAppHostPath);
+        }
         return this.tryReserveExternalLaunch(appHostPath, isDirectoryScope);
     }
 
@@ -50,6 +64,49 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
 
     releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void {
         this.released.push({ appHostPath, reservationId });
+        if (this.activeReservations.get(appHostPath) === reservationId) {
+            this.activeReservations.delete(appHostPath);
+        }
+    }
+
+    tryReserveExternalOperation(
+        appHostPath: string,
+        command: 'deploy' | 'publish' | 'do',
+        noDebug: boolean,
+        doStep?: string,
+        isDirectoryScope = false,
+    ): string | false {
+        this.reservedOperations.push({ appHostPath, command, noDebug, doStep, isDirectoryScope });
+        return this.claimedByLifecycle ? false : `operation-${this.reservedOperations.length}`;
+    }
+
+    validateOrReacquireExternalOperationReservation(
+        appHostPath: string,
+        reservationId: string,
+        command: 'deploy' | 'publish' | 'do',
+        noDebug: boolean,
+        doStep?: string,
+        isDirectoryScope = false,
+    ): string | false {
+        this.validatedOperations.push({ appHostPath, reservationId, command, noDebug, doStep, isDirectoryScope });
+        return this.validationResult ?? reservationId;
+    }
+
+    replaceExternalOperationReservation(
+        previousAppHostPath: string,
+        previousReservationId: string,
+        appHostPath: string,
+        command: 'deploy' | 'publish' | 'do',
+        noDebug: boolean,
+        doStep?: string,
+        isDirectoryScope = false,
+    ): string | false {
+        this.replacedOperations.push({ previousAppHostPath, previousReservationId, appHostPath, command, noDebug, doStep, isDirectoryScope });
+        return `operation-${this.reservedOperations.length + this.replacedOperations.length}`;
+    }
+
+    releaseExternalOperationReservation(appHostPath: string, reservationId: string): void {
+        this.releasedOperations.push({ appHostPath, reservationId });
     }
 
     async prepareLaunchArguments(
@@ -59,13 +116,20 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
         token: vscode.CancellationToken,
         cliPath?: string,
         _target?: import('../utils/cliPathVariables').CliPathResolutionTarget,
+        _isolated?: boolean,
+        _isolationPolicy?: 'explicit-only' | 'linked-worktree-default',
+        launchProfile?: string,
     ): Promise<{ args: string[] | undefined }> {
-        this.prepared.push({
+        const prepared: (typeof this.prepared)[number] = {
             appHostPath,
             command,
             args: args ? [...args] : undefined,
             cliPath,
-        });
+        };
+        if (launchProfile !== undefined) {
+            prepared.launchProfile = launchProfile;
+        }
+        this.prepared.push(prepared);
 
         if (token.isCancellationRequested) {
             throw new vscode.CancellationError();
@@ -182,9 +246,184 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config?.[appHostLaunchReservationIdConfigKey], 'reservation-1');
     });
 
-    test('does not reserve a launch for an Aspire command that is not a run', async () => {
-        // `publish`/`deploy`/`do` are not AppHost lifetimes, so reserving them would make
-        // the tool report an AppHost as starting when nothing is being started.
+    test('reserves a durable operation without marking a non-Run launch as starting', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Publish AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'publish',
+            noDebug: true,
+            program: appHostPath
+        });
+
+        assert.deepStrictEqual(launchReservation.reserved, []);
+        assert.deepStrictEqual(launchReservation.reservedOperations, [{
+            appHostPath,
+            command: 'publish',
+            noDebug: true,
+            doStep: undefined,
+            isDirectoryScope: false,
+        }]);
+        assert.strictEqual(config?.[appHostLaunchReservationIdConfigKey], 'operation-1');
+    });
+
+    test('preserves directory scope across non-Run reservation validation and replacement', async () => {
+        const workspaceRoot = path.join(tempDir, 'workspace');
+        const otherAppHostPath = path.join(tempDir, 'other', 'AppHost.csproj');
+        fs.mkdirSync(workspaceRoot, { recursive: true });
+        fs.mkdirSync(path.dirname(otherAppHostPath), { recursive: true });
+        fs.writeFileSync(otherAppHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const folder = createWorkspaceFolder(workspaceRoot);
+        const discoveryService = {
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const provider = createProvider(discoveryService, launchReservation);
+        const first = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Deploy AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'deploy',
+            program: workspaceRoot,
+        });
+        assert.ok(first);
+
+        const second = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, first);
+        assert.ok(second);
+        second.program = otherAppHostPath;
+        const third = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, second);
+        assert.ok(third);
+
+        assert.deepStrictEqual(launchReservation.reservedOperations, [{
+            appHostPath: workspaceRoot,
+            command: 'deploy',
+            noDebug: false,
+            doStep: undefined,
+            isDirectoryScope: true,
+        }]);
+        assert.deepStrictEqual(launchReservation.validatedOperations, [{
+            appHostPath: workspaceRoot,
+            reservationId: 'operation-1',
+            command: 'deploy',
+            noDebug: false,
+            doStep: undefined,
+            isDirectoryScope: true,
+        }]);
+        assert.deepStrictEqual(launchReservation.replacedOperations, [{
+            previousAppHostPath: workspaceRoot,
+            previousReservationId: 'operation-1',
+            appHostPath: otherAppHostPath,
+            command: 'deploy',
+            noDebug: false,
+            doStep: undefined,
+            isDirectoryScope: false,
+        }]);
+    });
+
+    test('replaces a non-Run reservation when the same path changes directory scope', async () => {
+        const workspaceRoot = path.join(tempDir, 'workspace');
+        fs.mkdirSync(workspaceRoot, { recursive: true });
+        const folder = createWorkspaceFolder(workspaceRoot);
+        const discoveryService = {
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const provider = createProvider(discoveryService, launchReservation);
+        const first = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Deploy AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'deploy',
+            program: workspaceRoot,
+        });
+        assert.ok(first);
+
+        const second = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, first);
+
+        assert.ok(second);
+        assert.deepStrictEqual(launchReservation.validatedOperations, []);
+        assert.deepStrictEqual(launchReservation.replacedOperations, [{
+            previousAppHostPath: workspaceRoot,
+            previousReservationId: 'operation-1',
+            appHostPath: workspaceRoot,
+            command: 'deploy',
+            noDebug: false,
+            doStep: undefined,
+            isDirectoryScope: false,
+        }]);
+    });
+
+    test('cancels a launch.json non-Run operation when another operation owns the AppHost', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        launchReservation.claimedByLifecycle = true;
+        const message = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Deploy AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'deploy',
+            program: appHostPath,
+        });
+
+        assert.strictEqual(config, undefined);
+        assert.strictEqual(launchReservation.reservedOperations.length, 1);
+        assert.strictEqual(message.calledOnce, true);
+        assert.strictEqual(message.firstCall.args[0], appHostOperationAlreadyInProgress);
+    });
+
+    test('validates a launch profile before ignoring non-run launch arguments', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        launchReservation.preparationError = new Error('Launch profiles are only supported for the run command.');
+
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+        await assert.rejects(
+            provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'Publish AppHost',
+                type: 'aspire',
+                request: 'launch',
+                command: 'publish',
+                program: appHostPath,
+                launchProfile: 'Development',
+            }),
+            /Launch profiles are only supported for the run command/);
+
+        assert.deepStrictEqual(launchReservation.prepared.map(prepared => ({
+            command: prepared.command,
+            launchProfile: prepared.launchProfile,
+        })), [{
+            command: 'publish',
+            launchProfile: 'Development',
+        }]);
+    });
+
+    test('rejects a launch profile for an unrecognized explicit command', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        await assert.rejects(
+            provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'Start AppHost',
+                type: 'aspire',
+                request: 'launch',
+                command: 'start',
+                program: appHostPath,
+                launchProfile: 'Development',
+            }),
+            /Launch profiles are only supported for the run command/);
+
+        assert.deepStrictEqual(launchReservation.prepared, []);
+    });
+
+    test('keeps legacy nested AppHost launch profiles debugger-owned for non-run configurations', async () => {
         const appHostPath = path.join(tempDir, 'AppHost.csproj');
         fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
 
@@ -194,10 +433,15 @@ suite('AspireDebugConfigurationProvider', () => {
             type: 'aspire',
             request: 'launch',
             command: 'publish',
-            program: appHostPath
+            program: appHostPath,
+            debuggers: {
+                apphost: {
+                    launchProfile: 'Development',
+                },
+            },
         });
 
-        assert.deepStrictEqual(launchReservation.reserved, []);
+        assert.deepStrictEqual(launchReservation.prepared, []);
     });
 
     test('claims the concrete AppHost when the workspace-folder launch config leaves program as the directory', async () => {
@@ -341,8 +585,9 @@ suite('AspireDebugConfigurationProvider', () => {
             [appHostLaunchReservationIdConfigKey]: 'forged-reservation',
         });
 
-        assert.strictEqual(config?.[appHostLaunchReservationIdConfigKey], undefined);
+        assert.strictEqual(config?.[appHostLaunchReservationIdConfigKey], 'operation-1');
         assert.deepStrictEqual(launchReservation.reserved, []);
+        assert.strictEqual(launchReservation.reservedOperations.length, 1);
     });
 
     test('does not preserve a launch.json reservation ID after phase one trusts the resolved CLI', async () => {
@@ -363,9 +608,10 @@ suite('AspireDebugConfigurationProvider', () => {
             ? await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, phaseOne)
             : undefined;
 
-        assert.strictEqual(phaseTwo?.[appHostLaunchReservationIdConfigKey], undefined);
+        assert.strictEqual(phaseTwo?.[appHostLaunchReservationIdConfigKey], 'operation-1');
         assert.strictEqual((phaseTwo as AspireExtendedDebugConfiguration | undefined)?.resolvedCliPath, '/resolved/aspire');
         assert.deepStrictEqual(launchReservation.reserved, []);
+        assert.strictEqual(launchReservation.reservedOperations.length, 1);
     });
 
     test('uses the resolved CLI path when a launch.json pinned CLI path is untrusted', async () => {
@@ -380,6 +626,7 @@ suite('AspireDebugConfigurationProvider', () => {
             request: 'launch',
             program: appHostPath,
             resolvedCliPath: '/forged/aspire',
+            launchProfile: 'Development HTTPS',
         });
 
         assert.strictEqual((config as AspireExtendedDebugConfiguration | undefined)?.resolvedCliPath, '/resolved/aspire');
@@ -389,7 +636,156 @@ suite('AspireDebugConfigurationProvider', () => {
             command: 'run',
             args: undefined,
             cliPath: '/resolved/aspire',
+            launchProfile: 'Development HTTPS',
         }]);
+    });
+
+    test('prepares the CLI with the nested AppHost launch profile instead of the top-level profile', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            launchProfile: 'Top Level',
+            args: ['--launch-profile=Argument Profile', '--', '--app-argument'],
+            debuggers: {
+                apphost: {
+                    launchProfile: 'AppHost Override',
+                },
+            },
+        });
+
+        assert.deepStrictEqual(launchReservation.prepared[0].args, [
+            '--',
+            '--app-argument',
+        ]);
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
+    });
+
+    test('removes the root CLI launch profile when nested AppHost settings disable profiles', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            launchProfile: 'Top Level',
+            args: ['--launch-profile', 'Argument Profile', '--isolated', '--', '--app-argument'],
+            debuggers: {
+                apphost: {
+                    disableLaunchProfile: true,
+                },
+            },
+        });
+
+        assert.deepStrictEqual(launchReservation.prepared[0].args, [
+            '--isolated',
+            '--',
+            '--app-argument',
+        ]);
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
+    });
+
+    test('does not promote project debugger launch profiles to a non-dotnet AppHost CLI', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.ts');
+        fs.writeFileSync(appHostPath, 'import { createBuilder } from "./.aspire/modules/aspire";');
+        const provider = createProvider(
+            createAppHostDiscoveryService(appHostPath, appHostPath, 'typescript/nodejs'),
+            launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            launchProfile: 'Top Level',
+            debuggers: {
+                project: {
+                    launchProfile: 'Project Resource Profile',
+                },
+            },
+        });
+
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Top Level');
+    });
+
+    test('classifies a suffix-shaped AppHost directory by its contents', async () => {
+        const appHostDirectory = path.join(tempDir, 'apphost.cs');
+        fs.mkdirSync(appHostDirectory);
+        fs.writeFileSync(
+            path.join(appHostDirectory, 'apphost.ts'),
+            'import { createBuilder } from "./.aspire/modules/aspire";');
+        const provider = createProvider(createAppHostDiscoveryService(appHostDirectory, null), launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostDirectory,
+            launchProfile: 'Top Level',
+            debuggers: {
+                project: {
+                    launchProfile: 'Project Resource Profile',
+                },
+            },
+        });
+
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Top Level');
+    });
+
+    test('keeps project debugger launch profiles boundary-owned for directory-based dotnet AppHosts', async () => {
+        const appHostDirectory = path.join(tempDir, 'AppHost');
+        fs.mkdirSync(appHostDirectory);
+        fs.writeFileSync(path.join(appHostDirectory, 'AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostDirectory, null), launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostDirectory,
+            launchProfile: 'Top Level',
+            args: ['--launch-profile=Argument Profile'],
+            debuggers: {
+                project: {
+                    launchProfile: 'Project Override',
+                },
+            },
+        });
+
+        assert.deepStrictEqual(launchReservation.prepared[0].args, []);
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
+    });
+
+    test('strips disabled root launch profiles before non-run command handling', async () => {
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Publish AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'publish',
+            program: appHostPath,
+            launchProfile: 'Top Level',
+            args: ['--launch-profile=Argument Profile', '--', '--app-argument'],
+            debuggers: {
+                apphost: {
+                    disableLaunchProfile: true,
+                },
+            },
+        });
+
+        assert.deepStrictEqual(config?.args, ['--', '--app-argument']);
+        assert.deepStrictEqual(launchReservation.prepared, []);
     });
 
     test('preserves the launch service pinned CLI path', async () => {
@@ -787,6 +1183,220 @@ suite('AspireDebugConfigurationProvider', () => {
 
         assert.strictEqual(config?.program, programPath);
     });
+
+    test('selects a concrete AppHost before reserving an ambiguous default-discovery directory', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async (items: any) => {
+            const resolvedItems = await items;
+            return resolvedItems[1];
+        });
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+
+        assert.strictEqual(discoverStub.calledOnce, true);
+        assert.strictEqual(quickPickStub.calledOnce, true);
+        assert.strictEqual(config?.program, secondAppHostPath);
+        assert.strictEqual(config?.[appHostSelectionOriginConfigKey], 'user-selection');
+        assert.strictEqual(config?.[appHostTelemetryTargetPathConfigKey], undefined);
+        assert.deepStrictEqual(launchReservation.reserved, [secondAppHostPath]);
+    });
+
+    test('cancels an ambiguous default-discovery directory when the AppHost picker is dismissed', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+
+        assert.strictEqual(discoverStub.calledOnce, true);
+        assert.strictEqual(quickPickStub.calledOnce, true);
+        assert.strictEqual(config, undefined);
+        assert.deepStrictEqual(launchReservation.reserved, []);
+    });
+
+    test('releases a carried directory reservation when repeated discovery becomes ambiguous and the picker is dismissed', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([]);
+        discoverStub.onSecondCall().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+        assert.ok(firstPass);
+
+        const secondPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, firstPass);
+
+        assert.strictEqual(secondPass, undefined);
+        assert.deepStrictEqual(launchReservation.released, [{
+            appHostPath: folder.uri.fsPath,
+            reservationId: 'reservation-1',
+        }]);
+        assert.strictEqual(launchReservation.activeReservations.size, 0);
+    });
+
+    test('releases a carried directory operation when repeated discovery becomes ambiguous and the picker is dismissed', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        fs.mkdirSync(folder.uri.fsPath);
+        const firstAppHostPath = path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj');
+        const secondAppHostPath = path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj');
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().resolves([]);
+        discoverStub.onSecondCall().resolves([
+            { path: firstAppHostPath, language: 'csharp', status: 'buildable' },
+            { path: secondAppHostPath, language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const firstPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Deploy AppHost',
+            type: 'aspire',
+            request: 'launch',
+            command: 'deploy',
+            program: folder.uri.fsPath,
+            [appHostSelectionOriginConfigKey]: 'default-discovery',
+        });
+        assert.ok(firstPass);
+
+        const secondPass = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, firstPass);
+
+        assert.strictEqual(secondPass, undefined);
+        assert.deepStrictEqual(launchReservation.releasedOperations, [{
+            appHostPath: folder.uri.fsPath,
+            reservationId: 'operation-1',
+        }]);
+        assert.deepStrictEqual(launchReservation.released, []);
+    });
+
+    test('does not discover or prompt for an explicit nested directory launch', async () => {
+        const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+        const nestedDirectory = path.join(folder.uri.fsPath, 'Nested');
+        fs.mkdirSync(nestedDirectory, { recursive: true });
+        const discoverStub = sinon.stub().resolves([
+            { path: path.join(nestedDirectory, 'AppHost.csproj'), language: 'csharp', status: 'buildable' },
+        ]);
+        const discoveryService = {
+            discover: discoverStub,
+            resolveDebugTarget: async (filePath: string) => filePath,
+            tryFindWorkspaceDefaultCandidate: async () => undefined,
+        } as unknown as AppHostDiscoveryService;
+        const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+        const provider = createProvider(discoveryService, launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: nestedDirectory,
+            [appHostSelectionOriginConfigKey]: 'explicit-launch-configuration',
+        });
+
+        assert.strictEqual(config?.program, nestedDirectory);
+        assert.strictEqual(config?.[appHostSelectionOriginConfigKey], 'explicit-launch-configuration');
+        assert.strictEqual(discoverStub.called, false);
+        assert.strictEqual(quickPickStub.called, false);
+    });
+
+    for (const testCase of [
+        {
+            name: 'one buildable candidate',
+            candidates: (folder: vscode.WorkspaceFolder): CandidateAppHostDisplayInfo[] => [
+                { path: path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj'), language: 'csharp', status: 'buildable' },
+            ],
+        },
+        {
+            name: 'a selected default',
+            candidates: (folder: vscode.WorkspaceFolder): CandidateAppHostDisplayInfo[] => [
+                { path: path.join(folder.uri.fsPath, 'ApiService', 'ApiService.AppHost.csproj'), language: 'csharp', status: 'buildable', selected: true },
+                { path: path.join(folder.uri.fsPath, 'WebApp', 'WebApp.AppHost.csproj'), language: 'csharp', status: 'buildable' },
+            ],
+        },
+    ]) {
+        test(`leaves a default-discovery directory unchanged without prompting when discovery has ${testCase.name}`, async () => {
+            const folder = createWorkspaceFolder(path.join(tempDir, 'workspace'));
+            fs.mkdirSync(folder.uri.fsPath);
+            const candidates = testCase.candidates(folder);
+            const defaultCandidate = candidates.find(candidate => candidate.selected) ?? (candidates.length === 1 ? candidates[0] : undefined);
+            const discoveryService = {
+                discover: sinon.stub().resolves(candidates),
+                resolveDebugTarget: async (filePath: string) => filePath,
+                tryFindWorkspaceDefaultCandidate: async () => defaultCandidate,
+            } as unknown as AppHostDiscoveryService;
+            const quickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+            const provider = createProvider(discoveryService, launchReservation);
+
+            const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+                name: 'Debug AppHost',
+                type: 'aspire',
+                request: 'launch',
+                program: folder.uri.fsPath,
+                [appHostSelectionOriginConfigKey]: 'default-discovery',
+            });
+
+            assert.strictEqual(config?.program, folder.uri.fsPath);
+            assert.strictEqual(quickPickStub.called, false);
+        });
+    }
 
     test('leaves workspace folder launch target unchanged and records AppHost telemetry target', async () => {
         const folder = createWorkspaceFolder(tempDir);

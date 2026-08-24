@@ -287,6 +287,11 @@
         <target state="translated">Сохранено: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="SdkVersionUnknownPlaceholder">
+        <source>(unknown)</source>
+        <target state="new">(unknown)</target>
+        <note>Displayed in place of the current SDK version when aspire.config.json has no SDK version pinned.</note>
+      </trans-unit>
       <trans-unit id="SelectChannelPrompt">
         <source>Select a channel:</source>
         <target state="translated">Выберите канал:</target>

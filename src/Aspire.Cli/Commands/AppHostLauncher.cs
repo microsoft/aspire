@@ -29,6 +29,7 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AppHostLauncher(
     IProjectLocator projectLocator,
+    IAppHostProjectFactory projectFactory,
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     IAuxiliaryBackchannelMonitor backchannelMonitor,
@@ -71,6 +72,14 @@ internal sealed class AppHostLauncher(
     };
 
     /// <summary>
+    /// Shared option for selecting the AppHost launch profile.
+    /// </summary>
+    internal static readonly Option<string?> s_launchProfileOption = new("--launch-profile", "-lp")
+    {
+        Description = SharedCommandStrings.LaunchProfileOptionDescription
+    };
+
+    /// <summary>
     /// Adds the detached launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep options in sync.
     /// </summary>
@@ -79,6 +88,7 @@ internal sealed class AppHostLauncher(
         command.Options.Add(s_appHostOption);
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
+        command.Options.Add(s_launchProfileOption);
     }
 
     /// <summary>
@@ -113,6 +123,7 @@ internal sealed class AppHostLauncher(
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
     /// <param name="format">The output format (JSON or table).</param>
     /// <param name="isolated">The explicitly supplied isolated option value, or <see langword="null"/> when omitted.</param>
+    /// <param name="launchProfile">The explicitly selected launch profile, or <see langword="null"/> when omitted.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
@@ -125,6 +136,7 @@ internal sealed class AppHostLauncher(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
         bool? isolated,
+        string? launchProfile,
         bool isExtensionHost,
         bool waitForDebugger,
         int timeoutSeconds,
@@ -158,6 +170,20 @@ internal sealed class AppHostLauncher(
         if (effectiveAppHostFile is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject);
+        }
+
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            var project = projectFactory.TryGetProject(effectiveAppHostFile);
+            if (project is null)
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
+            }
+
+            if (GetLaunchProfileValidationError(project, launchProfile) is { } launchProfileError)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, launchProfileError);
+            }
         }
 
         // The detached child receives the selected file rather than the directory that caused the
@@ -237,6 +263,23 @@ internal sealed class AppHostLauncher(
         }
 
         return CommandResult.Success();
+    }
+
+    internal static string? GetLaunchProfileValidationError(IAppHostProject project, string? launchProfile)
+    {
+        if (string.IsNullOrEmpty(launchProfile))
+        {
+            return null;
+        }
+
+        if (!project.SupportsLaunchProfiles)
+        {
+            return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, project.DisplayName);
+        }
+
+        // Missing or malformed launch settings must reach `dotnet run`, which owns the authoritative
+        // discovery and diagnostic behavior for explicit profiles.
+        return null;
     }
 
     private async Task StopLaunchedAppHostAsync(LaunchResult result, TimeSpan delay, CancellationToken cancellationToken)

@@ -113,7 +113,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);
 
-  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider);
+  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
@@ -124,7 +124,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   appHostLaunchService.setExternalAppHostStopper((appHostPath, token) =>
     stopExternalAppHost(terminalProvider, appHostPath, token));
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState, vscode.env.clipboard, configInfoProvider);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,

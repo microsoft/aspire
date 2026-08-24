@@ -9,9 +9,9 @@ namespace Aspire.Hosting;
 internal interface IInteractionFileUploadStore
 {
     /// <summary>
-    /// Registers an interaction that can own uploaded files.
+    /// Registers an interaction and the file inputs that can own uploaded files.
     /// </summary>
-    void StartInteraction(int interactionId);
+    void StartInteraction(int interactionId, IReadOnlyList<(string InputName, int MaxFileCount)> fileInputs);
 
     /// <summary>
     /// Creates a new entry for an uploaded file and returns the file ID and path.
@@ -24,14 +24,14 @@ internal interface IInteractionFileUploadStore
     void CompleteUpload(int interactionId, string fileId);
 
     /// <summary>
-    /// Gets the file path for a given file ID, interaction ID, and input name.
+    /// Gets the completed uploads for an interaction input.
     /// </summary>
-    string? GetFilePath(string fileId, int interactionId, string inputName);
+    IReadOnlyList<InteractionFileUpload> GetCompletedFiles(int interactionId, string inputName);
 
     /// <summary>
-    /// Gets the original file name for a given interaction and file ID.
+    /// Marks validated uploads as resolved into the accepted interaction result.
     /// </summary>
-    string? GetFileName(int interactionId, string fileId);
+    void MarkFilesAccepted(int interactionId, string inputName, IReadOnlyList<string> fileIds);
 
     /// <summary>
     /// Removes a file entry from an interaction and cleans up its uploaded content.
@@ -39,7 +39,7 @@ internal interface IInteractionFileUploadStore
     void RemoveEntry(int interactionId, string fileId);
 
     /// <summary>
-    /// Marks an interaction as completed.
+    /// Marks an interaction as completed while retaining uploads for the caller to process.
     /// </summary>
     void CompleteInteraction(int interactionId);
 
@@ -48,3 +48,5 @@ internal interface IInteractionFileUploadStore
     /// </summary>
     void CancelInteraction(int interactionId);
 }
+
+internal sealed record InteractionFileUpload(string Id, string Name, string FilePath);

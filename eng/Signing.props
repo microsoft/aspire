@@ -61,7 +61,7 @@
     <FileSignInfo Include="OpenTelemetry.Extensions.Hosting.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.Abstractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.FileSystem.dll" CertificateName="3PartySHA2" />
-    <FileSignInfo Include="NSec.Cryptography.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="BouncyCastle.Cryptography.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />

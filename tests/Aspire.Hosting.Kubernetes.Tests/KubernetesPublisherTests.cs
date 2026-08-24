@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
@@ -856,6 +859,254 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_EmbeddedParametersInEnvironmentExpressionsPopulateValues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        // Regression for https://github.com/microsoft/aspire/issues/11140: the base chart keeps
+        // deployment parameters empty, but every nested Helm reference must still be declared.
+        var host = builder.AddParameter("host", "localhost");
+        var token = builder.AddParameter("token", "test-token", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_ConflictingEmbeddedParameterValuesPathReportsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var host = builder.AddParameter("host", "parameter-host", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("host", "environment-host")
+            .WithEnvironment("URL", $"http://{host}/test");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both environment value 'host' and embedded parameter 'host' " +
+            "to Helm values path 'config.myapp.host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
+    public async Task PublishAsync_EmbeddedParametersWithSameNormalizedValuesPathReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var dashedHost = builder.AddParameter("api-host", "dashed-host", publishValueAsDefault: true);
+        var underscoredHost = new ParameterResource("api_host", _ => "underscored-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{dashedHost}/{underscoredHost}");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(CompletionState.CompletedWithError, reporter.ResultCompletionState);
+        Assert.Contains(
+            "Resource 'myapp' maps both embedded parameter 'api-host' and embedded parameter 'api_host' " +
+            "to Helm values path 'config.myapp.api_host'. Rename one of them so each value has a unique Helm path.",
+            Assert.IsType<string>(reporter.CompletionMessage));
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctEmbeddedParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstHost = new ParameterResource("host", _ => "first-host");
+        var secondHost = new ParameterResource("host", _ => "second-host");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("URL", $"http://{firstHost}/{secondHost}");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct embedded parameter sources named 'host' " +
+            "to Helm values path 'config.myapp.host'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_DistinctConditionalParameterSourcesWithSameNameReportError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var firstCondition = new ParameterResource("enable-tls", _ => bool.TrueString);
+        var secondCondition = new ParameterResource("enable-tls", _ => bool.FalseString);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["FIRST"] = ReferenceExpression.CreateConditional(
+                    firstCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+                context.EnvironmentVariables["SECOND"] = ReferenceExpression.CreateConditional(
+                    secondCondition,
+                    bool.TrueString,
+                    ReferenceExpression.Create($"enabled"),
+                    ReferenceExpression.Create($"disabled"));
+            });
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "Resource 'myapp' maps multiple distinct condition parameter sources named 'enable-tls' " +
+            "to Helm values path 'parameters.myapp.enable_tls'. Reuse the same ParameterResource instance " +
+            "or give each source a unique name.",
+            exception.ToString());
+    }
+
+    [Fact]
+    public async Task PublishAsync_CompositeExpressionPreservesExpressionShape()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var first = builder.AddParameter("first", "alpha", publishValueAsDefault: true);
+        var second = builder.AddParameter("second", "beta", publishValueAsDefault: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("COMPOSITE", $"prefix-{{literal}}-{second}-{first}-{second}-suffix");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_SharedEmbeddedParameterIsScopedPerResource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var sharedHost = builder.AddParameter("shared-host", "shared.internal", publishValueAsDefault: true);
+
+        builder.AddContainer("first", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/first");
+
+        builder.AddContainer("second", "nginx")
+            .WithEnvironment("URL", $"http://{sharedHost}/second");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/first/config.yaml",
+            "templates/second/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -867,7 +1118,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment(context =>
             {
                 var conditional = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.TrueString),
+                    new TestValueProvider(bool.TrueString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Empty);
@@ -875,7 +1126,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 context.EnvironmentVariables["TLS_SUFFIX"] = conditional;
 
                 var conditionalFalse = ReferenceExpression.CreateConditional(
-                    new TestConditionProvider(bool.FalseString),
+                    new TestValueProvider(bool.FalseString),
                     bool.TrueString,
                     ReferenceExpression.Create($",ssl=true"),
                     ReferenceExpression.Create($",ssl=false"));
@@ -917,12 +1168,63 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
+    public async Task PublishAsync_ConditionalBranchesCaptureEmbeddedParameters()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
+
+        var mode = builder.AddParameter("mode", "enabled", publishValueAsDefault: true);
+        var user = builder.AddParameter("user", "alice", publishValueAsDefault: true);
+        var password = builder.AddParameter("password", "test-password", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["OPTIONS"] = ReferenceExpression.CreateConditional(
+                    mode.Resource,
+                    "enabled",
+                    ReferenceExpression.Create($"user={user};password={password}"),
+                    ReferenceExpression.Create($"user={user};disabled"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/myapp/secrets.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var environment = builder.AddKubernetesEnvironment("env");
 
         // Use a real ParameterResource as the condition with a known default value.
         var enableTls = builder.AddParameter("enable-tls", "True", publishValueAsDefault: true);
@@ -941,6 +1243,12 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 
         var app = builder.Build();
         app.Run();
+
+        Assert.Contains(environment.Resource.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
 
         var expectedFiles = new[]
         {
@@ -1588,17 +1896,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
                 Assert.DoesNotContain(pattern, content);
             }
         }
-    }
-
-    private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
-    {
-        public string ValueExpression => "test-condition";
-
-        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
-            => new(value);
-
-        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
-            => new(value);
     }
 
     private sealed class TestProject : IProjectMetadata

@@ -209,13 +209,13 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds a test vault resource
-    pub fn add_test_vault(&self, name: &str) -> Result<TestVaultResource, Box<dyn std::error::Error>> {
+    pub fn add_test_vault(&self, name: &str) -> Result<ITestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/addTestVault", args)?;
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(TestVaultResource::new(handle, self.client.clone()))
+        Ok(ITestVaultResource::new(handle, self.client.clone()))
     }
 }
 
@@ -284,6 +284,128 @@ impl HasHandle for IResourceWithEnvironment {
 }
 
 impl IResourceWithEnvironment {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource
+pub struct ITestMutablePromiseCollisionResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestMutablePromiseCollisionResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestMutablePromiseCollisionResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets or sets the test value.
+    pub fn value(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.value", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Value property
+    pub fn set_value(&self, value: &str) -> Result<ITestMutablePromiseCollisionResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ITestMutablePromiseCollisionResource::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise
+pub struct ITestMutablePromiseCollisionResourcePromise {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestMutablePromiseCollisionResourcePromise {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestMutablePromiseCollisionResourcePromise {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource
+pub struct ITestPromiseCollisionResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestPromiseCollisionResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestPromiseCollisionResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise
+pub struct ITestPromiseCollisionResourcePromise {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestPromiseCollisionResourcePromise {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestPromiseCollisionResourcePromise {
     pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
         Self { handle, client }
     }
@@ -915,6 +1037,28 @@ impl TestRedisResource {
         &self.client
     }
 
+    /// Configures a Redis resource with parameter-only resources whose generated names collide.
+    pub fn with_promise_collision_resources(&self, resource: &ITestPromiseCollisionResource, resource_promise: &ITestPromiseCollisionResourcePromise) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("resourcePromise".to_string(), resource_promise.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withPromiseCollisionResources", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide.
+    pub fn with_mutable_promise_collision_resources(&self, resource: &ITestMutablePromiseCollisionResource, resource_promise: &ITestMutablePromiseCollisionResourcePromise) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("resourcePromise".to_string(), resource_promise.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMutablePromiseCollisionResources", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a child database to a test Redis resource
     pub fn add_test_child_database(&self, name: &str, database_name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -1204,6 +1348,16 @@ impl TestRedisResource {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withDataVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a Redis resource with the concrete vault resource as a parameter.
+    pub fn with_concrete_vault_resource(&self, resource: &TestVaultResource) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withConcreteVaultResource", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }

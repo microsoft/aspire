@@ -361,6 +361,16 @@ suite('telemetry utilities', () => {
         assert.strictEqual(fake.events[0].properties?.error_kind, 'HandledError');
     });
 
+    test('withCommandTelemetry classifies handled cancellations without an error kind', async () => {
+        const handledCancellation = { success: false as const, canceled: true };
+
+        const result = await withCommandTelemetry('cmd.handledCancellation', () => handledCancellation);
+
+        assert.strictEqual(result, handledCancellation);
+        assert.strictEqual(fake.events[0].properties?.outcome, 'canceled');
+        assert.strictEqual(fake.events[0].properties?.error_kind, undefined);
+    });
+
     test('withCommandTelemetry records and normalizes handled error kinds', async () => {
         await withCommandTelemetry('cmd.handledKind', () => ({ success: false, errorKind: 'ResourceNotFound' }));
         await withCommandTelemetry('cmd.invalidHandledErrorKind', () => ({

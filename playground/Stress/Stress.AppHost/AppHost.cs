@@ -129,6 +129,5 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
 
 builder.AddNoStatusResource("no-status-resource");
 builder.AddPropertyStressResource("property-stress-resource");
-builder.AddReplicaStateStressResource("replica-state-stress");
 
 builder.Build().Run();

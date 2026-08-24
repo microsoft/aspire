@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
@@ -185,7 +187,7 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
     internal const string CompileStampFileName = ".aspire-compile-stamp";
 
     /// <summary>
-    /// Builds the up-to-date check that lets an unchanged AppHost skip <c>javac</c> entirely.
+    /// Sets the up-to-date check that lets an unchanged AppHost skip <c>javac</c> entirely when supported.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -205,28 +207,80 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
     /// solution do not give back the time this saves.
     /// </para>
     /// </remarks>
+    /// <param name="commandSpec">The compile command to update.</param>
     /// <param name="classOutputDirectory">Directory javac writes classes to, which is where the stamp lives.</param>
-    internal static CommandUpToDateCheck CreateCompileUpToDateCheck(string classOutputDirectory)
+    [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "The installed CLI roots the force-shared contract when this property exists.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The installed CLI roots the force-shared contract when this property exists.")]
+    internal static void SetCompileUpToDateCheckIfSupported(object commandSpec, string classOutputDirectory)
     {
-        return new CommandUpToDateCheck
+        // Aspire.TypeSystem is force-shared from the installed CLI. A newer codegen assembly can
+        // therefore run against an older CommandSpec that has the same assembly identity but does not
+        // expose this additive property. Probe by name so the optimization is skipped and the older CLI
+        // compiles on every launch rather than failing to load the Java language support.
+        var upToDateCheckProperty = commandSpec.GetType().GetProperty(nameof(CommandSpec.UpToDateCheck));
+
+        if (upToDateCheckProperty is null)
         {
-            Inputs =
-            [
-                "{appHostFile}",
-                "./**",
-                $"{GeneratedSourcesDirectory}/**",
-                "src/main/java/**"
-            ],
-            // Only sources are inputs. Without this the .class files javac writes beside the sources in
-            // the flat layout would invalidate the very check they were produced under.
-            FileExtensions = [".java"],
-            StampFile = Path.Combine(classOutputDirectory, CompileStampFileName)
-        };
+            return;
+        }
+
+        var expectedTypeName = $"{typeof(CommandSpec).Namespace}.{nameof(CommandUpToDateCheck)}";
+        var upToDateCheckType = upToDateCheckProperty.PropertyType;
+        var inputsProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.Inputs));
+        var fileExtensionsProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.FileExtensions));
+        var stampFileProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.StampFile));
+
+        if (upToDateCheckProperty.SetMethod is null ||
+            !upToDateCheckProperty.SetMethod.IsPublic ||
+            upToDateCheckType.Assembly != typeof(CommandSpec).Assembly ||
+            upToDateCheckType.FullName != expectedTypeName ||
+            upToDateCheckType.IsAbstract ||
+            upToDateCheckType.GetConstructor(Type.EmptyTypes) is null ||
+            inputsProperty?.PropertyType != typeof(string[]) ||
+            inputsProperty.SetMethod is null ||
+            !inputsProperty.SetMethod.IsPublic ||
+            fileExtensionsProperty?.PropertyType != typeof(string[]) ||
+            fileExtensionsProperty.SetMethod is null ||
+            !fileExtensionsProperty.SetMethod.IsPublic ||
+            stampFileProperty?.PropertyType != typeof(string) ||
+            stampFileProperty.SetMethod is null ||
+            !stampFileProperty.SetMethod.IsPublic)
+        {
+            throw new MissingMemberException(
+                $"The runtime {nameof(CommandSpec.UpToDateCheck)} contract does not match {expectedTypeName}.");
+        }
+
+        var upToDateCheck = Activator.CreateInstance(upToDateCheckType)
+            ?? throw new MissingMemberException($"The runtime type {expectedTypeName} could not be created.");
+
+        inputsProperty.SetValue(upToDateCheck, new[]
+        {
+            "{appHostFile}",
+            "./**",
+            $"{GeneratedSourcesDirectory}/**",
+            "src/main/java/**"
+        });
+        // Only sources are inputs. Without this the .class files javac writes beside the sources in
+        // the flat layout would invalidate the very check they were produced under.
+        fileExtensionsProperty.SetValue(upToDateCheck, new[] { ".java" });
+        stampFileProperty.SetValue(upToDateCheck, Path.Combine(classOutputDirectory, CompileStampFileName));
+        upToDateCheckProperty.SetValue(commandSpec, upToDateCheck);
     }
 
     /// <inheritdoc />
     public RuntimeSpec GetRuntimeSpec()
     {
+        var compile = new CommandSpec
+        {
+            // No shell. javac creates the destination directory itself, so there is nothing
+            // left that needed one, and running without a shell means arguments are not
+            // re-split: a project under a path such as "C:\My Projects" works unchanged, on
+            // Windows and Unix alike, from a single spec.
+            Command = "javac",
+            Args = [.. s_javacOptions, "-d", BuildOutputDirectory, $"@{GeneratedSourcesListPath}", "{appHostFile}"]
+        };
+        SetCompileUpToDateCheckIfSupported(compile, BuildOutputDirectory);
+
         return new RuntimeSpec
         {
             Language = LanguageId,
@@ -238,19 +292,7 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
             // would otherwise start a shell), and it lets --no-build skip the compile.
             // A Maven or Gradle AppHost replaces both commands via JavaAppHostToolchainResolver.
             InstallDependencies = null,
-            PreExecute =
-            [
-                new CommandSpec
-                {
-                    // No shell. javac creates the destination directory itself, so there is nothing
-                    // left that needed one, and running without a shell means arguments are not
-                    // re-split: a project under a path such as "C:\My Projects" works unchanged, on
-                    // Windows and Unix alike, from a single spec.
-                    Command = "javac",
-                    Args = [.. s_javacOptions, "-d", BuildOutputDirectory, $"@{GeneratedSourcesListPath}", "{appHostFile}"],
-                    UpToDateCheck = CreateCompileUpToDateCheck(BuildOutputDirectory)
-                }
-            ],
+            PreExecute = [compile],
             // Debugging the AppHost itself goes through the same Java debug adapter the resources use.
             // The CLI only takes this path when the extension reports the capability, so a CLI-only
             // run is unaffected.

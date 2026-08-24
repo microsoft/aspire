@@ -50,6 +50,7 @@ internal sealed class StartCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var explicitIsolated = AppHostLauncher.GetExplicitIsolated(parseResult);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the
@@ -106,6 +107,11 @@ internal sealed class StartCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
+        }
+
         if (appHostArgs.Count > 0)
         {
             additionalArgs.Add("--");
@@ -121,6 +127,7 @@ internal sealed class StartCommand : BaseCommand
             passedAppHostProjectFile,
             format,
             explicitIsolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

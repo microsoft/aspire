@@ -50,14 +50,20 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions()
         {
-            NoLaunchProfile = true
+            NoLaunchProfile = true,
+            LaunchProfile = "E2E"
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
             executionContext,
-            (args, _, _, _) => Assert.Contains(args, arg => arg == "--no-launch-profile"),
+            (args, _, _, _) =>
+            {
+                Assert.Equal(
+                    ["run", "--no-launch-profile", "--project", projectFile.FullName, "--", "--operation", "inspect"],
+                    args);
+            },
             42);
 
         // This is what we are really testing here - that RunAsync reads
@@ -73,6 +79,48 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             env: new Dictionary<string, string>(),
             null,
             options,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+    }
+
+    [Theory]
+    [InlineData("AppHost.csproj", false)]
+    [InlineData("AppHost.csproj", true)]
+    [InlineData("apphost.cs", false)]
+    public async Task RunAsyncAppliesSelectedLaunchProfile(string appHostFileName, bool watch)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, appHostFileName));
+        await File.WriteAllTextAsync(appHostFile.FullName, "Not a real AppHost.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, _) =>
+            {
+                string[] expectedArgs = appHostFile.Extension == ".cs"
+                    ? ["run", "--launch-profile=--no-build", $"/p:{KnownConfigNames.SuppressCliRunHook}=true", "--file", appHostFile.FullName, "--"]
+                    : watch
+                        ? ["watch", "--non-interactive", "--launch-profile=--no-build", "--project", appHostFile.FullName, "--"]
+                        : ["run", "--launch-profile=--no-build", "--project", appHostFile.FullName, "--"];
+                Assert.Equal(expectedArgs, args);
+            },
+            42);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: appHostFile,
+            watch,
+            noBuild: false,
+            noRestore: false,
+            args: [],
+            env: null,
+            backchannelCompletionSource: null,
+            new ProcessInvocationOptions { LaunchProfile = "--no-build" },
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(42, exitCode);

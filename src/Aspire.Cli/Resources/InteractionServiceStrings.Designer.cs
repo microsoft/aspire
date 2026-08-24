@@ -241,6 +241,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Invalid selection..
+        /// </summary>
+        public static string InvalidSelection {
+            get {
+                return ResourceManager.GetString("InvalidSelection", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to [dim]For more information, see: {0}[/].
         /// </summary>
         public static string MoreInfoNewCliVersion {

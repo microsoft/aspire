@@ -30,6 +30,8 @@ internal class DotNetTemplateFactory(
     IEnvironment environment)
     : ITemplateFactory
 {
+    private const string NoTestFramework = "None";
+
     // Template-specific options
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
     {
@@ -339,12 +341,12 @@ internal class DotNetTemplateFactory(
 
         var testFramework = await interactionService.PromptForSelectionAsync(
             TemplatingStrings.PromptForTFM_Prompt,
-            ["MSTest", "NUnit", "xUnit.net", TemplatingStrings.None],
-            choice => choice,
+            ["MSTest", "NUnit", "xUnit.net", NoTestFramework],
+            choice => string.Equals(choice, NoTestFramework, StringComparison.Ordinal) ? TemplatingStrings.None : choice,
             binding: binding,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(testFramework, TemplatingStrings.None, StringComparisons.CliInputOrOutput))
+        if (!string.Equals(testFramework, NoTestFramework, StringComparisons.CliInputOrOutput))
         {
             if (string.Equals(testFramework, "xUnit.net", StringComparison.OrdinalIgnoreCase))
             {
@@ -528,8 +530,10 @@ internal class DotNetTemplateFactory(
             // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
-            // Persist the resolved channel into the scaffolded project's aspire.config.json
-            // for channels whose name should be pinned (pr-<N>, daily, staging, local).
+            // Persist the resolved channel and exact SDK version into the scaffolded project's
+            // aspire.config.json for channels whose name should be pinned (pr-<N>, daily, staging,
+            // local). Local hives can contain packages from several builds, so the version keeps
+            // later integration discovery aligned with the template package selected here.
             // Without this pin, `aspire update` on the new project skips the local-config
             // step in its channel-resolution precedence and falls through to either an
             // interactive prompt (when hives exist) or the Implicit/nuget.org channel —
@@ -542,6 +546,7 @@ internal class DotNetTemplateFactory(
             {
                 var config = AspireConfigFile.LoadOrCreate(outputPath);
                 config.Channel = selectedTemplateDetails.Channel.Name;
+                config.SdkVersion = selectedTemplateDetails.Package.Version;
                 config.Save(outputPath);
             }
 
