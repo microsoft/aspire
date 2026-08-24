@@ -129,7 +129,12 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         [
             "needs.extension_tests_win.result == 'skipped'",
             "needs.extension_e2e_tests.result == 'skipped'",
-            "(needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter == 'true'))",
+            "needs.cli_starter_validation_linux_x64.result == 'skipped'",
+            "needs.cli_starter_validation_linux_arm64.result == 'skipped'",
+            "needs.cli_starter_validation_windows_x64.result == 'skipped'",
+            "needs.cli_starter_validation_windows_arm64.result == 'skipped'",
+            "needs.cli_starter_validation_macos_x64.result == 'skipped'",
+            "needs.cli_starter_validation_macos_arm64.result == 'skipped'",
             "needs.typescript_sdk_tests.result == 'skipped'",
             "needs.typescript_api_compat.result == 'skipped'",
             "needs.build_cli_archive_macos_x64.result == 'skipped'",
@@ -149,49 +154,24 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void NormalCiPreservesSelectiveCliStarterValidation()
-    {
-        var setupOutputs = Mapping(Mapping(s_testJobs, "setup_for_tests"), "outputs");
-        Assert.Equal("${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter }}", Scalar(setupOutputs, "run_cli_starter"));
-
-        var job = Mapping(s_testJobs, "cli_starter_validation_windows");
-        Assert.Equal(
-            "${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && (needs.setup_for_tests.outputs.run_cli_starter == 'true') }}",
-            Scalar(job, "if"));
-        Assert.False(job.Children.ContainsKey(new YamlScalarNode("uses")));
-
-        string[] unrelatedReplacementJobs =
-        [
-            "cli_starter_validation_linux_x64",
-            "cli_starter_validation_linux_arm64",
-            "cli_starter_validation_windows_x64",
-            "cli_starter_validation_windows_arm64",
-            "cli_starter_validation_macos_x64",
-            "cli_starter_validation_macos_arm64",
-        ];
-        Assert.All(unrelatedReplacementJobs, jobName => Assert.False(s_testJobs.Children.ContainsKey(new YamlScalarNode(jobName))));
-
-        var results = Mapping(s_testJobs, "results");
-        Assert.Contains("cli_starter_validation_windows", SequenceScalars(results, "needs"));
-        Assert.All(
-            unrelatedReplacementJobs,
-            jobName => Assert.DoesNotContain(jobName, SequenceScalars(results, "needs")));
-
-        var workflow = File.ReadAllText(RepoPath(".github", "workflows", "tests.yml"));
-        Assert.Contains(
-            "- cli_starter_validation_windows: this job only runs for pull requests",
-            workflow,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NormalTestsDoNotRequestActionsReadPermission()
+    public void ReleaseCallerGrantsAllReusableWorkflowPermissions()
     {
         var workflowPermissions = Mapping(s_testsWorkflow, "permissions");
-        Assert.False(workflowPermissions.Children.ContainsKey(new YamlScalarNode("actions")));
+        Assert.Equal("read", Scalar(workflowPermissions, "actions"));
+        Assert.Equal("read", Scalar(workflowPermissions, "contents"));
 
-        var normalTestsPermissions = Mapping(Mapping(s_ciJobs, "tests"), "permissions");
-        Assert.False(normalTestsPermissions.Children.ContainsKey(new YamlScalarNode("actions")));
+        var normalPermissions = Mapping(Mapping(s_ciJobs, "tests"), "permissions");
+        var releasePermissions = Mapping(Mapping(s_ciJobs, "extension_release_tests"), "permissions");
+        string[] requiredPermissions =
+        [
+            "actions",
+            "contents",
+            "issues",
+            "pull-requests",
+        ];
+
+        Assert.Equal(requiredPermissions, releasePermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value).Order());
+        Assert.All(requiredPermissions, permission => Assert.Equal(Scalar(normalPermissions, permission), Scalar(releasePermissions, permission)));
     }
 
     [Fact]

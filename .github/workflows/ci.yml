@@ -132,6 +132,13 @@ jobs:
     needs: [prepare_for_ci]
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' }}
     uses: ./.github/workflows/tests.yml
+    # GitHub validates every permission requested by a reusable workflow, including jobs skipped
+    # by extensionReleaseOnly. Keep this in sync with the normal tests caller above.
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
     with:
       extensionReleaseOnly: true
 
