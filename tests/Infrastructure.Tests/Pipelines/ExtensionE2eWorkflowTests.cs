@@ -84,8 +84,10 @@ public sealed class ExtensionE2eWorkflowTests
         var unitSteps = ((YamlSequenceNode)extensionUnitJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
         var uploadStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Upload VSIX");
         Assert.Contains("!cancelled()", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("!inputs.extensionReleaseOnly", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
         var packageStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Package VSIX");
         Assert.Contains("!cancelled()", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("!inputs.extensionReleaseOnly", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
 
         var resultsJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("results")];
         var steps = (YamlSequenceNode)resultsJob.Children[new YamlScalarNode("steps")];
