@@ -139,6 +139,7 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Copy components
         CopyManaged();
+        CopyDashboard();
         await CopyDcpAsync().ConfigureAwait(false);
 
         Log("Layout build complete!");
@@ -148,7 +149,7 @@ internal sealed class LayoutBuilder : IDisposable
     {
         Log("Copying aspire-managed...");
 
-        var managedPublishPath = FindPublishPath("Aspire.Managed");
+        var managedPublishPath = FindPublishPath("Aspire.Managed", "net10.0");
         if (managedPublishPath is null)
         {
             throw new InvalidOperationException("Aspire.Managed publish output not found.");
@@ -157,7 +158,7 @@ internal sealed class LayoutBuilder : IDisposable
         var managedDir = Path.Combine(_outputPath, "managed");
         Directory.CreateDirectory(managedDir);
 
-        // Copy only the aspire-managed executable and required assets (wwwroot for Dashboard).
+        // Copy only the aspire-managed executable.
         // Skip other .exe files — they are native host stubs from referenced Exe projects
         // that leak into the publish output but are not needed (everything is in aspire-managed.exe).
         var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
@@ -171,14 +172,41 @@ internal sealed class LayoutBuilder : IDisposable
 
         File.Copy(managedExePath, Path.Combine(managedDir, managedExeName), overwrite: true);
 
-        // Copy wwwroot (required for Dashboard static web assets)
-        var wwwrootPath = Path.Combine(managedPublishPath, "wwwroot");
-        if (Directory.Exists(wwwrootPath))
+        Log($"  Copied aspire-managed to managed/");
+    }
+
+    private void CopyDashboard()
+    {
+        Log("Copying Native AOT Dashboard...");
+
+        // A non-RID publish contains a framework-dependent apphost whose DLL and runtime config are
+        // intentionally not copied into the bundle. Only RID-specific output can be used here.
+        var dashboardPublishPath = FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true);
+        if (dashboardPublishPath is null)
         {
-            CopyDirectory(wwwrootPath, Path.Combine(managedDir, "wwwroot"));
+            throw new InvalidOperationException("Aspire.Dashboard publish output not found.");
         }
 
-        Log($"  Copied aspire-managed to managed/");
+        var dashboardDir = Path.Combine(_outputPath, "dashboard");
+        Directory.CreateDirectory(dashboardDir);
+
+        var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
+        var dashboardExeName = isWindows ? "Aspire.Dashboard.exe" : "Aspire.Dashboard";
+        var dashboardExePath = Path.Combine(dashboardPublishPath, dashboardExeName);
+        if (!File.Exists(dashboardExePath))
+        {
+            throw new InvalidOperationException($"Native AOT Dashboard executable not found at {dashboardExePath}");
+        }
+
+        File.Copy(dashboardExePath, Path.Combine(dashboardDir, dashboardExeName), overwrite: true);
+
+        var wwwrootPath = Path.Combine(dashboardPublishPath, "wwwroot");
+        if (Directory.Exists(wwwrootPath))
+        {
+            CopyDirectory(wwwrootPath, Path.Combine(dashboardDir, "wwwroot"));
+        }
+
+        Log("  Copied Native AOT Dashboard to dashboard/");
     }
 
     private Task CopyDcpAsync()
@@ -271,22 +299,32 @@ internal sealed class LayoutBuilder : IDisposable
         return archivePath;
     }
 
-    private string? FindPublishPath(string projectName)
+    private string? FindPublishPath(string projectName, string targetFramework, bool requireRidSpecific = false)
     {
         // Look for publish output in standard locations
         // Order: RID-specific publish paths first (Release then Debug)
-        var searchPaths = new[]
+        var ridSpecificSearchPaths = new[]
         {
+            // PlatformName-scoped output used by RID packaging and signing.
+            Path.Combine(_artifactsPath, "bin", projectName, _rid, "Release", targetFramework, _rid, "publish"),
+            Path.Combine(_artifactsPath, "bin", projectName, _rid, "Debug", targetFramework, _rid, "publish"),
             // RID-specific self-contained publish output (preferred for Aspire.Managed)
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", "net10.0", _rid, "publish"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", "net10.0", _rid, "publish"),
+            Path.Combine(_artifactsPath, "bin", projectName, "Release", targetFramework, _rid, "publish"),
+            Path.Combine(_artifactsPath, "bin", projectName, "Debug", targetFramework, _rid, "publish"),
             // Native AOT output
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", "net10.0", _rid, "native"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", "net10.0", _rid, "native"),
-            // Non-RID publish output
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", "net10.0", "publish"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", "net10.0", "publish"),
+            Path.Combine(_artifactsPath, "bin", projectName, "Release", targetFramework, _rid, "native"),
+            Path.Combine(_artifactsPath, "bin", projectName, "Debug", targetFramework, _rid, "native"),
         };
+
+        var searchPaths = requireRidSpecific
+            ? ridSpecificSearchPaths
+            :
+            [
+                .. ridSpecificSearchPaths,
+                // Non-RID publish output
+                Path.Combine(_artifactsPath, "bin", projectName, "Release", targetFramework, "publish"),
+                Path.Combine(_artifactsPath, "bin", projectName, "Debug", targetFramework, "publish"),
+            ];
 
         foreach (var path in searchPaths)
         {

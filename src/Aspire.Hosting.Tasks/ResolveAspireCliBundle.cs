@@ -141,8 +141,8 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     private void SetOutputs(BundleResolution resolution)
     {
         DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
-        AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
-        AspireDashboardPath = resolution.ManagedPath;
+        AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.DashboardDir);
+        AspireDashboardPath = resolution.DashboardPath;
         AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
         AspireTerminalHostPath = resolution.ManagedPath;
         AspireTerminalHostInvocationArgs = "terminalhost";
@@ -231,12 +231,29 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         var managedDir = Path.Combine(bundleRoot, "managed");
         var managedPath = Path.Combine(managedDir, IsWindows() ? "aspire-managed.exe" : "aspire-managed");
 
+        // Current bundles isolate the Native AOT Dashboard and its static assets in dashboard/.
+        // Preserve compatibility with transitional bundles that placed Aspire.Dashboard in managed/;
+        // if neither executable exists, resolution below falls back to the older aspire-managed
+        // dispatcher, which launches the Dashboard through its "dashboard" subcommand.
+        var dashboardDir = Path.Combine(bundleRoot, "dashboard");
+        var dashboardPath = Path.Combine(dashboardDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        if (!File.Exists(dashboardPath))
+        {
+            dashboardDir = managedDir;
+            dashboardPath = Path.Combine(managedDir, IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        }
+
         if (!File.Exists(dcpPath) || !File.Exists(managedPath))
         {
             return false;
         }
 
-        resolution = new BundleResolution(dcpDir, managedDir, managedPath);
+        resolution = new BundleResolution(
+            dcpDir,
+            managedDir,
+            managedPath,
+            dashboardDir,
+            File.Exists(dashboardPath) ? dashboardPath : managedPath);
         return true;
     }
 
@@ -494,12 +511,16 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             or System.Security.SecurityException;
     }
 
-    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath)
+    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath)
     {
         public string DcpDir { get; } = dcpDir;
 
         public string ManagedDir { get; } = managedDir;
 
         public string ManagedPath { get; } = managedPath;
+
+        public string DashboardDir { get; } = dashboardDir;
+
+        public string DashboardPath { get; } = dashboardPath;
     }
 }

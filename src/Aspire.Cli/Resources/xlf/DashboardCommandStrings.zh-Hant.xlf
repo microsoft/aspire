@@ -83,8 +83,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ManagedBinaryNotFound">
-        <source>The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
+        <source>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
+        <target state="new">The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcLabel">

@@ -457,7 +457,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task AddDashboardResource_CreatesExecutableResourceWithCustomRuntimeConfig()
+    public async Task AddDashboardResource_UsesDashboardRuntimeConfigWithoutReplacingFrameworkVersions()
     {
         // Arrange
         var resourceLoggerService = new ResourceLoggerService();
@@ -482,12 +482,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             {
                 runtimeOptions = new
                 {
-                    tfm = "net8.0",
-                    rollForward = "Major",
+                    tfm = "net11.0",
                     frameworks = new[]
                     {
-                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
-                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                        new { name = "Microsoft.NETCore.App", version = "11.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "11.0.0" }
                     },
                     configProperties = new
                     {
@@ -523,19 +522,20 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
 
-            // Verify that the custom runtime config has been updated with current framework versions
-            var customConfigContent = File.ReadAllText((string)args[2]);
-            var customConfig = JsonSerializer.Deserialize<JsonElement>(customConfigContent);
+            // Verify that the Dashboard's framework versions were preserved rather than replaced
+            // with the lower-targeted AppHost's versions.
+            var dashboardConfigContent = File.ReadAllText((string)args[2]);
+            var dashboardConfig = JsonSerializer.Deserialize<JsonElement>(dashboardConfigContent);
 
-            var frameworks = customConfig.GetProperty("runtimeOptions").GetProperty("frameworks").EnumerateArray().ToArray();
+            var frameworks = dashboardConfig.GetProperty("runtimeOptions").GetProperty("frameworks").EnumerateArray().ToArray();
             var netCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.NETCore.App");
             var aspNetCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.AspNetCore.App");
 
-            Assert.Equal("8.0.0", netCoreFramework.GetProperty("version").GetString());
-            Assert.Equal("8.0.0", aspNetCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("11.0.0", netCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("11.0.0", aspNetCoreFramework.GetProperty("version").GetString());
         }
         finally
         {
@@ -603,7 +603,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
         }
         finally
@@ -672,7 +672,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
         }
         finally
@@ -739,7 +739,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
         }
         finally
@@ -748,6 +748,38 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             {
                 Directory.Delete(tempDir, recursive: true);
             }
+        }
+    }
+
+    [Theory]
+    [InlineData("Aspire.Dashboard.exe")]
+    [InlineData("Aspire.Dashboard")]
+    public async Task AddDashboardResource_WithNativeExecutable_RunsDirectly(string executableName)
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var tempDir = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var dashboardExecutable = Path.Combine(tempDir.FullName, executableName);
+            File.WriteAllText(dashboardExecutable, "mock native executable");
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExecutable });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            var dashboardResource = Assert.Single(model.Resources);
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal(dashboardExecutable, executableResource.Command);
+            Assert.Empty(executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
         }
     }
 
