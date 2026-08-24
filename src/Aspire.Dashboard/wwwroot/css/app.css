@@ -1544,14 +1544,14 @@ fluent-switch.table-switch::part(label) {
     text-align: start !important;
 }
 
+/* The inline start inset lives on the footer itself rather than on .result-count so that
+   whichever item comes first (the pause warning, when capture is paused, otherwise the
+   result count) lines up with the rest of the page content. */
 .items-footer {
     display: flex;
     column-gap: 20px;
     min-height: 46px;
     align-items: center;
-}
-
-.items-footer .result-count {
     padding-left: var(--layout-left-padding);
 }
 
