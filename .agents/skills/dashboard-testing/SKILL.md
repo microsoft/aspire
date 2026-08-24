@@ -331,33 +331,17 @@ Use this when verifying the installed/released dashboard instead of the repo-loc
 - In-repo playground AppHosts can add `Projects.Aspire_Dashboard` for local dashboard development. Running an installed `aspire` CLI is not enough when the AppHost model already contains that local project.
 - Use `SkipDashboardProjectReference=true` to opt out of the shared playground dashboard project reference, and point `AspireDashboardPath` at the installed bundle.
 
+Run `aspire doctor --format Json --non-interactive` and use the active installation's `canonicalPath` and `route` to locate its bundle root:
+
+| Installation route | Bundle root |
+| --- | --- |
+| `script`, `pr`, `localhive` | Parent of the directory containing `canonicalPath` |
+| `winget`, `brew`, `dotnet-tool` | Directory containing `canonicalPath` |
+| Other or no sidecar | `ASPIRE_HOME` when set; otherwise `~/.aspire` |
+
 ```powershell
 $appHost = "<path-to-AppHost.csproj>"
-$doctor = aspire doctor --format Json --non-interactive 2>$null | ConvertFrom-Json
-$installation = $doctor.installations | Where-Object pathStatus -eq "active" | Select-Object -First 1
-if ($null -eq $installation)
-{
-    throw "Could not find the active Aspire CLI installation."
-}
-
-$aspireDirectory = Split-Path $installation.canonicalPath -Parent
-if ($installation.route -in @("script", "pr", "localhive"))
-{
-    $bundleRoot = Split-Path $aspireDirectory -Parent
-}
-elseif ($installation.route -in @("winget", "brew", "dotnet-tool"))
-{
-    $bundleRoot = $aspireDirectory
-}
-elseif ($env:ASPIRE_HOME)
-{
-    $bundleRoot = $env:ASPIRE_HOME
-}
-else
-{
-    $bundleRoot = Join-Path $HOME ".aspire"
-}
-
+$bundleRoot = "<bundle-root-from-the-table>"
 $managedExecutable = if ($env:OS -eq "Windows_NT") { "aspire-managed.exe" } else { "aspire-managed" }
 $dashboard = Join-Path $bundleRoot "bundle/managed/$managedExecutable"
 if (-not (Test-Path $dashboard))
