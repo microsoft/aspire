@@ -62,11 +62,6 @@
         <target state="translated">Необходимо предоставить хотя бы одну фабрику шаблонов.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">При доверии сертификатам возникла ошибка: {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">Создать NuGet.config для выбранных каналов?</target>

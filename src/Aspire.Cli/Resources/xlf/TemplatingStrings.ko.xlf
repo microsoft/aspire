@@ -62,11 +62,6 @@
         <target state="translated">하나 이상의 템플릿 센터를 제공해야 합니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">인증서의 신뢰성을 확인하는 중에 오류가 발생했습니다. {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">선택한 채널에 대한 NuGet.config를 만드시겠습니까?</target>
