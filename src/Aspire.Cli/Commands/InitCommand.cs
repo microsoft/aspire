@@ -152,14 +152,7 @@ internal sealed class InitCommand : BaseCommand
         // ignore failures since `aspire doctor` / `aspire certs trust` provide a fallback.
         if (isCSharp)
         {
-            try
-            {
-                _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
-            }
-            catch (CertificateServiceException)
-            {
-                // Non-fatal: surface via aspire doctor / aspire certs trust.
-            }
+            _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
         // Step 4: Chain to aspire agent init for MCP server + skill configuration.

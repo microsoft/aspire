@@ -568,11 +568,6 @@ internal class DotNetTemplateFactory(
         {
             return new TemplateResult(CliExitCodes.Cancelled);
         }
-        catch (CertificateServiceException ex)
-        {
-            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
-            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
-        }
         catch (Exceptions.ChannelNotFoundException ex)
         {
             interactionService.DisplayError(ex.Message);
