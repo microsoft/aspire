@@ -15,9 +15,9 @@ description: |
     - CHANGELOG.md prepends a matching version section without editing prior notes
 
   The same-repository + bot-author checks are what make the branch-prefix check
-  safe: a fork cannot bypass Copilot review or full CI by simply naming its
-  branch 'extension-release/*', because it can never make head_repo equal the
-  base repository or make the PR author equal the bot's App slug.
+  safe: a fork cannot bypass full CI by simply naming its branch
+  'extension-release/*', because it can never make head_repo equal the base
+  repository or make the PR author equal the bot's App slug.
 
   The validator reads files from the supplied head revision and its merge base
   with the supplied base revision. It never executes revision content.
