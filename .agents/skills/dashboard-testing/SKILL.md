@@ -333,12 +333,13 @@ Use this when verifying the installed/released dashboard instead of the repo-loc
 
 ```powershell
 $appHost = "<path-to-AppHost.csproj>"
-$dashboard = "$HOME\.aspire\bundle\managed\aspire-managed.exe"
+$managedExecutable = if ($env:OS -eq "Windows_NT") { "aspire-managed.exe" } else { "aspire-managed" }
+$dashboard = Join-Path $HOME ".aspire/bundle/managed/$managedExecutable"
 dotnet build $appHost /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
 aspire run --no-build --apphost $appHost
 ```
 
-- Verify the dashboard resource in Aspire metadata/logs before treating the run as a stock baseline. The source/executable must be `aspire-managed.exe`, not `Aspire.Dashboard.csproj`.
+- Verify the dashboard resource in Aspire metadata/logs before treating the run as a stock baseline. The source/executable must be `aspire-managed` (`aspire-managed.exe` on Windows), not `Aspire.Dashboard.csproj`.
 
 ## Test Conventions
 
