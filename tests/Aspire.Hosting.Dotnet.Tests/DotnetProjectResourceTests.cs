@@ -83,7 +83,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void AddDotnetProject_ResourceSupportsServiceDiscovery()
+    public void AddDotnetProject_ResourceSupportsServiceDiscoveryAndIsComputeResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -91,6 +91,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 
         Assert.IsAssignableFrom<IResourceWithServiceDiscovery>(app.Resource);
         Assert.IsAssignableFrom<ExecutableResource>(app.Resource);
+        Assert.IsAssignableFrom<IComputeResource>(app.Resource);
     }
 
     [Fact]
