@@ -3741,6 +3741,31 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                                     KeyValuePair.Create("messaging.operation", "publish"),
                                     KeyValuePair.Create("messaging.destination.name", "orders")
                                 ],
+                                kind: Span.Types.SpanKind.Producer),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-5",
+                                startTime: s_testTime.AddMinutes(4),
+                                endTime: s_testTime.AddMinutes(5),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("messaging.system", "kafka"),
+                                    KeyValuePair.Create("messaging.operation.name", "send"),
+                                    KeyValuePair.Create("messaging.destination.name", "orders")
+                                ],
+                                kind: Span.Types.SpanKind.Producer),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-6",
+                                startTime: s_testTime.AddMinutes(5),
+                                endTime: s_testTime.AddMinutes(6),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("messaging.system", "kafka"),
+                                    KeyValuePair.Create("messaging.operation.name", "send"),
+                                    KeyValuePair.Create("messaging.operation", "publish"),
+                                    KeyValuePair.Create("messaging.destination.name", "invoices")
+                                ],
                                 kind: Span.Types.SpanKind.Producer)
                         }
                     }
@@ -3753,7 +3778,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             (Text: "HTTP GET 200", SpanId: "1-1"),
             (Text: "DATA postgresql Test span. Id: 1-2", SpanId: "1-2"),
             (Text: "RPC Greeter/SayHello OK", SpanId: "1-3"),
-            (Text: "MSG kafka publish orders", SpanId: "1-4")
+            (Text: "MSG kafka publish orders", SpanId: "1-4"),
+            (Text: "MSG kafka send orders", SpanId: "1-5"),
+            (Text: "MSG kafka send invoices", SpanId: "1-6")
         };
         foreach (var expectedMatch in expectedMatches)
         {

@@ -49,13 +49,8 @@ internal sealed partial class MetricsService(MetricsChannel channel, ConfluentKa
 
                 tags.Add(new KeyValuePair<string, object?> (Tags.Type, statistics.Type));
 
-                var sentMessageTags = tags;
-                sentMessageTags.Add(Tags.MessagingSystem, TagValues.KafkaMessagingSystem);
-                sentMessageTags.Add(Tags.OperationName, TagValues.SendOperationName);
-
-                var consumedMessageTags = tags;
-                consumedMessageTags.Add(Tags.MessagingSystem, TagValues.KafkaMessagingSystem);
-                consumedMessageTags.Add(Tags.OperationName, TagValues.PollOperationName);
+                var sentMessageTags = CreateMessageTags(tags, TagValues.SendOperationName);
+                var consumedMessageTags = CreateMessageTags(tags, TagValues.PollOperationName);
 
                 if (_state.TryGetValue(statistics.Name, out var previous))
                 {
@@ -83,6 +78,15 @@ internal sealed partial class MetricsService(MetricsChannel channel, ConfluentKa
                 _state[statistics.Name] = statistics;
             }
         }
+    }
+
+    private static TagList CreateMessageTags(TagList tags, string operationName)
+    {
+        // Accepting TagList by value intentionally creates a copy so operation-specific tags do not leak into other metrics.
+        tags.Add(Tags.MessagingSystem, TagValues.KafkaMessagingSystem);
+        tags.Add(Tags.OperationName, operationName);
+
+        return tags;
     }
 
     [LoggerMessage(LogLevel.Warning, EventId = 1, Message = "Invalid statistics json payload received: '{json}'")]
