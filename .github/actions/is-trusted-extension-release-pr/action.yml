@@ -9,7 +9,6 @@ description: |
     - base branch is 'main'
     - base and head repositories are 'microsoft/aspire' (blocks forks)
     - PR author is 'aspire-repo-bot[bot]'
-    - workflow actor is 'aspire-repo-bot[bot]'
     - head branch starts with 'extension-release/v'
     - only extension/package.json and extension/CHANGELOG.md changed
     - package.json changes only its X.Y.Z version
@@ -39,9 +38,6 @@ inputs:
   author:
     description: "The PR author's login (github.event.pull_request.user.login)."
     required: true
-  actor:
-    description: "The workflow actor's login (github.actor)."
-    required: true
   base_sha:
     description: "The full base tip SHA used to compute the PR merge base (github.event.pull_request.base.sha)."
     required: true
@@ -65,7 +61,6 @@ runs:
         HEAD_REPO: ${{ inputs.head_repo }}
         HEAD_REF: ${{ inputs.head_ref }}
         AUTHOR: ${{ inputs.author }}
-        ACTOR: ${{ inputs.actor }}
         BASE_SHA: ${{ inputs.base_sha }}
         HEAD_SHA: ${{ inputs.head_sha }}
       run: '& "$env:GITHUB_ACTION_PATH/validate.ps1"'

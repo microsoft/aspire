@@ -154,6 +154,17 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
+    public void ReleaseOnlyModeSkipsTestResultAggregation()
+    {
+        var steps = Steps(Mapping(s_testJobs, "results"));
+        var failureStep = Assert.Single(steps, step => Scalar(step, "name") == "Fail if any dependency failed");
+
+        Assert.All(
+            steps.Where(step => step != failureStep),
+            step => Assert.Contains("!inputs.extensionReleaseOnly", Scalar(step, "if") ?? string.Empty, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ReleaseCallerGrantsAllReusableWorkflowPermissions()
     {
         var workflowPermissions = Mapping(s_testsWorkflow, "permissions");
@@ -261,7 +272,6 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
 
         Assert.Equal(
             [
-                "actor",
                 "author",
                 "base_ref",
                 "base_sha",
@@ -276,7 +286,6 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         Assert.Equal("${{ github.event.pull_request.head.repo.full_name }}", Scalar(inputs, "head_repo"));
         Assert.Equal("${{ github.event.pull_request.head.ref }}", Scalar(inputs, "head_ref"));
         Assert.Equal("${{ github.event.pull_request.user.login }}", Scalar(inputs, "author"));
-        Assert.Equal("${{ github.actor }}", Scalar(inputs, "actor"));
         Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(inputs, "base_sha"));
         Assert.Equal("${{ github.event.pull_request.head.sha }}", Scalar(inputs, "head_sha"));
     }

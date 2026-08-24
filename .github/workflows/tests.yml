@@ -816,39 +816,44 @@ jobs:
     ]
     steps:
       - name: Checkout code
+        if: ${{ !inputs.extensionReleaseOnly }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create test results directory
+        if: ${{ !inputs.extensionReleaseOnly }}
         shell: bash
         run: mkdir -p "${{ github.workspace }}/testresults"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-ubuntu-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/ubuntu-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-windows-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/windows-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-macos-latest
           merge-multiple: true
           path: testresults/macos-latest
 
       - name: Upload test results
-        if: always()
+        if: ${{ always() && !inputs.extensionReleaseOnly }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
 
       - name: Generate test results summary
-        if: always()
+        if: ${{ always() && !inputs.extensionReleaseOnly }}
         shell: bash
         run: |
           ${{ github.workspace }}/dotnet.sh \
@@ -859,7 +864,7 @@ jobs:
             --combined
 
       - name: Generate CI timeline
-        if: always()
+        if: ${{ always() && !inputs.extensionReleaseOnly }}
         continue-on-error: true
         shell: bash
         env:

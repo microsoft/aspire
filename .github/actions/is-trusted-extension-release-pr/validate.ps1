@@ -58,7 +58,6 @@ try {
         $env:BASE_REF -cne 'main' -or
         $env:HEAD_REPO -cne 'microsoft/aspire' -or
         $env:AUTHOR -cne 'aspire-repo-bot[bot]' -or
-        $env:ACTOR -cne 'aspire-repo-bot[bot]' -or
         $env:HEAD_REF -cnotmatch '^extension-release/v.+$') {
         Set-TrustedOutput $false
         exit 0

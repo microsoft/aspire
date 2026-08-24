@@ -67,7 +67,6 @@ jobs:
           head_repo: ${{ github.event.pull_request.head.repo.full_name }}
           head_ref: ${{ github.event.pull_request.head.ref }}
           author: ${{ github.event.pull_request.user.login }}
-          actor: ${{ github.actor }}
           base_sha: ${{ github.event.pull_request.base.sha }}
           head_sha: ${{ github.event.pull_request.head.sha }}
 

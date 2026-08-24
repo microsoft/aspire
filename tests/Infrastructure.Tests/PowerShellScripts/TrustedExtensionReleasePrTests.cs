@@ -64,6 +64,17 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
     }
 
     [Fact]
+    public async Task TrustsMaintainerFinalizationOfBotAuthoredRelease()
+    {
+        var headSha = CommitTrustedChanges();
+
+        var result = await RunValidator(headSha, actor: "maintainer");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("is_trusted=true", ReadGitHubOutput());
+    }
+
+    [Fact]
     public async Task TrustsExpectedPatchWhenBaseTipAdvancedAfterBranchPoint()
     {
         Git("switch", "-c", "extension-release/v1.19.0");
@@ -80,21 +91,19 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
     }
 
     [Theory]
-    [InlineData("develop", "microsoft/aspire", "extension-release/v1.19.0", BotLogin, BotLogin)]
-    [InlineData("main", "someone/aspire", "extension-release/v1.19.0", BotLogin, BotLogin)]
-    [InlineData("main", "microsoft/aspire", "extension-release/v1.19.0", "someone", BotLogin)]
-    [InlineData("main", "microsoft/aspire", "extension-release/v1.19.0", BotLogin, "someone")]
-    [InlineData("main", "microsoft/aspire", "extension-release/1.19.0", BotLogin, BotLogin)]
+    [InlineData("develop", "microsoft/aspire", "extension-release/v1.19.0", BotLogin)]
+    [InlineData("main", "someone/aspire", "extension-release/v1.19.0", BotLogin)]
+    [InlineData("main", "microsoft/aspire", "extension-release/v1.19.0", "someone")]
+    [InlineData("main", "microsoft/aspire", "extension-release/1.19.0", BotLogin)]
     public async Task RejectsUntrustedIdentityMetadata(
         string baseRef,
         string headRepo,
         string headRef,
-        string author,
-        string actor)
+        string author)
     {
         var headSha = CommitTrustedChanges();
 
-        var result = await RunValidator(headSha, baseRef, headRepo, headRef, author, actor);
+        var result = await RunValidator(headSha, baseRef, headRepo, headRef, author);
 
         AssertRejected(result);
     }
