@@ -175,7 +175,7 @@
             }
         </MainSection>
         <FooterSection>
-            @if (_activeView == ConsoleLogsView.Console && PauseText is not null)
+            @if (PauseText is not null)
             {
                 <PauseWarning PauseText="@PauseText" />
             }
