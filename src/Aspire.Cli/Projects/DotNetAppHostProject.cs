@@ -1491,13 +1491,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
-        var (preparationExitCode, builtByCli) = await PrepareAppHostAsync(
+        var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
             context,
             effectiveAppHostFile,
             isSingleFileAppHost,
             isExtensionHost,
             extensionBackchannel,
             buildOutputCollector,
+            env,
             cancellationToken);
         if (preparationExitCode is { } exitCode)
         {
@@ -1524,9 +1525,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         context.OutputCollector = runOutputCollector;
 
-        // Signal that build/preparation is complete
-        context.BuildCompletionSource?.TrySetResult(true);
-        activity.AddAppHostBuildReadyEvent();
+        void SignalBuildCompletion()
+        {
+            context.BuildCompletionSource?.TrySetResult(true);
+            activity.AddAppHostBuildReadyEvent();
+        }
+
+        if (!deferBuildCompletion)
+        {
+            SignalBuildCompletion();
+        }
 
         var runOptions = new ProcessInvocationOptions
         {
@@ -1545,6 +1553,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
             LaunchProfile = context.LaunchProfile,
+            ExtensionAppHostLaunchCompletedAsync = deferBuildCompletion
+                ? () =>
+                {
+                    SignalBuildCompletion();
+                    return Task.CompletedTask;
+                }
+                : null,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -1659,38 +1674,40 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<(int? ExitCode, bool BuiltByCli)> PrepareAppHostAsync(
+    private async Task<(int? ExitCode, bool BuiltByCli, bool DeferBuildCompletion)> PrepareAppHostAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
         bool isExtensionHost,
         IExtensionBackchannel? extensionBackchannel,
         OutputCollector buildOutputCollector,
+        IDictionary<string, string> buildEnvironment,
         CancellationToken cancellationToken)
     {
         try
         {
-            var (buildExitCode, builtByCli) = await BuildAppHostIfNeededAsync(
+            var (buildExitCode, builtByCli, deferBuildCompletion) = await BuildAppHostIfNeededAsync(
                 context,
                 effectiveAppHostFile,
                 isSingleFileAppHost,
                 isExtensionHost,
                 extensionBackchannel,
                 buildOutputCollector,
+                buildEnvironment,
                 cancellationToken);
             if (buildExitCode is not null)
             {
-                return (buildExitCode, builtByCli);
+                return (buildExitCode, builtByCli, deferBuildCompletion);
             }
 
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
                 context.BuildCompletionSource?.TrySetResult(false);
-                return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli);
+                return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
             }
 
-            return (null, builtByCli);
+            return (null, builtByCli, deferBuildCompletion);
         }
         catch
         {
@@ -1702,27 +1719,29 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<(int? ExitCode, bool BuiltByCli)> BuildAppHostIfNeededAsync(
+    private async Task<(int? ExitCode, bool BuiltByCli, bool DeferBuildCompletion)> BuildAppHostIfNeededAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
         bool isExtensionHost,
         IExtensionBackchannel? extensionBackchannel,
         OutputCollector buildOutputCollector,
+        IDictionary<string, string> buildEnvironment,
         CancellationToken cancellationToken)
     {
         if (context.NoBuild && !isSingleFileAppHost)
         {
-            return (null, false);
+            return (null, false, false);
         }
 
         var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
-        if (isExtensionHost && !extensionHasBuildCapability)
+        var extensionCanLaunchProject = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.Project, cancellationToken);
+        if (isExtensionHost && extensionCanLaunchProject && !extensionHasBuildCapability)
         {
             // Older extension hosts own the AppHost build themselves. Building again in the CLI would
             // duplicate work and could race the extension's diagnostics/launch pipeline. Newer hosts
             // opt in with build-dotnet-using-cli when they want the CLI to own this pre-build.
-            return (null, false);
+            return (null, false, true);
         }
 
         // File-based AppHosts cannot safely reuse ambient RunCommand metadata. The runner previously
@@ -1736,12 +1755,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
 
-        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, noRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, noRestore, buildEnvironment, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
 
         if (buildExitCode == 0)
         {
-            return (null, true);
+            return (null, true, false);
         }
 
         // Preserve the build output before signaling failure. RunCommand reads this collector after
@@ -1749,7 +1768,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // generic "project could not be built" message.
         context.OutputCollector = buildOutputCollector;
         context.BuildCompletionSource?.TrySetResult(false);
-        return (CliExitCodes.FailedToBuildArtifacts, false);
+        return (CliExitCodes.FailedToBuildArtifacts, false, false);
     }
 
     private async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
@@ -2405,6 +2424,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 _interactionService,
                 effectiveAppHostFile,
                 noRestore: false,
+                env: env,
                 buildOptions,
                 context.WorkingDirectory,
                 cancellationToken);

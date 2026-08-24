@@ -38,6 +38,7 @@ internal interface IDotNetCliRunner
     Task<int> NewProjectAsync(string templateName, string name, string outputPath, string[] extraArgs, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> RestoreAsync(FileInfo projectFilePath, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -142,6 +143,11 @@ internal sealed class ProcessInvocationOptions
     public IGracefulShutdownWindow? ShutdownService { get; set; }
 
     /// <summary>
+    /// Invoked after an extension-owned AppHost launch, including any build performed by the extension.
+    /// </summary>
+    public Func<Task>? ExtensionAppHostLaunchCompletedAsync { get; set; }
+
+    /// <summary>
     /// Creates a shallow copy so a caller-supplied instance can be layered with additional settings
     /// without mutating the original, which the caller may reuse across invocations. The delegate and
     /// service references are intentionally shared with the copy.
@@ -164,6 +170,7 @@ internal sealed class ProcessInvocationOptions
         AppHostArgumentStartIndex = AppHostArgumentStartIndex,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
+        ExtensionAppHostLaunchCompletedAsync = ExtensionAppHostLaunchCompletedAsync,
     };
 }
 
@@ -271,6 +278,11 @@ internal sealed class DotNetCliRunner(
                     execution.Arguments.ToList(),
                     execution.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList(),
                     options.StartDebugSession);
+
+                if (options.ExtensionAppHostLaunchCompletedAsync is not null)
+                {
+                    await options.ExtensionAppHostLaunchCompletedAsync().ConfigureAwait(false);
+                }
 
                 await StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, backchannelParentContext, cancellationToken).ConfigureAwait(false);
                 var backchannel = await backchannelCompletionSource.Task.ConfigureAwait(false);
@@ -1267,7 +1279,10 @@ internal sealed class DotNetCliRunner(
             cancellationToken: cancellationToken);
     }
 
-    public async Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        => BuildAsync(projectFilePath, noRestore, env: null, options, cancellationToken);
+
+    public async Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -1277,10 +1292,8 @@ internal sealed class DotNetCliRunner(
 
         // File-based AppHosts derive their RunCommand during build. Persist suppression into that
         // generated command so the later dotnet run --no-build cannot recursively invoke Aspire CLI.
-        var buildEnvironment = new Dictionary<string, string>
-        {
-            [KnownConfigNames.SuppressCliRunHook] = "true"
-        };
+        var buildEnvironment = env?.ToDictionary() ?? new Dictionary<string, string>();
+        buildEnvironment[KnownConfigNames.SuppressCliRunHook] = "true";
 
         return await ExecuteAsync(
             args: cliArgs,

@@ -2732,7 +2732,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostProjectFile.FullName, "<Project></Project>");
 
         var options = new ProcessInvocationOptions();
-        await AppHostHelper.BuildAppHostAsync(testRunner, testInteractionService, appHostProjectFile, noRestore: false, options, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await AppHostHelper.BuildAppHostAsync(testRunner, testInteractionService, appHostProjectFile, noRestore: false, env: null, options, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
     }
 
     [Fact]
@@ -2741,7 +2741,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "devkit" });
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "devkit", "project" });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
@@ -2811,7 +2811,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(Array.Empty<string>());
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "project" });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState

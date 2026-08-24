@@ -272,7 +272,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildAsyncSuppressesCliRunHook()
+    public async Task BuildAsyncPreservesCallerEnvironmentAndSuppressesCliRunHook()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -288,6 +288,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (_, env, _, _) =>
             {
                 Assert.NotNull(env);
+                Assert.Equal("bundle-path", env["AspireCliBundlePath"]);
                 Assert.Equal("true", env[KnownConfigNames.SuppressCliRunHook]);
             },
             0);
@@ -295,6 +296,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var exitCode = await runner.BuildAsync(
             projectFile,
             noRestore: false,
+            env: new Dictionary<string, string> { ["AspireCliBundlePath"] = "bundle-path" },
             new ProcessInvocationOptions(),
             CancellationToken.None).DefaultTimeout();
 
@@ -1010,7 +1012,9 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
-        var launchAppHostCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launchAppHostStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowLaunchAppHostToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionLaunchCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannel = new TestAppHostBackchannel
         {
             ConnectAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
@@ -1022,7 +1026,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             {
                 testExtensionInteractionService = new TestExtensionInteractionService(sp)
                 {
-                    LaunchAppHostCallback = () => launchAppHostCalledTcs.SetResult(),
+                    LaunchAppHostAsyncCallback = async () =>
+                    {
+                        launchAppHostStarted.TrySetResult();
+                        await allowLaunchAppHostToComplete.Task;
+                    },
                 };
                 return testExtensionInteractionService;
             };
@@ -1052,10 +1060,22 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
             },
             backchannelCompletionSource,
-            options: new ProcessInvocationOptions(),
+            options: new ProcessInvocationOptions
+            {
+                ExtensionAppHostLaunchCompletedAsync = () =>
+                {
+                    extensionLaunchCompleted.TrySetResult();
+                    return Task.CompletedTask;
+                }
+            },
             cancellationToken: CancellationToken.None);
 
-        await launchAppHostCalledTcs.Task.DefaultTimeout();
+        await launchAppHostStarted.Task.DefaultTimeout();
+        Assert.False(extensionLaunchCompleted.Task.IsCompleted);
+        Assert.False(backchannel.ConnectAsyncCalled.Task.IsCompleted);
+
+        allowLaunchAppHostToComplete.TrySetResult();
+        await extensionLaunchCompleted.Task.DefaultTimeout();
         await backchannel.ConnectAsyncCalled.Task.DefaultTimeout();
         Assert.Same(backchannel, await backchannelCompletionSource.Task.DefaultTimeout());
 

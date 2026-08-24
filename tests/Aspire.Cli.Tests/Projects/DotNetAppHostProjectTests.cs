@@ -10,6 +10,7 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.Json;
@@ -2183,6 +2184,142 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_SingleFileNoBuildUsingCliBundlePassesBundleEnvironmentToSafetyBuild()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
+        var bundleRoot = CreateCliBundle(out var layout);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncWithEnvironmentCallback = (projectFile, noRestore, env, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                Assert.False(noRestore);
+                Assert.NotNull(env);
+                Assert.Equal(bundleRoot.FullName, env["AspireCliBundlePath"]);
+                return 0;
+            },
+            RunAsyncCallback = (projectFile, watch, noBuild, noRestore, _, _, _, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                Assert.False(watch);
+                Assert.True(noBuild);
+                Assert.True(noRestore);
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = true,
+            NoRestore = true,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ExtensionOwnedBuildSignalsCompletionAfterLaunchReturns()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var buildCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionLaunchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowExtensionLaunchToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == KnownCapabilities.Project)
+        };
+
+        var runner = new TestDotNetCliRunner
+        {
+            InvokeExtensionAppHostLaunchCompletedCallback = false,
+            BuildAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("The extension owns this build."),
+            RunAsyncCallback = async (_, _, _, _, _, _, _, options, _) =>
+            {
+                extensionLaunchStarted.TrySetResult();
+                await allowExtensionLaunchToComplete.Task;
+                Assert.NotNull(options.ExtensionAppHostLaunchCompletedAsync);
+                await options.ExtensionAppHostLaunchCompletedAsync();
+                return 0;
+            }
+        };
+        var project = CreateDotNetAppHostProject(
+            runner,
+            configureServices: options =>
+            {
+                options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+                options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            });
+
+        var runTask = project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>(),
+            BuildCompletionSource = buildCompletionSource
+        }, CancellationToken.None);
+
+        await extensionLaunchStarted.Task.DefaultTimeout();
+        Assert.False(buildCompletionSource.Task.IsCompleted);
+
+        allowExtensionLaunchToComplete.TrySetResult();
+        Assert.True(await buildCompletionSource.Task.DefaultTimeout());
+        Assert.Equal(0, await runTask.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task RunAsync_ExtensionWithoutProjectCapabilityBuildsInCli()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        var buildCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(false)
+        };
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFile, _, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                return 0;
+            },
+            RunAsyncCallback = (_, _, noBuild, _, _, _, _, options, _) =>
+            {
+                Assert.True(noBuild);
+                Assert.Null(options.ExtensionAppHostLaunchCompletedAsync);
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(
+            runner,
+            configureServices: options =>
+            {
+                options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+                options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            });
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>(),
+            BuildCompletionSource = buildCompletionSource
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(await buildCompletionSource.Task.DefaultTimeout());
     }
 
     [Fact]
