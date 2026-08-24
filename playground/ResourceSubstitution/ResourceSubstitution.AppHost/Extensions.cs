@@ -123,11 +123,20 @@ public static class Extensions
             }
 
             // For now, create a dummy csharp app resource, then copy it's annotations to our new resource
-            // 
+            //
             // Exposing ProjectResourceBuilderExtensions.WithProjectDefaults may be a cleaner approach in the long run
             // And making it usable on any `IResource`
             var newProject = builder.ApplicationBuilder.AddCSharpApp($"temp-{Guid.NewGuid()}", projectPath);
             builder.ApplicationBuilder.Resources.Remove(newProject.Resource);
+
+            // AddCSharpApp (via WithProjectDefaults) also adds a hidden "{name}-rebuilder" companion resource as
+            // a side effect. Removing the temp project above doesn't remove that companion, so it would otherwise
+            // leak into the app model referencing a project resource that no longer exists.
+            var rebuilder = builder.ApplicationBuilder.Resources.FirstOrDefault(r => r.Name == $"{newProject.Resource.Name}-rebuilder");
+            if (rebuilder is not null)
+            {
+                builder.ApplicationBuilder.Resources.Remove(rebuilder);
+            }
 
             // TODO: A clever merge approach may be needed here
             foreach (var annotation in newProject.Resource.Annotations)
