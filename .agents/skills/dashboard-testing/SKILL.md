@@ -331,13 +331,13 @@ Use this when verifying the installed/released dashboard instead of the repo-loc
 - In-repo playground AppHosts can add `Projects.Aspire_Dashboard` for local dashboard development. Running an installed `aspire` CLI is not enough when the AppHost model already contains that local project.
 - Use `SkipDashboardProjectReference=true` to opt out of the shared playground dashboard project reference, and point `AspireDashboardPath` at the installed bundle.
 
-Run `aspire doctor --format Json --non-interactive` and use the active installation's `canonicalPath` and `route` to locate its bundle root:
+Run `aspire doctor --format json --non-interactive` and use the first installation row, which represents the running CLI. Use `canonicalPath` together with `route` to locate its bundle root. If `canonicalPath` is absent, stop rather than guessing from `path`, which can be an unresolved package-manager symlink.
 
 | Installation route | Bundle root |
 | --- | --- |
 | `script`, `pr`, `localhive` | Parent of the directory containing `canonicalPath` |
 | `winget`, `brew`, `dotnet-tool` | Directory containing `canonicalPath` |
-| Other or no sidecar | `ASPIRE_HOME` when set; otherwise `~/.aspire` |
+| `nix`, other, or no sidecar | `ASPIRE_HOME` when set; otherwise `~/.aspire` |
 
 ```powershell
 $appHost = "<path-to-AppHost.csproj>"
@@ -350,10 +350,12 @@ if (-not (Test-Path $dashboard))
 }
 
 dotnet build $appHost /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
+$env:ASPIRE_DASHBOARD_PATH = $dashboard
 aspire run --no-build --apphost $appHost
+Remove-Item Env:ASPIRE_DASHBOARD_PATH
 ```
 
-- Verify the dashboard resource in Aspire metadata/logs before treating the run as a stock baseline. The source/executable must be `aspire-managed` (`aspire-managed.exe` on Windows), not `Aspire.Dashboard.csproj`.
+- Verify the dashboard resource in Aspire metadata/logs before treating the run as a stock baseline. Its resolved executable path must equal `$dashboard`, and its source must be `aspire-managed` (`aspire-managed.exe` on Windows), not `Aspire.Dashboard.csproj`.
 
 ## Test Conventions
 
