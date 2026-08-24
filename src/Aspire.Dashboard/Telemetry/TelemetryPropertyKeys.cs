@@ -39,6 +39,7 @@ public static class TelemetryPropertyKeys
 
     // Error properties
     public const string ErrorRequestId = AspireDashboardPropertyPrefix + "RequestId";
+    public const string ErrorCount = AspireDashboardPropertyPrefix + "Error.Count";
 
     // Structured logs properties
     public const string StructuredLogsSelectedLogLevel = AspireDashboardPropertyPrefix + "StructuredLogs.SelectedLogLevel";

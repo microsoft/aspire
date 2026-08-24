@@ -17,6 +17,26 @@
         <target state="translated">오류</target>
         <note />
       </trans-unit>
+      <trans-unit id="ErrorModeDismissButton">
+        <source>Continue Anyway</source>
+        <target state="new">Continue Anyway</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ErrorModePageSubtitle">
+        <source>The dashboard has configuration errors that need to be resolved</source>
+        <target state="new">The dashboard has configuration errors that need to be resolved</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ErrorModePageTitle">
+        <source>Configuration Error</source>
+        <target state="new">Configuration Error</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ErrorModeWarning">
+        <source>Warning: Continuing with configuration errors may result in security vulnerabilities or limited functionality.</source>
+        <target state="new">Warning: Continuing with configuration errors may result in security vulnerabilities or limited functionality.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NotFoundDescription">
         <source>Not found</source>
         <target state="translated">찾을 수 없음</target>
