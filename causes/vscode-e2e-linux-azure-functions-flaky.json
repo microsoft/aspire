@@ -1,0 +1,17 @@
+{
+  "id": "vscode-e2e-linux-azure-functions-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Linux, azure-functions) shard fails with generic exit code 1, unrelated to PR changes",
+  "test_name": "VS Code extension E2E (Linux, azure-functions)",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Linux, azure-functions)' shard.",
+  "occurrences": [
+    {
+      "run_id": 32781735084,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32781735084",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "pr_number": 19624,
+      "observed_at": "2026-08-24T23:00:30Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19639"
+}

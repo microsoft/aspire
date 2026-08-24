@@ -1,0 +1,16 @@
+{
+  "id": "sqlserver-testcontainer-coinitializesecurity-failure",
+  "type": "infra-failure",
+  "title": "SQL Server Testcontainer exits with CoInitializeSecurity failure (HRESULT 0x800706b5), breaking EF Core/SqlClient conformance tests",
+  "error_pattern": "Class fixture type 'Aspire.Microsoft.Data.SqlClient.Tests.SqlServerContainerFixture' threw in InitializeAsync\nDotNet.Testcontainers.Containers.ContainerNotRunningException : Container exited with code 255.\nStderr: ERROR: CoInitializeSecurity failure. (HRESULT 0x800706b5)\nDocker.DotNet.DockerApiException : Docker API responded with status code=Conflict, response={\"message\":\"container ... is not running\"}",
+  "occurrences": [
+    {
+      "run_id": 32781735084,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32781735084",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "pr_number": 19624,
+      "observed_at": "2026-08-24T23:00:30Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19638"
+}

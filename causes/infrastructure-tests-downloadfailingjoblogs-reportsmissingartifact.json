@@ -1,0 +1,17 @@
+{
+  "id": "infrastructure-tests-downloadfailingjoblogs-reportsmissingartifact",
+  "type": "flaky-test",
+  "title": "Flaky: DownloadFailingJobLogsToolTests.ReportsMissingArtifactWithoutFailing assertion mismatch",
+  "test_name": "Infrastructure.Tests.DownloadFailingJobLogsToolTests.ReportsMissingArtifactWithoutFailing",
+  "error_pattern": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   1\nat Infrastructure.Tests.DownloadFailingJobLogsToolTests.ReportsMissingArtifactWithoutFailing() in /_/tests/Infrastructure.Tests/DownloadFailingJobLogs/DownloadFailingJobLogsToolTests.cs:line 81",
+  "occurrences": [
+    {
+      "run_id": 32781735084,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32781735084",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "pr_number": 19624,
+      "observed_at": "2026-08-24T23:00:30Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19637"
+}

@@ -88,6 +88,13 @@
       "job": "Tests / Cli / Cli (windows-latest)",
       "pr_number": 19048,
       "observed_at": "2026-08-24T21:26:16Z"
+    },
+    {
+      "run_id": 32781735084,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32781735084",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "pr_number": 19624,
+      "observed_at": "2026-08-24T23:00:30Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"

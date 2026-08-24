@@ -1,0 +1,107 @@
+{
+  "run_id": 32781735084,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32781735084",
+  "analyzed_at": "2026-08-24T23:00:30Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19624,
+    "title": "Show consistent pause warnings across dashboard pages",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-fix-dashboard-pause-warnings",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19624"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "id": 97605592624,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97605592624",
+      "classification": "flaky-test",
+      "reason": "Fails on Infrastructure.Tests.DownloadFailingJobLogsToolTests.ReportsMissingArtifactWithoutFailing (Assert.Equal expected 0 actual 1), unrelated to PR changes which only touch the Dashboard UI code.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Microsoft.EntityFrameworkCore.SqlServer / Microsoft.EntityFrameworkCore.SqlServer (ubuntu-latest)",
+      "id": 97605603151,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97605603151",
+      "classification": "flaky-test",
+      "reason": "SqlServerContainerFixture failed to start the SQL Server 2022 Testcontainer (exited with code 255, 'CoInitializeSecurity failure'), a Docker/container environment issue unrelated to PR changes which only touch the Dashboard.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97607516566,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97607516566",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring pattern cli-smoke-test-homebrew-winget-unrelated: CLI smoke test fails during Homebrew cask preparation, unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97608433967,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97608433967",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring pattern cli-smoke-test-homebrew-winget-unrelated: CLI smoke test fails during WinGet manifest preparation, unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97608976828,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97608976828",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring pattern vscode-e2e-linux-workspace-target-proof-flaky: exit code 1, logs unavailable, unrelated to PR changes touching only the Dashboard.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97608976951,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97608976951",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring pattern vscode-e2e-windows-edge-cases-flaky: exit code 1, logs unavailable, unrelated to PR changes touching only the Dashboard.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 97608976974,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32781735084/job/97608976974",
+      "classification": "flaky-test",
+      "reason": "Extension E2E shard fails with generic exit code 1 and unavailable job logs, unrelated to PR changes which only touch the Dashboard UI code, consistent with other known VS Code E2E shard flakiness patterns.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Infrastructure.Tests.DownloadFailingJobLogsToolTests.ReportsMissingArtifactWithoutFailing",
+      "job": "Tests / Infrastructure / Infrastructure (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   1",
+      "stack_trace": "at Infrastructure.Tests.DownloadFailingJobLogsToolTests.ReportsMissingArtifactWithoutFailing() in /_/tests/Infrastructure.Tests/DownloadFailingJobLogs/DownloadFailingJobLogsToolTests.cs:line 81",
+      "classification": "flaky",
+      "reason": "PR only modifies Dashboard UI files; this test targets CI tooling (DownloadFailingJobLogsTool) which was not touched by the PR."
+    },
+    {
+      "name": "Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests.ConformanceTests.DbContextPoolingRegistersIDbContextPool",
+      "job": "Tests / Microsoft.EntityFrameworkCore.SqlServer / Microsoft.EntityFrameworkCore.SqlServer (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Microsoft.Data.SqlClient.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- DotNet.Testcontainers.Containers.ContainerNotRunningException : Container exited with code 255. Stderr: ERROR: CoInitializeSecurity failure. (HRESULT 0x800706b5)\n-------- Docker.DotNet.DockerApiException : Docker API responded with status code=Conflict, response={\"message\":\"container ... is not running\"}",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.ThrowIfContainerNotRunningAsync(...) in DockerContainer.cs:line 737\nat DotNet.Testcontainers.Containers.DockerContainer.CheckReadinessAsync(...) in DockerContainer.cs:line 690\nat Aspire.Microsoft.Data.SqlClient.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 25",
+      "classification": "flaky",
+      "reason": "All 28 EF Core SqlServer conformance tests fail identically due to the shared SqlServerContainerFixture's Testcontainer failing to start (Docker/SQL Server container startup issue), not due to any PR code change. PR only touches Dashboard files, not EF Core/SqlClient code."
+    }
+  ],
+  "causes": [
+    "infrastructure-tests-downloadfailingjoblogs-reportsmissingartifact",
+    "sqlserver-testcontainer-coinitializesecurity-failure",
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky",
+    "vscode-e2e-linux-azure-functions-flaky"
+  ]
+}
