@@ -32,6 +32,9 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeProperties = true)]
 public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource
 {
+    private const int HttpRouteHostnameLimit = 16;
+    private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
+
     /// <summary>
     /// Gets or sets the name of the Helm chart to be generated.
     /// </summary>
@@ -1049,6 +1052,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             gatewayResource.Hostnames,
             gatewayResource.Name,
             cancellationToken).ConfigureAwait(false);
+
+        if (resolvedHostnames.Count > HttpRouteHostnameLimit &&
+            gatewayResource.Routes.Any(route => route.Host is null))
+        {
+            throw new InvalidOperationException(
+                $"Gateway '{gatewayResource.Name}' configures {resolvedHostnames.Count} hostnames that would be inherited by a hostless route, " +
+                $"but Kubernetes Gateway API HTTPRoute.spec.hostnames supports at most {HttpRouteHostnameLimit} entries. " +
+                $"Define explicit host-scoped routes with WithRoute(hostname, path, endpoint) so each HTTPRoute stays within the limit. " +
+                $"See the Kubernetes Gateway API documentation: {HttpRouteSpecDocumentationUrl}");
+        }
 
         gateway.Spec.GatewayClassName = await ResolveExpressionAsync(gatewayResource.GatewayClassName, gatewayResource.Name, cancellationToken).ConfigureAwait(false);
 
