@@ -224,11 +224,11 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
             }
 
             output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
-            await CleanupResourceGroupAsync(resourceGroupName);
+            await CleanupResourceGroupAsync(resourceGroupName, subscriptionId);
         }
     }
 
-    private async Task CleanupResourceGroupAsync(string resourceGroupName)
+    private async Task CleanupResourceGroupAsync(string resourceGroupName, string subscriptionId)
     {
         try
         {
@@ -237,7 +237,10 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "az",
-                    Arguments = $"group delete --name {resourceGroupName} --yes --no-wait",
+                    // The AppHost provisions into AZURE__SUBSCRIPTIONID, which can differ from the
+                    // local Azure CLI default. Scope cleanup explicitly so failed local runs do not
+                    // leave billable resources in the configured test subscription.
+                    Arguments = $"group delete --subscription {subscriptionId} --name {resourceGroupName} --yes --no-wait",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false
