@@ -46,6 +46,13 @@
       "job": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
       "pr_number": 19613,
       "observed_at": "2026-08-24T17:47:00Z"
+    },
+    {
+      "run_id": 32756925219,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32756925219",
+      "job": "Tests / Acquisition / Acquisition (windows-latest)",
+      "pr_number": 19592,
+      "observed_at": "2026-08-24T18:16:20Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19597"

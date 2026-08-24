@@ -1,0 +1,70 @@
+{
+  "run_id": 32756925219,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32756925219",
+  "analyzed_at": "2026-08-24T18:16:20Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19592,
+    "title": "Stabilize VS Code extension E2E state assertions",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-fix-vscode-e2e-shards",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19592"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Acquisition / Acquisition (windows-latest)",
+      "id": 97531586728,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32756925219/job/97531586728",
+      "classification": "transient-infra",
+      "reason": "Job annotations show 'Process completed with exit code -1073741502' (0xC0000142 STATUS_DLL_INIT_FAILED) in post-test steps, a known recurring Windows runner process-init failure unrelated to PR changes (PR only touches VS Code extension E2E tests).",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97533740493,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32756925219/job/97533740493",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) failed with exit code 4, a recurring failure in Homebrew/WinGet installer prep jobs unrelated to PR changes (PR only touches VS Code extension e2e tests).",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97534671399,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32756925219/job/97534671399",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1; job logs unavailable and no TRX test failures extracted. This matches a recurring flaky shard failure pattern seen 6 prior times, tracked in issue #19597. Note: PR title suggests it aimed to stabilize this exact shard, but failure mode (generic exit 1, no logs) matches pre-existing flakiness rather than a new assertion failure.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97534671533,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32756925219/job/97534671533",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1; job logs unavailable and no TRX test failures extracted. Matches recurring flaky shard failure tracked in issue #19547 (9 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97535325293,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32756925219/job/97535325293",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) failed with exit code 1, matching the recurring Homebrew/WinGet installer smoke test failure pattern unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "windows-process-init-failure-0xc0000142",
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky"
+  ]
+}
