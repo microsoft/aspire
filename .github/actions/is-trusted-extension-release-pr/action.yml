@@ -8,22 +8,24 @@ description: |
     - the Copilot review dispatcher (.github/workflows/copilot-review-dispatch.yml)
     - the CI fast-path classifier (.github/workflows/ci.yml, prepare_for_ci)
 
-  A PR is trusted only when ALL of the following server-provided fields match:
+  A PR is trusted only when ALL identity fields match and its patch contains
+  exactly the expected extension package version and changelog updates:
     - base branch is 'main'
-    - head repository is the same repository this workflow runs in (blocks forks)
+    - base and head repositories are 'microsoft/aspire' (blocks forks)
     - PR author is 'aspire-repo-bot[bot]'
-    - head branch starts with 'extension-release/'
+    - workflow actor is 'aspire-repo-bot[bot]'
+    - head branch starts with 'extension-release/v'
+    - only extension/package.json and extension/CHANGELOG.md changed
+    - package.json changes only its X.Y.Z version
+    - CHANGELOG.md prepends a matching version section without editing prior notes
 
   The same-repository + bot-author checks are what make the branch-prefix check
   safe: a fork cannot bypass Copilot review or full CI by simply naming its
   branch 'extension-release/*', because it can never make head_repo equal the
   base repository or make the PR author equal the bot's App slug.
 
-  This action performs no checkout of PR-controlled code and does no
-  interpolation of untrusted values into shell commands; all comparisons are
-  done with '==' inside a bash '[[ ]]' test using values passed in as
-  action inputs (which the calling workflow reads from the GitHub event
-  payload, not from PR content).
+  The validator reads both files directly from the supplied Git revisions. It
+  never executes revision content.
 
 inputs:
   repository:
@@ -41,6 +43,15 @@ inputs:
   author:
     description: "The PR author's login (github.event.pull_request.user.login)."
     required: true
+  actor:
+    description: "The workflow actor's login (github.actor)."
+    required: true
+  base_sha:
+    description: "The full base commit SHA (github.event.pull_request.base.sha)."
+    required: true
+  head_sha:
+    description: "The full head commit SHA (github.event.pull_request.head.sha)."
+    required: true
 
 outputs:
   is_trusted:
@@ -51,26 +62,14 @@ runs:
   using: 'composite'
   steps:
     - id: classify
-      shell: bash
+      shell: pwsh
       env:
         REPOSITORY: ${{ inputs.repository }}
         BASE_REF: ${{ inputs.base_ref }}
         HEAD_REPO: ${{ inputs.head_repo }}
         HEAD_REF: ${{ inputs.head_ref }}
         AUTHOR: ${{ inputs.author }}
-      run: |
-        set -eo pipefail
-
-        IS_TRUSTED=false
-
-        if [[ "$BASE_REF" == "main" \
-              && "$HEAD_REPO" == "$REPOSITORY" \
-              && "$AUTHOR" == "aspire-repo-bot[bot]" \
-              && "$HEAD_REF" == extension-release/* ]]; then
-          IS_TRUSTED=true
-        fi
-
-        echo "base_ref=$BASE_REF, head_repo=$HEAD_REPO, repository=$REPOSITORY, author=$AUTHOR, head_ref=$HEAD_REF"
-        echo "is_trusted=$IS_TRUSTED"
-        echo "is_trusted=$IS_TRUSTED" >> "$GITHUB_OUTPUT"
-        
+        ACTOR: ${{ inputs.actor }}
+        BASE_SHA: ${{ inputs.base_sha }}
+        HEAD_SHA: ${{ inputs.head_sha }}
+      run: '& "$env:GITHUB_ACTION_PATH/validate.ps1"'
