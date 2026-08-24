@@ -255,6 +255,7 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         var trustedCheckout = steps[classifierIndex - 1];
         Assert.Equal("Checkout trusted extension release classifier", Scalar(trustedCheckout, "name"));
         Assert.Equal("${{ github.event_name == 'pull_request' }}", Scalar(trustedCheckout, "if"));
+        Assert.Equal("true", Scalar(trustedCheckout, "continue-on-error"));
         Assert.Equal(
             "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
             Scalar(trustedCheckout, "uses"));
@@ -265,6 +266,7 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         Assert.Equal("false", Scalar(checkoutInputs, "persist-credentials"));
 
         var classifier = steps[classifierIndex];
+        Assert.Equal("true", Scalar(classifier, "continue-on-error"));
         Assert.Equal(
             "./.trusted-extension-release-classifier/.github/actions/is-trusted-extension-release-pr",
             Scalar(classifier, "uses"));
@@ -306,9 +308,6 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         var classifier = Assert.Single(Steps(prepareForCi), step => Scalar(step, "id") == "classify_release_pr");
 
         Assert.Equal("true", Scalar(classifier, "continue-on-error"));
-        Assert.All(
-            Steps(prepareForCi).Where(step => Scalar(step, "id") != "classify_release_pr"),
-            step => Assert.False(step.Children.ContainsKey(new YamlScalarNode("continue-on-error"))));
         Assert.Equal(
             "${{ github.event_name == 'pull_request' && steps.classify_release_pr.outputs.is_trusted == 'true' && 'true' || 'false' }}",
             Scalar(Mapping(prepareForCi, "outputs"), "is_trusted_extension_release_pr"));
