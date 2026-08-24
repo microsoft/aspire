@@ -176,8 +176,10 @@ public sealed class AzureRoleAssignmentRunModeTests(ITestOutputHelper output)
             output.WriteLine("Step 10: Verifying the role assignment deployment with az...");
             // In run mode BicepProvisioner names the ARM deployment after the resource itself (publish mode
             // appends a timestamp), so the deployment is literally "storage-roles".
-            await auto.RunCommandAsync($"az deployment group show --resource-group {resourceGroupName} --name storage-roles -o json > roles-deployment.json", counter, TimeSpan.FromMinutes(2));
-            await auto.RunCommandAsync("az account show -o json > az-account.json", counter, TimeSpan.FromMinutes(1));
+            // Local Azure CLI users can have a different default subscription than the one configured for
+            // the AppHost, so scope verification commands to the provisioning subscription explicitly.
+            await auto.RunCommandAsync($"az deployment group show --subscription {subscriptionId} --resource-group {resourceGroupName} --name storage-roles -o json > roles-deployment.json", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync($"az account show --subscription {subscriptionId} -o json > az-account.json", counter, TimeSpan.FromMinutes(1));
 
             var requireServicePrincipal = DeploymentE2ETestHelpers.IsRunningInCI ? "true" : "false";
             await auto.RunCommandAsync($"python3 validate-role-assignment.py roles-deployment.json az-account.json {requireServicePrincipal}", counter, TimeSpan.FromSeconds(30));
