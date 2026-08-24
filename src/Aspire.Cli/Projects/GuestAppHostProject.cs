@@ -725,18 +725,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
 
-                // Signal failure to RunCommand so it doesn't hang waiting for the backchannel.
-                // RunCommand's startup catch path wraps the message with the localized
-                // InteractionServiceStrings.UnexpectedErrorOccurred template before surfacing
-                // it to the user, matching the pre-PR behavior where this exception fell
-                // through to RunCommand's generic exception handler.
-                var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
                 if (guestAppHostLaunched)
                 {
+                    // Once launch succeeds, fail the backchannel wait so RunCommand surfaces the
+                    // AppHost failure instead of waiting for startup to complete.
+                    var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
                     context.BackchannelCompletionSource?.TrySetException(error);
                 }
                 else
                 {
+                    // Dependency installation and pre-execute checks are preparation work. Their
+                    // detailed output was displayed above; complete the build signal so RunCommand
+                    // reports the standard project build failure without starting the startup budget.
                     context.BuildCompletionSource?.TrySetResult(false);
                 }
 
