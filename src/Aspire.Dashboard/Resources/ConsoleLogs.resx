@@ -160,6 +160,12 @@
   <data name="DownloadLogs" xml:space="preserve">
     <value>Download logs</value>
   </data>
+  <data name="DownloadLogsAsText" xml:space="preserve">
+    <value>Download as text</value>
+  </data>
+  <data name="DownloadLogsAsCsv" xml:space="preserve">
+    <value>Download as CSV</value>
+  </data>
   <data name="ConsoleLogsSettings" xml:space="preserve">
     <value>Settings</value>
   </data>
