@@ -238,7 +238,7 @@ public partial class MetricsTests : DashboardTestContext
                 string.Format(
                     CultureInfo.CurrentCulture,
                     loc[nameof(Resources.Metrics.PauseInProgressText)],
-                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, pausedAt.Value, MillisecondsDisplay.Truncated)),
+                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, pausedAt.Value)),
                 pauseWarning.Instance.PauseText);
             Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
         });

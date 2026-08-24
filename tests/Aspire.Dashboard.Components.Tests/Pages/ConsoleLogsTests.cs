@@ -837,7 +837,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
                 string.Format(
                     CultureInfo.CurrentCulture,
                     loc[nameof(Resources.ConsoleLogs.PauseInProgressText)],
-                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, activePause.Start, MillisecondsDisplay.Truncated)),
+                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, activePause.Start)),
                 pauseWarning.Instance.PauseText);
             Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
         });

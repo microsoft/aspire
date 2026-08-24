@@ -1223,7 +1223,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         ? string.Format(
             CultureInfo.CurrentCulture,
             Loc[nameof(Dashboard.Resources.ConsoleLogs.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, pause.Start, MillisecondsDisplay.Truncated))
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, pause.Start))
         : null;
 
     private void OnPausedChanged(bool isPaused)
