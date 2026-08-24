@@ -463,6 +463,8 @@ public static class AspireAzureAIInferenceExtensions
 
         // The SDK's /info operation is unsupported by Azure OpenAI endpoints.
         // See https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient.getmodelinfoasync.
+        // Keep these domains aligned with Azure OpenAI endpoint additions until the SDK exposes a capability
+        // signal that can replace domain inference. DisableHealthChecks is the escape hatch for unrecognized endpoints.
         var host = endpoint.Host;
         return !IsHostOrSubdomain(host, "openai.azure.com")
             && !IsHostOrSubdomain(host, "openai.azure.us")
