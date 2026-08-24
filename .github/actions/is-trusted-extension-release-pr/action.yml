@@ -4,10 +4,6 @@ description: |
   extension release PR that is allowed onto the release fast path (see
   microsoft/aspire#19581).
 
-  This is the SINGLE predicate shared by:
-    - the Copilot review dispatcher (.github/workflows/copilot-review-dispatch.yml)
-    - the CI fast-path classifier (.github/workflows/ci.yml, prepare_for_ci)
-
   A PR is trusted only when ALL identity fields match and its patch contains
   exactly the expected extension package version and changelog updates:
     - base branch is 'main'
@@ -24,8 +20,8 @@ description: |
   branch 'extension-release/*', because it can never make head_repo equal the
   base repository or make the PR author equal the bot's App slug.
 
-  The validator reads both files directly from the supplied Git revisions. It
-  never executes revision content.
+  The validator reads files from the supplied head revision and its merge base
+  with the supplied base revision. It never executes revision content.
 
 inputs:
   repository:
@@ -47,7 +43,7 @@ inputs:
     description: "The workflow actor's login (github.actor)."
     required: true
   base_sha:
-    description: "The full base commit SHA (github.event.pull_request.base.sha)."
+    description: "The full base tip SHA used to compute the PR merge base (github.event.pull_request.base.sha)."
     required: true
   head_sha:
     description: "The full head commit SHA (github.event.pull_request.head.sha)."

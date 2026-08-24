@@ -42,12 +42,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for any changes that require CI
-        id: check_for_changes
+      - name: Checkout trusted extension release classifier
         if: ${{ github.event_name == 'pull_request' }}
-        uses: ./.github/actions/check-changed-files
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted-extension-release-classifier
+          persist-credentials: false
 
       # Classify once, here, and share the result with the tests / stabilization_check /
       # extension_release_tests jobs below via this job's outputs, so the
@@ -58,7 +59,7 @@ jobs:
         # See the is_trusted_extension_release_pr output comment above: a failure
         # here must default to normal CI, not to the fast path.
         continue-on-error: true
-        uses: ./.github/actions/is-trusted-extension-release-pr
+        uses: ./.trusted-extension-release-classifier/.github/actions/is-trusted-extension-release-pr
         with:
           repository: ${{ github.repository }}
           base_ref: ${{ github.event.pull_request.base.ref }}
@@ -68,6 +69,13 @@ jobs:
           actor: ${{ github.actor }}
           base_sha: ${{ github.event.pull_request.base.sha }}
           head_sha: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check for any changes that require CI
+        id: check_for_changes
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: ./.github/actions/check-changed-files
+        with:
+          patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs

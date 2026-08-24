@@ -11,9 +11,12 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
 {
     private const string BotLogin = "aspire-repo-bot[bot]";
     private const string BasePackageJson = """{"name":"aspire-vscode","version":"1.18.0","scripts":{"test":"mocha"}}""";
-    private const string BaseChangelog = "## v1.18.0\n\nExisting notes.\n";
+    private const string ChangelogPreamble = "# Aspire VS Code Extension Changelog\n\n";
+    private const string BaseChangelogBody = "## v1.18.0\n\nExisting notes.\n";
+    private const string BaseChangelog = ChangelogPreamble + BaseChangelogBody;
     private const string TrustedPackageJson = """{"name":"aspire-vscode","version":"1.19.0","scripts":{"test":"mocha"}}""";
-    private const string TrustedChangelogPrefix = "## v1.19.0\n\nNew notes.\n\n";
+    private const string TrustedChangelogEntry = "## v1.19.0\n\nNew notes.\n\n";
+    private const string TrustedChangelog = ChangelogPreamble + TrustedChangelogEntry + BaseChangelogBody;
 
     private readonly TemporaryWorkspace _workspace;
     private readonly ITestOutputHelper _output;
@@ -50,11 +53,27 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
     public void Dispose() => _workspace.Dispose();
 
     [Fact]
-    public async Task TrustsExpectedExtensionReleasePatch()
+    public async Task TrustsReleaseEntryInsertedAfterUnchangedChangelogTitle()
     {
         var headSha = CommitTrustedChanges();
 
         var result = await RunValidator(headSha);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal("is_trusted=true", ReadGitHubOutput());
+    }
+
+    [Fact]
+    public async Task TrustsExpectedPatchWhenBaseTipAdvancedAfterBranchPoint()
+    {
+        Git("switch", "-c", "extension-release/v1.19.0");
+        var headSha = CommitTrustedChanges();
+
+        Git("switch", "main");
+        File.WriteAllText(Path.Combine(_workspace.Path, "base-only.txt"), "unrelated base change");
+        var advancedBaseSha = CommitChanges();
+
+        var result = await RunValidator(headSha, baseSha: advancedBaseSha);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("is_trusted=true", ReadGitHubOutput());
@@ -98,7 +117,7 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
         File.WriteAllText(
             PackageJsonPath,
             """{"name":"aspire-vscode","version":"1.19.0","scripts":{"test":"mocha","lint":"eslint ."}}""");
-        File.WriteAllText(ChangelogPath, TrustedChangelogPrefix + BaseChangelog);
+        File.WriteAllText(ChangelogPath, TrustedChangelog);
         var headSha = CommitChanges();
 
         var result = await RunValidator(headSha);
@@ -120,7 +139,9 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
               }
             }
             """);
-        File.WriteAllText(ChangelogPath, "## v1.18.0\n\nNew notes.\n\n" + BaseChangelog);
+        File.WriteAllText(
+            ChangelogPath,
+            ChangelogPreamble + "## v1.18.0\n\nNew notes.\n\n" + BaseChangelogBody);
         var headSha = CommitChanges();
 
         var result = await RunValidator(headSha);
@@ -129,8 +150,10 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
     }
 
     [Theory]
-    [InlineData("## v1.19.0\n\nNew notes.\n\n## v1.18.0\n\nEdited notes.\n")]
-    [InlineData("## v1.19.0\n\nNew notes.\n")]
+    [InlineData("# Aspire VS Code Extension Changelog\n\n## v1.19.0\n\nNew notes.\n\n## v1.18.0\n\nEdited notes.\n")]
+    [InlineData("# Aspire VS Code Extension Changelog\n\n## v1.19.0\n\nNew notes.\n")]
+    [InlineData("# Different Changelog\n\n## v1.19.0\n\nNew notes.\n\n## v1.18.0\n\nExisting notes.\n")]
+    [InlineData("# Aspire VS Code Extension Changelog\n\n## v1.19.0\n\nNew notes.\n\n## v1.19.0\n\nMore notes.\n\n## v1.18.0\n\nExisting notes.\n")]
     public async Task RejectsChangelogChangesThatDoNotPreserveBaseContent(string headChangelog)
     {
         File.WriteAllText(PackageJsonPath, TrustedPackageJson);
@@ -146,7 +169,9 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
     public async Task RejectsChangelogHeadingThatDoesNotMatchPackageVersion()
     {
         File.WriteAllText(PackageJsonPath, TrustedPackageJson);
-        File.WriteAllText(ChangelogPath, "## v1.20.0\n\nNew notes.\n\n" + BaseChangelog);
+        File.WriteAllText(
+            ChangelogPath,
+            ChangelogPreamble + "## v1.20.0\n\nNew notes.\n\n" + BaseChangelogBody);
         var headSha = CommitChanges();
 
         var result = await RunValidator(headSha);
@@ -181,7 +206,7 @@ public sealed class TrustedExtensionReleasePrTests : IDisposable
     private void WriteTrustedChanges()
     {
         File.WriteAllText(PackageJsonPath, TrustedPackageJson);
-        File.WriteAllText(ChangelogPath, TrustedChangelogPrefix + BaseChangelog);
+        File.WriteAllText(ChangelogPath, TrustedChangelog);
     }
 
     private string CommitChanges()

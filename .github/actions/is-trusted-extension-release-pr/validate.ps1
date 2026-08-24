@@ -69,11 +69,18 @@ try {
         throw 'The base or head revision is not a full lowercase Git SHA.'
     }
 
+    # The PR patch starts at the branch point. Comparing the two tips directly would also
+    # include unrelated base-only changes added after the release branch was created.
+    $mergeBaseSha = (Invoke-Git @('merge-base', $env:BASE_SHA, $env:HEAD_SHA)).Trim()
+    if ($mergeBaseSha -cnotmatch '^[0-9a-f]{40}$') {
+        throw 'The base and head revisions do not have a valid merge base.'
+    }
+
     $changedFilesText = Invoke-Git @(
         'diff',
         '--name-only',
         '--no-renames',
-        $env:BASE_SHA,
+        $mergeBaseSha,
         $env:HEAD_SHA,
         '--'
     )
@@ -85,7 +92,7 @@ try {
         exit 0
     }
 
-    $basePackageJson = Invoke-Git @('show', "$($env:BASE_SHA):extension/package.json")
+    $basePackageJson = Invoke-Git @('show', "$($mergeBaseSha):extension/package.json")
     $headPackageJson = Invoke-Git @('show', "$($env:HEAD_SHA):extension/package.json")
     $basePackage = $basePackageJson | ConvertFrom-Json -AsHashtable -Depth 100
     $headPackage = $headPackageJson | ConvertFrom-Json -AsHashtable -Depth 100
@@ -118,17 +125,48 @@ try {
         exit 0
     }
 
-    $baseChangelog = Invoke-Git @('show', "$($env:BASE_SHA):extension/CHANGELOG.md")
+    $baseChangelog = Invoke-Git @('show', "$($mergeBaseSha):extension/CHANGELOG.md")
     $headChangelog = Invoke-Git @('show', "$($env:HEAD_SHA):extension/CHANGELOG.md")
-    if ($headChangelog.Length -le $baseChangelog.Length -or
-        -not $headChangelog.EndsWith($baseChangelog, [System.StringComparison]::Ordinal)) {
+
+    # extension-release.yml preserves the first title line, inserts the new release, then
+    # appends the prior body after removing only its leading blank lines:
+    #   # Aspire VS Code Extension Changelog
+    #
+    #   ## v1.19.0
+    #   ...
+    #
+    #   ## v1.18.0
+    #   ...
+    $baseTitleEnd = $baseChangelog.IndexOf("`n", [System.StringComparison]::Ordinal)
+    $headTitleEnd = $headChangelog.IndexOf("`n", [System.StringComparison]::Ordinal)
+    if ($baseTitleEnd -lt 0 -or $headTitleEnd -lt 0) {
         Set-TrustedOutput $false
         exit 0
     }
 
-    $prefix = $headChangelog.Substring(0, $headChangelog.Length - $baseChangelog.Length)
-    $firstPrefixLine = ($prefix -split '\r?\n', 2)[0]
-    if ($prefix.Length -eq 0 -or $firstPrefixLine -cne "## v$headVersion") {
+    $baseTitle = $baseChangelog.Substring(0, $baseTitleEnd).TrimEnd([char]13)
+    $headTitle = $headChangelog.Substring(0, $headTitleEnd).TrimEnd([char]13)
+    if (-not $baseTitle.StartsWith('#') -or $headTitle -cne $baseTitle) {
+        Set-TrustedOutput $false
+        exit 0
+    }
+
+    $baseBody = $baseChangelog.Substring($baseTitleEnd + 1)
+    $headBody = $headChangelog.Substring($headTitleEnd + 1)
+    $baseBody = [regex]::Replace($baseBody, '\A(?:[^\S\r\n]*(?:\r?\n|\z))*', '')
+    $headBody = [regex]::Replace($headBody, '\A(?:[^\S\r\n]*(?:\r?\n|\z))*', '')
+    if ($baseBody.Length -eq 0 -or
+        $headBody.Length -le $baseBody.Length -or
+        -not $headBody.EndsWith($baseBody, [System.StringComparison]::Ordinal)) {
+        Set-TrustedOutput $false
+        exit 0
+    }
+
+    $entry = $headBody.Substring(0, $headBody.Length - $baseBody.Length)
+    $releaseHeadings = @($entry -split '\r?\n' | Where-Object { $_ -cmatch '^## ' })
+    if ($releaseHeadings.Count -ne 1 -or
+        $releaseHeadings[0] -cne "## v$headVersion" -or
+        -not [regex]::IsMatch($entry, '(?:\r?\n){2}\z')) {
         Set-TrustedOutput $false
         exit 0
     }

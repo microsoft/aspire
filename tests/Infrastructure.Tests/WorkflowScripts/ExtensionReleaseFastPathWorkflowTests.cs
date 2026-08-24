@@ -215,6 +215,15 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
+    public void ClassifierDescriptionDoesNotReferenceDeletedCopilotDispatcher()
+    {
+        var action = File.ReadAllText(
+            RepoPath(".github", "actions", "is-trusted-extension-release-pr", "action.yml"));
+
+        Assert.DoesNotContain("copilot-review-dispatch.yml", action, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GenericReviewChecksOnlyStableNonExperimentalAtsBreaks()
     {
         var skill = File.ReadAllText(RepoPath(".agents", "skills", "code-review", "SKILL.md"));
@@ -231,6 +240,34 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
 
         Assert.All(atsScopeMarkers, marker => Assert.Contains(marker, skill, StringComparison.Ordinal));
         Assert.False(skill.Contains("breaking changes to public API without justification", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ClassifierRunsFromAdjacentTrustedBaseCheckout()
+    {
+        var steps = Steps(Mapping(s_ciJobs, "prepare_for_ci"));
+        var classifierIndex = steps.FindIndex(step => Scalar(step, "id") == "classify_release_pr");
+        var changedFilesIndex = steps.FindIndex(step => Scalar(step, "id") == "check_for_changes");
+
+        Assert.True(classifierIndex > 0);
+        Assert.True(changedFilesIndex > classifierIndex);
+
+        var trustedCheckout = steps[classifierIndex - 1];
+        Assert.Equal("Checkout trusted extension release classifier", Scalar(trustedCheckout, "name"));
+        Assert.Equal("${{ github.event_name == 'pull_request' }}", Scalar(trustedCheckout, "if"));
+        Assert.Equal(
+            "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+            Scalar(trustedCheckout, "uses"));
+
+        var checkoutInputs = Mapping(trustedCheckout, "with");
+        Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(checkoutInputs, "ref"));
+        Assert.Equal(".trusted-extension-release-classifier", Scalar(checkoutInputs, "path"));
+        Assert.Equal("false", Scalar(checkoutInputs, "persist-credentials"));
+
+        var classifier = steps[classifierIndex];
+        Assert.Equal(
+            "./.trusted-extension-release-classifier/.github/actions/is-trusted-extension-release-pr",
+            Scalar(classifier, "uses"));
     }
 
     [Fact]
