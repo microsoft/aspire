@@ -89,6 +89,43 @@ await builder.build().run();
 
 The callback runs when Aspire generates Bicep for deployment. Use compatible versions of the Azure provisioning npm packages and the `Aspire.Hosting.Azure` integration.
 
+### Build unpublished npm packages locally
+
+Until the Azure provisioning packages are published to npm, build installable tarballs from the public [Azure/js-provisioning-lib](https://github.com/Azure/js-provisioning-lib) repository:
+
+```bash
+git clone https://github.com/Azure/js-provisioning-lib.git
+cd js-provisioning-lib
+
+corepack enable
+pnpm install --frozen-lockfile
+
+PACK_DIR="$PWD/artifacts/npm-local"
+mkdir -p "$PACK_DIR"
+
+packages=(
+  @azure/provisioning-serialization-ast
+  @azure/provisioning-core
+  @azure/provisioning-serialization
+  @azure/provisioning-managed-identity
+  @azure/provisioning-storage
+)
+
+for package in "${packages[@]}"; do
+  pnpm --filter "$package" build
+  pnpm --filter "$package" pack --pack-destination "$PACK_DIR"
+done
+```
+
+In the TypeScript AppHost directory, install the generated tarballs:
+
+```bash
+cd /path/to/AppHost
+npm install /path/to/js-provisioning-lib/artifacts/npm-local/*.tgz
+```
+
+Installing tarballs rather than linking workspace directories ensures that the AppHost's npm restore can resolve the complete local dependency graph. This modifies `package.json` and `package-lock.json` to use local file paths; do not commit those temporary entries. Replace them with published package versions when the packages become available from npm.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/
