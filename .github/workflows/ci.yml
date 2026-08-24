@@ -28,9 +28,9 @@ jobs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
       EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
-      # Trusted extension-release fast path (see microsoft/aspire#19581). Uses the
-      # same predicate as .github/workflows/copilot-review-dispatch.yml. Any
-      # classification failure (missing/empty step output) evaluates the
+      # Trusted extension-release fast path (see microsoft/aspire#19581). Classification is
+      # centralized in .github/actions/is-trusted-extension-release-pr. Any classification
+      # failure (missing/empty step output) evaluates the
       # comparison below to false, which routes the PR through normal CI --
       # never silently onto the fast path.
       is_trusted_extension_release_pr: ${{ github.event_name == 'pull_request' && steps.classify_release_pr.outputs.is_trusted == 'true' && 'true' || 'false' }}
@@ -96,13 +96,11 @@ jobs:
     uses: ./.github/workflows/tests.yml
     name: Tests
     needs: [prepare_for_ci]
-    # actions:read lets the reusable workflow download build artifacts via gh/actions APIs (for example
-    # get-aspire-cli-pr.ps1 -> gh run download). issues:write + pull-requests:write are used only by
-    # tests.yml's isolated comment_selection job (which runs no PR code) to post the "selected tests"
-    # issue comment. Reusable-workflow tokens are capped by the caller, so every needed scope must be
-    # granted here.
+    # issues:write + pull-requests:write are used only by tests.yml's isolated comment_selection job
+    # (which runs no PR code) to post the "selected tests" issue comment; every job that runs PR code
+    # stays at contents:read. Reusable-workflow tokens are capped by the caller, so this is where the
+    # elevated scope must be granted.
     permissions:
-      actions: read
       contents: read
       issues: write
       pull-requests: write
@@ -296,4 +294,3 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             await require('./.github/workflows/report-ci-failure.js').track({ github, context, core });
-            

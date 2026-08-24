@@ -129,12 +129,7 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         [
             "needs.extension_tests_win.result == 'skipped'",
             "needs.extension_e2e_tests.result == 'skipped'",
-            "needs.cli_starter_validation_linux_x64.result == 'skipped'",
-            "needs.cli_starter_validation_linux_arm64.result == 'skipped'",
-            "needs.cli_starter_validation_windows_x64.result == 'skipped'",
-            "needs.cli_starter_validation_windows_arm64.result == 'skipped'",
-            "needs.cli_starter_validation_macos_x64.result == 'skipped'",
-            "needs.cli_starter_validation_macos_arm64.result == 'skipped'",
+            "(needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter == 'true'))",
             "needs.typescript_sdk_tests.result == 'skipped'",
             "needs.typescript_api_compat.result == 'skipped'",
             "needs.build_cli_archive_macos_x64.result == 'skipped'",
@@ -151,6 +146,91 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         ];
 
         Assert.All(normalModeSkipChecks, check => Assert.Contains(check, condition, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NormalCiPreservesSelectiveCliStarterValidation()
+    {
+        var setupOutputs = Mapping(Mapping(s_testJobs, "setup_for_tests"), "outputs");
+        Assert.Equal("${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter }}", Scalar(setupOutputs, "run_cli_starter"));
+
+        var job = Mapping(s_testJobs, "cli_starter_validation_windows");
+        Assert.Equal(
+            "${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && (needs.setup_for_tests.outputs.run_cli_starter == 'true') }}",
+            Scalar(job, "if"));
+        Assert.False(job.Children.ContainsKey(new YamlScalarNode("uses")));
+
+        string[] unrelatedReplacementJobs =
+        [
+            "cli_starter_validation_linux_x64",
+            "cli_starter_validation_linux_arm64",
+            "cli_starter_validation_windows_x64",
+            "cli_starter_validation_windows_arm64",
+            "cli_starter_validation_macos_x64",
+            "cli_starter_validation_macos_arm64",
+        ];
+        Assert.All(unrelatedReplacementJobs, jobName => Assert.False(s_testJobs.Children.ContainsKey(new YamlScalarNode(jobName))));
+
+        var results = Mapping(s_testJobs, "results");
+        Assert.Contains("cli_starter_validation_windows", SequenceScalars(results, "needs"));
+        Assert.All(
+            unrelatedReplacementJobs,
+            jobName => Assert.DoesNotContain(jobName, SequenceScalars(results, "needs")));
+
+        var workflow = File.ReadAllText(RepoPath(".github", "workflows", "tests.yml"));
+        Assert.Contains(
+            "- cli_starter_validation_windows: this job only runs for pull requests",
+            workflow,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NormalTestsDoNotRequestActionsReadPermission()
+    {
+        var workflowPermissions = Mapping(s_testsWorkflow, "permissions");
+        Assert.False(workflowPermissions.Children.ContainsKey(new YamlScalarNode("actions")));
+
+        var normalTestsPermissions = Mapping(Mapping(s_ciJobs, "tests"), "permissions");
+        Assert.False(normalTestsPermissions.Children.ContainsKey(new YamlScalarNode("actions")));
+    }
+
+    [Fact]
+    public void NativeCopilotReviewIsPreservedAndReleasePlaceholderIsDocumented()
+    {
+        Assert.False(File.Exists(RepoPath(".github", "workflows", "copilot-review-dispatch.yml")));
+
+        var skill = File.ReadAllText(RepoPath(".agents", "skills", "code-review", "SKILL.md"));
+        string[] releaseFlowMarkers =
+        [
+            "extension/CHANGELOG.md",
+            "extension-release.yml",
+            "bot-authored `extension-release/*`",
+            "asynchronously replaced",
+            "extension-changelog.md",
+            "extension-changelog-finalized.yml",
+            "outside this exact release flow",
+        ];
+
+        Assert.All(releaseFlowMarkers, marker => Assert.Contains(marker, skill, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GenericReviewChecksOnlyStableNonExperimentalAtsBreaks()
+    {
+        var skill = File.ReadAllText(RepoPath(".agents", "skills", "code-review", "SKILL.md"));
+        string[] atsScopeMarkers =
+        [
+            "Aspire Type System (ATS)",
+            "polyglot SDK generation",
+            "<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>",
+            "[Experimental]",
+            "ATS experimental metadata",
+            "dedicated `api-review` skill",
+            "general .NET/C# API breaking changes",
+        ];
+
+        Assert.All(atsScopeMarkers, marker => Assert.Contains(marker, skill, StringComparison.Ordinal));
+        Assert.False(skill.Contains("breaking changes to public API without justification", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -284,10 +364,13 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     private static string CollapseWhitespace(string? value)
         => string.Join(' ', (value ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
+    private static string RepoPath(params string[] path)
+        => Path.Combine([RepoRoot.Path, .. path]);
+
     private static YamlMappingNode LoadWorkflow(string workflowName)
     {
         var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", workflowName)));
+        using var reader = new StringReader(File.ReadAllText(RepoPath(".github", "workflows", workflowName)));
         yaml.Load(reader);
 
         return Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
