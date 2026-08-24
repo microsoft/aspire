@@ -1024,14 +1024,7 @@ public static class ResourceExtensions
             return false;
         }
 
-        // Deliberately a concrete-type check rather than TryGetProjectAnnotation: automatic SDK-based image
-        // build/push is a real ProjectResource deployment concern, not a general "has project metadata" one.
-        // CSharpAppResource (AddCSharpApp) derives from ProjectResource, so it's still covered here.
-        // DotnetProjectResource (AddDotnetProject) is an ExecutableResource that carries IProjectMetadata purely
-        // to support `dotnet run` — it explicitly opts out of automatic publishing and handles its own publish
-        // validation (see DotnetProjectResource's ctor), so it must not be swept into this path just because it
-        // also carries project metadata.
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.TryGetProjectAnnotation(out _) || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
