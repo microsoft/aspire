@@ -38,6 +38,7 @@ import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
 import { initializeHotReloadAdvisory } from './debugger/hotReload';
+import { AddIntegrationTestProjectAvailability } from './commands/addIntegrationTestProject';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -161,6 +162,19 @@ export async function activate(context: vscode.ExtensionContext) {
   vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', true);
   vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', true);
   vscode.commands.executeCommand('setContext', 'aspire.loading', true);
+
+  const addIntegrationTestProjectAvailability = new AddIntegrationTestProjectAvailability(configInfoProvider);
+  context.subscriptions.push(
+    addIntegrationTestProjectAvailability,
+    vscode.window.onDidChangeActiveTextEditor(() => void addIntegrationTestProjectAvailability.refresh()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => void addIntegrationTestProjectAvailability.refresh()),
+    cliPathResolver.onDidChangeForwarding(() => void addIntegrationTestProjectAvailability.refresh(true)),
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('aspire.aspireCliExecutablePath')) {
+        void addIntegrationTestProjectAvailability.refresh(true);
+      }
+    }));
+  void addIntegrationTestProjectAvailability.refresh();
 
   // Activate the data repository. Workspace describe watching and global polling begin when the panel is visible.
   dataRepository.activate();

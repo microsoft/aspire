@@ -301,6 +301,12 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.addIntegrationTestProject",
+        "title": "%command.addIntegrationTestProject%",
+        "category": "Aspire",
+        "enablement": "aspire.addIntegrationTestProjectSupported"
+      },
+      {
         "command": "aspire-vscode.init",
         "title": "%command.init%",
         "category": "Aspire"
@@ -656,6 +662,10 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "aspire-vscode.addIntegrationTestProject",
+          "when": "aspire.addIntegrationTestProjectSupported"
+        },
         {
           "command": "aspire-vscode.createWithAspire",
           "when": "false"

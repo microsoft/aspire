@@ -19,6 +19,9 @@
     <trans-unit id="command.add">
       <source xml:lang="en">Add an integration</source>
     </trans-unit>
+    <trans-unit id="command.addIntegrationTestProject">
+      <source xml:lang="en">Add integration test project</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.nextSteps.description">
       <source xml:lang="en">Add integrations, move toward production, or go deeper in the Aspire docs.&#10;&#10;[Add an integration](command:aspire-vscode.add)&#10;&#10;[Open Aspire docs](https://aspire.dev/docs/)</source>
     </trans-unit>
@@ -441,6 +444,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.title">
       <source xml:lang="en">Install the Aspire CLI</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.addIntegrationTestProjectRequiresCSharpAppHost">
+      <source xml:lang="en">Integration test project scaffolding requires a C# AppHost.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.invalidLaunchConfiguration">
       <source xml:lang="en">Invalid launch configuration for {0}.</source>
@@ -957,6 +963,9 @@
     </trans-unit>
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.addIntegrationTestProjectUnsupported">
+      <source xml:lang="en">The selected Aspire CLI does not advertise integration test project scaffolding. Update or verify the Aspire CLI installation and try again.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleIsolationModeNotSupported">
       <source xml:lang="en">The selected Aspire CLI does not support the requested isolation mode.</source>

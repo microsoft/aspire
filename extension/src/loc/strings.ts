@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 
 export const noCsprojFound = vscode.l10n.t('No AppHost found in the current workspace.');
+export const addIntegrationTestProjectRequiresCSharpAppHost = vscode.l10n.t('Integration test project scaffolding requires a C# AppHost.');
+export const addIntegrationTestProjectUnsupported = vscode.l10n.t('The selected Aspire CLI does not advertise integration test project scaffolding. Update or verify the Aspire CLI installation and try again.');
 // l10n.t only substitutes primitives, so passing an Error left the message as the literal "Error: {0}".
 export const errorMessage = (error: unknown) => vscode.l10n.t('Error: {0}', error instanceof Error ? error.message : String(error));
 export const yesLabel = vscode.l10n.t('Yes');

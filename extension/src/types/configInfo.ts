@@ -82,6 +82,13 @@ export const isolatedLaunchCapability = 'isolated-launch.v1';
 export const launchProfileCapability = 'launch-profile.v1';
 
 /**
+ * Capability advertised by the CLI when `aspire new aspire-test` supports targeting an existing
+ * C# AppHost with `--apphost`.
+ * Keep in sync with `KnownCapabilities.AspireTestAppHost` in src/Aspire.Cli.
+ */
+export const aspireTestAppHostCapability = 'aspire-test-apphost.v1';
+
+/**
  * First Aspire CLI version that accepts `aspire run --isolated`.
  */
 export const isolatedLaunchMinimumVersion = '13.2.0';
