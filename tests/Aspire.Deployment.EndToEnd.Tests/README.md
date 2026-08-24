@@ -8,13 +8,14 @@ These tests use the [Hex1b](https://github.com/hex1b/hex1b) terminal automation 
 
 ## Azure Subscription Quota Requirements
 
-The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios deploy to `westus3`, but the AKS (Azure Kubernetes Service) scenarios deploy to `centralus`, and a couple of resource-specific tests use other regions (`australiaeast`, `eastus`). Ensure the quotas below are available in the region noted for each section.
+The deployment tests require an Azure subscription with sufficient quota for the resources being deployed. Most scenarios, including the AKS (Azure Kubernetes Service) scenarios, deploy to `westus3`; a resource-specific test uses `eastus2`. Ensure the quotas below are available in the region noted for each section.
 
 ### Container Apps
 
 | Resource | Quota Required | Current Setting | Notes |
 |----------|---------------|-----------------|-------|
 | Managed Environments | 150+ | 150 | Each test run creates a new environment. High quota allows concurrent runs and handles cleanup delays. |
+| Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 50 | Public Container Apps environments consume this regional quota. Request manually in `westus3`; Microsoft.Quota exposes the limit but rejects CLI create/update requests. |
 | Container App Instances | Default | - | Standard quota is typically sufficient |
 
 ### App Service
@@ -26,18 +27,17 @@ The deployment tests require an Azure subscription with sufficient quota for the
 
 ### AKS / Kubernetes node pools
 
-The AKS scenarios deploy to `centralus`, where the subscription holds `Standard_D2s_v5` (DSv5) capacity. The CI workflow's quota self-healing (`QUOTA_TARGETS` in `.github/workflows/deployment-tests.yml`) requests the compute vCPU quotas automatically; the managed-cluster count is not exposed by the Microsoft.Quota API and must be raised manually if the default is ever insufficient:
+The AKS scenarios deploy to `westus3`, where the subscription holds `Standard_D2as_v5` (DASv5) capacity. The CI workflow's quota self-healing (`QUOTA_TARGETS` in `.github/workflows/deployment-tests.yml`) requests the compute vCPU and managed-cluster quotas automatically:
 
 | Resource | Region | Quota Required | Notes |
 |----------|--------|----------------|-------|
-| `StandardDSv5Family` vCPUs (`Microsoft.Compute`) | `centralus` | 200 (dedicated) | System and workload node pools use `Standard_D2s_v5`. Self-healed by the workflow. |
-| Total Regional vCPUs (`Microsoft.Compute`, `cores`) | `centralus` | 200 (dedicated) | Azure enforces this regional total independently of the family quota, so node pools need headroom in both. Self-healed by the workflow. |
-| Managed Clusters (`Microsoft.ContainerService`) | `centralus` | 20 | Each AKS test creates a cluster; headroom covers concurrent runs and cleanup lag. Not exposed by the Microsoft.Quota API — request via the Azure Portal/support if the default is insufficient. |
+| `StandardDASv5Family` vCPUs (`Microsoft.Compute`) | `westus3` | 200 (dedicated) | System and workload node pools use `Standard_D2as_v5`. Self-healed by the workflow. |
+| Total Regional vCPUs (`Microsoft.Compute`, `cores`) | `westus3` | 200 (dedicated) | Azure enforces this regional total independently of the family quota, so node pools need headroom in both. Self-healed by the workflow. |
+| Managed Clusters (`Microsoft.ContainerService`) | `westus3` | 20 | Each AKS test creates a cluster; headroom covers concurrent runs and cleanup lag. Self-healed by the workflow. |
 
-A few tests intentionally use other regions for capacity or feature reasons:
+One test intentionally uses another region for a resource-specific requirement:
 
-- `AksBlazorRedisDeploymentTests` → `australiaeast` (`Standard_D2as_v4` / DASv4 family).
-- `AcaManagedRedisDeploymentTests` → `eastus` (Azure Managed Redis availability-zone support).
+- `AcaManagedRedisDeploymentTests` → `eastus2` (Azure Managed Redis availability-zone support).
 
 ### Container Registry
 
@@ -50,7 +50,7 @@ A few tests intentionally use other regions for capacity or feature reasons:
 | Resource | Quota Required | Notes |
 |----------|---------------|-------|
 | Resource Groups | 100+ | Each test creates a unique resource group (e.g., `e2e-starter-12345678-1`) |
-| Role Assignments | Default | Tests may create role assignments for managed identities |
+| Role Assignments | Default | Tests may create role assignments for managed identities, and `AzureRoleAssignmentRunModeTests` creates them for the ambient deployment principal |
 
 ### Requesting Quota Increases
 
@@ -68,9 +68,10 @@ To request quota increases:
 
 Common quota increase requests:
 - **Container Apps Managed Environments**: Request 150+ in westus3
+- **Standard Public IP Addresses**: Request 150+ in westus3
 - **App Service PremiumV3 vCPUs**: Request 10+ in westus3
-- **AKS `StandardDSv5Family` vCPUs**: Request 200 (dedicated) in centralus
-- **AKS Managed Clusters**: Request 20 in centralus
+- **AKS `StandardDASv5Family` vCPUs**: Request 200 (dedicated) in westus3
+- **AKS Managed Clusters**: Request 20 in westus3
 
 ## Prerequisites
 
@@ -174,8 +175,10 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureEventHubsDeploymentTests.cs       # Azure Event Hubs resource
 ├── AzureKeyVaultDeploymentTests.cs        # Azure Key Vault resource
 ├── AzureLogAnalyticsDeploymentTests.cs    # Azure Log Analytics resource
+├── AzureRoleAssignmentRunModeTests.cs     # Run-mode role assignments under the ambient credential
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
+├── AzureStorageRunModeTests.cs            # Run-mode resource commands against live Azure
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
 ├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
 ├── RadiusAzureResourcesDeploymentTests.cs # Gap: cloud-managed Azure resource refs on Radius
@@ -183,6 +186,36 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
 ```
+
+## Run-mode role assignment coverage
+
+Most tests here drive `aspire deploy` (publish mode). `AzureRoleAssignmentRunModeTests` and
+`AzureStorageRunModeTests` instead drive `aspire start`, which is a materially different code path
+for RBAC.
+
+In publish mode a role assignment targets a user-assigned managed identity, so `principalType` is
+statically `ServicePrincipal` and `BicepProvisioner` refuses to infer principal parameters at all.
+In run mode there is no managed identity: the assignment targets the ambient credential, and
+`principalType` / `principalId` / `principalName` become plain Bicep parameters filled from the
+signed-in identity's access token. ARM rejects a mismatched `principalType` with
+`UnmatchedPrincipalType` / `PrincipalNotFound`, which is exactly how
+[#13933](https://github.com/microsoft/aspire/issues/13933) surfaced.
+
+`AzureRoleAssignmentRunModeTests.RoleAssignmentsSucceedForAmbientCredentialInRunMode` covers that
+path. Its AppHost is a single `builder.AddAzureStorage("storage")` with **no**
+`ClearDefaultRoleAssignments()` — in run mode an Azure resource that no compute resource references
+still has its default role assignments applied, which synthesizes a `storage-roles` resource. The
+test waits for `storage-roles` and `storage` to come up, then reads the ARM deployment back with
+`az deployment group show` and asserts the recorded `principalType` matches the kind of identity
+`az account show` reports. In CI it additionally asserts that identity is a service principal, so
+the job fails loudly if the credential ever degrades to a user and silently stops covering the
+app-only scenario.
+
+This is the cheapest scenario in the matrix — one storage account plus one role-assignment
+deployment — and runs as its own parallel job with its own resource group.
+
+`AzureStorageRunModeTests` deliberately keeps `ClearDefaultRoleAssignments()`: it covers resource
+command metadata, and mixing the RBAC path into it would blur the failure signal.
 
 ## Radius deployment coverage
 
@@ -354,6 +387,6 @@ The test Azure tenant/subscription rotates approximately every 90 days per polic
 3. Grant Owner role on subscription (constrained - cannot create other Owner identities)
 4. Update GitHub secrets: `AZURE_DEPLOYMENT_TEST_CLIENT_ID`, `AZURE_DEPLOYMENT_TEST_TENANT_ID`
 5. Update GitHub variable: `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID`
-6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps and App Service in `westus3`, and AKS in `centralus` (`StandardDSv5Family` vCPUs, Total Regional vCPUs, and managed clusters). The CI workflow self-heals the compute vCPU quotas (family and regional total); the managed-cluster count is not covered by the Microsoft.Quota API, so a new subscription may still need a manual portal/support request.
+6. Ensure regional quotas per [Azure Subscription Quota Requirements](#azure-subscription-quota-requirements): Container Apps, App Service, and AKS in `westus3` (`StandardDASv5Family` vCPUs, Total Regional vCPUs, and managed clusters). The CI workflow self-heals all three AKS quotas.
 
 See [Deployment Testing Documentation](../../docs/deployment-testing.md) for detailed rotation procedures.

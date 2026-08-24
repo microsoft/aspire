@@ -572,6 +572,12 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             return wrapperClassName;
         }
+
+        if (ExtractSimpleTypeName(typeId) == "IDistributedApplicationBuilder")
+        {
+            return "DistributedApplicationBuilder";
+        }
+
         return GetHandleTypeName(typeId);
     }
 
@@ -1069,7 +1075,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Generate methods
         foreach (var method in allMethods)
         {
-            GenerateTypeClassMethod(sb, method);
+            GenerateTypeClassMethod(sb, method, className == "AbstractDistributedApplicationBuilder");
         }
 
         if (string.Equals(model.TypeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
@@ -1259,7 +1265,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates a method on a type class.
     /// </summary>
-    private void GenerateTypeClassMethod(System.Text.StringBuilder sb, AtsCapabilityInfo capability)
+    private void GenerateTypeClassMethod(
+        System.Text.StringBuilder sb,
+        AtsCapabilityInfo capability,
+        bool isDistributedApplicationBuilder)
     {
         // Use OwningTypeName if available to extract method name, otherwise parse from MethodName
         var methodName = !string.IsNullOrEmpty(capability.OwningTypeName) && capability.MethodName.Contains('.')
@@ -1274,7 +1283,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         var optionalParams = userParams.Where(p => !requiredParams.Contains(p)).ToList();
 
         // Determine return type
-        var returnType = GetReturnTypeId(capability) != null
+        var returnsSelf = isDistributedApplicationBuilder && capability.ReturnType?.TypeId == capability.TargetTypeId;
+        var returnType = returnsSelf
+            ? "typing.Self"
+            : GetReturnTypeId(capability) != null
             ? MapTypeRefToPython(capability.ReturnType)
             : "None";
         var isResourceBuilder = capability.ReturnType != null && capability.ReturnType.Category == AtsTypeCategory.Handle &&
@@ -1328,12 +1340,16 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Invoke capability
-        if (returnType == "None")
+        if (returnType == "None" || returnsSelf)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"        self._client.invoke_capability(");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            '{capability.CapabilityId}',");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            rpc_args");
             sb.AppendLine(CultureInfo.InvariantCulture, $"        )");
+            if (returnsSelf)
+            {
+                sb.AppendLine("        return self");
+            }
         }
         else
         {

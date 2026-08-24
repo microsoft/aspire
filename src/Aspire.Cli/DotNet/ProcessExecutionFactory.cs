@@ -4,6 +4,8 @@
 using Aspire.Cli.Processes;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -14,6 +16,8 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 {
+    internal static IReadOnlyList<string> InvocationScopedEnvVarNames { get; } = [KnownConfigNames.CliAppHostSelectionOrigin];
+
     private readonly IEnvironment _environment;
     private readonly ILogger<ProcessExecutionFactory> _logger;
     private readonly ILayoutDiscovery? _layoutDiscovery;
@@ -43,7 +47,14 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
     {
         var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : _logger;
 
-        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", fileName, workingDirectory.FullName, string.Join(" ", args));
+        // `dotnet run --project AppHost.csproj -- <appHostArgs>` reaches this factory with the
+        // forwarded AppHost arguments still attached, so redact past the separator before logging.
+        // Direct AppHost launches have no separator at all and instead declare the boundary through
+        // ProcessInvocationOptions.AppHostArgumentStartIndex.
+        var loggableArgs = options.AppHostArgumentStartIndex is { } appHostArgumentStartIndex
+            ? AppHostArgumentRedactor.RedactFromToString(args, appHostArgumentStartIndex)
+            : AppHostArgumentRedactor.RedactToString(args);
+        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", fileName, workingDirectory.FullName, loggableArgs);
 
         if (env is not null)
         {
@@ -68,9 +79,11 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             startInfo.ArgumentList.Add(a);
         }
 
-        // Touching Environment here snapshots the parent env on first access, so the strip below
-        // applies even when the caller passes no explicit env. Then overlay the caller's env deltas.
+        // Touching Environment here snapshots the parent env on first access. Strip invocation-scoped
+        // values before overlaying explicit values so the detached child CLI can deliberately receive
+        // the marker while AppHost and build children do not inherit it.
         StripIdentityEnvVars(startInfo);
+        StripInvocationScopedEnvVars(startInfo);
         ApplyEnvironmentVariableFilter(startInfo, options.EnvironmentVariableFilter);
 
         if (env is not null)
@@ -88,7 +101,9 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
     {
         var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : _logger;
 
-        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", startInfo.FileName, startInfo.WorkingDirectory, string.Join(" ", startInfo.ArgumentList));
+        // Same redaction boundary as the ArgumentList-building overload: anything after the first
+        // "--" is application input forwarded to the AppHost and must not be logged verbatim.
+        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", startInfo.FileName, startInfo.WorkingDirectory, AppHostArgumentRedactor.RedactToString(startInfo.ArgumentList));
 
         var isolatedStartInfo = new IsolatedProcessStartInfo
         {
@@ -129,6 +144,7 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         // into the child via startInfo.Environment (which is parent-seeded). Same rationale as the
         // other overload — see StripIdentityEnvVars.
         StripIdentityEnvVars(isolatedStartInfo);
+        StripInvocationScopedEnvVars(isolatedStartInfo);
         ApplyEnvironmentVariableFilter(isolatedStartInfo, options.EnvironmentVariableFilter);
 
         return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, _environment, _layoutDiscovery, _bundleService, _executionContext);
@@ -146,6 +162,14 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
     private static void StripIdentityEnvVars(IsolatedProcessStartInfo startInfo)
     {
         foreach (var envVarName in Acquisition.IdentityResolver.IdentityEnvVarNames)
+        {
+            startInfo.Environment.Remove(envVarName);
+        }
+    }
+
+    private static void StripInvocationScopedEnvVars(IsolatedProcessStartInfo startInfo)
+    {
+        foreach (var envVarName in InvocationScopedEnvVarNames)
         {
             startInfo.Environment.Remove(envVarName);
         }

@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
+import { CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
 
 /**
  * Coarse AppHost language classification used for telemetry. We deliberately
@@ -11,13 +11,31 @@ import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
  *
  *  - `csharp`     : every detected AppHost reports a C# variant.
  *  - `typescript` : every detected AppHost reports a TypeScript / Node variant.
- *  - `polyglot`   : at least one AppHost of each language family is present,
+ *  - `rust`       : every detected AppHost reports Rust.
+ *  - `polyglot`   : more than one language family is present,
  *                   or an unknown language is mixed with a known one. This is
  *                   the headline signal Damian asked us to capture.
  *  - `unknown`    : we found AppHosts but couldn't classify any of them.
  *  - `none`       : no AppHosts were detected at all.
  */
-export type AppHostLanguageSummary = 'csharp' | 'typescript' | 'polyglot' | 'unknown' | 'none';
+export type AppHostLanguage = 'csharp' | 'typescript' | 'rust' | 'java' | 'unknown';
+export type AppHostLanguageSummary = Exclude<AppHostLanguage, 'unknown'> | 'polyglot' | 'unknown' | 'none';
+
+export function formatAppHostLanguage(language: string): string | undefined {
+    if (!language) {
+        return undefined;
+    }
+
+    switch (language.toLowerCase()) {
+        case 'csharp':
+            return 'C#';
+        case 'typescript':
+        case 'typescript/nodejs':
+            return 'TypeScript';
+        default:
+            return language.charAt(0).toUpperCase() + language.slice(1);
+    }
+}
 
 /**
  * Normalizes a language string from `aspire ls --format json` to a coarse
@@ -25,7 +43,7 @@ export type AppHostLanguageSummary = 'csharp' | 'typescript' | 'polyglot' | 'unk
  * the summary. Anything we don't recognize is grouped as `'other'` so that a
  * mixed workspace still reports `polyglot` rather than hiding the diversity.
  */
-function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript' | 'other' {
+function languageFamily(raw: string | null | undefined): AppHostLanguage | 'other' {
     if (!raw) {
         return 'other';
     }
@@ -35,6 +53,12 @@ function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript'
     }
     if (value === 'typescript' || value.startsWith('typescript/') || value === 'javascript' || value.startsWith('javascript/')) {
         return 'typescript';
+    }
+    if (value === 'rust' || value.startsWith('rust/')) {
+        return 'rust';
+    }
+    if (value === 'java' || value.startsWith('java/')) {
+        return 'java';
     }
     return 'other';
 }
@@ -46,6 +70,8 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
 
     let sawCsharp = false;
     let sawTypescript = false;
+    let sawRust = false;
+    let sawJava = false;
     let sawOther = false;
 
     for (const candidate of candidates) {
@@ -56,12 +82,18 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
         else if (family === 'typescript') {
             sawTypescript = true;
         }
+        else if (family === 'rust') {
+            sawRust = true;
+        }
+        else if (family === 'java') {
+            sawJava = true;
+        }
         else {
             sawOther = true;
         }
     }
 
-    const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawOther);
+    const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawRust) + Number(sawJava) + Number(sawOther);
     if (distinctFamilies > 1) {
         return 'polyglot';
     }
@@ -70,6 +102,12 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
     }
     if (sawTypescript) {
         return 'typescript';
+    }
+    if (sawRust) {
+        return 'rust';
+    }
+    if (sawJava) {
+        return 'java';
     }
     return 'unknown';
 }
@@ -84,7 +122,7 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
  * use {@link classifyAppHostDirectory} which peeks for marker files. This entry
  * point only looks at the file extension.
  */
-export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' | 'typescript' | 'unknown' {
+export function classifyAppHostPath(appHostPath: string | undefined): AppHostLanguage {
     if (!appHostPath) {
         return 'unknown';
     }
@@ -95,6 +133,12 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
     if (lower.endsWith('.ts') || lower.endsWith('.mts') || lower.endsWith('.cts') ||
         lower.endsWith('.js') || lower.endsWith('.mjs') || lower.endsWith('.cjs')) {
         return 'typescript';
+    }
+    if (lower.endsWith('.rs')) {
+        return 'rust';
+    }
+    if (lower.endsWith('.java')) {
+        return 'java';
     }
     return 'unknown';
 }
@@ -110,7 +154,7 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
  * Directory reads are O(entries), small for typical AppHost roots; any failure
  * (permissions, missing directory) returns `'unknown'` rather than throwing.
  */
-export async function classifyAppHostDirectory(directoryPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
+export async function classifyAppHostDirectory(directoryPath: string | undefined): Promise<AppHostLanguage> {
     if (!directoryPath) {
         return 'unknown';
     }
@@ -123,12 +167,20 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     }
     let sawCsharp = false;
     let sawTypescript = false;
+    let sawRust = false;
+    let sawJava = false;
     for (const entry of entries) {
         if (await isCsharpAppHostMarker(directoryPath, entry)) {
             sawCsharp = true;
         }
         else if (isTypescriptAppHostMarker(entry)) {
             sawTypescript = true;
+        }
+        else if (entry.toLowerCase() === 'apphost.rs') {
+            sawRust = true;
+        }
+        else if (await isJavaAppHostMarker(directoryPath, entry)) {
+            sawJava = true;
         }
     }
     if (sawCsharp && sawTypescript) {
@@ -143,7 +195,40 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     if (sawTypescript) {
         return 'typescript';
     }
+    if (sawRust) {
+        return 'rust';
+    }
+    if (sawJava) {
+        return 'java';
+    }
     return 'unknown';
+}
+
+/**
+ * A Java AppHost has two supported layouts: a flat `AppHost.java` sitting directly in the
+ * directory, or a Maven/Gradle project whose AppHost lives at `src/main/java/AppHost.java`.
+ *
+ * The build file alone is not a marker — that would classify every Maven or Gradle project in
+ * the workspace as an AppHost — so the nested layout is only accepted once the AppHost source
+ * file is confirmed to exist.
+ */
+async function isJavaAppHostMarker(directoryPath: string, entry: string): Promise<boolean> {
+    const lower = entry.toLowerCase();
+    if (lower === 'apphost.java') {
+        return true;
+    }
+
+    if (lower !== 'pom.xml' && lower !== 'build.gradle' && lower !== 'build.gradle.kts') {
+        return false;
+    }
+
+    try {
+        await fs.access(join(directoryPath, 'src', 'main', 'java', 'AppHost.java'));
+        return true;
+    }
+    catch {
+        return false;
+    }
 }
 
 async function isCsharpAppHostMarker(directoryPath: string, entry: string): Promise<boolean> {

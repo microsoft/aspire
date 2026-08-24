@@ -15,7 +15,7 @@ import {
     resourceCommandSecretWarning,
     yesLabel,
 } from '../loc/strings';
-import { ResourceCommandArgumentInputJson, ResourceCommandInputType, ResourceCommandJson } from './AppHostDataRepository';
+import { ResourceCommandArgumentInputJson, ResourceCommandInputType, ResourceCommandJson } from '../data/AppHostDataRepository';
 
 export interface ResourceCommandArgumentValue {
     input: ResourceCommandArgumentInputJson;

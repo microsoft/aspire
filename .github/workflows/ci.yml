@@ -70,11 +70,13 @@ jobs:
     uses: ./.github/workflows/tests.yml
     name: Tests
     needs: [prepare_for_ci]
-    # issues:write + pull-requests:write are used only by tests.yml's isolated comment_selection job
-    # (which runs no PR code) to post the "selected tests" issue comment; every job that runs PR code
-    # stays at contents:read. Reusable-workflow tokens are capped by the caller, so this is where the
-    # elevated scope must be granted.
+    # actions:read lets the reusable workflow download build artifacts via gh/actions APIs (for example
+    # get-aspire-cli-pr.ps1 -> gh run download). issues:write + pull-requests:write are used only by
+    # tests.yml's isolated comment_selection job (which runs no PR code) to post the "selected tests"
+    # issue comment. Reusable-workflow tokens are capped by the caller, so every needed scope must be
+    # granted here.
     permissions:
+      actions: read
       contents: read
       issues: write
       pull-requests: write

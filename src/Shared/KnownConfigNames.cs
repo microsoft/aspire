@@ -10,6 +10,7 @@ internal static class KnownConfigNames
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
     public const string DashboardOtlpHttpEndpointUrl = "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL";
     public const string DashboardFrontendBrowserToken = "ASPIRE_DASHBOARD_FRONTEND_BROWSERTOKEN";
+    public const string DashboardSuppressBrowserTokenInOutput = "ASPIRE_DASHBOARD_SUPPRESS_BROWSER_TOKEN_IN_OUTPUT";
     public const string DashboardResourceServiceClientApiKey = "ASPIRE_DASHBOARD_RESOURCESERVICE_APIKEY";
     public const string DashboardUnsecuredAllowAnonymous = "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS";
     public const string DashboardCorsAllowedOrigins = "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS";
@@ -41,6 +42,11 @@ internal static class KnownConfigNames
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string CliProcessStartedStable = "ASPIRE_CLI_STARTED_STABLE";
 
+    // Direct AppHost owner of an aspire-managed terminalhost process. The terminal host watches
+    // this identity so it can shut down and unlink its sockets if the AppHost disappears.
+    public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";
+    public const string TerminalHostParentProcessStartedStable = "ASPIRE_TERMINAL_HOST_PARENT_STARTED_STABLE";
+
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the
     // AppHost tree down if the launcher dies before the app reaches readiness, preventing leaked
@@ -61,6 +67,7 @@ internal static class KnownConfigNames
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
+    public const string AspireHome = "ASPIRE_HOME";
     public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
     public const string MaxFileUploadSize = "ASPIRE_MAX_FILE_UPLOAD_SIZE";
 
@@ -88,6 +95,9 @@ internal static class KnownConfigNames
     // the emitted binlog path on the profiling span.
     public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
     public const string CliBackchannelConnectTimeoutSeconds = "ASPIRE_CLI_BACKCHANNEL_CONNECT_TIMEOUT_SECONDS";
+
+    // Internal extension-to-CLI handoff used to preserve AppHost selection ownership.
+    public const string CliAppHostSelectionOrigin = "ASPIRE_CLI_APPHOST_SELECTION_ORIGIN";
 
     // DCP owns these profiling variables. Aspire maps its profiling state to these names when
     // spawning DCP because DCP intentionally does not read ASPIRE_* configuration names.

@@ -101,17 +101,18 @@ internal static class InteractionExports
     /// <summary>
     /// Displays a progress dialog with an indeterminate progress indicator.
     /// </summary>
-    [AspireExport]
+    // Progress prompts can invoke Work callbacks that re-enter the remote host through ATS, so the synchronous
+    // invocation path must run on a background thread to keep the JSON-RPC loop processing nested callbacks.
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static async Task<BoolInteractionResult> PromptProgress(
         this IInteractionService interactionService,
         string message,
-        string? title = null,
         InteractionProgressOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(interactionService);
 
-        var result = await interactionService.PromptProgressAsync(message, title, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        var result = await interactionService.PromptProgressAsync(message, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
         return BoolInteractionResult.From(result);
     }
 
@@ -272,9 +273,10 @@ internal static class InteractionExports
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
 
-        if (input.Files is { Count: > 0 })
+        var files = input.GetFiles();
+        if (files.Count > 0)
         {
-            result.SetFiles(input.Files);
+            result.SetFiles(new InteractionFileCollection(files));
         }
 
         return result;
@@ -348,6 +350,20 @@ internal sealed class InteractionInputBuilder
     {
         Input.Value = value;
         return this;
+    }
+
+    /// <summary>
+    /// Releases uploaded files associated with the input.
+    /// </summary>
+    /// <remarks>
+    /// Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+    /// server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+    /// deleted when the AppHost shuts down.
+    /// </remarks>
+    [AspireExport]
+    public void ReleaseFiles()
+    {
+        Input.GetFiles().Dispose();
     }
 
     /// <summary>
@@ -746,6 +762,11 @@ internal sealed class InteractionInputsDialogOptions
 internal sealed class InteractionProgressOptions
 {
     /// <summary>
+    /// Gets or sets the optional title of the progress dialog.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
     /// Gets or sets the primary button text (e.g. "Cancel").
     /// </summary>
     public string? PrimaryButtonText { get; init; }
@@ -766,6 +787,7 @@ internal sealed class InteractionProgressOptions
     {
         return new ProgressInteractionOptions
         {
+            Title = Title,
             PrimaryButtonText = PrimaryButtonText,
             EnableMessageMarkdown = EnableMessageMarkdown,
             Work = Work,

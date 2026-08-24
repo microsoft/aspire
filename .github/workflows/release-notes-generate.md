@@ -10,8 +10,16 @@ description: |
 max-daily-ai-credits: -1
 
 on:
-  release:
-    types: [published]
+  # Dispatched explicitly by .github/workflows/release-github-tasks.yml right
+  # after it creates the draft GitHub release. We deliberately do NOT use the
+  # `release: [created]` event: GitHub Actions does not fire release events for
+  # draft releases at all
+  # (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release
+  # — "Workflows are not triggered for the created, edited, or deleted activity
+  # types for draft releases"). The placeholder body has to be rewritten while
+  # the release is still a draft, because immutable releases lock the release
+  # at publish time, so an explicit workflow_dispatch is the only workable
+  # trigger.
   workflow_dispatch:
     inputs:
       tag_name:
@@ -29,18 +37,13 @@ on:
   # other bot-triggered gh-aw workflows in this repo.
   bots: [aspire-repo-bot]
 
-if: >-
-  github.repository == 'microsoft/aspire'
-  && (
-    (github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.draft == false)
-    || github.event_name == 'workflow_dispatch'
-  )
+if: github.repository == 'microsoft/aspire'
 
-# Serialize runs for the same tag so that a duplicate release event (or a
-# manual workflow_dispatch rerun on top of an in-flight automatic run) can't
-# race and double-edit the release body.
+# Serialize runs for the same tag so that a manual workflow_dispatch rerun on
+# top of an in-flight automatic dispatch can't race and double-edit the
+# release body.
 concurrency:
-  group: release-notes-generate-${{ github.event.release.tag_name || github.event.inputs.tag_name }}
+  group: release-notes-generate-${{ github.event.inputs.tag_name }}
   cancel-in-progress: false
 
 # Agent runs read-only; the release-body update is performed by a separate,
@@ -66,6 +69,9 @@ safe-outputs:
     max: 1
 
 tools:
+  # Shell access is explicit because the unfiltered GitHub integrity setting
+  # requires an intentional allowlist.
+  bash: ["cat", "ls", "grep", "head", "tail", "wc"]
   github:
     # `repos` exposes get_release_by_tag / list_releases and commit-comparison
     # APIs. `pull_requests` and `search` are used to enrich commits with PR
@@ -93,46 +99,54 @@ timeout-minutes: 20
 
 # Generate release notes for a new stable Aspire release
 
-The GitHub Release for this tag was just created by
+The GitHub Release for this tag was just created **as a draft** by
 `.github/workflows/release-github-tasks.yml` with a short placeholder body.
 Your job is to replace that placeholder with real, human-readable release
 notes that match the tone and structure of recent stable Aspire releases.
+The release manager will manually publish the draft as a final step once
+both notes and CLI assets are attached.
 
-The release is already published, so for **benign no-op cases** (release
-missing, prerelease/draft, tag doesn't match `vX.Y.Z`, body has already
-been edited and no longer contains the placeholder phrase) write a clear
-diagnostic to the run summary and **exit successfully**. But for **real
-errors** when actually trying to update the release (API rejection,
-permission denied on `update_release`, malformed payload, etc.) **fail the
-workflow** — a maintainer needs to see a red X so they can investigate or
-manually backfill. Do **not** open issues to "ask a maintainer to paste
-notes" as a fallback; the workflow has no `create_issue` capability by
-design.
+The release is still a draft, so for **benign no-op cases** (release
+missing, prerelease, tag doesn't match `vX.Y.Z`, body has already been
+edited and no longer contains the placeholder phrase, **or the release is
+no longer a draft because the release manager already published it**)
+write a clear diagnostic to the run summary and **exit successfully**.
+But for **real errors** when actually trying to update the release (API
+rejection, permission denied on `update_release`, malformed payload, etc.)
+**fail the workflow** — a maintainer needs to see a red X so they can
+investigate or manually backfill. Do **not** open issues to "ask a
+maintainer to paste notes" as a fallback; the workflow has no
+`create_issue` capability by design.
 
 ## Context
 
 - **Repository**: `microsoft/aspire`
-- **Trigger event**: `${{ github.event_name }}`
-- **Release tag**: `${{ github.event.release.tag_name || github.event.inputs.tag_name }}`
-- **Release name**: `${{ github.event.release.name }}`
+- **Release tag**: `${{ github.event.inputs.tag_name }}`
 
 ## Step 1: Resolve the release
 
-Determine the tag this run is processing:
-
-- If `github.event_name == 'release'`, the tag is in `${{ github.event.release.tag_name }}`.
-- If `github.event_name == 'workflow_dispatch'`, the tag is in `${{ github.event.inputs.tag_name }}`.
+The tag this run is processing is in `${{ github.event.inputs.tag_name }}`
+(this workflow is always dispatched via `workflow_dispatch` with that input).
 
 Fetch the full release record for `microsoft/aspire` by tag
 (`GET /repos/microsoft/aspire/releases/tags/<tag>`). Capture its `id`,
 `tag_name`, `name`, `body`, `published_at`, `html_url`, `draft`, and
-`prerelease`.
+`prerelease`. The workflow runs with a GitHub App token that can see
+drafts in `microsoft/aspire`, so this call returns the draft record that
+`release-github-tasks.yml` created just before dispatching this workflow.
 
 **Exit successfully with a diagnostic** if any of these are true (do not
-fail the run — the release is already live):
+fail the run — these are expected states the workflow shouldn't act on):
 
 - The release can't be found.
-- `release.draft == true` or `release.prerelease == true`.
+- `release.draft == false` — the release manager has already published the
+  draft, so the body should no longer be overwritten by automation. If
+  this run was a `workflow_dispatch` rerun on a published release, the
+  expectation is that a human has reviewed the notes and explicitly chose
+  to publish; another rewrite would clobber human edits. Direct the
+  maintainer to edit the release body manually if a correction is needed.
+- `release.prerelease == true` — release-notes-generate is a stable-only
+  workflow.
 - The tag does not match `^v\d+\.\d+\.\d+$`.
 
 Parse the version: strip the leading `v` and split into
@@ -286,7 +300,9 @@ Two distinct failure classes — handle them differently:
 These are the early-exit cases already covered by Steps 1 and 2:
 
 - Release not found by tag.
-- `release.draft == true` or `release.prerelease == true`.
+- `release.draft == false` (release manager already published the draft —
+  body is no longer safe to overwrite by automation).
+- `release.prerelease == true`.
 - Tag does not match `^v\d+\.\d+\.\d+$`.
 - Release body has already been edited (does not contain the placeholder
   phrase) — Step 2 idempotency check.

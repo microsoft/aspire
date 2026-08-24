@@ -1,5 +1,17 @@
 import {
     accentBaseColor,
+    accentFillActive,
+    accentFillFocus,
+    accentFillHover,
+    accentFillRest,
+    accentForegroundActive,
+    accentForegroundFocus,
+    accentForegroundHover,
+    accentForegroundRest,
+    accentStrokeControlActive,
+    accentStrokeControlFocus,
+    accentStrokeControlHover,
+    accentStrokeControlRest,
     baseLayerLuminance,
     SwatchRGB,
     fillColor,
@@ -45,6 +57,14 @@ const themeSettingLight = "Light";
 const darkThemeLuminance = 0.17;
 const lightThemeLuminance = 1.0;
 const darknessLuminanceTarget = (-0.1 + Math.sqrt(0.21)) / 2;
+const brandPurple = createSwatch(0x51, 0x2B, 0xD4);
+const brandPrimary = createSwatch(0x74, 0x55, 0xDD);
+const brandSecondary = createSwatch(0xB9, 0xAA, 0xEE);
+const brandLight = createSwatch(0xDC, 0xD5, 0xF6);
+
+function createSwatch(r, g, b) {
+    return SwatchRGB.create(r / 255.0, g / 255.0, b / 255.0);
+}
 
 /**
  * Updates the current theme on the site based on the specified theme
@@ -170,19 +190,38 @@ function getBaseLayerLuminanceForTheme(theme) {
 }
 
 /**
- * Configures the accent color palette based on the .NET purple
+ * Configures Fluent's accent seed and semantic color tokens from the approved Aspire brand palette.
+ * Fluent UI Blazor exposes the underlying FAST design tokens from its JavaScript module. Setting those
+ * tokens keeps JavaScript token consumers and emitted CSS custom properties aligned, unlike overriding
+ * the generated custom properties in a linked stylesheet.
+ * @param {string} theme The theme to use. Should be Light or Dark
  */
-function setAccentColor() {
-    // Convert the base color ourselves to avoid pulling in the
-    // @microsoft/fast-colors library just for one call to parseColorHexRGB
-    const baseColor = { // #512BD4
-        r: 0x51 / 255.0,
-        g: 0x2B / 255.0,
-        b: 0xD4 / 255.0
-    };
+function setAccentColor(theme) {
+    accentBaseColor.withDefault(brandPurple);
 
-    const accentBase = SwatchRGB.create(baseColor.r, baseColor.g, baseColor.b);
-    accentBaseColor.withDefault(accentBase);
+    // The adaptive recipes interpolate additional shades from accentBaseColor. Pin the semantic roles
+    // used by Fluent controls so the rendered colors remain in the approved palette while retaining
+    // distinct interaction states and WCAG contrast in each theme.
+    const rest = theme === themeSettingDark ? brandSecondary : brandPurple;
+    const hover = theme === themeSettingDark ? brandLight : brandPrimary;
+    const active = rest;
+    const focus = rest;
+    // Scope the explicit semantic values to the body so dashboard content and UI mounted directly
+    // under the body inherit the same branded Fluent tokens.
+    const root = document.body;
+
+    accentFillRest.setValueFor(root, rest);
+    accentFillHover.setValueFor(root, hover);
+    accentFillActive.setValueFor(root, active);
+    accentFillFocus.setValueFor(root, focus);
+    accentForegroundRest.setValueFor(root, rest);
+    accentForegroundHover.setValueFor(root, hover);
+    accentForegroundActive.setValueFor(root, active);
+    accentForegroundFocus.setValueFor(root, focus);
+    accentStrokeControlRest.setValueFor(root, rest);
+    accentStrokeControlHover.setValueFor(root, hover);
+    accentStrokeControlActive.setValueFor(root, active);
+    accentStrokeControlFocus.setValueFor(root, focus);
 }
 
 /**
@@ -216,11 +255,13 @@ function setNeutralBaseColor(theme) {
  */
 function applyTheme(theme) {
     setBaseLayerLuminance(theme);
-    setAccentColor();
     // Set the neutral ramp base before deriving the fill color, since the body fill is taken
     // from neutralLayerL2 (which is generated from the neutral palette we're adjusting here).
     setNeutralBaseColor(theme);
     setFillColor();
+    // Accent recipes depend on the fill color. Apply the explicit brand semantics after all recipe
+    // inputs are settled so a dependency update does not regenerate and re-emit interpolated colors.
+    setAccentColor(theme);
     setThemeOnDocument(theme);
 }
 

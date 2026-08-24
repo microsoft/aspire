@@ -890,7 +890,11 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     /// </summary>
     private static async Task<SerializedMauiLaunchConfiguration> DeserializeLaunchConfigurationAsync(IResource resource)
     {
-        var json = JsonSerializer.Serialize(await resource.CreateLaunchConfigurationAsync(ExecutableLaunchMode.Debug));
+        var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(
+            resource,
+            ExecutableLaunchMode.Debug);
+        var json = JsonSerializer.Serialize(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
         var launchConfiguration = JsonSerializer.Deserialize<SerializedMauiLaunchConfiguration>(json);
         Assert.NotNull(launchConfiguration);
 

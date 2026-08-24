@@ -2,7 +2,12 @@
     "dotnet.defaultSolution": "./Aspire.slnx",
     "dotnet.solution.autoOpen": "./Aspire.slnx",
     "dotnet.preview.enableSupportForSlnx": true,
+    "dotnet.fileBasedApps.enableAutomaticDiscovery": false,
     "dotnet.testWindow.useTestingPlatformProtocol": true,
+    "files.watcherExclude": {
+        "**/.dotnet/**": true,
+        "**/artifacts/**": true
+    },
     "aspire.enableSettingsFileCreationPromptOnStartup": false,
     "aspire.enableAutoRestore": false
 }

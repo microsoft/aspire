@@ -97,6 +97,11 @@
         <target state="needs-review-translation">이 환경에서는 대화형 입력이 지원되지 않습니다. --non-interactive 플래그를 사용하거나 CLI가 대화형 터미널에서 실행되고 있는지 확인합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]자세한 내용은 [link]{0}[/][/]을(를) 참조하세요.</target>
@@ -157,9 +162,9 @@
         <target state="needs-review-translation">--apphost 옵션이 지정되지 않았고 앱 호스트 프로젝트 파일이 여러 개 검색되었습니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">프로젝트 인수가 지정되지 않았고 앱 호스트 프로젝트 파일이 감지되지 않았습니다.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

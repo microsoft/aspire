@@ -26,7 +26,7 @@ Our verification chain relies on these trust anchors:
 
 | Trust anchor | What it provides | How it's protected |
 |---|---|---|
-| **dotnet-public-npm Azure Artifacts feed** | Package metadata, tarball hosting | HTTPS/TLS, Microsoft-managed pull-through feed |
+| **npm registry (registry.npmjs.org)** | Package metadata, tarball hosting | HTTPS/TLS, public npm registry |
 | **Sigstore (Fulcio + Rekor)** | Cryptographic attestation signatures | Public CA with OIDC federation, append-only transparency log, verified in-process via Sigstore .NET library with TUF trust root |
 | **GitHub Actions OIDC** | Builder identity claims in Sigstore certificates | GitHub's infrastructure security |
 | **Hardcoded expected values** | Package name, version range, expected source repository | Code review, our own release process |
@@ -35,13 +35,13 @@ Our verification chain relies on these trust anchors:
 
 ### Step 1: Resolve package version
 
-**Action:** Run `npm view @playwright/cli@{versionRange} version` against the internal `dotnet-public-npm` Azure Artifacts feed. The default version range is `>=0.1.3`, which resolves to the latest published version at or above 0.1.3. This can be overridden to a specific version via the `playwrightCliVersion` configuration key.
+**Action:** Run `npm view @playwright/cli@{versionRange} version` against the public npm registry (`https://registry.npmjs.org/`). The default version range is `>=0.1.3`, which resolves to the latest published version at or above 0.1.3. This can be overridden to a specific version via the `playwrightCliVersion` configuration key.
 
 **What this establishes:** We know the exact version we intend to install.
 
-**Trust basis:** The internal Azure Artifacts feed over HTTPS/TLS.
+**Trust basis:** The public npm registry over HTTPS/TLS.
 
-**Limitations:** If the feed is compromised, it could select an attacker-controlled version. This step alone is insufficient.
+**Limitations:** If the registry is compromised, it could select an attacker-controlled version. This step alone is insufficient.
 
 ### Step 2: Check if already installed at a suitable version
 
@@ -53,7 +53,7 @@ Our verification chain relies on these trust anchors:
 
 ### Step 3: Download and hash the tarball
 
-**Action:** Run `npm pack @playwright/cli@{version}` against the internal feed, then compute the archive's SHA-512 SRI value.
+**Action:** Run `npm pack @playwright/cli@{version}` against the public npm registry, then compute the archive's SHA-512 SRI value.
 
 **What this establishes:** We have a stable digest for the exact local archive that will be installed.
 
@@ -115,12 +115,12 @@ Our verification chain relies on these trust anchors:
                                    │
                     ┌──────────────▼────────────────┐
                     │  Step 1: Resolve version       │
-                    │  from internal feed            │
+                    │  from public registry          │
                     └──────────────┬────────────────┘
                                    │
                     ┌──────────────▼────────────────┐
                     │  Step 3: npm pack from        │
-                    │  internal feed + SHA-512      │
+                    │  public registry + SHA-512    │
                     └──────────────┬────────────────┘
                                    │
                     ┌──────────────▼────────────────┐
@@ -153,7 +153,7 @@ Our verification chain relies on these trust anchors:
 ```csharp
 internal const string PackageName = "@playwright/cli";
 internal const string VersionRange = ">=0.1.3";
-private const string InternalRegistry = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/";
+private const string PublicRegistry = "https://registry.npmjs.org/";
 internal const string ExpectedSourceRepository = "https://github.com/microsoft/playwright-cli";
 internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
 internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";

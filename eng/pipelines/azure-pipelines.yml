@@ -505,13 +505,12 @@ extends:
           # not recognized."
           enableMicrobuild: true
           enablePublishUsingPipelines: true
-          # Asset_Registry_Publish (BAR publish) needs MaestroAccessToken from
-          # the Publish-Build-Assets variable group, which is only loaded on
-          # main / release / internal-release branches because of the AzDO
-          # ACL on that group. Skip the publish job entirely on contributor
-          # branches so jobs.yml does not inject Asset_Registry_Publish and
-          # fail at runtime for a missing token (and so the assemble stage
-          # does not trip an additional 1ES Branch control checkpoint).
+          # Asset_Registry_Publish (BAR publish) loads Publish-Build-Assets at
+          # job scope for MaestroAccessToken. The group has an AzDO ACL for
+          # main / release / internal-release branches, so skip the publish
+          # job entirely on contributor branches. This avoids injecting a job
+          # that cannot load its token and prevents another 1ES Branch control
+          # checkpoint on the assemble stage.
           ${{ if or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}:
             enablePublishBuildAssets: true
             publishAssetsImmediately: true

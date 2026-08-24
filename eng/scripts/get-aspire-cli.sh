@@ -21,6 +21,9 @@ VERSION=""
 QUALITY=""
 OS=""
 ARCH=""
+INSTALLED_CLI_PATH=""
+INSTALLED_CLI_OS=""
+INSTALLED_CLI_ARCH=""
 SHOW_HELP=false
 VERBOSE=false
 KEEP_ARCHIVE=false
@@ -519,6 +522,37 @@ map_quality_to_channel() {
     esac
 }
 
+# Writes install-route provenance and, when the archive came from a quality route,
+# the channel that must take precedence over the binary's build-time stamp.
+write_install_sidecar() {
+    local install_path="$1"
+    local quality="${2:-}"
+    local sidecar_path="$install_path/.aspire-install.json"
+    local temporary_path
+
+    mkdir -p "$install_path"
+    temporary_path=$(mktemp "$sidecar_path.tmp.XXXXXXXX")
+
+    if [[ -n "$quality" ]]; then
+        local channel
+        channel=$(map_quality_to_channel "$quality")
+        if ! printf '{"source":"script","channel":"%s"}\n' "$channel" > "$temporary_path"; then
+            rm -f "$temporary_path"
+            return 1
+        fi
+    else
+        if ! printf '{"source":"script"}\n' > "$temporary_path"; then
+            rm -f "$temporary_path"
+            return 1
+        fi
+    fi
+
+    if ! mv -f "$temporary_path" "$sidecar_path"; then
+        rm -f "$temporary_path"
+        return 1
+    fi
+}
+
 # Function to add PATH to shell configuration file
 # Parameters:
 #   $1 - config_file: Path to the shell configuration file
@@ -995,6 +1029,9 @@ download_and_install_archive() {
         cli_exe="aspire"
     fi
     cli_path="${INSTALL_PATH}/${cli_exe}"
+    INSTALLED_CLI_PATH="$cli_path"
+    INSTALLED_CLI_OS="$os"
+    INSTALLED_CLI_ARCH="$arch"
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
 
@@ -1017,6 +1054,33 @@ download_and_install_archive() {
             say_warn "Cannot install extension: VS Code CLI not found in PATH"
             say_info "Please ensure VS Code is installed and available in PATH"
         fi
+    fi
+}
+
+setup_cli_bundle() {
+    local host_os host_arch
+
+    if ! host_os=$(detect_os) || ! host_arch=$(get_cli_architecture_from_architecture "<auto>"); then
+        say_warn "Skipping Aspire CLI bundle setup because the current platform could not be detected."
+        return 0
+    fi
+
+    # Cross-target archive downloads are supported, but the downloaded executable cannot
+    # safely be run to extract its embedded bundle on a different host platform.
+    if [[ "$INSTALLED_CLI_OS" != "$host_os" || "$INSTALLED_CLI_ARCH" != "$host_arch" ]]; then
+        say_info "Skipping Aspire CLI bundle setup for ${INSTALLED_CLI_OS}-${INSTALLED_CLI_ARCH} on ${host_os}-${host_arch}."
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would run: $INSTALLED_CLI_PATH setup"
+        return 0
+    fi
+
+    say_verbose "Running: $INSTALLED_CLI_PATH setup"
+    if ! "$INSTALLED_CLI_PATH" setup; then
+        say_error "Aspire CLI bundle setup failed"
+        return 1
     fi
 }
 
@@ -1102,8 +1166,17 @@ main() {
     if [[ "$DRY_RUN" == true ]]; then
         printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
     else
-        mkdir -p "$INSTALL_PATH"
-        printf '{"source":"script"}\n' > "$sidecar_path"
+        # An explicit version can come from any channel, so retain the archive's
+        # baked identity when there was no quality route to author the channel.
+        local sidecar_quality=""
+        if [[ -z "$VERSION" ]]; then
+            sidecar_quality="$QUALITY"
+        fi
+        write_install_sidecar "$INSTALL_PATH" "$sidecar_quality"
+    fi
+
+    if ! setup_cli_bundle; then
+        exit 1
     fi
 
     # Skip PATH configuration if --skip-path is set

@@ -289,6 +289,7 @@ internal sealed class InitCommand : BaseCommand
         var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
+            #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
 
@@ -438,6 +439,7 @@ internal sealed class InitCommand : BaseCommand
         // (or after a CLI update) the template will be missing. Install first.
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
+            sourceOverride: null,
             _runner,
             InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,

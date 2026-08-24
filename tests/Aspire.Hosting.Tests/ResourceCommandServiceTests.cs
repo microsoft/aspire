@@ -383,6 +383,28 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_CommandException_Failure()
+    {
+        using var builder = CreateBuilder();
+        const string diagnostic = "Failed to apply launch configuration. Process fallback is unavailable.";
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: _ => throw new FailedToApplyEnvironmentException(diagnostic));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Equal(diagnostic, result.Message);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_LegacyCommandName_FallsBackToCurrentName()
     {
         // Arrange
@@ -1719,7 +1741,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 },
                 commandOptions: new CommandOptions
                 {
-                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                    Progress = new CommandProgressOptions { Message = "Processing...", Title = "Cancelable Command" }
                 });
 
         var app = builder.Build();
@@ -1730,6 +1752,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // Wait for the Work callback to write the interaction and for the command to start.
         var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
         Assert.Equal(InteractionType.Progress, interaction.Type);
+        Assert.Equal("Cancelable Command", interaction.Title);
         Assert.Equal("Processing...", interaction.Message);
         await commandStarted.Task.DefaultTimeout();
 
@@ -1741,6 +1764,56 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(testInteractionService.PromptProgressCalled);
         Assert.False(result.Success);
         Assert.True(result.Canceled);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_ReturnsCanceledWhenCommandHandlesProgressCancellation()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var commandStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "cancelable-command",
+                displayName: "Cancelable Command",
+                executeCommand: async e =>
+                {
+                    commandStarted.SetResult();
+
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, e.CancellationToken);
+                    }
+                    catch (OperationCanceledException) when (e.CancellationToken.IsCancellationRequested)
+                    {
+                        return CommandResults.Success("Cleanup completed.");
+                    }
+
+                    return CommandResults.Success();
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync("myResource", "cancelable-command");
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionType.Progress, interaction.Type);
+        await commandStarted.Task.DefaultTimeout();
+
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+
+        var result = await resultTask.DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+        Assert.Null(result.Message);
     }
 
     [Fact]

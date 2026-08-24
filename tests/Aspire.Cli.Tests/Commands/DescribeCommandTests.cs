@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Dashboard.Model;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
@@ -442,6 +444,48 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Single(deserialized.Resources);
 
         Assert.Equal("http://localhost:18888/?resource=redis", deserialized.Resources[0].DashboardUrl);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_JsonFormat_PreservesObjectProperties()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "postgres",
+                DisplayName = "postgres",
+                ResourceType = "Container",
+                State = "Running",
+                Properties = new Dictionary<string, JsonNode?>
+                {
+                    [KnownProperties.Resource.ConnectionProperties] = new JsonObject
+                    {
+                        ["Host"] = "localhost",
+                        ["DatabaseName"] = "catalogdb"
+                    }
+                }
+            },
+        ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        using var document = JsonDocument.Parse(jsonOutput);
+        var connectionProperties = document.RootElement
+            .GetProperty("resources")[0]
+            .GetProperty("properties")
+            .GetProperty(KnownProperties.Resource.ConnectionProperties);
+
+        Assert.Equal(JsonValueKind.Object, connectionProperties.ValueKind);
+        Assert.Equal("localhost", connectionProperties.GetProperty("Host").GetString());
+        Assert.Equal("catalogdb", connectionProperties.GetProperty("DatabaseName").GetString());
     }
 
     [Fact]

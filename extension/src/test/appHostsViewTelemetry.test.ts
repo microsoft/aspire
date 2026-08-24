@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AppHostsViewTelemetry } from '../views/AppHostsViewTelemetry';
-import type { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
+import type { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 
 interface RecordedEvent {

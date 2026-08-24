@@ -9,12 +9,12 @@ with create_builder() as builder:
     password = builder.add_parameter("parameter")
     cache = builder.add_redis("resource")
     # addRedis — overload with explicit port
-    cache2 = builder.add_redis("resource", 6380)
+    cache2 = builder.add_redis("resource", port=6380)
     # withDataVolume + withPersistence — fluent chaining on RedisResource
     cache.with_data_volume()
     cache.with_persistence()
     # withDataBindMount on RedisResource
-    cache2.with_data_bind_mount()
+    cache2.with_data_bind_mount("./data")
     # withModule on RedisResource - well-known and custom module paths
     cache.with_module(RedisModules.Json)
     cache.with_module("/opt/redis/custom-module.so")
@@ -22,7 +22,7 @@ with create_builder() as builder:
     cache.with_host_port()
     # withPassword on RedisResource
     new_password = builder.add_parameter("parameter")
-    cache2.with_password()
+    cache2.with_password(new_password)
     # withRedisCommander — with configureContainer callback exercising withHostPort
     cache.with_redis_commander()
     # withRedisInsight — with configureContainer callback exercising withHostPort, withDataVolume, withDataBindMount

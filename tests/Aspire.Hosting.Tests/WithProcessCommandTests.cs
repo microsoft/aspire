@@ -4,8 +4,8 @@
 using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Diagnostics;
-using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -1510,126 +1510,9 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         };
     }
 
-    private sealed class TestProcessRunner : IProcessRunner
-    {
-        private readonly Queue<TestProcessRun> _runs = [];
-        private readonly List<TestProcessDisposable> _disposables = [];
-
-        public List<ProcessSpec> ProcessSpecs { get; } = [];
-
-        public IReadOnlyList<TestProcessDisposable> Disposables => _disposables;
-
-        public TaskCompletionSource<ProcessSpec> RunStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public void EnqueueResult(
-            int exitCode = 0,
-            IReadOnlyList<string>? output = null,
-            IReadOnlyList<string>? error = null,
-            int? totalOutputLineCount = null,
-            IReadOnlyList<TestProcessOutput>? outputEvents = null)
-        {
-            _runs.Enqueue(TestProcessRun.Result(exitCode, output, error, totalOutputLineCount, outputEvents));
-        }
-
-        public void EnqueueException(Exception exception)
-        {
-            _runs.Enqueue(TestProcessRun.Failed(exception));
-        }
-
-        public void EnqueuePending(Task<ProcessResult> processResult)
-        {
-            _runs.Enqueue(TestProcessRun.Pending(processResult));
-        }
-
-        public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
-        {
-            ProcessSpecs.Add(processSpec);
-            RunStarted.TrySetResult(processSpec);
-
-            var disposable = new TestProcessDisposable();
-            _disposables.Add(disposable);
-
-            var run = _runs.Count > 0 ? _runs.Dequeue() : TestProcessRun.Result();
-            if (run.FailureException is { } exception)
-            {
-                throw exception;
-            }
-
-            if (run.PendingResult is { } pendingResult)
-            {
-                return (pendingResult, disposable);
-            }
-
-            foreach (var output in run.OutputEvents)
-            {
-                if (output.IsError)
-                {
-                    processSpec.OnErrorData?.Invoke(output.Value);
-                }
-                else
-                {
-                    processSpec.OnOutputData?.Invoke(output.Value);
-                }
-            }
-
-            var processOutput = run.OutputEvents.Select(static output => output.Value).ToArray();
-            var processResult = new ProcessResult(run.ExitCode, processOutput, run.TotalOutputLineCount);
-
-            return (Task.FromResult(processResult), disposable);
-        }
-    }
-
-    private sealed record TestProcessRun(
-        int ExitCode,
-        IReadOnlyList<TestProcessOutput> OutputEvents,
-        int? TotalOutputLineCount,
-        Exception? FailureException,
-        Task<ProcessResult>? PendingResult)
-    {
-        public static TestProcessRun Result(
-            int exitCode = 0,
-            IReadOnlyList<string>? output = null,
-            IReadOnlyList<string>? error = null,
-            int? totalOutputLineCount = null,
-            IReadOnlyList<TestProcessOutput>? outputEvents = null)
-        {
-            outputEvents ??=
-            [
-                .. (output ?? Array.Empty<string>()).Select(Output),
-                .. (error ?? Array.Empty<string>()).Select(Error)
-            ];
-
-            return new TestProcessRun(exitCode, outputEvents, totalOutputLineCount, null, null);
-        }
-
-        public static TestProcessRun Failed(Exception exception)
-        {
-            return new TestProcessRun(0, [], null, exception, null);
-        }
-
-        public static TestProcessRun Pending(Task<ProcessResult> pendingResult)
-        {
-            return new TestProcessRun(0, [], null, null, pendingResult);
-        }
-    }
-
     private static TestProcessOutput Output(string value) => new(false, value);
 
     private static TestProcessOutput Error(string value) => new(true, value);
-
-    private sealed record TestProcessOutput(bool IsError, string Value);
-
-    private sealed class TestProcessDisposable : IAsyncDisposable
-    {
-        public int DisposeCallCount { get; private set; }
-
-        public ValueTask DisposeAsync()
-        {
-            DisposeCallCount++;
-
-            return ValueTask.CompletedTask;
-        }
-    }
 
     private sealed class CustomResource(string name) : Resource(name)
     {

@@ -462,7 +462,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                         // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
                         // Order these before non-browser usable endpoints.
                         url.DisplayText = $"Dashboard ({endpoint.EndpointName})";
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set for compatibility.
                         url.DisplayOrder = 1;
+#pragma warning restore CS0618
 
                         // Append the browser token to the URL as a query string parameter if token is configured
                         if (!string.IsNullOrEmpty(browserToken))
@@ -540,7 +542,13 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken),
             options.OtlpHttpEndpointUrl).ConfigureAwait(false);
 
-        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
+        // Withholding the token drops the login URL from the summary and the separate "Login to the dashboard at"
+        // line, leaving the dashboard and OTLP endpoints. Testing sets this because its token is a live
+        // credential for a dashboard the test already has a supported accessor for, and the AppHost logger in
+        // that mode is test and CI output.
+        var summaryToken = options.SuppressLoginUrlInStartupSummary ? null : browserToken;
+
+        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, summaryToken, isContainer: false);
     }
 
     private async ValueTask<string?> ResolveUrlAsync(Func<ValueTask<string?>> resolveCallback, string? configuredUrl)

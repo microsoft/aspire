@@ -508,6 +508,24 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.UseAntiforgery();
         _app.UseWebSockets();
 
+        // Browsers don't apply CORS restrictions to WebSocket upgrades. Only the
+        // dashboard frontend should establish a Blazor circuit, so reject cross-site
+        // upgrades before SignalR allocates a connection or circuit.
+        _app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/_blazor", StringComparisons.UrlPath) &&
+                context.WebSockets.IsWebSocketRequest &&
+                !WebSocketOriginValidator.IsSameOrigin(context, out var originLogValue))
+            {
+                _logger.LogWarning("Rejecting Blazor WebSocket upgrade with disallowed Origin '{Origin}'.", originLogValue);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync("Origin not allowed.").ConfigureAwait(false);
+                return;
+            }
+
+            await next(context).ConfigureAwait(false);
+        });
+
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
         // Terminal WebSocket proxy
@@ -529,7 +547,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)
     {
         var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-        var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
+        var suppressBrowserToken = _app.Configuration.GetBool(KnownConfigNames.DashboardSuppressBrowserTokenInOutput) ?? false;
+        var token = !suppressBrowserToken && options.Frontend.AuthMode == FrontendAuthMode.BrowserToken
+            ? options.Frontend.BrowserToken
+            : null;
         var frontendAddress = frontendEndpointInfo?.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);

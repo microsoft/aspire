@@ -967,6 +967,8 @@ internal sealed class UploadFileRequest
 {
     public required byte[] Data { get; set; }
     public required string FileName { get; set; }
+    public required int InteractionId { get; set; }
+    public required string InputName { get; set; }
 }
 
 internal sealed class UploadFileResponse

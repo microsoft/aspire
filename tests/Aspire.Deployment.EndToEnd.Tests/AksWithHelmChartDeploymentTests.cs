@@ -115,11 +115,11 @@ var builder = DistributedApplication.CreateBuilder(args);
 #pragma warning disable ASPIREAZURE003
 
 // AKS environment provisioned by Aspire (Azure Kubernetes Service).
-// Pin both the system and workload pools to a Standard_D2s_v5 SKU; the default pool SKUs
-// routinely hit vCPU quota, so we standardize on StandardDSv5Family, where we hold quota.
+// Pin both the system and workload pools to a Standard_D2as_v5 SKU; the default pool SKUs
+// routinely hit vCPU quota, so we standardize on StandardDASv5Family, where we hold quota.
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2s_v5");
-aks.AddNodePool("workload", "Standard_D2s_v5", 1, 3);
+    .WithSystemNodePool("Standard_D2as_v5");
+aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
 
 // Install podinfo as an external Helm chart and opt in to destroy-time uninstall.
 aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
@@ -145,7 +145,7 @@ aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1"
             // Step 8: Set env vars for deployment
             // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
             // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=centralus && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

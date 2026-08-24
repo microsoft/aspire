@@ -1,8 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { accountConfig, setAccountActive, setAccountRepos } from "./state.mjs";
+import {
+  accountConfig,
+  addAzurePipeline,
+  DEFAULT_PREFS,
+  normalizeHealthOrder,
+  normalizeAzurePipelines,
+  removeAzurePipeline,
+  setAccountActive,
+  setAccountRepos,
+  setHealthOrder,
+} from "./state.mjs";
 import { DEFAULT_REPOS, DEFAULT_EMU_REPOS } from "./github.mjs";
+
+test("background updates apply automatically by default", () => {
+  assert.equal(DEFAULT_PREFS.autoApplyUpdates, true);
+});
 
 test("accountConfig defaults unconfigured EMU accounts to the first-party repos", () => {
   const emu = accountConfig({ accounts: {} }, "acct:github.com/dapine_microsoft");
@@ -74,4 +88,42 @@ test("accountConfig reads legacy login-only prefs for github.com host-scoped ids
     active: true,
     configured: true,
   });
+});
+
+test("Azure DevOps pipeline preferences normalize, replace, and remove without credentials", () => {
+  const prefs = { azurePipelines: [] };
+  const pipeline = {
+    id: "azdo:dnceng/internal/1602",
+    url: "https://dev.azure.com/dnceng/internal/_build?definitionId=1602",
+    organization: "https://dev.azure.com/dnceng",
+    organizationName: "dnceng",
+    project: "internal",
+    definitionId: 1602,
+    name: "microsoft-aspire",
+    branch: "refs/heads/main",
+    repository: { id: "repo", name: "microsoft-aspire", type: "TfsGit", url: "https://example", defaultBranch: "refs/heads/main" },
+    token: "must-not-survive",
+  };
+
+  addAzurePipeline(prefs, pipeline);
+  addAzurePipeline(prefs, { ...pipeline, name: "Updated" });
+
+  assert.equal(prefs.azurePipelines.length, 1);
+  assert.equal(prefs.azurePipelines[0].name, "Updated");
+  assert.equal("token" in prefs.azurePipelines[0], false);
+  assert.deepEqual(normalizeAzurePipelines([{ id: "bad", url: "https://example", definitionId: 0 }]), []);
+
+  removeAzurePipeline(prefs, pipeline.id);
+  assert.deepEqual(prefs.azurePipelines, []);
+});
+
+test("health source ordering is stable, unique, and bounded", () => {
+  const tooLong = "x".repeat(513);
+  const prefs = {};
+
+  setHealthOrder(prefs, ["github:one", "github:two", "github:one", "", tooLong, null]);
+
+  assert.deepEqual(prefs.healthOrder, ["github:one", "github:two"]);
+  assert.deepEqual(normalizeHealthOrder([" azdo:one ", "azdo:one"]), ["azdo:one"]);
+  assert.equal(normalizeHealthOrder(Array.from({ length: 510 }, (_, index) => `source:${index}`)).length, 500);
 });

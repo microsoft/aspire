@@ -147,6 +147,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         var context = Program.BuildCliExecutionContext(
             debugMode: true,
+            consoleLogLevel: null,
             logsDirectory: logsDirectory,
             logFilePath: logFilePath,
             identityResolver: resolver,
@@ -180,6 +181,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
+            consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
             identityResolver: resolver);
@@ -201,6 +203,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         var context = Program.BuildCliExecutionContext(
             debugMode: false,
+            consoleLogLevel: null,
             logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
             logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
             identityResolver: resolver);

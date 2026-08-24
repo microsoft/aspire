@@ -43,6 +43,13 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                 //! Aspire Rust SDK
                 //! GENERATED CODE - DO NOT EDIT
 
+                // The SDK mirrors the whole app model surface, so any single AppHost leaves most of it
+                // unused and would otherwise emit hundreds of dead_code/unused warnings on every build.
+                // Lint levels are inherited by child modules, so allowing them here covers transport,
+                // base and aspire, and keeps cargo output limited to diagnostics that come from the
+                // AppHost's own code.
+                #![allow(dead_code, unused_imports, unused_variables)]
+
                 pub mod transport;
                 pub mod base;
                 pub mod aspire;
