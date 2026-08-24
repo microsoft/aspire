@@ -5,6 +5,7 @@ secrets:
   SpeciaL_ApP:
     param3: ""
     ConnectionStrings__api_cs: ""
+    param1: ""
 config:
   SpeciaL_ApP:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
@@ -12,3 +13,4 @@ config:
     OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18889"
     OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
     OTEL_SERVICE_NAME: "SpeciaL-ApP"
+    param0: ""

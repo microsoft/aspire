@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  TLS_SUFFIX: {{ tpl "{{ if eq (.Values.parameters.myapp.enable_tls | toString | lower) \u0022true\u0022 }},ssl=true{{ else }},ssl=false{{ end }}" . | quote }}
+  COMPOSITE: "prefix-{literal}-{{ .Values.config.myapp.second }}-{{ .Values.config.myapp.first }}-{{ .Values.config.myapp.second }}-suffix"
