@@ -50,7 +50,7 @@ jobs:
           patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
 
       # Classify once, here, and share the result with the tests / stabilization_check /
-      # extension_release_unit_tests jobs below via this job's outputs, so the
+      # extension_release_tests jobs below via this job's outputs, so the
       # whole workflow uses one predicate instead of re-deriving it per job.
       - name: Classify trusted extension release PR
         id: classify_release_pr
@@ -65,6 +65,9 @@ jobs:
           head_repo: ${{ github.event.pull_request.head.repo.full_name }}
           head_ref: ${{ github.event.pull_request.head.ref }}
           author: ${{ github.event.pull_request.user.login }}
+          actor: ${{ github.actor }}
+          base_sha: ${{ github.event.pull_request.base.sha }}
+          head_sha: ${{ github.event.pull_request.head.sha }}
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs
@@ -112,17 +115,16 @@ jobs:
   #
   # The release PR (aspire-repo-bot, base=main, head=extension-release/vX.Y.Z,
   # diff limited to extension/package.json + extension/CHANGELOG.md) has no
-  # need for the full reusable `tests` workflow -- no .NET changes, no CLI
-  # archives, no E2E, no stabilization build. This job runs only the VS Code
-  # extension unit tests, via the same reusable workflow `tests` uses, with
-  # package_vsix: false since there's no E2E consumer on this path.
-  extension_release_unit_tests:
-    name: Extension unit tests (release fast path)
+  # need for the full test graph -- no .NET changes, no CLI archives, no E2E,
+  # no stabilization build. The release-only mode runs just the VS Code
+  # extension unit tests inside the same reusable workflow as normal CI.
+  extension_release_tests:
+    name: Extension release tests
     needs: [prepare_for_ci]
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' }}
-    uses: ./.github/workflows/extension-unit-tests-reusable.yml
+    uses: ./.github/workflows/tests.yml
     with:
-      package_vsix: false
+      extensionReleaseOnly: true
 
   # Stabilization gate.
   #
@@ -227,38 +229,30 @@ jobs:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [prepare_for_ci, tests, stabilization_check, extension_release_unit_tests]
+    needs: [prepare_for_ci, tests, stabilization_check, extension_release_tests]
 
     steps:
       - name: Fail if any of the dependent jobs failed
         # Don't fail if the workflow is being skipped.
-        # Check skip_workflow on all declared dependencies. Workflows without
-        # skip_workflow outputs (e.g., tests, build_cli_archives) evaluate to
-        # empty string, so the check still works ('!= true' is true for empty).
         #
-        # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
-        # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
-        # 'skipped'
-        #
-        # Trusted extension release PR (see microsoft/aspire#19581): `tests` and
-        # `stabilization_check` are *expected* to be 'skipped' on this path, and
-        # `extension_release_unit_tests` is expected to be 'skipped' on every
-        # other path -- each is excused from the blanket 'skipped' == failure
-        # rule exactly opposite the other, so this job still resolves to a single
-        # Final Results context without a release-specific branch-protection
-        # exception.
+        # Exactly one graph is legal when CI is required:
+        #   trusted release: normal tests + stabilization skipped, release tests succeeded
+        #   normal CI: normal tests + stabilization succeeded, release tests skipped
+        # This catches unexpected skips from failed transitive dependencies while preserving
+        # the successful Final Results context for docs-only changes.
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
-              needs.tests.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                (needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' &&
-                needs.extension_release_unit_tests.result == 'skipped') ||
+                (needs.tests.result != 'skipped' ||
+                needs.stabilization_check.result != 'skipped' ||
+                needs.extension_release_tests.result != 'success')) ||
                (needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' &&
-                (needs.tests.result == 'skipped' ||
-                 needs.stabilization_check.result == 'skipped' ||
-                 needs.extension_release_unit_tests.result != 'skipped'))) }}
+                (needs.tests.result != 'success' ||
+                needs.stabilization_check.result != 'success' ||
+                needs.extension_release_tests.result != 'skipped'))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1
