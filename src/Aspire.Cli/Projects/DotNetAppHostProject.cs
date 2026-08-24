@@ -1744,8 +1744,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             return (null, false, true);
         }
 
-        // File-based AppHosts cannot safely reuse ambient RunCommand metadata. The runner previously
-        // rebuilt these even for --no-build; keep that behavior but complete it before the startup budget begins.
+        // File-based AppHosts cannot safely reuse ambient RunCommand metadata, including for explicit
+        // --no-build. Build them here so startup reuses output generated with run-hook suppression.
         var noRestore = isSingleFileAppHost && context.NoBuild ? false : context.NoRestore;
         using var buildActivity = _profilingTelemetry.StartAppHostBuild(noRestore, isExtensionHost, extensionHasBuildCapability);
 
