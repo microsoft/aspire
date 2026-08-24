@@ -3,6 +3,7 @@ import http = require('http');
 import https = require('https');
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { azureFunctionsExtensionId, csharpExtensionId } from '../../capabilities';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration } from '../../dcp/types';
 import {
     azureFunctionsCmdDelayedExpansion,
@@ -21,7 +22,7 @@ import { AlreadyStartedResourceDebugSession, ResourceDebuggerExtension } from '.
 import { DotNetService } from './dotnet';
 import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
-const AF_EXTENSION_ID = 'ms-azuretools.vscode-azurefunctions';
+const AF_EXTENSION_ID = azureFunctionsExtensionId;
 const DEFAULT_PICK_PROCESS_TIMEOUT_SECONDS = 30;
 const FUNC_HOST_DEFAULT_PORT = 7071;
 const POLL_INTERVAL_MS = 100;
@@ -652,7 +653,7 @@ function throwUnsupportedTaskShell(): never {
 export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'azure-functions',
     debugAdapter: 'coreclr',
-    extensionId: 'ms-dotnettools.csharp',
+    extensionId: csharpExtensionId,
     getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => {
         if (isAzureFunctionsLaunchConfiguration(launchConfig) && launchConfig.project_path) {
             return `Azure Functions: ${path.basename(launchConfig.project_path)}`;

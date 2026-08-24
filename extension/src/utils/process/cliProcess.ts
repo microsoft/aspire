@@ -17,6 +17,7 @@ const managedPosixProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
     stderrCallback?: (data: string) => void;
+    processExitCallback?: (code: number | null) => void;
     exitCallback?: (code: number | null) => void;
     errorCallback?: (error: Error) => void;
     lineCallback?: (line: string) => void;
@@ -104,6 +105,10 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
 
     child.on('error', (error) => {
         options?.errorCallback?.(error);
+    });
+
+    child.on('exit', (code) => {
+        options?.processExitCallback?.(code);
     });
 
     child.on("close", (code) => {

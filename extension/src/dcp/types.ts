@@ -254,6 +254,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     program: string;
     debuggers?: AspireDebuggersConfiguration;
     command?: AspireCommandType;
+    launchProfile?: string;
     dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;

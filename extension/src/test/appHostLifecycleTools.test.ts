@@ -33,6 +33,7 @@ interface LaunchCall {
     command: string;
     noDebug: boolean;
     isolated: boolean | undefined;
+    launchProfile?: string;
 }
 
 class FakeLaunchService implements AppHostLifecycleLaunchService {
@@ -167,11 +168,22 @@ class FakeLaunchService implements AppHostLifecycleLaunchService {
         return { effective: false, option: undefined };
     }
 
-    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<{ effective: boolean; option: boolean | undefined }> {
+    async launchFromLifecycleOwner(
+        appHostPath: string,
+        command: 'run',
+        noDebug: boolean,
+        isolated: boolean | undefined,
+        token: vscode.CancellationToken,
+        launchProfile?: string,
+    ): Promise<{ effective: boolean; option: boolean | undefined }> {
         this.launchInputIsolations.push(isolated);
         this.onBeforeLaunch?.();
         const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token);
-        this.launchCalls.push({ appHostPath, command, noDebug, isolated: launchIsolation.option });
+        const launchCall: LaunchCall = { appHostPath, command, noDebug, isolated: launchIsolation.option };
+        if (launchProfile !== undefined) {
+            launchCall.launchProfile = launchProfile;
+        }
+        this.launchCalls.push(launchCall);
         if (this.launchDelay) {
             await this.launchDelay;
         }
@@ -416,7 +428,7 @@ suite('AppHost lifecycle language model tools', () => {
                     type: string;
                     additionalProperties: boolean;
                     required: string[];
-                    properties: Record<string, { type: string; enum?: string[]; description: string }>;
+                    properties: Record<string, { type: string; enum?: string[]; description: string; minLength?: number; maxLength?: number }>;
                 };
                 assert.strictEqual(schema.type, 'object');
                 assert.strictEqual(schema.additionalProperties, false);
@@ -427,8 +439,15 @@ suite('AppHost lifecycle language model tools', () => {
 
             const startSchema = tools[0].inputSchema;
             assert.deepStrictEqual(startSchema.required, ['appHostPath', 'mode']);
-            assert.deepStrictEqual(Object.keys(startSchema.properties).sort(), ['appHostPath', 'isolated', 'mode']);
+            assert.deepStrictEqual(Object.keys(startSchema.properties).sort(), ['appHostPath', 'isolated', 'launchProfile', 'mode']);
             assert.strictEqual(startSchema.properties.isolated.type, 'boolean');
+            assert.deepStrictEqual(
+                {
+                    type: startSchema.properties.launchProfile.type,
+                    minLength: startSchema.properties.launchProfile.minLength,
+                    maxLength: startSchema.properties.launchProfile.maxLength,
+                },
+                { type: 'string', minLength: 1, maxLength: 256 });
             assert.deepStrictEqual(startSchema.properties.mode.enum, ['run', 'debug']);
             assert.match(
                 packageNls['languageModelTool.aspireAppHostStart.modelDescription'],
@@ -560,6 +579,21 @@ suite('AppHost lifecycle language model tools', () => {
 
             assert.strictEqual(result.outcome, 'invalidInput');
             assert.strictEqual(discoveryService.discoverCalls, 0);
+        });
+
+        test('rejects invalid launch profile values before consulting the AppHost registry', async () => {
+            for (const launchProfile of ['', '   ', 42, 'line\nbreak', 'x'.repeat(257)]) {
+                const result = await service.start({
+                    appHostPath: 'AppHost/AppHost.csproj',
+                    mode: 'run',
+                    launchProfile,
+                } as never, new vscode.CancellationTokenSource().token);
+
+                assert.strictEqual(result.outcome, 'invalidInput');
+            }
+
+            assert.strictEqual(discoveryService.discoverCalls, 0);
+            assert.strictEqual(launchService.launchCalls.length, 0);
         });
 
         test('rejects a selector the AppHost registry does not list', async () => {
@@ -878,6 +912,22 @@ suite('AppHost lifecycle language model tools', () => {
             await service.start({ appHostPath: 'AppHost/AppHost.csproj', mode: 'debug' }, new vscode.CancellationTokenSource().token);
 
             assert.deepStrictEqual(launchService.launchCalls, [{ appHostPath: appHostProjectPath, command: 'run', noDebug: false, isolated: undefined }]);
+        });
+
+        test('passes an explicit launch profile through to the launch', async () => {
+            await service.start({
+                appHostPath: 'AppHost/AppHost.csproj',
+                mode: 'run',
+                launchProfile: 'Development HTTPS',
+            } as never, new vscode.CancellationTokenSource().token);
+
+            assert.deepStrictEqual(launchService.launchCalls, [{
+                appHostPath: appHostProjectPath,
+                command: 'run',
+                noDebug: true,
+                isolated: undefined,
+                launchProfile: 'Development HTTPS',
+            }]);
         });
 
         test('passes explicit isolated true through to the launch', async () => {
@@ -1626,6 +1676,24 @@ suite('AppHost lifecycle language model tools', () => {
             assert.strictEqual(prepared?.confirmationMessages?.message, 'Start the Aspire AppHost AppHost/AppHost.csproj in debug mode?');
             assert.strictEqual(prepared?.invocationMessage, 'Starting Aspire AppHost AppHost/AppHost.csproj...');
             assert.strictEqual(discoveryService.discoverCalls - discoverCallsBeforePreparation, 1);
+        });
+
+        test('includes the selected launch profile in the confirmation', async () => {
+            const tool = new AppHostStartLanguageModelTool(service);
+
+            const prepared = await tool.prepareInvocation(
+                {
+                    input: {
+                        appHostPath: 'AppHost/AppHost.csproj',
+                        mode: 'debug',
+                        launchProfile: 'Development HTTPS',
+                    } as never,
+                },
+                new vscode.CancellationTokenSource().token);
+
+            assert.strictEqual(
+                prepared.confirmationMessages?.message,
+                'Start the Aspire AppHost AppHost/AppHost.csproj in debug mode using launch profile Development HTTPS?');
         });
 
         test('always confirms a stop with the action and relative path', async () => {

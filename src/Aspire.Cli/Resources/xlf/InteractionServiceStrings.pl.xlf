@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Interakcyjne dane wejściowe nie są obsługiwane w tym środowisku. Użyj flagi --non-interactive lub upewnij się, że interfejs wiersza polecenia jest uruchomiony w terminalu interaktywnym.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Aby uzyskać więcej informacji, zobacz: [link]{0}[/][/]</target>

@@ -1,21 +1,22 @@
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
-import { appHostLifecycleIsolationCapabilityCouldNotBeVerified, appHostLifecycleIsolationModeNotSupported, startDebuggingDeclined } from '../loc/strings';
+import { appHostLifecycleInvalidLaunchProfile, appHostLifecycleIsolationCapabilityCouldNotBeVerified, appHostLifecycleIsolationModeNotSupported, appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified, appHostLifecycleLaunchProfileNotSupported, appHostLifecycleLaunchProfileRequiresRun, startDebuggingDeclined } from '../loc/strings';
 import { ensureIsolatedCliArg, getRootIsolatedCliArg, isLinkedGitWorktree } from '../utils/gitWorktree';
 import { compareAppHostIdentity, getAppHostIdentityKeyInfo, isAppHostPathWithinDirectory, type AppHostIdentityKeyInfo, type AppHostIdentityRelation } from '../utils/appHostIdentity';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
-import { CliPathResolutionTarget, getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { CliPathResolutionTarget, getCliPathTargetForUri, getCliPathTargetKey } from '../utils/cliPathVariables';
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey, type AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { markAspireDebugConfigurationAsExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
-import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
+import { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostDebugSessionTerminatedEvent, type AppHostEditorSessions, type AppHostLaunchRequestedEvent, type AppHostLaunchSession, type AppHostOperationState, type AppHostStopResult, type RunningAppHost } from './appHostLaunchContracts';
 import { AppHostLaunchReservations } from './appHostLaunchReservations';
 import { getLaunchTelemetryProperties, isE2eDebugLaunchSuppressed } from './appHostLaunchTelemetry';
-import { isolatedLaunchCapability, isolatedLaunchMinimumVersion, type CapabilityStatus } from '../types/configInfo';
+import { isolatedLaunchCapability, isolatedLaunchMinimumVersion, launchProfileCapability, type CapabilityStatus } from '../types/configInfo';
+import { ensureLaunchProfileCliArg } from '../utils/launchProfile';
 
 export { AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, AppHostStopError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs } from './appHostLaunchContracts';
-export type { AppHostDebugSessionTerminatedEvent, AppHostEditorSessions, AppHostLaunchRequestedEvent, AppHostLaunchSession, AppHostStopResult, RunningAppHost } from './appHostLaunchContracts';
+export type { AppHostDebugSessionTerminatedEvent, AppHostEditorSessions, AppHostLaunchRequestedEvent, AppHostLaunchSession, AppHostOperationState, AppHostStopResult, RunningAppHost } from './appHostLaunchContracts';
 
 export interface AppHostLaunchCapabilityProvider {
     getCapabilityStatus(capability: string, options?: {
@@ -71,6 +72,10 @@ interface TrackedAppHostDebugSession {
     readonly session: AppHostLaunchSession;
 }
 
+interface TrackedAppHostOperationState extends AppHostOperationState {
+    readonly isDirectoryScope?: boolean;
+}
+
 /**
  * Centralizes all Aspire AppHost launch operations that require a resolved
  * AppHost path. Both the editor command provider (which discovers the path)
@@ -90,6 +95,8 @@ export class AppHostLaunchService implements vscode.Disposable {
     });
     private readonly _lifecycleLocks = new Map<string, Promise<unknown>>();
     private readonly _lifecycleLockPathKeys = new Map<string, Set<string>>();
+    private readonly _pendingOrActiveLifecycleOperationPathKeys = new Map<number, Set<string>>();
+    private _nextLifecycleOperationId = 0;
     private readonly _lifecycleCancellationSource = new vscode.CancellationTokenSource();
     private _getEditorSessions: () => readonly AppHostLaunchSession[] = () => [];
     private _getRunningAppHosts: (token: vscode.CancellationToken) => Promise<readonly RunningAppHost[]> = async () => [];
@@ -97,9 +104,33 @@ export class AppHostLaunchService implements vscode.Disposable {
     private _disposed = false;
     private readonly _activeRunDebugSessionPaths = new Map<string, string>();
     private readonly _pendingRunPathByToken = new Map<number, string>();
+    /**
+     * Durable non-Run operations (deploy/publish/do) that have begun launch preparation but
+     * whose root debug session has not started yet, keyed by launch token. A pending entry
+     * is recorded before the first `await` so a concurrent duplicate is rejected, and is
+     * either transferred to {@link _activeOperationBySessionId} when the session starts or
+     * cleared when the launch is cancelled, declined, suppressed, errors, or disposes.
+     */
+    private readonly _pendingOperationByToken = new Map<number, TrackedAppHostOperationState>();
+    /**
+     * Operations started from launch.json/F5 never pass through {@link launch}. Their short-lived
+     * reservations cover the gap between debug configuration resolution and the root session start.
+     */
+    private readonly _pendingExternalOperationByReservationId = new Map<string, TrackedAppHostOperationState>();
+    private readonly _pendingExternalOperationExpiryByReservationId = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly _restartOperationExpiryByToken = new Map<number, ReturnType<typeof setTimeout>>();
+    /**
+     * Durable non-Run operations whose root debug session is running, keyed by that
+     * session's ID. Cleared when the session terminates.
+     */
+    private readonly _activeOperationBySessionId = new Map<string, TrackedAppHostOperationState>();
     private _nextLaunchToken = 0;
+    private _nextExternalOperationReservationId = 0;
 
     readonly onDidChangeLaunchingState = this._reservations.onDidChangeLaunchingState;
+
+    private readonly _onDidChangeOperationState = new vscode.EventEmitter<void>();
+    readonly onDidChangeOperationState = this._onDidChangeOperationState.event;
 
     private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<AppHostDebugSessionTerminatedEvent>();
     readonly onDidTerminateAppHostDebugSession = this._onDidTerminateAppHostDebugSession.event;
@@ -112,14 +143,37 @@ export class AppHostLaunchService implements vscode.Disposable {
     constructor(private readonly _capabilityProvider: AppHostLaunchCapabilityProvider) {
         const startSubscription = vscode.debug.onDidStartDebugSession(session => {
             const launchToken = session.configuration?.[appHostLaunchTokenConfigKey];
+            let transferredOperation = false;
             if (typeof launchToken === 'number') {
                 this._pendingRunPathByToken.delete(launchToken);
+                // The launch token only rides on the root configuration this service creates,
+                // so its presence proves this is the root session that now owns any pending
+                // non-Run operation.
+                transferredOperation = this.transferPendingOperationToActiveSession(launchToken, session.id);
             }
 
             const appHostPath = getDebugConfigurationAppHostPath(session.configuration);
             const reservationId = session.configuration?.[appHostLaunchReservationIdConfigKey];
+            const command = getAspireDebugConfigurationCommand(session.configuration);
+            if (!transferredOperation &&
+                appHostPath &&
+                typeof reservationId === 'string' &&
+                command !== undefined &&
+                command !== 'run') {
+                transferredOperation = this.transferPendingExternalOperationToActiveSession(
+                    reservationId,
+                    appHostPath,
+                    session.id);
+            }
             if (appHostPath && typeof reservationId === 'string') {
-                this._reservations.preserveStartedExternalLaunchReservation(appHostPath, reservationId);
+                if (transferredOperation) {
+                    // The active operation is now owned by this session. Its temporary launch
+                    // reservation must not block an independent Run or F5 for the same AppHost.
+                    this.clearMatchingLaunching(appHostPath, reservationId);
+                }
+                else {
+                    this._reservations.preserveStartedExternalLaunchReservation(appHostPath, reservationId);
+                }
             }
             if (appHostPath &&
                 session.configuration?.type === 'aspire' &&
@@ -131,10 +185,22 @@ export class AppHostLaunchService implements vscode.Disposable {
         // When a debug session terminates, clear launching state for that AppHost
         // so the tree reverts from "Starting..." if the launch failed or was cancelled.
         const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
-            this._activeRunDebugSessionPaths.delete(session.id);
             const launchToken = session.configuration?.[appHostLaunchTokenConfigKey];
+            const restartSourceSessionId = session.configuration?.[appHostRestartSourceSessionIdConfigKey];
+            const isToolbarRestart = typeof restartSourceSessionId === 'string' &&
+                restartSourceSessionId === session.id;
+            this._activeRunDebugSessionPaths.delete(session.id);
+            if (isToolbarRestart && typeof launchToken === 'number') {
+                this.preserveActiveOperationForRestart(session.id, launchToken);
+            }
+            else {
+                this.clearActiveOperation(session.id);
+            }
             if (typeof launchToken === 'number') {
                 this._pendingRunPathByToken.delete(launchToken);
+                if (!isToolbarRestart) {
+                    this.clearPendingOperation(launchToken);
+                }
             }
 
             this._appHostDebugSessions.delete(session.id);
@@ -148,9 +214,6 @@ export class AppHostLaunchService implements vscode.Disposable {
                 }
                 const command = getAspireDebugConfigurationCommand(session.configuration);
                 const shouldRequestStopRefresh = command === 'run' && isCurrentGeneration;
-                const restartSourceSessionId = session.configuration[appHostRestartSourceSessionIdConfigKey];
-                const isToolbarRestart = typeof restartSourceSessionId === 'string' &&
-                    restartSourceSessionId === session.id;
                 this._onDidTerminateAppHostDebugSession.fire({
                     appHostPath,
                     command,
@@ -175,8 +238,21 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._reservations.dispose();
         this._activeRunDebugSessionPaths.clear();
         this._pendingRunPathByToken.clear();
+        this._pendingOperationByToken.clear();
+        this._pendingExternalOperationByReservationId.clear();
+        for (const expiry of this._pendingExternalOperationExpiryByReservationId.values()) {
+            clearTimeout(expiry);
+        }
+        this._pendingExternalOperationExpiryByReservationId.clear();
+        for (const expiry of this._restartOperationExpiryByToken.values()) {
+            clearTimeout(expiry);
+        }
+        this._restartOperationExpiryByToken.clear();
+        this._activeOperationBySessionId.clear();
+        this._pendingOrActiveLifecycleOperationPathKeys.clear();
         this._onDidTerminateAppHostDebugSession.dispose();
         this._onDidRequestLaunch.dispose();
+        this._onDidChangeOperationState.dispose();
     }
 
     get launchingPaths(): readonly string[] {
@@ -370,6 +446,10 @@ export class AppHostLaunchService implements vscode.Disposable {
         throwIfCancelled(token);
         throwIfCancelled(this._lifecycleCancellationSource.token);
         const identity = getAppHostIdentityKeyInfo(appHostPath);
+        const lifecycleOperationId = ++this._nextLifecycleOperationId;
+        this._pendingOrActiveLifecycleOperationPathKeys.set(
+            lifecycleOperationId,
+            new Set(identity.pathKeys));
         const keys = this.getLifecycleLockKeys(identity);
         this.trackLifecycleLockPathKeys(keys[0], identity);
         // Waiting on every overlapping queue, not just the first, is what keeps exclusivity
@@ -393,14 +473,15 @@ export class AppHostLaunchService implements vscode.Disposable {
             this._lifecycleLocks.set(lockKey, tail);
         }
 
-        void tail.then(() => {
+        const clearLifecycleLockIfOwned = () => {
             for (const lockKey of keys) {
                 if (this._lifecycleLocks.get(lockKey) === tail) {
                     this._lifecycleLocks.delete(lockKey);
                     this._lifecycleLockPathKeys.delete(lockKey);
                 }
             }
-        });
+        };
+        void tail.then(clearLifecycleLockIfOwned);
 
         let acquired = false;
         let holdTimeout: NodeJS.Timeout | undefined;
@@ -432,12 +513,21 @@ export class AppHostLaunchService implements vscode.Disposable {
             callerCancellation.dispose();
             serviceCancellation.dispose();
             operationCancellation.dispose();
+            this._pendingOrActiveLifecycleOperationPathKeys.delete(lifecycleOperationId);
             if (acquired) {
                 release();
+                // Clearing the final owner synchronously keeps the lock's observable lifetime
+                // aligned with this promise. A queued owner has already replaced `tail`, so the
+                // identity metadata remains intact when another operation is waiting.
+                clearLifecycleLockIfOwned();
             }
             else {
                 // Preserve queue ordering even though this caller no longer waits.
-                void previous.then(release, release);
+                const releaseCancelledWaiter = () => {
+                    release();
+                    clearLifecycleLockIfOwned();
+                };
+                void previous.then(releaseCancelledWaiter, releaseCancelledWaiter);
             }
         }
     }
@@ -495,16 +585,16 @@ export class AppHostLaunchService implements vscode.Disposable {
         return this._reservations.isLaunching(appHostPath);
     }
 
-    tryReserveLaunch(appHostPath: string): boolean {
-        return this._reservations.tryReserveLaunch(appHostPath);
+    tryReserveLaunch(appHostPath: string, trackRunGeneration = true): boolean {
+        return this._reservations.tryReserveLaunch(appHostPath, trackRunGeneration);
     }
 
     hasLifecycleLaunchClaim(appHostPath: string): boolean {
         return this._reservations.hasLifecycleLaunchClaim(appHostPath);
     }
 
-    reserveLaunch(appHostPath: string): string {
-        return this._reservations.reserveLaunch(appHostPath);
+    reserveLaunch(appHostPath: string, trackRunGeneration = true): string {
+        return this._reservations.reserveLaunch(appHostPath, trackRunGeneration);
     }
 
     tryReserveExternalLaunch(appHostPath: string, isDirectoryScope = false): string | false {
@@ -524,7 +614,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     }
 
     private hasActiveLifecycleOperationWithinDirectory(directoryPath: string): boolean {
-        return Array.from(this._lifecycleLockPathKeys.values())
+        return Array.from(this._pendingOrActiveLifecycleOperationPathKeys.values())
             .some(activePathKeys => Array.from(activePathKeys)
                 .some(activePathKey => isAppHostPathWithinDirectory(activePathKey, directoryPath)));
     }
@@ -543,7 +633,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     }
 
     private hasActiveLifecycleOperation(appHostPath: string): boolean {
-        for (const activePathKeys of this._lifecycleLockPathKeys.values()) {
+        for (const activePathKeys of this._pendingOrActiveLifecycleOperationPathKeys.values()) {
             if (Array.from(activePathKeys).some(activePathKey =>
                 compareAppHostIdentity(activePathKey, appHostPath) !== 'different')) {
                 return true;
@@ -565,6 +655,82 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._reservations.clearLaunchingForRunningAppHost(appHostPath);
     }
 
+    tryReserveExternalOperation(
+        appHostPath: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+        isDirectoryScope = false,
+    ): string | false {
+        if (this._reservations.hasPendingLaunchOrLifecycleConflict(appHostPath, isDirectoryScope)) {
+            return false;
+        }
+
+        if (isDirectoryScope
+            ? this.hasPendingOrActiveOperationWithinDirectory(appHostPath)
+            : this.hasPendingOrActiveOperationConflict(appHostPath)) {
+            return false;
+        }
+
+        const reservationId = `operation-${++this._nextExternalOperationReservationId}`;
+        this._pendingExternalOperationByReservationId.set(
+            reservationId,
+            { appHostPath, command, noDebug, doStep, isDirectoryScope: isDirectoryScope || undefined });
+        this.scheduleExternalOperationExpiry(reservationId);
+        this._onDidChangeOperationState.fire();
+        return reservationId;
+    }
+
+    validateOrReacquireExternalOperationReservation(
+        appHostPath: string,
+        reservationId: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+        isDirectoryScope = false,
+    ): string | false {
+        const pending = this._pendingExternalOperationByReservationId.get(reservationId);
+        const ownsCurrentReservation = pending &&
+            compareAppHostIdentity(pending.appHostPath, appHostPath) === 'same' &&
+            pending.isDirectoryScope === (isDirectoryScope || undefined);
+        if (ownsCurrentReservation) {
+            if (this._reservations.hasPendingLaunchOrLifecycleConflict(appHostPath, isDirectoryScope)) {
+                this.clearExternalOperationReservation(reservationId);
+                return false;
+            }
+
+            this._pendingExternalOperationByReservationId.set(
+                reservationId,
+                { appHostPath, command, noDebug, doStep, isDirectoryScope: isDirectoryScope || undefined });
+            this.scheduleExternalOperationExpiry(reservationId);
+            return reservationId;
+        }
+
+        return this.tryReserveExternalOperation(appHostPath, command, noDebug, doStep, isDirectoryScope);
+    }
+
+    replaceExternalOperationReservation(
+        previousAppHostPath: string,
+        previousReservationId: string,
+        appHostPath: string,
+        command: Exclude<AspireCommandType, 'run'>,
+        noDebug: boolean,
+        doStep?: string,
+        isDirectoryScope = false,
+    ): string | false {
+        this.releaseExternalOperationReservation(previousAppHostPath, previousReservationId);
+        return this.tryReserveExternalOperation(appHostPath, command, noDebug, doStep, isDirectoryScope);
+    }
+
+    releaseExternalOperationReservation(appHostPath: string, reservationId: string): void {
+        const pending = this._pendingExternalOperationByReservationId.get(reservationId);
+        if (!pending || compareAppHostIdentity(pending.appHostPath, appHostPath) !== 'same') {
+            return;
+        }
+
+        this.clearExternalOperationReservation(reservationId);
+    }
+
     /**
      * Launches an Aspire debug session for the given AppHost path.
      * Automatically marks the path as "launching" until it either appears
@@ -575,14 +741,23 @@ export class AppHostLaunchService implements vscode.Disposable {
      * @param doStep Optional step name for the 'do' command.
      */
     async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string, target?: CliPathResolutionTarget, cliPath?: string): Promise<void> {
+        // A durable non-Run operation (deploy/publish/do) must be the only one in flight for
+        // its AppHost. Rejecting here - before any pending state or the lifecycle lock -
+        // stops a second deploy/publish/do from starting while one is pending or active,
+        // while still allowing a Run to start alongside an active non-Run operation.
+        if (command !== 'run' && this.hasPendingOrActiveOperationConflict(appHostPath)) {
+            throw new vscode.CancellationError();
+        }
+
         const launchToken = this.trackPendingRun(appHostPath, command);
+        this.beginPendingOperation(launchToken, appHostPath, command, noDebug, doStep);
         try {
             return await this.runWithAppHostLifecycleLock(appHostPath, this._lifecycleCancellationSource.token, async lockToken => {
                 if (this._disposed) {
                     throw new vscode.CancellationError();
                 }
 
-                if (!this.tryReserveLaunch(appHostPath)) {
+                if (!this.tryReserveLaunch(appHostPath, command === 'run')) {
                     throw new vscode.CancellationError();
                 }
 
@@ -591,11 +766,12 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
         catch (error) {
             this._pendingRunPathByToken.delete(launchToken);
+            this.clearPendingOperation(launchToken);
             throw error;
         }
     }
 
-    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken): Promise<AppHostLaunchIsolation | undefined> {
+    async launchFromLifecycleOwner(appHostPath: string, command: 'run', noDebug: boolean, isolated: boolean | undefined, token: vscode.CancellationToken, launchProfile?: string): Promise<AppHostLaunchIsolation | undefined> {
         if (this._disposed) {
             throw new vscode.CancellationError();
         }
@@ -604,7 +780,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // establish a missing default, but must not replace an existing workspace choice.
         const launchToken = this.trackPendingRun(appHostPath, command);
         try {
-            return await this.launchCore(appHostPath, command, noDebug, undefined, 'explicit-launch-configuration', launchToken, token, isolated, undefined, undefined, 'linked-worktree-default');
+            return await this.launchCore(appHostPath, command, noDebug, undefined, 'explicit-launch-configuration', launchToken, token, isolated, undefined, undefined, 'linked-worktree-default', launchProfile);
         }
         catch (error) {
             this._pendingRunPathByToken.delete(launchToken);
@@ -627,8 +803,13 @@ export class AppHostLaunchService implements vscode.Disposable {
         target: CliPathResolutionTarget = getCliPathTargetForUri(vscode.Uri.file(appHostPath)),
         isolated: boolean | undefined = getRootIsolatedCliArg(args),
         isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
+        launchProfile?: string,
     ): Promise<PreparedAppHostLaunchArguments> {
         if (command !== 'run') {
+            if (launchProfile !== undefined) {
+                throw new Error(appHostLifecycleLaunchProfileRequiresRun);
+            }
+
             return {
                 args,
                 isolation: { effective: false, option: undefined },
@@ -636,10 +817,51 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
 
         const launchIsolation = await this.resolveLaunchIsolation(appHostPath, isolated, token, cliPath, isolationPolicy, target);
+        const selectedLaunchProfile = await this.resolveLaunchProfile(launchProfile, token, cliPath, target);
+        const isolatedArgs = ensureIsolatedCliArg(args, launchIsolation.option);
         return {
-            args: ensureIsolatedCliArg(args, launchIsolation.option),
+            args: selectedLaunchProfile === undefined
+                ? isolatedArgs
+                : ensureLaunchProfileCliArg(isolatedArgs, selectedLaunchProfile),
             isolation: launchIsolation,
         };
+    }
+
+    private async resolveLaunchProfile(
+        launchProfile: string | undefined,
+        token: vscode.CancellationToken,
+        cliPath: string | undefined,
+        target: CliPathResolutionTarget,
+    ): Promise<string | undefined> {
+        if (launchProfile === undefined) {
+            return undefined;
+        }
+        if (launchProfile.trim().length === 0) {
+            throw new Error(appHostLifecycleInvalidLaunchProfile);
+        }
+
+        throwIfCancelled(token);
+        const supportStatus = await this._capabilityProvider.getCapabilityStatus(launchProfileCapability, {
+            suppressErrors: true,
+            forceRefresh: cliPath !== undefined,
+            cliPath,
+            cancellationToken: token,
+            target,
+        });
+        throwIfCancelled(token);
+        if (supportStatus === 'supported') {
+            return launchProfile;
+        }
+
+        if (cliPath === undefined) {
+            // Preflight data can describe a stale PATH or setting snapshot. The launch path
+            // repeats this check against the resolved executable before starting VS Code.
+            return launchProfile;
+        }
+
+        throw new Error(supportStatus === 'unsupported'
+            ? appHostLifecycleLaunchProfileNotSupported
+            : appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified);
     }
 
     /**
@@ -709,6 +931,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         target?: CliPathResolutionTarget,
         cliPath?: string,
         isolationPolicy: AppHostLaunchIsolationPolicy = 'explicit-only',
+        launchProfile?: string,
     ): Promise<AppHostLaunchIsolation | undefined> {
         // Reserve before the first await. The awaits below (telemetry, the CLI gate) run
         // before `startDebugging`, so reserving later would leave a window in which a
@@ -716,7 +939,7 @@ export class AppHostLaunchService implements vscode.Disposable {
         // The tree also shows "Starting..." from here, and every pre-start failure path
         // clears it because VS Code emits no terminate event for a launch that never
         // started. See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
-        const reservationId = this.reserveLaunch(appHostPath);
+        const reservationId = this.reserveLaunch(appHostPath, command === 'run');
         // Everything between the reservation and the main try/catch below has to release
         // the reservation itself, otherwise a cancelled or failed launch would leave this
         // AppHost permanently reported as launching.
@@ -742,6 +965,9 @@ export class AppHostLaunchService implements vscode.Disposable {
         const executionSuppressed = isE2eDebugLaunchSuppressed();
         if (executionSuppressed) {
             this._pendingRunPathByToken.delete(launchToken);
+            // A suppressed launch never starts a session, so there is nothing to transfer
+            // the pending operation to; clear it now rather than leaking it.
+            this.clearPendingOperation(launchToken);
         }
 
         let telemetryProperties: Awaited<ReturnType<typeof getLaunchTelemetryProperties>>;
@@ -771,6 +997,9 @@ export class AppHostLaunchService implements vscode.Disposable {
         if (doStep) {
             config.step = doStep;
         }
+        if (launchProfile !== undefined) {
+            config.launchProfile = launchProfile;
+        }
 
         abortIfCancelled();
         this._onDidRequestLaunch.fire({
@@ -778,12 +1007,14 @@ export class AppHostLaunchService implements vscode.Disposable {
             command,
             noDebug,
             doStep,
+            cliPath,
+            cliTargetKey: target ? getCliPathTargetKey(target) : undefined,
             executionSuppressed,
         });
         abortIfCancelled();
         if (executionSuppressed) {
             await releaseReservationOnFailure(
-                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, target, isolated, isolationPolicy));
+                () => this.prepareLaunchArguments(appHostPath, command, config.args, token, undefined, target, isolated, isolationPolicy, launchProfile));
             this.clearMatchingLaunching(appHostPath, reservationId);
             sendTelemetryEvent('aspire/vscode/apphost/launch/result', {
                 ...telemetryProperties,
@@ -815,7 +1046,8 @@ export class AppHostLaunchService implements vscode.Disposable {
                 resolvedCliPath,
                 target,
                 isolated,
-                isolationPolicy);
+                isolationPolicy,
+                launchProfile);
             if (launchPreparation.args === undefined) {
                 delete config.args;
             }
@@ -871,6 +1103,154 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
 
         return launchToken;
+    }
+
+    /**
+     * The durable non-Run operation (deploy/publish/do) currently pending or active for an
+     * AppHost, or `undefined` when none can be identified unambiguously. Matches only a
+     * proven AppHost identity - not just the raw path - so a unique project file and its
+     * sibling source file resolve to the same operation without assigning ownership when
+     * multiple AppHosts could match.
+     */
+    getActiveOperation(appHostPath: string): AppHostOperationState | undefined {
+        const matchingOperations = this.getPendingAndActiveOperations()
+            .filter(operation => operation.isDirectoryScope
+                ? isAppHostPathWithinDirectory(appHostPath, operation.appHostPath)
+                : compareAppHostIdentity(operation.appHostPath, appHostPath) === 'same');
+
+        if (matchingOperations.length !== 1) {
+            return undefined;
+        }
+
+        const { isDirectoryScope: _, ...operation } = matchingOperations[0];
+        return operation;
+    }
+
+    private hasPendingOrActiveOperationConflict(appHostPath: string): boolean {
+        // Duplicate prevention is intentionally conservative: an ambiguous source/project
+        // association cannot identify an owner, but starting another operation could still
+        // overlap one that is already pending or active.
+        return this.getPendingAndActiveOperations()
+            .some(operation => operation.isDirectoryScope
+                ? isAppHostPathWithinDirectory(appHostPath, operation.appHostPath)
+                : compareAppHostIdentity(operation.appHostPath, appHostPath) !== 'different');
+    }
+
+    private hasPendingOrActiveOperationWithinDirectory(directoryPath: string): boolean {
+        return this.getPendingAndActiveOperations()
+            .some(operation => isAppHostPathWithinDirectory(operation.appHostPath, directoryPath) ||
+                (operation.isDirectoryScope && isAppHostPathWithinDirectory(directoryPath, operation.appHostPath)));
+    }
+
+    private getPendingAndActiveOperations(): TrackedAppHostOperationState[] {
+        return [
+            ...this._pendingOperationByToken.values(),
+            ...this._pendingExternalOperationByReservationId.values(),
+            ...this._activeOperationBySessionId.values(),
+        ];
+    }
+
+    private beginPendingOperation(launchToken: number, appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep: string | undefined): void {
+        // Only deploy/publish/do are durable operations; a Run is represented by its running
+        // AppHost and needs no operation entry.
+        if (command === 'run') {
+            return;
+        }
+
+        this._pendingOperationByToken.set(launchToken, { appHostPath, command, noDebug, doStep });
+        this._onDidChangeOperationState.fire();
+    }
+
+    private transferPendingOperationToActiveSession(launchToken: number, sessionId: string): boolean {
+        const pending = this._pendingOperationByToken.get(launchToken);
+        if (!pending) {
+            return false;
+        }
+
+        this.clearRestartOperationExpiry(launchToken);
+        this._pendingOperationByToken.delete(launchToken);
+        this._activeOperationBySessionId.set(sessionId, pending);
+        // No state event fires: {@link getActiveOperation} still reports the same operation,
+        // so nothing observable changed - only the owner moved from the launch token to the
+        // now-running session.
+        return true;
+    }
+
+    private clearPendingOperation(launchToken: number): void {
+        this.clearRestartOperationExpiry(launchToken);
+        if (this._pendingOperationByToken.delete(launchToken)) {
+            this._onDidChangeOperationState.fire();
+        }
+    }
+
+    private transferPendingExternalOperationToActiveSession(
+        reservationId: string,
+        appHostPath: string,
+        sessionId: string,
+    ): boolean {
+        const pending = this._pendingExternalOperationByReservationId.get(reservationId);
+        if (!pending || compareAppHostIdentity(pending.appHostPath, appHostPath) !== 'same') {
+            return false;
+        }
+
+        this.clearExternalOperationExpiry(reservationId);
+        this._pendingExternalOperationByReservationId.delete(reservationId);
+        this._activeOperationBySessionId.set(sessionId, pending);
+        return true;
+    }
+
+    private preserveActiveOperationForRestart(sessionId: string, launchToken: number): void {
+        const active = this._activeOperationBySessionId.get(sessionId);
+        if (!active) {
+            return;
+        }
+
+        this._activeOperationBySessionId.delete(sessionId);
+        this._pendingOperationByToken.set(launchToken, active);
+        this.clearRestartOperationExpiry(launchToken);
+        const expiry = setTimeout(
+            () => this.clearPendingOperation(launchToken),
+            externalLaunchReservationTimeoutMs);
+        expiry.unref?.();
+        this._restartOperationExpiryByToken.set(launchToken, expiry);
+    }
+
+    private scheduleExternalOperationExpiry(reservationId: string): void {
+        this.clearExternalOperationExpiry(reservationId);
+        const expiry = setTimeout(
+            () => this.clearExternalOperationReservation(reservationId),
+            externalLaunchReservationTimeoutMs);
+        expiry.unref?.();
+        this._pendingExternalOperationExpiryByReservationId.set(reservationId, expiry);
+    }
+
+    private clearExternalOperationReservation(reservationId: string): void {
+        this.clearExternalOperationExpiry(reservationId);
+        if (this._pendingExternalOperationByReservationId.delete(reservationId)) {
+            this._onDidChangeOperationState.fire();
+        }
+    }
+
+    private clearExternalOperationExpiry(reservationId: string): void {
+        const expiry = this._pendingExternalOperationExpiryByReservationId.get(reservationId);
+        if (expiry) {
+            clearTimeout(expiry);
+            this._pendingExternalOperationExpiryByReservationId.delete(reservationId);
+        }
+    }
+
+    private clearRestartOperationExpiry(launchToken: number): void {
+        const expiry = this._restartOperationExpiryByToken.get(launchToken);
+        if (expiry) {
+            clearTimeout(expiry);
+            this._restartOperationExpiryByToken.delete(launchToken);
+        }
+    }
+
+    private clearActiveOperation(sessionId: string): void {
+        if (this._activeOperationBySessionId.delete(sessionId)) {
+            this._onDidChangeOperationState.fire();
+        }
     }
 }
 

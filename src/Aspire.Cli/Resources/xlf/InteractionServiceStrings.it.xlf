@@ -97,6 +97,11 @@
         <target state="needs-review-translation">L'input interattivo non è supportato in questo ambiente. Usare il flag --non interattivo, oppure assicurarsi che l'interfaccia della riga di comando sia in esecuzione in un terminale interattivo.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Per altre informazioni, vedere: [link]{0}[/][/]</target>

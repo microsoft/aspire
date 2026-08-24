@@ -73,6 +73,89 @@ function Get-CombinedProcessOutput
     return "$stdout$stderr"
 }
 
+function Invoke-DetachedAspireCommand
+{
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('run', 'start')]
+        [string]$Command,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TemplateId,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkingDirectory,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DiagnosticsDirectory,
+
+        [Parameter(Mandatory = $true)]
+        [int]$TimeoutSeconds
+    )
+
+    $stdoutPath = Join-Path $DiagnosticsDirectory "aspire-$Command.stdout.json"
+    $stderrPath = Join-Path $DiagnosticsDirectory "aspire-$Command.stderr.log"
+    $combinedPath = Join-Path $DiagnosticsDirectory "aspire-$Command.log"
+    $arguments = @($Command)
+    if ($Command -eq 'run')
+    {
+        $arguments += '--detach'
+    }
+    $arguments += @('--format', 'json', '--non-interactive', '--nologo')
+
+    $startedAt = Get-Date
+    $process = Start-Process -FilePath 'aspire' `
+        -ArgumentList $arguments `
+        -WorkingDirectory $WorkingDirectory `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath `
+        -PassThru
+
+    try
+    {
+        $process | Wait-Process -Timeout $TimeoutSeconds -ErrorAction Stop
+    }
+    catch
+    {
+        if (-not $process.HasExited)
+        {
+            $process | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+
+        throw "${TemplateId}: aspire $Command did not exit within $TimeoutSeconds seconds."
+    }
+
+    $output = Get-CombinedProcessOutput -StdOutPath $stdoutPath -StdErrPath $stderrPath
+    Set-Content -Path $combinedPath -Value $output -Encoding utf8
+
+    if ($process.ExitCode -ne 0)
+    {
+        throw "${TemplateId}: aspire $Command failed with exit code $($process.ExitCode)."
+    }
+
+    try
+    {
+        $metadata = Get-Content -Raw $stdoutPath | ConvertFrom-Json
+    }
+    catch
+    {
+        throw "${TemplateId}: aspire $Command did not produce valid JSON. Output: $output"
+    }
+
+    if ($null -eq $metadata -or
+        $null -eq $metadata.PSObject.Properties['appHostPid'] -or
+        $null -eq $metadata.PSObject.Properties['appHostPath'] -or
+        $null -eq $metadata.PSObject.Properties['logFile'] -or
+        $metadata.appHostPid -le 0 -or
+        [string]::IsNullOrWhiteSpace([string]$metadata.appHostPath) -or
+        [string]::IsNullOrWhiteSpace([string]$metadata.logFile))
+    {
+        throw "${TemplateId}: aspire $Command did not return the expected detached AppHost metadata. Output: $output"
+    }
+
+    return (Get-Date) - $startedAt
+}
+
 $validationRootPath = Get-ValidationRoot
 Remove-Item -Recurse -Force $validationRootPath -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $validationRootPath -Force | Out-Null
@@ -100,9 +183,8 @@ foreach ($template in $templates)
     $templateRoot = Join-Path $validationRootPath $templateId
     $diagnosticsDir = Join-Path $templateRoot 'diagnostics'
     $projectRoot = Join-Path $templateRoot $projectName
-    $startStdOutPath = Join-Path $diagnosticsDir 'aspire-start.stdout.log'
-    $startStdErrPath = Join-Path $diagnosticsDir 'aspire-start.stderr.log'
-    $startCombinedPath = Join-Path $diagnosticsDir 'aspire-start.log'
+    $addLogPath = Join-Path $diagnosticsDir 'aspire-add.log'
+    $postRunStopLogPath = Join-Path $diagnosticsDir 'aspire-stop-after-run.log'
     $preStartStopLogPath = Join-Path $diagnosticsDir 'aspire-stop-before-start.log'
     $stopLogPath = Join-Path $diagnosticsDir 'aspire-stop.log'
 
@@ -115,6 +197,26 @@ foreach ($template in $templates)
         try
         {
             aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init
+
+            Push-Location $projectRoot
+            try
+            {
+                aspire add Aspire.Hosting.PostgreSQL --non-interactive --nologo *>&1 | Tee-Object -FilePath $addLogPath
+
+                $runElapsed = Invoke-DetachedAspireCommand `
+                    -Command run `
+                    -TemplateId $templateId `
+                    -WorkingDirectory $projectRoot `
+                    -DiagnosticsDirectory $diagnosticsDir `
+                    -TimeoutSeconds $MaxStartupSeconds
+
+                aspire stop --non-interactive --nologo *>&1 | Out-File -FilePath $postRunStopLogPath -Encoding utf8
+                Write-Host "$templateId aspire run started in $([math]::Round($runElapsed.TotalSeconds, 2)) seconds."
+            }
+            finally
+            {
+                Pop-Location
+            }
 
             try
             {
@@ -133,47 +235,12 @@ foreach ($template in $templates)
                 }
             }
 
-            $startAt = Get-Date
-            $process = Start-Process -FilePath 'aspire' `
-                -ArgumentList @('start') `
+            $startElapsed = Invoke-DetachedAspireCommand `
+                -Command start `
+                -TemplateId $templateId `
                 -WorkingDirectory $projectRoot `
-                -RedirectStandardOutput $startStdOutPath `
-                -RedirectStandardError $startStdErrPath `
-                -PassThru
-
-            try
-            {
-                $process | Wait-Process -Timeout $MaxStartupSeconds -ErrorAction Stop
-            }
-            catch
-            {
-                if (-not $process.HasExited)
-                {
-                    $process | Stop-Process -Force -ErrorAction SilentlyContinue
-                }
-
-                throw "${templateId}: aspire start did not exit within $MaxStartupSeconds seconds."
-            }
-
-            $elapsed = (Get-Date) - $startAt
-            $startOutput = Get-CombinedProcessOutput -StdOutPath $startStdOutPath -StdErrPath $startStdErrPath
-
-            Set-Content -Path $startCombinedPath -Value $startOutput -Encoding utf8
-
-            if ($process.ExitCode -ne 0)
-            {
-                throw "${templateId}: aspire start failed with exit code $($process.ExitCode)."
-            }
-
-            if ($startOutput -match 'Timeout waiting for apphost to start')
-            {
-                throw "${templateId}: aspire start reported a startup timeout."
-            }
-
-            if ($startOutput -notmatch 'Apphost started successfully\.')
-            {
-                throw "${templateId}: aspire start did not report a successful startup."
-            }
+                -DiagnosticsDirectory $diagnosticsDir `
+                -TimeoutSeconds $MaxStartupSeconds
 
             Set-Location $projectRoot
 
@@ -224,7 +291,7 @@ foreach ($template in $templates)
                 }
             }
 
-            Write-Host "$templateId started in $([math]::Round($elapsed.TotalSeconds, 2)) seconds."
+            Write-Host "$templateId aspire start started in $([math]::Round($startElapsed.TotalSeconds, 2)) seconds."
         }
         catch
         {

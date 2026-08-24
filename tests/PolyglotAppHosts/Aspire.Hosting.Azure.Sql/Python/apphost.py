@@ -11,7 +11,7 @@ with create_builder() as builder:
     db2 = sql_server.add_database("resource")
     db2.with_default_azure_sku()
     sql_server.run_as_container()
-    sql_server.with_admin_deployment_script_storage()
+    sql_server.with_admin_deployment_script_storage(storage)
     _db3 = sql_server.add_database("resource")
     _host_name = sql_server.host_name
     _port = sql_server.port
@@ -19,8 +19,8 @@ with create_builder() as builder:
     _connection_string_expression = sql_server.connection_string_expression
     _jdbc_connection_string = sql_server.jdbc_connection_string
     _is_container = sql_server.is_container
-    _database_count = sql_server.databases.count()
-    _has_my_db = sql_server.databases.contains_key()
+    _database_count = len(sql_server.databases)
+    _has_my_db = "resource" in sql_server.databases
     _parent = db.parent
     _db_connection_string_expression = db.connection_string_expression
     _database_name = db.database_name

@@ -11,22 +11,22 @@ namespace Aspire.Hosting.Blazor.Tests;
 public class AddDotnetProjectBlazorGatewayTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    public void WithBlazorApp_DotnetProjectGateway_AddsGatewayAppsAnnotation()
+    public void AddDotnetProjectBlazorGateway_WithBlazorClientApp_AddsGatewayAppsAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        // The gateway helpers are generic over the gateway resource type, so a DotnetProjectResource
-        // gateway (created via AddDotnetProject) flows through the same path as an AddBlazorGateway
-        // (ProjectResource) gateway. Build the gateway directly to avoid depending on the Gateway.cs
-        // script content that AddDotnetProjectBlazorGateway resolves at run time. ExcludeLaunchProfile
-        // avoids resolving launchSettings for the placeholder project path.
-        var gateway = builder.AddDotnetProject("gateway", "gateway.csproj", o => o.ExcludeLaunchProfile = true)
-            .WithHttpEndpoint()
-            .WithHttpsEndpoint();
-
+        var gateway = builder.AddDotnetProjectBlazorGateway("gateway");
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        gateway.WithBlazorApp(wasmApp, "store", []);
+        gateway.WithBlazorClientApp(wasmApp);
+
+        Assert.True(gateway.Resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata));
+        Assert.True(File.Exists(projectMetadata.ProjectPath));
+        Assert.Equal("Gateway.cs", Path.GetFileName(projectMetadata.ProjectPath));
+        Assert.Equal("Scripts", Path.GetFileName(Path.GetDirectoryName(projectMetadata.ProjectPath)));
+        Assert.Equal(
+            ["http", "https"],
+            gateway.Resource.Annotations.OfType<EndpointAnnotation>().Select(e => e.Name));
 
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -42,9 +42,7 @@ public class AddDotnetProjectBlazorGatewayTests(ITestOutputHelper testOutputHelp
         var weatherApi = builder.AddDotnetProject("weatherapi", "weatherapi.csproj", o => o.ExcludeLaunchProfile = true)
             .WithHttpEndpoint();
 
-        var gateway = builder.AddDotnetProject("gateway", "gateway.csproj", o => o.ExcludeLaunchProfile = true)
-            .WithHttpEndpoint()
-            .WithHttpsEndpoint();
+        var gateway = builder.AddDotnetProjectBlazorGateway("gateway");
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
             .WithReference(weatherApi);

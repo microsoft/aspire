@@ -81,11 +81,6 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
                     "the credential does not contain a valid 'oid' (object id) claim.");
             }
 
-            // `upn` is the user principal name; `email` is the fallback for accounts that don't
-            // carry one (for example guests). Neither is present on app-only tokens, which is why
-            // an empty name is tolerated here.
-            var upn = GetRootString(root, "upn") ?? GetRootString(root, "email") ?? string.Empty;
-
             // Default to "User" so older tokens — and any flow that omits `idtyp` — keep the
             // historical behavior of a hardcoded "User" principalType instead of regressing to an
             // empty value. `idtyp` is an optional claim that Entra only emits for app-only tokens
@@ -93,14 +88,59 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
             // a user identity; it just means we can't tell and fall back to the previous default.
             // The comparison is case-insensitive for resilience against future producers that emit
             // different casing than the lower-case values Entra documents.
-            var principalType = string.Equals(GetRootString(root, "idtyp"), IdTypApp, StringComparison.OrdinalIgnoreCase)
+            var isAppOnly = string.Equals(GetRootString(root, "idtyp"), IdTypApp, StringComparison.OrdinalIgnoreCase);
+
+            var principalType = isAppOnly
                 ? PrincipalTypeServicePrincipal
                 : PrincipalTypeUser;
 
-            return new AzurePrincipal(principalId, upn, principalType);
+            return new AzurePrincipal(principalId, ResolvePrincipalName(root, principalId, isAppOnly), principalType);
         }
 
         return ParseToken(response);
+    }
+
+    // Resolves the value written to the `principalName` well-known Bicep parameter.
+    //
+    // `upn` is the user principal name; `email` is the fallback for accounts that don't carry one
+    // (for example guests). App-only tokens carry neither, and an empty name is not benign: role
+    // assignment templates feed this straight into resource definitions that reject it. Azure SQL's
+    // principal reconciliation script runs `CREATE USER QUOTENAME(@name) WITH SID = ...`, and
+    // QUOTENAME('') produces the invalid identifier `[]`; Azure Database for PostgreSQL requires a
+    // `principalName` on Microsoft.DBforPostgreSQL/flexibleServers/administrators. See
+    // https://github.com/microsoft/aspire/issues/19487.
+    //
+    // For app-only tokens `app_displayname` carries the display name of the app registration, which
+    // is the name Entra reports for its service principal and the value PostgreSQL expects. It is
+    // gated on `isAppOnly` because on a user-delegated token the same claim names the *client*
+    // application instead of the signed-in identity — "Microsoft Azure CLI" for an `az login`
+    // session — which would be badly wrong as a principal name.
+    //
+    // `oid` is the last resort because it is the only claim guaranteed to be present, so the result
+    // is never empty. Entra documents `app_displayname` as a claim callers must not take a hard
+    // dependency on, and resolving the display name from Microsoft Graph instead is deliberately
+    // avoided: it requires directory read permissions the deployment principal may not hold and adds
+    // a network round trip to every provisioning run.
+    //
+    // See: https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims
+    private static string ResolvePrincipalName(JsonElement root, Guid principalId, bool isAppOnly)
+    {
+        if (GetRootString(root, "upn") is { Length: > 0 } upn)
+        {
+            return upn;
+        }
+
+        if (GetRootString(root, "email") is { Length: > 0 } email)
+        {
+            return email;
+        }
+
+        if (isAppOnly && GetRootString(root, "app_displayname") is { Length: > 0 } appDisplayName)
+        {
+            return appDisplayName;
+        }
+
+        return principalId.ToString();
     }
 
     // Reads a string claim from the root of the payload. Returns null when the claim is absent or

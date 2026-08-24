@@ -8,6 +8,9 @@
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <!-- Override Arcade's embedded PDBs: the WASM debugger needs separate portable PDB files
+         served alongside the .wasm assemblies in _framework/ to bind breakpoints. -->
+    <DebugType>portable</DebugType>
     <!-- Enable WebAssembly diagnostics for OpenTelemetry tracing -->
     <MetricsSupport>true</MetricsSupport>
     <EventSourceSupport>true</EventSourceSupport>
@@ -33,5 +36,15 @@
   <ItemGroup>
     <ProjectReference Include="..\BlazorHosted.ClientServiceDefaults\BlazorHosted.ClientServiceDefaults.csproj" />
   </ItemGroup>
+
+  <!-- This target prototypes the WebAssembly SDK side of project discovery.
+       Returning the evaluated full path lets the referencing project consume TargetOutputs
+       without parsing the referenced project file or depending on its physical XML shape. -->
+  <Target Name="GetWebAssemblyProjectReference"
+          Returns="@(_WebAssemblyProjectReference)">
+    <ItemGroup>
+      <_WebAssemblyProjectReference Include="$(MSBuildProjectFullPath)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

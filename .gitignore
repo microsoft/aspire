@@ -139,6 +139,11 @@ node_modules/
 target/
 dependency-reduced-pom.xml
 
+# Gradle caches and Java build outputs
+.gradle/
+playground/Java*/**/build/
+tests/PolyglotAppHosts/**/Java/**/build/
+
 # Java AppHost build artifacts
 #
 # .java-build is where the CLI compiles a single-file Java AppHost before launching it with

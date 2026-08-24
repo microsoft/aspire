@@ -29,9 +29,10 @@ import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } f
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
-import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
-import { markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
+import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
+import { getAppHostLaunchProfileOptions, getRootLaunchProfileCliArg } from "../utils/launchProfile";
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
@@ -455,6 +456,13 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     let pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(resourceDeadline, stopFailures);
     await this.drainLateResourceStops(resourceDeadline, stopFailures);
 
+    // A blocked extension host can resume after the absolute shutdown deadline has passed. Timers
+    // could not enforce that deadline while JavaScript was blocked, so preserve the documented final
+    // phase reserve from the point at which AppHost teardown can actually begin.
+    const finalStopDeadline = Math.max(
+      deadline,
+      Date.now() + AspireDebugSession._appHostStopReserveMs);
+
     // Global/E2E stop requests target the synthetic Aspire session. Stop the real AppHost session
     // explicitly before the parent so we do not rely on VS Code cascading termination before the
     // AppHost registry refresh runs.
@@ -464,7 +472,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         await this.stopWithinBudget(
           () => appHostDebugSession.stopSession(),
           appHostDebugSession.session.name,
-          deadline,
+          finalStopDeadline,
           () => appHostDebugSession.resetStopSessionAttempt?.());
         this._appHostStopped = true;
         this._resourceDebugSessions = this._resourceDebugSessions.filter(session => session.id !== appHostDebugSession.id);
@@ -487,13 +495,13 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     if (!pendingStartBudgetExhausted) {
-      pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(deadline, stopFailures);
+      pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(finalStopDeadline, stopFailures);
     }
-    await this.drainLateResourceStops(deadline, stopFailures);
+    await this.drainLateResourceStops(finalStopDeadline, stopFailures);
 
     if (!this._parentStopped) {
       try {
-        await this.stopWithinBudget(() => this.stopParentDebugSession(), this._session.name, deadline);
+        await this.stopWithinBudget(() => this.stopParentDebugSession(), this._session.name, finalStopDeadline);
       }
       catch (err) {
         stopFailures.push(err);
@@ -501,9 +509,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     if (!pendingStartBudgetExhausted) {
-      await this.drainPendingDebugSessionStarts(deadline, stopFailures);
+      await this.drainPendingDebugSessionStarts(finalStopDeadline, stopFailures);
     }
-    await this.drainLateResourceStops(deadline, stopFailures);
+    await this.drainLateResourceStops(finalStopDeadline, stopFailures);
 
     return stopFailures;
   }
@@ -940,7 +948,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   private async handleLaunchMessage(message: any): Promise<void> {
     const command = this.configuration.command ?? 'run';
-    const noDebug = !!message.arguments?.noDebug && command === 'run';
+    const noDebug = !!message.arguments?.noDebug && (command === 'run' || command === 'do');
 
     // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
     const commandArgs = this.configuration.args ?? [];
@@ -1296,7 +1304,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
-      let appHostArgs: string[];
+      let appHostArgs: string[] | undefined;
       let launchConfig;
 
       if (isNodeAppHost) {
@@ -1340,12 +1348,27 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       else {
         // The CLI sends the full dotnet CLI args (e.g., ["run", "--no-build", "--project", "...", "--", ...appHostArgs]).
         // Since we launch the apphost directly via the debugger (not via dotnet run), extract only the args after "--".
+        // The parent configuration's typed profile has to cross this second launch boundary explicitly;
+        // the CLI option itself is one of the root arguments intentionally removed here.
         const separatorIndex = args.indexOf('--');
-        appHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
-        launchConfig = { project_path: projectFile, type: 'project' } as ProjectLaunchConfiguration;
+        const explicitAppHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+        appHostArgs = explicitAppHostArgs.length > 0 ? explicitAppHostArgs : undefined;
+        const launchProfileOptions = getAppHostLaunchProfileOptions(
+          this.configuration,
+          classifyAppHostPath(projectFile) === 'csharp');
+        const launchProfile = launchProfileOptions.disableLaunchProfile === true
+          ? undefined
+          : launchProfileOptions.launchProfile ?? getRootLaunchProfileCliArg(args);
+        launchConfig = {
+          project_path: projectFile,
+          type: 'project',
+          ...(launchProfile !== undefined
+            ? { launch_profile: launchProfile }
+            : {})
+        } as ProjectLaunchConfiguration;
       }
 
-      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs.length}`);
+      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs?.length ?? 0}`);
 
       const appHostDebugSessionConfiguration = await createDebugSessionConfiguration(
         this.configuration,
@@ -1419,6 +1442,14 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
                 : windowCliPathTarget;
               markAspireDebugConfigurationWithResolvedCliPath(config, config.resolvedCliPath);
               markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(cliPathTarget));
+            }
+            const operationKind = getOperationKind(config.command);
+            if (typeof config[appHostLaunchTokenConfigKey] === 'number' &&
+              (operationKind === 'deploy' || operationKind === 'publish' || operationKind === 'do')) {
+              // The launch service moved this operation back to its token while the old session
+              // stopped. Restore its private ownership proof so the provider does not make the
+              // replacement contend with the operation it is meant to reclaim.
+              markAspireDebugConfigurationAsExtensionOwned(config);
             }
             await vscode.debug.startDebugging(undefined, config);
           }

@@ -6194,6 +6194,25 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
+    test('background data lease keeps ps follow active while the panel is hidden', async () => {
+        const childProcess = new TestChildProcess();
+        spawnStub.returns(childProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        const lease = repository.keepDataActive();
+        await waitForMicrotasks();
+
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--follow', '--format', 'json', '--nologo']);
+        assert.strictEqual(childProcess.killed, false);
+
+        lease.dispose();
+
+        assert.strictEqual(childProcess.killed, true);
+
+        repository.dispose();
+    });
+
     test('global ps follow and one-shot refresh resolve with the window target', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 

@@ -41,6 +41,17 @@ suite('utils/workspace tests', () => {
             assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
             assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
         });
+
+        test('uses pinnedCliPath without re-resolving the CLI', async () => {
+            const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath');
+            const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
+
+            const result = await checkCliAvailableOrRedirect('debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/a/bin/aspire' });
+
+            assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
+            assert.ok(tryExecuteCliStub.calledOnceWithExactly('/repo/a/bin/aspire'));
+            assert.strictEqual(resolveCliPathStub.called, false);
+        });
     });
 
     test('getCommonExcludeGlob returns valid glob pattern', () => {

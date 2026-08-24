@@ -165,6 +165,7 @@ internal sealed class RunCommand : BaseCommand
         var detach = parseResult.GetValue(s_detachOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var captureProfileDelay = TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption));
@@ -286,6 +287,13 @@ internal sealed class RunCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
+            if (AppHostLauncher.GetLaunchProfileValidationError(project, launchProfile) is { } launchProfileError)
+            {
+                return CommandResult.Failure(
+                    CliExitCodes.InvalidCommand,
+                    launchProfileError);
+            }
+
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
 
             // Check for running instance — even if we fail to stop we won't
@@ -319,6 +327,7 @@ internal sealed class RunCommand : BaseCommand
                 WaitForDebugger = waitForDebugger,
                 Isolated = isolated,
                 StartDebugSession = startDebugSession,
+                LaunchProfile = launchProfile,
                 EnvironmentVariables = new Dictionary<string, string>(),
                 UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
@@ -1195,6 +1204,7 @@ internal sealed class RunCommand : BaseCommand
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = AppHostLauncher.GetExplicitIsolated(parseResult);
         var noBuild = parseResult.GetValue(s_noBuildOption);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
         var appHostArgs = parseResult.UnmatchedTokens;
@@ -1209,6 +1219,11 @@ internal sealed class RunCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
+        }
+
         if (appHostArgs.Count > 0)
         {
             additionalArgs.Add("--");
@@ -1219,6 +1234,7 @@ internal sealed class RunCommand : BaseCommand
             passedAppHostProjectFile,
             format,
             isolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,
