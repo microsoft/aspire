@@ -450,7 +450,7 @@ public static class KubernetesPersistentVolumeExtensions
         // `.WithDataVolume("pgdata").WithPersistentVolume(pv)` the container used Docker volume
         // `pgdata`. Renaming that to the generated name starts the container on a new empty volume
         // with no error or warning - the original data is still on disk, just unreferenced - so the
-        // symptom is an apparently empty database after an upgrade. Reported in review of #19404.
+        // symptom is an apparently empty database after an upgrade.
         //
         // The cost of this gate is that WithPersistentVolume(pv, "/data") and
         // WithPersistentVolume(pv, "/data", env: "X") mount different local volumes for the same
