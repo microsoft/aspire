@@ -45,6 +45,10 @@ public sealed class ExtensionE2eWorkflowTests
             "\"ASPIRE_DCP_PATH=$($dcp.Directory.FullName)\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
             prepareCliScript,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "\"ASPIRE_CLI_PACKAGES=$hiveDir\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
+            prepareCliScript,
+            StringComparison.Ordinal);
     }
 
     [Fact]
