@@ -164,6 +164,44 @@ public class KubernetesPersistentVolumeRunModeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task NameMatchBindingWithEnvScopesContainerVolume(bool bindBeforeVolume)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("data");
+        var container = builder.AddContainer("container", "image");
+
+        if (bindBeforeVolume)
+        {
+            container.WithPersistentVolume(volume)
+                .WithVolume("data", "/srv/data", env: "DATA_PATH");
+        }
+        else
+        {
+            container.WithVolume("data", "/srv/data", env: "DATA_PATH")
+                .WithPersistentVolume(volume);
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        // Spelling env on the mount is the same opt-in as spelling it on the binding, so it has to
+        // produce the same worktree-scoped volume. The scoping decision runs at finalization, which
+        // is what keeps this independent of the order the two calls were made in.
+        var expectedVolumeName = VolumeNameGenerator.Generate(volume, "kubernetes-env");
+        var mount = Assert.Single(container.Resource.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal(expectedVolumeName, mount.Source);
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal("/srv/data", environment["DATA_PATH"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task NameMatchBindingUsesSharedPersistentVolumePathForHostProcesses(bool bindBeforeVolume)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

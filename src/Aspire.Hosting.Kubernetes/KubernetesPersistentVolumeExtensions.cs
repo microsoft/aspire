@@ -275,10 +275,12 @@ public static class KubernetesPersistentVolumeExtensions
                 return KubernetesPersistentVolumeLocalStorage.GetOrCreatePath(store, volume.Resource);
             });
 
-        // The name-match overload has no env parameter, so it never scopes the local volume name.
-        // This is the surface that shipped in 13.5.0 and it has to keep mounting the volume the
-        // container already declared.
-        var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume, env: null);
+        // This overload takes no env, but the name-match composition can still opt into the portable
+        // path by spelling env on the mount instead:
+        //   .WithVolume("data", "/srv/data", env: "DATA_PATH").WithPersistentVolume(pv)
+        // That mount may be declared after this call, so whether the scoped name actually gets applied
+        // is decided at finalization rather than here. See ApplyRunModeContainerVolumeName.
+        var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume);
         builder.WithAnnotation(new KubernetesPersistentVolumeBindingAnnotation(
             volume.Resource,
             runModeContainerVolumeName: runModeContainerVolumeName));
@@ -409,7 +411,7 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(volume);
         ArgumentException.ThrowIfNullOrEmpty(mountPath);
 
-        var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume, env);
+        var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume);
 
         VolumeResourceBuilderExtensions.WithVolumeCore(
             builder,
@@ -431,10 +433,14 @@ public static class KubernetesPersistentVolumeExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Computes the worktree-scoped local volume name for a run-mode container binding. This only
+    /// builds the candidate; whether it is actually applied is decided at finalization, because the
+    /// env opt-in can be spelled on a mount declared after this binding.
+    /// </summary>
     private static string? GetRunModeContainerVolumeName<T>(
         IResourceBuilder<T> builder,
-        IResourceBuilder<KubernetesPersistentVolumeResource> volume,
-        string? env)
+        IResourceBuilder<KubernetesPersistentVolumeResource> volume)
         where T : IComputeResource
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode || builder.Resource is not ContainerResource)
@@ -442,26 +448,8 @@ public static class KubernetesPersistentVolumeExtensions
             return null;
         }
 
-        // Only bindings that opted into the portable env path get a worktree-scoped local volume.
-        //
-        // Scoping exists so one AppHost checked out into two worktrees does not silently share a
-        // single local volume. Applying it to every binding would rename the local volume out from
-        // under AppHosts written against 13.5.0, which mounted the persistent volume's own name: with
-        // `.WithDataVolume("pgdata").WithPersistentVolume(pv)` the container used Docker volume
-        // `pgdata`. Renaming that to the generated name starts the container on a new empty volume
-        // with no error or warning - the original data is still on disk, just unreferenced - so the
-        // symptom is an apparently empty database after an upgrade.
-        //
-        // The cost of this gate is that WithPersistentVolume(pv, "/data") and
-        // WithPersistentVolume(pv, "/data", env: "X") mount different local volumes for the same
-        // persistent volume. That asymmetry is deliberate: env is the opt-in for the new portable path
-        // behavior, so preserving existing data for existing AppHosts outranks naming uniformity
-        // across the two overloads.
-        if (env is null)
-        {
-            return null;
-        }
-
+        // Generate is builder-bound because it needs the application name and the AppHost path hash,
+        // so the candidate has to be built here even though the decision happens later.
         var environmentName = volume.Resource.Parent.Name.ToKubernetesResourceName();
         return VolumeNameGenerator.Generate(volume, $"kubernetes-{environmentName}");
     }

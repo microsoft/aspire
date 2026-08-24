@@ -223,9 +223,28 @@ public static class KubernetesEnvironmentExtensions
             return;
         }
 
-        // Resolve after the model is complete so WithPersistentVolume and WithVolume remain
-        // order-independent while publish mode can continue matching the original claim name.
+        // Only bindings that opted into the portable env path get a worktree-scoped local volume, and
+        // the opt-in has two spellings: env on the binding itself, or env on a name-matched mount.
+        // GetLocalPathEnvironmentVariableName resolves both, and running here - after the model is
+        // complete - is what makes the mount spelling work regardless of builder order.
         //
+        // Scoping exists so one AppHost checked out into two worktrees does not silently share a
+        // single local volume. Applying it to every binding would rename the local volume out from
+        // under AppHosts written against 13.5.0, which mounted the persistent volume's own name: with
+        // `.WithDataVolume("pgdata").WithPersistentVolume(pv)` the container used Docker volume
+        // `pgdata`. Renaming that to the generated name starts the container on a new empty volume
+        // with no error or warning - the original data is still on disk, just unreferenced - so the
+        // symptom is an apparently empty database after an upgrade. Neither env spelling existed
+        // before this convention shipped, so gating on env cannot strand data written by 13.5.0.
+        //
+        // The cost is that WithPersistentVolume(pv, "/data") and WithPersistentVolume(pv, "/data",
+        // env: "X") mount different local volumes for the same persistent volume. That asymmetry is
+        // deliberate: env is the opt-in, so preserving existing data outranks naming uniformity.
+        if (GetLocalPathEnvironmentVariableName(resource, binding) is null)
+        {
+            return;
+        }
+
         // Replace each mount in place rather than Remove-then-Add. ContainerMountAnnotation is a
         // record, so Remove matches by value and a Remove/Add pair would both relocate the mount to
         // the end of the annotation collection and risk removing a value-identical sibling.

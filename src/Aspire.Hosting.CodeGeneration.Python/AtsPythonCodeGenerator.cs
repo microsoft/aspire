@@ -701,6 +701,16 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return methodName + "Parameters";
     }
 
+    /// <summary>
+    /// Extracts the trailing segment of a capability ID, for example "withDataVolume" from
+    /// "Aspire.Hosting.Azure.Storage/withDataVolume".
+    /// </summary>
+    /// <remarks>
+    /// This only needs to be a better-than-nothing disambiguator, not a uniquely correct name. It is
+    /// one rung of the widening ladder in <see cref="ResolveParameterMappingName"/>, which starts at the
+    /// projected method name and ends at a namespace-qualified name plus a numeric suffix, so a
+    /// collision here simply falls through to the next rung.
+    /// </remarks>
     private static string GetCapabilityName(string capabilityId)
     {
         var slashIndex = capabilityId.LastIndexOf('/');
