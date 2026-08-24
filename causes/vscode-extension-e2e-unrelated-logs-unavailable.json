@@ -1,0 +1,17 @@
+{
+  "id": "vscode-extension-e2e-unrelated-logs-unavailable",
+  "type": "flaky-test",
+  "title": "VS Code extension E2E tests fail with unavailable logs and generic exit code 1, unrelated to PR changes",
+  "test_name": "VS Code extension E2E (matrix shards, e.g. workspace-target-proof / edge-cases)",
+  "error_pattern": "Run extension E2E tests step fails with 'Process completed with exit code 1.' Job logs could not be fetched ('Failed to fetch logs for job'). Occurs on PRs unrelated to the extension codebase, similar to known extension-e2eshardmatrix-windows-flaky pattern.",
+  "occurrences": [
+    {
+      "run_id": 32704259463,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32704259463",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "pr_number": 19520,
+      "observed_at": "2026-08-24T08:32:11Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19618"
+}

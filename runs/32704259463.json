@@ -1,0 +1,56 @@
+{
+  "run_id": 32704259463,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32704259463",
+  "analyzed_at": "2026-08-24T08:32:11Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19520,
+    "title": "Add run-mode deployment E2E coverage for role assignments under a service principal credential",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-run-mode-role-assignment-e2e",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19520"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97364598543,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32704259463/job/97364598543",
+      "classification": "flaky-test",
+      "reason": "PR changes are limited to Azure role-assignment provisioning code and deployment E2E tests; they do not touch the VS Code extension. Job logs were unavailable to fetch, only 'Process completed with exit code 1' annotation, consistent with known unrelated extension E2E flakiness.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97364598586,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32704259463/job/97364598586",
+      "classification": "flaky-test",
+      "reason": "PR changes do not touch the VS Code extension. Similar to the known 'extension-e2eshardmatrix-windows-flaky' pattern of intermittent Windows extension host test failures; logs were unavailable but annotation shows generic exit code 1.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97364611607,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32704259463/job/97364611607",
+      "classification": "flaky-test",
+      "reason": "Matches known prior cause 'cli-smoke-test-homebrew-winget-unrelated' (5 prior occurrences): Smoke test installed CLI (aspire new + restore) step fails with exit code 1/4 during Homebrew cask preparation, plus unrelated tap-trust warnings for aws/tap. PR does not touch CLI installer scripts.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97365391214,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32704259463/job/97365391214",
+      "classification": "flaky-test",
+      "reason": "Matches known prior cause 'cli-smoke-test-homebrew-winget-unrelated': Smoke test installed CLI (aspire new + restore) step fails during WinGet manifest preparation, same pattern as Homebrew job failure. PR does not touch CLI installer scripts.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["cli-smoke-test-homebrew-winget-unrelated", "vscode-extension-e2e-unrelated-logs-unavailable"]
+}
