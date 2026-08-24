@@ -142,12 +142,11 @@ public class AspireAzureAIInferenceExtensionTests
 
     [Theory]
     [InlineData("https://account.services.ai.azure.com/models", true)]
-    [InlineData("https://models.github.ai/inference", false)]
-    [InlineData("https://models.inference.ai.azure.com", false)]
     [InlineData("https://account.openai.azure.com/openai/deployments/model", false)]
     [InlineData("https://account.openai.azure.us/openai/deployments/model", false)]
     [InlineData("https://account.openai.azure.cn/openai/deployments/model", false)]
     [InlineData("https://account.openai.azure.de/openai/deployments/model", false)]
+    [InlineData("https://account.services.ai.azure.com/OpenAI/v1", false)]
     public void HealthCheckRegistrationMatchesEndpointSupport(string endpoint, bool expected)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);

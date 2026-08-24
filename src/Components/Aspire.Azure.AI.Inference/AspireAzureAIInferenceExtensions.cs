@@ -461,19 +461,22 @@ public static class AspireAzureAIInferenceExtensions
             return false;
         }
 
-        // The SDK's /info operation is unsupported by GitHub Models and Azure OpenAI endpoints.
+        // The SDK's /info operation is unsupported by Azure OpenAI endpoints.
         // See https://learn.microsoft.com/dotnet/api/azure.ai.inference.chatcompletionsclient.getmodelinfoasync.
         var host = endpoint.Host;
-        return !IsHostOrSubdomain(host, "models.github.ai")
-            && !IsHostOrSubdomain(host, "models.inference.ai.azure.com")
-            && !IsHostOrSubdomain(host, "openai.azure.com")
+        return !IsHostOrSubdomain(host, "openai.azure.com")
             && !IsHostOrSubdomain(host, "openai.azure.us")
             && !IsHostOrSubdomain(host, "openai.azure.cn")
-            && !IsHostOrSubdomain(host, "openai.azure.de");
+            && !IsHostOrSubdomain(host, "openai.azure.de")
+            && !(IsHostOrSubdomain(host, "services.ai.azure.com") && IsPathOrSubpath(endpoint.AbsolutePath, "/openai"));
 
         static bool IsHostOrSubdomain(string host, string domain)
             => host.Equals(domain, StringComparison.OrdinalIgnoreCase)
                 || host.EndsWith($".{domain}", StringComparison.OrdinalIgnoreCase);
+
+        static bool IsPathOrSubpath(string path, string expectedPath)
+            => path.Equals(expectedPath, StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith($"{expectedPath}/", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
