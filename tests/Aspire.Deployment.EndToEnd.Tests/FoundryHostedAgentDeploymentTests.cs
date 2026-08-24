@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Resources;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -119,14 +118,15 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <Nullable>enable</Nullable>
                     <ImplicitUsings>enable</ImplicitUsings>
                     <!-- Suppress experimental API warnings from Agent Framework Foundry packages -->
-                    <NoWarn>$(NoWarn);OPENAI001;MAIF001</NoWarn>
+                    <NoWarn>$(NoWarn);OPENAI001;MAIF001;MAAI001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
-                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.1" />
+                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.3" />
                     <PackageReference Include="Azure.Identity" Version="1.21.0" />
-                    <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.4.0-preview.260505.1" />
-                    <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.0" />
+                    <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.12.0-preview.260629.1" />
+                    <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
                     <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
+                    <PackageReference Include="Azure.Core" Version="1.59.0" />
                   </ItemGroup>
                 </Project>
                 """);
@@ -244,7 +244,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
                 builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
                     .WithReference(chat).WaitFor(chat)
-                    .AsHostedAgent(foundryProject);
+                    .AsHostedAgent(foundryProject, HostedAgentProtocol.Responses, "2.0.0");
 
                 builder.Build().Run();
                 """);

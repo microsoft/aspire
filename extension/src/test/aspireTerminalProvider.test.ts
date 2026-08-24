@@ -1,8 +1,13 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { AspireTerminalProvider, quoteShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
@@ -57,6 +62,23 @@ suite('AspireTerminalProvider tests', () => {
 
             const result = await terminalProvider.getAspireCliExecutablePath();
             assert.strictEqual(result, 'C:\\Program Files\\Aspire\\aspire.exe');
+        });
+
+        test('forwards the workspace folder target to resolveCliPath', async () => {
+            const folder = createWorkspaceFolder('a', '/repo/a');
+            resolveCliPathStub.resolves({ cliPath: '/repo/a/bin/aspire', available: true, source: 'configured' });
+
+            await terminalProvider.getAspireCliExecutablePath(workspaceFolderCliPathTarget(folder));
+
+            assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        });
+
+        test('defaults to the window target when no target is supplied', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+
+            await terminalProvider.getAspireCliExecutablePath();
+
+            assert.ok(resolveCliPathStub.calledOnceWith(windowCliPathTarget));
         });
     });
 
@@ -147,6 +169,68 @@ suite('AspireTerminalProvider tests', () => {
                 platformStub.restore();
             }
         });
+
+        test('recreates terminal after all Aspire terminals are closed for an environment change', () => {
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const firstTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const secondTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onFirstCall().returns(firstTerminal);
+            createTerminalStub.onSecondCall().returns(secondTerminal);
+            const terminalsStub = sinon.stub(vscode.window, 'terminals').value([firstTerminal]);
+
+            try {
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, firstTerminal);
+
+                terminalProvider.closeAllOpenAspireTerminals();
+
+                assert.strictEqual((firstTerminal.dispose as sinon.SinonStub).called, true);
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, secondTerminal);
+                assert.strictEqual(createTerminalStub.callCount, 2);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                terminalsStub.restore();
+            }
+        });
+
+        test('stops reusing a terminal with stale environment without disposing it', () => {
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const firstTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const secondTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onFirstCall().returns(firstTerminal);
+            createTerminalStub.onSecondCall().returns(secondTerminal);
+
+            try {
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, firstTerminal);
+
+                (terminalProvider as unknown as { invalidateSharedAspireTerminal(): void }).invalidateSharedAspireTerminal();
+
+                assert.strictEqual((firstTerminal.dispose as sinon.SinonStub).called, false);
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, secondTerminal);
+                assert.strictEqual(createTerminalStub.callCount, 2);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {
@@ -168,6 +252,155 @@ suite('AspireTerminalProvider tests', () => {
             }
             else {
                 process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] = originalStopOnEntry;
+            }
+        });
+
+        test('does not reuse a shared Aspire terminal across workspace folders', async () => {
+            const folderA = createWorkspaceFolder('a', '/repo/a');
+            const folderB = createWorkspaceFolder('b', '/repo/b');
+            const targetA = workspaceFolderCliPathTarget(folderA);
+            const targetB = workspaceFolderCliPathTarget(folderB);
+            resolveCliPathStub.callsFake(async target => ({
+                cliPath: target === targetA ? '/repo/a/aspire' : '/repo/b/aspire',
+                available: true,
+                source: 'configured',
+            }));
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').callsFake(() => ({
+                shellIntegration: { executeCommand: () => ({} as vscode.TerminalShellExecution) },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal));
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target: targetA });
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target: targetB });
+
+                assert.strictEqual(createTerminalStub.callCount, 2);
+                assert.strictEqual((createTerminalStub.firstCall.args[0] as vscode.TerminalOptions).cwd, folderA.uri);
+                assert.strictEqual((createTerminalStub.secondCall.args[0] as vscode.TerminalOptions).cwd, folderB.uri);
+            }
+            finally {
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+            }
+        });
+
+        test('uses the same concrete CLI for the command and terminal environment', async () => {
+            const folder = createWorkspaceFolder('a', '/repo/a');
+            const target = workspaceFolderCliPathTarget(folder);
+            const cliPath = '/repo/a/bin/aspire';
+            resolveCliPathStub.resolves({ cliPath, available: true, source: 'configured' });
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            let executedCommand: string | undefined;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns({
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal);
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target });
+
+                assert.ok(resolveCliPathStub.calledOnceWith(target));
+                // The shell decides how the path is quoted: PowerShell needs the call operator and
+                // quotes, POSIX shells do not. Asserting containment keeps this about which CLI ran.
+                assert.ok(executedCommand?.includes(cliPath), executedCommand);
+                assert.ok(executedCommand?.endsWith(' logs'), executedCommand);
+                assert.ok(createEnvironmentStub.calledOnceWith(undefined, undefined, undefined, cliPath));
+            }
+            finally {
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+            }
+        });
+
+        test('uses a gate-resolved CLI without resolving the target again', async () => {
+            const folder = createWorkspaceFolder('a', '/repo/a');
+            const target = workspaceFolderCliPathTarget(folder);
+            const cliPath = '/gate/bin/aspire';
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            let executedCommand: string | undefined;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns({
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    },
+                },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal);
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('new', false, undefined, { target, cliPath });
+
+                assert.strictEqual(resolveCliPathStub.called, false);
+                assert.ok(executedCommand?.includes(cliPath), executedCommand);
+                assert.strictEqual(createEnvironmentStub.firstCall.args[3], cliPath);
+            }
+            finally {
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+            }
+        });
+
+        test('does not reuse a shared terminal whose CLI environment is stale', async () => {
+            const folder = createWorkspaceFolder('a', '/repo/a');
+            const target = workspaceFolderCliPathTarget(folder);
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').callsFake(() => ({
+                shellIntegration: { executeCommand: () => ({} as vscode.TerminalShellExecution) },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal));
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('new', false, undefined, { target, cliPath: '/repo/a/first/aspire' });
+                await terminalProvider.sendAspireCommandToAspireTerminal('new', false, undefined, { target, cliPath: '/repo/a/second/aspire' });
+
+                assert.strictEqual(createTerminalStub.callCount, 2);
+                assert.strictEqual(createEnvironmentStub.firstCall.args[3], '/repo/a/first/aspire');
+                assert.strictEqual(createEnvironmentStub.secondCall.args[3], '/repo/a/second/aspire');
+            }
+            finally {
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+            }
+        });
+
+        test('targeted invalidation stops reusing only the matching folder terminal', async () => {
+            const folderA = createWorkspaceFolder('a', '/repo/a');
+            const folderB = createWorkspaceFolder('b', '/repo/b');
+            const targetA = workspaceFolderCliPathTarget(folderA);
+            const targetB = workspaceFolderCliPathTarget(folderB);
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').callsFake(() => ({
+                shellIntegration: { executeCommand: () => ({} as vscode.TerminalShellExecution) },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal));
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target: targetA });
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target: targetB });
+
+                (terminalProvider as unknown as { invalidateSharedAspireTerminal(target: typeof targetA): void }).invalidateSharedAspireTerminal(targetA);
+
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target: targetB });
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false, undefined, { target: targetA });
+
+                assert.strictEqual(createTerminalStub.callCount, 3);
+            }
+            finally {
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
             }
         });
 
@@ -212,6 +445,35 @@ suite('AspireTerminalProvider tests', () => {
             finally {
                 eventSubscription.dispose();
                 getAspireTerminalStub.restore();
+            }
+        });
+
+        test('creates a new editor terminal when terminalTarget is editor', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const createdTerminal = {
+                shellIntegration: {
+                    executeCommand: () => ({} as vscode.TerminalShellExecution)
+                },
+                sendText: () => { },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal;
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(createdTerminal);
+            const sharedTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal');
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', true, undefined, { terminalTarget: 'editor', target: windowCliPathTarget });
+
+                assert.strictEqual(sharedTerminalStub.called, false);
+                assert.strictEqual(createTerminalStub.calledOnce, true);
+                const options = createTerminalStub.firstCall.args[0] as vscode.TerminalOptions;
+                assert.strictEqual(options.location, vscode.TerminalLocation.Editor);
+            }
+            finally {
+                createEnvironmentStub.restore();
+                createTerminalStub.restore();
+                sharedTerminalStub.restore();
             }
         });
 
@@ -525,7 +787,7 @@ suite('AspireTerminalProvider tests', () => {
                     '--',
                     '--secret',
                     'super-secret',
-                ], { redactAdditionalArgs: true });
+                ], { redactAdditionalArgs: true, target: windowCliPathTarget });
 
                 assert.ok(executedCommand?.includes('super-secret'));
                 assert.strictEqual(infoStub.calledOnce, true);
@@ -541,7 +803,15 @@ suite('AspireTerminalProvider tests', () => {
     });
 
     suite('createEnvironment', () => {
+        let originalStartupTimeout: string | undefined;
+        let originalLowercaseStartupTimeout: string | undefined;
+
         setup(() => {
+            originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            originalLowercaseStartupTimeout = process.env.aspire_cli_start_timeout;
+            delete process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            delete process.env.aspire_cli_start_timeout;
+
             terminalProvider.rpcServerConnectionInfo = {
                 address: 'http://localhost:1234',
                 token: 'rpc-token',
@@ -554,6 +824,11 @@ suite('AspireTerminalProvider tests', () => {
             };
         });
 
+        teardown(() => {
+            restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            restoreEnvironmentVariable('aspire_cli_start_timeout', originalLowercaseStartupTimeout);
+        });
+
         test('marks extension-managed debug sessions as non-interactive without disabling extension prompts', () => {
             const env = terminalProvider.createEnvironment('debug-session-id', false);
 
@@ -562,12 +837,268 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
         });
 
+        test('uses a longer AppHost startup timeout for extension-managed debug sessions', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '86400');
+        });
+
+        test('does not change the AppHost startup timeout for extension-managed run sessions', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', true);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+        });
+
+        test('keeps an explicitly configured AppHost startup timeout for extension-managed debug sessions', () => {
+            const originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '300';
+
+            try {
+                const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+                assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '300');
+            }
+            finally {
+                restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            }
+        });
+
+        test('keeps an explicitly configured AppHost startup timeout with different casing on Windows', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            process.env.aspire_cli_start_timeout = '300';
+
+            try {
+                const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+                assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+                assert.strictEqual(env.aspire_cli_start_timeout, '300');
+            }
+            finally {
+                platformStub.restore();
+            }
+        });
+
+        test('creates DCP run-session environment without extension backchannel stop hook', () => {
+            const previousEndpoint = process.env.ASPIRE_EXTENSION_ENDPOINT;
+            const previousToken = process.env.ASPIRE_EXTENSION_TOKEN;
+            const previousCert = process.env.ASPIRE_EXTENSION_CERT;
+            process.env.ASPIRE_EXTENSION_ENDPOINT = 'inherited-endpoint';
+            process.env.ASPIRE_EXTENSION_TOKEN = 'inherited-token';
+            process.env.ASPIRE_EXTENSION_CERT = 'inherited-cert';
+
+            let env: any;
+            try {
+                env = terminalProvider.createDcpRunSessionEnvironment('debug-session-id', false);
+            } finally {
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_ENDPOINT', previousEndpoint);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_TOKEN', previousToken);
+                restoreEnvironmentVariable('ASPIRE_EXTENSION_CERT', previousCert);
+            }
+
+            assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_TOKEN, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_CERT, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
+            assert.strictEqual(env.DCP_INSTANCE_ID_PREFIX, 'debug-session-id-');
+            assert.strictEqual(env.DEBUG_SESSION_RUN_MODE, 'Debug');
+            assert.strictEqual(env.DEBUG_SESSION_PORT, 'http://localhost:5678');
+            assert.strictEqual(env.DEBUG_SESSION_TOKEN, 'dcp-token');
+            assert.strictEqual(env.DEBUG_SESSION_SERVER_CERTIFICATE, 'dcp-cert');
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '86400');
+            const debugSessionInfo = JSON.parse(env.DEBUG_SESSION_INFO);
+            assert.deepStrictEqual(debugSessionInfo.protocols_supported, ['2024-03-03', '2024-04-23', '2025-10-01']);
+            assert.ok(debugSessionInfo.supported_launch_configurations.includes('baseline.v1'));
+            assert.ok(debugSessionInfo.supported_launch_configurations.includes('node'));
+            assert.ok(debugSessionInfo.supported_launch_configurations.includes('browser'));
+        });
+
         test('does not mark user terminal commands as non-interactive', () => {
             const env = terminalProvider.createEnvironment();
 
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
+        });
+
+        test('forwards an existing absolute aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution can pick it up', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, __filename);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('forwards AspireCliPath even when extension backchannel variables are suppressed', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, true);
+                assert.strictEqual(env.AspireCliPath, __filename);
+                assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is empty', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is a bare command name', () => {
+            // A relative or bare-name value would fail ResolveAspireCliBundle's
+            // File.Exists guard, so leaving the env var unset is the correct
+            // behavior. The task then falls back to its PATH/ASPIRE_HOME logic.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured absolute path does not exist', () => {
+            // A stale absolute value would fail ResolveAspireCliBundle's
+            // File.Exists guard and suppress PATH/ASPIRE_HOME fallback.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('/work/aspire/missing/aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('preserves locale override for hidden CLI commands without extension backchannel variables', () => {
+            const inheritedVariables: Record<string, string> = {
+                ASPIRE_BACKCHANNEL_PATH: 'inherited-backchannel-path',
+                ASPIRE_CLI_LOG_FILE: 'inherited-cli-log-file',
+                ASPIRE_CLI_PID: 'inherited-cli-pid',
+                ASPIRE_CLI_STARTED: 'inherited-cli-started',
+                ASPIRE_EXTENSION_CAPABILITIES: 'inherited-capabilities',
+                ASPIRE_EXTENSION_CERT: 'inherited-cert',
+                ASPIRE_EXTENSION_DEBUG_RUN_MODE: 'inherited-debug-run-mode',
+                ASPIRE_EXTENSION_DEBUG_SESSION_ID: 'inherited-debug-session-id',
+                ASPIRE_EXTENSION_ENDPOINT: 'inherited-endpoint',
+                ASPIRE_EXTENSION_PROMPT_ENABLED: 'inherited-prompt-enabled',
+                ASPIRE_EXTENSION_TOKEN: 'inherited-token',
+                ASPIRE_LOCALE_OVERRIDE: 'process-locale',
+                ASPIRE_NON_INTERACTIVE: 'inherited-non-interactive',
+                ASPIRE_SUPPRESS_CLI_RUN_HOOK: 'inherited-suppress-run-hook',
+                ASPIRE_TERMINAL_HOST_CUSTOM_TEST: 'inherited-terminal-host-custom',
+                ASPIRE_TERMINAL_HOST_INVOCATION_ARGS: 'inherited-terminal-host-invocation-args',
+                ASPIRE_TERMINAL_HOST_PATH: 'inherited-terminal-host-path',
+                DCP_INSTANCE_ID_PREFIX: 'inherited-dcp-instance-prefix',
+                DEBUG_SESSION_INFO: 'inherited-debug-session-info',
+                DEBUG_SESSION_PORT: 'inherited-debug-session-port',
+                DEBUG_SESSION_RUN_MODE: 'inherited-debug-session-run-mode',
+                DEBUG_SESSION_SERVER_CERTIFICATE: 'inherited-debug-session-certificate',
+                DEBUG_SESSION_TOKEN: 'inherited-debug-session-token',
+            };
+            const previousVariables = new Map<string, string | undefined>();
+
+            for (const [key, value] of Object.entries(inheritedVariables)) {
+                previousVariables.set(key, process.env[key]);
+                process.env[key] = value;
+            }
+
+            let env: any;
+            try {
+                env = terminalProvider.createEnvironment(undefined, undefined, true);
+            } finally {
+                for (const [key, value] of previousVariables) {
+                    restoreEnvironmentVariable(key, value);
+                }
+            }
+
+            assert.strictEqual(env.ASPIRE_LOCALE_OVERRIDE, vscode.env.language);
+            for (const key of Object.keys(inheritedVariables).filter(key => key !== 'ASPIRE_LOCALE_OVERRIDE')) {
+                assert.strictEqual(env[key], undefined, key);
+            }
+        });
+
+        test('scrubs hidden CLI extension variables case-insensitively on Windows', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const inheritedVariables: Record<string, string> = {
+                Aspire_Extension_Token: 'mixed-case-token',
+                debug_session_token: 'lowercase-debug-session-token',
+                aspire_terminal_host_path: 'lowercase-terminal-host-path',
+            };
+            const previousVariables = new Map<string, string | undefined>();
+
+            for (const [key, value] of Object.entries(inheritedVariables)) {
+                previousVariables.set(key, process.env[key]);
+                process.env[key] = value;
+            }
+
+            let env: any;
+            try {
+                env = terminalProvider.createEnvironment(undefined, undefined, true);
+            } finally {
+                platformStub.restore();
+                for (const [key, value] of previousVariables) {
+                    restoreEnvironmentVariable(key, value);
+                }
+            }
+            for (const key of Object.keys(inheritedVariables)) {
+                assert.strictEqual(env[key], undefined, key);
+            }
+        });
+
+        test('forwards the exact resolved CLI path even when a different configured path is valid', () => {
+            const otherExistingPath = path.join(__dirname, 'cliSpawn.test.js');
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(otherExistingPath);
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, undefined, __filename);
+                assert.strictEqual(env.AspireCliPath, __filename);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('forwards the exact resolved CLI path when extension backchannel variables are suppressed', () => {
+            const otherExistingPath = path.join(__dirname, 'cliSpawn.test.js');
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(otherExistingPath);
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, true, __filename);
+                assert.strictEqual(env.AspireCliPath, __filename);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('removes an ambient AspireCliPath when the resolved CLI path is a bare command name', () => {
+            // A bare command isn't forwardable, so any inherited AspireCliPath (e.g. from a
+            // parent shell) must not leak into this child and point ResolveAspireCliBundle at a
+            // CLI other than the one that was actually launched.
+            const previousAmbientCliPath = process.env.AspireCliPath;
+            process.env.AspireCliPath = '/ambient/stale/aspire';
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                restoreEnvironmentVariable('AspireCliPath', previousAmbientCliPath);
+            }
+        });
+
+        test('omits AspireCliPath for a resolved unbundled framework-dependent CLI build', () => {
+            const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-terminal-provider-unbundled-'));
+            const cliPath = path.join(tempDirectory, 'aspire');
+            fs.writeFileSync(cliPath, '');
+            fs.writeFileSync(path.join(tempDirectory, 'aspire.dll'), '');
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, undefined, cliPath);
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                removeDirectorySafely(tempDirectory);
+            }
         });
     });
 

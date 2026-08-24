@@ -7,6 +7,9 @@
     <RootNamespace>Aspire.Hosting.CodeGeneration.Rust</RootNamespace>
     <!-- Required for Rust AppHost support -->
     <IsPackable>true</IsPackable>
+    <!-- Code-generation infrastructure, not a discoverable polyglot integration, so opt out of the
+         default 'polyglot' NuGet tag that `aspire add` uses to surface integrations to non-C# AppHosts. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
     <!-- No baseline exists since this package was previously not published -->
     <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <IsAotCompatible>true</IsAotCompatible>

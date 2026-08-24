@@ -8,6 +8,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREUSERSECRETS001
+#pragma warning disable ASPIREWATCH001
 
 using System.Diagnostics;
 using System.Reflection;
@@ -141,22 +142,26 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _innerBuilder.Configuration["Publishing:Publisher"] switch
             {
                 { } publisher => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, publisher),
-                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() }
             };
         }
 
-        var operation = _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
+        return _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
         {
-            "publish" => DistributedApplicationOperation.Publish,
-            "run" => DistributedApplicationOperation.Run,
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            "run" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
+            "publish" or "inspect" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
+            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish', 'run', or 'inspect'.")
         };
+    }
 
-        return operation switch
+    private RunConfiguration BuildRunConfiguration()
+    {
+        // Only "true" and "false" (case-insensitively) are accepted. bool.TryParse rejects everything else,
+        // including values some configuration sources emit for booleans such as "1" or "yes". An unusable
+        // value must never fail an otherwise valid run, so anything unrecognized falls back to the default.
+        return new RunConfiguration
         {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(operation),
-            DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            WatchEnabled = bool.TryParse(_innerBuilder.Configuration["AppHost:Run:WatchEnabled"], out var watchEnabled) && watchEnabled
         };
     }
 
@@ -211,8 +216,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
-        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
+        // Allow warnings from Aspire's dashboard code. We control this code and want to be able to log warnings to help troubleshoot issues in the dashboard.
+        // For example, misconfigured icons from the apphost are logged as warnings, and we want those to be visible to users.
+        // The volume of logs from this category should be low, so it shouldn't cause too much noise.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
+        // Third-party dashboard categories (e.g. Microsoft.AspNetCore, Grpc) are routed under
+        // Aspire.Hosting.Dashboard.ThirdParty so they can be filtered with a single rule.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
 
         // This is to reduce log noise when we activate health checks for resources which may not yet be
         // fully initialized. For example a database which is not yet created.
@@ -364,7 +375,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
-        _innerBuilder.Services.AddSingleton<ParameterProcessor>();
+        _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
+        {
+            var parameterProcessor = ActivatorUtilities.CreateInstance<ParameterProcessor>(sp);
+            // Wire the AppHost-scoped redaction history after construction (not through the public constructor) so
+            // the processor records resolved secret values as they are assigned/replaced. This populates the
+            // describe/watch redaction set from startup, independent of any backchannel connection, while keeping
+            // ParameterProcessor's public constructor unchanged (https://github.com/microsoft/aspire/issues/19241).
+            parameterProcessor.SecretRedactionHistory = sp.GetRequiredService<SecretRedactionHistory>();
+            return parameterProcessor;
+        });
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -407,7 +427,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
+        // Shared by every per-connection AuxiliaryBackchannelRpcTarget so the describe/watch secret redaction set
+        // outlives an individual connection (https://github.com/microsoft/aspire/issues/19241).
+        _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
+        _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
 
         ConfigureHealthChecks();
 
@@ -521,6 +545,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
+            _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -748,6 +774,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Pipeline options (valid for aspire do based commands)
             { "--step", "Pipeline:Step" },
+            { "--list-steps", "Pipeline:ListSteps" },
             { "--output-path", "Pipeline:OutputPath" },
             { "--log-level", "Pipeline:LogLevel" },
             { "--include-exception-details", "Pipeline:IncludeExceptionDetails" },

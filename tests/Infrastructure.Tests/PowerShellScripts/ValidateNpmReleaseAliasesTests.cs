@@ -64,6 +64,18 @@ public sealed class ValidateNpmReleaseAliasesTests
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task FailsWhenOwnersHasMultipleAliases()
+    {
+        var result = await RunValidation(owners: "joperezr,ankj", approvers: "adamratzman");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "NpmPublishOwners must contain exactly one Microsoft alias or @microsoft.com email address.",
+            Flatten(result.Output));
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task FailsWhenOwnersMissingEveryRequiredAlias()
     {
         var result = await RunValidation(owners: "octocat", approvers: "ankj");
@@ -151,12 +163,14 @@ public sealed class ValidateNpmReleaseAliasesTests
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task EmitsSortedDeduplicatedEffectiveAliasesOnSuccess()
+    public async Task EmitsDeduplicatedEffectiveAliasesOnSuccess()
     {
-        var result = await RunValidation(owners: "ankj,joperezr,ANKJ", approvers: "adamratzman");
+        // Duplicate spellings of the same single owner alias (different casing and the
+        // @microsoft.com suffix) collapse to one entry, satisfying the single-owner rule.
+        var result = await RunValidation(owners: "joperezr,JOPEREZR,joperezr@microsoft.com", approvers: "adamratzman");
 
         result.EnsureSuccessful();
-        Assert.Contains("variable=NpmPublishOwnersEffective]ankj,joperezr", result.Output);
+        Assert.Contains("variable=NpmPublishOwnersEffective]joperezr", result.Output);
         Assert.Contains("variable=NpmPublishApproversEffective]adamratzman", result.Output);
     }
 

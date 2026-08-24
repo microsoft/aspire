@@ -15,4 +15,17 @@
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" />
   </ItemGroup>
 
+  <!-- These targets prototype the contract that will eventually be provided by the SDKs.
+       The server asks every evaluated ProjectReference whether it is a WebAssembly
+       project and collects the project paths returned by references that recognize the target. -->
+  <Target Name="ResolveWebAssemblyProjectReferences">
+    <MSBuild
+        Projects="@(ProjectReference)"
+        Targets="GetWebAssemblyProjectReference"
+        BuildInParallel="true"
+        SkipNonexistentTargets="true">
+      <Output TaskParameter="TargetOutputs" ItemName="WebAssemblyProjectReference" />
+    </MSBuild>
+  </Target>
+
 </Project>

@@ -203,7 +203,7 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         SetDefault("DcpPublisher:WaitForResourceCleanup", "true");
 
         // Make sure we have a dashboard URL and OTLP endpoint URL.
-        SetDefault(KnownConfigNames.AspNetCoreUrls, "http://localhost:8080");
+        SetDefault(KnownAspNetCoreConfigNames.Urls, "http://localhost:8080");
         SetDefaultFallback(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl, "http://localhost:4317");
 
         // Since the testing builder defaults all dashboard/OTLP URLs to HTTP, also allow

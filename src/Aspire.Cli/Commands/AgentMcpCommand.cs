@@ -134,7 +134,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             ServerInfo = new Implementation
             {
                 Name = "aspire-mcp-server",
-                Version = VersionHelper.GetDefaultTemplateVersion(),
+                Version = _executionContext.IdentityVersion,
                 Icons = icons
             },
             Handlers = new McpServerHandlers()

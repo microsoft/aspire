@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests.Helpers;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -144,7 +145,7 @@ public class DashboardServiceDataTerminalTests
     private static bool HasTerminalProperty(ResourceSnapshot snapshot, string name)
         => snapshot.Properties.Any(p => string.Equals(p.Name, name, StringComparison.Ordinal));
 
-    private static (string Name, Google.Protobuf.WellKnownTypes.Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted) GetTerminalProperty(ResourceSnapshot snapshot, string name)
+    private static (string Name, Google.Protobuf.WellKnownTypes.Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted, int? SortOrder) GetTerminalProperty(ResourceSnapshot snapshot, string name)
         => snapshot.Properties.Single(p => string.Equals(p.Name, name, StringComparison.Ordinal));
 
     private static IReadOnlyList<TerminalHostResource> GetTerminalHosts(Resource resource)
@@ -196,13 +197,15 @@ public class DashboardServiceDataTerminalTests
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
         var data = new DashboardServiceData(
             notifications,
             loggerService,
             NullLogger<DashboardServiceData>.Instance,
             new ResourceCommandService(notifications, loggerService, new ServiceCollection().BuildServiceProvider()),
-            interactions);
+            interactions,
+            new TestInteractionFileUploadStore());
         return (data, notifications, resource);
     }
 

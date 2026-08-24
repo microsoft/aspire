@@ -22,6 +22,7 @@ public sealed class ResourceViewModel
     private readonly ImmutableArray<HealthReportViewModel> _healthReports = [];
     private readonly KnownResourceState? _knownState;
     private Lazy<ImmutableArray<string>>? _cachedAddresses;
+    private Lazy<string?>? _cachedDatabaseName;
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
@@ -59,6 +60,9 @@ public sealed class ResourceViewModel
     /// </summary>
     public ImmutableArray<string> CachedAddresses => (_cachedAddresses ??= new Lazy<ImmutableArray<string>>(ExtractResourceAddresses)).Value;
 
+    /// <summary>Gets the database name from resource metadata or the parsed connection string.</summary>
+    internal string? CachedDatabaseName => (_cachedDatabaseName ??= new Lazy<string?>(ExtractDatabaseName)).Value;
+
     private ImmutableArray<string> ExtractResourceAddresses()
     {
         var addresses = new List<string>();
@@ -89,6 +93,51 @@ public sealed class ResourceViewModel
         }
 
         return addresses.ToImmutableArray();
+    }
+
+    private string? ExtractDatabaseName()
+    {
+        if (TryGetConnectionProperty("DatabaseName", out var databaseNameProperty) &&
+            databaseNameProperty.TryConvertToString(out var databaseName))
+        {
+            return databaseName;
+        }
+
+        if (Properties.TryGetValue(KnownProperties.Resource.ConnectionString, out var connectionStringProperty) &&
+            connectionStringProperty.Value.TryConvertToString(out var connectionString) &&
+            ConnectionStringParser.TryDetectDatabaseName(connectionString, out databaseName))
+        {
+            return databaseName;
+        }
+
+        return null;
+    }
+
+    private bool TryGetConnectionProperty(string propertyName, [NotNullWhen(true)] out Value? propertyValue)
+    {
+        if (!Properties.TryGetValue(KnownProperties.Resource.ConnectionProperties, out var connectionPropertiesProperty) ||
+            connectionPropertiesProperty.Value.StructValue is not { } connectionProperties)
+        {
+            propertyValue = null;
+            return false;
+        }
+
+        if (connectionProperties.Fields.TryGetValue(propertyName, out propertyValue))
+        {
+            return true;
+        }
+
+        foreach (var (name, value) in connectionProperties.Fields)
+        {
+            if (string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                propertyValue = value;
+                return true;
+            }
+        }
+
+        propertyValue = null;
+        return false;
     }
 
     public required ImmutableArray<HealthReportViewModel> HealthReports
@@ -319,9 +368,9 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
 
     public string ToolTip => _tooltip.Value;
     public KnownProperty? KnownProperty => _propertyViewModel.KnownProperty;
-    public int Priority => _propertyViewModel.Priority;
     public Value Value => _propertyViewModel.Value;
     public bool IsHighlighted => _propertyViewModel.IsHighlighted;
+    public int SortOrder => _propertyViewModel.SortOrder;
     public string DisplayName => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
 
     string IPropertyGridItem.Name => DisplayName;
@@ -338,7 +387,7 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         _browserTimeProvider = browserTimeProvider;
 
         // Known and unknown properties are displayed together. Avoid any duplicate keys.
-        _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : $"unknown-{propertyViewModel.Name}";
+        _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : GetUnknownKey(propertyViewModel.Name);
 
         _tooltip = new(() => propertyViewModel.Value.HasStringValue ? propertyViewModel.Value.StringValue : propertyViewModel.Value.ToString());
 
@@ -371,13 +420,15 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         });
     }
 
+    internal static string GetUnknownKey(string propertyName) => $"unknown-{propertyName}";
+
     public bool MatchesFilter(string filter) =>
         _propertyViewModel.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         ToolTip.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 }
 
-[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}")]
+[DebuggerDisplay("Name = {Name}, Value = {Value}, IsValueSensitive = {IsValueSensitive}, IsValueMasked = {IsValueMasked}, IsHighlighted = {IsHighlighted}, SortOrder = {SortOrder}")]
 public sealed class ResourcePropertyViewModel
 {
     public string Name { get; }
@@ -387,9 +438,9 @@ public sealed class ResourcePropertyViewModel
     public bool IsValueSensitive { get; }
     public bool IsValueMasked { get; set; }
     public bool IsHighlighted { get; }
-    public int Priority { get; }
+    public int SortOrder { get; }
 
-    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int priority, string? displayName = null, bool isHighlighted = false)
+    public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int sortOrder, string? displayName, bool isHighlighted)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
@@ -398,8 +449,8 @@ public sealed class ResourcePropertyViewModel
         DisplayName = displayName;
         IsValueSensitive = isValueSensitive;
         KnownProperty = knownProperty;
-        Priority = priority;
         IsHighlighted = isHighlighted;
+        SortOrder = sortOrder;
         IsValueMasked = isValueSensitive;
     }
 }

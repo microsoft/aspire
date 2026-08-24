@@ -85,6 +85,33 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
     }
 
+    /// <summary>
+    /// Maps a generated type to its output path, placing it in the directory its package declares.
+    /// </summary>
+    /// <remarks>
+    /// The generated SDK declares <c>package aspire;</c>, so the sources have to live in an
+    /// <c>aspire/</c> directory rather than flat in <c>.aspire/modules</c>. javac itself does not care
+    /// when every file is named explicitly, which is how the CLI compiles, but anything that resolves
+    /// types through a source path does: IDEs build from the project model rather than the CLI's
+    /// argument file, so a flat layout makes the Java language server report
+    /// "package aspire does not exist" against a working AppHost. Emitting the package directory is
+    /// what lets an editor add <c>.aspire/modules</c> as a source root and resolve the SDK.
+    /// </remarks>
+    private static string GetGeneratedFilePath(string packageLine, string fileName)
+    {
+        // "package aspire;" or "package a.b.c;" -> "aspire" / "a/b/c". Always forward slashes: the
+        // value is a relative path key that also gets written into the javac argument file, and javac
+        // accepts forward slashes on every platform.
+        var packageName = packageLine
+            .Replace("package ", string.Empty, StringComparison.Ordinal)
+            .Replace(";", string.Empty, StringComparison.Ordinal)
+            .Trim();
+
+        return string.IsNullOrEmpty(packageName)
+            ? fileName
+            : $"{packageName.Replace('.', '/')}/{fileName}";
+    }
+
     private static Dictionary<string, string> SplitJavaSourceFiles(string source)
     {
         var packageLine = string.Empty;
@@ -174,7 +201,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             if (braceDepth == 0)
             {
                 declarations.Add(
-                    $"{currentTypeName}.java",
+                    GetGeneratedFilePath(packageLine, $"{currentTypeName}.java"),
                     CreateJavaSourceFile($"{currentTypeName}.java", packageLine, importLines, currentDeclaration));
 
                 currentDeclaration = null;
@@ -370,6 +397,129 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         return delta;
     }
 
+    /// <summary>
+    /// Finds the line the top-level type is declared on, skipping the javadoc and comments that
+    /// precede it.
+    /// </summary>
+    /// <remarks>
+    /// Java has no file-level warning suppression, so <c>@SuppressWarnings</c> has to go on the type
+    /// itself, and it has to go <em>below</em> any javadoc: an annotation between a doc comment and
+    /// the type it documents is legal, but a doc comment that is not immediately followed by the
+    /// declaration stops being attached to it.
+    /// </remarks>
+    private static int FindDeclarationLineIndex(List<string> declarationLines)
+    {
+        var inBlockComment = false;
+
+        for (var i = 0; i < declarationLines.Count; i++)
+        {
+            var trimmed = declarationLines[i].Trim();
+
+            if (inBlockComment)
+            {
+                if (trimmed.EndsWith("*/", StringComparison.Ordinal))
+                {
+                    inBlockComment = false;
+                }
+
+                continue;
+            }
+
+            if (trimmed.Length == 0 || trimmed.StartsWith("//", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (trimmed.StartsWith("/*", StringComparison.Ordinal))
+            {
+                // A one-line "/** Foo DTO. */" opens and closes on the same line.
+                if (!trimmed.EndsWith("*/", StringComparison.Ordinal))
+                {
+                    inBlockComment = true;
+                }
+
+                continue;
+            }
+
+            return i;
+        }
+
+        return declarationLines.Count;
+    }
+
+    /// <summary>
+    /// Returns the subset of <paramref name="importLines"/> that <paramref name="declarationLines"/>
+    /// actually references.
+    /// </summary>
+    /// <remarks>
+    /// Every declaration is split out of one generated compilation unit, so without filtering it
+    /// inherits that unit's entire import block. Copying all of it into all 226 files is what made
+    /// the Java language server report an unused import on nearly every file of a project-style
+    /// AppHost. Each import the generator emits names a single type, so "is it used" reduces to a
+    /// whole-word search of the declaration.
+    /// </remarks>
+    private static List<string> FilterImports(List<string> importLines, List<string> declarationLines)
+    {
+        var body = string.Join('\n', declarationLines);
+        var used = new List<string>();
+
+        foreach (var importLine in importLines)
+        {
+            // "import java.util.Map;" -> "java.util.Map", "import static a.B.c;" -> "static a.B.c".
+            var imported = importLine["import ".Length..].TrimEnd(';').Trim();
+
+            // A wildcard cannot be matched against a simple name without knowing every type the
+            // package exports, so it is kept rather than risk dropping one the declaration needs.
+            if (imported.EndsWith('*'))
+            {
+                used.Add(importLine);
+                continue;
+            }
+
+            var simpleName = imported[(imported.LastIndexOf('.') + 1)..];
+
+            if (ContainsWord(body, simpleName))
+            {
+                used.Add(importLine);
+            }
+        }
+
+        return used;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="word"/> appears in <paramref name="text"/> delimited by characters
+    /// that cannot be part of a Java identifier.
+    /// </summary>
+    /// <remarks>
+    /// Substring matching would keep <c>java.util.List</c> alive for a file that only mentions
+    /// <c>AspireList</c>, and dropping a needed import breaks the build, so the boundary check errs
+    /// toward keeping imports: <c>$</c> and <c>_</c> count as identifier characters because Java
+    /// allows them in names.
+    /// </remarks>
+    private static bool ContainsWord(string text, string word)
+    {
+        var index = text.IndexOf(word, StringComparison.Ordinal);
+
+        while (index >= 0)
+        {
+            var beforeIsBoundary = index == 0 || !IsJavaIdentifierChar(text[index - 1]);
+            var afterIndex = index + word.Length;
+            var afterIsBoundary = afterIndex == text.Length || !IsJavaIdentifierChar(text[afterIndex]);
+
+            if (beforeIsBoundary && afterIsBoundary)
+            {
+                return true;
+            }
+
+            index = text.IndexOf(word, index + 1, StringComparison.Ordinal);
+        }
+
+        return false;
+
+        static bool IsJavaIdentifierChar(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '$';
+    }
+
     private static string CreateJavaSourceFile(string fileName, string packageLine, List<string> importLines, List<string> declarationLines)
     {
         var builder = new StringBuilder();
@@ -380,19 +530,48 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         builder.AppendLine(packageLine);
         builder.AppendLine();
 
-        foreach (var importLine in importLines)
+        var usedImports = FilterImports(importLines, declarationLines);
+
+        foreach (var importLine in usedImports)
         {
             builder.AppendLine(importLine);
         }
 
-        if (importLines.Count > 0)
+        if (usedImports.Count > 0)
         {
             builder.AppendLine();
         }
 
-        foreach (var line in declarationLines)
+        var declarationIndex = FindDeclarationLineIndex(declarationLines);
+
+        for (var i = 0; i < declarationLines.Count; i++)
         {
-            builder.AppendLine(line);
+            if (i == declarationIndex)
+            {
+                // This file is regenerated on every run and is not the user's to edit, so a warning
+                // reported against it is noise they cannot act on. Emitting clean code is not enough
+                // on its own: editors compile with ECJ, whose warning set is far broader than javac's
+                // -Xlint (neither "Unnecessary @SuppressWarnings" nor "The import X is never used"
+                // exists in javac), and the alternative of marking the source folder generated lives
+                // in the user's own pom.xml/build.gradle rather than anywhere Aspire controls.
+                //
+                // All three tokens are required, because the two compilers disagree on what "all"
+                // means. ECJ honours "all" as a blanket, and it is the one token ECJ never reports
+                // back as unnecessary. javac does not apply "all" to its -Xlint categories at all, so
+                // it needs each category named: "unchecked" for the Map<String, Object> casts in the
+                // generated callback adapters, and "serial" for CapabilityError, which extends
+                // RuntimeException without a serialVersionUID. Naming them also silences the
+                // "Note: Some input files use unchecked or unsafe operations" that javac otherwise
+                // prints on every `gradle build` and `mvn compile`. The redundancy is safe in the
+                // other direction: ECJ does not flag the extra tokens, because "all" suppresses its
+                // unnecessary-suppression diagnostic too.
+                //
+                // An annotation on the top-level type also covers the compilation unit's imports.
+                // protobuf-java, Dagger, and MapStruct all annotate their output the same way.
+                builder.AppendLine("@SuppressWarnings({\"all\", \"unchecked\", \"serial\"})");
+            }
+
+            builder.AppendLine(declarationLines[i]);
         }
 
         return builder.ToString();
@@ -448,8 +627,20 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine();
         WriteLine("package aspire;");
         WriteLine();
-        WriteLine("import java.util.*;");
-        WriteLine("import java.util.function.*;");
+        // Explicit rather than wildcard imports: CreateJavaSourceFile keeps an import only when the
+        // declaration it lands on references the simple name, and that decision is only exact when the
+        // import names one type. A wildcard would have to be matched against every name the package
+        // exports, so it gets copied into files that never use it.
+        WriteLine("import java.util.ArrayList;");
+        WriteLine("import java.util.HashMap;");
+        WriteLine("import java.util.LinkedHashMap;");
+        WriteLine("import java.util.List;");
+        WriteLine("import java.util.Map;");
+        WriteLine("import java.util.Set;");
+        WriteLine("import java.util.UUID;");
+        WriteLine("import java.util.function.BiFunction;");
+        WriteLine("import java.util.function.Consumer;");
+        WriteLine("import java.util.function.Function;");
         WriteLine();
     }
 
@@ -545,9 +736,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var fieldName = ToCamelCase(property.Name);
-                var methodName = ToPascalCase(property.Name);
                 var fieldType = MapDtoFieldTypeToJava(property);
-                
+                var methodName = DtoAccessorSuffix(property.Name);
                 WriteLine($"    public {fieldType} get{methodName}() {{ return {fieldName}; }}");
                 WriteLine($"    public void set{methodName}({fieldType} value) {{ this.{fieldName} = value; }}");
             }
@@ -566,7 +756,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                     continue;
                 }
                 var fieldName = ToCamelCase(property.Name);
-                var methodName = ToPascalCase(property.Name);
+                var methodName = ToPascalCase(fieldName);
                 var transportValueName = $"{fieldName}Value";
                 WriteLine($"        var {transportValueName} = map.get(\"{property.Name}\");");
                 WriteLine($"        value.set{methodName}({RenderJavaDtoPropertyTransportValueConversion(property.Type, transportValueName, property.IsOptional)});");
@@ -702,7 +892,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
 
             sb.Append("set");
-            sb.Append(ToPascalCase(property.Name));
+            sb.Append(DtoAccessorSuffix(property.Name));
             sb.Append('(');
             sb.Append(RenderJavaExportedValue(propertyValue, property.Type, dtoTypesById));
             sb.Append("); ");
@@ -955,7 +1145,12 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         string returnType,
         string methodName,
         IReadOnlyList<JavaMethodParameter> parameters,
-        bool hasReturn)
+        bool hasReturn,
+        // Signatures already emitted for this method. A caller that invokes this more than once for the
+        // same Java method - as the union expansion does, once per union member and once per arity - has
+        // to share one set, because two union members can both map to the same bridge parameter type and
+        // emitting that bridge twice is a duplicate-method compile error.
+        HashSet<string>? seenSignatures = null)
     {
         if (parameters.Count == 0)
         {
@@ -972,7 +1167,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             return;
         }
 
-        var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
+        seenSignatures ??= new HashSet<string>(StringComparer.Ordinal);
         var combinationCount = 1 << convertibleParameters.Count;
 
         for (var mask = 1; mask < combinationCount; mask++)
@@ -1206,6 +1401,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
 
         var unionParamName = ToCamelCase(unionParameter.Name);
+        // Shared for the same reason as the with-options path: two union members can map to one bridge.
+        var bridgeSignatures = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var unionType in unionTypes
             .Select(type => new { Type = type, JavaType = MapInputTypeToJava(type, unionParameter.IsOptional || unionParameter.IsNullable) })
@@ -1246,7 +1443,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 returnInfo.ReturnType,
                 methodName,
                 CreateUnionMethodParameters(parameters, unionParameter, unionType),
-                returnInfo.HasReturn);
+                returnInfo.HasReturn,
+                bridgeSignatures);
         }
     }
 
@@ -1392,6 +1590,9 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
 
         var unionParamName = ToCamelCase(unionParameter.Name);
+        // One set for the whole method: the loop below emits a bridge overload per union member and
+        // per arity, and two members can map to the same bridge signature.
+        var bridgeSignatures = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var unionType in unionTypes
             .Select(type => new { Type = type, JavaType = MapInputTypeToJava(type, unionParameter.IsOptional || unionParameter.IsNullable) })
@@ -1440,7 +1641,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 returnInfo.ReturnType,
                 methodName,
                 bridgeParameters,
-                returnInfo.HasReturn);
+                returnInfo.HasReturn,
+                bridgeSignatures);
 
             WriteLine($"    public {returnInfo.ReturnType} {methodName}({string.Join(", ", requiredParameters.Select(parameter => ReferenceEquals(parameter, unionParameter) ? $"{MapInputTypeToJava(unionType, unionParameter.IsOptional || unionParameter.IsNullable)} {ToCamelCase(parameter.Name)}" : $"{MapParameterToJava(parameter)} {ToCamelCase(parameter.Name)}"))}) {{");
             if (returnInfo.HasReturn)
@@ -1453,6 +1655,17 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
             WriteLine("    }");
             WriteLine();
+
+            // The options arity above gets a bridge that accepts a generated resource class, so this
+            // arity needs one too. Without it `frontend.withReference(app)` does not compile - the only
+            // single-argument overloads would be the handle wrapper, the endpoint reference, the string
+            // and the union, and a generated resource such as NodeAppResource is none of those.
+            GenerateResourceBuilderOverloads(
+                returnInfo.ReturnType,
+                methodName,
+                CreateUnionMethodParameters(requiredParameters, unionParameter, unionType),
+                returnInfo.HasReturn,
+                bridgeSignatures);
         }
     }
 
@@ -1828,17 +2041,46 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         return converted;
     }
 
-    private string RenderJavaDtoPropertyTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional)
+    private string RenderJavaDtoPropertyTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional, int depth = 0)
     {
-        if (typeRef?.Category != AtsTypeCategory.Dict)
+        // A DTO field is typed by MapDtoPropertyTypeToJava, which renders every dictionary as Map and
+        // every list as List. MapTypeRefToJava instead renders a *mutable* dictionary or list as
+        // AspireDict/AspireList, which extend HandleWrapperBase and implement neither interface. So the
+        // cast has to use the DTO flavour for collections at any depth, not just at the top level:
+        // otherwise a property as ordinary as Dictionary<string, string>[] emits
+        // `(AspireDict<String, String>[]) value` against a `Map<String, String>[]` field and javac
+        // rejects the file. The CLI compiles the whole generated SDK in one javac invocation, so that
+        // fails `aspire run` entirely, in code the user is told not to edit.
+        if (typeRef?.Category is not (AtsTypeCategory.Dict or AtsTypeCategory.Array or AtsTypeCategory.List))
         {
-            return RenderJavaTransportValueConversion(typeRef, valueExpression, isOptional);
+            return RenderJavaTransportValueConversion(typeRef, valueExpression, isOptional, depth);
         }
 
         var allowNull = isOptional || typeRef.IsNullable == true;
+
+        if (typeRef.Category == AtsTypeCategory.List)
+        {
+            // Rebuilt element by element rather than cast, because the transport hands back a
+            // List<Object> whose elements still need converting. `item{depth}` keeps nested lambdas
+            // from shadowing one another.
+            var itemName = $"item{depth}";
+            var convertedItem = RenderJavaDtoPropertyTransportValueConversion(
+                typeRef.ElementType,
+                itemName,
+                typeRef.ElementType?.IsNullable == true,
+                depth + 1);
+            var projected = $"((List<Object>) {valueExpression}).stream().map({itemName} -> {convertedItem}).toList()";
+
+            return allowNull ? $"{valueExpression} == null ? null : {projected}" : projected;
+        }
+
         var converted = $"({MapDtoPropertyTypeToJava(typeRef, allowNull, useBoxedTypes: true)}) {valueExpression}";
 
-        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+        // An array needs no null guard: casting null to an array type is legal Java and yields null,
+        // so guarding would only add noise the previous shape did not have.
+        return allowNull && typeRef.Category == AtsTypeCategory.Dict
+            ? $"{valueExpression} == null ? null : {converted}"
+            : converted;
     }
 
     private static string RenderJavaPrimitiveTransportValueConversion(string typeId, string valueExpression, bool allowNull)
@@ -1934,21 +2176,21 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         var wrapperType = isDict ? "AspireDict" : "AspireList";
 
         // Determine type arguments
+        // Boxing is requested from the mapper rather than applied afterwards to a primitive name, so
+        // these type arguments match the ones the List/Dict cases of MapTypeRefToJava produce. Boxing
+        // "double" to "Double" here instead would leave the collection accessor returning
+        // AspireDict<String, Double> while its own setter took AspireDict<String, Number>, and generic
+        // invariance would then reject ctx.setCounts(ctx.counts()).
         string typeArgs;
         if (isDict)
         {
-            var keyType = MapTypeRefToJava(returnType.KeyType, false);
-            var valueType = MapTypeRefToJava(returnType.ValueType, false);
-            // Use boxed types for generics
-            keyType = BoxPrimitiveType(keyType);
-            valueType = BoxPrimitiveType(valueType);
+            var keyType = MapTypeRefToJava(returnType.KeyType, false, useBoxedTypes: true);
+            var valueType = MapTypeRefToJava(returnType.ValueType, false, useBoxedTypes: true);
             typeArgs = $"<{keyType}, {valueType}>";
         }
         else
         {
-            var elementType = MapTypeRefToJava(returnType.ElementType, false);
-            // Use boxed types for generics
-            elementType = BoxPrimitiveType(elementType);
+            var elementType = MapTypeRefToJava(returnType.ElementType, false, useBoxedTypes: true);
             typeArgs = $"<{elementType}>";
         }
 
@@ -1972,22 +2214,6 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine();
     }
 
-    private static string BoxPrimitiveType(string type)
-    {
-        return type switch
-        {
-            "int" => "Integer",
-            "long" => "Long",
-            "double" => "Double",
-            "float" => "Float",
-            "boolean" => "Boolean",
-            "char" => "Character",
-            "byte" => "Byte",
-            "short" => "Short",
-            _ => type
-        };
-    }
-
     private void GenerateHandleWrapperRegistrations(
         IReadOnlyList<JavaHandleType> handleTypes,
         Dictionary<string, bool> collectionTypes)
@@ -2008,7 +2234,13 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         foreach (var (typeId, isDict) in collectionTypes)
         {
             var wrapperType = isDict ? "AspireDict" : "AspireList";
-            WriteLine($"        AspireClient.registerHandleWrapper(\"{typeId}\", (h, c) -> new {wrapperType}(h, c));");
+            // The diamond is required rather than cosmetic: the factory is a
+            // BiFunction<Handle, AspireClient, Object>, so a raw AspireList/AspireDict here would
+            // raise a rawtypes warning in every consumer's IDE. Element types are not known at
+            // registration time, so inference against the Object target yields the erased-equivalent
+            // AspireList<Object>/AspireDict<Object, Object>, which is exactly what callers re-cast
+            // through the typed accessors generated by GenerateListOrDictProperty.
+            WriteLine($"        AspireClient.registerHandleWrapper(\"{typeId}\", (h, c) -> new {wrapperType}<>(h, c));");
         }
 
         WriteLine("    }");
@@ -2059,8 +2291,18 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            resolvedOptions.putAll(options.toMap());");
         WriteLine("        }");
         WriteLine("        if (resolvedOptions.get(\"Args\") == null) {");
-        WriteLine("            // Note: Java doesn't have easy access to command line args from here");
-        WriteLine("            resolvedOptions.put(\"Args\", new String[0]);");
+        // Python, TypeScript and Rust AppHosts read the process arguments themselves
+        // (sys.argv[1:], process.argv.slice(2), std::env::args()), so a builder created without
+        // arguments still observes "--operation publish". A JVM cannot do the same:
+        // main(String[]) is the only place those arguments exist, and
+        // ProcessHandle.current().info().arguments() reports the JVM's own arguments (options and
+        // main class) rather than the application's. The CLI therefore forwards them in
+        // ASPIRE_APPHOST_ARGS, newline separated, so CreateBuilder() behaves like its
+        // counterparts instead of silently running the app when the user asked to publish.
+        WriteLine("            String forwardedArgs = System.getenv(\"ASPIRE_APPHOST_ARGS\");");
+        WriteLine("            resolvedOptions.put(\"Args\", forwardedArgs == null || forwardedArgs.isEmpty()");
+        WriteLine("                ? new String[0]");
+        WriteLine("                : forwardedArgs.split(\"\\n\", -1));");
         WriteLine("        }");
         // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
         // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
@@ -2331,13 +2573,21 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     private static string MapPrimitiveType(string typeId, bool useBoxedTypes) => typeId switch
     {
         AtsConstants.String or AtsConstants.Char => "String",
-        AtsConstants.Number => useBoxedTypes ? "Double" : "double",
+        // java.lang.Number rather than Double. ATS collapses every numeric to one Number type, so a C#
+        // int parameter such as a port or an exit code arrives here as a floating-point type, and Java
+        // will not convert an int literal to a Double: widening followed by boxing is not one of the
+        // conversions the language performs, so `targetPort(8080)` and `waitForCompletion(job, 0)` fail
+        // to compile with "int cannot be converted to Double". Declaring the supertype accepts int, long
+        // and double literals, boxed values and null alike, and the value is serialized through
+        // AspireClient.serializeValue(Object), which never needed a Double.
+        // https://docs.oracle.com/javase/specs/jls/se21/html/jls-5.html#jls-5.3
+        AtsConstants.Number => useBoxedTypes ? "Number" : "double",
         AtsConstants.Boolean => useBoxedTypes ? "Boolean" : "boolean",
         AtsConstants.Void => "void",
         AtsConstants.Any => "Object",
         AtsConstants.DateTime or AtsConstants.DateTimeOffset or
         AtsConstants.DateOnly or AtsConstants.TimeOnly => "String",
-        AtsConstants.TimeSpan => useBoxedTypes ? "Double" : "double",
+        AtsConstants.TimeSpan => useBoxedTypes ? "Number" : "double",
         AtsConstants.Guid or AtsConstants.Uri => "String",
         AtsConstants.CancellationToken => "CancellationToken",
         _ => "Object"
@@ -2450,6 +2700,21 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
+    /// Builds the accessor suffix for a DTO property, so <c>Default</c> yields <c>Default_</c> to match
+    /// the <c>default_</c> field.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the keyword-escaped field rather than the raw property name so the accessors and the
+    /// field stay in step, and so a property named <c>Class</c> becomes <c>getClass_()</c> instead of
+    /// colliding with the final <c>java.lang.Object.getClass()</c>, which cannot be overridden. Both the
+    /// accessor declarations and the exported-value initializers that call the setters must go through
+    /// here: when the initializer derived its call from the raw name instead, it emitted
+    /// <c>setDefault(...)</c> against a <c>setDefault_</c> declaration, and javac rejected the whole
+    /// generated SDK with <c>cannot find symbol</c>.
+    /// </remarks>
+    private static string DtoAccessorSuffix(string propertyName) => ToPascalCase(ToCamelCase(propertyName));
+
+    /// <summary>
     /// Converts a name to PascalCase for Java class/method names.
     /// </summary>
     private static string ToPascalCase(string name)
@@ -2466,19 +2731,29 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
-    /// Converts a name to camelCase for Java field/variable names.
+    /// Converts a name to camelCase for Java field, parameter and local variable names, escaping any
+    /// result that collides with a Java keyword.
     /// </summary>
+    /// <remarks>
+    /// Only type names used to route through <see cref="SanitizeIdentifier"/>, so a capability parameter
+    /// or DTO property named <c>Default</c>, <c>Package</c> or <c>Class</c> emitted <c>default</c>,
+    /// <c>package</c> or <c>class</c> as a bare identifier and javac rejected the generated SDK outright.
+    /// The Rust generator escapes every identifier it emits (<c>r#</c> prefix); this keeps Java at parity.
+    /// The trailing underscore is the convention the JLS leaves available, since no keyword ends in one.
+    /// <para>
+    /// This only changes Java source. Transport keys are emitted from the original property name, so the
+    /// wire payload exchanged with the .NET host is unaffected.
+    /// </para>
+    /// </remarks>
     private static string ToCamelCase(string name)
     {
         if (string.IsNullOrEmpty(name))
         {
             return name;
         }
-        if (char.IsLower(name[0]))
-        {
-            return name;
-        }
-        return char.ToLowerInvariant(name[0]) + name[1..];
+
+        var camelCase = char.IsLower(name[0]) ? name : char.ToLowerInvariant(name[0]) + name[1..];
+        return s_javaKeywords.Contains(camelCase) ? camelCase + "_" : camelCase;
     }
 
     /// <summary>

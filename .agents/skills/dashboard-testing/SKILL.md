@@ -294,7 +294,6 @@ Both test projects use hand-rolled fakes — no mocking framework is used. Cross
 | `TestSessionStorage` | In-memory session storage |
 | `TestStringLocalizer` | Pass-through string localizer |
 | `TestDashboardTelemetrySender` | No-op telemetry sender |
-| `TestAIContextProvider` | No-op AI context provider |
 | `ModelTestHelpers.CreateResource()` | Factory for building `ResourceViewModel` instances with sensible defaults |
 
 ### Using TestDashboardClient

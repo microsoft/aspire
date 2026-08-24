@@ -49,31 +49,31 @@ public class SpanFilteringBenchmarks
     [Benchmark(Description = "Trace detail: no filters")]
     public int NoFilters()
     {
-        return Count(TraceDetail.ApplySpanFilters(_balancedTree, filter: string.Empty, typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, filter: string.Empty, typeFilter: null, s_noFilters, s_getResourceName));
     }
 
     [Benchmark(Description = "Trace detail: duration >= 50ms")]
     public int DurationOnly()
     {
-        return Count(TraceDetail.ApplySpanFilters(_balancedTree, filter: string.Empty, typeFilter: null, _durationFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, filter: string.Empty, typeFilter: null, _durationFilters, s_getResourceName));
     }
 
     [Benchmark(Description = "Trace detail: no-match text filter")]
     public int ContextFilterNoMatchDeepChain()
     {
-        return Count(TraceDetail.ApplySpanFilters(_deepChain, filter: "missing-span-name", typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_deepChain, filter: "missing-span-name", typeFilter: null, s_noFilters, s_getResourceName));
     }
 
     [Benchmark(Description = "Trace detail: root text filter")]
     public int ContextFilterRootMatch()
     {
-        return Count(TraceDetail.ApplySpanFilters(_balancedTree, filter: "root-span", typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_balancedTree, filter: "root-span", typeFilter: null, s_noFilters, s_getResourceName));
     }
 
     [Benchmark(Description = "Trace detail: hidden descendants")]
     public int ContextFilterCollapsedTree()
     {
-        return Count(TraceDetail.ApplySpanFilters(_collapsedTree, filter: "leaf-match", typeFilter: null, s_noFilters, s_getResourceName));
+        return Count(TraceDetail.TraceDetailPageViewModel.ApplySpanFilters(_collapsedTree, filter: "leaf-match", typeFilter: null, s_noFilters, s_getResourceName));
     }
 
     private static List<SpanWaterfallViewModel> CreateDeepChain(int count)

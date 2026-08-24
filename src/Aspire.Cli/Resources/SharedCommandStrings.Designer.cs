@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string AppHostNotRunningInCurrentWorktree {
+            get {
+                return ResourceManager.GetString("AppHostNotRunningInCurrentWorktree", resourceCulture);
+            }
+        }
+
         internal static string AppHostNotRunningAtPath {
             get {
                 return ResourceManager.GetString("AppHostNotRunningAtPath", resourceCulture);
@@ -159,6 +165,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LaunchProfileOptionDescription {
+            get {
+                return ResourceManager.GetString("LaunchProfileOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LaunchProfileNotSupported {
+            get {
+                return ResourceManager.GetString("LaunchProfileNotSupported", resourceCulture);
+            }
+        }
+
         internal static string UsingAppHost {
             get {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);
@@ -168,6 +186,15 @@ namespace Aspire.Cli.Resources {
         internal static string MultipleInScopeAppHosts {
             get {
                 return ResourceManager.GetString("MultipleInScopeAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use..
+        /// </summary>
+        internal static string MultipleAppHostsNonInteractive {
+            get {
+                return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
             }
         }
 
@@ -201,6 +228,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string PipelineListStepsOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineListStepsOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string PipelineFormatOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineFormatOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string PipelineStepTimelineLabel {
             get {
                 return ResourceManager.GetString("PipelineStepTimelineLabel", resourceCulture);
@@ -213,9 +252,21 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string PipelineFormatRequiresListSteps {
+            get {
+                return ResourceManager.GetString("PipelineFormatRequiresListSteps", resourceCulture);
+            }
+        }
+
         internal static string NonInteractiveRequiresYesFormat {
             get {
                 return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
+            }
+        }
+
+        internal static string UnrecognizedOptionDidYouMeanFormat {
+            get {
+                return ResourceManager.GetString("UnrecognizedOptionDidYouMeanFormat", resourceCulture);
             }
         }
     }

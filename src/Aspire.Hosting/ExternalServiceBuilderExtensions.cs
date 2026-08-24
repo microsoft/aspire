@@ -23,7 +23,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="url">The URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addExternalService dispatcher export.")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, string url)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -67,7 +67,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="uri">The URI of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addExternalService dispatcher export.")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, Uri uri)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -84,7 +84,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="urlParameter">The parameter containing the URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addExternalService dispatcher export.")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, IResourceBuilder<ParameterResource> urlParameter)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -216,7 +216,7 @@ public static class ExternalServiceBuilderExtensions
     /// the HTTP request.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withHttpHealthCheck export wrapper.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withHttpHealthCheck export wrapper.")]
     public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null)
     {
         if (path is not null && !Uri.IsWellFormedUriString(path, UriKind.Relative))
@@ -449,29 +449,48 @@ internal sealed class ParameterUriHealthCheck : IHealthCheck
 }
 
 /// <summary>
-/// HTTP health check that resolves its URI lazily.
+/// HTTP health check that resolves its URI from an endpoint.
 /// </summary>
-internal sealed class DeferredUriHealthCheck : IHealthCheck
+internal sealed class EndpointUriHealthCheck : IHealthCheck
 {
-    private readonly Func<Uri?> _uriFactory;
+    private readonly EndpointReference _endpoint;
+    private readonly string _path;
     private readonly int _expectedStatusCode;
     private readonly Func<HttpClient> _httpClientFactory;
 
-    public DeferredUriHealthCheck(Func<Uri?> uriFactory, int expectedStatusCode, Func<HttpClient> httpClientFactory)
+    public EndpointUriHealthCheck(EndpointReference endpoint, string path, int expectedStatusCode, Func<HttpClient> httpClientFactory)
     {
-        ArgumentNullException.ThrowIfNull(uriFactory);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(httpClientFactory);
-        _uriFactory = uriFactory;
+        _endpoint = endpoint;
+        _path = path;
         _expectedStatusCode = expectedStatusCode;
         _httpClientFactory = httpClientFactory;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        var uri = _uriFactory();
-        if (uri is null)
+        if (!_endpoint.Exists)
         {
-            return HealthCheckResult.Unhealthy("The URI for the health check is not set. Ensure that the resource has been allocated before the health check is executed.");
+            return HealthCheckResult.Unhealthy($"The endpoint '{_endpoint.EndpointName}' does not exist on the resource.");
+        }
+
+        Uri uri;
+        try
+        {
+            var endpointValue = await _endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (endpointValue is null)
+            {
+                return HealthCheckResult.Unhealthy($"The endpoint '{_endpoint.EndpointName}' does not have a URL.");
+            }
+
+            var baseUri = new Uri(endpointValue, UriKind.Absolute);
+            uri = new Uri(baseUri, _path);
+        }
+        catch (Exception ex)
+        {
+            return new HealthCheckResult(context.Registration.FailureStatus, "Failed to determine the URI for the health check.", ex);
         }
 
         try

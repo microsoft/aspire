@@ -46,6 +46,61 @@ internal static class CommandResources
                 IconName = "CloudDatabase",
                 IsHighlighted = true
             });
+        // Commands with unknown/missing icons to stress test issue #18385.
+        iconCommands.WithCommand(
+            name: "unknown-icon",
+            displayName: "Unknown icon",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "Bracket"
+            });
+        iconCommands.WithCommand(
+            name: "unknown-icon-highlighted",
+            displayName: "Simulate knockout — prediction phase",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "Bracket",
+                IsHighlighted = true
+            });
+        iconCommands.WithCommand(
+            name: "unknown-icon-highlighted-short",
+            displayName: "Short",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "NotARealIconName",
+                IsHighlighted = true
+            });
+        iconCommands.WithCommand(
+            name: "no-icon",
+            displayName: "No icon at all",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions());
+        iconCommands.WithCommand(
+            name: "no-icon-highlighted",
+            displayName: "No icon highlighted with a very long display name to test overflow",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IsHighlighted = true
+            });
 
         var argumentCommands = builder.AddCommandGroup("argument-commands", serviceBuilder.Resource);
         argumentCommands.WithCommand(

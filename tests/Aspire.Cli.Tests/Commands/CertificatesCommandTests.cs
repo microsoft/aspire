@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -18,7 +19,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_Help_ShowsCertificatesSubcommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -33,7 +34,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_CleanSubcommand_ShowsInHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -48,7 +49,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_TrustSubcommand_ShowsInHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -63,7 +64,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CertificatesCommand_TrustSubcommand_ReturnsSuccessForNonInteractiveLinuxPartialTrust()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var toolRunner = new TestCertificateToolRunner
         {
@@ -100,7 +101,8 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
-                return new CertificateService(toolRunner, interactionService, telemetry, hostEnvironment, executionContext, isLinux: () => true);
+                var logger = sp.GetRequiredService<ILogger<CertificateService>>();
+                return new CertificateService(toolRunner, interactionService, telemetry, hostEnvironment, TestEnvironment.CreateLinux(), executionContext, logger);
             };
         });
         using var provider = services.BuildServiceProvider();

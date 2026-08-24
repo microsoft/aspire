@@ -83,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
+        <source>An error occurred while connecting to the AppHost: {0}</source>
         <target state="needs-review-translation">アプリ ホスティング プロセスへの接続でエラーが発生しました。アプリ ホスティング プロセスが、利用可能になる前にクラッシュした可能性があります: {0}。</target>
         <note />
       </trans-unit>
@@ -95,6 +95,11 @@
       <trans-unit id="InteractiveInputNotSupported">
         <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
         <target state="needs-review-translation">対話型入力は、この環境ではサポートされていません。--non-interactive フラグを使用するか、CLI が対話型ターミナルで実行されていることを確認してください。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
@@ -157,9 +162,9 @@
         <target state="needs-review-translation">--apphost オプションが指定されておらず、アプリ ホスティング プロセスのプロジェクト ファイルが複数検出されました。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">プロジェクト引数が指定されておらず、アプリ ホスト プロジェクト ファイルが検出されませんでした。</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

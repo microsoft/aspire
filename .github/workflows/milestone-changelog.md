@@ -6,6 +6,8 @@ description: |
   of new features, improvements, and notable bug fixes. A companion GitHub issue collects
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
 
+max-daily-ai-credits: -1
+
 # ──────────────────────────────────────────────────────────
 # Architecture
 #
@@ -310,7 +312,7 @@ jobs:
           rm -rf "$WIKI_TMP"
 
           echo "has_work=$HAS_WORK" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         if: steps.fetch.outputs.has_work == 'true'
         with:
           name: changelog-data
@@ -322,6 +324,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
 
 network: defaults
 
@@ -449,7 +452,7 @@ safe-outputs:
 timeout-minutes: 30
 
 steps:
-  - uses: actions/download-artifact@v4
+  - uses: actions/download-artifact@v4.3.0
     with:
       name: changelog-data
       path: /tmp/gh-aw/

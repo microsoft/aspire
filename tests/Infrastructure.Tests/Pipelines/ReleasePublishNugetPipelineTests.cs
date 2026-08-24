@@ -80,7 +80,7 @@ public sealed class ReleasePublishNugetPipelineTests
         //   2) templateContext.mb.publish.feedSource: <dnceng mirror>  (for the publishing job)
         // Both must be present in this pipeline:
         //   - non-publishing jobs (PrepareJob, WinGetJob, DispatchGitHubTasksJob,
-        //     PublishReleaseAssetsJob, HomebrewValidateJob) -> enabled: false
+        //     PublishReleaseAssetsJob, UpdateNixPackageJob) -> enabled: false
         //   - ReleaseJob (the only job that actually publishes) -> feedSource = dnceng mirror
         Assert.Contains("enabled: false", pipeline);
         Assert.Contains(
@@ -141,10 +141,10 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
         Assert.Contains("- name: NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
         Assert.Equal("joperezr,ankj", FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"));
-        Assert.Contains("displayName: '[Advanced] npm ESRP owners (comma-separated Microsoft aliases or emails; must include joperezr or ankj)'", pipeline);
-        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owners)'", pipeline);
+        Assert.Contains("displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'", pipeline);
+        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'", pipeline);
 
-        AssertContainsRequiredAliases(
+        AssertOwnerDefaultIsSingleRequiredAlias(
             FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"),
             FindYamlParameterDefault(pipeline, "NpmPublishOwners"),
             "NpmPublishOwners");
@@ -164,6 +164,7 @@ public sealed class ReleasePublishNugetPipelineTests
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
+        Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'", pipeline);
         Assert.Contains("Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
         Assert.DoesNotContain("Assert-ContainsRequiredNpmAliases $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
         Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'", pipeline);
@@ -222,13 +223,13 @@ public sealed class ReleasePublishNugetPipelineTests
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
         // Defaults let an unattended queue submission pass validation without operator input:
-        // owners include a required owner alias, the approver is a single distinct alias, and the
-        // per-run override parameters are marked advanced.
+        // the owner is a single required owner alias, the approver is a single distinct alias, and
+        // the per-run override parameters are marked advanced.
         Assert.Contains("- name: NpmPublishOwners", pipeline);
-        Assert.Contains("default: 'joperezr,ankj'", pipeline);
+        Assert.Contains("default: 'joperezr'", pipeline);
         Assert.Contains("- name: NpmPublishApprovers", pipeline);
         Assert.Contains("default: 'adamratzman'", pipeline);
-        Assert.Contains("[Advanced] npm ESRP owners", pipeline);
+        Assert.Contains("[Advanced] npm ESRP owner", pipeline);
         Assert.Contains("[Advanced] npm ESRP approver", pipeline);
         Assert.Contains("[Advanced] Minutes to wait between npm RID and pointer package submissions", pipeline);
     }
@@ -544,6 +545,149 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("npm view $spec version --registry=https://registry.npmjs.org/", pipeline);
     }
 
+    [Fact]
+    public async Task WinGetPublishingRunsOnlyForStableReleases()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+
+        Assert.Equal("false", FindYamlParameterDefault(pipeline, "SkipWinGetPublish"));
+
+        const string stableReleaseGate = "${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:";
+        Assert.Equal(2, pipeline.Split(stableReleaseGate, StringSplitOptions.None).Length - 1);
+
+        var winGetJob = ExtractSection(
+            pipeline,
+            "# ===== WINGET PUBLISHING =====",
+            "# ===== STAGE 3: GITHUB TASKS =====");
+        Assert.Contains("eq('${{ parameters.SkipWinGetPublish }}', 'false')", winGetJob);
+        Assert.Contains("eq('${{ parameters.IsPrerelease }}', 'false')", winGetJob);
+
+        var releaseSummary = ExtractSection(
+            pipeline,
+            "# ===== SUMMARY =====",
+            "# ===== VS CODE EXTENSION PUBLISHING =====");
+        var winGetSummary = ExtractSection(
+            releaseSummary,
+            """Write-Host "║ WinGet:""",
+            """Write-Host "║ GitHub Tasks:""");
+        Assert.Contains("""if ("${{ parameters.SkipWinGetPublish }}" -eq "true")""", winGetSummary);
+        Assert.Contains("""elseif ("${{ parameters.IsPrerelease }}" -eq "true")""", winGetSummary);
+        Assert.Contains("Write-Host \" (SKIPPED - prerelease)\"", winGetSummary);
+    }
+
+    [Fact]
+    public async Task VSCodeExtensionPublishUsesAzureCredential()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var job = ExtractSection(
+            pipeline,
+            "# ===== VS CODE EXTENSION PUBLISHING =====",
+            "# ===== WINGET PUBLISHING =====");
+
+        Assert.Contains("task: AzureCLI@2", job);
+        // The service connection name must match the connection whose identity is authorized on
+        // the microsoft-aspire Marketplace publisher. A mismatch fails only at publish time,
+        // which is the last step of a release.
+        Assert.Contains("azureSubscription: 'AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity'", job);
+        Assert.Contains("vsce verify-pat --azure-credential $publisher", job);
+        Assert.Contains("""$publishArgs = @("publish", "--azure-credential", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)""", job);
+        Assert.Contains("vsce @publishArgs", job);
+
+        var secretReferenceMatches = System.Text.RegularExpressions.Regex.Matches(job, @"\b(VSCE_PAT|VscePublishToken)\b");
+        Assert.Empty(secretReferenceMatches);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseInstructionsSkipNonExtensionReleaseLegs()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+        var instructions = ExtractSection(
+            workflow,
+            "For an extension-only release, use these parameters:",
+            "For a full Aspire release");
+
+        Assert.Contains("| \\`SkipNuGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmRidPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmPointerPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipChannelPromotion\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipWinGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipGitHubTasks\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipReleaseAssets\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNixPackageUpdate\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipVSCodeExtensionPublish\\` | \\`false\\` |", instructions);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseDryRunInstructionsDoNotOverstatePublisherRoleValidation()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+
+        Assert.Contains("can acquire an Azure credential and read publisher role assignments", workflow);
+        Assert.Contains("Separately confirm the service connection identity is a Contributor", workflow);
+    }
+
+    [Fact]
+    public async Task WinGetJobVerifiesWingetCreateBeforeConditionalSubmission()
+    {
+        var template = await ReadRepoFileAsync("eng/pipelines/templates/publish-winget.yml");
+        var runtimeInstallIndex = FindRequiredText(template, "- task: UseDotNet@2");
+        var wingetCreateInstallIndex = FindRequiredText(template, "Write-Host \"Downloading wingetcreate...\"");
+        var submitIndex = FindRequiredText(template, "Write-Host \"Submitting WinGet manifests");
+        var runtimeInstall = template[runtimeInstallIndex..wingetCreateInstallIndex];
+        var wingetCreateInstall = template[wingetCreateInstallIndex..submitIndex];
+        var submission = template[submitIndex..];
+
+        Assert.Contains("packageType: 'runtime'", runtimeInstall);
+        Assert.Contains("version: '9.0.x'", runtimeInstall);
+        Assert.Contains("condition: succeeded()", runtimeInstall);
+        Assert.Contains("wingetcreate.exe\" info", wingetCreateInstall);
+        Assert.Contains("condition: succeeded()", wingetCreateInstall);
+        Assert.Contains("eq('${{ parameters.dryRun }}', 'false')", submission);
+        Assert.Contains("eq(variables['_IsProductionBranch'], 'true')", submission);
+    }
+
+    [Fact]
+    public async Task WinGetPreparationExercisesWingetCreate()
+    {
+        var template = await ReadRepoFileAsync("eng/pipelines/templates/prepare-winget-manifest.yml");
+
+        Assert.Contains("- task: UseDotNet@2", template);
+        Assert.Contains("packageType: 'runtime'", template);
+        Assert.Contains("version: '9.0.x'", template);
+        Assert.Contains("https://aka.ms/wingetcreate/latest", template);
+        Assert.Contains("wingetcreate.exe\" info", template);
+    }
+
+    [Fact]
+    public async Task MarketplacePublishingDocumentationKeepsIdentityDetailsInternalAndRetiresPat()
+    {
+        var documentation = await ReadRepoFileAsync("docs/release-process.md");
+        var identitySection = ExtractSection(
+            documentation,
+            "#### Marketplace publishing identity",
+            "### Approved GitHub Actions");
+
+        Assert.Contains(
+            "[Azure DevOps service connections](https://dev.azure.com/dnceng/internal/_settings/adminservices)",
+            identitySection);
+        Assert.DoesNotMatch(
+            @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+            documentation);
+        Assert.Contains(
+            "If the variable is still present in `Aspire-Release-Secrets`, revoke the PAT and delete the variable.",
+            documentation);
+    }
+
+    private static string ExtractSection(string contents, string begin, string end)
+    {
+        var beginIndex = FindRequiredText(contents, begin);
+        var endIndex = FindRequiredText(contents, end);
+
+        Assert.True(endIndex > beginIndex, $"Expected '{end}' after '{begin}'.");
+
+        return contents[beginIndex..endIndex];
+    }
+
     private static void AssertBefore(string contents, string text, int boundaryIndex)
     {
         var textIndex = FindRequiredText(contents, text);
@@ -562,17 +706,19 @@ public sealed class ReleasePublishNugetPipelineTests
         return index;
     }
 
-    private static void AssertContainsRequiredAliases(string requiredAliasesValue, string actualAliasesValue, string parameterName)
+    private static void AssertOwnerDefaultIsSingleRequiredAlias(string requiredAliasesValue, string actualAliasesValue, string parameterName)
     {
+        // The single-owner rule means the default must normalize to exactly one alias, and that
+        // alias must be one of the required ESRP owner aliases so unattended runs pass validation.
         var actualAliases = ParseNpmReleaseAliasSet(actualAliasesValue);
-        var missingAliases = ParseNpmReleaseAliasSet(requiredAliasesValue)
-            .Where(requiredAlias => !actualAliases.Contains(requiredAlias))
-            .OrderBy(alias => alias)
-            .ToArray();
-
         Assert.True(
-            missingAliases.Length == 0,
-            $"{parameterName} default must include required ESRP alias(es): {string.Join(", ", missingAliases)}.");
+            actualAliases.Count == 1,
+            $"{parameterName} default must be a single alias, but was '{actualAliasesValue}'.");
+
+        var requiredAliases = ParseNpmReleaseAliasSet(requiredAliasesValue);
+        Assert.True(
+            actualAliases.All(requiredAliases.Contains),
+            $"{parameterName} default '{actualAliasesValue}' must be one of the required ESRP owner aliases: {requiredAliasesValue}.");
     }
 
     private static HashSet<string> ParseNpmReleaseAliasSet(string value)

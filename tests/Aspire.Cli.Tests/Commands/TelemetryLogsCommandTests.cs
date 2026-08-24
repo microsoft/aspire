@@ -22,7 +22,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -40,7 +40,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [InlineData(-100)]
     public async Task TelemetryLogsCommand_WithInvalidLimitValue_ReturnsInvalidCommand(int limitValue)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -55,7 +55,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_TableOutput_ResolvesUniqueResourceNames()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -90,7 +90,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         var guid1 = Guid.Parse("11111111-2222-3333-4444-555555555555");
         var guid2 = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -122,7 +122,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_TableOutput_StripsAnsiControlSequencesFromBody()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -182,7 +182,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_FetchesLogsDirectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var handler = new MockHttpMessageHandler(request =>
@@ -229,7 +229,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrlAndApiKey_SendsApiKeyHeader()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedApiKey = null;
 
@@ -279,7 +279,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrlAndAppHost_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -302,7 +302,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithInvalidDashboardUrl_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -325,7 +325,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_401_DisplaysAuthFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -363,7 +363,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_404WithReachableBase_DisplaysApiNotEnabledMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -406,7 +406,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_ConnectionRefused_DisplaysConnectionFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -445,7 +445,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithLoginUrl_ConnectionRefused_DisplaysConnectionFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -475,7 +475,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_ResourcesEndpoint404_DisplaysApiNotEnabledMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -515,7 +515,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithLoginUrl_NormalizesToBaseUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedBaseUrl = null;
 
@@ -572,7 +572,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_JsonOutput_ProducesExpectedJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var resourceLogs = new OtlpResourceLogsJson[]
@@ -671,7 +671,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithSearchOption_PassesSearchToUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedUrl = null;
 

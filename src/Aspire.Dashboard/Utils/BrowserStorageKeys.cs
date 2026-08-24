@@ -22,9 +22,10 @@ internal static class BrowserStorageKeys
     public const string TextVisualizerDialogSettings = "Aspire_TextVisualizerDialog_TextVisualizerDialogSettings";
     public const string ResourcesShowResourceTypes = "Aspire_Resources_ShowResourceTypes";
 
-    public const string AssistantChatAssistantSettings = "Aspire_AssistantChat_AssistantSettings";
     public const string DashboardTelemetrySettings = "Aspire_Settings_DashboardTelemetry";
     public const string ResourcesShowHiddenResources = "Aspire_Resources_ShowHiddenResources";
+
+    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";

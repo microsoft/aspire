@@ -462,6 +462,12 @@ public sealed class ContainerFileSystemCallbackHttpsCertificateContext
     public ReferenceExpression KeyPath { get; init; } = null!;
 
     /// <summary>
+    /// A reference expression that resolves to the path to the server authentication certificate and key combined in a single PEM file inside the container.
+    /// Use GetValueAsync to resolve the path.
+    /// </summary>
+    public ReferenceExpression CertificateWithKeyPath { get; init; } = null!;
+
+    /// <summary>
     /// A reference expression that resolves to the path to the server authentication PFX file inside the container.
     /// Use GetValueAsync to resolve the path.
     /// </summary>

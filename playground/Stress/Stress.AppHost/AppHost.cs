@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -83,6 +84,11 @@ var telemetryBuilder = builder.AddProject<Projects.Stress_TelemetryService>("str
        .WithUrls(c => c.Urls.Add(new() { Url = "https://someplace.com", DisplayText = "Some place" }))
        .WithUrl("https://someotherplace.com/some-path", "Some other place")
        .WithUrl("https://extremely-long-url.com/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz//abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmno");
+
+for (var i = 0; i < 500; i++)
+{
+    telemetryBuilder.WithUrl($"https://example.com/service-{i.ToString(CultureInfo.InvariantCulture)}", $"Service {i}");
+}
 
 builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 

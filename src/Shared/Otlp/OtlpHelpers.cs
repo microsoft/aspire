@@ -124,4 +124,47 @@ public static partial class OtlpHelpers
 
         return resource.ResourceName;
     }
+
+    /// <summary>
+    /// Finds a resource by composite name first, then falls back to all resources with the base name.
+    /// Returns no matches when a composite name identifies multiple resources or also matches a resource's
+    /// base name because joining the resource name and instance ID with a dash is not guaranteed to produce
+    /// a unique value.
+    /// </summary>
+    internal static IReadOnlyList<T> ResolveResourceNameMatches<T>(string resourceName, IEnumerable<T> resources)
+        where T : IOtlpResource
+    {
+        var compositeNameMatches = new List<T>();
+        var resourceNameMatches = new List<T>();
+
+        foreach (var resource in resources)
+        {
+            if (resource.InstanceId is { } instanceId && EqualsCompositeName(resource.ResourceName, instanceId, resourceName))
+            {
+                compositeNameMatches.Add(resource);
+            }
+
+            if (string.Equals(resource.ResourceName, resourceName, StringComparisons.ResourceName))
+            {
+                resourceNameMatches.Add(resource);
+            }
+        }
+
+        return compositeNameMatches.Count switch
+        {
+            0 => resourceNameMatches,
+            1 when resourceNameMatches.Count == 0 => compositeNameMatches,
+            _ => []
+        };
+    }
+
+    private static bool EqualsCompositeName(string resourceName, string instanceId, string value)
+    {
+        // Composite names have the format "{resourceName}-{instanceId}". Compare each
+        // segment without allocating the composite string because this runs for every resource.
+        return value.Length == resourceName.Length + instanceId.Length + 1
+            && value.AsSpan(0, resourceName.Length).Equals(resourceName, StringComparisons.ResourceName)
+            && value[resourceName.Length] == '-'
+            && value.AsSpan(resourceName.Length + 1, instanceId.Length).Equals(instanceId, StringComparisons.ResourceName);
+    }
 }

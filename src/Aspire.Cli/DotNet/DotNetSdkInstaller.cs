@@ -11,8 +11,16 @@ namespace Aspire.Cli.DotNet;
 /// <summary>
 /// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH.
 /// </summary>
-internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNetSdkInstaller
+internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironment environment) : IDotNetSdkInstaller
 {
+    private readonly Func<string, string, ProcessStartInfo> _createProcessStartInfo = CreateProcessStartInfo;
+
+    internal DotNetSdkInstaller(IConfiguration configuration, IEnvironment environment, Func<string, string, ProcessStartInfo> createProcessStartInfo)
+        : this(configuration, environment)
+    {
+        _createProcessStartInfo = createProcessStartInfo;
+    }
+
     /// <summary>
     /// The minimum .NET SDK version required for Aspire.
     /// </summary>
@@ -28,23 +36,39 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
+            var dotnetPath = ResolveDotNetPath(environment);
 
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "dotnet",
-                    Arguments = arguments,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                }
-            };
+            using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
             process.Start();
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            try
+            {
+                await Task.WhenAll(
+                    standardOutputTask,
+                    standardErrorTask,
+                    process.WaitForExitAsync(cancellationToken));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The doctor timeout owns this process, so cancellation must not leave dotnet or
+                // any child process running after the check has returned.
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync(CancellationToken.None);
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process exited between cancellation and the kill attempt.
+                }
+
+                throw;
+            }
+
+            var output = await standardOutputTask;
 
             if (process.ExitCode != 0)
             {
@@ -93,6 +117,24 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // If we can't start the process, the SDK is not available
             return (false, null, minimumVersion);
         }
+    }
+
+    // Use the explicit Windows executable name so lookup still finds dotnet.exe when PATHEXT omits .EXE
+    // and does not select an extensionless PATH entry that Process.Start cannot execute on Windows.
+    internal static string ResolveDotNetPath(IEnvironment environment) =>
+        PathLookupHelper.ResolveExecutablePath(environment.IsWindows() ? "dotnet.exe" : "dotnet");
+
+    private static ProcessStartInfo CreateProcessStartInfo(string dotnetPath, string arguments)
+    {
+        return new ProcessStartInfo
+        {
+            FileName = dotnetPath,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
     }
 
     /// <summary>

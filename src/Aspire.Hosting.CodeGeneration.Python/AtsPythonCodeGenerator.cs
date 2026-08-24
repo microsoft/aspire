@@ -572,6 +572,12 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             return wrapperClassName;
         }
+
+        if (ExtractSimpleTypeName(typeId) == "IDistributedApplicationBuilder")
+        {
+            return "DistributedApplicationBuilder";
+        }
+
         return GetHandleTypeName(typeId);
     }
 
@@ -665,7 +671,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
         // Convert camelCase to snake_case
         var snakeName = ToSnakeCase(methodName);
-        if (snakeName.EndsWith("_async"))
+        if (snakeName.EndsWith("_async", StringComparison.Ordinal))
         {
             snakeName = snakeName[..^6];
         }
@@ -674,7 +680,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private static string GetMethodAsOptionName(string methodName)
     {
-        if (methodName.StartsWith("with_"))
+        if (methodName.StartsWith("with_", StringComparison.Ordinal))
         {
             return methodName[5..];
         }
@@ -684,7 +690,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private static string GetMethodParametersName(string methodName)
     {
         methodName = char.ToUpper(methodName[0]) + methodName.Substring(1);
-        if (methodName.StartsWith("With"))
+        if (methodName.StartsWith("With", StringComparison.Ordinal))
         {
             methodName = methodName[4..];
         }
@@ -1069,7 +1075,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Generate methods
         foreach (var method in allMethods)
         {
-            GenerateTypeClassMethod(sb, method);
+            GenerateTypeClassMethod(sb, method, className == "AbstractDistributedApplicationBuilder");
         }
 
         if (string.Equals(model.TypeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
@@ -1259,7 +1265,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates a method on a type class.
     /// </summary>
-    private void GenerateTypeClassMethod(System.Text.StringBuilder sb, AtsCapabilityInfo capability)
+    private void GenerateTypeClassMethod(
+        System.Text.StringBuilder sb,
+        AtsCapabilityInfo capability,
+        bool isDistributedApplicationBuilder)
     {
         // Use OwningTypeName if available to extract method name, otherwise parse from MethodName
         var methodName = !string.IsNullOrEmpty(capability.OwningTypeName) && capability.MethodName.Contains('.')
@@ -1274,7 +1283,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         var optionalParams = userParams.Where(p => !requiredParams.Contains(p)).ToList();
 
         // Determine return type
-        var returnType = GetReturnTypeId(capability) != null
+        var returnsSelf = isDistributedApplicationBuilder && capability.ReturnType?.TypeId == capability.TargetTypeId;
+        var returnType = returnsSelf
+            ? "typing.Self"
+            : GetReturnTypeId(capability) != null
             ? MapTypeRefToPython(capability.ReturnType)
             : "None";
         var isResourceBuilder = capability.ReturnType != null && capability.ReturnType.Category == AtsTypeCategory.Handle &&
@@ -1328,12 +1340,16 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Invoke capability
-        if (returnType == "None")
+        if (returnType == "None" || returnsSelf)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"        self._client.invoke_capability(");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            '{capability.CapabilityId}',");
             sb.AppendLine(CultureInfo.InvariantCulture, $"            rpc_args");
             sb.AppendLine(CultureInfo.InvariantCulture, $"        )");
+            if (returnsSelf)
+            {
+                sb.AppendLine("        return self");
+            }
         }
         else
         {
@@ -2470,14 +2486,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Dict/Parameters format includes all params (required + optional)
-        if (optionType.EndsWith("Parameters"))
+        if (optionType.EndsWith("Parameters", StringComparison.Ordinal))
         {
             return optionalParams.Any(p => string.Equals(p.Name, paramName, StringComparison.Ordinal));
         }
 
         // Tuple format includes optional params only when there's exactly 1 optional
         // and the tuple has an extra slot for it
-        if (optionType.StartsWith("("))
+        if (optionType.StartsWith("(", StringComparison.Ordinal))
         {
             var tupleSlots = SplitTupleTypes(optionType.Trim('(', ')'));
             if (tupleSlots.Count == requiredParams.Count + 1 && optionalParams.Count == 1)
@@ -2533,7 +2549,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             builder.AppendLine(CultureInfo.InvariantCulture, $"                rpc_args: dict[str, typing.Any] = {{\"{targetParamName}\": handle}}");
             builder.AppendLine(CultureInfo.InvariantCulture, $"                handle = self._wrap_builder(client.invoke_capability('{variationCapabilityId}', rpc_args))");
         }
-        else if (currentOption.EndsWith("Parameters"))
+        else if (currentOption.EndsWith("Parameters", StringComparison.Ordinal))
         {
             builder.AppendLine(CultureInfo.InvariantCulture, $"            {clause} _validate_dict_types(_{optionName}, {currentOption}):");
             builder.AppendLine(CultureInfo.InvariantCulture, $"                rpc_args: dict[str, typing.Any] = {{\"{targetParamName}\": handle}}");
@@ -2560,7 +2576,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 builder.AppendLine(CultureInfo.InvariantCulture, $"                handle = self._wrap_builder(client.invoke_capability('{variationCapabilityId}', rpc_args))");
             }
         }
-        else if (currentOption.StartsWith("(")) // Tuple of parameters
+        else if (currentOption.StartsWith("(", StringComparison.Ordinal)) // Tuple of parameters
         {
             var paramTypes = SplitTupleTypes(currentOption.Trim('(', ')'));
             builder.AppendLine(CultureInfo.InvariantCulture, $"            {clause} _validate_tuple_types(_{optionName}, {currentOption}):");

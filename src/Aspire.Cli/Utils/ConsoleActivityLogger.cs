@@ -463,7 +463,7 @@ internal sealed class ConsoleActivityLogger
         var timelineLabel = SharedCommandStrings.PipelineStepTimelineLabel;
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
         var durationWidth = Math.Max(10, orderedRecords.Max(r => FormatSummaryDuration(r.Duration, totalTimeline).Length));
-        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).RemoveMarkup().Length));
+        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => StringUtils.RemoveMarkup(GetIndentedDisplayName(r)).Length));
         var renderTimeline = ShouldRenderTimeline(durationWidth, nameWidth, totalTimeline);
         var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
         var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {timelineLabel.PadRight(nameWidth)}  ";
@@ -490,7 +490,7 @@ internal sealed class ConsoleActivityLogger
             };
             var symbol = _enableColor ? $"[{GetStateColor(rec.State)}]{stateSymbol}[/]" : stateSymbol;
             var displayName = GetIndentedDisplayName(rec);
-            var plainDisplayName = displayName.RemoveMarkup();
+            var plainDisplayName = StringUtils.RemoveMarkup(displayName);
             // Pad based on visible (plain-text) width, then re-append the markup name so tags render correctly.
             var padding = renderTimeline ? Math.Max(0, nameWidth - plainDisplayName.Length) : 0;
             var name = displayName + new string(' ', padding);

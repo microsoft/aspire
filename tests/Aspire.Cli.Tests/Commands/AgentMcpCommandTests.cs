@@ -29,7 +29,7 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
     private async Task<McpTestContext> CreateMcpClientAsync(string? dashboardUrl = null)
     {
         var cts = new CancellationTokenSource();
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
         var testTransport = new TestMcpServerTransport(loggerFactory);
         var backchannelMonitor = new TestAuxiliaryBackchannelMonitor();
@@ -570,7 +570,7 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task McpServer_WithInvalidDashboardUrl_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var serviceProvider = services.BuildServiceProvider();
 

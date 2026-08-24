@@ -10,8 +10,9 @@ A staging-identity CLI is an official release-branch build whose own commit alwa
 a SHA-specific `darc-pub-microsoft-aspire-<commit>` feed carrying its matching packages
 (prerelease-shaped `13.4.0-preview.*` and stable-shaped `13.4.0` alike). Feed
 **provenance** is decided by the CLI's baked build **identity** (`AspireCliChannel`),
-while version **filtering** (the channel quality) is decided by the CLI's **version
-shape**. See `PackagingService.ShouldUseSharedStagingFeed`.
+and official staging identities use `Both` quality because one build can publish stable
+packages alongside integrations that deliberately remain prerelease. See
+`PackagingService.ShouldUseSharedStagingFeed`.
 
 A locally built CLI bakes a `local` identity and an unstamped informational version, so
 it never synthesizes a staging channel and never derives a darc feed. The two diagnostic
@@ -26,7 +27,7 @@ package-directory lookups):
 | Config key | Purpose |
 | --- | --- |
 | `overrideCliIdentityChannel` | Forces the identity used for staging-feed routing decisions. Must be a valid channel (`stable`, `staging`, `daily`, `local`, or `pr-<N>`); invalid values are ignored and the real identity is used. |
-| `overrideCliInformationalVersion` | Forces the informational version that both the SHA-derivation provider and the version-shape (quality) predicate read. The part after `+` (truncated to 8 chars) builds the darc URL; the version part determines stable-vs-prerelease shape. |
+| `overrideCliInformationalVersion` | Forces the informational version used to derive the darc URL. The part after `+` is truncated to 8 characters for the feed name. |
 
 **Both overrides are required** to reach the darc path from a local build:
 
@@ -75,19 +76,19 @@ identity/feed can't silently resolve packages on a normal invocation.
    `dnceng/.../dotnet9` daily feed.
 
 To simulate a **stable**-shaped staging build, use a stable-shaped version override
-(e.g. `13.4.0+<full-commit-hash>`); the channel quality becomes `Stable` while the feed
-stays the darc feed.
+(e.g. `13.4.0+<full-commit-hash>`). The channel still uses `Both` quality because the
+SHA feed can contain prerelease-only integrations alongside stable packages.
 
 ## Helper scripts
 
 `eng/scripts/debug-staging.{sh,ps1}` and `eng/scripts/debug-stable.{sh,ps1}` wrap the
 recipe above. Both target identity `staging` and expect the **same** darc feed; they
-differ only in version shape/quality:
+differ only in version shape:
 
 | Script | Version shape | Expected quality | Scenario |
 | --- | --- | --- | --- |
 | `debug-staging` | prerelease (`13.4.0-preview.*`) | `Both` | [#17744](https://github.com/microsoft/aspire/issues/17744) — the bug this PR fixes |
-| `debug-stable` | stable (`13.4.0`) | `Stable` | [#17527](https://github.com/microsoft/aspire/issues/17527) — stable-shaped release build |
+| `debug-stable` | stable (`13.4.0`) | `Both` | [#17527](https://github.com/microsoft/aspire/issues/17527) — stable-shaped release build |
 
 Each script computes the expected `darc-pub-microsoft-aspire-<sha8>` feed and supports
 three modes:
@@ -142,7 +143,7 @@ shell/subshell environment, so nothing is written to global or per-project confi
 | Identity | Version shape | Expected feed | Expected quality |
 | --- | --- | --- | --- |
 | `staging` | prerelease | `darc-pub-microsoft-aspire-<sha8>` | `Both` |
-| `staging` | stable | `darc-pub-microsoft-aspire-<sha8>` | `Stable` |
-| `daily` | any | shared `dnceng/.../dotnet9` daily feed | `Both` |
+| `staging` | stable | `darc-pub-microsoft-aspire-<sha8>` | `Both` |
+| `daily` | any | shared `dnceng/.../dotnet9` daily feed | `Prerelease` |
 | `local` / `pr-<N>` | any | local/PR hive + implicit (no staging synthesis) | n/a |
 | `stable` | stable | nuget.org | `Stable` |

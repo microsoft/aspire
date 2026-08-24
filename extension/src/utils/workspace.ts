@@ -3,9 +3,10 @@ import { appHostCandidateDescription, cliNotAvailable, cliFoundAtDefaultPath, di
 import path from 'path';
 import { AspireConfigFile, aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { extensionLogOutputChannel } from './logging';
-import { resolveCliPath } from './cliPath';
+import { resolveCliPath, tryExecuteCli, type CliPathResolutionResult } from './cliPath';
+import { CliPathResolutionTarget } from './cliPathVariables';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
-import type { AppHostCandidate } from './appHostDiscovery';
+import { sendTelemetryEvent } from './telemetry';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
@@ -70,10 +71,6 @@ export function getRelativePathToWorkspace(filePath: string): string {
 
 interface AppHostQuickPickItem extends vscode.QuickPickItem {
     appHostPath: string;
-}
-
-export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
-    return candidate.status === 'buildable';
 }
 
 function createAppHostQuickPickItems(result: AppHostProjectSearchResult, rootFolder: vscode.WorkspaceFolder): AppHostQuickPickItem[] {
@@ -253,11 +250,36 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * installation directory and updates the VS Code setting accordingly.
  *
  * If not available, shows a message prompting to open Aspire CLI installation steps.
+ * @param target The resolution scope to check availability for: the workspace folder that
+ * owns the operation, or the window scope for operations with no single owning folder.
+ * @param options Optional exact CLI previously selected for a restart or resumed operation.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
-export async function checkCliAvailableOrRedirect(): Promise<{ cliPath: string; available: boolean }> {
-    // Resolve CLI path fresh each time — settings or PATH may have changed
-    const result = await resolveCliPath();
+export async function checkCliAvailableOrRedirect(
+    operation: 'command_gate' | 'debug_gate',
+    target: CliPathResolutionTarget,
+    options?: {
+        pinnedCliPath?: string;
+    },
+): Promise<{ cliPath: string; available: boolean }> {
+    // A restart validates the executable that its already-negotiated arguments target.
+    // Ordinary launches resolve fresh through the canonical CLI path resolver because settings or
+    // PATH may have changed.
+    const startTime = Date.now();
+    const result: CliPathResolutionResult = options?.pinnedCliPath === undefined
+        ? await resolveCliPath(target)
+        : {
+            cliPath: options.pinnedCliPath,
+            available: await tryExecuteCli(options.pinnedCliPath),
+            source: 'configured',
+        };
+    sendTelemetryEvent('aspire/vscode/cli/availability', {
+        available: result.available ? 'true' : 'false',
+        source: result.source,
+        operation,
+    }, {
+        duration_ms: Date.now() - startTime,
+    });
 
     if (result.available) {
         // Show informational message if CLI was found at default path (not on PATH)

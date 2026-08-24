@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
@@ -15,6 +16,8 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -26,6 +29,7 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AppHostLauncher(
     IProjectLocator projectLocator,
+    IAppHostProjectFactory projectFactory,
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     IAuxiliaryBackchannelMonitor backchannelMonitor,
@@ -33,11 +37,14 @@ internal sealed class AppHostLauncher(
     AspireCliTelemetry telemetry,
     ProfilingTelemetry profilingTelemetry,
     FileLoggerProvider fileLoggerProvider,
-    ProcessShutdownService processShutdownService,
-    IDetachedProcessLauncher detachedProcessLauncher,
+    ProcessTreeGracefulShutdownService processShutdownService,
+    IProcessExecutionFactory processExecutionFactory,
+    IConfiguration configuration,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
+    private const string DefaultDiscoverySelectionOrigin = "default-discovery";
+    private const string UserSelectionOrigin = "user-selection";
     private const int MaxDisplayedChildLogLines = 80;
     private const int MaxParentLogReplayLines = 200;
     private static readonly TimeSpan s_legacyDetachedStartupStabilityWindow = TimeSpan.FromSeconds(2);
@@ -65,6 +72,14 @@ internal sealed class AppHostLauncher(
     };
 
     /// <summary>
+    /// Shared option for selecting the AppHost launch profile.
+    /// </summary>
+    internal static readonly Option<string?> s_launchProfileOption = new("--launch-profile", "-lp")
+    {
+        Description = SharedCommandStrings.LaunchProfileOptionDescription
+    };
+
+    /// <summary>
     /// Adds the detached launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep options in sync.
     /// </summary>
@@ -73,6 +88,33 @@ internal sealed class AppHostLauncher(
         command.Options.Add(s_appHostOption);
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
+        command.Options.Add(s_launchProfileOption);
+    }
+
+    /// <summary>
+    /// Gets the explicitly supplied isolated option value, or <see langword="null"/> when omitted.
+    /// </summary>
+    internal static bool? GetExplicitIsolated(ParseResult parseResult)
+    {
+        return parseResult.GetResult(s_isolatedOption) is { Implicit: false }
+            ? parseResult.GetValue(s_isolatedOption)
+            : null;
+    }
+
+    /// <summary>
+    /// Gets the isolated option value to propagate to another CLI invocation.
+    /// </summary>
+    internal static bool? ResolveIsolatedOption(bool? explicitIsolated)
+    {
+        return explicitIsolated;
+    }
+
+    /// <summary>
+    /// Resolves whether the AppHost should run isolated from the explicit CLI option.
+    /// </summary>
+    internal static bool ResolveIsolated(ParseResult parseResult)
+    {
+        return ResolveIsolatedOption(GetExplicitIsolated(parseResult)) ?? false;
     }
 
     /// <summary>
@@ -80,7 +122,8 @@ internal sealed class AppHostLauncher(
     /// </summary>
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>
     /// <param name="format">The output format (JSON or table).</param>
-    /// <param name="isolated">Whether to run in isolated mode.</param>
+    /// <param name="isolated">The explicitly supplied isolated option value, or <see langword="null"/> when omitted.</param>
+    /// <param name="launchProfile">The explicitly selected launch profile, or <see langword="null"/> when omitted.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
     /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
@@ -92,7 +135,8 @@ internal sealed class AppHostLauncher(
     public async Task<CommandResult> LaunchDetachedAsync(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
-        bool isolated,
+        bool? isolated,
+        string? launchProfile,
         bool isExtensionHost,
         bool waitForDebugger,
         int timeoutSeconds,
@@ -128,7 +172,33 @@ internal sealed class AppHostLauncher(
             return CommandResult.Failure(CliExitCodes.FailedToFindProject);
         }
 
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            var project = projectFactory.TryGetProject(effectiveAppHostFile);
+            if (project is null)
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
+            }
+
+            if (GetLaunchProfileValidationError(project, launchProfile) is { } launchProfileError)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, launchProfileError);
+            }
+        }
+
+        // The detached child receives the selected file rather than the directory that caused the
+        // prompt, so carry the prompt provenance explicitly to persist the user's choice.
+        var appHostSelectionOrigin = searchResult.WasExplicitDirectorySelectionPrompted
+            ? UserSelectionOrigin
+            : configuration[KnownConfigNames.CliAppHostSelectionOrigin];
+        if (string.IsNullOrEmpty(appHostSelectionOrigin) && passedAppHostProjectFile is null)
+        {
+            appHostSelectionOrigin = DefaultDiscoverySelectionOrigin;
+        }
+
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
+
+        var isolatedOption = ResolveIsolatedOption(isolated);
 
         // Check for running instance and stop it if found (same behavior as regular run)
         await StopExistingInstancesAsync(effectiveAppHostFile, cancellationToken);
@@ -136,14 +206,18 @@ internal sealed class AppHostLauncher(
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         executionContext.AppHostCliLogFilePath = childLogFile;
-        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
+        var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolatedOption, globalArgs, additionalArgs);
 
-        // Compute the expected socket prefix for backchannel detection
+        // Compute the expected socket prefix for backchannel detection. The AppHost keys its
+        // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
+        // hash we wait on must also be computed from the resolved path (see ComputeDetachedMatchHashes).
+        var socketKeyPath = PathNormalizer.ResolveSymlinks(effectiveAppHostFile.FullName);
         var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
+            socketKeyPath,
+            executionContext.HomeDirectory.FullName);
+        var (expectedHash, legacyHashes) = ComputeDetachedMatchHashes(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName);
-        var expectedHash = AppHostHelper.ExtractHashFromSocketPath(expectedSocketPrefix)!;
-        var legacyHashes = AppHostHelper.ComputeLegacyHashes(effectiveAppHostFile.FullName);
 
         logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
         if (legacyHashes.Length > 0)
@@ -167,7 +241,7 @@ internal sealed class AppHostLauncher(
         {
             launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -191,6 +265,23 @@ internal sealed class AppHostLauncher(
         return CommandResult.Success();
     }
 
+    internal static string? GetLaunchProfileValidationError(IAppHostProject project, string? launchProfile)
+    {
+        if (string.IsNullOrEmpty(launchProfile))
+        {
+            return null;
+        }
+
+        if (!project.SupportsLaunchProfiles)
+        {
+            return string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, project.DisplayName);
+        }
+
+        // Missing or malformed launch settings must reach `dotnet run`, which owns the authoritative
+        // discovery and diagnostic behavior for explicit profiles.
+        return null;
+    }
+
     private async Task StopLaunchedAppHostAsync(LaunchResult result, TimeSpan delay, CancellationToken cancellationToken)
     {
         if (delay > TimeSpan.Zero)
@@ -202,7 +293,7 @@ internal sealed class AppHostLauncher(
         {
             // Reuse the shared "RPC stop + wait for termination" flow so capture mode follows the
             // same teardown path as socket-discovered running-instance stops.
-            var manager = new RunningInstanceManager(logger, interactionService, timeProvider);
+            var manager = new RunningInstanceManager(logger, interactionService, timeProvider, profilingTelemetry);
             await manager.StopAndMonitorAsync(result.Backchannel, cancellationToken).ConfigureAwait(false);
         }
 
@@ -227,6 +318,41 @@ internal sealed class AppHostLauncher(
         }
     }
 
+    /// <summary>
+    /// Computes the primary and fallback auxiliary-backchannel socket hashes used to match 
+    /// a detached AppHost's backchannel connection during launch.
+    /// </summary>
+    /// <param name="appHostPath">The AppHost project file or assembly path as supplied to the CLI.</param>
+    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <returns>
+    /// The primary expected hash (the compact AppHost id of the resolved path) and the de-duplicated
+    /// fallback hashes to also search: the compact AppHost id of the raw path plus the legacy hex
+    /// hashes of both the resolved and raw paths (including any Windows drive-letter casing variants).
+    /// </returns>
+    internal static (string ExpectedHash, string[] FallbackHashes) ComputeDetachedMatchHashes(string appHostPath, string homeDirectory)
+    {
+        var socketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
+
+        var expectedHash = AppHostHelper.ExtractHashFromSocketPath(
+            AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory))!;
+
+        // Current socket file names embed the compact AppHost id (a different hash space than the
+        // legacy hex hashes below), so include the raw path's compact id explicitly. 
+        // This is what matches a still-running AppHost that keyed its socket on the unresolved path before the
+        // AppHost side started resolving symlinks.
+        var rawCompactHash = AppHostHelper.ExtractHashFromSocketPath(
+            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory))!;
+
+        var fallbackHashes = new[] { rawCompactHash }
+            .Concat(AppHostHelper.ComputeLegacyHashes(socketKeyPath))
+            .Concat(AppHostHelper.ComputeLegacyHashes(appHostPath))
+            .Where(h => !string.Equals(h, expectedHash, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return (expectedHash, fallbackHashes);
+    }
+
     private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
     {
         var existingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
@@ -238,7 +364,7 @@ internal sealed class AppHostLauncher(
         if (existingSockets.Length > 0)
         {
             logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Length);
-            var manager = new RunningInstanceManager(logger, interactionService, timeProvider);
+            var manager = new RunningInstanceManager(logger, interactionService, timeProvider, profilingTelemetry);
             var stopTasks = existingSockets.Select(socket =>
                 manager.StopRunningInstanceAsync(socket, cancellationToken));
             await Task.WhenAll(stopTasks).ConfigureAwait(false);
@@ -248,7 +374,7 @@ internal sealed class AppHostLauncher(
     private (string ExecutablePath, List<string> ChildArgs) BuildChildProcessArgs(
         FileInfo effectiveAppHostFile,
         string childLogFile,
-        bool isolated,
+        bool? isolated,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs)
     {
@@ -264,9 +390,13 @@ internal sealed class AppHostLauncher(
 
         args.AddRange(globalArgs);
 
-        if (isolated)
+        if (isolated is not null)
         {
             args.Add(s_isolatedOption.Name);
+            if (!isolated.Value)
+            {
+                args.Add("false");
+            }
         }
 
         foreach (var token in additionalArgs)
@@ -288,8 +418,10 @@ internal sealed class AppHostLauncher(
 
         childArgs.AddRange(args);
 
+        // childArgs ends with the caller's "-- <appHostArgs>" tail, which is user-supplied AppHost
+        // input rather than CLI options, so it must not be written to the log verbatim.
         logger.LogDebug("Spawning child CLI: {Executable} (isDotnetHost={IsDotnetHost}) with args: {Args}",
-            dotnetPath, isDotnetHost, string.Join(" ", childArgs));
+            dotnetPath, isDotnetHost, AppHostArgumentRedactor.RedactToString(childArgs));
         logger.LogDebug("Working directory: {WorkingDirectory}", executionContext.WorkingDirectory.FullName);
 
         return (dotnetPath, childArgs);
@@ -311,57 +443,99 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
-    internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity)
+    /// <summary>
+    /// Builds the environment for the detached child CLI.
+    /// </summary>
+    /// <param name="activity">The spawn activity whose profiling context the child should join.</param>
+    /// <param name="appHostSelectionOrigin">
+    /// How this invocation's AppHost target was selected (<see cref="KnownConfigNames.CliAppHostSelectionOrigin"/>),
+    /// or <see langword="null"/> when nothing selected it explicitly. The detached child continues
+    /// the same invocation, so it must make the same workspace-default persistence decision.
+    /// </param>
+    internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity, string? appHostSelectionOrigin)
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
+
+        // Record the foreground launcher's identity (PID + start time) so the detached child can watch
+        // it during startup and tear the AppHost tree down if the launcher is killed before the app
+        // reaches readiness. Without this, killing `aspire start`/`aspire run --detach` mid-start (for
+        // example a test runner timing it out) leaks the AppHost + dashboard as orphaned processes.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(environment, KnownConfigNames.CliLauncherProcessId, KnownConfigNames.CliLauncherProcessStarted);
+
+        if (!string.IsNullOrEmpty(appHostSelectionOrigin))
+        {
+            environment[KnownConfigNames.CliAppHostSelectionOrigin] = appHostSelectionOrigin;
+        }
 
         ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
         ProfileCaptureEnvironment.AddCurrentToEnvironment(environment);
         return environment;
     }
 
-    private record LaunchResult(Process? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode, DateTimeOffset? ChildStartedAt = null);
+    private record LaunchResult(IProcessExecution? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode, DateTimeOffset? ChildStartedAt = null);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
         List<string> childArgs,
         string expectedHash,
         IReadOnlyList<string> legacyHashes,
+        string? appHostSelectionOrigin,
         TimeSpan timeout,
         Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
-        Process childProcess;
+        IProcessExecution? childProcess = null;
 
         using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs, "run"))
         {
             try
             {
-                childProcess = detachedProcessLauncher.Start(
+                var options = new ProcessInvocationOptions
+                {
+                    Detached = true,
+                    IsolateConsole = true,
+                    EnvironmentVariableFilter = IsExtensionEnvironmentVariable
+                };
+                childProcess = processExecutionFactory.CreateExecution(
                     executablePath,
-                    childArgs,
-                    executionContext.WorkingDirectory.FullName,
-                    IsExtensionEnvironmentVariable,
-                    CreateDetachedChildEnvironment(Activity.Current));
-                spawnActivity.SetProcessId(childProcess.Id);
+                    childArgs.ToArray(),
+                    CreateDetachedChildEnvironment(Activity.Current, appHostSelectionOrigin),
+                    executionContext.WorkingDirectory,
+                    options);
+
+                await childProcess.StartAsync(cancellationToken).ConfigureAwait(false);
+                spawnActivity.SetProcessId(childProcess.ProcessId);
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
+                await DisposeAfterFailedStartAsync(childProcess).ConfigureAwait(false);
+                throw;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                await DisposeAfterFailedStartAsync(childProcess).ConfigureAwait(false);
                 spawnActivity.SetError(ex.Message);
                 logger.LogError(ex, "Failed to start child CLI process");
                 return new LaunchResult(null, null, null, false, 0);
             }
         }
 
-        var childStartedAt = new DateTimeOffset(childProcess.StartTime);
-        logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
+        if (childProcess is null)
+        {
+            throw new InvalidOperationException("Failed to create child CLI process execution.");
+        }
+
+        var childStartedAt = childProcess.StartTime;
+        logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
         var startTime = timeProvider.GetUtcNow();
-        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHashes.Count > 0);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId, expectedHash, legacyHashes.Count > 0);
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
         string? launchFailureMessage = null;
+        var childExitTask = childProcess.WaitForExitAsync(CancellationToken.None);
+        ObserveFaults(childExitTask);
 
         try
         {
@@ -406,10 +580,8 @@ internal sealed class AppHostLauncher(
                     {
                         break;
                     }
-
                     using var readinessCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     var readinessTask = WaitForAppHostReadyAsync(connection, readinessCts.Token);
-                    var childExitTask = childProcess.WaitForExitAsync(cancellationToken);
                     var timeoutTask = Task.Delay(remainingTimeout, timeProvider, cancellationToken);
 
                     var completedTask = await Task.WhenAny(readinessTask, childExitTask, timeoutTask).ConfigureAwait(false);
@@ -431,7 +603,7 @@ internal sealed class AppHostLauncher(
                             }
 
                             updateStatus(RunCommandStrings.AppHostConnectionLostWaitingForExit);
-                            await childProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                            await childExitTask.WaitAsync(cancellationToken).ConfigureAwait(false);
                             return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                         }
 
@@ -470,13 +642,13 @@ internal sealed class AppHostLauncher(
                     }
                 }
 
-                try
+                var waitTask = Task.Delay(TimeSpan.FromMilliseconds(500), timeProvider, cancellationToken);
+                var completedWaitTask = await Task.WhenAny(childExitTask, waitTask).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (completedWaitTask == childExitTask)
                 {
-                    await childProcess.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
-                }
-                catch (TimeoutException)
-                {
-                    // Expected - the 500ms delay elapsed without the process exiting
+                    await childExitTask.ConfigureAwait(false);
+                    return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                 }
             }
         }
@@ -492,19 +664,37 @@ internal sealed class AppHostLauncher(
         return new LaunchResult(childProcess, null, dashboardUrls, false, 0, childStartedAt);
     }
 
-    private Task RequestGracefulShutdownThenForceKillAsync(Process childProcess, DateTimeOffset childStartedAt)
+    private async ValueTask DisposeAfterFailedStartAsync(IProcessExecution? childProcess)
+    {
+        if (childProcess is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await childProcess.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to dispose child CLI process execution after start failure.");
+        }
+    }
+
+    private Task RequestGracefulShutdownThenForceKillAsync(IProcessExecution childProcess, DateTimeOffset? childStartedAt)
     {
         return processShutdownService.StopProcessTreeAsync(
-            childProcess.Id,
+            childProcess.ProcessId,
             childStartedAt,
             includeStartTimeForDcp: true,
             CancellationToken.None);
     }
 
-    private LaunchResult CreateChildExitedLaunchResult(Process childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset childStartedAt)
+    private LaunchResult CreateChildExitedLaunchResult(IProcessExecution childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)
     {
         var exitCode = childProcess.ExitCode;
         waitForBackchannelActivity.SetProcessExitCode(exitCode);
+
         if (IsSuccessfulDetachedEarlyExit(exitCode))
         {
             logger.LogInformation("Child CLI process exited successfully before AppHost readiness was observed.");
@@ -657,7 +847,7 @@ internal sealed class AppHostLauncher(
         }
 
         interactionService.DisplayError(RunCommandStrings.FailedToStartAppHost);
-        DisplayChildLogTail(childLogFile, result.ChildProcess.Id);
+        DisplayChildLogTail(childLogFile, result.ChildProcess.ProcessId);
         if (failureMessage is not null && !string.Equals(failureMessage, RunCommandStrings.FailedToStartAppHost, StringComparison.Ordinal))
         {
             interactionService.DisplayError(failureMessage);
@@ -730,14 +920,14 @@ internal sealed class AppHostLauncher(
     {
         var appHostInfo = result.Backchannel!.AppHostInfo;
         var dashboardUrls = result.DashboardUrls;
-        var pid = appHostInfo?.ProcessId ?? result.ChildProcess!.Id;
+        var pid = appHostInfo?.ProcessId ?? result.ChildProcess!.ProcessId;
 
         if (format == OutputFormat.Json)
         {
             var jsonResult = new DetachOutputInfo(
                 effectiveAppHostFile.FullName,
                 pid,
-                result.ChildProcess!.Id,
+                result.ChildProcess!.ProcessId,
                 dashboardUrls?.BaseUrlWithLoginToken,
                 childLogFile);
             var json = JsonSerializer.Serialize(jsonResult, RunCommandJsonContext.RelaxedEscaping.DetachOutputInfo);

@@ -6,11 +6,6 @@ using System.CommandLine.Help;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
-#if DEBUG
-using System.Globalization;
-using System.Diagnostics;
-#endif
-
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
@@ -98,6 +93,12 @@ internal sealed class RootCommand : BaseRootCommand
         DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
+    internal static readonly Option<string?> s_logFileOption = new("--log-file")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -133,7 +134,6 @@ internal sealed class RootCommand : BaseRootCommand
         }
     }
 
-    private readonly IInteractionService _interactionService;
     private readonly IAnsiConsole _ansiConsole;
 
     public RootCommand(
@@ -177,34 +177,11 @@ internal sealed class RootCommand : BaseRootCommand
         IBundleService bundleService,
         IInteractionService interactionService,
         IFeatures features,
-        IAnsiConsole ansiConsole)
+        IAnsiConsole ansiConsole,
+        CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
-        _interactionService = interactionService;
         _ansiConsole = ansiConsole;
-
-#if DEBUG
-        CliWaitForDebuggerOption.Validators.Add((result) =>
-        {
-
-            var waitForDebugger = result.GetValueOrDefault<bool>();
-
-            if (waitForDebugger)
-            {
-                _interactionService.ShowStatus(
-                    string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
-                    () =>
-                    {
-                        while (!Debugger.IsAttached)
-                        {
-                            Thread.Sleep(1000);
-                        }
-
-                        Debugger.Break();
-                    }, emoji: KnownEmojis.Bug);
-            }
-        });
-#endif
 
         Options.Add(DebugOption);
         Options.Add(DebugLevelOption);
@@ -220,6 +197,7 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(CaptureProfileOption);
         Options.Add(CaptureProfileOutputOption);
         Options.Add(CaptureProfileDelayOption);
+        Options.Add(s_logFileOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
@@ -298,6 +276,10 @@ internal sealed class RootCommand : BaseRootCommand
             else if (option is VersionOption versionOption)
             {
                 versionOption.Aliases.Add("-v");
+                // Report the resolved identity version so --version honors ASPIRE_CLI_VERSION /
+                // the install sidecar. Without an override this resolves to the assembly's
+                // informational version, matching the built-in action's output.
+                versionOption.Action = new IdentityVersionAction(executionContext);
             }
         }
 

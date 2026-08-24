@@ -70,7 +70,7 @@ public class OtlpResource : IOtlpResource
             {
                 if (!OtlpHelpers.TryGetOrAddScope(_meters, sm.Scope, Context, TelemetryType.Metrics, out var scope))
                 {
-                    context.FailureCount += sm.Metrics.Sum(m => GetMetricDataPointCount(m));
+                    context.FailureCount += sm.Metrics.Sum(GetMetricDataPointCount);
                     continue;
                 }
 

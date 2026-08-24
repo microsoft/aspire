@@ -2,6 +2,7 @@
 .components-reconnect-repeated-attempt-visible,
 .components-reconnect-failed-visible,
 .components-reconnect-resource-service-disconnected-visible,
+.components-reconnect-resource-service-unsupported-visible,
 .components-reconnect-resource-service-retry-visible,
 .components-rejoining-animation {
     display: none;
@@ -15,6 +16,7 @@
 #components-reconnect-modal.components-reconnect-failed,
 #components-reconnect-modal.components-reconnect-failed .components-reconnect-failed-visible,
 #components-reconnect-modal.components-reconnect-resource-service-disconnected .components-reconnect-resource-service-disconnected-visible,
+#components-reconnect-modal.components-reconnect-resource-service-unsupported .components-reconnect-resource-service-unsupported-visible,
 #components-reconnect-modal.components-reconnect-resource-service-disconnected .components-rejoining-animation,
 #components-reconnect-modal.components-reconnect-resource-service-show-retry .components-reconnect-resource-service-retry-visible {
     display: block;
@@ -23,7 +25,7 @@
 
 #components-reconnect-modal {
     background-color: white;
-    width: 20rem;
+    width: 22rem;
     margin: 20vh auto;
     padding: 2rem;
     border: 0;

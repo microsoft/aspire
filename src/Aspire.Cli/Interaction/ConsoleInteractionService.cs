@@ -30,6 +30,7 @@ internal class ConsoleInteractionService : IInteractionService
     private readonly IAnsiConsole _errorConsole;
     private readonly CliExecutionContext _executionContext;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IProcessPathProvider _processPathProvider;
     private readonly ILogger _stdoutLogger;
     private readonly ILogger _stderrLogger;
     private readonly ConsoleLogBufferContext _logBufferContext;
@@ -59,17 +60,43 @@ internal class ConsoleInteractionService : IInteractionService
 
     public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
 
-    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
+    private bool UsesConsoleLogging => _executionContext.ConsoleLogLevel is not null and not LogLevel.None;
+
+    private bool ShouldShowInteractiveStatus(string statusText)
+    {
+        // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
+        // Spectre.Console throws if multiple interactive operations run concurrently.
+        // If already in a status, or in debug/non-interactive/console logging mode, fall back without a spinner.
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation
+        // skips the swap when an earlier condition forces the fallback path. Otherwise the
+        // swap would set _inStatus to 1 but the try/finally that resets it would never run,
+        // permanently disabling interactive status for the lifetime of the service.
+        if (_executionContext.DebugMode ||
+            UsesConsoleLogging ||
+            !_hostEnvironment.SupportsInteractiveOutput ||
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IProcessPathProvider processPathProvider, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(processPathProvider);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(logBufferContext);
         _outConsole = consoleEnvironment.Out;
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
+        _processPathProvider = processPathProvider;
         _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
         _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
         _logBufferContext = logBufferContext;
@@ -87,18 +114,7 @@ internal class ConsoleInteractionService : IInteractionService
             statusText = ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) + statusText;
         }
 
-        // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
-        // Spectre.Console throws if multiple interactive operations run concurrently.
-        // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON).
-        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation
-        // skips the swap when an earlier condition forces the fallback path. Otherwise the
-        // swap would set _inStatus to 1 but the try/finally that resets it would never run,
-        // permanently disabling interactive status for the lifetime of the service.
-        if (_executionContext.DebugMode ||
-            !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText) ||
-            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
+        if (!ShouldShowInteractiveStatus(statusText))
         {
             // Skip displaying if status text is empty (e.g., when outputting JSON)
             if (!string.IsNullOrEmpty(statusText))
@@ -130,15 +146,7 @@ internal class ConsoleInteractionService : IInteractionService
         var emojiPrefix = emoji is { } e ? ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) : string.Empty;
         var initialDisplayText = emojiPrefix + initialStatusText.EscapeMarkup();
 
-        // Mirrors ShowStatusAsync: prevent nested Spectre.Console Status operations, skip when debug/non-interactive,
-        // and treat empty text as "no status UI". The fallback path still drives the action so progress logic runs;
-        // we just hand it an updater that emits subtle messages instead of mutating a live spinner.
-        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
-        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
-        if (_executionContext.DebugMode ||
-            !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(initialStatusText) ||
-            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
+        if (!ShouldShowInteractiveStatus(initialStatusText))
         {
             if (!string.IsNullOrEmpty(initialStatusText))
             {
@@ -184,16 +192,7 @@ internal class ConsoleInteractionService : IInteractionService
             statusText = ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) + statusText;
         }
 
-        // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
-        // Spectre.Console throws if multiple interactive operations run concurrently.
-        // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON).
-        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
-        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
-        if (_executionContext.DebugMode ||
-            !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText) ||
-            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
+        if (!ShouldShowInteractiveStatus(statusText))
         {
             if (!string.IsNullOrEmpty(statusText))
             {
@@ -279,7 +278,7 @@ internal class ConsoleInteractionService : IInteractionService
         return result;
     }
 
-    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
     {
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
@@ -441,7 +440,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
     {
-        var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
+        var cliInformationalVersion = _executionContext.IdentityVersion;
 
         // When both versions parse, tell the user which side is older and how to
         // update it rather than the ambiguous "upgrade the AppHost or Aspire CLI".
@@ -460,7 +459,7 @@ internal class ConsoleInteractionService : IInteractionService
             else if (comparison > 0)
             {
                 errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateCli;
-                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand()
+                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand(_processPathProvider.ProcessPath)
                     ?? NpmInstallDetection.GetNpmUpdateCommand()
                     ?? "aspire update";
             }
@@ -511,25 +510,13 @@ internal class ConsoleInteractionService : IInteractionService
         {
             // Only attempt to parse/remove markup when the message is expected to contain it.
             // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
-            var logMessage = allowMarkup ? message.RemoveMarkup() : message;
+            var logMessage = allowMarkup ? StringUtils.RemoveMarkup(message) : message;
             logger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, target, replaceEmoji: true) + logMessage);
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
 
-        // Use a grid to keep the icon in a fixed first column so long text wraps
-        // without pushing under the emoji prefix.
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        grid.Columns[0].NoWrap = true;
-        grid.Columns[0].Padding = new Padding(0);
-        grid.Columns[1].Padding = new Padding(0);
-
-        grid.AddRow(
-            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
-            new Markup(displayMessage));
-
+        var grid = ConsoleHelpers.CreateEmojiGrid(emoji, target, new Markup(displayMessage));
         target.Write(grid);
     }
 
@@ -662,10 +649,10 @@ internal class ConsoleInteractionService : IInteractionService
             });
     }
 
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
         GetConsoleOutput(consoleOverride).WriteLine();
-        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true, consoleOverride: consoleOverride);
+        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{message ?? InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true, consoleOverride: consoleOverride);
     }
 
     public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -845,7 +832,7 @@ internal class ConsoleInteractionService : IInteractionService
         // text. Some choice formatters intentionally include [bold]/[dim]/etc. tokens for the
         // interactive multi-select renderer; those tokens would otherwise leak verbatim through
         // DisplaySubtleMessage and confuse anyone diagnosing a typoed --option value.
-        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c).RemoveSpectreFormatting()));
+        var availableChoices = string.Join(", ", choices.Select(c => StringUtils.RemoveMarkup(choiceFormatter(c))));
         DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
         throw new NonInteractiveException(symbolDisplayName);
     }

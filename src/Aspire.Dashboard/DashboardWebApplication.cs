@@ -16,8 +16,6 @@ using Aspire.Shared;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
@@ -306,10 +304,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry API.
         builder.Services.AddSingleton<TelemetryApiService>();
 
-        // AI assistant services.
-        builder.Services.AddTransient<AssistantChatViewModel>();
-        builder.Services.AddTransient<AssistantChatDataContext>();
-
         builder.Services.AddTransient<TracesViewModel>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
@@ -327,10 +321,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<TelemetryExportService>();
         builder.Services.AddScoped<TelemetryImportService>();
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
-
-        builder.Services.AddScoped<IAIContextProvider, AIContextProvider>();
-        builder.Services.AddScoped<IceBreakersBuilder>();
-        builder.Services.AddSingleton<ChatClientFactory>();
 
         // Time zone is set by the browser.
         builder.Services.AddScoped<BrowserTimeProvider>();
@@ -518,6 +508,24 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.UseAntiforgery();
         _app.UseWebSockets();
 
+        // Browsers don't apply CORS restrictions to WebSocket upgrades. Only the
+        // dashboard frontend should establish a Blazor circuit, so reject cross-site
+        // upgrades before SignalR allocates a connection or circuit.
+        _app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/_blazor", StringComparisons.UrlPath) &&
+                context.WebSockets.IsWebSocketRequest &&
+                !WebSocketOriginValidator.IsSameOrigin(context, out var originLogValue))
+            {
+                _logger.LogWarning("Rejecting Blazor WebSocket upgrade with disallowed Origin '{Origin}'.", originLogValue);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync("Origin not allowed.").ConfigureAwait(false);
+                return;
+            }
+
+            await next(context).ConfigureAwait(false);
+        });
+
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
         // Terminal WebSocket proxy
@@ -539,7 +547,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)
     {
         var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-        var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
+        var suppressBrowserToken = _app.Configuration.GetBool(KnownConfigNames.DashboardSuppressBrowserTokenInOutput) ?? false;
+        var token = !suppressBrowserToken && options.Frontend.AuthMode == FrontendAuthMode.BrowserToken
+            ? options.Frontend.BrowserToken
+            : null;
         var frontendAddress = frontendEndpointInfo?.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
         var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
@@ -955,6 +966,47 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         try
         {
             _app.Run();
+            return 0;
+        }
+        catch (IOException ex) when (ContainsAddressInUse(ex))
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return ExitCodeAddressInUse;
+        }
+        catch (Exception ex)
+        {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
+            return ExitCodeUnexpectedError;
+        }
+    }
+
+    /// <summary>
+    /// Runs the dashboard until it shuts down or <paramref name="cancellationToken"/> is cancelled.
+    /// Cancellation triggers a graceful host shutdown.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to request the dashboard to stop.</param>
+    public async Task<int> RunAsync(CancellationToken cancellationToken)
+    {
+        if (_validationFailures.Count > 0)
+        {
+            return ExitCodeValidationFailure;
+        }
+
+        try
+        {
+            // Cast to IHost so this binds to the CancellationToken-aware HostingAbstractionsHostExtensions.RunAsync
+            // (WebApplication's own RunAsync only takes a URL). Cancelling the token stops the host gracefully.
+            await ((IHost)_app).RunAsync(cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation is the watchdog's normal shutdown signal (or a start-time race), not a failure.
             return 0;
         }
         catch (IOException ex) when (ContainsAddressInUse(ex))

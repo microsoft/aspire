@@ -1,16 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -34,7 +37,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommand_DoesNotConsultGlobalConfigurationServiceForChannelKey()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
         {
@@ -64,6 +67,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Stable);
             options.ConfigurationServiceFactory = _ => tripwireConfigService;
 
             // Pin a single Implicit channel so the template resolver has a definite fall-through
@@ -77,7 +81,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackage>>(
                             [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -120,7 +124,11 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// channel. Prerelease identities (daily/staging) further pin the template version to the
     /// current CLI/SDK so the bundled server and restored Aspire packages stay on the same
     /// version; the stable identity falls through to the highest shipped stable package because
-    /// the stable feed doesn't filter the running CLI's version out of search.
+    /// the stable feed doesn't filter the running CLI's version out of search. The stable
+    /// identity still resolves its template <em>version</em> from the stable channel (proved by
+    /// the 13.5.0 pickup), but its channel name is NOT pinned into the project
+    /// (<c>ShouldPersistChannelName</c> excludes <c>stable</c>) so the new project keeps the
+    /// ambient nuget.org configuration; daily/staging/pr do pin so restores hit their feed.
     /// </summary>
     [Theory]
     [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1", null)]
@@ -133,7 +141,15 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             identityChannelVersion: identityChannelVersion);
 
         Assert.Equal(expectedVersion ?? VersionHelper.GetDefaultSdkVersion(), captured.Version);
-        Assert.Equal(identityChannel, captured.Channel);
+
+        if (string.Equals(identityChannel, PackageChannelNames.Stable, StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Null(captured.Channel);
+        }
+        else
+        {
+            Assert.Equal(identityChannel, captured.Channel);
+        }
     }
 
     [Fact]
@@ -186,6 +202,71 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("13.3.0", captured.Version); // value from Implicit channel
         Assert.Null(captured.Channel); // Implicit channels never persist a channel pin
+    }
+
+    [Fact]
+    public async Task NewCommand_CliRuntimeTemplate_LocalIdentityWithoutLocalChannel_Fails()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: null,
+            identitySdkVersion: "13.6.0-dev",
+            expectedExitCode: CliExitCodes.InvalidCommand);
+
+        Assert.False(captured.WasApplied);
+        var error = Assert.Single(captured.Errors);
+        Assert.Equal(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                NewCommandStrings.NoMatchingLocalTemplatePackage,
+                "13.6.0-dev"),
+            error);
+    }
+
+    [Fact]
+    public async Task NewCommand_CliRuntimeTemplate_UnqualifiedLocalIdentity_FindsExactVersionBelowNewerPinnedVersion()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: "13.7.0-dev",
+            identityChannelVersions: ["13.6.0-dev", "13.7.0-dev"],
+            identitySdkVersion: "13.6.0-dev",
+            useLocalIdentityPackageDirectory: true);
+
+        Assert.True(captured.WasApplied);
+        Assert.Equal("13.6.0-dev", captured.Version);
+        Assert.Equal(PackageChannelNames.Local, captured.Channel);
+    }
+
+    [Fact]
+    public async Task NewCommand_CliRuntimeTemplate_LocalIdentityWithSourceOverride_UsesSourceVersion()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: "13.7.0-dev",
+            identitySdkVersion: "13.6.0-dev",
+            sourceOptionArg: "https://example.invalid/override/v3/index.json",
+            sourceOverrideVersion: "13.6.0-dev");
+
+        Assert.True(captured.WasApplied);
+        Assert.Equal("13.6.0-dev", captured.Version);
+        Assert.Null(captured.Channel);
+    }
+
+    [Fact]
+    public async Task NewCommand_CliRuntimeTemplate_LocalIdentityWithVersionOverride_DefersChannelResolution()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: "13.6.0-dev",
+            versionOptionArg: "13.5.0");
+
+        Assert.Equal("13.5.0", captured.Version);
+        Assert.Null(captured.Channel);
     }
 
     /// <summary>
@@ -289,16 +370,17 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// value is already forwarded into <c>inputs.Channel</c>.
     /// </para>
     /// <para>
-    /// All four shipping identity shapes are exercised — PR (developer dogfood build
-    /// against a hive), daily (nightly dnceng feed), staging (release-branch dnceng feed),
-    /// and stable (nuget.org via the explicit Stable channel registration).
+    /// The three feed-backed identity shapes are exercised — PR (developer dogfood build
+    /// against a hive), daily (nightly dnceng feed), and staging (release-branch dnceng feed).
+    /// The <c>stable</c> identity is deliberately NOT forwarded (its packages are on nuget.org,
+    /// the ambient default), which is covered separately by
+    /// <see cref="NewCommand_DotNetRuntimeTemplate_NoChannelArg_StableIdentity_DoesNotForwardChannel"/>.
     /// </para>
     /// </summary>
     [Theory]
     [InlineData("pr-99999", "13.4.0-pr.99999.gabc123")]
     [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1")]
     [InlineData(PackageChannelNames.Staging, "13.4.0-rc.1.99999.1")]
-    [InlineData(PackageChannelNames.Stable, "13.5.0")]
     public async Task NewCommand_DotNetRuntimeTemplate_NoChannelArg_ForwardsIdentityChannelToInputs(string identityChannel, string identityChannelVersion)
     {
         var captured = await CaptureTemplateInputsAsync(
@@ -311,6 +393,66 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         // DotNetTemplateFactory.ApplyTemplateAsync — NewCommand does not populate inputs.Version
         // for this runtime — so only inputs.Channel is asserted here.
         Assert.Equal(identityChannel, captured.Channel);
+    }
+
+    /// <summary>
+    /// Counterpart to <see cref="NewCommand_DotNetRuntimeTemplate_NoChannelArg_ForwardsIdentityChannelToInputs"/>
+    /// for the <c>stable</c> identity: a stable-identity DotNet-runtime <c>aspire new</c> must
+    /// leave <c>inputs.Channel</c> as <c>null</c>. The stable channel maps everything to
+    /// nuget.org (the ambient default source), so pinning it into the project — and dropping a
+    /// <c>&lt;clear/&gt;</c>-based NuGet.config for it — would be redundant and would wipe the
+    /// user's other feeds. The stable channel is still registered, proving the skip is driven by
+    /// the channel name (<c>ShouldPersistChannelName</c>) rather than an absence of mappings.
+    /// </summary>
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_NoChannelArg_StableIdentity_DoesNotForwardChannel()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Stable,
+            channelOptionArg: null,
+            identityChannelVersion: "13.5.0",
+            runtime: TemplateRuntime.DotNet);
+
+        Assert.Null(captured.Channel);
+    }
+
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_UnqualifiedLocalIdentity_DefersChannelResolution()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: "13.6.0-dev",
+            runtime: TemplateRuntime.DotNet);
+
+        Assert.Null(captured.Channel);
+    }
+
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_LocalIdentityWithVersionOverride_DefersChannelResolution()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: "13.6.0-dev",
+            runtime: TemplateRuntime.DotNet,
+            versionOptionArg: "13.5.0");
+
+        Assert.Equal("13.5.0", captured.Version);
+        Assert.Null(captured.Channel);
+    }
+
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_LocalIdentityWithSourceOverride_DefersChannelResolution()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Local,
+            channelOptionArg: null,
+            identityChannelVersion: "13.7.0-dev",
+            runtime: TemplateRuntime.DotNet,
+            sourceOptionArg: "https://example.invalid/override/v3/index.json");
+
+        Assert.Null(captured.Channel);
     }
 
     /// <summary>
@@ -402,11 +544,17 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         string? identityChannelVersion,
         IEnumerable<string>? identityChannelVersions = null,
         TemplateRuntime runtime = TemplateRuntime.Cli,
-        string? versionOptionArg = null)
+        string? versionOptionArg = null,
+        int expectedExitCode = CliExitCodes.Success,
+        string? identitySdkVersion = null,
+        bool useLocalIdentityPackageDirectory = false,
+        string? sourceOptionArg = null,
+        string? sourceOverrideVersion = null)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var capturedInputs = new CapturedTemplateInputs();
+        var interactionService = new TestInteractionService();
 
         // A fake template that intercepts the inputs and returns success without invoking
         // the heavyweight template scaffolding pipeline (RPC, codegen, bundled NuGet restore).
@@ -427,6 +575,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             applyOptionsCallback: _ => { },
             applyTemplateCallback: (_, inputs, _, _) =>
             {
+                capturedInputs.WasApplied = true;
                 capturedInputs.Version = inputs.Version;
                 capturedInputs.Channel = inputs.Channel;
                 var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "captured");
@@ -438,11 +587,13 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CliExecutionContextFactory = _ => BuildExecutionContextWithIdentity(workspace, identityChannel);
+            options.CliExecutionContextFactory = _ => BuildExecutionContextWithIdentity(workspace, identityChannel, identitySdkVersion);
 
             options.TemplateProviderFactory = _ => new SingleTemplateProvider(fakeTemplate);
 
-            options.PackagingServiceFactory = _ => BuildPackagingService(identityChannel, identityChannelVersion, identityChannelVersions);
+            options.PackagingServiceFactory = _ => BuildPackagingService(workspace, identityChannel, identityChannelVersion, identityChannelVersions, useLocalIdentityPackageDirectory, sourceOverrideVersion);
+
+            options.InteractionServiceFactory = _ => interactionService;
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -450,10 +601,12 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         var channelArg = string.IsNullOrEmpty(channelOptionArg) ? "" : $" --channel {channelOptionArg}";
         var versionArg = string.IsNullOrEmpty(versionOptionArg) ? "" : $" --version {versionOptionArg}";
-        var parseResult = newCommand.Parse($"new fake-template --name TestApp --output ./captured{channelArg}{versionArg}");
+        var sourceArg = string.IsNullOrEmpty(sourceOptionArg) ? "" : $" --source {sourceOptionArg}";
+        var parseResult = newCommand.Parse($"new fake-template --name TestApp --output ./captured{channelArg}{versionArg}{sourceArg}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(expectedExitCode, exitCode);
+        capturedInputs.Errors.AddRange(interactionService.DisplayedErrors);
         return capturedInputs;
     }
 
@@ -464,9 +617,12 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// tests can identify which channel won resolution.
     /// </summary>
     private static IPackagingService BuildPackagingService(
+        TemporaryWorkspace workspace,
         string identityChannel,
         string? identityChannelVersion,
-        IEnumerable<string>? identityChannelVersions)
+        IEnumerable<string>? identityChannelVersions,
+        bool useLocalIdentityPackageDirectory,
+        string? sourceOverrideVersion)
     {
         var identityVersions = identityChannelVersions?.ToArray()
             ?? (identityChannelVersion is null ? [] : [identityChannelVersion]);
@@ -475,11 +631,18 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         // outcome is distinguishable from an identity-channel pickup.
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+            GetTemplatePackagesAsyncCallback = (_, _, configFile, _) =>
                 Task.FromResult<IEnumerable<NuGetPackage>>(
-                    [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
+                    [new NuGetPackage
+                    {
+                        Id = "Aspire.ProjectTemplates",
+                        Source = "nuget",
+                        Version = configFile is not null && sourceOverrideVersion is not null
+                            ? sourceOverrideVersion
+                            : "13.3.0"
+                    }])
         };
-        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance);
 
         // Always register a stable channel — matches what PackagingService advertises in
         // production. Its version (13.5.0) is distinct from Implicit (13.3.0) so a test
@@ -495,7 +658,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             PackageChannelQuality.Stable,
             [new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")],
             stableCache,
-            features: new TestFeatures());
+            features: new TestFeatures(),
+            NullLogger.Instance);
 
         var channels = new List<PackageChannel> { implicitChannel, stableChannel };
 
@@ -507,6 +671,32 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             !identityChannel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase);
         if (isDailyOrStaging)
         {
+            PackageMapping[] mappings;
+            string? pinnedVersion = null;
+            if (useLocalIdentityPackageDirectory)
+            {
+                var packagesDirectory = workspace.CreateDirectory("identity-packages");
+                foreach (var version in identityVersions)
+                {
+                    File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{version}.nupkg"), string.Empty);
+                }
+
+                mappings =
+                [
+                    new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/')),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
+                ];
+                pinnedVersion = identityChannelVersion;
+            }
+            else
+            {
+                mappings =
+                [
+                    new PackageMapping("Aspire*", "https://example.invalid/feed/v3/index.json"),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
+                ];
+            }
+
             var explicitCache = new FakeNuGetPackageCache
             {
                 GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
@@ -516,12 +706,11 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             channels.Add(PackageChannel.CreateExplicitChannel(
                 identityChannel,
                 PackageChannelQuality.Prerelease,
-                [
-                    new PackageMapping("Aspire*", "https://example.invalid/feed/v3/index.json"),
-                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
-                ],
+                mappings,
                 explicitCache,
-                features: new TestFeatures()));
+                features: new TestFeatures(),
+                NullLogger.Instance,
+                pinnedVersion: pinnedVersion));
         }
 
         // PR hives are an additional explicit channel shape (PackageChannelQuality.Both
@@ -544,7 +733,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
                 ],
                 prCache,
-                features: new TestFeatures()));
+                features: new TestFeatures(),
+                NullLogger.Instance));
         }
 
         return new TestPackagingService
@@ -553,16 +743,19 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         };
     }
 
-    private static CliExecutionContext BuildExecutionContextWithIdentity(TemporaryWorkspace workspace, string identityChannel)
+    private static CliExecutionContext BuildExecutionContextWithIdentity(TemporaryWorkspace workspace, string identityChannel, string? identitySdkVersion)
     {
         return workspace.CreateExecutionContext(
-            identityChannel: identityChannel);
+            identityChannel: identityChannel,
+            identityVersion: identitySdkVersion);
     }
 
     private sealed class CapturedTemplateInputs
     {
+        public bool WasApplied { get; set; }
         public string? Version { get; set; }
         public string? Channel { get; set; }
+        public List<string> Errors { get; } = [];
     }
 
     /// <summary>

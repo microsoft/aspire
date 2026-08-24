@@ -15,7 +15,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -23,11 +23,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     public AutoRerunTransientCiFailuresTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "auto-rerun-transient-ci-failures.harness.js");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["node"])]
@@ -232,6 +233,23 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Single(result.RetryableJobs);
         Assert.Equal(
             "Failed steps 'Build test project | Check validation results' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to load the service index for source https:\\/\\/(?:pkgs\\.dev\\.azure\\.com\\/dnceng|dnceng\\.pkgs\\.visualstudio\\.com)\\/public\\/_packaging\\//i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AllowsLogBasedOverrideForConnectionResetByPeerInBuildSteps()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Build RID-specific packages"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "Unhandled exception: Unable to read data from the transport connection: Connection reset by peer.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Failed step 'Build RID-specific packages' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to read data from the transport connection: Connection reset by peer/i`.",
             result.RetryableJobs[0].Reason);
     }
 
@@ -2200,7 +2218,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
     {
-        string inputPath = Path.Combine(_tempDir.Path, $"{Guid.NewGuid():N}.json");
+        string inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
         string requestJson = JsonSerializer.Serialize(new HarnessRequest
         {
             Operation = operation,

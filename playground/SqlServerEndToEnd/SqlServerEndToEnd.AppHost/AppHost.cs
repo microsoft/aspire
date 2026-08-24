@@ -12,6 +12,8 @@ var sql2 = builder.AddAzureSqlServer("sql2");
 var db2 = sql2.AddDatabase("db2");
 
 var api = builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
+       .WithReference(db1)
+       .WithReference(db2)
        .WithExternalHttpEndpoints();
 
 // Add EF migrations resource for the api project

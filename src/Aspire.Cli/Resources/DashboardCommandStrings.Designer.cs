@@ -93,6 +93,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string EnsuringDashboardBundle {
+            get {
+                return ResourceManager.GetString("EnsuringDashboardBundle", resourceCulture);
+            }
+        }
+
         public static string DashboardStartTimedOut {
             get {
                 return ResourceManager.GetString("DashboardStartTimedOut", resourceCulture);

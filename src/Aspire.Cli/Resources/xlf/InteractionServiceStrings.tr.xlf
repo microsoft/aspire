@@ -83,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
+        <source>An error occurred while connecting to the AppHost: {0}</source>
         <target state="needs-review-translation">Uygulama ana işlemiyle bağlantı kurulurken bir hata oluştu. Uygulama ana işlemi, kullanılabilir duruma gelmeden önce muhtemelen çöktü: {0}.</target>
         <note />
       </trans-unit>
@@ -95,6 +95,11 @@
       <trans-unit id="InteractiveInputNotSupported">
         <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
         <target state="needs-review-translation">Bu ortamda etkileşimli giriş desteklenmemektedir. --non-interactive bayrağını kullanın veya CLI'nin etkileşimli bir terminalde çalıştığından emin olun.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
@@ -157,9 +162,9 @@
         <target state="needs-review-translation">--apphost seçeneği belirtilmedi ve birden fazla uygulama ana işlemi projesi dosyası algılandı.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">Proje bağımsız değişkeni belirtilmedi ve uygulama ana işlemi projesinin dosyaları tespit edilemedi.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
