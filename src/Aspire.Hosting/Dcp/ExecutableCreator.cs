@@ -123,11 +123,15 @@ internal sealed class ExecutableCreator(
         ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
-        var recipes = resource.Annotations.OfType<ExecutableLaunchRecipeAnnotation>().ToArray();
-        if (recipes.Length != 1)
+        // A resource can accumulate more than one recipe annotation when a substitution helper (e.g. RunAsTool,
+        // RunAsContainer) layers a donor resource's annotations onto an existing project/executable resource
+        // rather than replacing it outright. Follow the same "last annotation wins" convention used for every
+        // other resource annotation in this file (see TryGetLastAnnotation usages) instead of treating the
+        // resource as invalid.
+        if (!resource.TryGetLastAnnotation<ExecutableLaunchRecipeAnnotation>(out var recipeAnnotation))
         {
             throw new InvalidOperationException(
-                $"Resource '{resource.Name}' must have exactly one executable launch recipe, but {recipes.Length} were found.");
+                $"Resource '{resource.Name}' must have an executable launch recipe, but none were found.");
         }
 
         var decision = launchPolicy.Decide(resource);
@@ -139,7 +143,7 @@ internal sealed class ExecutableCreator(
             decision,
             resourceLogger,
             cancellationToken);
-        var plan = await recipes[0].Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
+        var plan = await recipeAnnotation.Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
 
         if (plan.Mechanism != decision.Mechanism)
         {
