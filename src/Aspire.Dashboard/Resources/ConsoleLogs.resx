@@ -176,6 +176,10 @@
     <value>&lt;Log capture paused at {0}, {1} log(s) filtered out&gt;</value>
     <comment>{0} is a date, {1} is a number</comment>
   </data>
+  <data name="PauseInProgressText" xml:space="preserve">
+    <value>Console logs capture paused at {0}</value>
+    <comment>{0} is a time</comment>
+  </data>
   <data name="ConsoleLogsPauseDetails" xml:space="preserve">
     <value>&lt;Log capture paused between {0} and {1}, {2} log(s) filtered out&gt;</value>
     <comment>{0} is a date, {1} is a date, {2} is a number.</comment>

@@ -158,6 +158,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsPauseActive", resourceCulture);
             }
         }
+
+        public static string PauseInProgressText {
+            get {
+                return ResourceManager.GetString("PauseInProgressText", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsPauseDetails {
             get {

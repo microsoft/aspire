@@ -174,5 +174,11 @@
                     ShowResourcePrefix="@_isSubscribedToAll"/>
             }
         </MainSection>
+        <FooterSection>
+            @if (_activeView == ConsoleLogsView.Console && PauseText is not null)
+            {
+                <PauseWarning PauseText="@PauseText" />
+            }
+        </FooterSection>
     </AspirePageContentLayout>
 </div>
