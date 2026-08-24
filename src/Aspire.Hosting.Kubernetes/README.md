@@ -80,7 +80,7 @@ const api = await builder.addNodeApp("api", "../api", "server.js");
 await api.withKubernetesPersistentVolumeMount(data, "/data", { env: "DATA_PATH" });
 ```
 
-When a project or executable runs locally, `DATA_PATH` points to a persistent directory in the AppHost's Aspire store. That store is normally under the AppHost intermediate-output directory, so cleaning build outputs can remove the local data. Local containers use a worktree-scoped container volume instead. A single persistent-volume resource cannot be shared between local containers and local projects or executables because those execution types cannot use one backing store reliably.
+When a project or executable runs locally, `DATA_PATH` points to a persistent directory in the AppHost's Aspire store. That store is normally under the AppHost intermediate-output directory, so cleaning build outputs can remove the local data. Local containers use a worktree-scoped container volume instead, provided the mount names an environment variable. Mounts that do not name one keep the persistent volume's own name for the local container volume, so data written by an earlier version of the AppHost stays attached. A single persistent-volume resource cannot be shared between local containers and local projects or executables because those execution types cannot use one backing store reliably.
 
 When published or deployed, `DATA_PATH` contains `/data`. Applications can therefore use the same environment variable in both environments. The `isReadOnly` mount option is enforced after deployment, but Aspire cannot make a directory read-only for a process running directly on the host.
 
