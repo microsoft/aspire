@@ -328,14 +328,14 @@ var resource = ModelTestHelpers.CreateResource(
 
 Use this when verifying the installed/released dashboard instead of the repo-local one.
 
-- TestShop adds `Projects.Aspire_Dashboard` by default for local dashboard development.
-- The MSBuild opt-out property is `SkipDashboardProjectReference=true`.
-- Running installed `aspire` from inside this repo is not enough by itself; without the opt-out, TestShop still references the local dashboard project.
+- In-repo playground AppHosts can add `Projects.Aspire_Dashboard` for local dashboard development. Running an installed `aspire` CLI is not enough when the AppHost model already contains that local project.
+- Use `SkipDashboardProjectReference=true` to opt out of the shared playground dashboard project reference, and point `AspireDashboardPath` at the installed bundle.
 
 ```powershell
+$appHost = "<path-to-AppHost.csproj>"
 $dashboard = "$HOME\.aspire\bundle\managed\aspire-managed.exe"
-dotnet build .\playground\TestShop\TestShop.AppHost\TestShop.AppHost.csproj /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
-aspire run --no-build --apphost .\playground\TestShop\TestShop.AppHost\TestShop.AppHost.csproj
+dotnet build $appHost /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
+aspire run --no-build --apphost $appHost
 ```
 
 - Verify the dashboard resource in Aspire metadata/logs before treating screenshots as baseline. The source/executable must be `aspire-managed.exe`, not `Aspire.Dashboard.csproj`.
