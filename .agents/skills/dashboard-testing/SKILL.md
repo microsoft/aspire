@@ -333,8 +333,38 @@ Use this when verifying the installed/released dashboard instead of the repo-loc
 
 ```powershell
 $appHost = "<path-to-AppHost.csproj>"
+$doctor = aspire doctor --format Json --non-interactive 2>$null | ConvertFrom-Json
+$installation = $doctor.installations | Where-Object pathStatus -eq "active" | Select-Object -First 1
+if ($null -eq $installation)
+{
+    throw "Could not find the active Aspire CLI installation."
+}
+
+$aspireDirectory = Split-Path $installation.canonicalPath -Parent
+if ($installation.route -in @("script", "pr", "localhive"))
+{
+    $bundleRoot = Split-Path $aspireDirectory -Parent
+}
+elseif ($installation.route -in @("winget", "brew", "dotnet-tool"))
+{
+    $bundleRoot = $aspireDirectory
+}
+elseif ($env:ASPIRE_HOME)
+{
+    $bundleRoot = $env:ASPIRE_HOME
+}
+else
+{
+    $bundleRoot = Join-Path $HOME ".aspire"
+}
+
 $managedExecutable = if ($env:OS -eq "Windows_NT") { "aspire-managed.exe" } else { "aspire-managed" }
-$dashboard = Join-Path $HOME ".aspire/bundle/managed/$managedExecutable"
+$dashboard = Join-Path $bundleRoot "bundle/managed/$managedExecutable"
+if (-not (Test-Path $dashboard))
+{
+    throw "Could not find the installed dashboard at '$dashboard'."
+}
+
 dotnet build $appHost /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
 aspire run --no-build --apphost $appHost
 ```
