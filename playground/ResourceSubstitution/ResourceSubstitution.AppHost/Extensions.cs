@@ -10,14 +10,20 @@ using Microsoft.Extensions.Logging;
 public static class Extensions
 {
     public static IResourceBuilder<T> RunAsContainer<T>(this IResourceBuilder<T> builder)
-        where T : ProjectResource
+        where T : IResourceWithEnvironment, IResourceWithArgs, IResourceWithEndpoints, IResourceWithWaitSupport
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             return builder;
         }
 
-        var imagePublisher = AddContainerPublisher();
+        var projectPath = builder.GetProjectPath();
+
+        // Every resource built from the same project produces the exact same image, so publishing it once and
+        // sharing that image (and the publisher that builds it) across all of them is both correct and avoids
+        // running redundant, concurrent `dotnet publish` invocations of the same project.
+        var image = GetContainerImage(projectPath);
+        var imagePublisher = GetOrAddContainerPublisher(projectPath, image);
 
         TransmuteResourceAnnotations();
         FixEndpoints();
@@ -25,6 +31,17 @@ public static class Extensions
         return builder
             .WaitForCompletion(imagePublisher)
             .WithDotnetContainerDefaults();
+
+        ContainerImageAnnotation GetContainerImage(string projectPath)
+        {
+            var appHostName = builder.ApplicationBuilder.AppHostAssembly!.GetName().Name!.ToLowerInvariant();
+            return new ContainerImageAnnotation
+            {
+                Image = $"aspire/{appHostName}/{GetSanitizedProjectName(projectPath)}",
+                Tag = "aspire-image-build",
+                Registry = "" // Use local registry
+            };
+        }
 
         void TransmuteResourceAnnotations()
         {
@@ -39,13 +56,9 @@ public static class Extensions
                 builder.Resource.Annotations.Remove(executableAnnotation);
             }
 
-            var appHostName = builder.ApplicationBuilder.AppHostAssembly!.GetName().Name!.ToLowerInvariant();
-            builder.WithAnnotation(new ContainerImageAnnotation
-            {
-                Image = $"aspire/{appHostName}/{builder.Resource.Name}",
-                Tag = "aspire-image-build",
-                Registry = "" // Use local registry
-            }, ResourceAnnotationMutationBehavior.Replace);
+            builder.ApplicationBuilder.RemoveRebuilderResource(builder.Resource.Name);
+
+            builder.WithAnnotation(image, ResourceAnnotationMutationBehavior.Replace);
         }
 
         // As a project, the target port is left null.
@@ -75,23 +88,47 @@ public static class Extensions
 
         // This could potentially use `IResourceContainerImageManager` instead, but this mirrors
         // the tool publishing approach, and is easier to troubleshoot errors in run mode.
-        IResourceBuilder<ExecutableResource> AddContainerPublisher()
+        //
+        // Idempotent per project path: every resource built from the same project shares this one publisher
+        // instead of each getting its own, so the project is only ever published once, not once per consumer.
+        IResourceBuilder<ExecutableResource> GetOrAddContainerPublisher(string projectPath, ContainerImageAnnotation image)
         {
-            return builder.ApplicationBuilder.AddExecutable($"{builder.Resource.Name}-publisher", "dotnet", ".")
-                .WithArgs("publish", builder.Resource.GetProjectMetadata().ProjectPath, "/t:PublishContainer")
+            var publisherName = $"{Path.GetFileNameWithoutExtension(projectPath)}-publisher";
+            if (builder.ApplicationBuilder.TryCreateResourceBuilder<ExecutableResource>(publisherName, out var existing))
+            {
+                return existing;
+            }
+
+            // Built from the project path rather than a user-provided resource name, so it can contain
+            // characters (e.g. the project file's '.') that the default resource-name validation rejects.
+            var publisher = new ExecutableResource(publisherName, "dotnet", builder.ApplicationBuilder.AppHostDirectory);
+            publisher.Annotations.Add(NameValidationPolicyAnnotation.None);
+
+            return builder.ApplicationBuilder.AddResource(publisher)
+                .WithArgs(
+                    "publish", projectPath, "/t:PublishContainer",
+                    $"/p:ContainerRepository=\"{image.Image}\"",
+                    $"/p:ContainerImageTags=\"{image.Tag}\"",
+                    $"/p:ContainerRegistry=\"{image.Registry}\"")
                 .WithIconName("BoxToolbox")
-                .WithParentRelationship(builder)
                 .WaitForContainerRuntime()
-                .WithArgs(ctx =>
-                {
-                    // Lazy set the image metadata in case someone mutates the image annotation
-                    if (builder.Resource.TryGetLastAnnotation<ContainerImageAnnotation>(out var imageAnnotation))
-                    {
-                        ctx.Args.Add($"/p:ContainerRepository=\"{imageAnnotation.Image}\"");
-                        ctx.Args.Add($"/p:ContainerImageTags=\"{imageAnnotation.Tag}\"");
-                        ctx.Args.Add($"/p:ContainerRegistry=\"{imageAnnotation.Registry}\"");
-                    }
-                });
+                .ExcludeFromManifest();
+        }
+    }
+
+    private static string GetSanitizedProjectName(string projectPath) =>
+        Path.GetFileNameWithoutExtension(projectPath).Replace('.', '-').ToLowerInvariant();
+
+    // AddProject/AddCSharpApp/AddDotnetProject all add a hidden "{name}-rebuilder" companion resource (via
+    // WithProjectDefaults) as a side effect. Once RunAsContainer/RunAsProject/RunAsTool convert a resource away
+    // from being a project, that companion is left behind referencing a resource that's no longer a project —
+    // remove it so it doesn't leak into the app model.
+    private static void RemoveRebuilderResource(this IDistributedApplicationBuilder appBuilder, string resourceName)
+    {
+        var rebuilder = appBuilder.Resources.FirstOrDefault(r => r.Name == $"{resourceName}-rebuilder");
+        if (rebuilder is not null)
+        {
+            appBuilder.Resources.Remove(rebuilder);
         }
     }
 
@@ -129,14 +166,8 @@ public static class Extensions
             var newProject = builder.ApplicationBuilder.AddCSharpApp($"temp-{Guid.NewGuid()}", projectPath);
             builder.ApplicationBuilder.Resources.Remove(newProject.Resource);
 
-            // AddCSharpApp (via WithProjectDefaults) also adds a hidden "{name}-rebuilder" companion resource as
-            // a side effect. Removing the temp project above doesn't remove that companion, so it would otherwise
-            // leak into the app model referencing a project resource that no longer exists.
-            var rebuilder = builder.ApplicationBuilder.Resources.FirstOrDefault(r => r.Name == $"{newProject.Resource.Name}-rebuilder");
-            if (rebuilder is not null)
-            {
-                builder.ApplicationBuilder.Resources.Remove(rebuilder);
-            }
+            // Removing the temp project above doesn't remove its "-rebuilder" companion (see RemoveRebuilderResource).
+            builder.ApplicationBuilder.RemoveRebuilderResource(newProject.Resource.Name);
 
             // TODO: A clever merge approach may be needed here
             foreach (var annotation in newProject.Resource.Annotations)
@@ -169,7 +200,7 @@ public static class Extensions
     // This is a slightly silly example - not sure why you'd ever want to run a project as a tool
     // But it helps to prove the model out.
     public static IResourceBuilder<T> RunAsTool<T>(this IResourceBuilder<T> builder)
-        where T : ProjectResource
+        where T : IResourceWithEnvironment, IResourceWithArgs, IResourceWithEndpoints, IResourceWithWaitSupport
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
@@ -194,6 +225,8 @@ public static class Extensions
                 builder.Resource.Annotations.Remove(containerImageAnnotation);
             }
 
+            builder.ApplicationBuilder.RemoveRebuilderResource(builder.Resource.Name);
+
             // again, rather than copy
             var newTool = builder.ApplicationBuilder.AddDotnetTool($"temp-{Guid.NewGuid()}", builder.Resource.Name)
                 .WithToolIgnoreExistingFeeds()
@@ -216,7 +249,7 @@ public static class Extensions
 
         IResourceBuilder<ExecutableResource> AddToolPublisher()
         {
-            var projectPath = builder.Resource.GetProjectMetadata().ProjectPath;
+            var projectPath = builder.GetProjectPath();
             return builder.ApplicationBuilder.AddExecutable($"{builder.Resource.Name}-tool-publisher", "dotnet", ".")
                 .WithArgs(ctx =>
                 {
@@ -230,7 +263,7 @@ public static class Extensions
                     ctx.Args.Add(GetToolPackageOutputPath(ctx.ExecutionContext.Services));
                 })
                 .WithIconName("BoxToolbox")
-                .WithParentRelationship(builder);
+                .WithParentRelationship(builder.Resource);
         }
 
         static string GetToolPackageOutputPath(IServiceProvider services)
@@ -242,6 +275,19 @@ public static class Extensions
 
             return toolPackageOutputPath;
         }
+    }
+
+    // Annotation-based rather than the ProjectResource-typed GetProjectMetadata() extension, so RunAsContainer/
+    // RunAsTool work on any resource carrying project metadata (e.g. DotnetProjectResource), not just ProjectResource.
+    private static string GetProjectPath<T>(this IResourceBuilder<T> builder)
+        where T : IResource
+    {
+        if (!builder.Resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+        {
+            throw new InvalidOperationException($"Resource '{builder.Resource.Name}' is missing required project metadata.");
+        }
+
+        return projectMetadata.ProjectPath;
     }
 
     private static IResourceBuilder<T> WithDotnetContainerDefaults<T>(this IResourceBuilder<T> builder)

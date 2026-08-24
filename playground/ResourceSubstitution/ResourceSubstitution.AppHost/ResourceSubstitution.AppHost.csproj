@@ -10,14 +10,11 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ResourceSubstitution.Api\ResourceSubstitution.Api.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Dashboard\KnownResourceTypes.cs" />
   </ItemGroup>
 
 </Project>
