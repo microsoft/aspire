@@ -73,7 +73,6 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:typescript-api-compat` | `tests.yml` → [`typescript-api-compat.yml`](../../.github/workflows/typescript-api-compat.yml) |
 | `job:extension-unit` | `tests.yml` `extension_tests_win` + `extension_bootstrap_linux` |
 | `job:extension-e2e` | `tests.yml` → [`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml) |
-| `job:cli-starter` | `tests.yml` `cli_starter_validation_windows` |
 | `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:nix-package` | `tests.yml` `nix_package` |
@@ -105,7 +104,7 @@ set instead of repeating it. Example:
 
 ```yaml
 groups:
-  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e, job:winget-installer, job:homebrew-installer]
+  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:extension-e2e, job:winget-installer, job:homebrew-installer]
 ```
 
 Group members may themselves be group names; expansion is recursive and
@@ -196,8 +195,6 @@ with `--skip-layer1`; the loose-file `path_rules` still cover those triggers.
 Project name means the `.csproj` base name, which is what Layer 1 emits.
 
 ```yaml
-- projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
-  targets: [job:cli-starter]
 - projects: [Aspire.Hosting*, Aspire.Cli]
   targets: [job:typescript-api-compat]
 ```
@@ -212,10 +209,8 @@ A `test → test` edge whose target has its own rule is followed; cycles termina
 This is how a job fires based on *which tests run*, not on which file changed:
 
 ```yaml
-- tests: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests]
-  targets: [job:cli-starter]
 - tests: [test:Aspire.Acquisition.Tests]
-  targets: [job:cli-starter, job:winget-installer, job:homebrew-installer]
+  targets: [job:winget-installer, job:homebrew-installer]
 ```
 
 ## Maintenance

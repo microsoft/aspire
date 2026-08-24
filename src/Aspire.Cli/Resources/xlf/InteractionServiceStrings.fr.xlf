@@ -97,6 +97,11 @@
         <target state="needs-review-translation">La saisie interactive n'est pas prise en charge dans cet environnement. Utilisez l’indicateur --non-interactive ou assurez-vous que la CLI s’exécute dans un terminal interactif.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">Pour découvrir plus d’informations, consultez : [lien]{0}[/][/]</target>

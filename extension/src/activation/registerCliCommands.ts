@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { addCommand } from '../commands/add';
 import { newCommand } from '../commands/new';
 import { initCommand } from '../commands/init';
+import { createWithAspireCommand } from '../commands/createWithAspire';
 import { deployCommand } from '../commands/deploy';
 import { publishCommand } from '../commands/publish';
 import { doCommand } from '../commands/do';
@@ -13,10 +14,11 @@ import { settingsCommand } from '../commands/settings';
 import { openLocalSettingsCommand, openGlobalSettingsCommand } from '../commands/openSettings';
 import { installCliCommand, verifyCliInstalledCommand } from '../commands/walkthroughCommands';
 import { cliNotAvailable, dismissLabel, errorMessage, noAppHostInWorkspace, openCliInstallInstructions, selectWorkspaceFolderForAspireCommand } from '../loc/strings';
-import { isCommandCancellation, withCommandTelemetry } from '../utils/telemetry';
+import { classifyError, type HandledCommandOutcome, isCommandCancellation, withCommandTelemetry } from '../utils/telemetry';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { isE2eBridgeEnabled } from '../testing/e2eStateFileBridge';
 import { registerInstrumentedCommand } from './instrumentedCommand';
@@ -28,16 +30,23 @@ interface CommandInvocation {
   readonly appHost?: AppHostCommandTarget;
 }
 
+type CommandSource = 'command_palette' | 'tree';
+
 export function registerCliCommands(
   terminalProvider: AspireTerminalProvider,
   editorCommandProvider: AspireEditorCommandProvider,
+  configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(terminalProvider),
 ): vscode.Disposable[] {
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp, invocation, cliPath) => addCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
-  const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', () => tryExecuteCommand('aspire-vscode.new', terminalProvider, (tp, invocation, cliPath) => newCommand(tp, invocation.target, cliPath), selectCommandInvocation));
-  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', () => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), selectCommandInvocation));
+  const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', (source: CommandSource = 'command_palette') => tryExecuteCommand('aspire-vscode.new', terminalProvider, (tp, invocation, cliPath) => newCommand(tp, invocation.target, cliPath), selectCommandInvocation, source));
+  const cliInitCommandRegistration = vscode.commands.registerCommand('aspire-vscode.init', (target?: CliPathResolutionTarget, source: CommandSource = 'command_palette') => tryExecuteCommand('aspire-vscode.init', terminalProvider, (tp, invocation, cliPath) => initCommand(tp, invocation.target, cliPath), target ? async () => ({ target }) : selectCommandInvocation, source));
+  // Delegates to aspire-vscode.new / aspire-vscode.init above, so it doesn't go
+  // through tryExecuteCommand itself — the delegated-to command owns its own CLI
+  // availability check and telemetry.
+  const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', createWithAspireCommand);
   const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
   const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
-  const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (tp, invocation, cliPath) => doCommand(tp, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
+  const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (_tp, invocation, cliPath) => doCommand(configInfoProvider, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
   const cliUpdateCommandRegistration = vscode.commands.registerCommand('aspire-vscode.update', () => tryExecuteCommand('aspire-vscode.update', terminalProvider, (tp, invocation, cliPath) => updateCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
   const cliUpdateSelfCommandRegistration = vscode.commands.registerCommand('aspire-vscode.updateSelf', () => tryExecuteCommand('aspire-vscode.updateSelf', terminalProvider, updateSelfCommand));
   const openTerminalCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openTerminal', () => tryExecuteCommand('aspire-vscode.openTerminal', terminalProvider, (tp, invocation, cliPath) => openTerminalCommand(tp, invocation.target, cliPath), selectCommandInvocation));
@@ -56,6 +65,7 @@ export function registerCliCommands(
     cliAddCommandRegistration,
     cliNewCommandRegistration,
     cliInitCommandRegistration,
+    createWithAspireCommandRegistration,
     cliDeployCommandRegistration,
     cliPublishCommandRegistration,
     cliDoCommandRegistration,
@@ -119,7 +129,8 @@ async function tryExecuteCommand(
   terminalProvider: AspireTerminalProvider,
   command: (terminalProvider: AspireTerminalProvider, invocation: CommandInvocation, cliPath: string) => Promise<void>,
   prepareInvocation: () => Promise<CommandInvocation> = async () => ({ target: windowCliPathTarget }),
-): Promise<void> {
+  source: CommandSource = 'command_palette',
+): Promise<HandledCommandOutcome | undefined> {
   try {
     await withCommandTelemetry(commandName, async () => {
       const invocation = await prepareInvocation();
@@ -148,13 +159,14 @@ async function tryExecuteCommand(
       }
 
       await command(terminalProvider, invocation, cliPath);
-    }, { source: 'command_palette' });
+    }, { source });
   }
   catch (error) {
-    // Cancellations should not surface as user-visible errors — but they still
-    // bubble through the wrapper so it can classify outcome correctly.
-    if (!isCommandCancellation(error)) {
-      vscode.window.showErrorMessage(errorMessage(error));
+    if (isCommandCancellation(error)) {
+      return { success: false, canceled: true };
     }
+
+    vscode.window.showErrorMessage(errorMessage(error));
+    return { success: false, errorKind: classifyError(error) };
   }
 }

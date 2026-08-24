@@ -49,7 +49,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout (for retry patterns)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.1
         with:
           sparse-checkout: eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
@@ -409,7 +409,7 @@ jobs:
 
           echo "Analysis summary written to ci-failure-data/analysis-summary.md"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4.6.2
         if: steps.collect.outputs.has_work == 'true'
         with:
           name: ci-failure-data
@@ -858,7 +858,7 @@ safe-outputs:
           type: string
       steps:
         - name: Rerun failed jobs
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             ENABLE_RERUN: ${{ env.ENABLE_RERUN }}
           with:
@@ -926,7 +926,7 @@ safe-outputs:
               core.info(`Requested rerun of failed jobs for run ${runId}. Reason: ${reason}`);
 
 steps:
-  - uses: actions/download-artifact@v4
+  - uses: actions/download-artifact@v4.3.0
     with:
       name: ci-failure-data
       path: ci-failure-data/

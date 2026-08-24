@@ -249,7 +249,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
         ? string.Format(
             CultureInfo.CurrentCulture,
             Loc[nameof(Dashboard.Resources.Metrics.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value, MillisecondsDisplay.Truncated))
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
         : null;
 
     public sealed class MetricsViewModel

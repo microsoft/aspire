@@ -1,0 +1,6 @@
+﻿parameters:
+  myapp:
+    enable_tls: "1.0"
+config:
+  myapp:
+    TLS_SUFFIX: "{{ tpl \"{{ if eq (.Values.parameters.myapp.enable_tls | toString | lower) \\u00221.0\\u0022 }},ssl=true{{ else }},ssl=false{{ end }}\" . | quote }}"

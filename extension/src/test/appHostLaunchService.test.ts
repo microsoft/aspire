@@ -5,15 +5,15 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration, type AspireResourceDebugSession } from '../dcp/types';
-import { appHostLaunchReservationIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import { appHostLaunchReservationIdConfigKey, appHostRestartSourceSessionIdConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned } from '../debugger/AspireDebugConfigurationProviderInternal';
 import * as locStrings from '../loc/strings';
 import { appHostLifecycleBusy } from '../loc/strings';
-import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchCapabilityProvider, type AppHostLaunchSession } from '../services/AppHostLaunchService';
+import { AppHostLaunchService, AppHostLifecycleLockTimeoutError, AppHostStopCancellationError, appHostLifecycleLockMaxHoldMs, appHostLifecycleLockWaitTimeoutMs, externalLaunchReservationTimeoutMs, type AppHostLaunchCapabilityProvider, type AppHostLaunchRequestedEvent, type AppHostLaunchSession } from '../services/AppHostLaunchService';
 import { getAppHostIdentityKey } from '../utils/appHostIdentity';
 import * as cliPathModule from '../utils/cliPath';
-import { isolatedLaunchCapability, type CapabilityStatus } from '../types/configInfo';
-import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { isolatedLaunchCapability, launchProfileCapability, type CapabilityStatus } from '../types/configInfo';
+import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { writeLinkedWorktreeMetadata } from './testGitWorktree';
 
@@ -74,13 +74,16 @@ class FakeCapabilityProvider implements AppHostLaunchCapabilityProvider {
         options: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string; target?: import('../utils/cliPathVariables').CliPathResolutionTarget } | undefined;
     }> = [];
     capabilityStatus: CapabilityStatus = 'supported';
+    launchProfileCapabilityStatus: CapabilityStatus = 'supported';
 
     async getCapabilityStatus(
         capability: string,
         options?: { suppressErrors?: boolean; forceRefresh?: boolean; cliPath?: string; cancellationToken?: vscode.CancellationToken; minimumVersion?: string; target?: import('../utils/cliPathVariables').CliPathResolutionTarget },
     ): Promise<CapabilityStatus> {
         this.calls.push({ capability, options });
-        return capability === isolatedLaunchCapability ? this.capabilityStatus : 'unsupported';
+        return capability === isolatedLaunchCapability
+            ? this.capabilityStatus
+            : capability === launchProfileCapability ? this.launchProfileCapabilityStatus : 'unsupported';
     }
 }
 
@@ -94,6 +97,7 @@ interface LaunchArgumentPreparer {
         target?: import('../utils/cliPathVariables').CliPathResolutionTarget,
         isolated?: boolean,
         isolationPolicy?: 'explicit-only' | 'linked-worktree-default',
+        launchProfile?: string,
     ): Promise<{
         args: string[] | undefined;
         isolation: {
@@ -225,6 +229,19 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.skipCliAvailabilityCheck, true);
     });
 
+    test('launch request event records the verified CLI path and target', async () => {
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const target = workspaceFolderCliPathTarget(folder);
+        const events: AppHostLaunchRequestedEvent[] = [];
+        service.onDidRequestLaunch(event => events.push(event));
+
+        await service.launch('/repo/AppHost.csproj', 'do', true, 'deploy', target, '/repo/bin/aspire');
+
+        assert.strictEqual(events.length, 1);
+        assert.strictEqual(events[0].cliPath, '/repo/bin/aspire');
+        assert.strictEqual(events[0].cliTargetKey, getCliPathTargetKey(target));
+    });
+
     test('lifecycle-owned launch does not replace an existing workspace default', async () => {
         const appHostPath = '/repo/AppHost.csproj';
         assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
@@ -255,6 +272,108 @@ suite('AppHostLaunchService', () => {
 
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.deepStrictEqual(config.args, ['--isolated']);
+    });
+
+    test('lifecycle-owned launch forwards a selected launch profile', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        await service.launchFromLifecycleOwner(
+            appHostPath,
+            'run',
+            true,
+            undefined,
+            new vscode.CancellationTokenSource().token,
+            'Development HTTPS');
+
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.launchProfile, 'Development HTTPS');
+        assert.deepStrictEqual(config.args, ['--launch-profile=Development HTTPS']);
+        assert.strictEqual(capabilityProvider.calls.at(-1)?.capability, launchProfileCapability);
+        assert.strictEqual(capabilityProvider.calls.at(-1)?.options?.cliPath, '/path/bin/aspire');
+    });
+
+    test('typed launch profile replaces root profile options and preserves AppHost arguments', async () => {
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/AppHost.csproj',
+            'run',
+            [
+                '--verbose',
+                '--launch-profile', 'First',
+                '--launch-profile=Second',
+                '-lp', 'Third',
+                '-lp=Fourth',
+                '--',
+                '--launch-profile', 'AppHostValue',
+            ],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire',
+            undefined,
+            undefined,
+            undefined,
+            'Development HTTPS');
+
+        assert.deepStrictEqual(prepared.args, [
+            '--verbose',
+            '--launch-profile=Development HTTPS',
+            '--',
+            '--launch-profile', 'AppHostValue',
+        ]);
+    });
+
+    test('typed launch profile preserves root options after a valueless profile option', async () => {
+        const prepared = await (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+            '/repo/AppHost.csproj',
+            'run',
+            ['--launch-profile', '--isolated'],
+            new vscode.CancellationTokenSource().token,
+            '/path/bin/aspire',
+            undefined,
+            undefined,
+            undefined,
+            'Development HTTPS');
+
+        assert.deepStrictEqual(prepared.args, [
+            '--isolated',
+            '--launch-profile=Development HTTPS',
+        ]);
+    });
+
+    test('typed launch profile rejects an older or unverifiable exact CLI', async () => {
+        for (const status of ['unsupported', 'unavailable'] as const) {
+            capabilityProvider.launchProfileCapabilityStatus = status;
+
+            await assert.rejects(
+                (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+                    '/repo/AppHost.csproj',
+                    'run',
+                    undefined,
+                    new vscode.CancellationTokenSource().token,
+                    '/path/bin/aspire',
+                    undefined,
+                    undefined,
+                    undefined,
+                    'Development HTTPS'),
+                status === 'unsupported'
+                    ? /does not support the requested launch profile/
+                    : /launch profile capability could not be verified/);
+        }
+    });
+
+    test('non-run launch rejects a typed launch profile', async () => {
+        await assert.rejects(
+            (service as unknown as LaunchArgumentPreparer).prepareLaunchArguments(
+                '/repo/AppHost.csproj',
+                'publish',
+                ['--verbose'],
+                new vscode.CancellationTokenSource().token,
+                '/path/bin/aspire',
+                undefined,
+                undefined,
+                undefined,
+                'Development HTTPS'),
+            /Launch profiles are only supported for the run command/);
+        assert.deepStrictEqual(capabilityProvider.calls, []);
     });
 
     test('prepareLaunchArguments does not infer root isolation when only app args specify isolated', async () => {
@@ -1105,6 +1224,31 @@ suite('AppHostLaunchService', () => {
         await assert.rejects(queued, vscode.CancellationError);
         assert.strictEqual(service.pendingLifecycleOperationCount, 1);
         void active;
+    });
+
+    test('clears a cancelled lifecycle waiter when the active operation settles', async () => {
+        const appHostPath = '/repo/AppHost/AppHost.csproj';
+        let releaseActive: (() => void) | undefined;
+        let signalActiveStarted: (() => void) | undefined;
+        const activeStarted = new Promise<void>(resolve => { signalActiveStarted = resolve; });
+        const active = service.runWithAppHostLifecycleLock(
+            appHostPath,
+            new vscode.CancellationTokenSource().token,
+            () => new Promise<void>(resolve => {
+                releaseActive = resolve;
+                signalActiveStarted?.();
+            }));
+        await activeStarted;
+        const queuedTokenSource = new vscode.CancellationTokenSource();
+        const queued = service.runWithAppHostLifecycleLock(appHostPath, queuedTokenSource.token, async () => undefined);
+        queuedTokenSource.cancel();
+        await assert.rejects(queued, vscode.CancellationError);
+
+        releaseActive?.();
+        await active;
+
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'deploy', true);
+        assert.strictEqual(typeof reservationId, 'string');
     });
 
     test('bounds lifecycle lock waits when the active operation does not settle', async () => {
@@ -2352,5 +2496,466 @@ suite('AppHostLaunchService', () => {
         });
 
         assert.strictEqual(terminationEventRaised, false);
+    });
+
+    test('a Run termination still requests stop refresh while a later Publish stays active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        const terminationEvents: Array<{ command?: string; shouldRequestStopRefresh: boolean; shouldMarkAppHostStopping: boolean }> = [];
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvents.push(event);
+        });
+
+        await service.launch(appHostPath, 'run', true);
+        const runConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const runSession = { id: 'run', configuration: runConfiguration } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(runSession);
+        service.clearLaunching(appHostPath);
+
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
+        const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
+        onDidStartDebugSessionCallback(publishSession);
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(runSession);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+        assert.deepStrictEqual(terminationEvents, [{
+            appHostPath,
+            command: 'run',
+            shouldRequestStopRefresh: true,
+            shouldMarkAppHostStopping: true,
+        }]);
+    });
+
+    test('a non-Run launch reports a pending then active operation and clears on termination', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        let changeCount = 0;
+        let signalCliResolutionStarted: (() => void) | undefined;
+        let releaseCliResolution: (() => void) | undefined;
+        const cliResolutionStarted = new Promise<void>(resolve => { signalCliResolutionStarted = resolve; });
+        const cliResolutionRelease = new Promise<void>(resolve => { releaseCliResolution = resolve; });
+        resolveCliPathStub.callsFake(async () => {
+            signalCliResolutionStarted?.();
+            await cliResolutionRelease;
+            return { cliPath: '/path/bin/aspire', available: true, source: 'path' };
+        });
+        service.onDidChangeOperationState(() => { changeCount++; });
+
+        const launch = service.launch(appHostPath, 'publish', true);
+        await cliResolutionStarted;
+
+        assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
+            appHostPath,
+            command: 'publish',
+            noDebug: true,
+            doStep: undefined,
+        });
+        assert.strictEqual(changeCount, 1);
+        assert.strictEqual(startDebuggingStub.called, false);
+
+        releaseCliResolution?.();
+        await launch;
+
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(publishSession);
+
+        assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
+            appHostPath,
+            command: 'publish',
+            noDebug: true,
+            doStep: undefined,
+        });
+        assert.strictEqual(changeCount, 1, 'transferring a pending operation to its session is not observable');
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(publishSession);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+        assert.strictEqual(changeCount, 2);
+    });
+
+    test('an external non-Run reservation blocks duplicate operations but not Run', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'deploy', true, 'infra');
+        assert.strictEqual(typeof reservationId, 'string');
+        assert.deepStrictEqual(service.getActiveOperation(appHostPath), {
+            appHostPath,
+            command: 'deploy',
+            noDebug: true,
+            doStep: 'infra',
+        });
+
+        await assert.rejects(
+            service.launch(appHostPath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+        await service.launch(appHostPath, 'run', true);
+
+        const externalConfiguration: AspireExtendedDebugConfiguration = {
+            type: 'aspire',
+            name: 'Deploy AppHost',
+            request: 'launch',
+            program: appHostPath,
+            command: 'deploy',
+            noDebug: true,
+            step: 'infra',
+            [appHostLaunchReservationIdConfigKey]: reservationId,
+        };
+        const externalSession = {
+            id: 'external-deploy',
+            configuration: externalConfiguration,
+        } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(externalSession);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'deploy');
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(externalSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('an external non-Run reservation is rejected while a Run launch is pending', () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        assert.strictEqual(
+            service.tryReserveExternalOperation(appHostPath, 'deploy', true, 'infra'),
+            false);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a directory-scoped external non-Run reservation is rejected while a child AppHost launch is pending', () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+        assert.strictEqual(service.tryReserveLaunch(appHostPath), true);
+
+        assert.strictEqual(
+            service.tryReserveExternalOperation(directory, 'deploy', true, undefined, true),
+            false);
+        assert.strictEqual(service.getActiveOperation(directory), undefined);
+    });
+
+    test('an external non-Run reservation is rejected while a lifecycle operation owns the AppHost', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        let releaseOperation: (() => void) | undefined;
+        let signalOperationStarted: (() => void) | undefined;
+        const operationStarted = new Promise<void>(resolve => { signalOperationStarted = resolve; });
+        const operation = service.runWithAppHostLifecycleLock(
+            appHostPath,
+            new vscode.CancellationTokenSource().token,
+            () => new Promise<void>(resolve => {
+                releaseOperation = resolve;
+                signalOperationStarted?.();
+            }));
+        await operationStarted;
+
+        assert.strictEqual(
+            service.tryReserveExternalOperation(appHostPath, 'publish', true),
+            false);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+
+        releaseOperation?.();
+        await operation;
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'publish', true);
+        assert.strictEqual(typeof reservationId, 'string');
+        service.releaseExternalOperationReservation(appHostPath, reservationId || '');
+    });
+
+    test('an external non-Run reservation is allowed beside a stable Run', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'run', true);
+        const configuration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({
+            id: 'stable-run',
+            configuration,
+        } as unknown as vscode.DebugSession);
+        service.clearLaunching(appHostPath);
+
+        const reservationId = service.tryReserveExternalOperation(appHostPath, 'deploy', true);
+
+        assert.strictEqual(typeof reservationId, 'string');
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'deploy');
+    });
+
+    test('a directory-scoped external non-Run reservation blocks a child AppHost operation', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj');
+        const appHostPath = path.join(directory, 'AppHost.csproj');
+        const reservationId = service.tryReserveExternalOperation(directory, 'deploy', true, undefined, true);
+        assert.strictEqual(typeof reservationId, 'string');
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'deploy');
+
+        await assert.rejects(
+            service.launch(appHostPath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+        assert.strictEqual(startDebuggingStub.called, false);
+    });
+
+    test('an abandoned external non-Run reservation expires', () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            const appHostPath = '/repo/AppHost.csproj';
+            let changeCount = 0;
+            service.onDidChangeOperationState(() => { changeCount++; });
+
+            assert.strictEqual(
+                typeof service.tryReserveExternalOperation(appHostPath, 'publish', true),
+                'string');
+            assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+
+            clock.tick(externalLaunchReservationTimeoutMs + 1);
+
+            assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+            assert.strictEqual(changeCount, 2);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('a toolbar restart preserves a durable operation until the replacement terminates', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'do', false, 'test');
+        const configuration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const firstSession = {
+            id: 'first-do',
+            configuration,
+        } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(firstSession);
+
+        configuration[appHostRestartSourceSessionIdConfigKey] = firstSession.id;
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(firstSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'do');
+
+        const replacementSession = {
+            id: 'replacement-do',
+            configuration,
+        } as unknown as vscode.DebugSession;
+        onDidStartDebugSessionCallback(replacementSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'do');
+
+        delete configuration[appHostRestartSourceSessionIdConfigKey];
+        onDidTerminateDebugSessionCallback(replacementSession);
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a durable operation expires when its toolbar restart never starts a replacement', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'do', false, 'test');
+        const configuration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const session = {
+            id: 'do',
+            configuration,
+        } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(session);
+
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        try {
+            configuration[appHostRestartSourceSessionIdConfigKey] = session.id;
+            assert.ok(onDidTerminateDebugSessionCallback);
+            onDidTerminateDebugSessionCallback(session);
+            assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'do');
+
+            clock.tick(externalLaunchReservationTimeoutMs + 1);
+
+            assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('an active operation matches its AppHost by identity, not just its raw path', async () => {
+        const directory = createAppHostDirectory('AppHost.csproj', 'Program.cs');
+        const projectPath = path.join(directory, 'AppHost.csproj');
+        const sourcePath = path.join(directory, 'Program.cs');
+
+        await service.launch(projectPath, 'deploy', false, 'infra');
+
+        assert.deepStrictEqual(service.getActiveOperation(sourcePath), {
+            appHostPath: projectPath,
+            command: 'deploy',
+            noDebug: false,
+            doStep: 'infra',
+        });
+    });
+
+    test('an ambiguous AppHost path does not claim either active operation but still blocks duplicates', async () => {
+        const directory = createAppHostDirectory('First.csproj', 'Second.csproj', 'Program.cs');
+        const firstProjectPath = path.join(directory, 'First.csproj');
+        const secondProjectPath = path.join(directory, 'Second.csproj');
+        const ambiguousSourcePath = path.join(directory, 'Program.cs');
+
+        await service.launch(firstProjectPath, 'publish', true);
+        const firstConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'first', configuration: firstConfiguration } as unknown as vscode.DebugSession);
+
+        await service.launch(secondProjectPath, 'deploy', false, 'infra');
+        const secondConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
+        onDidStartDebugSessionCallback({ id: 'second', configuration: secondConfiguration } as unknown as vscode.DebugSession);
+
+        assert.strictEqual(service.getActiveOperation(firstProjectPath)?.command, 'publish');
+        assert.strictEqual(service.getActiveOperation(secondProjectPath)?.command, 'deploy');
+        assert.strictEqual(service.getActiveOperation(ambiguousSourcePath), undefined);
+        await assert.rejects(
+            service.launch(ambiguousSourcePath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+        assert.strictEqual(startDebuggingStub.calledTwice, true);
+    });
+
+    test('a duplicate non-Run operation is rejected while one is pending', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+
+        await assert.rejects(
+            service.launch(appHostPath, 'deploy', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+        assert.strictEqual(startDebuggingStub.calledOnce, true);
+    });
+
+    test('a duplicate non-Run operation is rejected while one is active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
+        service.clearLaunching(appHostPath);
+
+        await assert.rejects(
+            service.launch(appHostPath, 'publish', true),
+            (error: unknown) => error instanceof vscode.CancellationError);
+
+        assert.strictEqual(startDebuggingStub.calledOnce, true);
+    });
+
+    test('a Run is not rejected while a non-Run operation is active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
+
+        await service.launch(appHostPath, 'run', true);
+
+        assert.strictEqual(startDebuggingStub.calledTwice, true);
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+    });
+
+    test('an external F5 launch is not rejected while a non-Run operation is active', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback({ id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession);
+
+        assert.strictEqual(typeof service.tryReserveExternalLaunch(appHostPath), 'string');
+        assert.strictEqual(service.getActiveOperation(appHostPath)?.command, 'publish');
+    });
+
+    test('a declined non-Run launch clears its pending operation', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        startDebuggingStub.resolves(false);
+
+        await assert.rejects(service.launch(appHostPath, 'publish', true));
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a cancelled non-Run launch clears its pending operation', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        startDebuggingStub.rejects(new vscode.CancellationError());
+
+        await assert.rejects(service.launch(appHostPath, 'publish', true));
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a suppressed non-Run launch clears its pending operation', async () => {
+        const environmentVariables = [
+            'ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE',
+            'ASPIRE_EXTENSION_E2E_STATE_FILE',
+            'ASPIRE_EXTENSION_E2E_CONTROL_FILE',
+            'ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH',
+        ] as const;
+        const originalValues = new Map(environmentVariables.map(name => [name, process.env[name]]));
+        const appHostPath = '/repo/AppHost.csproj';
+
+        try {
+            process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE = 'true';
+            process.env.ASPIRE_EXTENSION_E2E_STATE_FILE = 'state.json';
+            process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE = 'control.json';
+            process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_DEBUG_LAUNCH = 'true';
+
+            await service.launch(appHostPath, 'publish', true);
+
+            assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+            assert.strictEqual(startDebuggingStub.called, false);
+        }
+        finally {
+            for (const [name, value] of originalValues) {
+                if (value === undefined) {
+                    delete process.env[name];
+                }
+                else {
+                    process.env[name] = value;
+                }
+            }
+        }
+    });
+
+    test('disposal clears active operation state', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        await service.launch(appHostPath, 'publish', true);
+        assert.ok(service.getActiveOperation(appHostPath));
+
+        service.dispose();
+
+        assert.strictEqual(service.getActiveOperation(appHostPath), undefined);
+    });
+
+    test('a Publish launched while a Run is active does not advance the Run generation', async () => {
+        const appHostPath = '/repo/AppHost.csproj';
+        const terminationEvents: Array<{ appHostPath: string; command?: string; shouldRequestStopRefresh: boolean; shouldMarkAppHostStopping: boolean }> = [];
+        service.onDidTerminateAppHostDebugSession(event => {
+            terminationEvents.push(event);
+        });
+
+        await service.launch(appHostPath, 'run', true);
+        const runConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        const runSession = { id: 'run', configuration: runConfiguration } as unknown as vscode.DebugSession;
+        assert.ok(onDidStartDebugSessionCallback);
+        onDidStartDebugSessionCallback(runSession);
+        service.clearLaunching(appHostPath);
+
+        await service.launch(appHostPath, 'publish', true);
+        const publishConfiguration = startDebuggingStub.secondCall.args[1] as AspireExtendedDebugConfiguration;
+        const publishSession = { id: 'publish', configuration: publishConfiguration } as unknown as vscode.DebugSession;
+        onDidStartDebugSessionCallback(publishSession);
+        service.clearLaunching(appHostPath);
+
+        // The distinct reservation IDs prove the Publish took its own launching slot rather
+        // than reusing the Run's; the assertions below prove it did not steal the Run's
+        // generation while doing so.
+        assert.notStrictEqual(
+            publishConfiguration[appHostLaunchReservationIdConfigKey],
+            runConfiguration[appHostLaunchReservationIdConfigKey]);
+
+        assert.ok(onDidTerminateDebugSessionCallback);
+        onDidTerminateDebugSessionCallback(publishSession);
+        onDidTerminateDebugSessionCallback(runSession);
+
+        assert.deepStrictEqual(terminationEvents, [
+            { appHostPath, command: 'publish', shouldRequestStopRefresh: false, shouldMarkAppHostStopping: false },
+            { appHostPath, command: 'run', shouldRequestStopRefresh: true, shouldMarkAppHostStopping: true },
+        ]);
     });
 });

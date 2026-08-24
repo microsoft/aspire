@@ -186,22 +186,29 @@ steps:
         eq(variables['_IsProductionBranch'], 'true')
       )
 
+  # The latest standalone wingetcreate executable targets .NET 9 and is not
+  # self-contained. Install its runtime whenever the WinGet job is selected so
+  # dry-run and non-production builds also verify that the CLI can start.
+  - task: UseDotNet@2
+    displayName: '🟣Install .NET 9 runtime for wingetcreate'
+    inputs:
+      packageType: 'runtime'
+      version: '9.0.x'
+    condition: succeeded()
+
   - powershell: |
       $ErrorActionPreference = 'Stop'
       Write-Host "Downloading wingetcreate..."
       Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
-      Write-Host "wingetcreate downloaded successfully"
+      & "$(Build.StagingDirectory)/wingetcreate.exe" info
+      if ($LASTEXITCODE -ne 0) {
+        Write-Error "wingetcreate info failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+      }
+      Write-Host "wingetcreate downloaded and verified successfully"
     displayName: '🟣Install wingetcreate'
-    # Skip when no Submit step will run. wingetcreate is only used to submit to
-    # the upstream winget-pkgs repo, so dry-run and non-production-branch builds
-    # gain nothing from downloading it and instead pick up an aka.ms-redirect
-    # failure surface for free.
-    condition: |
-      and(
-        succeeded(),
-        eq('${{ parameters.dryRun }}', 'false'),
-        eq(variables['_IsProductionBranch'], 'true')
-      )
+    # This is side-effect free; the Submit step below retains the production gate.
+    condition: succeeded()
 
   - powershell: |
       $ErrorActionPreference = 'Stop'

@@ -50,6 +50,7 @@ internal sealed class StartCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var explicitIsolated = AppHostLauncher.GetExplicitIsolated(parseResult);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the
@@ -91,7 +92,10 @@ internal sealed class StartCommand : BaseCommand
                 new DebugSessionOptions
                 {
                     Command = "run",
-                    Args = [.. debugSessionArguments.Tokens]
+                    Args = [.. debugSessionArguments.Tokens],
+                    AppHostSelectionOrigin = passedAppHostProjectFile is not null
+                        ? DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+                        : DebugSessionOptions.DefaultDiscoveryAppHostSelectionOrigin
                 });
             _profileCaptureState.MarkTransferred();
 
@@ -101,6 +105,11 @@ internal sealed class StartCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
         }
 
         if (appHostArgs.Count > 0)
@@ -118,6 +127,7 @@ internal sealed class StartCommand : BaseCommand
             passedAppHostProjectFile,
             format,
             explicitIsolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

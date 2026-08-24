@@ -157,13 +157,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         // Pre-existing aspire.config.json pinned to a (stale) channel — the updater should
         // rewrite the channel to match the resolved explicit channel after the update completes.
         // See https://github.com/microsoft/aspire/issues/17295.
-        var aspireConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "aspire.config.json"));
+        var aspireConfigFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"));
         await File.WriteAllTextAsync(
             aspireConfigFile.FullName,
             """
             {
-              "appHost": { "path": "UpdateTester.AppHost.csproj" },
-              "channel": "stable"
+              "appHost": { "path": "UpdateTester.AppHost/UpdateTester.AppHost.csproj" },
+              "channel": "stable",
+              "sdk": { "version": "9.4.1" }
             }
             """);
 
@@ -287,6 +288,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var updatedConfig = await File.ReadAllTextAsync(aspireConfigFile.FullName);
         using var configDoc = JsonDocument.Parse(updatedConfig);
         Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
+        Assert.Equal("9.5.0-preview.1", configDoc.RootElement.GetProperty("sdk").GetProperty("version").GetString());
     }
 
     [Fact]
@@ -1732,31 +1734,34 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WithExistingChannel()
+    public void ProjectConfigUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WithExistingValues()
     {
-        var step = new ChannelUpdateStep(
+        var step = new ProjectConfigUpdateStep(
             "Update aspire.config.json channel from 'pr-17452' to 'stable'",
             () => Task.CompletedTask,
             "pr-17452",
-            "stable");
+            "stable",
+            "13.4.0",
+            "13.5.0");
 
         Assert.Equal(
-            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]stable[/]",
+            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]stable[/], [bold yellow]aspire.config.json#sdk.version[/] [bold green]13.4.0[/] to [bold green]13.5.0[/]",
             step.GetFormattedDisplayText());
     }
 
     [Fact]
-    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenChannelAbsent()
+    public void ProjectConfigUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenValuesAbsent()
     {
-        var step = new ChannelUpdateStep(
+        var step = new ProjectConfigUpdateStep(
             "Update aspire.config.json channel from '(none)' to 'stable'",
             () => Task.CompletedTask,
             CurrentChannel: null,
-            NewChannel: "stable");
+            NewChannel: "stable",
+            CurrentSdkVersion: null,
+            NewSdkVersion: "13.5.0");
 
-        // Markup-escaped grey placeholder for absent channel value.
         Assert.Equal(
-            "[bold yellow]aspire.config.json#channel[/] [grey](none)[/] to [bold green]stable[/]",
+            "[bold yellow]aspire.config.json#channel[/] [grey](none)[/] to [bold green]stable[/], [bold yellow]aspire.config.json#sdk.version[/] [grey](unknown)[/] to [bold green]13.5.0[/]",
             step.GetFormattedDisplayText());
     }
 

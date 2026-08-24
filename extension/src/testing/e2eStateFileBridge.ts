@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -12,7 +13,7 @@ import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunch
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECodeLensProbeResult, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
@@ -23,6 +24,7 @@ import { ResourceItem } from '../views/treeItems/resourceItems';
 import { ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
+import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 let atomicWriteSequence = 0;
 
@@ -45,6 +47,7 @@ export function createE2eStateFileBridge(
     return new vscode.Disposable(() => undefined);
   }
 
+  const extensionHostSessionId = randomUUID();
   const commandInvocations: AspireExtensionE2ECommandInvocation[] = [];
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
@@ -74,6 +77,7 @@ export function createE2eStateFileBridge(
     recordStoppingPathEvents(state.stoppingPaths);
 
     writeJsonFileAtomic(stateFile, {
+      extensionHostSessionId,
       updatedAt: new Date().toISOString(),
       runId,
       state,
@@ -367,7 +371,7 @@ function getE2eErrorMessage(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error);
 }
 
-async function executeE2eControlCommand(
+export async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
   dataRepository: AppHostDataRepository,
@@ -422,6 +426,30 @@ async function executeE2eControlCommand(
     case 'debugAppHost': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'deployAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.deployAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'publishAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.publishAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'runPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.runPipelineStepAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'debugPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugPipelineStepAppHost', element);
       markStarted();
       return await commandPromise;
     }
@@ -585,7 +613,14 @@ async function executeE2eControlCommand(
         throw new Error('Aspire extension E2E startDebugging requires an open workspace folder.');
       }
 
-      const commandPromise = vscode.debug.startDebugging(workspaceFolder, command.configurationName);
+      // Passing a name only searches launch.json. Resolve a matching dynamic configuration first so
+      // the control command can await the same provider pipeline that VS Code's debug picker starts.
+      const dynamicConfigurations = await aspireContext.debugConfigProvider?.provideDebugConfigurations(workspaceFolder);
+      const configuration = dynamicConfigurations?.find(configuration =>
+        configuration.name === command.configurationName ||
+        configuration.name.startsWith(`${command.configurationName} (`))
+        ?? command.configurationName;
+      const commandPromise = vscode.debug.startDebugging(workspaceFolder, configuration);
       markStarted();
       return await commandPromise;
     }
@@ -753,6 +788,11 @@ async function executeE2eControlCommand(
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
     }
+    case 'getCodeLenses': {
+      const filePath = getE2eRunPath(command.filePath, command.name);
+      markStarted();
+      return await getCodeLensesForFile(filePath);
+    }
     case 'snapshotClipboard': {
       markStarted();
       // The state and control files are uploaded as E2E diagnostics, so arbitrary user
@@ -804,6 +844,26 @@ async function executeE2eControlCommand(
       const folders = getE2eWorkspaceFolderEntries(command.folders);
       markStarted();
       return await setE2eWorkspaceFolders(folders);
+    }
+    case 'setWorkspaceFolderCliPath': {
+      const folderPath = getE2eWorkspacePath(command.folderPath);
+      const cliPath = getE2eRunPath(command.cliPath);
+      const workspaceFolder = vscode.workspace.workspaceFolders?.find(folder => isSamePath(folder.uri.fsPath, folderPath));
+      if (!workspaceFolder) {
+        throw new Error(`Aspire extension E2E setWorkspaceFolderCliPath requires an exact open workspace folder: ${folderPath}`);
+      }
+
+      markStarted();
+      const targetKey = getCliPathTargetKey(workspaceFolderCliPathTarget(workspaceFolder));
+      const cliPaths = getE2eWorkspaceFolderCliPaths();
+      cliPaths[targetKey] = cliPath;
+      process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS = JSON.stringify(cliPaths);
+      return { targetKey, cliPath };
+    }
+    case 'clearWorkspaceFolderCliPaths': {
+      markStarted();
+      delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+      return undefined;
     }
     case 'stopOwnedDebugSessionProcesses': {
       markStarted();
@@ -1664,6 +1724,27 @@ function getE2eCommandArguments(args: unknown): readonly unknown[] {
   return args;
 }
 
+function getE2eWorkspaceFolderCliPaths(): Record<string, string> {
+  const value = process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+    }
+  }
+  catch {
+    return {};
+  }
+
+  return {};
+}
+
 function getE2eWorkspacePath(filePath: unknown): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
     throw new Error('Aspire extension E2E workspace path arguments must be absolute paths.');
@@ -1769,13 +1850,13 @@ function getWorkspaceFolderInfo(): Array<{ name: string; uri: string; fileName: 
   })) ?? [];
 }
 
-function getE2eRunPath(filePath: unknown): string {
+function getE2eRunPath(filePath: unknown, commandName = 'openFile'): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
-    throw new Error('Aspire extension E2E openFile requires an absolute file path.');
+    throw new Error(`Aspire extension E2E ${commandName} requires an absolute file path.`);
   }
 
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    throw new Error(`Aspire extension E2E openFile requires an existing file: ${filePath}`);
+    throw new Error(`Aspire extension E2E ${commandName} requires an existing file: ${filePath}`);
   }
 
   // The workspace root is normally inside the run root, but a run whose workspace has to live
@@ -1787,7 +1868,7 @@ function getE2eRunPath(filePath: unknown): string {
   ].filter((root): root is string => typeof root === 'string' && root.length > 0);
 
   if (!allowedRoots.some(root => isPathWithinDirectory(filePath, root))) {
-    throw new Error('Aspire extension E2E openFile can only open files inside the configured E2E run root or workspace root.');
+    throw new Error(`Aspire extension E2E ${commandName} can only open files inside the configured E2E run root or workspace root.`);
   }
 
   return filePath;
@@ -1917,6 +1998,20 @@ export async function getDiagnosticsForFile(filePath: string): Promise<{ message
   return diagnostics;
 }
 
+export async function getCodeLensesForFile(filePath: string): Promise<AspireExtensionE2ECodeLensProbeResult> {
+  const uri = vscode.Uri.file(filePath);
+  const document = await vscode.workspace.openTextDocument(uri);
+  const codeLenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
+
+  return {
+    filePath: document.uri.fsPath,
+    languageId: document.languageId,
+    commandTitles: (codeLenses ?? [])
+      .map(codeLens => codeLens.command?.title)
+      .filter((title): title is string => typeof title === 'string' && title.length > 0),
+  };
+}
+
 function isFileOpenInAnyTab(uri: vscode.Uri): boolean {
   return vscode.window.tabGroups.all.some(group => group.tabs.some(tab =>
     tab.input instanceof vscode.TabInputText && tab.input.uri.fsPath === uri.fsPath));
@@ -1924,6 +2019,19 @@ function isFileOpenInAnyTab(uri: vscode.Uri): boolean {
 
 function getAppHostElement(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath: string | undefined): unknown {
   return appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) ?? { appHostPath } : undefined;
+}
+
+function getRequiredAppHostActionElement(
+  appHostTreeProvider: AspireAppHostTreeProvider,
+  commandName: string,
+  appHostPath: string,
+): unknown {
+  const element = appHostTreeProvider.findAppHostElement(appHostPath);
+  if (!element) {
+    throw new Error(`Aspire extension E2E ${commandName} could not find AppHost '${appHostPath}'.`);
+  }
+
+  return element;
 }
 
 function getAppHostPathForClipboard(element: unknown): string {
@@ -2127,6 +2235,8 @@ function cloneDebugLaunchEvent(event: AppHostLaunchRequestedEvent, sequence: num
     command: event.command,
     noDebug: event.noDebug,
     doStep: event.doStep,
+    cliPath: event.cliPath,
+    cliTargetKey: event.cliTargetKey,
     executionSuppressed: event.executionSuppressed,
   };
 }

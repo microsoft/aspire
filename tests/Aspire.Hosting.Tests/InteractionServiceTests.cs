@@ -1368,7 +1368,8 @@ public class InteractionServiceTests
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.StartedInteractions));
         Assert.Equal(interaction.InteractionId, Assert.Single(fileUploadStore.CompletedInteractions));
         var resultInput = Assert.IsType<InteractionInput>(result.Data);
-        Assert.Single(resultInput.Files!);
+        using var files = resultInput.GetFiles();
+        Assert.Single(files);
     }
 
     [Fact]
@@ -1504,6 +1505,51 @@ public class InteractionServiceTests
 
         Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
         Assert.Empty(input.ValidationErrors);
+    }
+
+    [Theory]
+    [InlineData(false, 1, true)]
+    [InlineData(false, 2, false)]
+    [InlineData(true, InteractionHelpers.MaxFileCount, true)]
+    [InlineData(true, InteractionHelpers.MaxFileCount + 1, false)]
+    public async Task PromptInputsAsync_FileCount_ValidatesLimit(bool allowMultipleFiles, int fileCount, bool expectedValid)
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = CreateInteractionService(fileUploadStore: fileUploadStore);
+        var input = new InteractionInput
+        {
+            Name = "File",
+            Label = "File",
+            InputType = InputType.File,
+            AllowMultipleFiles = allowMultipleFiles
+        };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var registeredFileInputs = Assert.Single(fileUploadStore.StartedFileInputs);
+        Assert.Equal((input.Name, InteractionHelpers.GetMaxFileCount(allowMultipleFiles)), Assert.Single(registeredFileInputs));
+        var files = Enumerable.Range(0, fileCount)
+            .Select(i => new InputFileDto($"file-{i}", $"file-{i}.txt", $"/tmp/file-{i}.txt"))
+            .ToArray();
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", "files", InputType.File, files)]);
+
+        if (expectedValid)
+        {
+            Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+            Assert.Empty(input.ValidationErrors);
+        }
+        else
+        {
+            var maxFileCount = allowMultipleFiles ? InteractionHelpers.MaxFileCount : 1;
+            Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+            Assert.Collection(
+                input.ValidationErrors,
+                error => Assert.Equal($"File count exceeds the maximum of {maxFileCount}.", error));
+        }
     }
 
     [Fact]

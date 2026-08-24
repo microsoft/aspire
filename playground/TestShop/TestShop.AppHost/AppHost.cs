@@ -132,10 +132,10 @@ yarp.WithConfiguration(builder =>
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
-// or build with `/p:SkipDashboardReference=true`, to test end developer
-// dashboard launch experience, Refer to Directory.Build.props for the path to
-// the dashboard binary (defaults to the Aspire.Dashboard bin output in the
-// artifacts dir).
+// or build with `/p:SkipDashboardProjectReference=true` to test the end developer
+// dashboard launch experience. The opt-out and project reference are defined in
+// playground/Directory.Build.targets. The repo-root Directory.Build.props sets the
+// default dashboard binary path to the Aspire.Dashboard output in the artifacts dir.
 builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
 #endif
 

@@ -313,14 +313,66 @@ function getAspireHostingPackageVersionFromItems(contents: string, itemNames: re
 
 function hasAmbiguousAppHostVersionDeclarations(contents: string): boolean {
     // MSBuild conditions can affect a declaration directly, through a containing ItemGroup,
-    // or through a property used by the version. This lightweight source parser cannot evaluate
-    // any of those forms, so do not use a conditioned project for a runtime compatibility gate.
-    if (/\bCondition\s*=/i.test(contents)) {
+    // PropertyGroup, or Choose block. This lightweight source parser cannot evaluate those forms,
+    // so do not use a conditioned Aspire version declaration for a runtime compatibility gate.
+    // Unrelated conditions are safe because they cannot change the literal version parsed here.
+    if (hasConditionedAppHostVersionDeclaration(contents)) {
         return true;
     }
 
     const versions = new Set(getAppHostVersionDeclarations(contents).map(version => version ?? unknownVersion));
     return versions.size > 1;
+}
+
+function hasConditionedAppHostVersionDeclaration(contents: string): boolean {
+    const projectStart = /<Project\b/i.exec(contents)?.index;
+    const projectOpeningTag = projectStart === undefined
+        ? undefined
+        : getXmlOpeningTag(contents.slice(projectStart));
+    if (projectOpeningTag &&
+        hasConditionAttribute(projectOpeningTag) &&
+        containsAppHostVersionReference(contents)) {
+        return true;
+    }
+
+    for (const elementName of ['Sdk', 'PackageReference', 'AspireProjectOrPackageReference', 'PackageVersion', 'AspireHostingSDKVersion']) {
+        for (const element of getMsBuildItems(contents, elementName)) {
+            if (containsAppHostVersionReference(element) && hasConditionAffectingElementVersion(element)) {
+                return true;
+            }
+        }
+    }
+
+    for (const containerName of ['ItemGroup', 'PropertyGroup', 'When']) {
+        for (const container of getMsBuildItems(contents, containerName)) {
+            if (hasConditionAttribute(container) && containsAppHostVersionReference(container)) {
+                return true;
+            }
+        }
+    }
+
+    // Every branch of a Choose block is conditional, including Otherwise, which has no Condition
+    // attribute of its own.
+    return getMsBuildItems(contents, 'Choose').some(containsAppHostVersionReference);
+}
+
+function hasConditionAffectingElementVersion(element: string): boolean {
+    if (hasConditionAttribute(element)) {
+        return true;
+    }
+
+    return ['Version', 'VersionOverride'].some(metadataName =>
+        getMsBuildItems(element, metadataName).some(hasConditionAttribute));
+}
+
+function containsAppHostVersionReference(contents: string): boolean {
+    return getAspireAppHostSdkVersionFromProject(contents).referencesAspireAppHostSdk ||
+        getAspireHostingPackageVersionFromProject(contents).referencesAspireHostingPackage ||
+        /<AspireHostingSDKVersion\b/i.test(contents);
+}
+
+function hasConditionAttribute(contents: string): boolean {
+    return getXmlAttribute(contents, 'Condition') !== undefined;
 }
 
 function getAppHostVersionDeclarations(contents: string): Array<string | undefined> {
@@ -366,8 +418,59 @@ function isAspireHostingPackageId(value: string | undefined): boolean {
 }
 
 function getMsBuildItems(contents: string, itemName: string): string[] {
-    const itemRegex = new RegExp(`<${itemName}\\b[^>]*(?:/>|>[\\s\\S]*?</${itemName}>)`, 'gi');
-    return [...contents.matchAll(itemRegex)].map(match => match[0]);
+    const items: string[] = [];
+    const escapedItemName = itemName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const openingTagRegex = new RegExp(`<${escapedItemName}\\b`, 'gi');
+    let openingMatch: RegExpExecArray | null;
+
+    while ((openingMatch = openingTagRegex.exec(contents)) !== null) {
+        const itemStart = openingMatch.index;
+        const openingTag = getXmlOpeningTag(contents.slice(itemStart));
+        if (!openingTag) {
+            break;
+        }
+
+        const openingTagEnd = itemStart + openingTag.length;
+        if (/\/\s*>$/.test(openingTag)) {
+            items.push(contents.slice(itemStart, openingTagEnd));
+            openingTagRegex.lastIndex = openingTagEnd;
+            continue;
+        }
+
+        const nestedTagRegex = new RegExp(`<\\/?${escapedItemName}\\b`, 'gi');
+        nestedTagRegex.lastIndex = openingTagEnd;
+        let depth = 1;
+        let itemEnd: number | undefined;
+        let nestedMatch: RegExpExecArray | null;
+        while ((nestedMatch = nestedTagRegex.exec(contents)) !== null) {
+            const nestedTag = getXmlOpeningTag(contents.slice(nestedMatch.index));
+            if (!nestedTag) {
+                break;
+            }
+
+            nestedTagRegex.lastIndex = nestedMatch.index + nestedTag.length;
+            if (nestedTag.startsWith('</')) {
+                depth--;
+                if (depth === 0) {
+                    itemEnd = nestedTagRegex.lastIndex;
+                    break;
+                }
+            }
+            else if (!/\/\s*>$/.test(nestedTag)) {
+                depth++;
+            }
+        }
+
+        if (itemEnd === undefined) {
+            openingTagRegex.lastIndex = openingTagEnd;
+            continue;
+        }
+
+        items.push(contents.slice(itemStart, itemEnd));
+        openingTagRegex.lastIndex = itemEnd;
+    }
+
+    return items;
 }
 
 function getMsBuildItemIdentity(item: string): string | undefined {
@@ -377,6 +480,7 @@ function getMsBuildItemIdentity(item: string): string | undefined {
 
 function getMsBuildVersionMetadata(item: string): { version?: string; hasVersion: boolean } {
     const version = getXmlAttribute(item, 'VersionOverride')
+        ?? getXmlElementText(item, 'VersionOverride')
         ?? getXmlAttribute(item, 'Version')
         ?? getXmlElementText(item, 'Version');
 
@@ -387,9 +491,34 @@ function getMsBuildVersionMetadata(item: string): { version?: string; hasVersion
 }
 
 function getXmlAttribute(xml: string, attributeName: string): string | undefined {
-    const openingTag = /^<[^>]+>/s.exec(xml)?.[0];
+    const openingTag = getXmlOpeningTag(xml);
     const attributeMatch = new RegExp(`\\b${attributeName}\\s*=\\s*(["'])(?<value>.*?)\\1`, 'is').exec(openingTag ?? '');
     return attributeMatch?.groups?.value;
+}
+
+function getXmlOpeningTag(xml: string): string | undefined {
+    const start = xml.indexOf('<');
+    if (start === -1) {
+        return undefined;
+    }
+
+    let quote: '"' | "'" | undefined;
+    for (let index = start + 1; index < xml.length; index++) {
+        const character = xml[index];
+        if (quote) {
+            if (character === quote) {
+                quote = undefined;
+            }
+        }
+        else if (character === '"' || character === "'") {
+            quote = character;
+        }
+        else if (character === '>') {
+            return xml.slice(start, index + 1);
+        }
+    }
+
+    return undefined;
 }
 
 function getXmlElementText(xml: string, elementName: string): string | undefined {

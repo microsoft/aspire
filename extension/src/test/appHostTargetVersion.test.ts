@@ -222,12 +222,49 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(version), false);
     });
 
+    test('ignores unrelated MSBuild conditions when the AppHost version is unconditional', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(IncludeDiagnostics)' == 'true'">
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6">
+      <PrivateAssets Condition="'$(PublishPrivateAssets)' == 'true'">all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
+`);
+
+        const version = await getAppHostTargetVersion(appHostPath);
+        assert.strictEqual(version, '13.4.6');
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(version), true);
+    });
+
     test('does not use a package reference with a raw greater-than condition', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'AppHost.csproj');
         writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup Condition="'$(AspireGeneration)' > '0'">
     <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
+    });
+
+    test('does not use a conditional self-closing package override with a raw greater-than condition', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
+    <PackageReference Update="Aspire.Hosting.AppHost" Version="13.5.0" Condition="'$(AspireGeneration)' > '0'" />
   </ItemGroup>
 </Project>
 `);
@@ -281,6 +318,29 @@ suite('appHostTargetVersion', () => {
 `);
 
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.2');
+    });
+
+    test('prefers a nested package version override over central package management', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost">
+      <VersionOverride>13.4.6</VersionOverride>
+    </PackageReference>
+  </ItemGroup>
+</Project>
+`);
+        writeFileSync(join(dir, 'Directory.Packages.props'), `<Project>
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.0" />
+  </ItemGroup>
+</Project>
+`);
+
+        const version = await getAppHostTargetVersion(appHostPath);
+        assert.strictEqual(version, '13.4.6');
+        assert.strictEqual(requiresLegacyCliPidOnlyOrphanDetection(version), true);
     });
 
     test('reads an unversioned C# project SDK version from global.json msbuild-sdks', async () => {

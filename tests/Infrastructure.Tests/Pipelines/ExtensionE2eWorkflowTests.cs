@@ -14,9 +14,7 @@ namespace Infrastructure.Tests.Pipelines;
 /// </summary>
 public sealed class ExtensionE2eWorkflowTests
 {
-    private const string WorkflowRelativePath = ".github/workflows/extension-e2e-tests.yml";
     private const string CallerWorkflowRelativePath = ".github/workflows/tests.yml";
-
     [Fact]
     public void AdvisoryShardRowsRemainIssueTrackedWithoutWeakeningRunnerStep()
     {
@@ -45,6 +43,10 @@ public sealed class ExtensionE2eWorkflowTests
         var prepareCliScript = Scalar(prepareCliStep, "run") ?? string.Empty;
         Assert.Contains(
             "\"ASPIRE_DCP_PATH=$($dcp.Directory.FullName)\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
+            prepareCliScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"ASPIRE_CLI_PACKAGES=$hiveDir\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
             prepareCliScript,
             StringComparison.Ordinal);
     }
@@ -97,17 +99,7 @@ public sealed class ExtensionE2eWorkflowTests
         Assert.Equal(2, condition?.Split(unexpectedSkipCheck, StringSplitOptions.None).Length - 1);
     }
 
-    private static YamlMappingNode LoadExtensionE2eJob()
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, WorkflowRelativePath)));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-
-        return (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_e2e")];
-    }
+    private static YamlMappingNode LoadExtensionE2eJob() => ExtensionE2eWorkflow.Job();
 
     private static IEnumerable<YamlMappingNode> MatrixIncludeRows(YamlMappingNode job)
     {

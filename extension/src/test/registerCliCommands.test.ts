@@ -12,6 +12,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { CommandInvocationEvent, onDidInvokeCommand } from '../utils/telemetry';
 import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 suite('registerCliCommands', () => {
     let sandbox: sinon.SinonSandbox;
@@ -62,7 +63,7 @@ suite('registerCliCommands', () => {
             tryExecuteDoAppHost: tryExecuteDoAppHostStub,
         } as unknown as AspireEditorCommandProvider;
 
-        registerCliCommands(terminalProvider, editorCommandProvider);
+        registerCliCommands(terminalProvider, editorCommandProvider, new ConfigInfoProvider(terminalProvider));
     });
 
     teardown(() => {
@@ -85,6 +86,20 @@ suite('registerCliCommands', () => {
         assert.ok(sendCommandStub.calledOnceWith('init', true, undefined, { target, cliPath: '/resolved/aspire' }));
     });
 
+    test('init uses an explicit target without selecting a workspace folder', async () => {
+        const folderA = createWorkspaceFolder('a', '/repo/a');
+        const folderB = createWorkspaceFolder('b', '/repo/b');
+        const target = workspaceFolderCliPathTarget(folderB);
+        workspaceFoldersStub.value([folderA, folderB]);
+        showWorkspaceFolderPickStub.resolves(folderA);
+
+        await callbacks.get('aspire-vscode.init')!(target);
+
+        assert.strictEqual(showWorkspaceFolderPickStub.called, false);
+        assert.ok(resolveCliPathStub.calledOnceWith(target));
+        assert.ok(sendCommandStub.calledOnceWith('init', true, undefined, { target, cliPath: '/resolved/aspire' }));
+    });
+
     test('new prompts once in a multi-root window and reuses the selected target', async () => {
         const folderA = createWorkspaceFolder('a', '/repo/a');
         const folderB = createWorkspaceFolder('b', '/repo/b');
@@ -99,18 +114,96 @@ suite('registerCliCommands', () => {
         assert.ok(sendCommandStub.calledOnceWith('new', true, undefined, { target, cliPath: '/resolved/aspire' }));
     });
 
-    test('workspace folder selection cancellation prevents the gate and command body', async () => {
+    test('direct new and init calls report command_palette telemetry source', async () => {
+        const folder = createWorkspaceFolder('a', '/repo/a');
+        workspaceFoldersStub.value([folder]);
+        const events: CommandInvocationEvent[] = [];
+        const subscription = onDidInvokeCommand(event => events.push(event));
+
+        try {
+            await callbacks.get('aspire-vscode.new')!();
+            await callbacks.get('aspire-vscode.init')!();
+        }
+        finally {
+            subscription.dispose();
+        }
+
+        assert.deepStrictEqual(
+            events.map(event => ({ command: event.command, source: event.source })),
+            [
+                { command: 'aspire-vscode.new', source: 'command_palette' },
+                { command: 'aspire-vscode.init', source: 'command_palette' },
+            ]);
+    });
+
+    test('delegated new and init calls report tree telemetry source', async () => {
+        const folder = createWorkspaceFolder('a', '/repo/a');
+        const target = workspaceFolderCliPathTarget(folder);
+        workspaceFoldersStub.value([folder]);
+        const events: CommandInvocationEvent[] = [];
+        const subscription = onDidInvokeCommand(event => events.push(event));
+
+        try {
+            await callbacks.get('aspire-vscode.new')!('tree');
+            await callbacks.get('aspire-vscode.init')!(target, 'tree');
+        }
+        finally {
+            subscription.dispose();
+        }
+
+        assert.deepStrictEqual(
+            events.map(event => ({ command: event.command, source: event.source })),
+            [
+                { command: 'aspire-vscode.new', source: 'tree' },
+                { command: 'aspire-vscode.init', source: 'tree' },
+            ]);
+    });
+
+    test('workspace folder selection cancellation returns a handled outcome without running the gate or command body', async () => {
         workspaceFoldersStub.value([
             createWorkspaceFolder('a', '/repo/a'),
             createWorkspaceFolder('b', '/repo/b'),
         ]);
         showWorkspaceFolderPickStub.resolves(undefined);
 
-        await callbacks.get('aspire-vscode.init')!();
+        const result = await callbacks.get('aspire-vscode.init')!();
 
+        assert.deepStrictEqual(result, { success: false, canceled: true });
         assert.strictEqual(showWorkspaceFolderPickStub.calledOnce, true);
         assert.strictEqual(resolveCliPathStub.called, false);
         assert.strictEqual(sendCommandStub.called, false);
+    });
+
+    test('command errors show one message and return the classified handled outcome', async () => {
+        workspaceFoldersStub.value([createWorkspaceFolder('a', '/repo/a')]);
+        sendCommandStub.rejects(new TypeError('failed'));
+        const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const events: CommandInvocationEvent[] = [];
+        const subscription = onDidInvokeCommand(event => events.push(event));
+
+        try {
+            const result = await callbacks.get('aspire-vscode.new')!();
+
+            assert.deepStrictEqual(result, { success: false, errorKind: 'TypeError' });
+        }
+        finally {
+            subscription.dispose();
+        }
+
+        assert.strictEqual(showErrorMessageStub.calledOnce, true);
+        assert.deepStrictEqual(
+            events.map(event => ({
+                command: event.command,
+                outcome: event.outcome,
+                source: event.source,
+                errorKind: event.errorKind,
+            })),
+            [{
+                command: 'aspire-vscode.new',
+                outcome: 'error',
+                source: 'command_palette',
+                errorKind: 'TypeError',
+            }]);
     });
 
     test('open terminal uses the only workspace folder without prompting', async () => {
@@ -159,7 +252,12 @@ suite('registerCliCommands', () => {
 
         assert.strictEqual(getAppHostPathStub.calledOnce, true);
         assert.ok(resolveCliPathStub.calledOnceWith(target));
-        assert.ok(hasCapabilityStub.calledOnceWith('pipelines', { target, cliPath: '/resolved/aspire' }));
+        assert.ok(hasCapabilityStub.calledOnceWith('pipelines', {
+            target,
+            cliPath: '/resolved/aspire',
+            suppressErrors: true,
+            forceRefresh: true,
+        }));
         assert.ok(tryExecuteDoAppHostStub.calledOnceWith(false, undefined, appHostPath, target, '/resolved/aspire'));
     });
 

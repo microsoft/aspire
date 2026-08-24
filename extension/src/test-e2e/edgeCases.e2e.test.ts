@@ -1,11 +1,11 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
-import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { createExternalSingleFileAppHost, executeE2eControlCommand, isProcessAlive, removeExternalSingleFileAppHost, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit } from './helpers/fixtures';
+import type { AspireExtensionE2ECodeLensProbeResult, AspireExtensionE2EControlCommand } from '../types/extensionApi';
+import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, getGeneratedAppHostPath, getGeneratedProjectRoot, isProcessAlive, removeExternalSingleFileAppHost, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle } from './helpers/vscode';
+import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface DebugSessionProcessInfo {
     appHostPath?: string;
@@ -16,6 +16,7 @@ interface DebugSessionProcessInfo {
 suite('Aspire extension edge case E2E', function () {
     this.timeout(240000);
     let externalAppHostPath: string | undefined;
+    let debuggerInstallHintProjectName: string | undefined;
 
     teardown(async () => {
         await runE2eTeardown([
@@ -23,10 +24,22 @@ suite('Aspire extension edge case E2E', function () {
             () => setDebugLaunchSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
             () => externalAppHostPath ? stopAppHostIfRunning(externalAppHostPath) : undefined,
+            () => debuggerInstallHintProjectName ? stopAppHostIfRunning(getGeneratedAppHostPath(debuggerInstallHintProjectName)) : undefined,
+            () => debuggerInstallHintProjectName ? restoreWorkspaceAppHostConfig() : undefined,
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => {
                 removeExternalSingleFileAppHost();
                 externalAppHostPath = undefined;
+            },
+            () => {
+                if (!debuggerInstallHintProjectName) {
+                    return undefined;
+                }
+
+                const projectName = debuggerInstallHintProjectName;
+                return removeGeneratedProject(projectName).then(() => {
+                    debuggerInstallHintProjectName = undefined;
+                });
             },
             () => stopPrimaryAppHostIfRunning(),
         ], 'Edge case E2E teardown failed.');
@@ -146,6 +159,75 @@ suite('Aspire extension edge case E2E', function () {
         assert.ok(backgrounded.state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath)));
     });
 
+    test('shows debugger install guidance while the Aspire panel and AppHost source are closed', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+
+        const debuggerExtensions = await executeE2eControlCommand({ name: 'getResourceDebuggerExtensions' });
+        const installedDebuggerTypes = (debuggerExtensions.result as Array<{ resourceType: string }>).map(extension => extension.resourceType);
+        assert.ok(!installedDebuggerTypes.includes('python'), 'The clean E2E host must not have the Python debugger extension installed.');
+
+        debuggerInstallHintProjectName = 'DebuggerInstallHintApp';
+        const appHostPath = getGeneratedAppHostPath(debuggerInstallHintProjectName);
+        await createEmptyAppHostProject(debuggerInstallHintProjectName);
+
+        // This scenario does not exercise dashboard transport security. Use the generated HTTP
+        // profile so clean test machines do not need an ambient ASP.NET Core developer certificate.
+        const runSettingsPath = path.join(path.dirname(appHostPath), 'apphost.run.json');
+        const runSettings = JSON.parse(fs.readFileSync(runSettingsPath, 'utf8')) as { profiles?: Record<string, unknown> };
+        assert.ok(runSettings.profiles?.http);
+        runSettings.profiles = { http: runSettings.profiles.http };
+        writeFileWithRetry(runSettingsPath, JSON.stringify(runSettings, undefined, 2));
+
+        const pythonAppDirectory = path.join(getGeneratedProjectRoot(debuggerInstallHintProjectName), 'pythonapp');
+        fs.mkdirSync(pythonAppDirectory, { recursive: true });
+        writeFileWithRetry(path.join(pythonAppDirectory, 'app.py'), 'import time\n\nprint("ready", flush=True)\ntime.sleep(600)\n');
+
+        const appHostSource = fs.readFileSync(appHostPath, 'utf8');
+        writeFileWithRetry(
+            appHostPath,
+            appHostSource
+                // This scenario validates the Hosting and extension changes together. The local CLI
+                // bundle can predate the repo-built packages, which would omit the debugger metadata.
+                .replace('#:property AspireUseCliBundle=true', '#:property AspireUseCliBundle=false')
+                .replace(
+                    'builder.Build().Run();',
+                    `#pragma warning disable ASPIREEXTENSION001
+builder.AddExecutable("pythonapp", OperatingSystem.IsWindows() ? "python" : "python3", "./pythonapp", "app.py")
+    .WithDebugSupport(mode => new { type = "python", mode }, "python");
+#pragma warning restore ASPIREEXTENSION001
+
+builder.Build().Run();`));
+        writeWorkspaceAppHostConfigForPath(appHostPath);
+
+        await waitForSelectedWorkspaceAppHost(appHostPath);
+        await executeE2eControlCommand({ name: 'closeAllEditors' });
+        await executeCommandFromPalette('workbench.view.explorer');
+
+        const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 180000, runBefore);
+
+        const notification = await waitForNotificationMessage(
+            'Set up Python debugging support to debug resources in this app.',
+            60000);
+        await notification.dismiss();
+
+        const timeoutMs = 60000;
+        const started = Date.now();
+        let lastResult: AspireExtensionE2ECodeLensProbeResult | undefined;
+        while (Date.now() - started < timeoutMs) {
+            lastResult = (await executeE2eControlCommand({ name: 'getCodeLenses', filePath: appHostPath })).result as AspireExtensionE2ECodeLensProbeResult;
+            if (lastResult.commandTitles.some(title => title.includes('Set up Python debugger'))) {
+                return;
+            }
+
+            await delay(500);
+        }
+
+        throw new Error(`Timed out after ${timeoutMs}ms waiting for the Python debugger CodeLens. Last provider result: ${JSON.stringify(lastResult)}`);
+    });
+
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
@@ -176,3 +258,7 @@ suite('Aspire extension edge case E2E', function () {
         await waitForNoRunningAppHost(120000, appHostPath);
     });
 });
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
