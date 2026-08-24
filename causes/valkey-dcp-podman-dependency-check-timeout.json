@@ -1,0 +1,17 @@
+{
+  "id": "valkey-dcp-podman-dependency-check-timeout",
+  "type": "infra-failure",
+  "title": "DCP dependency check times out waiting on podman during Valkey functional tests",
+  "test_name": "Aspire.Hosting.Valkey.Tests.ValkeyFunctionalTests.WithDataShouldPersistStateBetweenUsages",
+  "error_pattern": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. dcp.info.os-executor Context expired, stopping process... {\"Command\": \"/usr/local/bin/podman\", \"Args\": [\"container\", \"ls\", \"--last\", \"1\", \"--quiet\"]}",
+  "occurrences": [
+    {
+      "run_id": 32755490521,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32755490521",
+      "job": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
+      "pr_number": 19613,
+      "observed_at": "2026-08-24T17:47:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19623"
+}

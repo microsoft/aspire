@@ -11,6 +11,13 @@
       "job": "Tests / Build native CLI archive (macOS) / Build CLI (osx-arm64)",
       "pr_number": 19501,
       "observed_at": "2026-08-20T00:10:08Z"
+    },
+    {
+      "run_id": 32755490521,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32755490521",
+      "job": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
+      "pr_number": 19613,
+      "observed_at": "2026-08-24T17:47:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19517"

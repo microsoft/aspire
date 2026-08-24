@@ -1,0 +1,107 @@
+{
+  "run_id": 32755490521,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32755490521",
+  "analyzed_at": "2026-08-24T17:47:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19613,
+    "title": "Avoid duplicate dashboard connection metadata",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/fix-foundry-duplicate-connection-string",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19613"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
+      "id": 97522565015,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97522565015",
+      "classification": "flaky-test",
+      "reason": "DCP dependency check timed out waiting on podman 'container ls' during ValkeyFunctionalTests.WithDataShouldPersistStateBetweenUsages; environmental container-runtime slowness unrelated to PR changes in ApplicationOrchestrator.cs",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Hosting.Sdk / Hosting.Sdk (windows-latest)",
+      "id": 97522565362,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97522565362",
+      "classification": "flaky-test",
+      "reason": "Matches known flaky pattern vswhere-msbuild-lookup-timeout: vswhere.exe lookup for full-framework MSBuild timed out, unrelated to PR changes",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97525147558,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97525147558",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause cli-smoke-test-homebrew-winget-unrelated: CLI smoke test fails during Homebrew cask prep, unrelated to PR",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97525670990,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97525670990",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause cli-smoke-test-homebrew-winget-unrelated: CLI smoke test fails during WinGet manifest prep, unrelated to PR",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
+      "id": 97525686976,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97525686976",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause vscode-e2e-linux-debug-dashboard-flaky, generic exit code 1 with no logs, unrelated to PR changes in Aspire.Hosting",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97525687077,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97525687077",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause vscode-e2e-linux-workspace-target-proof-flaky, generic exit code 1 with no logs, unrelated to PR changes",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97525687251,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32755490521/job/97525687251",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause vscode-e2e-windows-edge-cases-flaky, generic exit code 1 with no logs, unrelated to PR changes",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.RunAspireCliCommandKillsCommandShimProcessTreeOnTimeoutInFullFrameworkMsBuild",
+      "job": "Tests / Hosting.Sdk / Hosting.Sdk (windows-latest)",
+      "error": "System.TimeoutException : C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe timed out after 00:00:30.",
+      "stack_trace": "at Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.RunProcessWithArgumentsAsync(String fileName, String workingDirectory, String[] arguments, IDictionary`2 environment, TimeSpan timeout) in /_/tests/Aspire.Hosting.Sdk.Tests/AppHostSdkTargetsTests.cs:line 1894\n   at Aspire.Hosting.Sdk.Tests.AppHostSdkTargetsTests.FindFullFrameworkMSBuildAsync() in /_/tests/Aspire.Hosting.Sdk.Tests/AppHostSdkTargetsTests.cs:line 1642",
+      "classification": "flaky",
+      "reason": "Matches prior cause vswhere-msbuild-lookup-timeout; vswhere.exe lookup timing out is an environmental/tooling issue unrelated to PR changes in ApplicationOrchestrator.cs"
+    },
+    {
+      "name": "Aspire.Hosting.Valkey.Tests.ValkeyFunctionalTests.WithDataShouldPersistStateBetweenUsages(useVolume: False)",
+      "job": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. info dcp.info.os-executor Context expired, stopping process... {\"PID\": 5093, \"Command\": \"/usr/local/bin/podman\", \"Args\": [\"container\", \"ls\", \"--last\", \"1\", \"--quiet\"]}",
+      "stack_trace": "at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 89\n   at Aspire.Hosting.Valkey.Tests.ValkeyFunctionalTests.WithDataShouldPersistStateBetweenUsages(Boolean useVolume) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Valkey.Tests/ValkeyFunctionalTests.cs:line 94",
+      "classification": "flaky",
+      "reason": "Podman container runtime call timed out during DCP dependency check startup; environmental container-runtime latency, not related to PR changes in ApplicationOrchestrator.cs/ApplicationOrchestratorTests.cs"
+    }
+  ],
+  "causes": [
+    "vswhere-msbuild-lookup-timeout",
+    "valkey-dcp-podman-dependency-check-timeout",
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-linux-debug-dashboard-flaky",
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky"
+  ]
+}

@@ -17,6 +17,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, debug-dashboard)",
       "pr_number": 19131,
       "observed_at": "2026-08-22T02:04:26Z"
+    },
+    {
+      "run_id": 32755490521,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32755490521",
+      "job": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
+      "pr_number": 19613,
+      "observed_at": "2026-08-24T17:47:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19588"

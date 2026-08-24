@@ -60,6 +60,13 @@
       "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
       "pr_number": 19429,
       "observed_at": "2026-08-24T04:49:40Z"
+    },
+    {
+      "run_id": 32755490521,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32755490521",
+      "job": "Tests / Hosting.Valkey / Hosting.Valkey (ubuntu-latest)",
+      "pr_number": 19613,
+      "observed_at": "2026-08-24T17:47:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"
