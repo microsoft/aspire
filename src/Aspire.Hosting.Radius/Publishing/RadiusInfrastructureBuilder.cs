@@ -1153,9 +1153,28 @@ internal sealed class RadiusInfrastructureBuilder
         // Claimed first so the reference-only pass below can recognize a reference *to* a sealed
         // object, which is the intended way to consume one rather than a collision.
         var sealedObjects = new HashSet<(string Namespace, string Name)>();
+
+        // Two stores may legitimately be populated from the *same* manifest file — e.g. one file
+        // carrying both `username` and `password`, with each store exposing one key. Both deploy
+        // steps then apply byte-identical validated content, and SealedSecretApplyStep's re-apply
+        // is deliberately idempotent, so there is no overwrite to warn about. Coalesce those
+        // writers and reserve ASPIRERADIUS090 for genuinely *distinct* manifests targeting one
+        // object, which is the case that really does clobber contents.
+        var sealedContentByObject = new Dictionary<(string Namespace, string Name), ReadOnlyMemory<byte>>();
+
         foreach (var (storeName, manifest) in options.SealedSecretManifests)
         {
-            sealedObjects.Add((manifest.Metadata.Namespace, manifest.Metadata.Name));
+            var manifestObject = (manifest.Metadata.Namespace, manifest.Metadata.Name);
+            sealedObjects.Add(manifestObject);
+
+            if (sealedContentByObject.TryGetValue(manifestObject, out var claimedContent) &&
+                claimedContent.Span.SequenceEqual(manifest.Content.Span))
+            {
+                continue;
+            }
+
+            sealedContentByObject[manifestObject] = manifest.Content;
+
             Claim(
                 manifest.Metadata.Namespace,
                 manifest.Metadata.Name,
@@ -1241,6 +1260,22 @@ internal sealed class RadiusInfrastructureBuilder
     {
         foreach (var secret in options.SecuritySecrets)
         {
+            // An unset name renders as null, which the literal check below skips entirely — the
+            // resource would then publish successfully and emit a `Radius.Security/secrets` block
+            // with no `name` at all, failing only once the deployment reaches the API server. This
+            // is deliberately a separate gate from the DNS-1123 check so an expression-backed name
+            // (which cannot be validated statically, and which RewireContainerEnvSecrets assigns on
+            // purpose) still passes.
+            if (RenderBicepValue(secret.SecretName) is null && !IsBicepExpression(secret.SecretName))
+            {
+                throw new InvalidOperationException(
+                    $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has no name. " +
+                    $"The recipe uses '{nameof(RadiusSecuritySecretConstruct.SecretName)}' verbatim as the Secret's " +
+                    $"'metadata.name', so the deployment would be rejected. Set " +
+                    $"'{nameof(RadiusSecuritySecretConstruct.SecretName)}' to a DNS-1123 subdomain. " +
+                    $"Diagnostic: ASPIRERADIUS088.");
+            }
+
             if (RenderBicepValue(secret.SecretName) is { } secretName &&
                 !IsBicepExpression(secret.SecretName) &&
                 !KubernetesName.IsDns1123Subdomain(secretName))
@@ -1257,6 +1292,8 @@ internal sealed class RadiusInfrastructureBuilder
             {
                 ValidateSecretDataKey(key, RadiusResourceTypes.SecuritySecrets, secret.BicepIdentifier);
             }
+
+            ValidateSecretKindRequiredKeys(secret);
         }
 
         // Secret stores reach the same Kubernetes `data` map, and an inline store's `StoreName`
@@ -1289,6 +1326,45 @@ internal sealed class RadiusInfrastructureBuilder
                 ValidateSecretDataKey(key, "secret store", store.BicepIdentifier);
             }
         }
+    }
+
+    /// <summary>
+    /// Rejects a literal <see cref="RadiusSecuritySecretConstruct.Kind"/> whose Radius-required
+    /// keys are not all present in <c>data</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>Kind</c> is public and freely mutable, so a callback can select a kind that carries a
+    /// data-shape contract the builder API's enum-typed surface would have enforced — for example
+    /// <c>basicAuthentication</c> requires <c>username</c> and <c>password</c>, <c>certificate</c>
+    /// requires <c>tls.crt</c>/<c>tls.key</c>. The pinned secrets recipe does not validate this;
+    /// it turns the missing-fields error into the Kubernetes Secret's <c>metadata.name</c>, so
+    /// publish succeeds and the failure only surfaces during deployment as an unrelated-looking
+    /// name error. Only literal, recognized kinds are checked: an expression cannot be evaluated
+    /// statically, and an unrecognized string may be a kind a newer control plane understands.
+    /// </remarks>
+    private static void ValidateSecretKindRequiredKeys(RadiusSecuritySecretConstruct secret)
+    {
+        if (IsBicepExpression(secret.Kind) ||
+            RenderBicepLiteral(secret.Kind) is not { } kind ||
+            !RadiusSecretStoreTypeExtensions.TryParseRadiusTypeString(kind, out var storeType))
+        {
+            return;
+        }
+
+        var missing = storeType.RequiredKeys().Where(required => !secret.Data.ContainsKey(required)).ToList();
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' declares kind " +
+            $"'{kind}', which requires the data {(missing.Count == 1 ? "key" : "keys")} " +
+            $"{string.Join(", ", missing.Select(key => $"'{key}'"))}, but 'data' does not contain " +
+            $"{(missing.Count == 1 ? "it" : "them")}. Radius does not reject the missing fields directly — the " +
+            $"secrets recipe surfaces them as an invalid Kubernetes object name at deploy time — so add the " +
+            $"missing {(missing.Count == 1 ? "entry" : "entries")} or use kind 'generic'. " +
+            $"Diagnostic: ASPIRERADIUS092.");
     }
 
     private static void ValidateSecretDataKey(string key, string ownerType, string ownerIdentifier)
@@ -4268,6 +4344,13 @@ internal sealed class RadiusInfrastructureBuilder
     // parameter is declared `@secure()` when the source is a secret so its value is neither printed
     // in deploy logs nor written to the artifact. The identifier→resource mapping is recorded for
     // the deploy step, which supplies the actual value via `rad deploy --parameters`.
+    //
+    // Identifiers come from BicepPostProcessor.SanitizeIdentifier — the same function
+    // GetOrAddRecipeParameter uses — rather than the SDK's NormalizeBicepIdentifier. The two agree
+    // on ordinary names but not on the Radius-specific reservations: `radius` has to become
+    // `radiusenv` because a bare `param radius` collides with the `extension radius` alias. Since
+    // the two allocators reuse each other's declarations, a parameter reached through one path
+    // must produce the identifier the other path would have produced.
     private ProvisioningParameter GetOrAddEnvParameter(ParameterResource parameter)
     {
         if (_envParametersByName.TryGetValue(parameter.Name, out var existing))
@@ -4275,7 +4358,7 @@ internal sealed class RadiusInfrastructureBuilder
             return existing;
         }
 
-        var identifier = Infrastructure.NormalizeBicepIdentifier(parameter.Name);
+        var identifier = BicepPostProcessor.SanitizeIdentifier(parameter.Name);
 
         // A recipe parameter / inline secret may already have allocated a secure `param` for this
         // same Aspire parameter — recipe-pack and secret-store emission both run before container
@@ -4888,6 +4971,22 @@ internal sealed class RadiusInfrastructureBuilder
     {
         if (!_recipeParameters.TryGetValue(parameter.Name, out var provisioningParameter))
         {
+            // Container env-var resolution may already have allocated a `param` for this same
+            // Aspire parameter. Reuse that declaration rather than allocating a second one: both
+            // spellings normalize to the same Bicep identifier, so a fresh allocation would trip
+            // the identifier-collision guard below (ASPIRERADIUS056) on a model that is actually
+            // valid — one secret parameter used by both `WithEnvironment` and a
+            // `Radius.Security/secrets`-scoped recipe parameter. This mirrors the reuse
+            // GetOrAddEnvParameter already performs in the opposite direction, so the two
+            // allocators agree regardless of which one runs first. Deliberately not cached in
+            // _recipeParameters: the env allocator emits it through options.Parameters, and the
+            // deploy binding was already recorded in _deployParametersByIdentifier, which
+            // RecordDeployParameters merges with the recipe bindings.
+            if (_envParametersByName.TryGetValue(parameter.Name, out var envParameter))
+            {
+                return envParameter;
+            }
+
             var identifier = BicepPostProcessor.SanitizeIdentifier(parameter.Name);
 
             // Two distinct parameter names can sanitize to the same Bicep identifier (e.g.

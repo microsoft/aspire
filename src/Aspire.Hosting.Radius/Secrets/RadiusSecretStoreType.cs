@@ -86,6 +86,39 @@ internal static class RadiusSecretStoreTypeExtensions
     };
 
     /// <summary>
+    /// Maps a Radius <c>type</c>/<c>kind</c> string back to its enum value. Used to validate a
+    /// literal value a callback assigned to the public, freely mutable
+    /// <c>RadiusSecuritySecretConstruct.Kind</c> / <c>RadiusSecretStoreConstruct.StoreType</c>,
+    /// which bypass the enum-typed builder API. Returns <see langword="false"/> for an unrecognized
+    /// string so the caller can leave a value it does not understand alone rather than rejecting a
+    /// kind a newer control plane may have added.
+    /// </summary>
+    internal static bool TryParseRadiusTypeString(string? value, out RadiusSecretStoreType type)
+    {
+        switch (value)
+        {
+            case "generic":
+                type = RadiusSecretStoreType.Generic;
+                return true;
+            case "certificate":
+                type = RadiusSecretStoreType.Certificate;
+                return true;
+            case "basicAuthentication":
+                type = RadiusSecretStoreType.BasicAuthentication;
+                return true;
+            case "azureWorkloadIdentity":
+                type = RadiusSecretStoreType.AzureWorkloadIdentity;
+                return true;
+            case "awsIRSA":
+                type = RadiusSecretStoreType.AwsIrsa;
+                return true;
+            default:
+                type = default;
+                return false;
+        }
+    }
+
+    /// <summary>
     /// The default per-key encoding for <paramref name="type"/> — <c>base64</c> for
     /// <see cref="RadiusSecretStoreType.Certificate"/> (Radius enforces it), <c>raw</c> otherwise.
     /// </summary>

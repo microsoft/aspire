@@ -23,9 +23,11 @@ public class PostCallbackSecretValidationTests : IDisposable
 
     public void Dispose() => Directory.Delete(_manifestDirectory, recursive: true);
 
-    private string WriteSealedManifest(string name, string ns)
+    private string WriteSealedManifest(string name, string ns) => WriteSealedManifest(name, ns, name, ["username"]);
+
+    private string WriteSealedManifest(string name, string ns, string fileName, string[] encryptedKeys)
     {
-        var path = Path.Combine(_manifestDirectory, $"{name}.sealed.yaml");
+        var path = Path.Combine(_manifestDirectory, $"{fileName}.sealed.yaml");
         File.WriteAllText(path,
             "apiVersion: bitnami.com/v1alpha1\n" +
             "kind: SealedSecret\n" +
@@ -34,7 +36,9 @@ public class PostCallbackSecretValidationTests : IDisposable
             $"  namespace: {ns}\n" +
             "spec:\n" +
             "  encryptedData:\n" +
-            "    username: AgByCIPHERTEXTONLYxx\n");
+            // Fixed, valid standard-base64 ciphertext: the manifest reader rejects a non-base64
+            // value with ASPIRERADIUS044 before any collision check runs.
+            string.Concat(encryptedKeys.Select(key => $"    {key}: AgByCIPHERTEXTONLYxx\n")));
         return path;
     }
 
@@ -104,6 +108,66 @@ public class PostCallbackSecretValidationTests : IDisposable
             });
 
         Assert.Contains("name: secretName", bicep);
+    }
+
+    /// <summary>
+    /// An unset name renders as null, which the DNS-1123 literal check skips entirely — without a
+    /// dedicated gate the resource publishes and emits a <c>Radius.Security/secrets</c> block with
+    /// no <c>name</c>, failing only once the API server sees it.
+    /// </summary>
+    [Fact]
+    public void CallbackAddingASecuritySecretWithoutAName_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts =>
+            {
+                var orphan = new RadiusSecuritySecretConstruct("orphanSecret")
+                {
+                    EnvironmentId = opts.SecuritySecrets[0].EnvironmentId,
+                };
+                orphan.Data["username"] = new RadiusSecuritySecretDataEntryConstruct
+                {
+                    Encoding = "string",
+                    Value = "value",
+                };
+                opts.SecuritySecrets.Add(orphan);
+            }));
+
+        Assert.Contains("ASPIRERADIUS088", ex.Message);
+        Assert.Contains("orphanSecret", ex.Message);
+    }
+
+    /// <summary>
+    /// A literal <c>Kind</c> carries a data-shape contract Radius does not enforce directly: the
+    /// pinned recipe turns the missing-fields error into the Secret's <c>metadata.name</c>, so
+    /// publish would otherwise succeed and fail during deployment with an unrelated-looking name
+    /// error.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAKindWithoutItsRequiredKeys_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Kind = "basicAuthentication"));
+
+        Assert.Contains("ASPIRERADIUS092", ex.Message);
+        Assert.Contains("basicAuthentication", ex.Message);
+        Assert.Contains("username", ex.Message);
+    }
+
+    /// <summary>
+    /// An unrecognized kind may be one a newer control plane understands, so the publisher leaves it
+    /// alone rather than rejecting a value whose contract it does not know.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAnUnrecognizedKind_StillPublishes()
+    {
+        var bicep = GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Kind = "somethingNewer");
+
+        Assert.Contains("somethingNewer", bicep, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -553,19 +617,40 @@ public class PostCallbackSecretValidationTests : IDisposable
     }
 
     /// <summary>
-    /// Two sealed stores are two <c>kubectl apply</c> calls against one object, so the second
-    /// manifest replaces the first — unlike two existing-mode references, this is a real collision.
+    /// One manifest split across two stores — each exposing a different key from the same file — is
+    /// a legitimate, common shape, not a collision. Both deploy steps apply byte-identical validated
+    /// content and <c>SealedSecretApplyStep</c>'s re-apply is deliberately idempotent, so there is
+    /// nothing to clobber. <c>ASPIRERADIUS090</c> is reserved for genuinely distinct writers.
     /// </summary>
     [Fact]
-    public void TwoSealedSecretStoresApplyingTheSameObject_FailThePublish()
+    public void TwoSealedSecretStoresApplyingTheSameManifest_PublishSuccessfully()
     {
-        var manifest = WriteSealedManifest("shared-secret", "default");
+        var manifest = WriteSealedManifest("shared-secret", "default", "shared-secret", ["username", "password"]);
+
+        var bicep = GenerateBicep(
+            builder => builder.AddContainer("api", "myapp/api:latest"),
+            configureEnvironment: radius => radius
+                .WithSecretStore("creds-user", RadiusSecretStoreType.Generic, s => s.WithSealedSecret(manifest, "username"))
+                .WithSecretStore("creds-password", RadiusSecretStoreType.Generic, s => s.WithSealedSecret(manifest, "password")));
+
+        Assert.Contains("shared-secret", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Two <em>different</em> manifests naming one object really are two <c>kubectl apply</c> calls
+    /// against that object, so the second replaces the first and the collision must still fail.
+    /// </summary>
+    [Fact]
+    public void TwoDistinctSealedSecretManifestsApplyingTheSameObject_FailThePublish()
+    {
+        var first = WriteSealedManifest("shared-secret", "default", "first", ["username"]);
+        var second = WriteSealedManifest("shared-secret", "default", "second", ["password"]);
 
         var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
             builder => builder.AddContainer("api", "myapp/api:latest"),
             configureEnvironment: radius => radius
-                .WithSecretStore("creds-user", RadiusSecretStoreType.Generic, s => s.WithSealedSecret(manifest, "username"))
-                .WithSecretStore("creds-password", RadiusSecretStoreType.Generic, s => s.WithSealedSecret(manifest, "password"))));
+                .WithSecretStore("creds-user", RadiusSecretStoreType.Generic, s => s.WithSealedSecret(first, "username"))
+                .WithSecretStore("creds-password", RadiusSecretStoreType.Generic, s => s.WithSealedSecret(second, "password"))));
 
         Assert.Contains("ASPIRERADIUS090", ex.Message);
         Assert.Contains("shared-secret", ex.Message);

@@ -58,12 +58,15 @@ public class ControlPlaneVersionGateTests
     [Fact]
     public void UnsupportedControlPlaneException_NamesTheVersionsAndTheRemediation()
     {
-        var ex = RadiusDeploymentPipelineStep.CreateUnsupportedControlPlaneException(new Version(0, 59));
+        var ex = RadiusDeploymentPipelineStep.CreateUnsupportedControlPlaneException(new Version(0, 59), "kind-radius");
 
         Assert.Contains("0.59", ex.Message, StringComparison.Ordinal);
         Assert.Contains(RadiusDeploymentPipelineStep.MinimumControlPlaneVersion.ToString(), ex.Message, StringComparison.Ordinal);
         Assert.Contains("rad upgrade kubernetes", ex.Message, StringComparison.Ordinal);
         Assert.Contains("ASPIRERADIUS091", ex.Message, StringComparison.Ordinal);
+        // The context is in the message because the gate deliberately inspects the workspace's
+        // cluster rather than the ambient one; naming it makes a surprising verdict diagnosable.
+        Assert.Contains("kind-radius", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
