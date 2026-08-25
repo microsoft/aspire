@@ -53,6 +53,7 @@ internal abstract class BaseCommand : Command
     private readonly CliExecutionContext _executionContext;
     private bool _isJsonFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
+    private bool _extensionInteractionFlushTimedOut;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
 
@@ -273,9 +274,9 @@ internal abstract class BaseCommand : Command
         return false;
     }
 
-    protected static async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
+    protected async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
     {
-        if (interactionService is not IExtensionInteractionService extensionInteractionService)
+        if (_extensionInteractionFlushTimedOut || interactionService is not IExtensionInteractionService extensionInteractionService)
         {
             return;
         }
@@ -290,8 +291,9 @@ internal abstract class BaseCommand : Command
         }
         catch (OperationCanceledException) when (flushCancellationTokenSource.IsCancellationRequested)
         {
-            // Prefer returning the command's chosen exit code over hanging indefinitely when
-            // VS Code has already gone away or stopped responding to backchannel requests.
+            // Do not spend another full timeout in the final drain after this same extension queue
+            // has already failed to drain. Prefer returning the command's chosen exit code.
+            _extensionInteractionFlushTimedOut = true;
         }
     }
 
