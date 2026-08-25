@@ -127,15 +127,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
-  const dataRepository = new AppHostDataRepository(
-    terminalProvider,
-    appHostDiscoveryService,
-    configInfoProvider,
-    () => {
-      void outdatedCliNotifier.notifyForActiveCliTargets().catch(error => {
-        extensionLogOutputChannel.warn(`Unable to check Aspire CLI version: ${String(error)}`);
-      });
+  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
+  context.subscriptions.push(dataRepository.onDidBecomeDataActive(() => {
+    void outdatedCliNotifier.notifyForActiveCliTargets().catch(error => {
+      extensionLogOutputChannel.warn(`Unable to check Aspire CLI version: ${String(error)}`);
     });
+  }));
   appHostLaunchService.setEditorSessionProvider(() => aspireExtensionContext.aspireDebugSessions);
   appHostLaunchService.setRunningAppHostProvider(async token => {
     const appHosts = await dataRepository.fetchRunningAppHostsOnce(token);

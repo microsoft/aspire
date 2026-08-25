@@ -346,4 +346,17 @@ suite('registerCliCommands', () => {
         assert.strictEqual(resolveCliPathStub.called, false);
         assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, { target: windowCliPathTarget }));
     });
+
+    test('update self uses the pre-resolved workspace CLI supplied by the warning action', async () => {
+        const folder = createWorkspaceFolder('a', '/repo/a');
+        const target = workspaceFolderCliPathTarget(folder);
+
+        await callbacks.get('aspire-vscode.updateSelf')!(target, '/repo/a/.aspire/bin/aspire');
+
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
+            target,
+            cliPath: '/repo/a/.aspire/bin/aspire',
+        }));
+    });
 });

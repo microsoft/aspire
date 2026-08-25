@@ -28,6 +28,7 @@ import { getCliPathTargetForUri } from '../utils/cliPathVariables';
 interface CommandInvocation {
   readonly target: CliPathResolutionTarget;
   readonly appHost?: AppHostCommandTarget;
+  readonly cliPath?: string;
 }
 
 type CommandSource = 'command_palette' | 'tree';
@@ -48,7 +49,12 @@ export function registerCliCommands(
   const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
   const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (_tp, invocation, cliPath) => doCommand(configInfoProvider, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
   const cliUpdateCommandRegistration = vscode.commands.registerCommand('aspire-vscode.update', () => tryExecuteCommand('aspire-vscode.update', terminalProvider, (tp, invocation, cliPath) => updateCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
-  const cliUpdateSelfCommandRegistration = vscode.commands.registerCommand('aspire-vscode.updateSelf', () => tryExecuteCommand('aspire-vscode.updateSelf', terminalProvider, updateSelfCommand));
+  const cliUpdateSelfCommandRegistration = vscode.commands.registerCommand('aspire-vscode.updateSelf', (target: CliPathResolutionTarget = windowCliPathTarget, cliPath?: string) =>
+    tryExecuteCommand(
+      'aspire-vscode.updateSelf',
+      terminalProvider,
+      (tp, invocation, resolvedCliPath) => updateSelfCommand(tp, invocation.target, resolvedCliPath || undefined),
+      async () => ({ target, cliPath })));
   const openTerminalCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openTerminal', () => tryExecuteCommand('aspire-vscode.openTerminal', terminalProvider, (tp, invocation, cliPath) => openTerminalCommand(tp, invocation.target, cliPath), selectCommandInvocation));
   const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, configureLaunchJsonCommand));
   const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand));
@@ -142,7 +148,7 @@ async function tryExecuteCommand(
   try {
     await withCommandTelemetry(commandName, async () => {
       const invocation = await prepareInvocation();
-      let cliPath = '';
+      let cliPath = invocation.cliPath ?? '';
       const cliCheckExcludedCommands: string[] = ["aspire-vscode.settings", "aspire-vscode.configureLaunchJson", "aspire-vscode.updateSelf"];
       if (!cliCheckExcludedCommands.includes(commandName)) {
         if (isE2eBridgeEnabled() && process.env.ASPIRE_EXTENSION_E2E_FORCE_CLI_UNAVAILABLE === 'true') {

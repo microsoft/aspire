@@ -6215,11 +6215,8 @@ suite('AppHostDataRepository global polling', () => {
 
     test('notifies only when Aspire data sources become active', () => {
         let activationCount = 0;
-        const repository = new AppHostDataRepository(
-            terminalProvider,
-            undefined,
-            undefined,
-            () => activationCount++);
+        const repository = new AppHostDataRepository(terminalProvider);
+        const subscription = repository.onDidBecomeDataActive(() => activationCount++);
 
         repository.activate();
         assert.strictEqual(activationCount, 0);
@@ -6233,6 +6230,7 @@ suite('AppHostDataRepository global polling', () => {
         repository.setPanelVisible(true);
         assert.strictEqual(activationCount, 2);
 
+        subscription.dispose();
         repository.dispose();
     });
 

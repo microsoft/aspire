@@ -84,6 +84,9 @@ export class AppHostDataRepository {
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
 
+    private readonly _onDidBecomeDataActive = new vscode.EventEmitter<void>();
+    readonly onDidBecomeDataActive = this._onDidBecomeDataActive.event;
+
     // ── Mode / panel state ──
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
@@ -147,12 +150,7 @@ export class AppHostDataRepository {
     private _disposed = false;
     private readonly _cliRunner: AppHostCliRunner;
 
-    constructor(
-        private readonly _terminalProvider: AspireTerminalProvider,
-        appHostDiscoveryService?: AppHostDiscoveryService,
-        configInfoProvider?: ConfigInfoProvider,
-        private readonly _onDataActivated?: () => void,
-    ) {
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
         this._cliRunner = new AppHostCliRunner(_terminalProvider);
         this._psPoller = new AppHostPsPoller(
             _terminalProvider,
@@ -292,7 +290,7 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         if (becameDataActive) {
-            this._onDataActivated?.();
+            this._onDidBecomeDataActive.fire();
         }
         this._syncPolling(resumedFromInactive);
     }
@@ -308,7 +306,7 @@ export class AppHostDataRepository {
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         this._hasEverBeenDataActive = true;
         if (becameDataActive) {
-            this._onDataActivated?.();
+            this._onDidBecomeDataActive.fire();
         }
         this._syncPolling(resumedFromInactive);
 
@@ -350,7 +348,7 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         if (becameDataActive) {
-            this._onDataActivated?.();
+            this._onDidBecomeDataActive.fire();
         }
         // Re-scope the displayed AppHosts against the new open-tab set right away.
         this._handlePsSnapshot(this._appHosts, { force: true });
@@ -582,6 +580,7 @@ export class AppHostDataRepository {
         this._psPollerDisposable.dispose();
         this._psPoller.dispose();
         this._onDidChangeData.dispose();
+        this._onDidBecomeDataActive.dispose();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
         }

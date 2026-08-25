@@ -23,7 +23,7 @@ import { executeCommandFromPalette, openAspireView, waitForNotificationMessage, 
 // Mirrors configuredCliPathRejected in src/loc/strings.ts.
 const rejectionNotificationText = 'The configured Aspire CLI path could not be used';
 const openSettingActionText = 'Open Setting';
-const outdatedCliWarningText = 'Aspire CLI 13.4.9 is older than 13.5.0';
+const outdatedCliWarningText = "Aspire CLI 13.4.9 is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later";
 const updateCliActionText = 'Update Aspire CLI';
 
 suite('Configured CLI path rejection E2E', function () {

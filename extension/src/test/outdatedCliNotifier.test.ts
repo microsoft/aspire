@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as strings from '../loc/strings';
 import { CliVersionStatus, CliVersionStatusOptions } from '../utils/configInfoProvider';
-import { windowCliPathTarget } from '../utils/cliPathVariables';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { minimumSupportedAspireCliVersion, OutdatedCliNotificationSurface, OutdatedCliNotifier } from '../utils/outdatedCliNotifier';
 
 suite('outdatedCliNotifier', () => {
@@ -18,7 +18,7 @@ suite('outdatedCliNotifier', () => {
 
     class FakeSurface implements OutdatedCliNotificationSurface {
         readonly warnings: Array<{ message: string; actions: string[] }> = [];
-        readonly commands: string[] = [];
+        readonly commands: Array<{ command: string; args: unknown[] }> = [];
         selection: string | undefined;
 
         showWarning(message: string, ...actions: string[]): Thenable<string | undefined> {
@@ -26,8 +26,8 @@ suite('outdatedCliNotifier', () => {
             return Promise.resolve(this.selection);
         }
 
-        executeCommand(command: string): Thenable<unknown> {
-            this.commands.push(command);
+        executeCommand(command: string, ...args: unknown[]): Thenable<unknown> {
+            this.commands.push({ command, args });
             return Promise.resolve(undefined);
         }
     }
@@ -80,7 +80,7 @@ suite('outdatedCliNotifier', () => {
         assert.strictEqual(surface.warnings.length, 1);
         assert.strictEqual(
             surface.warnings[0].message,
-            'Aspire CLI 13.4.9 is older than 13.5.0. Update it to avoid a known AppHost startup failure in VS Code.');
+            "Aspire CLI 13.4.9 is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later to avoid a known startup failure in VS Code.");
         notifier.dispose();
     });
 
@@ -101,23 +101,31 @@ suite('outdatedCliNotifier', () => {
         assert.deepStrictEqual(
             surface.warnings.map(warning => warning.message),
             outdatedVersions.map(version =>
-                `Aspire CLI ${version.version} is older than 13.5.0. Update it to avoid a known AppHost startup failure in VS Code.`));
+                `Aspire CLI ${version.version} is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later to avoid a known startup failure in VS Code.`));
         notifier.dispose();
     });
 
-    test('invokes the existing update-self command when the action is selected', async () => {
+    test('updates the exact workspace CLI that triggered the warning', async () => {
         const { notifier, versionProvider, surface } = createNotifier();
+        const target = workspaceFolderCliPathTarget({
+            uri: vscode.Uri.file('/workspace/a'),
+            name: 'a',
+            index: 0,
+        });
         versionProvider.result = {
-            cliPath: '/cli/aspire',
+            cliPath: '/workspace/a/.aspire/bin/aspire',
             version: '13.4.9',
             status: 'unsupported',
         };
         surface.selection = strings.updateAspireCliAction;
 
-        await notifier.notifyIfOutdated(windowCliPathTarget);
+        await notifier.notifyIfOutdated(target);
 
         assert.deepStrictEqual(surface.warnings[0].actions, [strings.updateAspireCliAction]);
-        assert.deepStrictEqual(surface.commands, ['aspire-vscode.updateSelf']);
+        assert.deepStrictEqual(surface.commands, [{
+            command: 'aspire-vscode.updateSelf',
+            args: [target, '/workspace/a/.aspire/bin/aspire'],
+        }]);
         notifier.dispose();
     });
 });

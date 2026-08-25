@@ -12,12 +12,12 @@ type CliVersionProvider = Pick<ConfigInfoProvider, 'getCliVersionStatus'>;
 
 export interface OutdatedCliNotificationSurface {
     showWarning(message: string, ...actions: string[]): Thenable<string | undefined>;
-    executeCommand(command: string): Thenable<unknown>;
+    executeCommand(command: string, ...args: unknown[]): Thenable<unknown>;
 }
 
 const defaultSurface: OutdatedCliNotificationSurface = {
     showWarning: (message, ...actions) => vscode.window.showWarningMessage(message, ...actions),
-    executeCommand: command => vscode.commands.executeCommand(command),
+    executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
 };
 
 /**
@@ -53,7 +53,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             strings.outdatedAspireCliWarning(result.version, minimumSupportedAspireCliVersion),
             strings.updateAspireCliAction);
         if (selection === strings.updateAspireCliAction) {
-            await this._surface.executeCommand(updateAspireCliCommand);
+            await this._surface.executeCommand(updateAspireCliCommand, target, result.cliPath);
         }
     }
 
