@@ -1,0 +1,70 @@
+{
+  "run_id": 32864200821,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32864200821",
+  "analyzed_at": "2026-08-25T15:42:12Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19627,
+    "title": "Remove obsolete certificate service exception",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-remove-obsolete-certificate-exception",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19627"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97858889799,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32864200821/job/97858889799",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) fails with exit code 4 during Homebrew cask prep; matches recurring cli-smoke-test-homebrew-winget-unrelated cause (17 prior occurrences), unrelated to PR changes which only touch Aspire.Cli certificate/init/run command code.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97860038456,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32864200821/job/97860038456",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) fails with exit code 1 during WinGet manifest prep; matches recurring cli-smoke-test-homebrew-winget-unrelated cause, unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97860118859,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32864200821/job/97860118859",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step fails with generic exit code 1 and no retrievable logs; matches recurring vscode-e2e-windows-edge-cases-flaky cause (19 prior occurrences), unrelated to PR which does not touch the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 97860118980,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32864200821/job/97860118980",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step fails with generic exit code 1 and no retrievable logs; matches recurring vscode-e2e-linux-azure-functions-flaky cause, unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97860119220,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32864200821/job/97860119220",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step fails with generic exit code 1 and no retrievable logs; matches recurring vscode-e2e-linux-workspace-target-proof-flaky cause (12 prior occurrences), unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-windows-edge-cases-flaky",
+    "vscode-e2e-linux-azure-functions-flaky",
+    "vscode-e2e-linux-workspace-target-proof-flaky"
+  ]
+}
