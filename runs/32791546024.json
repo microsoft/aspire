@@ -1,0 +1,60 @@
+{
+  "run_id": 32791546024,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32791546024",
+  "analyzed_at": "2026-08-25T01:15:25Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19430,
+    "title": "Fix Kubernetes hostname publishing and routing",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-fix-kubernetes-ingress-hostname",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19430"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97638575040,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32791546024/job/97638575040",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) fails during Homebrew cask prep, unrelated to PR changes (PR only touches Kubernetes hosting code). Matches known recurring issue #19596 with 12 prior occurrences.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97638829543,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32791546024/job/97638829543",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure in VS Code extension E2E (Windows, edge-cases) shard, unrelated to Kubernetes hosting PR changes. Matches known recurring issue #19547 with 14 prior occurrences.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 97638829560,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32791546024/job/97638829560",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure in VS Code extension E2E (Linux, azure-functions) shard, unrelated to Kubernetes hosting PR changes. Matches known recurring issue #19479-style pattern.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97639294886,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32791546024/job/97639294886",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) fails during WinGet manifest prep, unrelated to PR changes (PR only touches Kubernetes hosting code). Matches known recurring issue #19596 with 12 prior occurrences.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-windows-edge-cases-flaky",
+    "vscode-e2e-linux-azure-functions-flaky"
+  ]
+}
