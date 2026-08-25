@@ -58,7 +58,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     /// <summary>
     /// Gets the stored value for a deployment state section.
     /// </summary>
-    protected virtual JsonNode? GetSectionState(JsonObject? state, string sectionName) =>
+    protected virtual JsonNode? GetSectionState(JsonObject? state, string sectionName, bool includeLegacyState) =>
         TryGetNestedPropertyValue(state, sectionName);
 
     /// <summary>
@@ -132,7 +132,14 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     }
 
     /// <inheritdoc/>
-    public async Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+    public Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default) =>
+        AcquireSectionAsync(sectionName, includeLegacyState: true, cancellationToken);
+
+    /// <inheritdoc/>
+    public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default) =>
+        AcquireSectionAsync(sectionName, includeLegacyState: false, cancellationToken);
+
+    private async Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, bool includeLegacyState, CancellationToken cancellationToken)
     {
         await LoadStateAsync(cancellationToken).ConfigureAwait(false);
 
@@ -145,7 +152,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
             JsonObject? data = null;
             string? value = null;
 
-            var sectionData = GetSectionState(_state, sectionName);
+            var sectionData = GetSectionState(_state, sectionName, includeLegacyState);
             if (sectionData is JsonObject o)
             {
                 data = o.DeepClone().AsObject();

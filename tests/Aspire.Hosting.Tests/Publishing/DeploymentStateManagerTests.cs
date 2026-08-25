@@ -465,6 +465,9 @@ public class DeploymentStateManagerTests : IDisposable
         await legacyStateManager.SaveSectionAsync(secondLegacySection);
 
         var firstStateManager = CreateFileDeploymentStateManager(firstSha, legacySha);
+        var currentParentSection = await firstStateManager.AcquireCurrentSectionAsync("Azure:Sandboxes");
+        Assert.Empty(currentParentSection.Data);
+
         var firstSection = await firstStateManager.AcquireSectionAsync("Azure:Sandboxes:first");
         firstSection.Data["Migrated"] = true;
         await firstStateManager.SaveSectionAsync(firstSection);

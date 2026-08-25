@@ -112,16 +112,17 @@ internal sealed partial class FileDeploymentStateManager(
     }
 
     /// <inheritdoc/>
-    protected override JsonNode? GetSectionState(JsonObject? state, string sectionName)
+    protected override JsonNode? GetSectionState(JsonObject? state, string sectionName, bool includeLegacyState)
     {
         if (_isMigratingLegacyState &&
-            (_migratedSectionNames.Contains(sectionName) ||
+            (!includeLegacyState ||
+             _migratedSectionNames.Contains(sectionName) ||
              _migratedSectionNames.Any(name => name.StartsWith($"{sectionName}:", StringComparison.Ordinal))))
         {
             return TryGetNestedPropertyValue(_migratedState, sectionName);
         }
 
-        return base.GetSectionState(state, sectionName);
+        return base.GetSectionState(state, sectionName, includeLegacyState);
     }
 
     /// <inheritdoc/>

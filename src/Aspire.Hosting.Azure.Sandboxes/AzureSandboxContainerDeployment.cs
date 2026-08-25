@@ -1206,7 +1206,10 @@ internal static class AzureSandboxContainerDeployment
     private static async Task DestroyStaleDeploymentsAsync(PipelineStepContext context, IReadOnlySet<string> activeStateSectionNames)
     {
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
-        var sandboxesSection = await deploymentStateManager.AcquireSectionAsync(SandboxStateParentSection, context.CancellationToken).ConfigureAwait(false);
+        // Legacy deployment state was shared by every polyglot AppHost in the directory.
+        // Stale enumeration must only inspect sections already claimed by this AppHost;
+        // direct per-resource reads still use legacy fallback to migrate owned state.
+        var sandboxesSection = await deploymentStateManager.AcquireCurrentSectionAsync(SandboxStateParentSection, context.CancellationToken).ConfigureAwait(false);
 
         var staleResourceNames = sandboxesSection.Data
             .Where(pair => pair.Value is JsonObject)

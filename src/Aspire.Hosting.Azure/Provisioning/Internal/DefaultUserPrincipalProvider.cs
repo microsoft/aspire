@@ -21,13 +21,18 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
         {
             // Parse Azure access-token payloads to get the object id and principal type.
             // User tokens typically include:
-            //   { "oid": "<object-id>", "upn": "user@contoso.com" }
+            //   { "oid": "<object-id>", "upn": "user@contoso.com", "scp": "User.Read" }
             // App-only tokens typically include:
-            //   { "oid": "<service-principal-object-id>", "idtyp": "app", "appid": "<client-id>" }
+            //   { "oid": "<service-principal-object-id>", "appid": "<client-id>", "roles": ["Application.Read.All"] }
+            // The optional idtyp claim is authoritative when present; otherwise scp distinguishes
+            // delegated tokens from app-only tokens carrying application roles.
+            // See https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference.
             var oid = string.Empty;
             var principalName = string.Empty;
             var appId = string.Empty;
-            var isAppPrincipal = false;
+            var identityType = string.Empty;
+            var hasDelegatedScopes = false;
+            var hasApplicationRoles = false;
             var parts = response.Token.Split('.');
             var part = parts[1];
             var convertedToken = part.ToString().Replace('_', '/').Replace('-', '+');
@@ -66,7 +71,24 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
                     else if (header == "idtyp")
                     {
                         reader.Read();
-                        isAppPrincipal = string.Equals(reader.GetString(), "app", StringComparison.OrdinalIgnoreCase);
+                        identityType = reader.GetString() ?? string.Empty;
+                    }
+                    else if (header == "scp")
+                    {
+                        reader.Read();
+                        hasDelegatedScopes = !string.IsNullOrWhiteSpace(reader.GetString());
+                    }
+                    else if (header == "roles")
+                    {
+                        reader.Read();
+                        if (reader.TokenType == JsonTokenType.StartArray)
+                        {
+                            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                            {
+                                hasApplicationRoles |= reader.TokenType == JsonTokenType.String &&
+                                    !string.IsNullOrWhiteSpace(reader.GetString());
+                            }
+                        }
                     }
                     else
                     {
@@ -76,6 +98,9 @@ internal sealed class DefaultUserPrincipalProvider(ITokenCredentialProvider toke
             }
 
             var hasAppId = !string.IsNullOrEmpty(appId);
+            var isAppPrincipal =
+                string.Equals(identityType, "app", StringComparison.OrdinalIgnoreCase) ||
+                (string.IsNullOrEmpty(identityType) && !hasDelegatedScopes && hasApplicationRoles);
             var principalType = isAppPrincipal
                 ? RoleManagementPrincipalType.ServicePrincipal
                 : RoleManagementPrincipalType.User;

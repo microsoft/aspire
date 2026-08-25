@@ -83,6 +83,22 @@ public class DefaultUserPrincipalProviderTests
     }
 
     [Fact]
+    public async Task GetUserPrincipalAsync_ParsesAppTokenWithoutIdentityTypeAsServicePrincipal()
+    {
+        var expectedOid = Guid.NewGuid();
+        var expectedAppId = Guid.NewGuid().ToString();
+        var token = CreateTestAppToken(expectedOid, expectedAppId, includeIdentityType: false);
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(token);
+        var provider = new DefaultUserPrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetUserPrincipalAsync();
+
+        Assert.Equal(expectedOid, principal.Id);
+        Assert.Equal(expectedAppId, principal.Name);
+        Assert.Equal(RoleManagementPrincipalType.ServicePrincipal, principal.Type);
+    }
+
+    [Fact]
     public async Task GetUserPrincipalAsync_DoesNotInferServicePrincipalFromAppId()
     {
         var expectedOid = Guid.NewGuid();
@@ -174,18 +190,22 @@ public class DefaultUserPrincipalProviderTests
         return $"{header}.{payloadBase64}.{signature}";
     }
 
-    private static string CreateTestAppToken(Guid oid, string appId)
+    private static string CreateTestAppToken(Guid oid, string appId, bool includeIdentityType = true)
     {
         var header = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" })));
 
-        var payload = new
+        var payload = new Dictionary<string, object>
         {
-            oid = oid.ToString(),
-            appid = appId,
-            idtyp = "app",
-            exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
-            iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            ["oid"] = oid.ToString(),
+            ["appid"] = appId,
+            ["roles"] = new[] { "Application.Read.All" },
+            ["exp"] = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
+            ["iat"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
+        if (includeIdentityType)
+        {
+            payload["idtyp"] = "app";
+        }
 
         var payloadJson = JsonSerializer.Serialize(payload);
         var payloadBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadJson))
