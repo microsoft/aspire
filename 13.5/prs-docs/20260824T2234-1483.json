@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Documents CLI bundle default enablement (PR #19076), matched to existing changelog entry for backport #19294.",
+  "mergedAt": "2026-08-24T22:34:20Z",
+  "number": 1483,
+  "runDate": "2026-08-25T00:15:01Z",
+  "status": "included",
+  "title": "[docs] Default Aspire CLI bundle opt-in in new C# AppHost templates"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "README documentation clarification for existing telemetry limits behavior; no matching new user-facing changelog entry found for this milestone.",
+  "mergedAt": "2026-08-24T12:40:42Z",
+  "number": 1561,
+  "runDate": "2026-08-25T00:15:01Z",
+  "status": "excluded",
+  "title": "Update dashboard telemetry limit documentation"
+}

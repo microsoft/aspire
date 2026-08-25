@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Support page maintenance for a patch release; not a milestone feature.",
+  "mergedAt": "2026-08-24T17:29:31Z",
+  "number": 1569,
+  "runDate": "2026-08-25T00:15:01Z",
+  "status": "excluded",
+  "title": "[support] Update support page for Aspire 13.5.2 release"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency version bump (dependabot); not user-facing.",
+  "mergedAt": "2026-08-24T13:56:12Z",
+  "number": 1516,
+  "runDate": "2026-08-25T00:15:01Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 5 updates"
+}
