@@ -64,10 +64,10 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
         return currentClient.ExecuteResourceCommandAsync(resourceName, resourceType, command, options, cancellationToken);
     }
 
-    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
+    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken)
     {
         EnsureWritable();
-        return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, cancellationToken);
+        return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, interactionId, inputName, cancellationToken);
     }
 
     private void EnsureWritable()

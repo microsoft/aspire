@@ -93,6 +93,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         {
             Interaction = interaction,
             Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
             OnSubmitCallback = (_, _) => Task.CompletedTask
         };
         await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters

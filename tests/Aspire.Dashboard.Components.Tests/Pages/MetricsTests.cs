@@ -115,7 +115,6 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.ActiveView, MetricViewKind.Graph);
             builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
             builder.Add(component => component.Resources, [resource]);
-            builder.Add(component => component.PauseText, null);
         });
         cut.WaitForAssertion(() =>
         {
@@ -230,7 +229,6 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.ActiveView, MetricViewKind.Table);
             builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
             builder.Add(component => component.Resources, [resource]);
-            builder.Add(component => component.PauseText, null);
         });
 
         cut.WaitForState(() => cut.FindComponents<MetricTable>().Count == 1);
@@ -319,7 +317,6 @@ public partial class MetricsTests : DashboardTestContext
                 builder.Add(component => component.ActiveView, MetricViewKind.Table);
                 builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
                 builder.Add(component => component.Resources, [resource]);
-                builder.Add(component => component.PauseText, null);
             });
 
             cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<MetricTable>()));
@@ -486,12 +483,12 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void PauseIncomingData_DisplaysPauseWarningInPageFooter()
+    public async Task PauseIncomingData_DisplaysPauseWarningInPageFooter()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
