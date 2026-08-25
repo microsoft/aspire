@@ -21,6 +21,7 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
     private BicepValue<string>? _publicNetworkAccess;
     private BicepValue<string>? _virtualNetworkType;
     private BicepValue<string>? _subnetResourceId;
+    private BicepList<ApiManagementHostnameConfigurationProvisioningModel>? _hostnameConfigurations;
     private BicepDictionary<string>? _tags;
     private BicepValue<Uri>? _gatewayUri;
     private BicepValue<ResourceIdentifier>? _id;
@@ -79,6 +80,12 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
         set { Initialize(); _subnetResourceId!.Assign(value); }
     }
 
+    public BicepList<ApiManagementHostnameConfigurationProvisioningModel> HostnameConfigurations
+    {
+        get { Initialize(); return _hostnameConfigurations!; }
+        set { Initialize(); _hostnameConfigurations!.Assign(value); }
+    }
+
     public BicepDictionary<string> Tags
     {
         get { Initialize(); return _tags!; }
@@ -108,9 +115,67 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
         _publicNetworkAccess = DefineProperty<string>(nameof(PublicNetworkAccess), ["properties", "publicNetworkAccess"]);
         _virtualNetworkType = DefineProperty<string>(nameof(VirtualNetworkType), ["properties", "virtualNetworkType"]);
         _subnetResourceId = DefineProperty<string>(nameof(SubnetResourceId), ["properties", "virtualNetworkConfiguration", "subnetResourceId"]);
+        _hostnameConfigurations = DefineListProperty<ApiManagementHostnameConfigurationProvisioningModel>(
+            nameof(HostnameConfigurations), ["properties", "hostnameConfigurations"]);
         _tags = DefineDictionaryProperty<string>(nameof(Tags), ["tags"]);
         _gatewayUri = DefineProperty<Uri>(nameof(GatewayUri), ["properties", "gatewayUrl"], isOutput: true);
         _id = DefineProperty<ResourceIdentifier>(nameof(Id), ["id"], isOutput: true);
+    }
+}
+
+internal sealed class ApiManagementHostnameConfigurationProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<string>? _type;
+    private BicepValue<string>? _hostName;
+    private BicepValue<string>? _keyVaultId;
+    private BicepValue<string>? _identityClientId;
+    private BicepValue<bool>? _defaultSslBinding;
+    private BicepValue<bool>? _negotiateClientCertificate;
+
+    public BicepValue<string> Type
+    {
+        get { Initialize(); return _type!; }
+        set { Initialize(); _type!.Assign(value); }
+    }
+
+    public BicepValue<string> HostName
+    {
+        get { Initialize(); return _hostName!; }
+        set { Initialize(); _hostName!.Assign(value); }
+    }
+
+    public BicepValue<string> KeyVaultId
+    {
+        get { Initialize(); return _keyVaultId!; }
+        set { Initialize(); _keyVaultId!.Assign(value); }
+    }
+
+    public BicepValue<string> IdentityClientId
+    {
+        get { Initialize(); return _identityClientId!; }
+        set { Initialize(); _identityClientId!.Assign(value); }
+    }
+
+    public BicepValue<bool> DefaultSslBinding
+    {
+        get { Initialize(); return _defaultSslBinding!; }
+        set { Initialize(); _defaultSslBinding!.Assign(value); }
+    }
+
+    public BicepValue<bool> NegotiateClientCertificate
+    {
+        get { Initialize(); return _negotiateClientCertificate!; }
+        set { Initialize(); _negotiateClientCertificate!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _type = DefineProperty<string>(nameof(Type), ["type"], isRequired: true);
+        _hostName = DefineProperty<string>(nameof(HostName), ["hostName"], isRequired: true);
+        _keyVaultId = DefineProperty<string>(nameof(KeyVaultId), ["keyVaultId"], isRequired: true);
+        _identityClientId = DefineProperty<string>(nameof(IdentityClientId), ["identityClientId"]);
+        _defaultSslBinding = DefineProperty<bool>(nameof(DefaultSslBinding), ["defaultSslBinding"]);
+        _negotiateClientCertificate = DefineProperty<bool>(nameof(NegotiateClientCertificate), ["negotiateClientCertificate"]);
     }
 }
 
@@ -653,5 +718,508 @@ internal sealed class ApiManagementOperationPolicyProvisioningResource(string bi
         _format = DefineProperty<string>(nameof(Format), ["properties", "format"]);
         _value = DefineProperty<string>(nameof(Value), ["properties", "value"]);
         _parent = DefineResource<ApiManagementOperationProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementProductProvisioningResource(string bicepIdentifier)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service/products", "2024-05-01")
+{
+    private BicepValue<string>? _name;
+    private BicepValue<string>? _displayName;
+    private BicepValue<string>? _description;
+    private BicepValue<string>? _terms;
+    private BicepValue<bool>? _subscriptionRequired;
+    private BicepValue<bool>? _approvalRequired;
+    private BicepValue<int>? _subscriptionsLimit;
+    private BicepValue<string>? _state;
+    private BicepValue<ResourceIdentifier>? _id;
+    private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public BicepValue<string> DisplayName
+    {
+        get { Initialize(); return _displayName!; }
+        set { Initialize(); _displayName!.Assign(value); }
+    }
+
+    public BicepValue<string> Description
+    {
+        get { Initialize(); return _description!; }
+        set { Initialize(); _description!.Assign(value); }
+    }
+
+    public BicepValue<string> Terms
+    {
+        get { Initialize(); return _terms!; }
+        set { Initialize(); _terms!.Assign(value); }
+    }
+
+    public BicepValue<bool> SubscriptionRequired
+    {
+        get { Initialize(); return _subscriptionRequired!; }
+        set { Initialize(); _subscriptionRequired!.Assign(value); }
+    }
+
+    public BicepValue<bool> ApprovalRequired
+    {
+        get { Initialize(); return _approvalRequired!; }
+        set { Initialize(); _approvalRequired!.Assign(value); }
+    }
+
+    public BicepValue<int> SubscriptionsLimit
+    {
+        get { Initialize(); return _subscriptionsLimit!; }
+        set { Initialize(); _subscriptionsLimit!.Assign(value); }
+    }
+
+    public BicepValue<string> State
+    {
+        get { Initialize(); return _state!; }
+        set { Initialize(); _state!.Assign(value); }
+    }
+
+    public BicepValue<ResourceIdentifier> Id
+    {
+        get { Initialize(); return _id!; }
+    }
+
+    public ApiManagementServiceProvisioningResource? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _displayName = DefineProperty<string>(nameof(DisplayName), ["properties", "displayName"], isRequired: true);
+        _description = DefineProperty<string>(nameof(Description), ["properties", "description"]);
+        _terms = DefineProperty<string>(nameof(Terms), ["properties", "terms"]);
+        _subscriptionRequired = DefineProperty<bool>(nameof(SubscriptionRequired), ["properties", "subscriptionRequired"]);
+        _approvalRequired = DefineProperty<bool>(nameof(ApprovalRequired), ["properties", "approvalRequired"]);
+        _subscriptionsLimit = DefineProperty<int>(nameof(SubscriptionsLimit), ["properties", "subscriptionsLimit"]);
+        _state = DefineProperty<string>(nameof(State), ["properties", "state"]);
+        _id = DefineProperty<ResourceIdentifier>(nameof(Id), ["id"], isOutput: true);
+        _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementProductApiProvisioningResource(string bicepIdentifier)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service/products/apis", "2024-05-01")
+{
+    private BicepValue<string>? _name;
+    private ResourceReference<ApiManagementProductProvisioningResource>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public ApiManagementProductProvisioningResource? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _parent = DefineResource<ApiManagementProductProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementSubscriptionProvisioningResource(string bicepIdentifier)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service/subscriptions", "2024-05-01")
+{
+    private BicepValue<string>? _name;
+    private BicepValue<string>? _displayName;
+    private BicepValue<ResourceIdentifier>? _scope;
+    private BicepValue<string>? _state;
+    private BicepValue<bool>? _allowTracing;
+    private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public BicepValue<string> DisplayName
+    {
+        get { Initialize(); return _displayName!; }
+        set { Initialize(); _displayName!.Assign(value); }
+    }
+
+    public BicepValue<ResourceIdentifier> Scope
+    {
+        get { Initialize(); return _scope!; }
+        set { Initialize(); _scope!.Assign(value); }
+    }
+
+    public BicepValue<string> State
+    {
+        get { Initialize(); return _state!; }
+        set { Initialize(); _state!.Assign(value); }
+    }
+
+    public BicepValue<bool> AllowTracing
+    {
+        get { Initialize(); return _allowTracing!; }
+        set { Initialize(); _allowTracing!.Assign(value); }
+    }
+
+    public ApiManagementServiceProvisioningResource? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _displayName = DefineProperty<string>(nameof(DisplayName), ["properties", "displayName"], isRequired: true);
+        _scope = DefineProperty<ResourceIdentifier>(nameof(Scope), ["properties", "scope"], isRequired: true);
+        _state = DefineProperty<string>(nameof(State), ["properties", "state"]);
+        _allowTracing = DefineProperty<bool>(nameof(AllowTracing), ["properties", "allowTracing"]);
+        _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementNamedValueProvisioningResource(string bicepIdentifier)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service/namedValues", "2024-05-01")
+{
+    private BicepValue<string>? _name;
+    private BicepValue<string>? _displayName;
+    private BicepValue<string>? _value;
+    private BicepValue<bool>? _secret;
+    private BicepList<string>? _tags;
+    private ApiManagementKeyVaultNamedValueProvisioningModel? _keyVault;
+    private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public BicepValue<string> DisplayName
+    {
+        get { Initialize(); return _displayName!; }
+        set { Initialize(); _displayName!.Assign(value); }
+    }
+
+    public BicepValue<string> Value
+    {
+        get { Initialize(); return _value!; }
+        set { Initialize(); _value!.Assign(value); }
+    }
+
+    public BicepValue<bool> Secret
+    {
+        get { Initialize(); return _secret!; }
+        set { Initialize(); _secret!.Assign(value); }
+    }
+
+    public BicepList<string> Tags
+    {
+        get { Initialize(); return _tags!; }
+        set { Initialize(); _tags!.Assign(value); }
+    }
+
+    public ApiManagementKeyVaultNamedValueProvisioningModel KeyVault
+    {
+        get { Initialize(); return _keyVault!; }
+        set { Initialize(); AssignOrReplace(ref _keyVault, value); }
+    }
+
+    public ApiManagementServiceProvisioningResource? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _displayName = DefineProperty<string>(nameof(DisplayName), ["properties", "displayName"], isRequired: true);
+        _value = DefineProperty<string>(nameof(Value), ["properties", "value"]);
+        _secret = DefineProperty<bool>(nameof(Secret), ["properties", "secret"]);
+        _tags = DefineListProperty<string>(nameof(Tags), ["properties", "tags"]);
+        _keyVault = DefineModelProperty<ApiManagementKeyVaultNamedValueProvisioningModel>(nameof(KeyVault), ["properties", "keyVault"]);
+        _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementKeyVaultNamedValueProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<string>? _secretIdentifier;
+    private BicepValue<string>? _identityClientId;
+
+    public BicepValue<string> SecretIdentifier
+    {
+        get { Initialize(); return _secretIdentifier!; }
+        set { Initialize(); _secretIdentifier!.Assign(value); }
+    }
+
+    public BicepValue<string> IdentityClientId
+    {
+        get { Initialize(); return _identityClientId!; }
+        set { Initialize(); _identityClientId!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _secretIdentifier = DefineProperty<string>(nameof(SecretIdentifier), ["secretIdentifier"], isRequired: true);
+        _identityClientId = DefineProperty<string>(nameof(IdentityClientId), ["identityClientId"]);
+    }
+}
+
+internal sealed class ApiManagementPolicyFragmentProvisioningResource(string bicepIdentifier)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service/policyFragments", "2024-05-01")
+{
+    private BicepValue<string>? _name;
+    private BicepValue<string>? _format;
+    private BicepValue<string>? _value;
+    private BicepValue<string>? _description;
+    private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public BicepValue<string> Format
+    {
+        get { Initialize(); return _format!; }
+        set { Initialize(); _format!.Assign(value); }
+    }
+
+    public BicepValue<string> Value
+    {
+        get { Initialize(); return _value!; }
+        set { Initialize(); _value!.Assign(value); }
+    }
+
+    public BicepValue<string> Description
+    {
+        get { Initialize(); return _description!; }
+        set { Initialize(); _description!.Assign(value); }
+    }
+
+    public ApiManagementServiceProvisioningResource? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _format = DefineProperty<string>(nameof(Format), ["properties", "format"]);
+        _value = DefineProperty<string>(nameof(Value), ["properties", "value"], isRequired: true);
+        _description = DefineProperty<string>(nameof(Description), ["properties", "description"]);
+        _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementLoggerProvisioningResource(string bicepIdentifier)
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service/loggers", "2024-05-01")
+{
+    private BicepValue<string>? _name;
+    private BicepValue<string>? _loggerType;
+    private BicepValue<ResourceIdentifier>? _resourceId;
+    private BicepDictionary<string>? _credentials;
+    private BicepValue<bool>? _isBuffered;
+    private BicepValue<ResourceIdentifier>? _id;
+    private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public BicepValue<string> LoggerType
+    {
+        get { Initialize(); return _loggerType!; }
+        set { Initialize(); _loggerType!.Assign(value); }
+    }
+
+    public BicepValue<ResourceIdentifier> ResourceId
+    {
+        get { Initialize(); return _resourceId!; }
+        set { Initialize(); _resourceId!.Assign(value); }
+    }
+
+    public BicepDictionary<string> Credentials
+    {
+        get { Initialize(); return _credentials!; }
+        set { Initialize(); _credentials!.Assign(value); }
+    }
+
+    public BicepValue<bool> IsBuffered
+    {
+        get { Initialize(); return _isBuffered!; }
+        set { Initialize(); _isBuffered!.Assign(value); }
+    }
+
+    public BicepValue<ResourceIdentifier> Id
+    {
+        get { Initialize(); return _id!; }
+    }
+
+    public ApiManagementServiceProvisioningResource? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _loggerType = DefineProperty<string>(nameof(LoggerType), ["properties", "loggerType"], isRequired: true);
+        _resourceId = DefineProperty<ResourceIdentifier>(nameof(ResourceId), ["properties", "resourceId"]);
+        _credentials = DefineDictionaryProperty<string>(nameof(Credentials), ["properties", "credentials"]);
+        _isBuffered = DefineProperty<bool>(nameof(IsBuffered), ["properties", "isBuffered"]);
+        _id = DefineProperty<ResourceIdentifier>(nameof(Id), ["id"], isOutput: true);
+        _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal abstract class ApiManagementDiagnosticProvisioningResource<TParent>(string bicepIdentifier, string resourceType)
+    : ProvisionableResource(bicepIdentifier, resourceType, "2024-05-01")
+    where TParent : ProvisionableResource
+{
+    private BicepValue<string>? _name;
+    private BicepValue<ResourceIdentifier>? _loggerId;
+    private BicepValue<string>? _alwaysLog;
+    private ApiManagementSamplingProvisioningModel? _sampling;
+    private BicepValue<string>? _httpCorrelationProtocol;
+    private BicepValue<bool>? _logClientIp;
+    private BicepValue<string>? _verbosity;
+    private BicepValue<string>? _operationNameFormat;
+    private BicepValue<bool>? _metrics;
+    private ResourceReference<TParent>? _parent;
+
+    public BicepValue<string> Name
+    {
+        get { Initialize(); return _name!; }
+        set { Initialize(); _name!.Assign(value); }
+    }
+
+    public BicepValue<ResourceIdentifier> LoggerId
+    {
+        get { Initialize(); return _loggerId!; }
+        set { Initialize(); _loggerId!.Assign(value); }
+    }
+
+    public BicepValue<string> AlwaysLog
+    {
+        get { Initialize(); return _alwaysLog!; }
+        set { Initialize(); _alwaysLog!.Assign(value); }
+    }
+
+    public ApiManagementSamplingProvisioningModel Sampling
+    {
+        get { Initialize(); return _sampling!; }
+        set { Initialize(); AssignOrReplace(ref _sampling, value); }
+    }
+
+    public BicepValue<string> HttpCorrelationProtocol
+    {
+        get { Initialize(); return _httpCorrelationProtocol!; }
+        set { Initialize(); _httpCorrelationProtocol!.Assign(value); }
+    }
+
+    public BicepValue<bool> LogClientIp
+    {
+        get { Initialize(); return _logClientIp!; }
+        set { Initialize(); _logClientIp!.Assign(value); }
+    }
+
+    public BicepValue<string> Verbosity
+    {
+        get { Initialize(); return _verbosity!; }
+        set { Initialize(); _verbosity!.Assign(value); }
+    }
+
+    public BicepValue<string> OperationNameFormat
+    {
+        get { Initialize(); return _operationNameFormat!; }
+        set { Initialize(); _operationNameFormat!.Assign(value); }
+    }
+
+    public BicepValue<bool> Metrics
+    {
+        get { Initialize(); return _metrics!; }
+        set { Initialize(); _metrics!.Assign(value); }
+    }
+
+    public TParent? Parent
+    {
+        get { Initialize(); return _parent!.Value; }
+        set { Initialize(); _parent!.Value = value; }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
+        _loggerId = DefineProperty<ResourceIdentifier>(nameof(LoggerId), ["properties", "loggerId"], isRequired: true);
+        _alwaysLog = DefineProperty<string>(nameof(AlwaysLog), ["properties", "alwaysLog"]);
+        _sampling = DefineModelProperty<ApiManagementSamplingProvisioningModel>(nameof(Sampling), ["properties", "sampling"]);
+        _httpCorrelationProtocol = DefineProperty<string>(nameof(HttpCorrelationProtocol), ["properties", "httpCorrelationProtocol"]);
+        _logClientIp = DefineProperty<bool>(nameof(LogClientIp), ["properties", "logClientIp"]);
+        _verbosity = DefineProperty<string>(nameof(Verbosity), ["properties", "verbosity"]);
+        _operationNameFormat = DefineProperty<string>(nameof(OperationNameFormat), ["properties", "operationNameFormat"]);
+        _metrics = DefineProperty<bool>(nameof(Metrics), ["properties", "metrics"]);
+        _parent = DefineResource<TParent>(nameof(Parent), ["parent"], isRequired: true);
+    }
+}
+
+internal sealed class ApiManagementServiceDiagnosticProvisioningResource(string bicepIdentifier)
+    : ApiManagementDiagnosticProvisioningResource<ApiManagementServiceProvisioningResource>(
+        bicepIdentifier,
+        "Microsoft.ApiManagement/service/diagnostics");
+
+internal sealed class ApiManagementApiDiagnosticProvisioningResource(string bicepIdentifier)
+    : ApiManagementDiagnosticProvisioningResource<ApiManagementApiProvisioningResource>(
+        bicepIdentifier,
+        "Microsoft.ApiManagement/service/apis/diagnostics");
+
+internal sealed class ApiManagementSamplingProvisioningModel : ProvisionableConstruct
+{
+    private BicepValue<string>? _samplingType;
+    private BicepValue<double>? _percentage;
+
+    public BicepValue<string> SamplingType
+    {
+        get { Initialize(); return _samplingType!; }
+        set { Initialize(); _samplingType!.Assign(value); }
+    }
+
+    public BicepValue<double> Percentage
+    {
+        get { Initialize(); return _percentage!; }
+        set { Initialize(); _percentage!.Assign(value); }
+    }
+
+    protected override void DefineProvisionableProperties()
+    {
+        _samplingType = DefineProperty<string>(nameof(SamplingType), ["samplingType"], isRequired: true);
+        _percentage = DefineProperty<double>(nameof(Percentage), ["percentage"], isRequired: true);
     }
 }

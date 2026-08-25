@@ -85,6 +85,11 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     internal List<AzureApiManagementOpenAIBackend> OpenAIBackends { get; } = [];
 
     /// <summary>
+    /// Gets or sets the API-level Application Insights diagnostic.
+    /// </summary>
+    internal AzureApiManagementDiagnostic? Diagnostic { get; set; }
+
+    /// <summary>
     /// Gets the parent API Management service.
     /// </summary>
     public AzureApiManagementResource Parent { get; }

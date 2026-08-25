@@ -351,6 +351,140 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public async Task AddAzureApiManagementWithServiceFeaturesGeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithComputeEnvironment(environment)
+            .WithExternalHttpEndpoints();
+        var insights = builder.AddAzureApplicationInsights("insights");
+        var vault = builder.AddAzureKeyVault("vault");
+        var apiKey = builder.AddParameter("api-key", secret: true);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+            Sku = AzureApiManagementSku.StandardV2,
+        });
+
+        var fragment = apim.AddPolicyFragment(
+            "correlation",
+            "<set-header name=\"x-correlation-id\" exists-action=\"skip\"><value>@(context.RequestId.ToString())</value></set-header>",
+            "Adds a correlation ID.");
+        apim.WithInboundPolicyFragment(fragment)
+            .WithApplicationInsights(insights, new()
+            {
+                SamplingPercentage = 25,
+                Verbosity = AzureApiManagementDiagnosticVerbosity.Error,
+            })
+            .WithCustomDomain(
+                "api.contoso.example",
+                vault.GetSecret("gateway-certificate"),
+                defaultSslBinding: true);
+        apim.AddNamedValue("backend-region", "westus3", tags: ["routing"]);
+        apim.AddSecretNamedValue("api-key-value", apiKey, displayName: "ApiKey");
+        apim.AddKeyVaultNamedValue(
+            "upstream-secret",
+            vault.GetSecret("upstream-secret"),
+            displayName: "UpstreamSecret");
+
+        var api = apim.AddApi("catalog-api", backend, "catalog")
+            .WithInboundPolicyFragment(fragment)
+            .WithApplicationInsights(insights, new()
+            {
+                SamplingPercentage = 50,
+                LogClientIp = true,
+            });
+        api.AddOperation("get-product", "GET", "/products/{id}")
+            .WithInboundPolicyFragment(fragment);
+        apim.AddProduct(
+                "catalog-product",
+                "Catalog",
+                new()
+                {
+                    Description = "Catalog APIs",
+                    Terms = "Use responsibly.",
+                })
+            .WithApi(api)
+            .AddSubscription("catalog-client", "Catalog client");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public void ApiManagementServiceFeaturesValidateInvalidConfigurations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var nonSecretParameter = builder.AddParameter("value");
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var otherApim = builder.AddAzureApiManagement("other-apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var api = apim.AddApi("catalog-api", backend, "catalog");
+        var otherApi = otherApim.AddApi("other-api", backend, "other");
+        var product = apim.AddProduct("catalog-product", "Catalog");
+        var fragment = apim.AddPolicyFragment("shared-policy", "<rate-limit calls=\"10\" renewal-period=\"60\" />");
+        var otherFragment = otherApim.AddPolicyFragment("other-policy", "<rate-limit calls=\"20\" renewal-period=\"60\" />");
+
+        Assert.Throws<InvalidOperationException>(() => product.WithApi(otherApi));
+        Assert.Throws<InvalidOperationException>(() => api.WithInboundPolicyFragment(otherFragment));
+        Assert.Throws<ArgumentException>(() => apim.AddPolicyFragment("invalid-fragment", "<base />", fragmentName: "-invalid"));
+        Assert.Throws<ArgumentException>(() => apim.AddSecretNamedValue("secret", nonSecretParameter));
+        Assert.Throws<ArgumentException>(() => apim.AddNamedValue("invalid-value", "value", displayName: "invalid value"));
+        Assert.Throws<ArgumentException>(() =>
+            apim.WithCustomDomain(
+                "portal.contoso.example",
+                vault.GetSecret("certificate"),
+                AzureApiManagementHostnameType.DeveloperPortal,
+                defaultSslBinding: true));
+        apim.WithCustomDomain(
+            "api.contoso.example",
+            vault.GetSecret("certificate"),
+            defaultSslBinding: true);
+        Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain(
+                "api2.contoso.example",
+                vault.GetSecret("certificate-2"),
+                defaultSslBinding: true));
+
+        api.WithInboundPolicyFragment(fragment);
+        Assert.Single(api.Resource.InboundPolicyStatements);
+    }
+
+    [Fact]
+    public void ConsumptionSkuRejectsCustomDomains()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.Consumption,
+            Capacity = 0,
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain("api.contoso.example", vault.GetSecret("certificate")));
+
+        Assert.Contains("not supported by the API Management Consumption SKU", exception.Message);
+    }
+
+    [Fact]
     public async Task AddAzureApiManagementWithInternalContainerAppBackendGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -13,6 +13,8 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.ApiManagement" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.AppContainers" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.ApplicationInsights" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.KeyVault" />
     <ProjectReference Include="..\AzureApiManagement.ApiService\AzureApiManagement.ApiService.csproj" />
   </ItemGroup>
 

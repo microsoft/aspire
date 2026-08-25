@@ -98,6 +98,125 @@ var api = apim.AddApi("catalog-api", catalog, "catalog")
 
 Use `WithPolicy` when a complete APIM policy document is required. APIM replaces the complete policy at that scope; replacing an API policy also replaces Aspire's generated backend-routing statement. `WithPolicy` and `WithInboundPolicy` cannot be combined at the same scope because doing so would silently discard one configuration.
 
+### Policy fragments
+
+Define shared policy statements once and include them at the service, API, or operation scope:
+
+```csharp
+var standardHeaders = apim.AddPolicyFragment(
+    "standard-headers",
+    """
+    <set-header name="x-powered-by" exists-action="override">
+      <value>Aspire</value>
+    </set-header>
+    """);
+
+apim.WithInboundPolicyFragment(standardHeaders);
+catalogApi.WithInboundPolicyFragment(standardHeaders);
+```
+
+Aspire creates the required `<fragment>` document and ensures policies are deployed after their referenced fragments.
+
+## Products and subscriptions
+
+Group APIs into a product and optionally provision a product-scoped subscription:
+
+```csharp
+apim.AddProduct("catalog-product", "Catalog", new()
+    {
+        Description = "Catalog APIs",
+        SubscriptionRequired = true,
+        ApprovalRequired = false,
+    })
+    .WithApi(catalogApi)
+    .AddSubscription("catalog-client", "Catalog client");
+```
+
+API Management generates the primary and secondary subscription keys. Aspire intentionally does not expose those keys as ordinary deployment outputs because they are secrets.
+
+## Named values
+
+Named values can contain a non-secret literal, a secret Aspire parameter, or a Key Vault secret reference:
+
+```csharp
+apim.AddNamedValue("region", "westus3");
+
+var apiKey = builder.AddParameter("upstream-api-key", secret: true);
+apim.AddSecretNamedValue("upstream-api-key-value", apiKey, displayName: "UpstreamApiKey");
+
+var vault = builder.AddAzureKeyVault("vault");
+apim.AddKeyVaultNamedValue(
+    "shared-secret",
+    vault.GetSecret("shared-secret"),
+    displayName: "SharedSecret");
+```
+
+Key Vault references stay late-bound and use versionless secret URIs so APIM can refresh rotated values. Aspire creates a user-assigned identity before the APIM service, grants it the Key Vault Secrets User role, and configures APIM to use that identity. This avoids the first-deployment dependency cycle that occurs when a new APIM service tries to use its not-yet-created system identity.
+
+## Application Insights diagnostics
+
+Enable service-wide diagnostics or override the settings for an individual API:
+
+```csharp
+var insights = builder.AddAzureApplicationInsights("insights");
+
+apim.WithApplicationInsights(insights, new()
+{
+    SamplingPercentage = 25,
+});
+
+catalogApi.WithApplicationInsights(insights, new()
+{
+    SamplingPercentage = 100,
+    Verbosity = AzureApiManagementDiagnosticVerbosity.Error,
+});
+```
+
+The default diagnostic uses W3C correlation, always logs errors, emits metrics, and does not capture request or response bodies.
+
+## Custom domains and certificates
+
+Bind a custom APIM endpoint to a PFX certificate stored as a Key Vault secret:
+
+```csharp
+var certificateVault = builder.AddAzureKeyVault("certificates")
+    .PublishAsExisting("contoso-certificates", resourceGroup: null);
+
+apim.WithCustomDomain(
+    "api.contoso.com",
+    certificateVault.GetSecret("gateway-certificate"),
+    AzureApiManagementHostnameType.Proxy,
+    defaultSslBinding: true);
+```
+
+The certificate secret URI is versionless so APIM can automatically refresh renewed certificates. Aspire creates a user-assigned identity before the APIM service, grants it the Key Vault Certificate User role, and configures the hostname to use that identity. Custom domains are not supported on the Consumption SKU. Key Vaults that require APIM's system identity through the trusted-services firewall exception need a staged deployment and are not currently supported by this API.
+
+## TypeScript service configuration
+
+Products, named values, policy fragments, diagnostics, and custom domains are available to polyglot AppHosts:
+
+```typescript
+const insights = await builder.addAzureApplicationInsights("insights");
+const vault = await builder.addAzureKeyVault("vault");
+const apim = await builder.addAzureApiManagement("apim", {
+    publisherEmail: "api-owners@example.com",
+});
+
+const fragment = await apim.addPolicyFragment(
+    "standard-headers",
+    '<set-header name="x-powered-by" exists-action="override"><value>Aspire</value></set-header>');
+await apim.withInboundPolicyFragment(fragment);
+await apim.withApplicationInsights(insights);
+await apim.addKeyVaultNamedValue(
+    "shared-secret",
+    vault,
+    "shared-secret");
+
+const product = await apim.addProduct("catalog-product", "Catalog");
+await product.withApi(catalogApi);
+await product.addSubscription("catalog-client", "Catalog client");
+```
+
 ## SKUs and networking
 
 Configure the tier and capacity with `AzureApiManagementOptions`. The integration supports Consumption, Developer, Basic, Basic v2, Standard, Standard v2, Premium, and Premium v2 capacity validation.

@@ -36,6 +36,31 @@ public class AzureApiManagementResource(
     internal List<AzureApiManagementApiResource> Apis { get; } = [];
 
     /// <summary>
+    /// Gets the products provisioned in this API Management service.
+    /// </summary>
+    internal List<AzureApiManagementProductResource> Products { get; } = [];
+
+    /// <summary>
+    /// Gets the named values provisioned in this API Management service.
+    /// </summary>
+    internal List<AzureApiManagementNamedValueResource> NamedValues { get; } = [];
+
+    /// <summary>
+    /// Gets the policy fragments provisioned in this API Management service.
+    /// </summary>
+    internal List<AzureApiManagementPolicyFragmentResource> PolicyFragments { get; } = [];
+
+    /// <summary>
+    /// Gets the custom domains configured on this API Management service.
+    /// </summary>
+    internal List<AzureApiManagementCustomDomain> CustomDomains { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the service-level Application Insights diagnostic.
+    /// </summary>
+    internal AzureApiManagementDiagnostic? Diagnostic { get; set; }
+
+    /// <summary>
     /// Gets the resource ID output reference.
     /// </summary>
     [AspireExportIgnore(Reason = "Bicep output references are not projected to polyglot AppHosts.")]

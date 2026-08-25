@@ -11,14 +11,17 @@ using System.Text;
 using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
+using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
 using Azure.Provisioning;
+using Azure.Provisioning.ApplicationInsights;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
+using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.Resources;
+using Azure.Provisioning.Roles;
 
 namespace Aspire.Hosting;
 
@@ -203,6 +206,488 @@ public static class AzureApiManagementExtensions
             operationName: "chat-completions");
 
         return apiBuilder;
+    }
+
+    /// <summary>
+    /// Adds a product to the API Management service.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical product name.</param>
+    /// <param name="displayName">The product display name.</param>
+    /// <param name="options">The product options.</param>
+    /// <param name="productName">The physical product identifier in API Management. The resource name is used when omitted.</param>
+    /// <returns>A builder for the product resource.</returns>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementProductResource> AddProduct(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        string displayName,
+        AzureApiManagementProductOptions? options = null,
+        string? productName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(displayName);
+
+        var resolvedProductName = productName ?? name;
+        ValidateGeneralIdentifier(resolvedProductName, 256, nameof(productName));
+        if (displayName.Length > 300)
+        {
+            throw new ArgumentException("The product display name cannot exceed 300 characters.", nameof(displayName));
+        }
+
+        if (builder.Resource.Products.Any(product =>
+            string.Equals(product.ProductName, resolvedProductName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"An API Management product with physical name '{resolvedProductName}' has already been added.");
+        }
+
+        options ??= new AzureApiManagementProductOptions();
+        if (options.Description?.Length > 1000)
+        {
+            throw new ArgumentException("The product description cannot exceed 1000 characters.", nameof(options));
+        }
+        if (options.ApprovalRequired && !options.SubscriptionRequired)
+        {
+            throw new ArgumentException("Product approval can only be required when subscriptions are required.", nameof(options));
+        }
+        if (options.SubscriptionsLimit is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.SubscriptionsLimit,
+                "The product subscription limit must be greater than zero.");
+        }
+
+        var resource = new AzureApiManagementProductResource(
+            name,
+            resolvedProductName,
+            displayName,
+            options,
+            builder.Resource);
+        builder.Resource.Products.Add(resource);
+
+        var resourceBuilder = builder.ApplicationBuilder.ExecutionContext.IsRunMode
+            ? builder.ApplicationBuilder.CreateResourceBuilder(resource)
+            : builder.ApplicationBuilder.AddResource(resource);
+
+        return resourceBuilder
+            .WithParentRelationship(builder.Resource)
+            .ExcludeFromManifest()
+            .WithIconName("BoxMultiple");
+    }
+
+    /// <summary>
+    /// Adds an API to an API Management product.
+    /// </summary>
+    /// <param name="builder">The API Management product resource builder.</param>
+    /// <param name="api">The API to add to the product.</param>
+    /// <returns>The product resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementProductResource> WithApi(
+        this IResourceBuilder<AzureApiManagementProductResource> builder,
+        IResourceBuilder<AzureApiManagementApiResource> api)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(api);
+
+        if (!ReferenceEquals(builder.Resource.Parent, api.Resource.Parent))
+        {
+            throw new InvalidOperationException("An API Management product can only contain APIs from the same API Management service.");
+        }
+        if (!builder.Resource.Apis.Contains(api.Resource))
+        {
+            builder.Resource.Apis.Add(api.Resource);
+        }
+
+        return builder.WithRelationship(api.Resource, "Includes");
+    }
+
+    /// <summary>
+    /// Adds a subscription scoped to an API Management product.
+    /// </summary>
+    /// <param name="builder">The API Management product resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical subscription name.</param>
+    /// <param name="displayName">The subscription display name.</param>
+    /// <param name="options">The subscription options.</param>
+    /// <param name="subscriptionName">The physical subscription identifier in API Management. The resource name is used when omitted.</param>
+    /// <returns>A builder for the subscription resource.</returns>
+    /// <remarks>API Management generates the primary and secondary subscription keys during deployment.</remarks>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementSubscriptionResource> AddSubscription(
+        this IResourceBuilder<AzureApiManagementProductResource> builder,
+        [ResourceName] string name,
+        string displayName,
+        AzureApiManagementSubscriptionOptions? options = null,
+        string? subscriptionName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(displayName);
+
+        var resolvedSubscriptionName = subscriptionName ?? name;
+        ValidateGeneralIdentifier(resolvedSubscriptionName, 256, nameof(subscriptionName));
+        if (displayName.Length > 100)
+        {
+            throw new ArgumentException("The subscription display name cannot exceed 100 characters.", nameof(displayName));
+        }
+
+        if (builder.Resource.Parent.Products
+            .SelectMany(product => product.Subscriptions)
+            .Any(subscription => string.Equals(
+                subscription.SubscriptionName,
+                resolvedSubscriptionName,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"An API Management subscription with physical name '{resolvedSubscriptionName}' has already been added.");
+        }
+
+        var resource = new AzureApiManagementSubscriptionResource(
+            name,
+            resolvedSubscriptionName,
+            displayName,
+            options ?? new AzureApiManagementSubscriptionOptions(),
+            builder.Resource);
+        builder.Resource.Subscriptions.Add(resource);
+
+        var resourceBuilder = builder.ApplicationBuilder.ExecutionContext.IsRunMode
+            ? builder.ApplicationBuilder.CreateResourceBuilder(resource)
+            : builder.ApplicationBuilder.AddResource(resource);
+
+        return resourceBuilder
+            .WithParentRelationship(builder.Resource)
+            .ExcludeFromManifest()
+            .WithIconName("Key");
+    }
+
+    /// <summary>
+    /// Adds a non-secret named value to the API Management service.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical named-value name.</param>
+    /// <param name="value">The named value.</param>
+    /// <param name="displayName">The name used to reference the value in policies. The resource name is used when omitted.</param>
+    /// <param name="namedValueName">The physical named-value identifier in API Management. The resource name is used when omitted.</param>
+    /// <param name="tags">Tags used to organize the named value.</param>
+    /// <returns>A builder for the named-value resource.</returns>
+    [AspireExport("addApiManagementNamedValue", MethodName = "addNamedValue")]
+    public static IResourceBuilder<AzureApiManagementNamedValueResource> AddNamedValue(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        string value,
+        string? displayName = null,
+        string? namedValueName = null,
+        string[]? tags = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value);
+        return AddNamedValueCore(builder, name, value, secret: false, displayName, namedValueName, tags);
+    }
+
+    /// <summary>
+    /// Adds a secret parameter as a named value in the API Management service.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical named-value name.</param>
+    /// <param name="value">The secret parameter containing the named value.</param>
+    /// <param name="displayName">The name used to reference the value in policies. The resource name is used when omitted.</param>
+    /// <param name="namedValueName">The physical named-value identifier in API Management. The resource name is used when omitted.</param>
+    /// <param name="tags">Tags used to organize the named value.</param>
+    /// <returns>A builder for the named-value resource.</returns>
+    [AspireExport("addApiManagementSecretNamedValue", MethodName = "addSecretNamedValue")]
+    public static IResourceBuilder<AzureApiManagementNamedValueResource> AddSecretNamedValue(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        IResourceBuilder<ParameterResource> value,
+        string? displayName = null,
+        string? namedValueName = null,
+        string[]? tags = null)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (!value.Resource.Secret)
+        {
+            throw new ArgumentException(
+                "The named-value parameter must be marked as secret. Use AddParameter with secret: true when creating the parameter.",
+                nameof(value));
+        }
+
+        return AddNamedValueCore(builder, name, value.Resource, secret: true, displayName, namedValueName, tags);
+    }
+
+    /// <summary>
+    /// Adds a Key Vault-backed named value to the API Management service.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical named-value name.</param>
+    /// <param name="value">The Key Vault secret reference.</param>
+    /// <param name="displayName">The name used to reference the value in policies. The resource name is used when omitted.</param>
+    /// <param name="namedValueName">The physical named-value identifier in API Management. The resource name is used when omitted.</param>
+    /// <param name="tags">Tags used to organize the named value.</param>
+    /// <returns>A builder for the named-value resource.</returns>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts pass the Key Vault resource and secret name separately.")]
+    public static IResourceBuilder<AzureApiManagementNamedValueResource> AddKeyVaultNamedValue(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        IAzureKeyVaultSecretReference value,
+        string? displayName = null,
+        string? namedValueName = null,
+        string[]? tags = null)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return AddNamedValueCore(builder, name, value, secret: true, displayName, namedValueName, tags)
+            .WithRelationship(value.Resource, "Secret");
+    }
+
+    /// <summary>
+    /// Adds a Key Vault-backed named value to the API Management service from a polyglot AppHost.
+    /// </summary>
+    [AspireExport("addApiManagementKeyVaultNamedValue", MethodName = "addKeyVaultNamedValue")]
+    internal static IResourceBuilder<AzureApiManagementNamedValueResource> AddKeyVaultNamedValueForPolyglot(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        IResourceBuilder<AzureKeyVaultResource> vault,
+        string secretName,
+        string? displayName = null,
+        string? namedValueName = null,
+        string[]? tags = null)
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+
+        return builder.AddKeyVaultNamedValue(
+            name,
+            vault.GetSecret(secretName),
+            displayName,
+            namedValueName,
+            tags);
+    }
+
+    /// <summary>
+    /// Adds a reusable policy fragment to the API Management service.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="name">The globally unique Aspire resource name and default physical policy-fragment name.</param>
+    /// <param name="policyXml">One or more well-formed APIM policy elements without a <c>fragment</c> envelope.</param>
+    /// <param name="description">An optional description.</param>
+    /// <param name="fragmentName">The physical policy-fragment identifier in API Management. The resource name is used when omitted.</param>
+    /// <returns>A builder for the policy-fragment resource.</returns>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementPolicyFragmentResource> AddPolicyFragment(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        [ResourceName] string name,
+        string policyXml,
+        string? description = null,
+        string? fragmentName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ValidatePolicyFragment(policyXml);
+
+        var resolvedFragmentName = fragmentName ?? name;
+        ValidatePolicyFragmentIdentifier(resolvedFragmentName, nameof(fragmentName));
+        if (description?.Length > 1000)
+        {
+            throw new ArgumentException("The policy-fragment description cannot exceed 1000 characters.", nameof(description));
+        }
+        if (builder.Resource.PolicyFragments.Any(fragment =>
+            string.Equals(fragment.FragmentName, resolvedFragmentName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"An API Management policy fragment with physical name '{resolvedFragmentName}' has already been added.");
+        }
+
+        var resource = new AzureApiManagementPolicyFragmentResource(
+            name,
+            resolvedFragmentName,
+            policyXml,
+            description,
+            builder.Resource);
+        builder.Resource.PolicyFragments.Add(resource);
+
+        var resourceBuilder = builder.ApplicationBuilder.ExecutionContext.IsRunMode
+            ? builder.ApplicationBuilder.CreateResourceBuilder(resource)
+            : builder.ApplicationBuilder.AddResource(resource);
+
+        return resourceBuilder
+            .WithParentRelationship(builder.Resource)
+            .ExcludeFromManifest()
+            .WithIconName("Code");
+    }
+
+    /// <summary>
+    /// Includes a policy fragment in the service-level inbound policy.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="fragment">The policy fragment to include.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExport("withApiManagementServiceInboundPolicyFragment", MethodName = "withInboundPolicyFragment")]
+    public static IResourceBuilder<AzureApiManagementResource> WithInboundPolicyFragment(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        IResourceBuilder<AzureApiManagementPolicyFragmentResource> fragment)
+    {
+        ValidatePolicyFragmentParent(builder.Resource, fragment);
+        builder.WithInboundPolicy(CreateIncludeFragmentPolicy(fragment.Resource.FragmentName));
+        return builder.WithRelationship(fragment.Resource, "Policy fragment");
+    }
+
+    /// <summary>
+    /// Includes a policy fragment in the API-level inbound policy.
+    /// </summary>
+    /// <param name="builder">The API Management API resource builder.</param>
+    /// <param name="fragment">The policy fragment to include.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExport("withApiManagementApiInboundPolicyFragment", MethodName = "withInboundPolicyFragment")]
+    public static IResourceBuilder<AzureApiManagementApiResource> WithInboundPolicyFragment(
+        this IResourceBuilder<AzureApiManagementApiResource> builder,
+        IResourceBuilder<AzureApiManagementPolicyFragmentResource> fragment)
+    {
+        ValidatePolicyFragmentParent(builder.Resource.Parent, fragment);
+        builder.WithInboundPolicy(CreateIncludeFragmentPolicy(fragment.Resource.FragmentName));
+        return builder.WithRelationship(fragment.Resource, "Policy fragment");
+    }
+
+    /// <summary>
+    /// Includes a policy fragment in the operation-level inbound policy.
+    /// </summary>
+    /// <param name="builder">The API Management operation resource builder.</param>
+    /// <param name="fragment">The policy fragment to include.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExport("withApiManagementOperationInboundPolicyFragment", MethodName = "withInboundPolicyFragment")]
+    public static IResourceBuilder<AzureApiManagementOperationResource> WithInboundPolicyFragment(
+        this IResourceBuilder<AzureApiManagementOperationResource> builder,
+        IResourceBuilder<AzureApiManagementPolicyFragmentResource> fragment)
+    {
+        ValidatePolicyFragmentParent(builder.Resource.Parent.Parent, fragment);
+        builder.WithInboundPolicy(CreateIncludeFragmentPolicy(fragment.Resource.FragmentName));
+        return builder.WithRelationship(fragment.Resource, "Policy fragment");
+    }
+
+    /// <summary>
+    /// Sends service-level API Management diagnostics to Application Insights.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="applicationInsights">The Application Insights resource.</param>
+    /// <param name="options">The diagnostic options.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExport("withApiManagementServiceApplicationInsights", MethodName = "withApplicationInsights")]
+    public static IResourceBuilder<AzureApiManagementResource> WithApplicationInsights(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        IResourceBuilder<AzureApplicationInsightsResource> applicationInsights,
+        AzureApiManagementDiagnosticOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(applicationInsights);
+        if (builder.Resource.Diagnostic is not null)
+        {
+            throw new InvalidOperationException("Application Insights diagnostics have already been configured for this API Management service.");
+        }
+
+        options ??= new AzureApiManagementDiagnosticOptions();
+        ValidateDiagnosticOptions(options);
+        builder.Resource.Diagnostic = new(applicationInsights.Resource, options);
+        return builder.WithRelationship(applicationInsights.Resource, "Diagnostics");
+    }
+
+    /// <summary>
+    /// Sends API-level API Management diagnostics to Application Insights.
+    /// </summary>
+    /// <param name="builder">The API Management API resource builder.</param>
+    /// <param name="applicationInsights">The Application Insights resource.</param>
+    /// <param name="options">The diagnostic options.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExport("withApiManagementApiApplicationInsights", MethodName = "withApplicationInsights")]
+    public static IResourceBuilder<AzureApiManagementApiResource> WithApplicationInsights(
+        this IResourceBuilder<AzureApiManagementApiResource> builder,
+        IResourceBuilder<AzureApplicationInsightsResource> applicationInsights,
+        AzureApiManagementDiagnosticOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(applicationInsights);
+        if (builder.Resource.Diagnostic is not null)
+        {
+            throw new InvalidOperationException("Application Insights diagnostics have already been configured for this API Management API.");
+        }
+
+        options ??= new AzureApiManagementDiagnosticOptions();
+        ValidateDiagnosticOptions(options);
+        builder.Resource.Diagnostic = new(applicationInsights.Resource, options);
+        return builder.WithRelationship(applicationInsights.Resource, "Diagnostics");
+    }
+
+    /// <summary>
+    /// Configures a custom hostname using a certificate stored in Azure Key Vault.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="hostname">The fully qualified custom hostname.</param>
+    /// <param name="certificate">The Key Vault secret containing a PFX certificate.</param>
+    /// <param name="type">The API Management endpoint to configure.</param>
+    /// <param name="defaultSslBinding">Whether this certificate is the default SNI fallback. This is valid only for gateway hostnames.</param>
+    /// <param name="negotiateClientCertificate">Whether the endpoint negotiates client certificates.</param>
+    /// <returns>The resource builder.</returns>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts pass the Key Vault resource and secret name separately.")]
+    public static IResourceBuilder<AzureApiManagementResource> WithCustomDomain(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        string hostname,
+        IAzureKeyVaultSecretReference certificate,
+        AzureApiManagementHostnameType type = AzureApiManagementHostnameType.Proxy,
+        bool defaultSslBinding = false,
+        bool negotiateClientCertificate = false)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(hostname);
+        ArgumentNullException.ThrowIfNull(certificate);
+
+        if (Uri.CheckHostName(hostname) != UriHostNameType.Dns)
+        {
+            throw new ArgumentException("The custom hostname must be a fully qualified DNS name.", nameof(hostname));
+        }
+        if (defaultSslBinding && type != AzureApiManagementHostnameType.Proxy)
+        {
+            throw new ArgumentException("The default SSL binding can only be configured for a proxy hostname.", nameof(defaultSslBinding));
+        }
+        if (defaultSslBinding && builder.Resource.CustomDomains.Any(domain => domain.DefaultSslBinding))
+        {
+            throw new InvalidOperationException("Only one custom hostname can be configured as the default SSL binding.");
+        }
+        if (builder.Resource.Options.Sku == AzureApiManagementSku.Consumption)
+        {
+            throw new InvalidOperationException("Custom domains are not supported by the API Management Consumption SKU.");
+        }
+        if (builder.Resource.CustomDomains.Any(domain =>
+            domain.Type == type &&
+            string.Equals(domain.Hostname, hostname, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"The custom hostname '{hostname}' has already been configured for endpoint type '{type}'.");
+        }
+
+        builder.Resource.CustomDomains.Add(new(
+            hostname,
+            certificate,
+            type,
+            defaultSslBinding,
+            negotiateClientCertificate));
+
+        return builder.WithRelationship(certificate.Resource, "Certificate");
+    }
+
+    /// <summary>
+    /// Configures a custom hostname from a polyglot AppHost using a certificate stored in Azure Key Vault.
+    /// </summary>
+    [AspireExport("withCustomDomain")]
+    internal static IResourceBuilder<AzureApiManagementResource> WithCustomDomainForPolyglot(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        string hostname,
+        IResourceBuilder<AzureKeyVaultResource> vault,
+        string certificateSecretName,
+        AzureApiManagementHostnameType type = AzureApiManagementHostnameType.Proxy,
+        bool defaultSslBinding = false,
+        bool negotiateClientCertificate = false)
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+
+        return builder.WithCustomDomain(
+            hostname,
+            vault.GetSecret(certificateSecretName),
+            type,
+            defaultSslBinding,
+            negotiateClientCertificate);
     }
 
     /// <summary>
@@ -541,6 +1026,19 @@ public static class AzureApiManagementExtensions
             },
         };
 
+        UserAssignedIdentity? keyVaultIdentity = null;
+        if (azureResource.CustomDomains.Count > 0 ||
+            azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
+        {
+            keyVaultIdentity = new UserAssignedIdentity(
+                Infrastructure.NormalizeBicepIdentifier($"{azureResource.Name}KeyVaultIdentity"));
+            infrastructure.Add(keyVaultIdentity);
+
+            service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
+            service.Identity.UserAssignedIdentities[
+                BicepFunction.Interpolate($"{keyVaultIdentity.Id}").Compile().ToString()] = new UserAssignedIdentityDetails();
+        }
+
         if (azureResource.VirtualNetworkConfiguration is { } virtualNetwork)
         {
             service.VirtualNetworkType = virtualNetwork.Mode switch
@@ -552,15 +1050,46 @@ public static class AzureApiManagementExtensions
             service.SubnetResourceId = virtualNetwork.Subnet.Id.AsProvisioningParameter(infrastructure);
         }
 
+        var keyVaultRoleAssignments = new Dictionary<string, RoleAssignment>(StringComparer.Ordinal);
+        foreach (var customDomain in azureResource.CustomDomains)
+        {
+            Debug.Assert(keyVaultIdentity is not null);
+            var secret = customDomain.Certificate.AsKeyVaultSecret(infrastructure);
+            var roleAssignment = AddKeyVaultRoleAssignment(
+                infrastructure,
+                customDomain.Certificate,
+                keyVaultIdentity.PrincipalId,
+                KeyVaultBuiltInRole.KeyVaultCertificateUser,
+                keyVaultRoleAssignments);
+            service.DependsOn.Add(roleAssignment);
+            service.HostnameConfigurations.Add(new ApiManagementHostnameConfigurationProvisioningModel
+            {
+                Type = GetProvisioningHostnameType(customDomain.Type),
+                HostName = customDomain.Hostname,
+                KeyVaultId = CreateVersionlessSecretUri(secret),
+                IdentityClientId = keyVaultIdentity.ClientId,
+                DefaultSslBinding = customDomain.DefaultSslBinding,
+                NegotiateClientCertificate = customDomain.NegotiateClientCertificate,
+            });
+        }
+
         infrastructure.Add(service);
 
-        AddServicePolicy(infrastructure, azureResource, service);
+        var policyFragments = AddPolicyFragments(infrastructure, azureResource, service);
+        AddNamedValues(infrastructure, azureResource, service, keyVaultIdentity, keyVaultRoleAssignments);
+        AddServicePolicy(infrastructure, azureResource, service, policyFragments);
 
         var roleAssignedAccounts = new HashSet<AzureProvisioningResource>();
+        var provisionedApis = new Dictionary<AzureApiManagementApiResource, ApiManagementApiProvisioningResource>();
         foreach (var apiResource in azureResource.Apis)
         {
-            AddApi(infrastructure, apiResource, service, roleAssignedAccounts);
+            provisionedApis.Add(
+                apiResource,
+                AddApi(infrastructure, apiResource, service, roleAssignedAccounts, policyFragments));
         }
+
+        AddProducts(infrastructure, azureResource, service, provisionedApis);
+        AddDiagnostics(infrastructure, azureResource, service, provisionedApis);
 
         infrastructure.Add(new ProvisioningOutput("gatewayUrl", typeof(string))
         {
@@ -579,7 +1108,8 @@ public static class AzureApiManagementExtensions
     private static void AddServicePolicy(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service)
+        ApiManagementServiceProvisioningResource service,
+        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments)
     {
         var policyXml = azureResource.PolicyXml ??
             CreatePolicyDocument(azureResource.InboundPolicyStatements, inheritParentPolicy: false);
@@ -597,14 +1127,330 @@ public static class AzureApiManagementExtensions
             Format = "rawxml",
             Value = policyXml!,
         };
+        foreach (var policyFragment in policyFragments)
+        {
+            policy.DependsOn.Add(policyFragment);
+        }
         infrastructure.Add(policy);
     }
 
-    private static void AddApi(
+    private static IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> AddPolicyFragments(
+        AzureResourceInfrastructure infrastructure,
+        AzureApiManagementResource azureResource,
+        ApiManagementServiceProvisioningResource service)
+    {
+        var provisionedFragments = new List<ApiManagementPolicyFragmentProvisioningResource>();
+        foreach (var fragmentResource in azureResource.PolicyFragments)
+        {
+            var fragment = new ApiManagementPolicyFragmentProvisioningResource(
+                Infrastructure.NormalizeBicepIdentifier(fragmentResource.Name))
+            {
+                Parent = service,
+                Name = fragmentResource.FragmentName,
+                Format = "rawxml",
+                Value = CreatePolicyFragmentDocument(fragmentResource.Value),
+            };
+            if (fragmentResource.Description is not null)
+            {
+                fragment.Description = fragmentResource.Description;
+            }
+
+            infrastructure.Add(fragment);
+            provisionedFragments.Add(fragment);
+        }
+
+        return provisionedFragments;
+    }
+
+    private static void AddNamedValues(
+        AzureResourceInfrastructure infrastructure,
+        AzureApiManagementResource azureResource,
+        ApiManagementServiceProvisioningResource service,
+        UserAssignedIdentity? keyVaultIdentity,
+        Dictionary<string, RoleAssignment> keyVaultRoleAssignments)
+    {
+        foreach (var namedValueResource in azureResource.NamedValues)
+        {
+            var namedValue = new ApiManagementNamedValueProvisioningResource(
+                Infrastructure.NormalizeBicepIdentifier(namedValueResource.Name))
+            {
+                Parent = service,
+                Name = namedValueResource.NamedValueName,
+                DisplayName = namedValueResource.DisplayName,
+                Secret = namedValueResource.Secret,
+            };
+            foreach (var tag in namedValueResource.Tags)
+            {
+                namedValue.Tags.Add(tag);
+            }
+
+            if (namedValueResource.Value is IAzureKeyVaultSecretReference secretReference)
+            {
+                Debug.Assert(keyVaultIdentity is not null);
+                var secret = secretReference.AsKeyVaultSecret(infrastructure);
+                namedValue.KeyVault = new ApiManagementKeyVaultNamedValueProvisioningModel
+                {
+                    SecretIdentifier = CreateVersionlessSecretUri(secret),
+                    IdentityClientId = keyVaultIdentity.ClientId,
+                };
+                var roleAssignment = AddKeyVaultRoleAssignment(
+                    infrastructure,
+                    secretReference,
+                    keyVaultIdentity.PrincipalId,
+                    KeyVaultBuiltInRole.KeyVaultSecretsUser,
+                    keyVaultRoleAssignments);
+                namedValue.DependsOn.Add(roleAssignment);
+            }
+            else if (namedValueResource.Value is ParameterResource parameter)
+            {
+                namedValue.Value = parameter.AsProvisioningParameter(infrastructure, isSecure: true);
+            }
+            else
+            {
+                namedValue.Value = (string)namedValueResource.Value;
+            }
+
+            infrastructure.Add(namedValue);
+        }
+    }
+
+    private static void AddProducts(
+        AzureResourceInfrastructure infrastructure,
+        AzureApiManagementResource azureResource,
+        ApiManagementServiceProvisioningResource service,
+        IReadOnlyDictionary<AzureApiManagementApiResource, ApiManagementApiProvisioningResource> provisionedApis)
+    {
+        foreach (var productResource in azureResource.Products)
+        {
+            var productIdentifier = Infrastructure.NormalizeBicepIdentifier(productResource.Name);
+            var product = new ApiManagementProductProvisioningResource(productIdentifier)
+            {
+                Parent = service,
+                Name = productResource.ProductName,
+                DisplayName = productResource.DisplayName,
+                SubscriptionRequired = productResource.Options.SubscriptionRequired,
+                ApprovalRequired = productResource.Options.ApprovalRequired,
+                State = productResource.Options.State switch
+                {
+                    AzureApiManagementProductState.NotPublished => "notPublished",
+                    AzureApiManagementProductState.Published => "published",
+                    _ => throw new UnreachableException(),
+                },
+            };
+            if (productResource.Options.SubscriptionsLimit is { } subscriptionsLimit)
+            {
+                product.SubscriptionsLimit = subscriptionsLimit;
+            }
+            if (productResource.Options.Description is not null)
+            {
+                product.Description = productResource.Options.Description;
+            }
+            if (productResource.Options.Terms is not null)
+            {
+                product.Terms = productResource.Options.Terms;
+            }
+            infrastructure.Add(product);
+
+            foreach (var apiResource in productResource.Apis)
+            {
+                var productApi = new ApiManagementProductApiProvisioningResource(
+                    Infrastructure.NormalizeBicepIdentifier($"{productResource.Name}_{apiResource.Name}"))
+                {
+                    Parent = product,
+                    Name = apiResource.ApiName,
+                };
+                productApi.DependsOn.Add(provisionedApis[apiResource]);
+                infrastructure.Add(productApi);
+            }
+
+            foreach (var subscriptionResource in productResource.Subscriptions)
+            {
+                var subscription = new ApiManagementSubscriptionProvisioningResource(
+                    Infrastructure.NormalizeBicepIdentifier(subscriptionResource.Name))
+                {
+                    Parent = service,
+                    Name = subscriptionResource.SubscriptionName,
+                    DisplayName = subscriptionResource.DisplayName,
+                    Scope = product.Id,
+                    State = subscriptionResource.Options.State switch
+                    {
+                        AzureApiManagementSubscriptionState.Active => "active",
+                        AzureApiManagementSubscriptionState.Suspended => "suspended",
+                        AzureApiManagementSubscriptionState.Submitted => "submitted",
+                        AzureApiManagementSubscriptionState.Rejected => "rejected",
+                        AzureApiManagementSubscriptionState.Expired => "expired",
+                        AzureApiManagementSubscriptionState.Cancelled => "cancelled",
+                        _ => throw new UnreachableException(),
+                    },
+                    AllowTracing = subscriptionResource.Options.AllowTracing,
+                };
+                infrastructure.Add(subscription);
+            }
+        }
+    }
+
+    private static void AddDiagnostics(
+        AzureResourceInfrastructure infrastructure,
+        AzureApiManagementResource azureResource,
+        ApiManagementServiceProvisioningResource service,
+        IReadOnlyDictionary<AzureApiManagementApiResource, ApiManagementApiProvisioningResource> provisionedApis)
+    {
+        var configuredDiagnostics = azureResource.Apis
+            .Where(api => api.Diagnostic is not null)
+            .Select(api => api.Diagnostic!)
+            .Prepend(azureResource.Diagnostic)
+            .OfType<AzureApiManagementDiagnostic>()
+            .ToArray();
+        if (configuredDiagnostics.Length == 0)
+        {
+            return;
+        }
+
+        var loggers = new Dictionary<AzureApplicationInsightsResource, ApiManagementLoggerProvisioningResource>();
+        foreach (var diagnostic in configuredDiagnostics)
+        {
+            if (loggers.ContainsKey(diagnostic.ApplicationInsights))
+            {
+                continue;
+            }
+
+            var applicationInsights = (ApplicationInsightsComponent)diagnostic.ApplicationInsights.AddAsExistingResource(infrastructure);
+            var logger = new ApiManagementLoggerProvisioningResource(
+                Infrastructure.NormalizeBicepIdentifier($"{diagnostic.ApplicationInsights.Name}Logger"))
+            {
+                Parent = service,
+                Name = CreateBoundedIdentifier($"{diagnostic.ApplicationInsights.Name}-application-insights", 256),
+                LoggerType = "applicationInsights",
+                ResourceId = applicationInsights.Id,
+                IsBuffered = true,
+                Credentials =
+                {
+                    { "instrumentationKey", applicationInsights.InstrumentationKey },
+                },
+            };
+            infrastructure.Add(logger);
+            loggers.Add(diagnostic.ApplicationInsights, logger);
+        }
+
+        if (azureResource.Diagnostic is { } serviceDiagnostic)
+        {
+            var diagnostic = CreateServiceDiagnostic(
+                service,
+                loggers[serviceDiagnostic.ApplicationInsights],
+                serviceDiagnostic.Options);
+            infrastructure.Add(diagnostic);
+        }
+
+        foreach (var apiResource in azureResource.Apis)
+        {
+            if (apiResource.Diagnostic is not { } apiDiagnostic)
+            {
+                continue;
+            }
+
+            var diagnostic = CreateApiDiagnostic(
+                provisionedApis[apiResource],
+                loggers[apiDiagnostic.ApplicationInsights],
+                apiDiagnostic.Options);
+            infrastructure.Add(diagnostic);
+        }
+    }
+
+    private static ApiManagementServiceDiagnosticProvisioningResource CreateServiceDiagnostic(
+        ApiManagementServiceProvisioningResource service,
+        ApiManagementLoggerProvisioningResource logger,
+        AzureApiManagementDiagnosticOptions options)
+    {
+        var diagnostic = new ApiManagementServiceDiagnosticProvisioningResource(
+            $"{service.BicepIdentifier}ApplicationInsightsDiagnostic")
+        {
+            Parent = service,
+            Name = "applicationinsights",
+            LoggerId = logger.Id,
+            AlwaysLog = "allErrors",
+            Sampling = new ApiManagementSamplingProvisioningModel
+            {
+                SamplingType = "fixed",
+                Percentage = options.SamplingPercentage,
+            },
+            HttpCorrelationProtocol = "W3C",
+            LogClientIp = options.LogClientIp,
+            Verbosity = GetProvisioningVerbosity(options.Verbosity),
+            OperationNameFormat = "Name",
+            Metrics = true,
+        };
+        diagnostic.DependsOn.Add(logger);
+        return diagnostic;
+    }
+
+    private static ApiManagementApiDiagnosticProvisioningResource CreateApiDiagnostic(
+        ApiManagementApiProvisioningResource api,
+        ApiManagementLoggerProvisioningResource logger,
+        AzureApiManagementDiagnosticOptions options)
+    {
+        var diagnostic = new ApiManagementApiDiagnosticProvisioningResource(
+            $"{api.BicepIdentifier}ApplicationInsightsDiagnostic")
+        {
+            Parent = api,
+            Name = "applicationinsights",
+            LoggerId = logger.Id,
+            AlwaysLog = "allErrors",
+            Sampling = new ApiManagementSamplingProvisioningModel
+            {
+                SamplingType = "fixed",
+                Percentage = options.SamplingPercentage,
+            },
+            HttpCorrelationProtocol = "W3C",
+            LogClientIp = options.LogClientIp,
+            Verbosity = GetProvisioningVerbosity(options.Verbosity),
+            OperationNameFormat = "Name",
+            Metrics = true,
+        };
+        diagnostic.DependsOn.Add(logger);
+        return diagnostic;
+    }
+
+    private static RoleAssignment AddKeyVaultRoleAssignment(
+        AzureResourceInfrastructure infrastructure,
+        IAzureKeyVaultSecretReference secretReference,
+        BicepValue<Guid> principalId,
+        KeyVaultBuiltInRole role,
+        Dictionary<string, RoleAssignment> roleAssignments)
+    {
+        var secret = secretReference.AsKeyVaultSecret(infrastructure);
+        var vault = secret.Parent
+            ?? throw new InvalidOperationException($"Key Vault secret '{secretReference.SecretName}' does not have a parent vault.");
+        var key = $"{vault.BicepIdentifier}:{role}";
+        if (roleAssignments.TryGetValue(key, out var existingRoleAssignment))
+        {
+            return existingRoleAssignment;
+        }
+
+        var roleAssignment = vault.CreateRoleAssignment(
+            role,
+            RoleManagementPrincipalType.ServicePrincipal,
+            principalId);
+        infrastructure.Add(roleAssignment);
+        roleAssignments.Add(key, roleAssignment);
+        return roleAssignment;
+    }
+
+    private static BicepValue<string> CreateVersionlessSecretUri(KeyVaultSecret secret)
+    {
+        var vault = secret.Parent
+            ?? throw new InvalidOperationException($"Key Vault secret '{secret.BicepIdentifier}' does not have a parent vault.");
+
+        // APIM refreshes Key Vault-backed values and certificates only when the URI does not pin a secret version.
+        // The generated URI has the form https://{vault}.vault.azure.net/secrets/{secret-name}.
+        return BicepFunction.Interpolate($"{vault.Properties.VaultUri}secrets/{secret.Name}");
+    }
+
+    private static ApiManagementApiProvisioningResource AddApi(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementApiResource apiResource,
         ApiManagementServiceProvisioningResource service,
-        HashSet<AzureProvisioningResource> roleAssignedAccounts)
+        HashSet<AzureProvisioningResource> roleAssignedAccounts,
+        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments)
     {
         var apiIdentifier = Infrastructure.NormalizeBicepIdentifier(apiResource.Name);
         var (backendIdentifier, backend, authenticateWithManagedIdentity) = apiResource.Target is not null
@@ -640,7 +1486,7 @@ public static class AzureApiManagementExtensions
 
         foreach (var operationResource in apiResource.Operations)
         {
-            AddOperation(infrastructure, operationResource, api);
+            AddOperation(infrastructure, operationResource, api, policyFragments);
         }
 
         var policyXml = apiResource.PolicyXml ??
@@ -658,7 +1504,13 @@ public static class AzureApiManagementExtensions
             Value = policyXml!,
         };
         policy.DependsOn.Add(backend);
+        foreach (var policyFragment in policyFragments)
+        {
+            policy.DependsOn.Add(policyFragment);
+        }
         infrastructure.Add(policy);
+
+        return api;
     }
 
     private static (string Identifier, ApiManagementBackendProvisioningResource Backend, bool AuthenticateWithManagedIdentity)
@@ -841,7 +1693,8 @@ public static class AzureApiManagementExtensions
     private static void AddOperation(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementOperationResource operationResource,
-        ApiManagementApiProvisioningResource api)
+        ApiManagementApiProvisioningResource api,
+        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments)
     {
         var operationIdentifier = Infrastructure.NormalizeBicepIdentifier(operationResource.Name);
         var operation = new ApiManagementOperationProvisioningResource(
@@ -882,6 +1735,10 @@ public static class AzureApiManagementExtensions
             Format = "rawxml",
             Value = policyXml,
         };
+        foreach (var policyFragment in policyFragments)
+        {
+            policy.DependsOn.Add(policyFragment);
+        }
         infrastructure.Add(policy);
     }
 
@@ -928,6 +1785,151 @@ public static class AzureApiManagementExtensions
             weight));
 
         return builder.WithRelationship(deployment, "Backend pool");
+    }
+
+    private static IResourceBuilder<AzureApiManagementNamedValueResource> AddNamedValueCore(
+        IResourceBuilder<AzureApiManagementResource> builder,
+        string name,
+        object value,
+        bool secret,
+        string? displayName,
+        string? namedValueName,
+        string[]? tags)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var resolvedNamedValueName = namedValueName ?? name;
+        var resolvedDisplayName = displayName ?? name;
+        ValidateGeneralIdentifier(resolvedNamedValueName, 256, nameof(namedValueName));
+        if (resolvedDisplayName.Length > 256 ||
+            resolvedDisplayName.Any(character => !char.IsLetterOrDigit(character) && character is not ('-' or '.' or '_')))
+        {
+            throw new ArgumentException(
+                "The named-value display name must be at most 256 characters and contain only letters, digits, hyphens, periods, and underscores.",
+                nameof(displayName));
+        }
+        if (builder.Resource.NamedValues.Any(namedValue =>
+            string.Equals(namedValue.NamedValueName, resolvedNamedValueName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"An API Management named value with physical name '{resolvedNamedValueName}' has already been added.");
+        }
+
+        var resource = new AzureApiManagementNamedValueResource(
+            name,
+            resolvedNamedValueName,
+            resolvedDisplayName,
+            value,
+            secret,
+            tags ?? [],
+            builder.Resource);
+        builder.Resource.NamedValues.Add(resource);
+
+        var resourceBuilder = builder.ApplicationBuilder.ExecutionContext.IsRunMode
+            ? builder.ApplicationBuilder.CreateResourceBuilder(resource)
+            : builder.ApplicationBuilder.AddResource(resource);
+
+        return resourceBuilder
+            .WithParentRelationship(builder.Resource)
+            .ExcludeFromManifest()
+            .WithIconName(secret ? "LockClosed" : "BracesVariable");
+    }
+
+    private static void ValidatePolicyFragmentParent(
+        AzureApiManagementResource parent,
+        IResourceBuilder<AzureApiManagementPolicyFragmentResource> fragment)
+    {
+        ArgumentNullException.ThrowIfNull(fragment);
+        if (!ReferenceEquals(parent, fragment.Resource.Parent))
+        {
+            throw new InvalidOperationException(
+                "An API Management policy can only include policy fragments from the same API Management service.");
+        }
+    }
+
+    private static string CreateIncludeFragmentPolicy(string fragmentName) =>
+        $"<include-fragment fragment-id=\"{fragmentName}\" />";
+
+    private static string CreatePolicyFragmentDocument(string policyXml)
+    {
+        var builder = new StringBuilder();
+        builder.Append("<fragment>\n");
+        foreach (var line in policyXml.Split('\n'))
+        {
+            builder.Append("  ").Append(line.TrimEnd('\r')).Append('\n');
+        }
+        builder.Append("</fragment>");
+        return builder.ToString();
+    }
+
+    private static string GetProvisioningHostnameType(AzureApiManagementHostnameType type) =>
+        type switch
+        {
+            AzureApiManagementHostnameType.ConfigurationApi => "ConfigurationApi",
+            AzureApiManagementHostnameType.DeveloperPortal => "DeveloperPortal",
+            AzureApiManagementHostnameType.Portal => "Portal",
+            AzureApiManagementHostnameType.Proxy => "Proxy",
+            AzureApiManagementHostnameType.Management => "Management",
+            AzureApiManagementHostnameType.Scm => "Scm",
+            _ => throw new UnreachableException(),
+        };
+
+    private static string GetProvisioningVerbosity(AzureApiManagementDiagnosticVerbosity verbosity) =>
+        verbosity switch
+        {
+            AzureApiManagementDiagnosticVerbosity.Error => "error",
+            AzureApiManagementDiagnosticVerbosity.Information => "information",
+            AzureApiManagementDiagnosticVerbosity.Verbose => "verbose",
+            _ => throw new UnreachableException(),
+        };
+
+    private static void ValidateDiagnosticOptions(AzureApiManagementDiagnosticOptions options)
+    {
+        if (!double.IsFinite(options.SamplingPercentage) ||
+            options.SamplingPercentage is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.SamplingPercentage,
+                "The Application Insights sampling percentage must be between 0 and 100.");
+        }
+    }
+
+    private static void ValidateGeneralIdentifier(string identifier, int maximumLength, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(identifier, parameterName);
+        if (identifier.Length > maximumLength)
+        {
+            throw new ArgumentException(
+                $"The API Management identifier cannot exceed {maximumLength} characters.",
+                parameterName);
+        }
+        if (identifier.IndexOfAny(s_invalidApiIdentifierCharacters) >= 0)
+        {
+            throw new ArgumentException(
+                "The API Management identifier cannot contain '*', '#', '&', '+', ':', '<', '>', or '?'.",
+                parameterName);
+        }
+    }
+
+    private static void ValidatePolicyFragmentIdentifier(string identifier, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(identifier, parameterName);
+        if (identifier.Length > 80)
+        {
+            throw new ArgumentException("The policy-fragment identifier cannot exceed 80 characters.", parameterName);
+        }
+
+        static bool IsWordCharacter(char value) => char.IsLetterOrDigit(value) || value == '_';
+
+        if (!IsWordCharacter(identifier[0]) ||
+            !IsWordCharacter(identifier[^1]) ||
+            identifier.Any(character => !IsWordCharacter(character) && character != '-'))
+        {
+            throw new ArgumentException(
+                "The policy-fragment identifier may contain letters, digits, underscores, and non-leading or trailing hyphens.",
+                parameterName);
+        }
     }
 
     private static string? CreatePolicyDocument(

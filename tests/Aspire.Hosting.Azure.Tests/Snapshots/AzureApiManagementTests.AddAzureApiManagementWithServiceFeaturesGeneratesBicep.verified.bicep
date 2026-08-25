@@ -1,0 +1,326 @@
+﻿@description('The location for the resource(s) to be deployed.')
+param location string = resourceGroup().location
+
+param vault_outputs_name string
+
+@secure()
+param api_key_value string
+
+param catalog_api_url string
+
+param insights_outputs_name string
+
+resource apimKeyVaultIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: take('apimKeyVaultIdentity-${uniqueString(resourceGroup().id)}', 128)
+  location: location
+}
+
+resource vault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
+  name: vault_outputs_name
+}
+
+resource vault_gateway_certificate 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existing = {
+  name: 'gateway-certificate'
+  parent: vault
+}
+
+resource vault_KeyVaultCertificateUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(vault.id, apimKeyVaultIdentity.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba'))
+  properties: {
+    principalId: apimKeyVaultIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
+    principalType: 'ServicePrincipal'
+  }
+  scope: vault
+}
+
+resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
+  name: take('apim${uniqueString(resourceGroup().id)}', 24)
+  location: location
+  properties: {
+    publisherEmail: 'api-owners@example.com'
+    publisherName: 'Contoso APIs'
+    publicNetworkAccess: 'Enabled'
+    virtualNetworkType: 'None'
+    hostnameConfigurations: [
+      {
+        type: 'Proxy'
+        hostName: 'api.contoso.example'
+        keyVaultId: '${vault.properties.vaultUri}secrets/gateway-certificate'
+        identityClientId: apimKeyVaultIdentity.properties.clientId
+        defaultSslBinding: true
+        negotiateClientCertificate: false
+      }
+    ]
+  }
+  sku: {
+    name: 'StandardV2'
+    capacity: 1
+  }
+  identity: {
+    type: 'SystemAssigned, UserAssigned'
+    userAssignedIdentities: {
+      '${apimKeyVaultIdentity.id}': { }
+    }
+  }
+  tags: {
+    'aspire-resource-name': 'apim'
+  }
+  dependsOn: [
+    vault_KeyVaultCertificateUser
+  ]
+}
+
+resource correlation 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = {
+  name: 'correlation'
+  properties: {
+    format: 'rawxml'
+    value: '<fragment>\n  <set-header name="x-correlation-id" exists-action="skip"><value>@(context.RequestId.ToString())</value></set-header>\n</fragment>'
+    description: 'Adds a correlation ID.'
+  }
+  parent: apim
+}
+
+resource backend_region 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  name: 'backend-region'
+  properties: {
+    displayName: 'backend-region'
+    value: 'westus3'
+    secret: false
+    tags: [
+      'routing'
+    ]
+  }
+  parent: apim
+}
+
+resource api_key_value 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  name: 'api-key-value'
+  properties: {
+    displayName: 'ApiKey'
+    value: api_key_value
+    secret: true
+  }
+  parent: apim
+}
+
+resource vault_upstream_secret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' existing = {
+  name: 'upstream-secret'
+  parent: vault
+}
+
+resource vault_KeyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(vault.id, apimKeyVaultIdentity.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))
+  properties: {
+    principalId: apimKeyVaultIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalType: 'ServicePrincipal'
+  }
+  scope: vault
+}
+
+resource upstream_secret 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  name: 'upstream-secret'
+  properties: {
+    displayName: 'UpstreamSecret'
+    secret: true
+    keyVault: {
+      secretIdentifier: '${vault.properties.vaultUri}secrets/upstream-secret'
+      identityClientId: apimKeyVaultIdentity.properties.clientId
+    }
+  }
+  parent: apim
+  dependsOn: [
+    vault_KeyVaultSecretsUser
+  ]
+}
+
+resource apimPolicy 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: '<policies>\n  <inbound>\n    <include-fragment fragment-id="correlation" />\n  </inbound>\n  <backend><forward-request /></backend>\n  <outbound />\n  <on-error />\n</policies>'
+  }
+  parent: apim
+  dependsOn: [
+    correlation
+  ]
+}
+
+resource catalog_apiBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  name: 'catalog_apiBackend'
+  properties: {
+    protocol: 'http'
+    url: catalog_api_url
+    title: 'catalog-api'
+    type: 'Single'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
+  }
+  parent: apim
+}
+
+resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
+  name: 'catalog-api'
+  properties: {
+    displayName: 'catalog-api'
+    path: 'catalog'
+    subscriptionRequired: true
+    type: 'http'
+    protocols: [
+      'https'
+    ]
+  }
+  parent: apim
+}
+
+resource catalog_apiProxy 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'proxy'
+  properties: {
+    displayName: 'Proxy'
+    method: '*'
+    urlTemplate: '/*'
+  }
+  parent: catalog_api
+}
+
+resource get_product 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+  name: 'get-product'
+  properties: {
+    displayName: 'get-product'
+    method: 'GET'
+    urlTemplate: '/products/{id}'
+    templateParameters: [
+      {
+        name: 'id'
+        type: 'string'
+        required: true
+      }
+    ]
+  }
+  parent: catalog_api
+}
+
+resource get_productPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = {
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: '<policies>\n  <inbound>\n    <base />\n    <include-fragment fragment-id="correlation" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+  }
+  parent: get_product
+  dependsOn: [
+    correlation
+  ]
+}
+
+resource catalog_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: '<policies>\n  <inbound>\n    <base />\n    <set-backend-service backend-id="catalog_apiBackend" />\n    <include-fragment fragment-id="correlation" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+  }
+  parent: catalog_api
+  dependsOn: [
+    catalog_apiBackend
+    correlation
+  ]
+}
+
+resource catalog_product 'Microsoft.ApiManagement/service/products@2024-05-01' = {
+  name: 'catalog-product'
+  properties: {
+    displayName: 'Catalog'
+    description: 'Catalog APIs'
+    terms: 'Use responsibly.'
+    subscriptionRequired: true
+    approvalRequired: false
+    state: 'published'
+  }
+  parent: apim
+}
+
+resource catalog_product_catalog_api 'Microsoft.ApiManagement/service/products/apis@2024-05-01' = {
+  name: 'catalog-api'
+  parent: catalog_product
+  dependsOn: [
+    catalog_api
+  ]
+}
+
+resource catalog_client 'Microsoft.ApiManagement/service/subscriptions@2024-05-01' = {
+  name: 'catalog-client'
+  properties: {
+    displayName: 'Catalog client'
+    scope: catalog_product.id
+    state: 'active'
+    allowTracing: false
+  }
+  parent: apim
+}
+
+resource insights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: insights_outputs_name
+}
+
+resource insightsLogger 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
+  name: 'insights-application-insights'
+  properties: {
+    loggerType: 'applicationInsights'
+    resourceId: insights.id
+    credentials: {
+      instrumentationKey: insights.properties.InstrumentationKey
+    }
+    isBuffered: true
+  }
+  parent: apim
+}
+
+resource apimApplicationInsightsDiagnostic 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = {
+  name: 'applicationinsights'
+  properties: {
+    loggerId: insightsLogger.id
+    alwaysLog: 'allErrors'
+    sampling: {
+      samplingType: 'fixed'
+      percentage: 25
+    }
+    httpCorrelationProtocol: 'W3C'
+    logClientIp: false
+    verbosity: 'error'
+    operationNameFormat: 'Name'
+    metrics: true
+  }
+  parent: apim
+  dependsOn: [
+    insightsLogger
+  ]
+}
+
+resource catalog_apiApplicationInsightsDiagnostic 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = {
+  name: 'applicationinsights'
+  properties: {
+    loggerId: insightsLogger.id
+    alwaysLog: 'allErrors'
+    sampling: {
+      samplingType: 'fixed'
+      percentage: 50
+    }
+    httpCorrelationProtocol: 'W3C'
+    logClientIp: true
+    verbosity: 'information'
+    operationNameFormat: 'Name'
+    metrics: true
+  }
+  parent: catalog_api
+  dependsOn: [
+    insightsLogger
+  ]
+}
+
+output gatewayUrl string = apim.properties.gatewayUrl
+
+output id string = apim.id
+
+output principalId string = apim.identity.principalId
