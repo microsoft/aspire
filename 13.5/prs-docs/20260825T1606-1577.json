@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found; PR is internal infra for the aspire.dev static site host (URL casing redirects), not documentation of a product feature",
+  "mergedAt": "2026-08-25T16:06:41Z",
+  "number": 1577,
+  "runDate": "2026-08-25T18:08:35Z",
+  "status": "excluded",
+  "title": "Redirect static paths to canonical casing"
+}
