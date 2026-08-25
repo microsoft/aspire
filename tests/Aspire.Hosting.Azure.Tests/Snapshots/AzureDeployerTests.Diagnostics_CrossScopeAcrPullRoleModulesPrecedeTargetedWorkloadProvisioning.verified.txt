@@ -33,7 +33,7 @@ If targeting 'deploy-cache':
   PythonApp:
 If targeting 'deploy-python-app':
   Direct dependencies: print-python-app-summary
-  Total steps: 21
+  Total steps: 20
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
@@ -42,7 +42,7 @@ If targeting 'deploy-python-app':
     [4] provision-aas-registry | provision-aca-env-mi | provision-aca-registry (parallel)
     [5] login-to-acr-aas-registry | login-to-acr-aca-registry | provision-aca-env-mi-roles-aca-registry (parallel)
     [6] provision-aca-env | push-prereq (parallel)
-    [7] provision-cache-containerapp | push-python-app (parallel)
+    [7] push-python-app
     [8] provision-python-app-containerapp
     [9] print-python-app-summary
     [10] deploy-python-app
