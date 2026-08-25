@@ -117,8 +117,9 @@ public partial class HostedAgentConfiguration(string image)
     /// </summary>
     internal ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions(string targetResourceName)
     {
-        ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
-        ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
+        var environmentVariables = NormalizeEnvironmentVariableNames(targetResourceName);
+        ValidateEnvironmentVariableNames(environmentVariables.Keys, targetResourceName);
+        ValidateEnvironmentVariableNamesAreNotReserved(environmentVariables.Keys, targetResourceName);
         ValidateProtocolVersions(targetResourceName);
 
         var def = new HostedAgentDefinition(
@@ -139,7 +140,7 @@ public partial class HostedAgentConfiguration(string image)
         {
             def.Tools.Add(tool);
         }
-        foreach (var envVar in EnvironmentVariables)
+        foreach (var envVar in environmentVariables)
         {
             def.EnvironmentVariables[envVar.Key] = envVar.Value;
         }
@@ -152,6 +153,26 @@ public partial class HostedAgentConfiguration(string image)
             options.Metadata[kvp.Key] = kvp.Value;
         }
         return options;
+    }
+
+    private Dictionary<string, string> NormalizeEnvironmentVariableNames(string targetResourceName)
+    {
+        var normalizedEnvironmentVariables = new Dictionary<string, string>(EnvironmentVariables.Count);
+        foreach (var (name, value) in EnvironmentVariables)
+        {
+            // Aspire resource names allow hyphens, so generated connection string and service
+            // discovery keys can contain them. Foundry Hosted Agents only accept letters, digits,
+            // and underscores in environment variable names.
+            var normalizedName = name.Replace('-', '_');
+            if (!normalizedEnvironmentVariables.TryAdd(normalizedName, value))
+            {
+                throw new DistributedApplicationException(
+                    $"Foundry hosted agent for target resource '{targetResourceName}' contains environment variable names that become duplicates when '-' is replaced with '_'. " +
+                    $"Duplicate name: '{normalizedName}'");
+            }
+        }
+
+        return normalizedEnvironmentVariables;
     }
 
     private void ValidateProtocolVersions(string? targetResourceName)

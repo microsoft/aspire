@@ -152,7 +152,38 @@ public class HostedAgentConfigurationTests
         var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
 
         Assert.Equal(
-            "Foundry hosted agent for target resource 'target' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'INVALID-NAME', 'invalid.name'",
+            "Foundry hosted agent for target resource 'target' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'invalid.name'",
+            ex.Message);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ReplacesHyphensInEnvironmentVariableNames()
+    {
+        var config = new HostedAgentConfiguration("myimage:latest");
+        config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0"));
+        config.EnvironmentVariables["ConnectionStrings__ai-light-model"] = "connection-string";
+        config.EnvironmentVariables["services__analytics-api__https__0"] = "https://analytics.example.com";
+
+        var options = config.ToProjectsAgentVersionCreationOptions("target");
+        var payload = JsonNode.Parse(ModelReaderWriter.Write(options, ModelReaderWriterOptions.Json).ToString())!;
+        var environmentVariables = payload["definition"]!["environment_variables"]!;
+
+        Assert.Equal("connection-string", environmentVariables["ConnectionStrings__ai_light_model"]!.GetValue<string>());
+        Assert.Equal("https://analytics.example.com", environmentVariables["services__analytics_api__https__0"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ThrowsWhenNormalizedEnvironmentVariableNamesConflict()
+    {
+        var config = new HostedAgentConfiguration("myimage:latest");
+        config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0"));
+        config.EnvironmentVariables["DUPLICATE-NAME"] = "first";
+        config.EnvironmentVariables["DUPLICATE_NAME"] = "second";
+
+        var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'target' contains environment variable names that become duplicates when '-' is replaced with '_'. Duplicate name: 'DUPLICATE_NAME'",
             ex.Message);
     }
 
