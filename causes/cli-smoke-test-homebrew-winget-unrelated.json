@@ -136,6 +136,13 @@
       "job": "Tests / Dashboard / Dashboard (windows-latest)",
       "pr_number": 19620,
       "observed_at": "2026-08-25T18:31:42Z"
+    },
+    {
+      "run_id": 32883688176,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32883688176",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 19600,
+      "observed_at": "2026-08-25T19:24:29Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19596"
