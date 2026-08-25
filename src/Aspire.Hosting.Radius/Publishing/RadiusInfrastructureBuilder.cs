@@ -826,10 +826,45 @@ internal sealed class RadiusInfrastructureBuilder
         var liveSecrets = new HashSet<RadiusSecuritySecretConstruct>(options.SecuritySecrets);
         var liveInstances = new HashSet<RadiusResourceTypeConstruct>(options.ResourceTypeInstances);
 
+        // Scope references are repaired per *secret*, ahead of the per-credential loop below, for
+        // the same two reasons as RewireContainerEnvSecrets. First, the last-write-wins comparison
+        // only holds against the value the publisher wrote, so repairing once per credential would
+        // mis-detect on the second credential sharing a secret. Second — and this is why the repair
+        // cannot live inside the loop below — the secret outlives its consumer: the loop skips a
+        // credential whose consumer a callback removed or whose property it reassigned, but the
+        // secret itself stays in options.SecuritySecrets and is still emitted. Repairing under
+        // those guards left it pointing at a symbol the rename retired, which reaches the artifact
+        // as a dangling reference that only Bicep compilation rejects, with nothing naming the
+        // callback that caused it.
+        foreach (var credential in _secretResourceCredentials.DistinctBy(c => c.Secret))
+        {
+            if (!liveSecrets.Contains(credential.Secret))
+            {
+                continue;
+            }
+
+            // Only repair a scope the callback has not set itself — `options.SecuritySecrets` is
+            // part of the callback surface, so re-scoping a generated secret is legitimate.
+            if (envConstruct is not null &&
+                string.Equals(RenderBicepValue(credential.Secret.EnvironmentId), credential.OriginalEnvironmentId, StringComparison.Ordinal))
+            {
+                credential.Secret.EnvironmentId = BuildIdExpression(envConstruct);
+            }
+
+            if (appConstruct is not null &&
+                credential.Secret.ApplicationId is { } currentApplicationId &&
+                string.Equals(RenderBicepValue(currentApplicationId), credential.OriginalApplicationId, StringComparison.Ordinal))
+            {
+                credential.Secret.ApplicationId = BuildIdExpression(appConstruct);
+            }
+        }
+
         foreach (var credential in _secretResourceCredentials)
         {
-            // The consumer is gone: the callback owns that decision, and the secret it no longer
-            // consumes is left alone rather than second-guessed.
+            // The consumer is gone: the callback owns that decision, and the *consumer
+            // relationship* is left alone rather than second-guessed. The secret's own scope
+            // references were already repaired by the loop above, because the secret outlives the
+            // consumer and is still emitted.
             if (!liveInstances.Contains(credential.Consumer))
             {
                 continue;
@@ -856,25 +891,6 @@ internal sealed class RadiusInfrastructureBuilder
                     $"ConfigureRadiusInfrastructure callback removed it. The property is required, so the deployment would " +
                     $"be rejected. Keep the secret, or point '{credential.PropertyName}' at a secret of your own. " +
                     $"Diagnostic: ASPIRERADIUS074.");
-            }
-
-            // Keep the secret's own scope references pointing at the right symbols if the
-            // environment or application construct was renamed — but only when the callback has not
-            // set them itself. `options.SecuritySecrets` is part of the callback surface, so an
-            // author can legitimately re-scope a generated secret; overwriting unconditionally would
-            // discard that silently. Same last-write-wins comparison used for the consumer property
-            // below and for container env values.
-            if (envConstruct is not null &&
-                string.Equals(RenderBicepValue(credential.Secret.EnvironmentId), credential.OriginalEnvironmentId, StringComparison.Ordinal))
-            {
-                credential.Secret.EnvironmentId = BuildIdExpression(envConstruct);
-            }
-
-            if (appConstruct is not null &&
-                credential.Secret.ApplicationId is { } currentApplicationId &&
-                string.Equals(RenderBicepValue(currentApplicationId), credential.OriginalApplicationId, StringComparison.Ordinal))
-            {
-                credential.Secret.ApplicationId = BuildIdExpression(appConstruct);
             }
 
             // The consumer still reads this secret, so the entry carrying the credential has to
@@ -2473,7 +2489,7 @@ internal sealed class RadiusInfrastructureBuilder
                 resource,
                 $"Resource '{resource.Name}' is emitted as a Radius type whose credential requires a " +
                 $"'{RadiusResourceTypes.SecuritySecrets}' resource, but no Radius environment was emitted to scope it to. " +
-                $"Diagnostic: ASPIRERADIUS071.");
+                $"Diagnostic: ASPIRERADIUS094.");
         }
 
         BicepValue<object>? secretValue = null;
@@ -3599,13 +3615,15 @@ internal sealed class RadiusInfrastructureBuilder
     {
         // The environment scope is required by the type. A container is always parented to the UDT
         // environment, so this is unreachable in practice — fail rather than emit a secret Radius
-        // would reject for a missing required scope.
+        // would reject for a missing required scope. InvalidOperationException rather than
+        // RadiusBackingResourceProjectionException deliberately: that exception carries a *backing*
+        // resource, and a container is a compute workload, not a backing resource.
         if (envConstruct is null)
         {
             throw new InvalidOperationException(
                 $"Container '{resource.Name}' has environment variables holding credentials, which are published as a " +
                 $"'{RadiusResourceTypes.SecuritySecrets}' resource, but no Radius environment was emitted to scope it to. " +
-                $"Diagnostic: ASPIRERADIUS071.");
+                $"Diagnostic: ASPIRERADIUS094.");
         }
 
         var secret = new RadiusSecuritySecretConstruct(

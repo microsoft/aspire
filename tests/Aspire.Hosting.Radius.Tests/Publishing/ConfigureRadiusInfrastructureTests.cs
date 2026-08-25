@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRERADIUS006 // Experimental: the secret-store APIs are exercised by the rename-rewire test.
 
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.Publishing.Constructs;
@@ -632,5 +633,62 @@ public class ConfigureRadiusInfrastructureTests
         var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
         Assert.Contains("api", ex.Message);
         Assert.Contains("5000/TCP", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_RemovingCredentialConsumer_StillRepairsSecretScope()
+    {
+        // A callback can rename the environment and drop a backing resource's construct in the same
+        // pass. The 'Radius.Security/secrets' resource carrying that resource's recipe credential
+        // stays in options.SecuritySecrets and is still emitted, so its required
+        // properties.environment scope has to follow the rename even though the consumer that read
+        // from it is gone. Repairing the scope only for credentials whose consumer survived left the
+        // orphaned secret pointing at the symbol the rename retired, which reaches the artifact as a
+        // dangling reference that only `bicep build` rejects, with nothing naming the callback.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Environments[0].BicepIdentifier = "renamed_env";
+                opts.Applications[0].BicepIdentifier = "renamed_app";
+
+                var queue = opts.ResourceTypeInstances.First(r => r.ResourceName.Value == "queue");
+                opts.ResourceTypeInstances.Remove(queue);
+            });
+
+        // RabbitMQ is the only type mapped to a SecretResourceReference credential, which is what
+        // puts the credential in a standalone secrets resource rather than inline on the consumer.
+        // The user name must be a parameter: a bare AddRabbitMQ fails the publish with
+        // ASPIRERADIUS082 before any of this is reached. Nothing references the queue, because a
+        // consumer would make RebuildProjectedEnvValues reject the removal with ASPIRERADIUS074
+        // first.
+        builder.AddRabbitMQ("queue", userName: builder.AddParameter("queueuser", "appuser"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+        var bicep = context.GenerateBicep(model);
+
+        // The secret survived the consumer's removal and is still declared.
+        Assert.Contains("resource queue_password_secret", bicep);
+
+        // Assert over *every* scope reference in the artifact rather than just the secret's, so a
+        // stale reference anywhere fails the test rather than hiding behind a correct one elsewhere.
+        // Both scopes are covered because the hoisted repair handles EnvironmentId and ApplicationId
+        // together. Emitted as `environment: <symbol>.id` / `application: <symbol>.id`.
+        var environmentScopes = Regex.Matches(bicep, @"environment: (\w+)\.id")
+            .Select(m => m.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var applicationScopes = Regex.Matches(bicep, @"application: (\w+)\.id")
+            .Select(m => m.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["renamed_env"], environmentScopes);
+        Assert.Equal(["renamed_app"], applicationScopes);
     }
 }
