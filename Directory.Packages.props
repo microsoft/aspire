@@ -137,7 +137,6 @@
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.3" />
     <PackageVersion Include="OpenAI" Version="2.12.0" />
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.300" />
-    <PackageVersion Include="Polly.Core" Version="8.7.0" />
     <PackageVersion Include="Polly.Extensions" Version="8.7.0" />
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
     <PackageVersion Include="Qdrant.Client" Version="1.19.0" />

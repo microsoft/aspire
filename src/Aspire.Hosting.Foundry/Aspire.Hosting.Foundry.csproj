@@ -42,7 +42,7 @@
     <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
     <PackageReference Include="Microsoft.Bcl.Memory" />
-    <PackageReference Include="Polly.Core" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
 
 </Project>

@@ -13,7 +13,5 @@
 
     <_DataFile Include="$(MSBuildThisFileDirectory)data\**\*" Link="testassets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="@(_DataFile)" />
-
-    <PackageReference Include="Polly.Core" />
   </ItemGroup>
 </Project>

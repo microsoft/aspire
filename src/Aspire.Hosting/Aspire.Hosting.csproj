@@ -75,7 +75,7 @@
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="Polly.Core" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="JsonPatch.Net" />
     <PackageReference Include="AspNetCore.HealthChecks.Uris" />
     <PackageReference Include="Semver" />
