@@ -183,6 +183,11 @@ internal class DotNetTemplateFactory(
                 );
         }
 
+        if (!showAllTemplates)
+        {
+            yield break;
+        }
+
         // Folded into the last yielded template.
         var msTestTemplate = new CallbackTemplate(
             "aspire-mstest",
