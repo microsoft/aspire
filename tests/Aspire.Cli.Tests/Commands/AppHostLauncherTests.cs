@@ -849,6 +849,72 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LaunchDetachedAsync_EnforcesStartupTimeoutAfterBackchannelConnects()
+    {
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromSeconds(1));
+        var cleanupStarted = new TaskCompletionSource<(int Pid, DateTimeOffset? StartTime, bool IncludeStartTimeForDcp)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowCleanupToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processShutdownService = new TestAppHostStopper
+        {
+            ProcessTreeStopAsyncCallback = async (pid, startTime, includeStartTimeForDcp, cancellationToken) =>
+            {
+                cleanupStarted.TrySetResult((pid, startTime, includeStartTimeForDcp));
+                await allowCleanupToComplete.Task.WaitAsync(cancellationToken);
+                return true;
+            }
+        };
+        using var harness = AppHostLauncherHarness.Create(outputHelper, timeProvider, processShutdownService);
+        var readinessWaitStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = async cancellationToken =>
+            {
+                readinessWaitStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return null;
+            }
+        });
+        var childStartedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        var execution = new NonExitingProcessExecution { StartTime = childStartedAt };
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) => Task.FromResult<IProcessExecution>(execution);
+
+        var launchTask = harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 1,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None);
+
+        await readinessWaitStarted.Task.DefaultTimeout();
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+
+        var cleanupRequest = await cleanupStarted.Task.DefaultTimeout();
+        Assert.Equal(execution.ProcessId, cleanupRequest.Pid);
+        Assert.Equal(childStartedAt, cleanupRequest.StartTime);
+        Assert.True(cleanupRequest.IncludeStartTimeForDcp);
+        Assert.False(launchTask.IsCompleted);
+
+        allowCleanupToComplete.TrySetResult();
+        var result = await launchTask.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+        Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1, CliConfigNames.AppHostStartupTimeout),
+            harness.InteractionService.DisplayedErrors);
+        Assert.Equal(1, execution.WaitForExitCallCount);
+    }
+
+    [Fact]
     public async Task LaunchDetachedAsync_UsesSingleUncancelledChildExitObservationWhileWaitingForBackchannel()
     {
         using var harness = AppHostLauncherHarness.Create(outputHelper);
@@ -1198,6 +1264,12 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, TimeProvider timeProvider) =>
             Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, timeProvider);
 
+        public static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            TimeProvider timeProvider,
+            IAppHostStopper processShutdownService) =>
+            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, timeProvider, processShutdownService);
+
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, string? appHostSelectionOrigin)
         {
             return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted: false, TimeProvider.System);
@@ -1216,6 +1288,16 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             string? appHostSelectionOrigin,
             bool selectionWasPrompted,
             TimeProvider timeProvider)
+        {
+            return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, timeProvider, processShutdownService: null);
+        }
+
+        private static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            string? appHostSelectionOrigin,
+            bool selectionWasPrompted,
+            TimeProvider timeProvider,
+            IAppHostStopper? processShutdownService)
         {
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
@@ -1239,7 +1321,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var monitor = new TestAuxiliaryBackchannelMonitor();
             var processFactory = new TestDetachedProcessFactory();
             var fileLoggerProvider = new FileLoggerProvider(executionContext.LogFilePath, new TestStartupErrorWriter());
-            var processShutdownService = new ProcessTreeGracefulShutdownService(
+            processShutdownService ??= new ProcessTreeGracefulShutdownService(
                 new FixedLayoutDiscovery(),
                 new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
@@ -1603,7 +1685,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public int ProcessId => int.MaxValue - 12345;
 
-        public DateTimeOffset? StartTime => null;
+        public DateTimeOffset? StartTime { get; init; }
 
         public bool HasExited => false;
 
@@ -1638,6 +1720,22 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SignalingFakeTimeProvider(TimeSpan signaledDueTime) : FakeTimeProvider
+    {
+        public TaskCompletionSource TimerCreated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            if (dueTime == signaledDueTime)
+            {
+                TimerCreated.TrySetResult();
+            }
+
+            return timer;
+        }
     }
 
     private sealed class FixedLayoutDiscovery : ILayoutDiscovery
