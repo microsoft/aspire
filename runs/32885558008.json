@@ -1,0 +1,60 @@
+{
+  "run_id": 32885558008,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32885558008",
+  "analyzed_at": "2026-08-25T19:53:19Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19615,
+    "title": "Update dependencies from dotnet/arcade",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-94e50d32-a9d9-499d-91b5-cbe330fecbec",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19615"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97940025888,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32885558008/job/97940025888",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with unavailable job logs; matches recurring vscode-e2e-linux-workspace-target-proof-flaky pattern (14 prior occurrences). PR only touches eng/ dependency files, unrelated to VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97940025937,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32885558008/job/97940025937",
+      "classification": "flaky-test",
+      "reason": "Generic exit code with unavailable job logs; matches recurring vscode-e2e-windows-edge-cases-flaky pattern (22 prior occurrences). PR only touches eng/ dependency files, unrelated to VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97940401044,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32885558008/job/97940401044",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) step fails; matches recurring cli-smoke-test-homebrew-winget-unrelated pattern (20 prior occurrences). Unrelated to eng/ dependency update PR.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97940457647,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32885558008/job/97940457647",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) step fails with exit code 4 and unrelated Homebrew tap-trust warnings; matches recurring cli-smoke-test-homebrew-winget-unrelated pattern (20 prior occurrences). Unrelated to eng/ dependency update PR.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky",
+    "cli-smoke-test-homebrew-winget-unrelated"
+  ]
+}
