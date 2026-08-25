@@ -17,6 +17,12 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
   </ItemGroup>
 
+  <!--#if (WithAppHostReference) -->
+  <ItemGroup>
+    <ProjectReference Include="XmlEncodedAppHostProjectPath" />
+  </ItemGroup>
+
+  <!--#endif -->
   <ItemGroup>
     <Using Include="System.Net" />
     <Using Include="Microsoft.Extensions.DependencyInjection" />

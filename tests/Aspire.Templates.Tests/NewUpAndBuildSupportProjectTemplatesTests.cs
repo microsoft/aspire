@@ -8,7 +8,14 @@ namespace Aspire.Templates.Tests;
 public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper testOutput) : TemplateTestsBase(testOutput)
 {
     [Trait("category", "basic-build")]
-    protected async Task CanNewAndBuildActual(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
+    protected async Task CanNewAndBuildActual(
+        string templateName,
+        string extraTestCreationArgs,
+        TestSdk sdk,
+        TestTargetFramework tfm,
+        string? error,
+        string? appHostDirectoryNamePrefix = null,
+        bool withAppHostReference = true)
     {
         var id = GetNewProjectId(prefix: $"new_build_{FixupSymbolName(templateName)}");
         var topLevelDir = Path.Combine(BuildEnvironment.TestRootPath, id + "_root");
@@ -41,6 +48,12 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
                 addEndpointsHook: false,
                 overrideRootDir: topLevelDir);
             project.AppHostProjectDirectory = Path.Combine(topLevelDir, id + ".AppHost");
+            if (appHostDirectoryNamePrefix is not null)
+            {
+                var specialAppHostDirectory = Path.Combine(topLevelDir, GetNewProjectId(appHostDirectoryNamePrefix));
+                Directory.Move(project.AppHostProjectDirectory, specialAppHostDirectory);
+                project.AppHostProjectDirectory = specialAppHostDirectory;
+            }
 
             var testProjectDir = await CreateAndAddTestTemplateProjectAsync(
                                         id: id,
@@ -49,7 +62,8 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
                                         tfm: tfm,
                                         buildEnvironment: buildEnvToUse,
                                         extraArgs: extraTestCreationArgs,
-                                        overrideRootDir: topLevelDir);
+                                        overrideRootDir: topLevelDir,
+                                        withAppHostReference: withAppHostReference);
 
             await project.BuildAsync(extraBuildArgs: [$"-c {config}"], workingDirectory: testProjectDir);
         }
@@ -58,6 +72,24 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
             Assert.NotNull(tce.Result);
             Assert.Contains(error, tce.Result.Value.Output);
         }
+    }
+}
+
+public class Standalone_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
+{
+    [Theory]
+    [InlineData("aspire-mstest")]
+    [InlineData("aspire-nunit")]
+    [InlineData("aspire-xunit")]
+    public Task CanNewAndBuildWithoutAppHostReference(string templateName)
+    {
+        return CanNewAndBuildActual(
+            templateName,
+            "",
+            TestSdk.Net10,
+            TestTargetFramework.Net10,
+            error: null,
+            withAppHostReference: false);
     }
 }
 
@@ -128,5 +160,17 @@ public class MSTest_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper 
     public Task CanNewAndBuild(string templateName, string extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, string? error)
     {
         return CanNewAndBuildActual(templateName, extraTestCreationArgs, sdk, tfm, error);
+    }
+
+    [Fact]
+    public Task CanNewAndBuildWithMSBuildSpecialCharactersInAppHostPath()
+    {
+        return CanNewAndBuildActual(
+            "aspire-mstest",
+            "",
+            TestSdk.Net10,
+            TestTargetFramework.Net10,
+            error: null,
+            appHostDirectoryNamePrefix: "AppHost_$(literal);100%@'&");
     }
 }
