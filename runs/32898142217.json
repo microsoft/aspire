@@ -1,0 +1,47 @@
+{
+  "run_id": 32898142217,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32898142217",
+  "analyzed_at": "2026-08-25T21:24:24Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19641,
+    "title": "Extend DCP initialization timeout through API readiness",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-extend-dcp-initialization-timeout",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19641"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97968348554,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32898142217/job/97968348554",
+      "classification": "flaky-test",
+      "reason": "CLI smoke test failure during Homebrew cask preparation, unrelated to PR which only touches Aspire.Hosting DCP KubernetesService code. Matches known recurring pattern with 22 prior occurrences; job logs unavailable.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97968577676,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32898142217/job/97968577676",
+      "classification": "flaky-test",
+      "reason": "VS Code extension E2E (Windows, edge-cases) shard fails with generic exit code 1, unrelated to PR which only modifies Aspire.Hosting DCP KubernetesService code, not the VS Code extension. Matches known recurring flaky pattern with 23 prior occurrences.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97969312238,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32898142217/job/97969312238",
+      "classification": "flaky-test",
+      "reason": "CLI smoke test failure during WinGet manifest preparation, unrelated to PR which only touches Aspire.Hosting DCP KubernetesService code. Matches known recurring pattern with 22 prior occurrences; job logs unavailable.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["cli-smoke-test-homebrew-winget-unrelated", "vscode-e2e-windows-edge-cases-flaky"]
+}
