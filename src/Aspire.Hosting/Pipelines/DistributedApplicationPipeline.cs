@@ -652,6 +652,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         DistributedApplicationModel model,
         List<PipelineStep> steps)
     {
+        var resourceNameComparer = new ResourceNameComparer();
+
         foreach (var computeResource in model.GetComputeResources())
         {
             foreach (var deploymentTarget in computeResource.Annotations.OfType<DeploymentTargetAnnotation>())
@@ -662,10 +664,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 }
 
                 var deploymentStep = steps.FirstOrDefault(step =>
-                    ReferenceEquals(step.Resource, deploymentTarget.DeploymentTarget) &&
+                    resourceNameComparer.Equals(step.Resource, deploymentTarget.DeploymentTarget) &&
                     step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure))
                     ?? steps.FirstOrDefault(step =>
-                        ReferenceEquals(step.Resource, deploymentTarget.DeploymentTarget) &&
+                        resourceNameComparer.Equals(step.Resource, deploymentTarget.DeploymentTarget) &&
                         step.Tags.Contains(WellKnownPipelineTags.DeployCompute));
 
                 if (deploymentStep is null)
@@ -764,8 +766,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         if (string.IsNullOrWhiteSpace(stepName))
         {
-            ApplyDeploymentConcurrencyGroups(allSteps);
-            return (allSteps, allStepsByName);
+            var clonedSteps = allSteps.Select(step => step.Clone()).ToList();
+            ApplyDeploymentConcurrencyGroups(clonedSteps);
+            return (clonedSteps, clonedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal));
         }
 
         if (!allStepsByName.TryGetValue(stepName, out var targetStep))
@@ -781,6 +784,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
         // Concurrency groups are lowered only after filtering. Adding these edges to the complete
         // graph would cause a targeted deployment to pull unrelated group members into its closure.
+        // Clone the selected graph so generated edges do not persist into later resolutions when a
+        // pipeline annotation returns the same PipelineStep instance more than once.
+        stepsToExecute = stepsToExecute.Select(step => step.Clone()).ToList();
         ApplyDeploymentConcurrencyGroups(stepsToExecute);
 
         var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
