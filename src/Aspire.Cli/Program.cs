@@ -1218,22 +1218,6 @@ public class Program
                 mainActivity?.Stop();
             }
 
-            // The agent telemetry command runs fire-and-forget from an agent hook and the process
-            // exits immediately after. The short Release shutdown flush window is not enough to
-            // reliably export the single just-created span, so force a bounded reported-provider
-            // flush here before returning. This is a no-op when telemetry is opted out (no provider).
-            if (isAgentTelemetryInvocation)
-            {
-                try
-                {
-                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // A telemetry flush failure must never change the hook's exit code.
-                }
-            }
-
             // This state is only consulted when the parent started a capture session. A successful
             // extension handoff transfers export to the child, while the parent still disposes its session.
             if (profileCaptureSession is not null && !profileCaptureState.IsTransferred)
@@ -1271,6 +1255,22 @@ public class Program
             // it has been handed to the provider before shutdown starts so short CLI invocations do not
             // lose the activity while the provider is flushing.
             await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
+
+            // The agent telemetry command runs fire-and-forget from an agent hook and the process
+            // exits immediately after. The short Release shutdown flush window is not enough to
+            // reliably export its just-created spans, so flush only after the asynchronously-created
+            // detector-health activity has also been submitted to the reported provider.
+            if (isAgentTelemetryInvocation)
+            {
+                try
+                {
+                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A telemetry flush failure must never change the hook's exit code.
+                }
+            }
 
             // Shutting down telemetry manager to flush any remaining telemetry will take time.
             // Run it concurrently with application shutdown after all asynchronously-created telemetry
