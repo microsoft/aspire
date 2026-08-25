@@ -57,11 +57,8 @@ internal static class KnownCapabilities
     // Advertised so tooling can pass `aspire run --launch-profile` only to CLIs that understand it.
     public const string LaunchProfile = "launch-profile.v1";
 
-    // Advertised so tooling can target an AppHost with `aspire new aspire-test --apphost`.
-    public const string AspireTestAppHost = "aspire-test-apphost.v1";
-
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, LaunchProfile, AspireTestAppHost];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, LaunchProfile];
 }
