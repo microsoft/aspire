@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
+    addIntegrationTestProjectCapabilityCouldNotBeVerified,
     addIntegrationTestProjectRequiresCSharpAppHost,
     addIntegrationTestProjectUnsupported,
 } from '../loc/strings';
@@ -75,7 +76,7 @@ export async function addIntegrationTestProject(
         return;
     }
 
-    const supported = await configInfoProvider.hasCapability(
+    const supportStatus = await configInfoProvider.getCapabilityStatus(
         aspireTestAppHostCapability,
         {
             cliPath,
@@ -83,8 +84,10 @@ export async function addIntegrationTestProject(
             forceRefresh: true,
             suppressErrors: true,
         });
-    if (!supported) {
-        await vscode.window.showErrorMessage(addIntegrationTestProjectUnsupported);
+    if (supportStatus !== 'supported') {
+        await vscode.window.showErrorMessage(supportStatus === 'unsupported'
+            ? addIntegrationTestProjectUnsupported
+            : addIntegrationTestProjectCapabilityCouldNotBeVerified);
         return;
     }
 

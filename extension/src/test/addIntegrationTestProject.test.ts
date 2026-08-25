@@ -10,6 +10,7 @@ import {
     addIntegrationTestProjectSupportedContext,
 } from '../commands/addIntegrationTestProject';
 import {
+    addIntegrationTestProjectCapabilityCouldNotBeVerified,
     addIntegrationTestProjectRequiresCSharpAppHost,
     addIntegrationTestProjectUnsupported,
 } from '../loc/strings';
@@ -27,6 +28,7 @@ suite('addIntegrationTestProject', () => {
     let configInfoProvider: ConfigInfoProvider;
     let sendCommandStub: sinon.SinonStub;
     let hasCapabilityStub: sinon.SinonStub;
+    let getCapabilityStatusStub: sinon.SinonStub;
     let showErrorMessageStub: sinon.SinonStub;
     let executeCommandStub: sinon.SinonStub;
 
@@ -37,8 +39,10 @@ suite('addIntegrationTestProject', () => {
             sendAspireCommandToAspireTerminal: sendCommandStub,
         } as unknown as AspireTerminalProvider;
         hasCapabilityStub = sandbox.stub().resolves(true);
+        getCapabilityStatusStub = sandbox.stub().resolves('supported');
         configInfoProvider = {
             hasCapability: hasCapabilityStub,
+            getCapabilityStatus: getCapabilityStatusStub,
         } as unknown as ConfigInfoProvider;
         showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
         executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
@@ -62,7 +66,7 @@ suite('addIntegrationTestProject', () => {
             target,
             '/selected/aspire');
 
-        assert.ok(hasCapabilityStub.calledOnceWith(aspireTestAppHostCapability, {
+        assert.ok(getCapabilityStatusStub.calledOnceWith(aspireTestAppHostCapability, {
             cliPath: '/selected/aspire',
             target,
             forceRefresh: true,
@@ -76,7 +80,7 @@ suite('addIntegrationTestProject', () => {
     });
 
     test('does not invoke a CLI that does not advertise support', async () => {
-        hasCapabilityStub.resolves(false);
+        getCapabilityStatusStub.resolves('unsupported');
 
         await addIntegrationTestProject(
             terminalProvider,
@@ -89,16 +93,31 @@ suite('addIntegrationTestProject', () => {
         assert.strictEqual(sendCommandStub.called, false);
     });
 
-    test('rejects a non-CSharp AppHost before checking the capability', async () => {
+    test('reports when selected CLI support cannot be verified', async () => {
+        getCapabilityStatusStub.resolves('unavailable');
+
         await addIntegrationTestProject(
             terminalProvider,
             configInfoProvider,
-            path.join('repo', 'app.ts'),
+            path.join('repo', 'AppHost.csproj'),
+            windowCliPathTarget,
+            '/selected/aspire');
+
+        assert.ok(showErrorMessageStub.calledOnceWith(addIntegrationTestProjectCapabilityCouldNotBeVerified));
+        assert.strictEqual(sendCommandStub.called, false);
+    });
+
+    test('rejects a CSharp single-file AppHost before checking the capability', async () => {
+        await addIntegrationTestProject(
+            terminalProvider,
+            configInfoProvider,
+            path.join('repo', 'apphost.cs'),
             windowCliPathTarget,
             '/selected/aspire');
 
         assert.ok(showErrorMessageStub.calledOnceWith(addIntegrationTestProjectRequiresCSharpAppHost));
         assert.strictEqual(hasCapabilityStub.called, false);
+        assert.strictEqual(getCapabilityStatusStub.called, false);
         assert.strictEqual(sendCommandStub.called, false);
     });
 
