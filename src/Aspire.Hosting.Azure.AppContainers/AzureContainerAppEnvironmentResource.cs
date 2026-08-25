@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -37,6 +38,11 @@ public class AzureContainerAppEnvironmentResource :
     public AzureContainerAppEnvironmentResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
+        // ACA permits only one active create or update operation per managed environment. Keep the
+        // policy on the environment so deployment publishers can enforce it without interpreting
+        // application relationships as deployment dependencies.
+        Annotations.Add(new DeploymentConcurrencyAnnotation(maxConcurrentDeployments: 1));
+
         // Add pipeline step annotation to create steps and expand deployment target steps
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
         {
