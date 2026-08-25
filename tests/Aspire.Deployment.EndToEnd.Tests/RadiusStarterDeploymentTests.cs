@@ -30,7 +30,6 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(55);
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19172")]
     public async Task DeployStarterTemplateToRadiusOnAks()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);

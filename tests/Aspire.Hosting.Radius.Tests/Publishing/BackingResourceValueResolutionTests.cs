@@ -391,6 +391,48 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The condition catch used to be blanket. Because the outer environment loop turns the
+    /// translated failure into a warning and <em>drops the variable</em>, a provider bug, a network
+    /// failure, or a configuration error would silently remove an environment variable from the
+    /// deployed app instead of failing the publish.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseConditionFailsUnexpectedly_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    new ThrowingValueProvider(new InvalidOperationException("provider bug")),
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")))));
+
+        Assert.Equal("provider bug", ex.Message);
+    }
+
+    /// <summary>
+    /// An <see cref="InvalidOperationException"/> is only treated as "unknowable here" when the
+    /// condition is an <see cref="IManifestExpressionProvider"/> — a placeholder some other
+    /// deployment fills in. The marker gates the skip; the exception type alone never does.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseManifestExpressionConditionFails_SkipsJustThatVariable()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    new ThrowingDeploymentOutput(new InvalidOperationException("not deployed yet")),
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")))
+                .WithEnvironment("KEPT", "kept"));
+
+        Assert.DoesNotContain("MODE_URL", bicep, StringComparison.Ordinal);
+        Assert.Contains("'kept'", bicep, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS078", Assert.Single(logger.Matching(LogLevel.Warning, "MODE_URL")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Substitutions are keyed by parameter identity, so a parameter given as both the user name and
     /// the password of a recipe-provisioned resource can only be rewritten to one of the two
     /// recipe-generated values. It used to be silently rewritten to the user name, handing consumers

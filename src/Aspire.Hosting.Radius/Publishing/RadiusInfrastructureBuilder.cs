@@ -519,6 +519,12 @@ internal sealed class RadiusInfrastructureBuilder
         // recipe-backed, so the pack may need the entry even when the publisher emitted no secret.
         EnsureSecretsRecipeRegistered(options, recipePackConstruct, udtRecipeEntries);
 
+        // Names and data keys are copied verbatim into the Kubernetes Secret by the recipe, and are
+        // freely mutable through the callback surface. Validate the final state — after the rewiring
+        // above, so the repaired names are the ones checked.
+        ValidateFinalSecretShapes(options);
+        ValidateNoPhysicalSecretCollisions(options);
+
         // Surface recipe-parameter scopes that target a resource type with no emitted recipe
         // entry, and register any ParameterResource-backed recipe/inline-secret Bicep params.
         WarnUnmatchedResourceTypeScopes(udtRecipeEntries.Keys.Concat(legacyRecipeEntries.Keys));
@@ -829,14 +835,26 @@ internal sealed class RadiusInfrastructureBuilder
                 continue;
             }
 
+            // The callback took ownership of the property, so this relationship is no longer the
+            // publisher's to enforce — last-write-wins, exactly as for container env values and
+            // projected type properties. This has to be decided *before* the checks below: those
+            // reject removing the secret or changing the credential, which are legitimate once the
+            // consumer no longer reads from it. The credential schema properties are internal, so
+            // the typed surface offers no way to reassign one, but the `ProvisionableProperties`
+            // dictionary inherited from Azure.Provisioning is public and reaches the same values.
+            if (credential.Consumer.GetSchemaProperty(credential.PropertyName) is not { } currentProperty ||
+                !string.Equals(RenderBicepValue(currentProperty), credential.OriginalPropertyValue, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             if (!liveSecrets.Contains(credential.Secret))
             {
                 throw new InvalidOperationException(
                     $"Radius resource '{credential.Consumer.BicepIdentifier}' reads its '{credential.PropertyName}' from " +
                     $"the '{RadiusResourceTypes.SecuritySecrets}' resource '{credential.OriginalSecretIdentifier}', but a " +
                     $"ConfigureRadiusInfrastructure callback removed it. The property is required, so the deployment would " +
-                    $"be rejected. Keep the secret: '{credential.PropertyName}' is a schema property the publisher owns " +
-                    $"and it cannot be assigned from a callback. " +
+                    $"be rejected. Keep the secret, or point '{credential.PropertyName}' at a secret of your own. " +
                     $"Diagnostic: ASPIRERADIUS074.");
             }
 
@@ -859,15 +877,39 @@ internal sealed class RadiusInfrastructureBuilder
                 credential.Secret.ApplicationId = BuildIdExpression(appConstruct);
             }
 
-            if (string.Equals(credential.Secret.BicepIdentifier, credential.OriginalSecretIdentifier, StringComparison.Ordinal))
+            // The consumer still reads this secret, so the entry carrying the credential has to
+            // survive intact. Unlike a container env secret — whose only reader is the variable that
+            // points at it, so a callback replacing the value is self-consistent — this value is
+            // handed to the *recipe* that provisions the server, while the matching credential was
+            // already composed into every consumer's connection string from Aspire's own parameter.
+            // Removing it prevents the recipe from starting; changing it provisions a server with a
+            // password no consumer was told about, which fails only as an authentication error at
+            // runtime. Neither can be repaired here, so both are rejected.
+            if (!credential.Secret.Data.TryGetValue(credential.SecretKey, out var liveEntry))
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"Radius resource '{credential.Consumer.BicepIdentifier}' reads its '{credential.PropertyName}' from " +
+                    $"key '{credential.SecretKey}' of the '{RadiusResourceTypes.SecuritySecrets}' resource " +
+                    $"'{credential.Secret.BicepIdentifier}', but a ConfigureRadiusInfrastructure callback removed that " +
+                    $"key. The recipe cannot provision the resource without it. Keep the key, or point " +
+                    $"'{credential.PropertyName}' at a secret of your own. Diagnostic: ASPIRERADIUS089.");
             }
 
-            // The callback assigned the property itself — last-write-wins, exactly as for container
-            // env values and projected type properties.
-            if (credential.Consumer.GetSchemaProperty(credential.PropertyName) is not { } current ||
-                !string.Equals(RenderBicepValue(current), credential.OriginalPropertyValue, StringComparison.Ordinal))
+            // Both an entry swapped for a new construct and one mutated in place are rejected: the
+            // credential Aspire projected to consumers is fixed at this point either way.
+            if (!ReferenceEquals(liveEntry?.Value, credential.Entry) ||
+                !string.Equals(RenderBicepValue(credential.Entry.Value), credential.OriginalEntryValue, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"A ConfigureRadiusInfrastructure callback changed the value of key '{credential.SecretKey}' on the " +
+                    $"'{RadiusResourceTypes.SecuritySecrets}' resource '{credential.Secret.BicepIdentifier}', which supplies " +
+                    $"'{credential.PropertyName}' for '{credential.Consumer.BicepIdentifier}'. Consumers were already given " +
+                    $"the original credential in their connection strings, so the deployed resource would require a " +
+                    $"credential no consumer has. Supply the credential as a parameter instead, or point " +
+                    $"'{credential.PropertyName}' at a secret of your own. Diagnostic: ASPIRERADIUS089.");
+            }
+
+            if (string.Equals(credential.Secret.BicepIdentifier, credential.OriginalSecretIdentifier, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -979,6 +1021,272 @@ internal sealed class RadiusInfrastructureBuilder
             reference.EnvVar.SecretName = reference.Secret.SecretName;
         }
     }
+
+    /// <summary>
+    /// After callbacks run, reject two emitted secrets that would materialize as the <em>same</em>
+    /// Kubernetes <c>Secret</c> object — the same name in the same namespace.
+    /// </summary>
+    /// <remarks>
+    /// Radius scopes uniqueness by resource type, so an <c>Applications.Core/secretStores</c> and a
+    /// <c>Radius.Security/secrets</c> can carry names that are distinct to Radius yet collapse onto
+    /// one cluster object. The publisher itself can produce that pair: a container named <c>Api</c>
+    /// generates a store named <c>api-env-secret</c>, and
+    /// <c>AddRadiusSecretStore("api-env-secret")</c> is a distinct Bicep symbol that passes the
+    /// existing duplicate-identifier check while naming the same object. Whichever the deploy
+    /// applies second overwrites the first, so the surviving object carries only one set of keys and
+    /// the other consumer reads a key that is not there.
+    /// <para>
+    /// A resource that only <em>references</em> an object the cluster already has (a secret store in
+    /// the existing mode) never overwrites it, so two of those naming the same object are
+    /// legitimate — exposing different keys from one Secret is the point of the mode. Only a pair
+    /// where at least one side materializes the object is rejected. A sealed store also carries a
+    /// <c>resource</c> reference but <em>is</em> a materializer, because deploy applies its manifest
+    /// with <c>kubectl apply</c>. Its claim is taken from the validated manifest rather than from
+    /// the emitted construct: <see cref="SealedSecretApplyStep"/> selects sealed stores from the
+    /// application model, so the manifest is applied even if a callback removed or replaced the
+    /// construct, and dropping the claim along with the construct would hide a real collision.
+    /// </para>
+    /// <para>
+    /// This is reported rather than auto-renamed: both names are user-visible (one is the resource
+    /// name, the other was passed explicitly), and renaming either would silently break a reference
+    /// held outside the app model — an existing/sealed store deliberately names an object the
+    /// cluster already has.
+    /// </para>
+    /// <para>
+    /// Only candidates whose namespace <em>and</em> name are both statically resolvable are
+    /// compared. Namespace comes from walking the scope chain to the owning environment construct,
+    /// whose namespace a callback may itself have changed; it is never assumed to be the environment
+    /// the publisher started from. Anything dynamic is skipped rather than guessed, because a false
+    /// collision would fail a publish that deploys correctly.
+    /// </para>
+    /// </remarks>
+    private static void ValidateNoPhysicalSecretCollisions(RadiusInfrastructureOptions options)
+    {
+        // Rendered `<symbol>.id` of every scope construct, so a scope reference can be walked back
+        // to the environment that supplies the namespace. Applications carry no namespace of their
+        // own, so they resolve through their own EnvironmentId.
+        var namespaceByScopeId = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var environmentIdByScopeId = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+        foreach (var environment in options.Environments)
+        {
+            namespaceByScopeId[BuildIdExpression(environment).ToString()] =
+                RenderBicepLiteral(environment.KubernetesNamespace);
+        }
+
+        foreach (var legacyEnvironment in options.LegacyEnvironments)
+        {
+            namespaceByScopeId[BuildIdExpression(legacyEnvironment).ToString()] =
+                RenderBicepLiteral(legacyEnvironment.ComputeNamespace);
+        }
+
+        foreach (var application in options.Applications)
+        {
+            environmentIdByScopeId[BuildIdExpression(application).ToString()] =
+                RenderBicepValue(application.EnvironmentId);
+        }
+
+        foreach (var legacyApplication in options.LegacyApplications)
+        {
+            environmentIdByScopeId[BuildIdExpression(legacyApplication).ToString()] =
+                RenderBicepValue(legacyApplication.EnvironmentId);
+        }
+
+        string? ResolveNamespace(string? scopeId)
+        {
+            if (scopeId is null)
+            {
+                return null;
+            }
+
+            if (environmentIdByScopeId.TryGetValue(scopeId, out var environmentId))
+            {
+                scopeId = environmentId;
+            }
+
+            return scopeId is not null && namespaceByScopeId.TryGetValue(scopeId, out var ns) ? ns : null;
+        }
+
+        // Only a resource that *materializes* the object can overwrite another's contents. Two
+        // reference-only stores naming the same existing object are legitimate and common — one
+        // exposing `username`, another exposing `password` from the same cluster Secret — so a
+        // reference collides with a materializer but never with another reference.
+        var claimed = new Dictionary<(string Namespace, string Name), (string Description, bool Materializes)>();
+
+        void Claim(string? ns, string? name, string description, bool materializes)
+        {
+            if (ns is null || name is null)
+            {
+                return;
+            }
+
+            if (claimed.TryGetValue((ns, name), out var existing))
+            {
+                if (materializes || existing.Materializes)
+                {
+                    // Both writing and one-writes-one-reads are failures, but for different reasons,
+                    // so say which one the author is actually looking at.
+                    var consequence = materializes && existing.Materializes
+                        ? "whichever is applied second overwrites the first, and a consumer of the overwritten secret " +
+                          "reads a key that is no longer there"
+                        : "one of them creates the object the other only references, so the reference resolves to " +
+                          "contents it did not expect and the keys it expects may not be there";
+
+                    throw new InvalidOperationException(
+                        $"{description} and {existing.Description} both resolve to the Kubernetes Secret '{name}' in " +
+                        $"namespace '{ns}'. Radius scopes names by resource type, so these are distinct resources to " +
+                        $"Radius but one object in the cluster: {consequence}. Rename one of them. " +
+                        $"Diagnostic: ASPIRERADIUS090.");
+                }
+
+                return;
+            }
+
+            claimed[(ns, name)] = (description, materializes);
+        }
+
+        // Claimed first so the reference-only pass below can recognize a reference *to* a sealed
+        // object, which is the intended way to consume one rather than a collision.
+        var sealedObjects = new HashSet<(string Namespace, string Name)>();
+        foreach (var (storeName, manifest) in options.SealedSecretManifests)
+        {
+            sealedObjects.Add((manifest.Metadata.Namespace, manifest.Metadata.Name));
+            Claim(
+                manifest.Metadata.Namespace,
+                manifest.Metadata.Name,
+                $"The sealed secret store '{storeName}'",
+                materializes: true);
+        }
+
+        foreach (var secret in options.SecuritySecrets)
+        {
+            // `ApplicationId` is optional but its getter always returns a non-null BicepValue in an
+            // unset state, so presence has to be decided by whether it renders to anything.
+            var scopeId = RenderBicepValue(secret.ApplicationId) ?? RenderBicepValue(secret.EnvironmentId);
+
+            Claim(
+                ResolveNamespace(scopeId),
+                RenderBicepLiteral(secret.SecretName),
+                $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}'",
+                materializes: true);
+        }
+
+        foreach (var store in options.SecretStores)
+        {
+            var scopeId = RenderBicepValue(store.ApplicationId) ?? RenderBicepValue(store.EnvironmentId);
+            var description = $"The secret store '{store.BicepIdentifier}'";
+
+            // An existing/sealed store names an object by `resource` rather than by `StoreName`,
+            // which in those modes is only the Radius-side resource name.
+            if (RenderBicepLiteral(store.ResourceReference) is { } resourceReference)
+            {
+                // `resource` is `<namespace>/<name>`, or a bare name meaning the scope's namespace.
+                var separator = resourceReference.IndexOf('/');
+                var referencedNamespace = separator >= 0 ? resourceReference[..separator] : ResolveNamespace(scopeId);
+                var referencedName = separator >= 0 ? resourceReference[(separator + 1)..] : resourceReference;
+
+                // A sealed store's own `resource` points at the object its manifest applies, and a
+                // store may also deliberately reference a sealed-managed object. Either way the
+                // sealed manifest already claimed it as the writer; claiming it again as a reference
+                // would report the store as colliding with the very thing that creates it.
+                if (referencedNamespace is null || !sealedObjects.Contains((referencedNamespace, referencedName)))
+                {
+                    Claim(referencedNamespace, referencedName, description, materializes: false);
+                }
+
+                continue;
+            }
+
+            if (IsBicepExpression(store.ResourceReference))
+            {
+                continue;
+            }
+
+            Claim(ResolveNamespace(scopeId), RenderBicepLiteral(store.StoreName), description, materializes: true);
+        }
+    }
+
+    /// <summary>
+    /// After callbacks run, validate the final shape of every emitted secret: the Kubernetes object
+    /// name each one materializes as, and every data key it carries.
+    /// </summary>
+    /// <remarks>
+    /// Both are values the secrets recipe copies <em>verbatim</em> into a Kubernetes <c>Secret</c>
+    /// (<c>metadata.name</c> and the <c>data</c> keys), and Radius validates neither, so an invalid
+    /// value compiles as Bicep and surfaces only when the API server rejects the object at deploy.
+    /// <para>
+    /// The publisher's own names and keys are already checked where they are generated
+    /// (<see cref="ToSecretKey"/>, and resource names are constrained by Aspire's model-name rules),
+    /// but <see cref="RadiusSecuritySecretConstruct.SecretName"/> and the <c>Data</c> dictionaries
+    /// are public and freely mutable, so the final state is only knowable here.
+    /// </para>
+    /// <para>
+    /// Only <em>literal</em> names are validated. A callback may legitimately assign a Bicep
+    /// expression: <see cref="RewireContainerEnvSecrets"/> assigns the secret's own
+    /// <see cref="BicepValue{T}"/> to the consuming variable's <c>secretName</c>, so both sides
+    /// evaluate to the same value at deploy time and the reference stays coherent. Rejecting a name
+    /// merely because it cannot be checked statically would contradict the escape hatch's
+    /// last-write-wins contract — the publisher only rejects a non-literal where it has already
+    /// emitted a fixed literal that must match (service discovery, see
+    /// <c>ValidatePostCallbackContainerInvariants</c>).
+    /// </para>
+    /// </remarks>
+    private static void ValidateFinalSecretShapes(RadiusInfrastructureOptions options)
+    {
+        foreach (var secret in options.SecuritySecrets)
+        {
+            if (RenderBicepValue(secret.SecretName) is { } secretName &&
+                !IsBicepExpression(secret.SecretName) &&
+                !KubernetesName.IsDns1123Subdomain(secretName))
+            {
+                throw new InvalidOperationException(
+                    $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has the name " +
+                    $"'{secretName}', which is not a valid Kubernetes object name. The recipe uses it verbatim as the " +
+                    $"Secret's 'metadata.name', so the deployment would be rejected. A name must be a DNS-1123 " +
+                    $"subdomain: 1-253 characters of lowercase letters, digits, '-' and '.', starting and ending " +
+                    $"alphanumeric. Diagnostic: ASPIRERADIUS088.");
+            }
+
+            foreach (var (key, _) in secret.Data)
+            {
+                ValidateSecretDataKey(key, RadiusResourceTypes.SecuritySecrets, secret.BicepIdentifier);
+            }
+        }
+
+        // Secret stores reach the same Kubernetes `data` map. AddRadiusSecretStore validates keys at
+        // the API boundary, but the construct is part of the callback surface too, so the final
+        // state still has to be checked. Both population modes key `Data` identically — an inline
+        // entry carries a value and an existing-secret entry is an empty object naming a key to
+        // expose — so the key contract is the same for both.
+        foreach (var store in options.SecretStores)
+        {
+            foreach (var (key, _) in store.Data)
+            {
+                ValidateSecretDataKey(key, "secret store", store.BicepIdentifier);
+            }
+        }
+    }
+
+    private static void ValidateSecretDataKey(string key, string ownerType, string ownerIdentifier)
+    {
+        if (KubernetesName.IsValidSecretDataKey(key))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The {ownerType} resource '{ownerIdentifier}' carries the data key '{key}', which is not a valid " +
+            $"Kubernetes secret key. The recipe copies it verbatim into the Secret's 'data', so the deployment would " +
+            $"be rejected. A key must be 1-253 characters of letters, digits, '-', '_' and '.', and may not be '.' " +
+            $"or '..' or start with '..'. Diagnostic: ASPIRERADIUS088.");
+    }
+
+    /// <summary>
+    /// Whether a Bicep value carries an expression rather than a literal, so a static check on its
+    /// text would be checking the expression's source rather than the value it deploys as.
+    /// </summary>
+    private static bool IsBicepExpression<T>(BicepValue<T> value) =>
+        value is IBicepValue { Expression: not null };
 
     private (string ResourceType, string ApiVersion) ResolveResourceType(IResource resource)
     {
@@ -1205,6 +1513,15 @@ internal sealed class RadiusInfrastructureBuilder
     /// that supplied its own entry for the type keeps it — the <c>ContainsKey</c> check makes this
     /// last-write-wins like the rest of the escape hatch.
     /// </para>
+    /// <para>
+    /// The second pass is not only for callback-added secrets: <c>Recipes</c> is a mutable
+    /// dictionary, so a callback can also <em>remove</em> the entry the first pass registered while
+    /// leaving the secret that needs it in place. That is repaired rather than rejected, and is a
+    /// deliberate exception to last-write-wins: the type is recipe-backed, so a surviving secret
+    /// with no registered recipe fails the deploy on the secret itself rather than on whatever
+    /// referenced it. Replacing the entry is still fully supported — only removing it while a
+    /// consumer remains is undone, because that state has no valid deployment.
+    /// </para>
     /// </remarks>
     private void EnsureSecretsRecipeRegistered(
         RadiusInfrastructureOptions options,
@@ -1222,11 +1539,38 @@ internal sealed class RadiusInfrastructureBuilder
 
         AddRecipeEntry(udtRecipeEntries, RadiusResourceTypes.SecuritySecrets);
         var entry = udtRecipeEntries[RadiusResourceTypes.SecuritySecrets];
-        recipePackConstruct.Recipes[RadiusResourceTypes.SecuritySecrets] = new RecipeEntryConstruct
+        recipePackConstruct.Recipes[RadiusResourceTypes.SecuritySecrets] =
+            BuildRecipeEntryConstruct(RadiusResourceTypes.SecuritySecrets, entry);
+    }
+
+    /// <summary>
+    /// Builds the <see cref="RecipeEntryConstruct"/> for one recipe entry, with the environment's
+    /// <c>WithRecipeParameters</c> values for <paramref name="type"/> applied.
+    /// </summary>
+    /// <remarks>
+    /// Shared by <see cref="CreateRecipePackConstruct"/> and
+    /// <see cref="EnsureSecretsRecipeRegistered"/> so an entry added on the later path cannot
+    /// silently lose its parameters: environment-wide parameters are documented as applying to
+    /// every entry, and the type is recorded in the entry map either way, so
+    /// <see cref="WarnUnmatchedResourceTypeScopes"/> would report nothing.
+    /// </remarks>
+    private RecipeEntryConstruct BuildRecipeEntryConstruct(string type, RecipeEntry entry)
+    {
+        var recipeEntry = new RecipeEntryConstruct
         {
             RecipeKind = entry.RecipeKind,
             RecipeLocation = entry.RecipeLocation,
         };
+
+        // Environment-wide parameters merged with any resource-type-scoped overrides. No-op when
+        // none are declared.
+        var parameters = GetEffectiveRecipeParameters(type);
+        if (parameters is not null)
+        {
+            ApplyRecipeParameters(recipeEntry.Parameters, parameters);
+        }
+
+        return recipeEntry;
     }
 
     private RadiusRecipePackConstruct CreateRecipePackConstruct(
@@ -1237,21 +1581,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         foreach (var (type, entry) in recipeEntries)
         {
-            var recipeEntry = new RecipeEntryConstruct
-            {
-                RecipeKind = entry.RecipeKind,
-                RecipeLocation = entry.RecipeLocation,
-            };
-
-            // Apply environment-level WithRecipeParameters for this resource type (environment-wide
-            // merged with any resource-type-scoped overrides). No-op when none are declared.
-            var parameters = GetEffectiveRecipeParameters(type);
-            if (parameters is not null)
-            {
-                ApplyRecipeParameters(recipeEntry.Parameters, parameters);
-            }
-
-            construct.Recipes[type] = recipeEntry;
+            construct.Recipes[type] = BuildRecipeEntryConstruct(type, entry);
         }
 
         return construct;
@@ -1944,12 +2274,14 @@ internal sealed class RadiusInfrastructureBuilder
             secret.ApplicationId = BuildIdExpression(appConstruct);
         }
 
-        secret.Data[secretKey] = new RadiusSecuritySecretDataEntryConstruct
+        var credentialEntry = new RadiusSecuritySecretDataEntryConstruct
         {
             // The 0.60 vocabulary is `string`/`base64` — the legacy secret-store `raw` is rejected.
             Encoding = "string",
             Value = new BicepValue<string>(secretValue.Compile()),
         };
+
+        secret.Data[secretKey] = credentialEntry;
 
         options.SecuritySecrets.Add(secret);
 
@@ -1960,6 +2292,9 @@ internal sealed class RadiusInfrastructureBuilder
             secret,
             construct,
             propertyName,
+            secretKey,
+            credentialEntry,
+            RenderBicepValue(credentialEntry.Value),
             secret.BicepIdentifier,
             RenderBicepValue(idExpression)!,
             RenderBicepValue(secret.EnvironmentId),
@@ -3124,6 +3459,9 @@ internal sealed class RadiusInfrastructureBuilder
         RadiusSecuritySecretConstruct Secret,
         RadiusResourceTypeConstruct Consumer,
         string PropertyName,
+        string SecretKey,
+        RadiusSecuritySecretDataEntryConstruct Entry,
+        string? OriginalEntryValue,
         string OriginalSecretIdentifier,
         string OriginalPropertyValue,
         string? OriginalEnvironmentId,
@@ -3135,6 +3473,13 @@ internal sealed class RadiusInfrastructureBuilder
     /// into the existing <see cref="BicepValue{T}"/> rather than replacing it, so reference
     /// equality cannot detect an override.
     /// </summary>
+    // The literal value only — null when the value is unset or carries an expression, so callers
+    // that need a statically-known value are not handed the rendered expression text instead.
+    private static string? RenderBicepLiteral<T>(BicepValue<T> value) =>
+        value is IBicepValue { Expression: null } bicepValue
+            ? bicepValue.LiteralValue?.ToString()
+            : null;
+
     private static string? RenderBicepValue<T>(BicepValue<T> value) =>
         value is IBicepValue bicepValue
             ? bicepValue.Expression?.ToString() ?? bicepValue.LiteralValue?.ToString()
@@ -3472,16 +3817,28 @@ internal sealed class RadiusInfrastructureBuilder
             }
             else
             {
-                // Translate a failure (most often a parameter with no configured value) into the
-                // publisher's own unresolvable-value failure: the raw exception would abort the
-                // whole publish, while the same parameter used as a *value* resolves to a
-                // `@secure()` param reference.
+                // Translate only the conditions the publisher recognises as legitimately unknown
+                // while publishing; everything else is a real failure and must abort the publish.
+                // This mirrors the default IValueProvider branch in ResolveEnvPartsAsync, and for
+                // the same reason: the outer environment loop turns a
+                // RadiusUnresolvableValueException into a warning and *drops the variable*, so a
+                // blanket catch here would let a configuration error, a network failure, or a bug
+                // inside a provider silently remove an environment variable from the deployed app.
                 var conditionContext = new ValueProviderContext { ExecutionContext = _executionContext, Caller = owner };
                 try
                 {
                     conditionValue = await expression.Condition!.GetValueAsync(conditionContext, _cancellationToken).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (
+                    // A parameter with no configured value. Used as a *value* the same parameter
+                    // resolves to a `@secure()` param reference, so the publish can continue; as a
+                    // condition there is no branch to select.
+                    ex is MissingParameterValueException ||
+                    // A placeholder another deployment fills in (an Azure Bicep output is the
+                    // canonical case), which throws until that deployment has run. Radius does not
+                    // run those deployments, so the value genuinely cannot be known here. The
+                    // marker gates the skip; the failure alone never does.
+                    (ex is InvalidOperationException && expression.Condition is IManifestExpressionProvider))
                 {
                     throw new RadiusUnresolvableValueException(
                         owner,
@@ -4099,6 +4456,19 @@ internal sealed class RadiusInfrastructureBuilder
                 var hasValue = RenderBicepValue(envVar.Value) is not null;
                 var hasSecretName = RenderBicepValue(envVar.SecretName) is not null;
                 var hasSecretKey = RenderBicepValue(envVar.SecretKey) is not null;
+
+                // Neither form assigned. Radius accepts the empty object and the Kubernetes recipe
+                // emits no `value` and no `valueFrom`, so the variable the callback added is absent
+                // from the deployed container — the same silent drop the two checks below exist to
+                // prevent, reached by leaving everything unset rather than by setting too much.
+                if (!hasValue && !hasSecretName && !hasSecretKey)
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback left environment variable '{key}' on container " +
+                        $"'{container.ContainerMapKey}' with neither a 'value' nor a 'valueFrom.secretKeyRef'. The " +
+                        $"variable would be dropped from the deployed container. Assign either Value or the " +
+                        $"SecretName/SecretKey pair. Diagnostic: ASPIRERADIUS087.");
+                }
 
                 if (hasValue && (hasSecretName || hasSecretKey))
                 {

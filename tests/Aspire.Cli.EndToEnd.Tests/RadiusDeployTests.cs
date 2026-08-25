@@ -475,13 +475,13 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Deploys Redis and RabbitMQ, which moved from the legacy <c>Applications.*</c> portable types
-    /// onto their <c>Radius.*</c> UDTs in Radius 0.60, and proves the credentials Aspire projects
-    /// are the ones the deployed servers actually enforce.
+    /// Deploys Redis, RabbitMQ, and MongoDB, and proves the credentials Aspire projects are the ones
+    /// the deployed servers actually enforce.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// These two types are the only ones whose migration cannot be validated from a Bicep snapshot.
+    /// The three cover the three distinct credential shapes the publisher emits, and none of them
+    /// can be validated from a Bicep snapshot.
     /// RabbitMQ's <c>password</c> property takes the <em>resource ID of a
     /// <c>Radius.Security/secrets</c> resource</em>, not a password string, so the snapshot can only
     /// show that a reference was emitted — not that Radius dereferenced it, materialized the secret,
@@ -495,14 +495,24 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
     /// claim about the deployed server's configuration, which the generated Bicep cannot make.
     /// </para>
     /// <para>
-    /// Both checks read from the <em>deployed</em> consumer's env rather than the generated Bicep,
+    /// MongoDB is the third shape, and the only live coverage of the legacy path: no Kubernetes
+    /// recipe has shipped for the <c>Radius.Data/mongoDatabases</c> UDT, so it stays on
+    /// <c>Applications.Datastores/mongoDatabases</c>, where the recipe generates the credential and
+    /// Aspire emits <c>listSecrets().password</c> and <c>properties.username</c> in place of the
+    /// AppHost's parameter. Whether those expressions resolve to what the recipe provisioned is
+    /// decided by Radius. A user name parameter is supplied deliberately: without one, MongoDB's
+    /// default <c>admin</c> is literal text in the connection string with nothing to substitute, so
+    /// the projection under test would not happen at all.
+    /// </para>
+    /// <para>
+    /// Every check reads from the <em>deployed</em> consumer's env rather than the generated Bicep,
     /// because only the deployed spec shows what Radius resolved the recipe outputs and the
     /// <c>@secure()</c> parameter to.
     /// </para>
     /// </remarks>
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployRadiusRedisAndRabbitMqBackingResourcesToKind()
+    public async Task DeployRadiusRedisRabbitMqAndMongoBackingResourcesToKind()
     {
         const string ProjectName = "AspireRadiusCacheQueueDeployTest";
 
@@ -561,6 +571,10 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
+            await auto.TypeAsync("aspire add Aspire.Hosting.MongoDB");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
             var appHostFilePath = Path.Combine(
                 workspace.WorkspaceRoot.FullName,
                 ProjectName,
@@ -575,11 +589,16 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
                 // loopback connections, so a broker provisioned with it would reject the `web` pod.
                 // Publishing a bare AddRabbitMQ fails with ASPIRERADIUS082 for that reason.
                 var queue = builder.AddRabbitMQ("queue", userName: builder.AddParameter("queueuser", "appuser"));
+                // An explicit user name is required for the recipe's own user name to be projected
+                // at all: MongoDB's default `admin` is composed into the connection string as
+                // literal text, with no value for the publisher to substitute.
+                var docs = builder.AddMongoDB("docs", userName: builder.AddParameter("docsuser", "appuser"));
                 builder.AddContainer("web", "{{ContainerImage}}", "{{ContainerImageTag}}")
                     .WithImageSHA256("{{ContainerImageDigest}}")
                     .WithHttpEndpoint(targetPort: {{ContainerPort}})
                     .WithReference(cache)
-                    .WithReference(queue);
+                    .WithReference(queue)
+                    .WithReference(docs);
                 """;
             content = content.Replace(buildRunPattern, radiusWiring + Environment.NewLine + Environment.NewLine + buildRunPattern);
             File.WriteAllText(appHostFilePath, content);
@@ -604,6 +623,19 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             Assert.Contains("Radius.Messaging/rabbitMQ@", appBicep);
             Assert.DoesNotContain("Applications.Datastores/redisCaches", appBicep);
             Assert.DoesNotContain("Applications.Messaging/rabbitMQQueues", appBicep);
+
+            // MongoDB is the opposite case, and deliberately so: no Kubernetes recipe has shipped
+            // for the `Radius.Data/mongoDatabases` UDT, so the legacy portable type — which has both
+            // a recipe and a `listSecrets()` action — is the only deployable mapping. This is the
+            // only resource in the suite that exercises that projection shape end to end.
+            Assert.Contains("Applications.Datastores/mongoDatabases", appBicep);
+            Assert.DoesNotContain("Radius.Data/mongoDatabases", appBicep);
+
+            // The legacy shape: the credential comes from the deployed resource's `listSecrets()`
+            // action and the user name from its properties, both resolved by Radius at deploy time.
+            // Neither the parameter value the AppHost supplied nor a literal may appear.
+            Assert.Contains("docs.listSecrets().password", appBicep);
+            Assert.Contains("docs.properties.username", appBicep);
 
             // RabbitMQ's password is a reference to a secret resource, never a literal on the
             // broker. If this ever regresses to an inline password the deploy below still succeeds
@@ -642,6 +674,10 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
             await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l radapp.io/resource=queue --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l radapp.io/resource=docs --timeout=300s");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
@@ -770,6 +806,59 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
                 "echo \"Attempt $i: broker not ready or credentials rejected, retrying...\"; sleep 10; done");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("MQVERIFY_OK", timeout: TimeSpan.FromMinutes(8));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+
+            // ---------------------------------------------------------------
+            // MongoDB: the recipe's own credentials are what reach the consumer
+            // ---------------------------------------------------------------
+            // This is the claim the generated Bicep cannot make. For legacy `Applications.*` types
+            // the recipe generates the credential and Aspire discards the AppHost's parameter,
+            // emitting `listSecrets().password` and `properties.username` in its place. Whether
+            // those expressions resolve to the values the recipe actually provisioned is decided by
+            // Radius, so only a deployed pod can answer it.
+            await auto.TypeAsync(
+                $"MONGO_USER=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"DOCS_USERNAME\")].value}}') && " +
+                "echo \"projected mongo user=$MONGO_USER\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // The parameter value must NOT survive: `docsuser` was supplied only so that a user name
+            // is projected at all, and the deployed user is the recipe's. If this ever matches, the
+            // publisher has regressed to emitting the parameter and the consumer holds a user the
+            // server does not have.
+            await auto.TypeAsync(
+                "test -n \"$MONGO_USER\" && test \"$MONGO_USER\" != appuser && echo MONGOUSER''_OK");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("MONGOUSER_OK", timeout: TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync(
+                $"MONGO_SECRET=$({envValue}'{{.spec.template.spec.containers[0].env[?(@.name==\"DOCS_PASSWORD\")].valueFrom.secretKeyRef.name}}') && " +
+                "test -n \"$MONGO_SECRET\" && " +
+                $"WEB_POD=$(kubectl get pod -n {radiusNamespace} -l radapp.io/resource=web -o jsonpath='{{.items[0].metadata.name}}') && " +
+                $"MONGO_PASSWORD=$(kubectl exec -n {radiusNamespace} \"$WEB_POD\" -- printenv DOCS_PASSWORD) && " +
+                "test -n \"$MONGO_PASSWORD\" && echo \"mongo_password_length=${#MONGO_PASSWORD}\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            // `mongosh` runs inside the server pod and authenticates against the server's own user
+            // database — the same question `rabbitmqctl authenticate_user` answers for the broker:
+            // do the projected credentials actually work against what the recipe provisioned?
+            await auto.TypeAsync($"MONGO_POD=$(kubectl get pod -n {radiusNamespace} -l radapp.io/resource=docs -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved mongo pod: $MONGO_POD\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            await auto.TypeAsync("for i in $(seq 1 12); do " +
+                $"if kubectl exec -n {radiusNamespace} \"$MONGO_POD\" -- " +
+                // The recipe provisions the credentials as a root user, which lives in `admin`, not in
+                // the database mongosh connects to by default — omitting --authenticationDatabase
+                // makes a correct credential pair fail to authenticate.
+                "mongosh --quiet --authenticationDatabase admin -u \"$MONGO_USER\" -p \"$MONGO_PASSWORD\" " +
+                "--eval 'db.runCommand({ping:1}).ok' | grep -q '^1$'; " +
+                "then echo MONGOVERIFY''_OK; break; fi; " +
+                "echo \"Attempt $i: mongo not ready or credentials rejected, retrying...\"; sleep 10; done");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("MONGOVERIFY_OK", timeout: TimeSpan.FromMinutes(8));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
