@@ -53,7 +53,7 @@ internal class DotNetTemplateFactory(
     };
     private readonly Option<FileInfo?> _appHostOption = new("--apphost")
     {
-        Description = SharedCommandStrings.AppHostOptionDescription
+        Description = TemplatingStrings.AppHostProjectOptionDescription
     };
 
     public IEnumerable<ITemplate> GetTemplates()

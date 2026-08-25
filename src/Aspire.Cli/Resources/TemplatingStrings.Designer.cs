@@ -61,6 +61,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The path to the Aspire AppHost project file.
+        /// </summary>
+        public static string AppHostProjectOptionDescription {
+            get {
+                return ResourceManager.GetString("AppHostProjectOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
         public static string AspireAppHost_Description {
