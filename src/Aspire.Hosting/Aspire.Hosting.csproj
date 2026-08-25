@@ -146,6 +146,13 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
+    <!--
+      Radius reads internal members that have no public equivalent, such as
+      ProjectLaunchDefaultsAnnotation.DefaultHttpsEndpoint. This grant was removed in #19620 as
+      unnecessary, which was correct at the time; the Radius backing-resource work reintroduced
+      the dependency, so the grant is restored here rather than resurrected by a merge.
+    -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Radius" />
     <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />
