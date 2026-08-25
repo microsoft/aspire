@@ -7,9 +7,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Provisioning\Aspire.Hosting.Azure.Provisioning.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Provisioning.Generators\Aspire.Hosting.Azure.Provisioning.Generators.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="xunit.v3.assert" />
   </ItemGroup>
 

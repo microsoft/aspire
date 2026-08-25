@@ -4,5 +4,14 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.Storage;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(StorageAccount))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(StorageAccount),
+    ExcludedMemberNames = new[]
+    {
+        "CreateRoleAssignment",
+        "ExtendedLocation",
+        "GetResourceNameRequirements",
+        "Identity",
+        "SystemData"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(Azure.Provisioning.Storage.FileShare), IsInfrastructureRoot = false)]

@@ -4,4 +4,6 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.ApplicationInsights;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(ApplicationInsightsComponent))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(ApplicationInsightsComponent),
+    ExcludedMemberNames = new[] { "CreateRoleAssignment", "GetResourceNameRequirements", "SystemData" })]

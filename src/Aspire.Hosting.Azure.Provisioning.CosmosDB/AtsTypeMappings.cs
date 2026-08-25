@@ -4,6 +4,15 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.CosmosDB;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBAccount))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(CosmosDBAccount),
+    ExcludedMemberNames = new[]
+    {
+        "CreateRoleAssignment",
+        "GetResourceNameRequirements",
+        "Identity",
+        "NetworkAclBypassResourceIds",
+        "SystemData"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBSqlDatabase), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBSqlContainer), IsInfrastructureRoot = false)]

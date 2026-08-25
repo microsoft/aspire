@@ -4,4 +4,12 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.OperationalInsights;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(OperationalInsightsWorkspace))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(OperationalInsightsWorkspace),
+    ExcludedMemberNames = new[]
+    {
+        "AdditionalProperties",
+        "GetResourceNameRequirements",
+        "Identity",
+        "SystemData"
+    })]

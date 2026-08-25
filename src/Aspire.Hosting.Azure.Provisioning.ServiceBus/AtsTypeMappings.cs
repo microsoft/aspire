@@ -4,7 +4,16 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.ServiceBus;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusNamespace))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(ServiceBusNamespace),
+    ExcludedMemberNames = new[]
+    {
+        "ApplicationProperties",
+        "CreateRoleAssignment",
+        "GetResourceNameRequirements",
+        "Identity",
+        "SystemData"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusQueue), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusTopic), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusSubscription), IsInfrastructureRoot = false)]

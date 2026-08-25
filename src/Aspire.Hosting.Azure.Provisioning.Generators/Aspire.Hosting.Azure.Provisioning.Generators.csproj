@@ -27,4 +27,8 @@
     <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Provisioning.Tests" />
+  </ItemGroup>
+
 </Project>

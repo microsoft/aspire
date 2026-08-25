@@ -4,4 +4,6 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.Roles;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(UserAssignedIdentity))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(UserAssignedIdentity),
+    ExcludedMemberNames = new[] { "GetResourceNameRequirements", "SystemData" })]

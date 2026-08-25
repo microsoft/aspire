@@ -4,5 +4,14 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccount))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(CognitiveServicesAccount),
+    ExcludedMemberNames = new[]
+    {
+        "AdditionalProperties",
+        "CreateRoleAssignment",
+        "GetResourceNameRequirements",
+        "Identity",
+        "SystemData"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccountDeployment), IsInfrastructureRoot = false)]

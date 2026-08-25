@@ -22,6 +22,39 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private const string ProvisionableResourceProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.ProvisionableResourceProxy";
     private const string AzureResourceInfrastructureTypeName = "global::Aspire.Hosting.Azure.AzureResourceInfrastructure";
     private const string FactoryClassName = "AzureResourceInfrastructureProvisioningExtensions";
+    private const string DiagnosticCategory = "Aspire.Hosting.Azure.Provisioning";
+
+    private static readonly DiagnosticDescriptor s_unsupportedProperty = new(
+        id: "ASPIREAZUREPROVISIONING002",
+        title: "Unsupported provisioning property",
+        messageFormat: "Property '{0}' on provisioning type '{1}' cannot be exported because {2}",
+        category: DiagnosticCategory,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor s_unsupportedMethod = new(
+        id: "ASPIREAZUREPROVISIONING003",
+        title: "Unsupported provisioning method",
+        messageFormat: "Method '{0}' on provisioning type '{1}' cannot be exported because {2}",
+        category: DiagnosticCategory,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor s_duplicateProjectedMethod = new(
+        id: "ASPIREAZUREPROVISIONING004",
+        title: "Duplicate projected provisioning method",
+        messageFormat: "Method '{0}' on provisioning type '{1}' projects to duplicate signature '{2}' and will not be exported",
+        category: DiagnosticCategory,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor s_unsupportedRootType = new(
+        id: "ASPIREAZUREPROVISIONING005",
+        title: "Unsupported provisioning proxy root",
+        messageFormat: "Type '{0}' cannot be used as a provisioning proxy root because it is not a non-generic, non-static class",
+        category: DiagnosticCategory,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 
     private static readonly SymbolDisplayFormat s_typeDisplayFormat = SymbolDisplayFormat.FullyQualifiedFormat
         .WithMiscellaneousOptions(
@@ -49,6 +82,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                             }
 
                             public bool IsInfrastructureRoot { get; set; } = true;
+
+                            public string[] ExcludedMemberNames { get; set; } = global::System.Array.Empty<string>();
                         }
                     }
                     """,
@@ -78,17 +113,29 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 attribute.ConstructorArguments[0] is { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol type })
             {
                 var isInfrastructureRoot = true;
+                var excludedMembers = ImmutableArray.CreateBuilder<string>();
                 foreach (var namedArgument in attribute.NamedArguments)
                 {
                     if (namedArgument.Key == "IsInfrastructureRoot" &&
                         namedArgument.Value.Value is bool value)
                     {
                         isInfrastructureRoot = value;
-                        break;
+                    }
+
+                    if (namedArgument.Key == "ExcludedMemberNames" &&
+                        namedArgument.Value.Kind == TypedConstantKind.Array)
+                    {
+                        foreach (var excludedMember in namedArgument.Value.Values)
+                        {
+                            if (excludedMember.Value is string memberName)
+                            {
+                                excludedMembers.Add(memberName);
+                            }
+                        }
                     }
                 }
 
-                roots.Add(new ProxyRoot(type, isInfrastructureRoot));
+                roots.Add(new ProxyRoot(type, isInfrastructureRoot, excludedMembers.ToImmutable()));
             }
         }
 
@@ -109,10 +156,35 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             .GroupBy(static root => root.Type, SymbolEqualityComparer.Default)
             .Select(static group => new ProxyRoot(
                 (INamedTypeSymbol)group.Key,
-                group.Any(static root => root.IsInfrastructureRoot)))
+                group.Any(static root => root.IsInfrastructureRoot),
+                group.SelectMany(static root => root.ExcludedMemberNames)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToImmutableArray()))
             .ToImmutableArray();
-        var rootTypes = normalizedRoots.Select(static root => root.Type).ToImmutableArray();
-        var discovery = DiscoverProxyTypes(rootTypes);
+        var validRoots = ImmutableArray.CreateBuilder<ProxyRoot>();
+        foreach (var root in normalizedRoots)
+        {
+            if (CanGenerateProxy(root.Type))
+            {
+                validRoots.Add(root);
+            }
+            else
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    s_unsupportedRootType,
+                    GetDiagnosticLocation(root.Type),
+                    root.Type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+            }
+        }
+
+        if (validRoots.Count == 0)
+        {
+            return;
+        }
+
+        var rootTypes = validRoots.Select(static root => root.Type).ToImmutableArray();
+        var excludedMemberNames = CreateExcludedMemberNames(validRoots);
+        var discovery = DiscoverProxyTypes(rootTypes, excludedMemberNames);
         if (discovery.Types.Count == 0)
         {
             return;
@@ -132,7 +204,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         foreach (var type in discovery.Types.OrderBy(static type => type.ToDisplayString(), StringComparer.Ordinal))
         {
-            GenerateProxy(source, type, proxyNames, collectionNames);
+            GenerateProxy(context, source, type, proxyNames, collectionNames, excludedMemberNames);
         }
 
         foreach (var collection in discovery.Collections
@@ -144,7 +216,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         GenerateFactoryClass(
             source,
-            normalizedRoots,
+            validRoots.ToImmutable(),
             discovery.Types,
             proxyNames,
             collectionNames);
@@ -171,7 +243,21 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         return namespaceName.ToString();
     }
 
-    private static DiscoveryResult DiscoverProxyTypes(ImmutableArray<INamedTypeSymbol> roots)
+    private static HashSet<string> CreateExcludedMemberNames(
+        ImmutableArray<ProxyRoot>.Builder roots)
+    {
+        var excludedMemberNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var root in roots)
+        {
+            excludedMemberNames.UnionWith(root.ExcludedMemberNames);
+        }
+
+        return excludedMemberNames;
+    }
+
+    private static DiscoveryResult DiscoverProxyTypes(
+        ImmutableArray<INamedTypeSymbol> roots,
+        HashSet<string> excludedMemberNames)
     {
         var types = new List<INamedTypeSymbol>();
         var collections = new List<CollectionShape>();
@@ -191,11 +277,19 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
             foreach (var property in GetExportableProperties(type))
             {
-                DiscoverMappedType(property.Type);
+                if (!IsExcluded(property, excludedMemberNames))
+                {
+                    DiscoverMappedType(property.Type);
+                }
             }
 
             foreach (var method in GetExportableMethods(type))
             {
+                if (IsExcluded(method, excludedMemberNames))
+                {
+                    continue;
+                }
+
                 DiscoverMappedType(method.ReturnType);
                 foreach (var parameter in method.Parameters)
                 {
@@ -255,10 +349,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         void AddType(INamedTypeSymbol type)
         {
             type = (INamedTypeSymbol)type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
-            if (type.TypeKind == TypeKind.Class &&
-                !type.IsGenericType &&
-                !type.IsStatic &&
-                seenTypes.Add(type))
+            if (CanGenerateProxy(type) && seenTypes.Add(type))
             {
                 types.Add(type);
             }
@@ -398,10 +489,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     }
 
     private static void GenerateProxy(
+        SourceProductionContext context,
         StringBuilder source,
         INamedTypeSymbol type,
         Dictionary<INamedTypeSymbol, string> proxyNames,
-        Dictionary<INamedTypeSymbol, string> collectionNames)
+        Dictionary<INamedTypeSymbol, string> collectionNames,
+        HashSet<string> excludedMemberNames)
     {
         var proxyName = proxyNames[type];
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
@@ -445,6 +538,25 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         foreach (var property in GetExportableProperties(type, includeInherited: proxyBaseType is null))
         {
+            if (IsExcluded(property, excludedMemberNames))
+            {
+                continue;
+            }
+
+            if (property.IsIndexer)
+            {
+                if (proxyNames.ContainsKey(property.ContainingType))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        s_unsupportedProperty,
+                        GetDiagnosticLocation(property),
+                        property.Name,
+                        type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        "indexers are not supported"));
+                }
+                continue;
+            }
+
             if (isProvisionableResource && property.Name == "BicepIdentifier")
             {
                 continue;
@@ -454,9 +566,32 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             {
                 GenerateProperty(source, property, mappedType, proxyName);
             }
+            else
+            {
+                if (proxyNames.ContainsKey(property.ContainingType))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        s_unsupportedProperty,
+                        GetDiagnosticLocation(property),
+                        property.Name,
+                        type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        $"type '{property.Type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}' is not supported"));
+                }
+            }
         }
 
-        var mappedMethods = GetMappedMethods(type, proxyNames, collectionNames, includeInherited: proxyBaseType is null);
+        var mappedMethods = GetMappedMethods(
+            context,
+            type,
+            proxyNames,
+            collectionNames,
+            excludedMemberNames,
+            GetInheritedProjectedMethodSignatures(
+                proxyBaseType,
+                proxyNames,
+                collectionNames,
+                excludedMemberNames),
+            includeInherited: proxyBaseType is null);
         foreach (var methodGroup in mappedMethods.GroupBy(static method => method.Method.Name, StringComparer.Ordinal))
         {
             var overloads = methodGroup.OrderBy(static method => method.Signature, StringComparer.Ordinal).ToList();
@@ -571,54 +706,130 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     }
 
     private static List<MappedMethod> GetMappedMethods(
+        SourceProductionContext context,
         INamedTypeSymbol type,
         Dictionary<INamedTypeSymbol, string> proxyNames,
         Dictionary<INamedTypeSymbol, string> collectionNames,
+        HashSet<string> excludedMemberNames,
+        HashSet<string> projectedSignatures,
         bool includeInherited)
     {
         var mappedMethods = new List<MappedMethod>();
-        var projectedSignatures = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var method in GetExportableMethods(type, includeInherited).OrderBy(GetMethodSignature, StringComparer.Ordinal))
         {
-            if (!TryMapMethod(method, proxyNames, collectionNames, out var mappedMethod))
+            if (IsExcluded(method, excludedMemberNames))
             {
                 continue;
             }
 
-            var projectedSignature = method.Name + "(" + string.Join(
-                ",",
-                mappedMethod.Parameters.Select(static parameter => parameter.Type.ExposedTypeName)) + ")";
+            if (!TryMapMethod(method, proxyNames, collectionNames, out var mappedMethod, out var failureReason))
+            {
+                if (proxyNames.ContainsKey(method.ContainingType))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        s_unsupportedMethod,
+                        GetDiagnosticLocation(method),
+                        method.Name,
+                        type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        failureReason));
+                }
+                continue;
+            }
+
+            var projectedSignature = GetProjectedMethodSignature(mappedMethod);
             if (projectedSignatures.Add(projectedSignature))
             {
                 mappedMethods.Add(mappedMethod);
+            }
+            else
+            {
+                if (proxyNames.ContainsKey(method.ContainingType))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        s_duplicateProjectedMethod,
+                        GetDiagnosticLocation(method),
+                        method.Name,
+                        type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                        projectedSignature));
+                }
             }
         }
 
         return mappedMethods;
     }
 
+    private static HashSet<string> GetInheritedProjectedMethodSignatures(
+        INamedTypeSymbol? proxyBaseType,
+        Dictionary<INamedTypeSymbol, string> proxyNames,
+        Dictionary<INamedTypeSymbol, string> collectionNames,
+        HashSet<string> excludedMemberNames)
+    {
+        var projectedSignatures = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = proxyBaseType; current is not null; current = GetProxyBaseType(current, proxyNames))
+        {
+            foreach (var method in GetExportableMethods(current, includeInherited: false))
+            {
+                if (!IsExcluded(method, excludedMemberNames) &&
+                    TryMapMethod(method, proxyNames, collectionNames, out var mappedMethod, out _))
+                {
+                    projectedSignatures.Add(GetProjectedMethodSignature(mappedMethod));
+                }
+            }
+        }
+
+        return projectedSignatures;
+    }
+
+    private static string GetProjectedMethodSignature(MappedMethod method)
+    {
+        return method.Method.Name + "(" + string.Join(
+            ",",
+            method.Parameters.Select(static parameter => parameter.Type.ExposedTypeName)) + ")";
+    }
+
     private static bool TryMapMethod(
         IMethodSymbol method,
         Dictionary<INamedTypeSymbol, string> proxyNames,
         Dictionary<INamedTypeSymbol, string> collectionNames,
-        out MappedMethod mappedMethod)
+        out MappedMethod mappedMethod,
+        out string failureReason)
     {
-        if (method.ReturnsByRef ||
-            method.ReturnsByRefReadonly ||
-            !TryMapType(method.ReturnType, proxyNames, collectionNames, out var returnType))
+        if (method.IsGenericMethod)
         {
             mappedMethod = null!;
+            failureReason = "generic methods are not supported";
+            return false;
+        }
+
+        if (method.ReturnsByRef || method.ReturnsByRefReadonly)
+        {
+            mappedMethod = null!;
+            failureReason = "by-reference return values are not supported";
+            return false;
+        }
+
+        if (!TryMapType(method.ReturnType, proxyNames, collectionNames, out var returnType))
+        {
+            mappedMethod = null!;
+            failureReason = $"return type '{method.ReturnType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}' is not supported";
             return false;
         }
 
         var mappedParameters = new List<MappedParameter>();
         foreach (var parameter in method.Parameters)
         {
-            if (parameter.RefKind != RefKind.None ||
-                !TryMapType(parameter.Type, proxyNames, collectionNames, out var parameterType))
+            if (parameter.RefKind != RefKind.None)
             {
                 mappedMethod = null!;
+                failureReason = $"parameter '{parameter.Name}' uses unsupported ref kind '{parameter.RefKind}'";
+                return false;
+            }
+
+            if (!TryMapType(parameter.Type, proxyNames, collectionNames, out var parameterType))
+            {
+                mappedMethod = null!;
+                failureReason = $"parameter '{parameter.Name}' uses unsupported type '{parameter.Type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}'";
                 return false;
             }
 
@@ -626,6 +837,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
 
         mappedMethod = new MappedMethod(method, returnType, mappedParameters, GetMethodSignature(method));
+        failureReason = string.Empty;
         return true;
     }
 
@@ -1364,7 +1576,6 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
             {
                 if (!property.IsStatic &&
-                    !property.IsIndexer &&
                     property.DeclaredAccessibility == Accessibility.Public &&
                     seenPropertyNames.Add(property.Name))
                 {
@@ -1391,7 +1602,6 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             foreach (var method in current.GetMembers().OfType<IMethodSymbol>())
             {
                 if (!method.IsStatic &&
-                    !method.IsGenericMethod &&
                     method.MethodKind == MethodKind.Ordinary &&
                     method.Name != nameof(ToString) &&
                     method.DeclaredAccessibility == Accessibility.Public &&
@@ -1538,6 +1748,29 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             .ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) == ProvisionableResourceMetadataName;
     }
 
+    private static bool CanGenerateProxy(INamedTypeSymbol type)
+    {
+        return type.TypeKind == TypeKind.Class &&
+            !type.IsGenericType &&
+            !type.IsStatic;
+    }
+
+    private static Location GetDiagnosticLocation(ISymbol symbol)
+    {
+        return symbol.Locations.FirstOrDefault(static location => location.IsInSource) ?? Location.None;
+    }
+
+    private static bool IsExcluded(
+        ISymbol member,
+        HashSet<string> excludedMemberNames)
+    {
+        return excludedMemberNames.Contains(member.Name) ||
+            excludedMemberNames.Contains(
+                member.ContainingType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) +
+                "." +
+                member.Name);
+    }
+
     private static bool IsProvisionableResource(INamedTypeSymbol type)
     {
         for (INamedTypeSymbol? current = type; current is not null; current = current.BaseType)
@@ -1671,15 +1904,21 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private readonly struct ProxyRoot
     {
-        public ProxyRoot(INamedTypeSymbol type, bool isInfrastructureRoot)
+        public ProxyRoot(
+            INamedTypeSymbol type,
+            bool isInfrastructureRoot,
+            ImmutableArray<string> excludedMemberNames)
         {
             Type = type;
             IsInfrastructureRoot = isInfrastructureRoot;
+            ExcludedMemberNames = excludedMemberNames;
         }
 
         public INamedTypeSymbol Type { get; }
 
         public bool IsInfrastructureRoot { get; }
+
+        public ImmutableArray<string> ExcludedMemberNames { get; }
     }
 
     private readonly struct CollectionShape
