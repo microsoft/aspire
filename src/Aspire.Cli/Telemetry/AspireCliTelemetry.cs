@@ -16,6 +16,8 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal sealed class AspireCliTelemetry : IHostedService
 {
+    private static readonly TimeSpan s_internalMicrosoftDiagnosticsCompletionTimeout = TimeSpan.FromSeconds(15);
+
     /// <summary>
     /// The name of the ActivitySource for report telemetry. This telemetry is exported to external systems.
     /// </summary>
@@ -230,7 +232,21 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <inheritdoc />
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) => CompleteInternalMicrosoftDiagnosticsAsync(cancellationToken);
+
+    internal async Task CompleteInternalMicrosoftDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _internalMicrosoftDiagnosticsTask.WaitAsync(s_internalMicrosoftDiagnosticsCompletionTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException ex)
+        {
+            // Telemetry must never prevent the CLI from exiting. Detector probes are individually
+            // bounded, but this also protects shutdown from unexpected filesystem or provider stalls.
+            _logger.LogDebug(ex, "Timed out waiting for internal Microsoft diagnostics to complete.");
+        }
+    }
 
     /// <summary>
     /// Starts background tag calculation. Returns immediately; the tags become available

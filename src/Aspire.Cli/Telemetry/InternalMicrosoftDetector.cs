@@ -1525,7 +1525,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             pageSize = 65536;
         }
 
-        if (pageSize <= 0)
+        if (pageSize is < 512 or > 65536 ||
+            (pageSize & (pageSize - 1)) != 0 ||
+            bytes.Length % pageSize != 0 ||
+            !TryGetSqliteFreelistPages(bytes, pageSize, out var freelistPages))
         {
             yield break;
         }
@@ -1533,6 +1536,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         for (var pageOffset = 0; pageOffset <= bytes.Length - pageSize; pageOffset += pageSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            var pageNumber = (pageOffset / pageSize) + 1;
+            if (freelistPages.Contains(pageNumber))
+            {
+                continue;
+            }
 
             var pageEnd = pageOffset + pageSize;
             var headerOffset = pageOffset == 0 ? 100 : pageOffset;
@@ -1579,6 +1588,73 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 }
             }
         }
+    }
+
+    private static bool TryGetSqliteFreelistPages(byte[] bytes, int pageSize, out HashSet<int> freelistPages)
+    {
+        // SQLite records the freelist in the database header and trunk pages:
+        //   header[32..36] = first trunk page number (big-endian)
+        //   header[36..40] = total number of trunk and leaf pages
+        //   trunk[0..4]    = next trunk page number
+        //   trunk[4..8]    = leaf pointer count, followed by 4-byte leaf page numbers
+        // Deleted table rows can remain in free leaf pages, so scanning physical pages without
+        // excluding this chain can report identities that have already been removed from VS Code.
+        freelistPages = [];
+        var pageCount = bytes.Length / pageSize;
+        var firstTrunkPage = ReadUInt32BigEndian(bytes, 32);
+        var declaredFreelistPageCount = ReadUInt32BigEndian(bytes, 36);
+        if (declaredFreelistPageCount == 0)
+        {
+            return firstTrunkPage == 0;
+        }
+
+        if (declaredFreelistPageCount > pageCount ||
+            firstTrunkPage is 0 || firstTrunkPage > pageCount)
+        {
+            return false;
+        }
+
+        var reservedBytes = bytes[20];
+        var usablePageSize = pageSize - reservedBytes;
+        if (usablePageSize < 8)
+        {
+            return false;
+        }
+
+        var trunkPage = firstTrunkPage;
+        while (trunkPage != 0)
+        {
+            if (trunkPage > pageCount || !freelistPages.Add((int)trunkPage))
+            {
+                return false;
+            }
+
+            var trunkOffset = ((int)trunkPage - 1) * pageSize;
+            var nextTrunkPage = ReadUInt32BigEndian(bytes, trunkOffset);
+            var leafCount = ReadUInt32BigEndian(bytes, trunkOffset + 4);
+            if (leafCount > (usablePageSize - 8) / 4)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < leafCount; index++)
+            {
+                var leafPage = ReadUInt32BigEndian(bytes, trunkOffset + 8 + (index * 4));
+                if (leafPage is 0 || leafPage > pageCount || !freelistPages.Add((int)leafPage))
+                {
+                    return false;
+                }
+            }
+
+            if (freelistPages.Count > declaredFreelistPageCount)
+            {
+                return false;
+            }
+
+            trunkPage = nextTrunkPage;
+        }
+
+        return freelistPages.Count == declaredFreelistPageCount;
     }
 
     internal static IReadOnlyList<string> ExtractSqliteRecordTextValuesForTesting(byte[] bytes, CancellationToken cancellationToken)
@@ -1696,6 +1772,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         return offset >= 0 && offset + 1 < bytes.Length
             ? (bytes[offset] << 8) | bytes[offset + 1]
+            : 0;
+    }
+
+    private static uint ReadUInt32BigEndian(byte[] bytes, int offset)
+    {
+        return offset >= 0 && offset + 3 < bytes.Length
+            ? ((uint)bytes[offset] << 24) |
+              ((uint)bytes[offset + 1] << 16) |
+              ((uint)bytes[offset + 2] << 8) |
+              bytes[offset + 3]
             : 0;
     }
 

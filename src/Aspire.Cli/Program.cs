@@ -1267,8 +1267,14 @@ public class Program
                 await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
             }
 
-            // Shutting down telemetry manager to flush any remaining telemetry and will take time.
-            // Start shutdown of telemetry manager immediately and run concurrently with app shutdown.
+            // The detector-health activity is created asynchronously after default tags resolve. Ensure
+            // it has been handed to the provider before shutdown starts so short CLI invocations do not
+            // lose the activity while the provider is flushing.
+            await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
+
+            // Shutting down telemetry manager to flush any remaining telemetry will take time.
+            // Run it concurrently with application shutdown after all asynchronously-created telemetry
+            // has been submitted to the providers.
             var shutdownTelemetryTask = telemetryManager.ShutdownAsync();
 
             await app.StopAsync().ConfigureAwait(false);

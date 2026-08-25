@@ -741,11 +741,45 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     public void ExtractSqliteRecordTextValuesForTesting_FailsClosedForTruncatedPayload()
     {
         var database = CreateSqliteDatabase("user@microsoft.com");
-        Array.Resize(ref database, database.Length - 10);
+        var cellOffset = (database[108] << 8) | database[109];
+        database[cellOffset] = 0x7F;
 
         var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
 
         Assert.Empty(values);
+    }
+
+    [Fact]
+    public void ExtractSqliteRecordTextValuesForTesting_RejectsInvalidPageSize()
+    {
+        var database = CreateSqliteDatabase("user@microsoft.com");
+        database[16] = 0x03;
+        database[17] = 0x00;
+
+        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
+
+        Assert.Empty(values);
+    }
+
+    [Fact]
+    public void ExtractSqliteRecordTextValuesForTesting_SkipsFreelistLeafPages()
+    {
+        const int pageSize = 512;
+        var database = new byte[pageSize * 4];
+        Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(database, 0);
+        database[16] = 0x02;
+        database[17] = 0x00;
+        WriteUInt32BigEndian(database, 32, 2);
+        WriteUInt32BigEndian(database, 36, 2);
+
+        WriteUInt32BigEndian(database, pageSize + 4, 1);
+        WriteUInt32BigEndian(database, pageSize + 8, 3);
+        WriteSqliteLeafPage(database, pageSize * 2, 0, "deleted.user@microsoft.com");
+        WriteSqliteLeafPage(database, pageSize * 3, 0, "active.user@microsoft.com");
+
+        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
+
+        Assert.Equal(["active.user@microsoft.com"], values);
     }
 
     [Fact]
@@ -995,10 +1029,17 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(database, 0);
         database[16] = 0x02;
         database[17] = 0x00;
-        database[100] = 0x0D;
-        database[103] = 0x00;
-        database[104] = 0x01;
+        WriteSqliteLeafPage(database, pageOffset: 0, headerOffsetInPage: 100, values);
+        return database;
+    }
 
+    private static void WriteSqliteLeafPage(byte[] database, int pageOffset, int headerOffsetInPage, params string[] values)
+    {
+        const int pageSize = 512;
+        var headerOffset = pageOffset + headerOffsetInPage;
+        database[headerOffset] = 0x0D;
+        database[headerOffset + 3] = 0x00;
+        database[headerOffset + 4] = 0x01;
         var payload = CreateSqliteRecordPayload(values);
         var cell = new List<byte>();
         WriteSqliteVarint(cell, payload.Count);
@@ -1006,12 +1047,11 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         cell.AddRange(payload);
 
         var cellOffset = pageSize - cell.Count;
-        database[105] = (byte)(cellOffset >> 8);
-        database[106] = (byte)cellOffset;
-        database[108] = (byte)(cellOffset >> 8);
-        database[109] = (byte)cellOffset;
-        cell.CopyTo(database, cellOffset);
-        return database;
+        database[headerOffset + 5] = (byte)(cellOffset >> 8);
+        database[headerOffset + 6] = (byte)cellOffset;
+        database[headerOffset + 8] = (byte)(cellOffset >> 8);
+        database[headerOffset + 9] = (byte)cellOffset;
+        cell.CopyTo(database, pageOffset + cellOffset);
     }
 
     private static byte[] CreateSqliteDatabaseWithOverflow(string value)
@@ -1095,6 +1135,14 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         }
 
         bytes.AddRange(stack);
+    }
+
+    private static void WriteUInt32BigEndian(byte[] bytes, int offset, uint value)
+    {
+        bytes[offset] = (byte)(value >> 24);
+        bytes[offset + 1] = (byte)(value >> 16);
+        bytes[offset + 2] = (byte)(value >> 8);
+        bytes[offset + 3] = (byte)value;
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
