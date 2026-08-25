@@ -371,15 +371,17 @@ public class AzureContainerAppEnvironmentResource :
             return true;
         }
 
+        // Bicep outputs are populated only after provisioning, but concurrency groups are assigned
+        // while deployment targets are prepared. Until then an output can match any supported name
+        // value, so keep those aliases together rather than allowing concurrent physical writes.
+        if (left is BicepOutputReference || right is BicepOutputReference)
+        {
+            return true;
+        }
+
         if (left is string leftString && right is string rightString)
         {
             return string.Equals(leftString, rightString, StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (left is BicepOutputReference leftOutput && right is BicepOutputReference rightOutput)
-        {
-            return ReferenceEquals(leftOutput.Resource, rightOutput.Resource) &&
-                   string.Equals(leftOutput.Name, rightOutput.Name, StringComparison.Ordinal);
         }
 
         return ReferenceEquals(left, right) || Equals(left, right);
