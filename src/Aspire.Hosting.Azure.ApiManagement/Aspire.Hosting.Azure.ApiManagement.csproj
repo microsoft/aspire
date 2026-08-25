@@ -18,9 +18,11 @@
     <ProjectReference Include="..\Aspire.Hosting.Azure.ApplicationInsights\Aspire.Hosting.Azure.ApplicationInsights.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.CognitiveServices\Aspire.Hosting.Azure.CognitiveServices.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Storage\Aspire.Hosting.Azure.Storage.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.CognitiveServices" />
+    <PackageReference Include="Azure.Provisioning.Storage" />
   </ItemGroup>
 
   <ItemGroup>

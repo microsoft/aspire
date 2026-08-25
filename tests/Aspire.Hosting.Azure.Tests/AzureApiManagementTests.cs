@@ -6,6 +6,7 @@
 #pragma warning disable ASPIRECOMPUTE002
 
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.ApplicationModel;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -568,9 +569,13 @@ public class AzureApiManagementTests
             PublisherEmail = "api-owners@example.com",
             Sku = AzureApiManagementSku.StandardV2,
         });
+        var primaryBackend = apim.AddFoundryBackend("chat-primary-backend", primary);
+        var secondaryBackend = apim.AddFoundryBackend("chat-secondary-backend", secondary);
+        var pool = apim.AddBackendPool("openai-pool")
+            .WithBackend(primaryBackend, priority: 1, weight: 3)
+            .WithBackend(secondaryBackend, priority: 2, weight: 1);
         apim.AddOpenAIApi("openai-api", "openai")
-            .WithFoundryBackend(primary, priority: 1, weight: 3)
-            .WithFoundryBackend(secondary, priority: 2, weight: 1);
+            .WithBackend(pool);
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
@@ -594,7 +599,13 @@ public class AzureApiManagementTests
             Capacity = 0,
         });
 
-        var exception = Assert.Throws<InvalidOperationException>(() => apim.AddOpenAIApi("openai-api", "openai"));
+        var exception = Assert.Throws<InvalidOperationException>(() => apim.AddBackend(
+            "backend",
+            ReferenceExpression.Create($"https://example.com"),
+            new AzureApiManagementBackendOptions
+            {
+                CircuitBreaker = new AzureApiManagementCircuitBreakerOptions(),
+            }));
 
         Assert.Contains("not supported by the Consumption SKU", exception.Message);
     }
@@ -610,12 +621,13 @@ public class AzureApiManagementTests
             PublisherEmail = "api-owners@example.com",
         });
 
-        var api = apim.AddOpenAIApi("openai-api", "openai")
-            .WithFoundryBackend(model, priority: 0, weight: 0);
+        var backend = apim.AddFoundryBackend("chat-backend", model);
+        var pool = apim.AddBackendPool("openai-pool")
+            .WithBackend(backend, priority: 0, weight: 0);
 
-        var backend = Assert.Single(api.Resource.OpenAIBackends);
-        Assert.Equal(0, backend.Priority);
-        Assert.Equal(0, backend.Weight);
+        var member = Assert.Single(pool.Resource.Backends);
+        Assert.Equal(0, member.Priority);
+        Assert.Equal(0, member.Weight);
     }
 
     [Fact]
@@ -628,10 +640,11 @@ public class AzureApiManagementTests
         {
             PublisherEmail = "api-owners@example.com",
         });
+        var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
         apim.AddOpenAIApi("chat-api", "chat")
-            .WithAzureOpenAIBackend(deployment);
+            .WithBackend(backend);
         apim.AddOpenAIApi("responses-api", "responses")
-            .WithAzureOpenAIBackend(deployment);
+            .WithBackend(backend);
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
@@ -710,11 +723,154 @@ public class AzureApiManagementTests
         {
             PublisherEmail = "api-owners@example.com",
         });
-        var api = apim.AddOpenAIApi("openai-api", "openai");
-
-        var exception = Assert.Throws<InvalidOperationException>(() => api.WithFoundryBackend(model));
+        var exception = Assert.Throws<InvalidOperationException>(() => apim.AddFoundryBackend("embedding-backend", model));
 
         Assert.Contains("Only OpenAI-format deployments", exception.Message);
+    }
+
+    [Fact]
+    public async Task BlobStorageBackendPoolUsesManagedIdentityAndRoleAssignments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var primary = builder.AddAzureStorage("storage-primary").AddBlobs("blobs-primary");
+        var secondary = builder.AddAzureStorage("storage-secondary").AddBlobs("blobs-secondary");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var primaryBackend = apim.AddBlobStorageBackend("blob-primary-backend", primary);
+        var secondaryBackend = apim.AddBlobStorageBackend("blob-secondary-backend", secondary);
+        var pool = apim.AddBackendPool("blob-pool")
+            .WithBackend(primaryBackend, weight: 3)
+            .WithBackend(secondaryBackend);
+        apim.AddApi("blob-api", "blobs", subscriptionRequired: false)
+            .WithBackend(pool)
+            .WithInboundPolicy("<set-header name=\"x-ms-version\" exists-action=\"override\"><value>2023-11-03</value></set-header>");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (manifest, bicep) = await GetManifestWithBicep(apim.Resource);
+        var manifestJson = manifest.ToJsonString();
+
+        Assert.Contains("storage-primary.outputs.blobEndpoint", manifestJson);
+        Assert.Contains("storage-secondary.outputs.blobEndpoint", manifestJson);
+        Assert.Contains("authentication-managed-identity resource=\"https://storage.azure.com/\"", bicep);
+        Assert.Contains("2a2b9908-6ea1-4ae2-8e65-a410df84e7d1", bicep);
+        Assert.Equal(2, bicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public async Task GenericBackendOptionsGenerateBackendConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var backend = apim.AddBackend(
+            "custom-backend",
+            ReferenceExpression.Create($"https://example.com/base"),
+            new AzureApiManagementBackendOptions
+            {
+                Title = "Custom SOAP backend",
+                Protocol = AzureApiManagementBackendProtocol.Soap,
+                ValidateCertificateName = false,
+                CircuitBreaker = new AzureApiManagementCircuitBreakerOptions
+                {
+                    Name = "serverErrors",
+                    FailureCount = 3,
+                    FailureIntervalSeconds = 30,
+                    TripDurationSeconds = 60,
+                    StatusCodeRanges = [new(500, 599)],
+                },
+            },
+            backendName: "custom\"backend");
+        apim.AddApi("custom-api", "custom")
+            .WithBackend(backend);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        Assert.Contains("protocol: 'soap'", bicep);
+        Assert.Contains("validateCertificateName: false", bicep);
+        Assert.Contains("name: 'serverErrors'", bicep);
+        Assert.Contains("interval: 'PT30S'", bicep);
+        Assert.Contains("tripDuration: 'PT1M'", bicep);
+        Assert.Contains("backend-id=\"custom&quot;backend\"", bicep);
+    }
+
+    [Fact]
+    public void BackendPoolRejectsDifferentManagedIdentityResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var storageBackend = apim.AddBackend(
+            "storage",
+            ReferenceExpression.Create($"https://storage.example.com"),
+            new AzureApiManagementBackendOptions
+            {
+                ManagedIdentityResource = "https://storage.azure.com/",
+            });
+        var cognitiveBackend = apim.AddBackend(
+            "cognitive",
+            ReferenceExpression.Create($"https://cognitive.example.com"),
+            new AzureApiManagementBackendOptions
+            {
+                ManagedIdentityResource = "https://cognitiveservices.azure.com",
+            });
+        var pool = apim.AddBackendPool("pool").WithBackend(storageBackend);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => pool.WithBackend(cognitiveBackend));
+
+        Assert.Contains("must use the same managed-identity resource URI", exception.Message);
+    }
+
+    [Fact]
+    public void BackendConfigurationEnforcesApiManagementLimits()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+
+        var invalidTitle = Assert.Throws<ArgumentException>(() => apim.AddBackend(
+            "invalid-title",
+            ReferenceExpression.Create($"https://example.com"),
+            new AzureApiManagementBackendOptions
+            {
+                Title = "",
+            }));
+        var invalidRange = Assert.Throws<ArgumentOutOfRangeException>(() => apim.AddBackend(
+            "invalid-range",
+            ReferenceExpression.Create($"https://example.com"),
+            new AzureApiManagementBackendOptions
+            {
+                CircuitBreaker = new AzureApiManagementCircuitBreakerOptions
+                {
+                    StatusCodeRanges = [new(199, 200)],
+                },
+            }));
+        var tooManyRanges = Assert.Throws<ArgumentException>(() => apim.AddBackend(
+            "too-many-ranges",
+            ReferenceExpression.Create($"https://example.com"),
+            new AzureApiManagementBackendOptions
+            {
+                CircuitBreaker = new AzureApiManagementCircuitBreakerOptions
+                {
+                    StatusCodeRanges = Enumerable.Repeat(new AzureApiManagementStatusCodeRange(500, 500), 11).ToArray(),
+                },
+            }));
+
+        Assert.Contains("backend title", invalidTitle.Message);
+        Assert.Contains("between 200 and 599", invalidRange.Message);
+        Assert.Contains("more than 10", tooManyRanges.Message);
     }
 
     [Fact]

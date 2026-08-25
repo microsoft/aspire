@@ -36,6 +36,16 @@ public class AzureApiManagementResource(
     internal List<AzureApiManagementApiResource> Apis { get; } = [];
 
     /// <summary>
+    /// Gets the backends provisioned in this API Management service.
+    /// </summary>
+    internal List<AzureApiManagementBackendResource> Backends { get; } = [];
+
+    /// <summary>
+    /// Gets the backend pools provisioned in this API Management service.
+    /// </summary>
+    internal List<AzureApiManagementBackendPoolResource> BackendPools { get; } = [];
+
+    /// <summary>
     /// Gets the products provisioned in this API Management service.
     /// </summary>
     internal List<AzureApiManagementProductResource> Products { get; } = [];

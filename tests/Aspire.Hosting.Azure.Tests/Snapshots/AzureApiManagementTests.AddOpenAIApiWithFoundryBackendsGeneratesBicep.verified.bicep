@@ -1,9 +1,9 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param openai_api_chat_primary_Backend_url string
+param chat_primary_backend_url string
 
-param openai_api_chat_secondary_Backend_url string
+param chat_secondary_backend_url string
 
 param foundry_primary_outputs_name string
 
@@ -30,12 +30,12 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   }
 }
 
-resource openai_api_chat_primary_Backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
-  name: 'openai_api_chat_primary_Backend'
+resource chat_primary_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  name: 'chat-primary-backend'
   properties: {
     protocol: 'http'
-    url: openai_api_chat_primary_Backend_url
-    title: 'chat-primary'
+    url: chat_primary_backend_url
+    title: 'chat-primary-backend'
     type: 'Single'
     tls: {
       validateCertificateChain: true
@@ -64,12 +64,12 @@ resource openai_api_chat_primary_Backend 'Microsoft.ApiManagement/service/backen
   parent: apim
 }
 
-resource openai_api_chat_secondary_Backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
-  name: 'openai_api_chat_secondary_Backend'
+resource chat_secondary_backend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  name: 'chat-secondary-backend'
   properties: {
     protocol: 'http'
-    url: openai_api_chat_secondary_Backend_url
-    title: 'chat-secondary'
+    url: chat_secondary_backend_url
+    title: 'chat-secondary-backend'
     type: 'Single'
     tls: {
       validateCertificateChain: true
@@ -98,20 +98,20 @@ resource openai_api_chat_secondary_Backend 'Microsoft.ApiManagement/service/back
   parent: apim
 }
 
-resource openai_apiPool 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
-  name: 'openai_apiPool'
+resource openai_pool 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  name: 'openai-pool'
   properties: {
-    title: 'openai-api'
+    title: 'openai-pool'
     type: 'Pool'
     pool: {
       services: [
         {
-          id: openai_api_chat_primary_Backend.id
+          id: chat_primary_backend.id
           priority: 1
           weight: 3
         }
         {
-          id: openai_api_chat_secondary_Backend.id
+          id: chat_secondary_backend.id
           priority: 2
           weight: 1
         }
@@ -120,8 +120,8 @@ resource openai_apiPool 'Microsoft.ApiManagement/service/backends@2024-05-01' = 
   }
   parent: apim
   dependsOn: [
-    openai_api_chat_primary_Backend
-    openai_api_chat_secondary_Backend
+    chat_primary_backend
+    chat_secondary_backend
   ]
 }
 
@@ -191,11 +191,11 @@ resource openai_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com" />\n    <set-backend-service backend-id="openai_apiPool" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
+    value: '<policies>\n  <inbound>\n    <base />\n    <authentication-managed-identity resource="https://cognitiveservices.azure.com" />\n    <set-backend-service backend-id="openai-pool" />\n  </inbound>\n  <backend><base /></backend>\n  <outbound><base /></outbound>\n  <on-error><base /></on-error>\n</policies>'
   }
   parent: openai_api
   dependsOn: [
-    openai_apiPool
+    openai_pool
   ]
 }
 

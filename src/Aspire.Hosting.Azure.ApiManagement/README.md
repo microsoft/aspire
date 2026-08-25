@@ -47,13 +47,13 @@ const apim = await builder.addAzureApiManagement("apim", {
 await apim.addApi("catalog-api", catalog, "catalog");
 ```
 
-`AddApi` creates an API, an APIM backend, and a wildcard operation that forwards requests to the deployed endpoint of the target resource. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
+The compute-targeted `AddApi` overload creates an API, an APIM backend, and a wildcard operation that forwards requests to the deployed endpoint of the target resource. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
 
 API Management resources are automatically omitted during `aspire run`. Azure compute environments do not materialize their public endpoints in run mode, and a cloud-hosted APIM instance cannot reach a backend running on localhost. Use `aspire deploy` to provision APIM and exercise its routing; no execution-mode guard is required around the APIM resources.
 
-## OpenAI backend pools
+## Backends and backend pools
 
-Use `AddOpenAIApi` to load balance an OpenAI-compatible API across Azure OpenAI or Microsoft Foundry deployments:
+Backends and pools are first-class resources that can be reused by APIs. The specialized Foundry adapter configures the deployment URL, managed-identity authentication, the required Cognitive Services role assignment, and an HTTP 429 circuit breaker:
 
 ```csharp
 var primaryFoundry = builder.AddFoundry("foundry-primary");
@@ -66,9 +66,15 @@ var secondary = secondaryFoundry.AddDeployment(
     "chat-secondary",
     FoundryModel.OpenAI.Gpt5Mini);
 
+var primaryBackend = apim.AddFoundryBackend("primary-backend", primary);
+var secondaryBackend = apim.AddFoundryBackend("secondary-backend", secondary);
+
+var pool = apim.AddBackendPool("openai-pool")
+    .WithBackend(primaryBackend, priority: 1, weight: 3)
+    .WithBackend(secondaryBackend, priority: 1, weight: 1);
+
 apim.AddOpenAIApi("openai-api", path: "openai")
-    .WithFoundryBackend(primary, priority: 1, weight: 3)
-    .WithFoundryBackend(secondary, priority: 1, weight: 1);
+    .WithBackend(pool);
 ```
 
 The generated APIM backend pool uses weighted routing between healthy members at the same priority. A lower priority number is preferred; members at the next priority are used when every member in a preferred group has an open circuit. Each backend has a circuit breaker that opens on HTTP 429 and honors the Azure OpenAI `Retry-After` response header.
@@ -83,6 +89,83 @@ is forwarded to the selected account at:
 
 ```text
 POST https://<account>/openai/deployments/<deployment>/chat/completions?api-version=<version>
+```
+
+The same pool model works with other services. For example, two Blob Storage services can share a pool:
+
+```csharp
+var primaryBlobs = builder.AddAzureStorage("storage-primary").AddBlobs("blobs-primary");
+var secondaryBlobs = builder.AddAzureStorage("storage-secondary").AddBlobs("blobs-secondary");
+
+var primaryBackend = apim.AddBlobStorageBackend("blob-primary", primaryBlobs);
+var secondaryBackend = apim.AddBlobStorageBackend("blob-secondary", secondaryBlobs);
+var pool = apim.AddBackendPool("blob-pool")
+    .WithBackend(primaryBackend, weight: 3)
+    .WithBackend(secondaryBackend);
+
+apim.AddApi("blob-api", path: "blobs")
+    .WithBackend(pool)
+    .WithInboundPolicy(
+        """<set-header name="x-ms-version" exists-action="override"><value>2023-11-03</value></set-header>""");
+```
+
+`AddBlobStorageBackend` grants the APIM managed identity the Storage Blob Data Reader role and configures the Storage authentication audience.
+
+Use `AddBackend` as the low-level escape hatch for other services or APIM backend features:
+
+```csharp
+var backend = apim.AddBackend(
+    "custom-backend",
+    ReferenceExpression.Create($"https://backend.example.com"),
+    new AzureApiManagementBackendOptions
+    {
+        Protocol = AzureApiManagementBackendProtocol.Soap,
+        ManagedIdentityResource = "api://backend",
+        ValidateCertificateName = false,
+        CircuitBreaker = new AzureApiManagementCircuitBreakerOptions
+        {
+            Name = "serverErrors",
+            FailureCount = 3,
+            FailureIntervalSeconds = 30,
+            TripDurationSeconds = 60,
+            StatusCodeRanges = [new(500, 599)],
+        },
+    });
+
+apim.AddApi("custom-api", path: "custom")
+    .WithBackend(backend);
+```
+
+Generic backends do not infer Azure role assignments because the required role is service-specific. Configure those permissions on the target resource separately when using managed identity.
+
+The same generic backend and pool APIs are available in TypeScript:
+
+```typescript
+import { refExpr } from "./.aspire/modules/aspire.mjs";
+
+const primary = await apim.addBackend(
+    "primary",
+    refExpr`https://primary.example.com`,
+    {
+        options: {
+            managedIdentityResource: "api://backend",
+        },
+    });
+const secondary = await apim.addBackend(
+    "secondary",
+    refExpr`https://secondary.example.com`,
+    {
+        options: {
+            managedIdentityResource: "api://backend",
+        },
+    });
+
+const pool = await apim.addBackendPool("backend-pool");
+await pool.addBackendPoolMember(primary, { weight: 3 });
+await pool.addBackendPoolMember(secondary);
+
+const api = await apim.addApiWithoutTarget("pooled-api", "pooled");
+await api.withApiBackendPool(pool);
 ```
 
 ## Policies

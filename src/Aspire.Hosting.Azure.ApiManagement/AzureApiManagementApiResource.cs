@@ -80,9 +80,9 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     internal IComputeResource? Target { get; }
 
     /// <summary>
-    /// Gets the OpenAI-compatible backend pool members.
+    /// Gets or sets the backend or backend pool used by this API.
     /// </summary>
-    internal List<AzureApiManagementOpenAIBackend> OpenAIBackends { get; } = [];
+    internal IResource? Backend { get; set; }
 
     /// <summary>
     /// Gets or sets the API-level Application Insights diagnostic.
