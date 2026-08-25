@@ -133,6 +133,40 @@ public class KubernetesServiceTests
         await server.WaitForRequestCancellationAsync(cts.Token);
     }
 
+    [Fact]
+    public async Task WatchAsync_DoesNotMarkApiReady_WhileHttpResponseIsPending()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            maxRetryDuration: TimeSpan.FromMilliseconds(500),
+            kubernetesInitializationTimeout: TimeSpan.FromSeconds(5));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
+        server.BlockWatchResponses();
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        await using var watchEnumerator = service.WatchAsync<Container>(cancellationToken: watchCts.Token).GetAsyncEnumerator();
+        var watchTask = watchEnumerator.MoveNextAsync().AsTask();
+        await server.WaitForWatchRequestAsync(cts.Token);
+
+        // Three conflict retries take longer than the steady-state budget but remain within the initialization budget.
+        server.FailNextRequests(3);
+        try
+        {
+            Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
+        }
+        finally
+        {
+            watchCts.Cancel();
+            await server.WaitForRequestCancellationAsync(cts.Token);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchTask);
+        }
+    }
+
     // Verifies that establishing the connection survives a partially-written kubeconfig: when the file exists
     // but DCP has only flushed part of it (so it does not yet parse as a valid kubeconfig), the read is retried
     // and the operation succeeds once the complete, valid kubeconfig is written.
@@ -359,6 +393,16 @@ public class KubernetesServiceTests
             Interlocked.Exchange(ref _responseState.ResponseDelayTicks, delay.Ticks);
         }
 
+        public void BlockWatchResponses()
+        {
+            Volatile.Write(ref _responseState.BlockWatchResponses, true);
+        }
+
+        public Task WaitForWatchRequestAsync(CancellationToken cancellationToken)
+        {
+            return _responseState.WatchRequestArrived.Task.WaitAsync(cancellationToken);
+        }
+
         public Task WaitForRequestCancellationAsync(CancellationToken cancellationToken)
         {
             return _responseState.RequestCancellationObserved.Task.WaitAsync(cancellationToken);
@@ -383,6 +427,22 @@ public class KubernetesServiceTests
 
             app.Run(async context =>
             {
+                var isWatchRequest = context.Request.Query.TryGetValue("watch", out var watchValues)
+                    && string.Equals(watchValues.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+                if (isWatchRequest && Volatile.Read(ref responseState.BlockWatchResponses))
+                {
+                    responseState.WatchRequestArrived.TrySetResult(true);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+                    }
+                    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                    {
+                        responseState.RequestCancellationObserved.TrySetResult(true);
+                        throw;
+                    }
+                }
+
                 var responseDelayTicks = Interlocked.Read(ref responseState.ResponseDelayTicks);
                 if (responseDelayTicks > 0)
                 {
@@ -425,11 +485,14 @@ public class KubernetesServiceTests
 
         private sealed class ResponseState
         {
+            public bool BlockWatchResponses;
             public int RequestCount;
             public TaskCompletionSource<bool> RequestCancellationObserved { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
             public long ResponseDelayTicks;
             public int SuccessfulRequestNumber;
+            public TaskCompletionSource<bool> WatchRequestArrived { get; } =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
     }
 }

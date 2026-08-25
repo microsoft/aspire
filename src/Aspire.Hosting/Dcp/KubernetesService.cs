@@ -271,7 +271,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             return ExecuteWithRetry(
                 DcpApiOperationType.Watch,
                 T.ObjectKind,
-                (kubernetes) =>
+                async (kubernetes, operationCancellationToken) =>
                 {
                     var responseTask = string.IsNullOrEmpty(namespaceParameter)
                         ? kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
@@ -279,14 +279,17 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                             GroupVersion.Version,
                             resourceType,
                             watch: true,
-                            cancellationToken: restartCancellationToken)
+                            cancellationToken: operationCancellationToken)
                         : kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
                             GroupVersion.Group,
                             GroupVersion.Version,
                             namespaceParameter,
                             resourceType,
                             watch: true,
-                            cancellationToken: restartCancellationToken);
+                            cancellationToken: operationCancellationToken);
+
+                    // KubernetesClient's lazy WatchAsync does not await the HTTP response until enumeration starts.
+                    await responseTask.ConfigureAwait(false);
 
                     // TODO: KubernetesClient v18 marked WatchAsync extension method as obsolete.
                     // The new pattern uses Watcher<T> directly, but requires significant refactoring.
@@ -449,21 +452,6 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         }
 
         return kindWithResource.Resource;
-    }
-
-    private Task<TResult> ExecuteWithRetry<TResult>(
-        DcpApiOperationType operationType,
-        string resourceType,
-        Func<DcpKubernetesClient, TResult> operation,
-        Func<Exception, bool> isRetryable,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteWithRetry<TResult>(
-            operationType,
-            resourceType,
-            (DcpKubernetesClient kubernetes, CancellationToken _) => Task.FromResult(operation(kubernetes)),
-            isRetryable,
-            cancellationToken);
     }
 
     private async Task<TResult> ExecuteWithRetry<TResult>(
