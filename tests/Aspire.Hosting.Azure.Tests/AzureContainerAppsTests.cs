@@ -3295,16 +3295,20 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
         builder.Configuration["Azure:ResourceGroup"] = resourceGroup;
+        builder.Configuration["Azure:Location"] = "eastus";
 
         var implicitScope = builder.AddAzureContainerAppEnvironment("implicit")
             .PublishAsExisting("shared-env", resourceGroup: null);
         var explicitScope = builder.AddAzureContainerAppEnvironment("explicit")
             .PublishAsExistingInResourceGroup("shared-env", resourceGroup, subscriptionId);
+        var otherResourceGroupScope = builder.AddAzureContainerAppEnvironment("other-rg")
+            .PublishAsExistingInResourceGroup("shared-env", "other-rg", subscriptionId);
         var otherScope = builder.AddAzureContainerAppEnvironment("other")
             .PublishAsExistingInResourceGroup("shared-env", resourceGroup, otherSubscriptionId);
 
         builder.AddContainer("api", "myimage").WithComputeEnvironment(implicitScope);
         builder.AddContainer("worker", "myimage").WithComputeEnvironment(explicitScope);
+        builder.AddContainer("other-rg-app", "myimage").WithComputeEnvironment(otherResourceGroupScope);
         builder.AddContainer("other-app", "myimage").WithComputeEnvironment(otherScope);
 
         using var app = builder.Build();
@@ -3314,10 +3318,39 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
         var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var otherResourceGroup = Assert.Single(GetComputeResource(model, "other-rg-app").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
         var otherGroup = Assert.Single(GetComputeResource(model, "other-app").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
 
         Assert.Same(apiGroup, workerGroup);
+        Assert.NotSame(apiGroup, otherResourceGroup);
         Assert.NotSame(apiGroup, otherGroup);
+    }
+
+    [Fact]
+    public async Task AliasesWithMutableImplicitResourceGroupShareConcurrencyGroup()
+    {
+        const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
+        builder.Configuration["Azure:ResourceGroup"] = "configured-rg";
+
+        var implicitScope = builder.AddAzureContainerAppEnvironment("implicit")
+            .PublishAsExisting("shared-env", resourceGroup: null);
+        var explicitScope = builder.AddAzureContainerAppEnvironment("explicit")
+            .PublishAsExistingInResourceGroup("shared-env", "selected-rg", subscriptionId);
+
+        builder.AddContainer("api", "myimage").WithComputeEnvironment(implicitScope);
+        builder.AddContainer("worker", "myimage").WithComputeEnvironment(explicitScope);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+
+        Assert.Same(apiGroup, workerGroup);
     }
 
     [Fact]

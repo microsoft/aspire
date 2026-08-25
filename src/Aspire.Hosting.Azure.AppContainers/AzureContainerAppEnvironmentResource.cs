@@ -264,9 +264,17 @@ public class AzureContainerAppEnvironmentResource :
 
         var configuration = services.GetRequiredService<IConfiguration>();
         var currentSubscription = configuration["Azure:SubscriptionId"];
-        var currentResourceGroup = configuration["Azure:ResourceGroup"];
+        var currentLocation = configuration["Azure:Location"];
 
-        if (currentResourceGroup is null &&
+        // Publish mode prompts for both location and resource group when location is unset,
+        // overwriting any configured resource group after deployment targets are prepared.
+        // Keep that mutable identity part unresolved so it can match the eventual selection.
+        var currentResourceGroup = currentLocation is null
+            ? null
+            : configuration["Azure:ResourceGroup"];
+
+        if (currentLocation is not null &&
+            currentResourceGroup is null &&
             model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } azureEnvironment)
         {
             currentResourceGroup = await ResolveParameterValueAsync(azureEnvironment.ResourceGroupName, cancellationToken).ConfigureAwait(false);
