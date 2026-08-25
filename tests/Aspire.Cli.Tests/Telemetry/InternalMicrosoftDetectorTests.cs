@@ -729,6 +729,198 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("dsregcmd", processFactory.LastFileName);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("/")]
+    [InlineData("///")]
+    public void EvaluateMacPlatformSso_DetectsManagedMicrosoftFixture(string trailingSeparators)
+    {
+        var output = MacPlatformSsoOutputFixture
+            .Replace("/v2.0\"", $"/v2.0{trailingSeparators}\"", StringComparison.Ordinal)
+            .Replace("/getkeydata\"", $"/getkeydata{trailingSeparators}\"", StringComparison.Ordinal)
+            .Replace("/oauth2/v2.0/token\"", $"/oauth2/v2.0/token{trailingSeparators}\"", StringComparison.Ordinal);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("test.alias", result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+        Assert.Null(result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public void EvaluateMacPlatformSso_RejectsOtherTenant()
+    {
+        var output = MacPlatformSsoOutputFixture.Replace(
+            MicrosoftTenantIdForTests,
+            "0dde70e6-f430-449f-8bce-f4d0a9eca2a4",
+            StringComparison.Ordinal);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.WrongTenant, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public void EvaluateMacPlatformSso_RejectsIncompleteRegistration()
+    {
+        var output = MacPlatformSsoOutputFixture.Replace(
+            "\"registrationCompleted\" : true",
+            "\"registrationCompleted\" : false",
+            StringComparison.Ordinal);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.IncompleteRegistration, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public void EvaluateMacPlatformSso_RejectsMalformedEndpoint()
+    {
+        var output = MacPlatformSsoOutputFixture.Replace(
+            $"https://login.microsoftonline.com/{MicrosoftTenantIdForTests}/getkeydata",
+            "not a URI",
+            StringComparison.Ordinal);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.MalformedOutput, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public void EvaluateMacPlatformSso_RequiresRealmAndUpnFromSameKerberosEntry()
+    {
+        var output = MacPlatformSsoOutputFixture.Replace(
+            "test.alias@REDMOND.CORP.MICROSOFT.COM",
+            "test.alias@EUROPE.CORP.MICROSOFT.COM",
+            StringComparison.Ordinal);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.NoCorporateIdentity, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public void EvaluateMacPlatformSso_RejectsTruncatedSection()
+    {
+        var output = MacPlatformSsoOutputFixture.Replace(
+            """
+            Login Configuration:
+             {
+            """,
+            """
+            Login Configuration:
+             [
+            """,
+            StringComparison.Ordinal);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.MalformedOutput, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public async Task CheckMacPlatformSsoAsync_UsesConfiguredSystemPathAndParsesStderr()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appSsoPath = Path.Combine(workspace.Path, "usr", "bin", "app-sso");
+        Directory.CreateDirectory(Path.GetDirectoryName(appSsoPath)!);
+        await File.WriteAllTextAsync(appSsoPath, string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, options) =>
+                new TestProcessExecution(
+                    fileName,
+                    arguments,
+                    environment,
+                    options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)),
+                    () => 1)
+                {
+                    WaitForExitAsyncCallback = (invocationOptions, _) =>
+                    {
+                        invocationOptions.StandardErrorCallback?.Invoke(MacPlatformSsoOutputFixture);
+                        return Task.FromResult(0);
+                    }
+                }
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            macPlatformSsoPath: appSsoPath);
+
+        var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal(appSsoPath, processFactory.LastFileName);
+        Assert.Equal(["platform", "-s"], Assert.IsType<string[]>(processFactory.LastArguments));
+    }
+
+    [Fact]
+    public async Task CheckMacPlatformSsoAsync_ReportsMissingCommand()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            macPlatformSsoPath: Path.Combine(workspace.Path, "missing-app-sso"));
+
+        var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.CommandMissing, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public async Task CheckMacPlatformSsoAsync_ReportsProcessTimeout()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appSsoPath = Path.Combine(workspace.Path, "app-sso");
+        await File.WriteAllTextAsync(appSsoPath, string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, _, _) =>
+                new StartCancellingProcessExecution(fileName, arguments, environment)
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            macPlatformSsoPath: appSsoPath);
+
+        var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeOutcome.TimedOut, result.DiagnosticOutcome);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReportsProbeSpecificOutcome()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("Mac Platform SSO", _ => Task.FromResult(
+                InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.WrongTenant)))]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        var diagnostic = Assert.Single(result.ProbeDiagnostics);
+        Assert.Equal("Mac Platform SSO", diagnostic.Source);
+        Assert.Equal(InternalMicrosoftProbeOutcome.WrongTenant, diagnostic.Outcome);
+    }
+
     [Fact]
     public async Task CheckWindowsWorkplaceJoinAsync_ReturnsOnlyNonSensitiveProcessExitCode()
     {
@@ -1388,6 +1580,46 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         => $"gho_{index:D2}{new string('a', 24)}";
 
     private const string MicrosoftTenantIdForTests = "72f988bf-86f1-41af-91ab-2d7cd011db47";
+    private const string MacPlatformSsoOutputFixture = """
+        Time: 2026-08-25 12:34:56 +0000
+
+        Device Configuration:
+         {
+          "formatNote" : "Braces { } and text such as Login Configuration: do not end a section.",
+          "registrationCompleted" : true
+        }
+
+        Login Configuration:
+         {
+          "issuer" : "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0",
+          "keyEndpointURL" : "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/getkeydata",
+          "tokenEndpointURL" : "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/oauth2/v2.0/token"
+        }
+
+        User Configuration:
+         {
+          "kerberosStatus" : [
+            {
+              "realm" : "KERBEROS.MICROSOFTONLINE.COM",
+              "upn" : "test.alias@microsoft.com@KERBEROS.MICROSOFTONLINE.COM"
+            },
+            {
+              "realm" : "REDMOND.CORP.MICROSOFT.COM",
+              "upn" : "test.alias@REDMOND.CORP.MICROSOFT.COM"
+            }
+          ],
+          "state" : "POUserStateNormal (0)",
+          "userLoginConfiguration" : {
+            "loginUserName" : "test.alias@microsoft.com"
+          }
+        }
+
+        SSO Tokens:
+        Received:
+        2026-08-25T12:34:56Z
+        Expiration:
+        2026-09-08T12:34:56Z (Not Expired)
+        """;
 
     private static string CreateJwt(string tenantId, string userName)
     {

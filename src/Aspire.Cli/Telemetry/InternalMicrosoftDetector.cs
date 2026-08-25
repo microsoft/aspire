@@ -60,6 +60,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? _probeStages;
     private readonly TimeSpan _probeStageTimeout;
+    private readonly string _macPlatformSsoPath;
 
     public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory, ICIEnvironmentDetector ciEnvironmentDetector)
         : this(
@@ -325,7 +326,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
         }
 
-        timedOut |= completedResults.Any(result => result.CompletionTimestamp > stageDeadlineTimestamp);
+        timedOut |= completedResults.Any(result =>
+            result.CompletionTimestamp > stageDeadlineTimestamp ||
+            result.Diagnostic.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
         foreach (var probe in probes)
         {
             if (!completedResults.Any(result => result.Source.Equals(probe.Name, StringComparison.Ordinal)))
@@ -655,12 +658,19 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return DetectVisualStudioMicrosoftTenant(result.Stdout, cancellationToken);
     }
 
-    [SupportedOSPlatform("macos")]
-    private async Task<InternalMicrosoftProbeResult> CheckMacPlatformSsoAsync(CancellationToken cancellationToken)
+    internal async Task<InternalMicrosoftProbeResult> CheckMacPlatformSsoAsync(CancellationToken cancellationToken)
     {
-        if (!CommandExists("app-sso"))
+        // app-sso is a macOS system utility. Use its fixed location so a restricted PATH does not
+        // hide Platform SSO registration from non-interactive CLI invocations.
+        if (!File.Exists(_macPlatformSsoPath))
         {
-            return InternalMicrosoftProbeResult.NotDetected;
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.CommandMissing);
+        }
+
+        var result = await RunProcessAsync(_macPlatformSsoPath, ["platform", "-s"], cancellationToken).ConfigureAwait(false);
+        if (result.TimedOut)
+        {
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.TimedOut);
         }
 
         var result = await RunProcessAsync("app-sso", ["platform", "-s"], cancellationToken).ConfigureAwait(false);
@@ -669,12 +679,26 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return processFailure;
         }
 
-        // app-sso emits a JSON document similar to:
-        //   {"realm":"REDMOND.CORP.MICROSOFT.COM","upn":"alias@REDMOND.CORP.MICROSOFT.COM",
-        //    "issuer":"https://login.microsoftonline.com/<tenant>/v2.0", ...}
-        // Use JSON APIs for the fixed fields so formatting changes don't affect detection.
-        var json = TryParseJsonObject($"{result.Stdout}{Environment.NewLine}{result.Stderr}");
-        if (json is null)
+        return EvaluateMacPlatformSso($"{result.Stdout}{Environment.NewLine}{result.Stderr}");
+    }
+
+    internal static InternalMicrosoftProbeResult EvaluateMacPlatformSso(string output)
+    {
+        // app-sso platform -s emits diagnostic text containing separate JSON objects:
+        //   Time: 2026-08-25 12:34:56 +0000
+        //   Device Configuration:
+        //    { "registrationCompleted" : true, ... }
+        //   Login Configuration:
+        //    { "issuer" : "https://login.microsoftonline.com/<tenant>/v2.0", ... }
+        //   User Configuration:
+        //    { "kerberosStatus" : [{ "realm" : "...", "upn" : "..." }], ... }
+        // The Platform SSO command has no JSON mode and is explicitly diagnostic, so parse each
+        // labeled object independently and fail closed if its structure changes.
+        // See https://developer.apple.com/documentation/authenticationservices/creating-extensions-that-support-platform-sso.
+        var deviceConfiguration = TryParseMacPlatformSsoSection(output, "Device Configuration");
+        var loginConfiguration = TryParseMacPlatformSsoSection(output, "Login Configuration");
+        var userConfiguration = TryParseMacPlatformSsoSection(output, "User Configuration");
+        if (deviceConfiguration is null || loginConfiguration is null || userConfiguration is null)
         {
             return InternalMicrosoftProbeResult.Failed(new(
                 InternalMicrosoftProbeFailureCode.JsonParse,
@@ -682,21 +706,50 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 ExceptionType: InternalMicrosoftProbeExceptionType.Json));
         }
 
-        var expectedIssuer = $"https://login.microsoftonline.com/{MicrosoftTenantId}/v2.0";
-        var expectedKeyEndpoint = $"https://login.microsoftonline.com/{MicrosoftTenantId}/getkeydata";
-        var expectedTokenEndpoint = $"https://login.microsoftonline.com/{MicrosoftTenantId}/oauth2/v2.0/token";
-        var upn = TryGetString(json, "upn");
-        var realmDomain = ExtractAdDomainNameFromCorpDnsName(TryGetString(json, "realm"));
-        var upnDomain = ExtractAdDomainNameFromAccountIdentifier(upn);
-        var domain = realmDomain ?? upnDomain;
+        if (!TryGetBoolean(deviceConfiguration, "registrationCompleted", out var registrationCompleted))
+        {
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.MalformedOutput);
+        }
 
-        return HasJsonStringProperty(json, "issuer", expectedIssuer) &&
-            HasJsonStringProperty(json, "keyEndpointURL", expectedKeyEndpoint) &&
-            HasJsonStringProperty(json, "tokenEndpointURL", expectedTokenEndpoint) &&
-            domain is not null &&
-            ExtractAliasFromAccountIdentifier(upn) is { } alias
-                ? Detected(alias, domain)
-                : InternalMicrosoftProbeResult.NotDetected;
+        if (!registrationCompleted)
+        {
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.IncompleteRegistration);
+        }
+
+        var issuer = TryGetAbsoluteUri(loginConfiguration, "issuer");
+        var keyEndpoint = TryGetAbsoluteUri(loginConfiguration, "keyEndpointURL");
+        var tokenEndpoint = TryGetAbsoluteUri(loginConfiguration, "tokenEndpointURL");
+        if (issuer is null || keyEndpoint is null || tokenEndpoint is null)
+        {
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.MalformedOutput);
+        }
+
+        if (!IsMicrosoftTenantEndpoint(issuer, "/v2.0") ||
+            !IsMicrosoftTenantEndpoint(keyEndpoint, "/getkeydata") ||
+            !IsMicrosoftTenantEndpoint(tokenEndpoint, "/oauth2/v2.0/token"))
+        {
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.WrongTenant);
+        }
+
+        if (userConfiguration["kerberosStatus"] is not JsonArray kerberosStatuses)
+        {
+            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.IncompleteRegistration);
+        }
+
+        foreach (var kerberosStatus in kerberosStatuses.OfType<JsonObject>())
+        {
+            var upn = TryGetString(kerberosStatus, "upn");
+            var realmDomain = ExtractAdDomainNameFromCorpDnsName(TryGetString(kerberosStatus, "realm"));
+            var upnDomain = ExtractAdDomainNameFromAccountIdentifier(upn);
+            if (realmDomain is not null &&
+                upnDomain?.Equals(realmDomain, StringComparison.OrdinalIgnoreCase) == true &&
+                ExtractAliasFromAccountIdentifier(upn) is { } alias)
+            {
+                return Detected(alias, realmDomain);
+            }
+        }
+
+        return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.NoCorporateIdentity);
     }
 
     internal async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
@@ -1069,7 +1122,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             started = true;
             var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
+            return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString(), TimedOut: false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -1553,20 +1606,112 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return _environment.GetEnvironmentVariables();
     }
 
-    private static JsonObject? TryParseJsonObject(string text)
+    private static JsonObject? TryParseMacPlatformSsoSection(string output, string sectionName)
     {
+        var sectionHeader = $"{sectionName}:";
+        var headerIndex = -1;
+        var searchIndex = 0;
+        while (searchIndex < output.Length)
+        {
+            var candidateIndex = output.IndexOf(sectionHeader, searchIndex, StringComparison.Ordinal);
+            if (candidateIndex < 0)
+            {
+                return null;
+            }
+
+            if (candidateIndex == 0 || output[candidateIndex - 1] is '\r' or '\n')
+            {
+                headerIndex = candidateIndex;
+                break;
+            }
+
+            searchIndex = candidateIndex + sectionHeader.Length;
+        }
+
+        if (headerIndex < 0)
+        {
+            return null;
+        }
+
+        var objectStart = headerIndex + sectionHeader.Length;
+        while (objectStart < output.Length && char.IsWhiteSpace(output[objectStart]))
+        {
+            objectStart++;
+        }
+
+        if (objectStart >= output.Length || output[objectStart] != '{')
+        {
+            return null;
+        }
+
+        var objectEnd = FindJsonObjectEnd(output, objectStart);
+        if (objectEnd < 0)
+        {
+            return null;
+        }
+
         try
         {
-            var start = text.IndexOf('{');
-            var end = text.LastIndexOf('}');
-            return start >= 0 && end > start
-                ? JsonNode.Parse(text[start..(end + 1)], documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true }) as JsonObject
-                : null;
+            return JsonNode.Parse(
+                output[objectStart..(objectEnd + 1)],
+                documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true }) as JsonObject;
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    private static int FindJsonObjectEnd(string text, int objectStart)
+    {
+        var depth = 0;
+        var insideString = false;
+        var escaped = false;
+        for (var index = objectStart; index < text.Length; index++)
+        {
+            var character = text[index];
+            if (insideString)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                }
+                else if (character == '\\')
+                {
+                    escaped = true;
+                }
+                else if (character == '"')
+                {
+                    insideString = false;
+                }
+
+                continue;
+            }
+
+            if (character == '"')
+            {
+                insideString = true;
+            }
+            else if (character == '{')
+            {
+                depth++;
+            }
+            else if (character == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return index;
+                }
+
+                if (depth < 0)
+                {
+                    return -1;
+                }
+            }
+        }
+
+        return -1;
     }
 
     private static InternalMicrosoftProbeResult Detected(string? alias, string? domain = null)
@@ -1677,7 +1822,29 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private static bool HasJsonStringProperty(JsonObject json, string propertyName, string expectedValue)
     {
-        return TryGetString(json, propertyName)?.Equals(expectedValue, StringComparison.OrdinalIgnoreCase) == true;
+        value = false;
+        return json.TryGetPropertyValue(propertyName, out var node) &&
+            node is JsonValue jsonValue &&
+            jsonValue.TryGetValue(out value);
+    }
+
+    private static Uri? TryGetAbsoluteUri(JsonObject json, string propertyName)
+    {
+        return Uri.TryCreate(TryGetString(json, propertyName), UriKind.Absolute, out var uri)
+            ? uri
+            : null;
+    }
+
+    private static bool IsMicrosoftTenantEndpoint(Uri uri, string expectedSuffix)
+    {
+        var expectedPath = $"/{MicrosoftTenantId}{expectedSuffix}";
+        return uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+            uri.Host.Equals("login.microsoftonline.com", StringComparison.OrdinalIgnoreCase) &&
+            uri.IsDefaultPort &&
+            string.IsNullOrEmpty(uri.UserInfo) &&
+            string.IsNullOrEmpty(uri.Query) &&
+            string.IsNullOrEmpty(uri.Fragment) &&
+            uri.AbsolutePath.TrimEnd('/').Equals(expectedPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? TryGetString(JsonObject json, string propertyName)
@@ -1718,6 +1885,8 @@ internal sealed record InternalMicrosoftProbe(
 
 internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias, string? Domain, InternalMicrosoftProbeFailure? Failure = null)
 {
+    public string? DiagnosticOutcome { get; init; }
+
     public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null, Domain: null);
 
     public static InternalMicrosoftProbeResult Failed(InternalMicrosoftProbeFailure failure)
@@ -1746,6 +1915,12 @@ internal static class InternalMicrosoftProbeOutcome
     public const string Failed = "failed";
     public const string Cancelled = "cancelled";
     public const string TimedOut = "timed_out";
+    public const string CommandMissing = "command_missing";
+    public const string ProcessFailed = "process_failed";
+    public const string MalformedOutput = "malformed_output";
+    public const string WrongTenant = "wrong_tenant";
+    public const string IncompleteRegistration = "incomplete_registration";
+    public const string NoCorporateIdentity = "no_corporate_identity";
 }
 
 internal sealed record InternalMicrosoftProbeDiagnostic(string Source, string Outcome, TimeSpan Duration, bool HasAlias, bool HasDomain, InternalMicrosoftProbeFailure? Failure = null);
