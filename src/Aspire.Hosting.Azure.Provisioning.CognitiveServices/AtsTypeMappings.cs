@@ -6,5 +6,9 @@ using Azure.Provisioning.CognitiveServices;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(CognitiveServicesAccount),
-    ExcludedMemberNames = new[] { "AdditionalProperties" })]
+    ExcludedMemberNames = new[]
+    {
+        // BicepDictionary<BinaryData> cannot be projected because BinaryData is an opaque JSON payload with no ATS-compatible representation.
+        "AdditionalProperties"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccountDeployment), IsInfrastructureRoot = false)]

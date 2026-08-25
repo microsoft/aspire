@@ -6,6 +6,10 @@ using Azure.Provisioning.CosmosDB;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(CosmosDBAccount),
-    ExcludedMemberNames = new[] { "NetworkAclBypassResourceIds" })]
+    ExcludedMemberNames = new[]
+    {
+        // BicepList<ResourceIdentifier> cannot be projected because Azure.Core.ResourceIdentifier is outside the supported proxy scope.
+        "NetworkAclBypassResourceIds"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBSqlDatabase), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBSqlContainer), IsInfrastructureRoot = false)]

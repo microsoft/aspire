@@ -6,7 +6,11 @@ using Azure.Provisioning.ServiceBus;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(ServiceBusNamespace),
-    ExcludedMemberNames = new[] { "ApplicationProperties" })]
+    ExcludedMemberNames = new[]
+    {
+        // BicepDictionary<object> cannot be projected because arbitrary CLR values have no type-safe ATS representation.
+        "ApplicationProperties"
+    })]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusQueue), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusTopic), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusSubscription), IsInfrastructureRoot = false)]

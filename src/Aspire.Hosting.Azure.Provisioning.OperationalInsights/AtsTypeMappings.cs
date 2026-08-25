@@ -6,4 +6,8 @@ using Azure.Provisioning.OperationalInsights;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(OperationalInsightsWorkspace),
-    ExcludedMemberNames = new[] { "AdditionalProperties" })]
+    ExcludedMemberNames = new[]
+    {
+        // BicepDictionary<BinaryData> cannot be projected because BinaryData is an opaque JSON payload with no ATS-compatible representation.
+        "AdditionalProperties"
+    })]
