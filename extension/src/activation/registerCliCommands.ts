@@ -45,8 +45,16 @@ export function registerCliCommands(
   // through tryExecuteCommand itself — the delegated-to command owns its own CLI
   // availability check and telemetry.
   const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', createWithAspireCommand);
-  const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
-  const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
+  const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand(
+    'aspire-vscode.deploy',
+    terminalProvider,
+    (_tp, invocation, cliPath) => deployCommand(editorCommandProvider, getRequiredAppHostPath(invocation), invocation.target, cliPath),
+    () => selectAppHostCommandInvocation(editorCommandProvider, true)));
+  const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand(
+    'aspire-vscode.publish',
+    terminalProvider,
+    (_tp, invocation, cliPath) => publishCommand(editorCommandProvider, getRequiredAppHostPath(invocation), invocation.target, cliPath),
+    () => selectAppHostCommandInvocation(editorCommandProvider, true)));
   const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (_tp, invocation, cliPath) => doCommand(configInfoProvider, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
   const cliUpdateCommandRegistration = vscode.commands.registerCommand('aspire-vscode.update', () => tryExecuteCommand('aspire-vscode.update', terminalProvider, (tp, invocation, cliPath) => updateCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
   const cliUpdateSelfCommandRegistration = vscode.commands.registerCommand('aspire-vscode.updateSelf', (target: CliPathResolutionTarget = windowCliPathTarget, cliPath?: string) =>
@@ -136,6 +144,15 @@ async function selectAppHostCommandInvocation(editorCommandProvider: AspireEdito
     ? getCliPathTargetForUri(vscode.Uri.file(appHost.appHostPath))
     : await selectCommandTarget();
   return { target, appHost };
+}
+
+function getRequiredAppHostPath(invocation: CommandInvocation): string {
+  const appHostPath = invocation.appHost?.appHostPath;
+  if (!appHostPath) {
+    throw new Error(noAppHostInWorkspace);
+  }
+
+  return appHostPath;
 }
 
 async function tryExecuteCommand(

@@ -129,12 +129,12 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         await this.launchAspireDebugSession('run', noDebug, undefined, await this.getAppHostPath(resource, allowWorkspaceFallback));
     }
 
-    public async tryExecuteDeployAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('deploy', noDebug);
+    public async tryExecuteDeployAppHost(noDebug: boolean, appHostPath: string, target: CliPathResolutionTarget, cliPath: string): Promise<void> {
+        await this.launchAspireDebugSession('deploy', noDebug, undefined, appHostPath, target, cliPath);
     }
 
-    public async tryExecutePublishAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('publish', noDebug);
+    public async tryExecutePublishAppHost(noDebug: boolean, appHostPath: string, target: CliPathResolutionTarget, cliPath: string): Promise<void> {
+        await this.launchAspireDebugSession('publish', noDebug, undefined, appHostPath, target, cliPath);
     }
 
     public async tryExecuteDoAppHost(noDebug: boolean, doStep?: string, appHostPath?: string, target?: CliPathResolutionTarget, cliPath?: string): Promise<void> {

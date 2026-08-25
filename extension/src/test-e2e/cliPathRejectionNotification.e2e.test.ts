@@ -18,7 +18,7 @@ import {
 } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { VSBrowser } from './helpers/extester';
-import { executeCommandFromPalette, openAspireView, waitForNotificationMessage, waitForWorkbenchText } from './helpers/vscode';
+import { closeAllEditors, openAspireView, waitForNotificationMessage, waitForWorkbenchText } from './helpers/vscode';
 
 // Mirrors configuredCliPathRejected in src/loc/strings.ts.
 const rejectionNotificationText = 'The configured Aspire CLI path could not be used';
@@ -33,7 +33,7 @@ suite('Configured CLI path rejection E2E', function () {
 
     teardown(async () => {
         await runE2eTeardown([
-            () => executeCommandFromPalette('workbench.view.explorer'),
+            () => closeAllEditors(),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceCliPath(),
@@ -107,7 +107,6 @@ suite('Configured CLI path rejection E2E', function () {
     test('warns when active Aspire use resolves an outdated CLI and routes the update action', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
-        await executeCommandFromPalette('workbench.view.explorer');
         const wrapper = writeOutdatedCliWarningWrapper();
         cleanupOutdatedCliWrapper = wrapper.cleanup;
         await setE2eCliPathForE2E(wrapper.cliPath);
@@ -135,5 +134,8 @@ suite('Configured CLI path rejection E2E', function () {
             beforeTerminalCommand);
 
         assert.strictEqual(terminalCommand.executionSuppressed, true);
+        assert.ok(
+            terminalCommand.commandLine.includes(wrapper.cliPath),
+            `Expected update command to use the warned CLI '${wrapper.cliPath}': ${terminalCommand.commandLine}`);
     });
 });

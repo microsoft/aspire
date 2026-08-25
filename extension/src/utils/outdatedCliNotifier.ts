@@ -27,6 +27,8 @@ const defaultSurface: OutdatedCliNotificationSurface = {
  */
 export class OutdatedCliNotifier implements vscode.Disposable {
     private readonly _notifiedCliVersions = new Set<string>();
+    private readonly _cancellationSource = new vscode.CancellationTokenSource();
+    private _disposed = false;
 
     constructor(
         private readonly _versionProvider: CliVersionProvider,
@@ -35,9 +37,17 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     }
 
     async notifyIfOutdated(target: CliPathResolutionTarget, cliPath?: string): Promise<void> {
-        const options: CliVersionStatusOptions = { target, cliPath };
+        if (this._disposed) {
+            return;
+        }
+
+        const options: CliVersionStatusOptions = {
+            target,
+            cliPath,
+            cancellationToken: this._cancellationSource.token,
+        };
         const result = await this._versionProvider.getCliVersionStatus(minimumSupportedAspireCliVersion, options);
-        if (result?.status !== 'unsupported') {
+        if (this._disposed || result?.status !== 'unsupported') {
             return;
         }
 
@@ -52,7 +62,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         const selection = await this._surface.showWarning(
             strings.outdatedAspireCliWarning(result.version, minimumSupportedAspireCliVersion),
             strings.updateAspireCliAction);
-        if (selection === strings.updateAspireCliAction) {
+        if (!this._disposed && selection === strings.updateAspireCliAction) {
             await this._surface.executeCommand(updateAspireCliCommand, target, result.cliPath);
         }
     }
@@ -66,6 +76,13 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     }
 
     dispose(): void {
+        if (this._disposed) {
+            return;
+        }
+
+        this._disposed = true;
+        this._cancellationSource.cancel();
+        this._cancellationSource.dispose();
         this._notifiedCliVersions.clear();
     }
 }

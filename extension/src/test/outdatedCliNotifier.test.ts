@@ -8,11 +8,12 @@ import { minimumSupportedAspireCliVersion, OutdatedCliNotificationSurface, Outda
 suite('outdatedCliNotifier', () => {
     class FakeVersionProvider {
         result: CliVersionStatus | null = null;
+        resultPromise: Promise<CliVersionStatus | null> | undefined;
         readonly calls: Array<{ minimumVersion: string; options?: CliVersionStatusOptions }> = [];
 
         async getCliVersionStatus(minimumVersion: string, options?: CliVersionStatusOptions): Promise<CliVersionStatus | null> {
             this.calls.push({ minimumVersion, options });
-            return this.result;
+            return await (this.resultPromise ?? this.result);
         }
     }
 
@@ -20,10 +21,11 @@ suite('outdatedCliNotifier', () => {
         readonly warnings: Array<{ message: string; actions: string[] }> = [];
         readonly commands: Array<{ command: string; args: unknown[] }> = [];
         selection: string | undefined;
+        selectionPromise: Promise<string | undefined> | undefined;
 
         showWarning(message: string, ...actions: string[]): Thenable<string | undefined> {
             this.warnings.push({ message, actions });
-            return Promise.resolve(this.selection);
+            return this.selectionPromise ?? Promise.resolve(this.selection);
         }
 
         executeCommand(command: string, ...args: unknown[]): Thenable<unknown> {
@@ -127,5 +129,49 @@ suite('outdatedCliNotifier', () => {
             args: [target, '/workspace/a/.aspire/bin/aspire'],
         }]);
         notifier.dispose();
+    });
+
+    test('dispose cancels an in-flight version probe and suppresses its warning', async () => {
+        const { notifier, versionProvider, surface } = createNotifier();
+        let resolveProbe!: (result: CliVersionStatus | null) => void;
+        versionProvider.resultPromise = new Promise(resolve => resolveProbe = resolve);
+
+        const notification = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        const cancellationToken = versionProvider.calls[0].options?.cancellationToken;
+        assert.ok(cancellationToken);
+        assert.strictEqual(cancellationToken.isCancellationRequested, false);
+
+        notifier.dispose();
+        assert.strictEqual(cancellationToken.isCancellationRequested, true);
+        resolveProbe({
+            cliPath: '/cli/aspire',
+            version: '13.4.9',
+            status: 'unsupported',
+        });
+        await notification;
+
+        assert.deepStrictEqual(surface.warnings, []);
+        assert.deepStrictEqual(surface.commands, []);
+    });
+
+    test('dispose while the warning awaits selection suppresses the update action', async () => {
+        const { notifier, versionProvider, surface } = createNotifier();
+        versionProvider.result = {
+            cliPath: '/cli/aspire',
+            version: '13.4.9',
+            status: 'unsupported',
+        };
+        let resolveSelection!: (selection: string | undefined) => void;
+        surface.selectionPromise = new Promise(resolve => resolveSelection = resolve);
+
+        const notification = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await new Promise(resolve => setImmediate(resolve));
+        assert.strictEqual(surface.warnings.length, 1);
+
+        notifier.dispose();
+        resolveSelection(strings.updateAspireCliAction);
+        await notification;
+
+        assert.deepStrictEqual(surface.commands, []);
     });
 });
