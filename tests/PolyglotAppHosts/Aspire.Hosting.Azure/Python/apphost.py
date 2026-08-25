@@ -8,6 +8,11 @@ def configure_infrastructure(_infrastructure: AzureResourceInfrastructure):
     pass
 
 
+def configure_identity_infrastructure(infrastructure: AzureResourceInfrastructure):
+    provisioned_identity = infrastructure.get_user_assigned_identity()
+    provisioned_identity.name = "polyglot-identity"
+
+
 with create_builder() as builder:
     builder.add_azure_provisioning()
     location = builder.add_parameter("parameter")
@@ -64,7 +69,7 @@ with create_builder() as builder:
     identity = builder.add_azure_user_assigned_identity("resource")
     identity_client_id = identity.get_output("clientId")
     identity_client_id_expression = ReferenceExpression.format_string("{0}", identity_client_id)
-    identity.configure_infrastructure(configure_infrastructure)
+    identity.configure_infrastructure(configure_identity_infrastructure)
     identity.with_parameter("default")
     identity.with_parameter("string-value", value="value")
     identity.with_parameter("string-values", value=["value-1", "value-2"])

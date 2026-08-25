@@ -13,6 +13,10 @@ func main() {
 	}
 
 	eventHubs := builder.AddAzureEventHubs("eventhubs")
+	_ = eventHubs.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		namespace := infrastructure.GetEventHubsNamespace()
+		namespace.Tags().Set("provisioning-proxy", "go")
+	})
 	if eventHubs.Err() != nil {
 		log.Fatalf(aspire.FormatError(eventHubs.Err()))
 	}

@@ -68,6 +68,16 @@ const identity = await builder.addAzureUserAssignedIdentity("identity");
 await identity.configureInfrastructure(async infrastructureContext => {
     await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
+    const provisionedIdentity = await infrastructureContext.getUserAssignedIdentity();
+    const bicep = infrastructureContext.bicep();
+    const resourceGroup = await bicep.resourceGroup();
+    const resourceGroupId = await bicep.member(resourceGroup, "id");
+    const uniqueName = await bicep.uniqueString([resourceGroupId]);
+    const identityName = bicep.createStringBuilder()
+        .appendLiteral("mi-")
+        .appendValue(uniqueName)
+        .build();
+    await provisionedIdentity.name.set(identityName);
 });
 await identity.withParameter("identityEmpty");
 await identity.withParameter("identityPlain", { value: "value" });

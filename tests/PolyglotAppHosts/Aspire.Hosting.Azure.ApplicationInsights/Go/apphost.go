@@ -14,6 +14,10 @@ func main() {
 
 	// AddAzureApplicationInsights — factory method with just a name
 	appInsights := builder.AddAzureApplicationInsights("insights")
+	_ = appInsights.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		component := infrastructure.GetApplicationInsightsComponent()
+		component.Tags().Set("provisioning-proxy", "go")
+	})
 	if err := appInsights.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

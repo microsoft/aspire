@@ -4,6 +4,10 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // 1) addAzureCosmosDB
         var cosmos = builder.addAzureCosmosDB("cosmos");
+        cosmos.configureInfrastructure((infrastructure) -> {
+            var account = infrastructure.getCosmosDBAccount();
+            account.tags().set("provisioning-proxy", "java");
+        });
         // 2) withDefaultAzureSku
         cosmos.withDefaultAzureSku();
         // 3) addCosmosDatabase

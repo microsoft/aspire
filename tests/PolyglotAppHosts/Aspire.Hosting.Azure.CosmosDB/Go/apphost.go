@@ -14,6 +14,10 @@ func main() {
 
 	// 1) AddAzureCosmosDB
 	cosmos := builder.AddAzureCosmosDB("cosmos")
+	_ = cosmos.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		account := infrastructure.GetCosmosDBAccount()
+		account.Tags().Set("provisioning-proxy", "go")
+	})
 
 	// 2) WithDefaultAzureSku
 	cosmos.WithDefaultAzureSku()

@@ -4,8 +4,14 @@
 from aspire_app import create_builder
 
 
+def configure_provisioning(infrastructure):
+    account = infrastructure.get_storage_account()
+    account.tags.set("provisioning-proxy", "python")
+
+
 with create_builder() as builder:
     storage = builder.add_azure_storage("resource")
+    storage.configure_infrastructure(configure_provisioning)
     storage.run_as_emulator()
     storage.with_storage_role_assignments(storage, ["StorageBlobDataReader"])
     # });

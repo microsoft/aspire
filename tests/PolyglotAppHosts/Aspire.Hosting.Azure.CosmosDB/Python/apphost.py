@@ -4,9 +4,15 @@
 from aspire_app import create_builder
 
 
+def configure_provisioning(infrastructure):
+    account = infrastructure.get_cosmos_db_account()
+    account.tags.set("provisioning-proxy", "python")
+
+
 with create_builder() as builder:
     # 1) addAzureCosmosDB
     cosmos = builder.add_azure_cosmos_db("resource")
+    cosmos.configure_infrastructure(configure_provisioning)
     # 2) withDefaultAzureSku
     cosmos.with_default_azure_sku()
     # 3) addCosmosDatabase

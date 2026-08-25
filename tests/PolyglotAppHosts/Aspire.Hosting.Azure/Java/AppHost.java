@@ -55,7 +55,10 @@ void main() throws Exception {
         infrastructure.publishAsExisting(existingName, existingResourceGroup);
         infrastructure.asExisting(existingName, existingResourceGroup);
         var identity = builder.addAzureUserAssignedIdentity("identity");
-        identity.configureInfrastructure((infrastructureContext) -> { });
+        identity.configureInfrastructure((infrastructureContext) -> {
+            var provisionedIdentity = infrastructureContext.getUserAssignedIdentity();
+            provisionedIdentity.setName("polyglot-identity");
+        });
         identity.withParameter("identityEmpty");
         identity.withParameter("identityPlain", "value");
         identity.withParameter("identityList", new String[] { "a", "b" });

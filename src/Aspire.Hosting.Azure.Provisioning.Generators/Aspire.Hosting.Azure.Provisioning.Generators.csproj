@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>aspire hosting azure provisioning bicep source-generator</PackageTags>
+    <Description>Source generators for creating bounded polyglot proxies over Azure Provisioning SDKs.</Description>
+    <LangVersion>12.0</LangVersion>
+    <NoWarn>$(NoWarn),1573,1591,1712,NU5128</NoWarn>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="All" />
+    <PackageReference Update="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+</Project>

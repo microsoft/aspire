@@ -146,6 +146,8 @@ output inlineUrl string = 'https://inline.example.com'
 	_ = identity.ConfigureInfrastructure(func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
 		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		provisionedIdentity := ctx.GetUserAssignedIdentity()
+		_ = provisionedIdentity.SetName("polyglot-identity")
 	})
 
 	identity.WithParameter("identityEmpty")

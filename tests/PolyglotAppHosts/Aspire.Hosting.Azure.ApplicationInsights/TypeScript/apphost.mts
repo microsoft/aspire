@@ -7,6 +7,11 @@ const builder = await createBuilder();
 
 // addAzureApplicationInsights — factory method with just a name
 const appInsights = await builder.addAzureApplicationInsights('insights');
+await appInsights.configureInfrastructure(async infrastructure => {
+    const component = await infrastructure.getApplicationInsightsComponent();
+    const tags = await component.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+});
 
 // addAzureLogAnalyticsWorkspace — from the OperationalInsights dependency
 const logAnalytics = await builder.addAzureLogAnalyticsWorkspace('logs');

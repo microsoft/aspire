@@ -4,6 +4,11 @@ const builder = await createBuilder();
 
 // 1) addAzureCosmosDB
 const cosmos = await builder.addAzureCosmosDB("cosmos");
+await cosmos.configureInfrastructure(async infrastructure => {
+    const account = await infrastructure.getCosmosDBAccount();
+    const tags = await account.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+});
 
 // 2) withDefaultAzureSku
 await cosmos.withDefaultAzureSku();

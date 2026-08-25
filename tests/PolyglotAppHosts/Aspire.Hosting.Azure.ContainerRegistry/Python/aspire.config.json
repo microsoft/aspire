@@ -8,6 +8,7 @@
   },
   "packages": {
     "Aspire.Hosting.Azure.AppContainers": "",
-    "Aspire.Hosting.Azure.ContainerRegistry": ""
+    "Aspire.Hosting.Azure.ContainerRegistry": "",
+    "Aspire.Hosting.Azure.Provisioning.ContainerRegistry": ""
   }
 }
