@@ -602,9 +602,10 @@ internal sealed class NewCommand : BaseCommand
         // wiring skill — users can still opt into it from the prompt.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
 
-        if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
+        var editorPath = templateResult.EditorPath ?? templateResult.OutputPath;
+        if (editorPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
-            extensionInteractionService.OpenEditor(templateResult.OutputPath);
+            extensionInteractionService.OpenEditor(editorPath);
         }
 
         return CommandResult.FromExitCode(agentInitResult.ExitCode);

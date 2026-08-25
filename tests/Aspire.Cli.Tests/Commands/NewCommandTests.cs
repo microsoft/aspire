@@ -83,6 +83,67 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommand_IntegrationTestTemplatePassesAppHostToSelectedTemplate()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        string? selectedTemplate = null;
+        string? openedEditorPath = null;
+        var runner = CreateTestRunnerWithStandardPackages();
+        runner.NewProjectAsyncCallback = (templateName, projectName, generatedPath, _, _) =>
+        {
+            selectedTemplate = templateName;
+            Directory.CreateDirectory(generatedPath);
+            File.WriteAllText(Path.Combine(generatedPath, $"{projectName}.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(generatedPath, "IntegrationTest1.cs"), "public class IntegrationTest1;");
+            return 0;
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
+            {
+                OpenEditorCallback = path => openedEditorPath = path
+            };
+            options.NewCommandPrompterFactory = serviceProvider =>
+            {
+                var prompter = new TestNewCommandPrompter(serviceProvider.GetRequiredService<IInteractionService>())
+                {
+                    PromptForTemplateCallback = templates => templates.Single(template => template.Name == "aspire-mstest")
+                };
+                return prompter;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new aspire-test --name AppHost.Tests --output \"{outputPath}\" --apphost \"{appHostFile.FullName}\" --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("aspire-mstest", selectedTemplate);
+        var extraArgs = Assert.IsType<string[]>(runner.LastNewProjectExtraArgs);
+        Assert.Equal(
+            [
+                "--WithAppHostReference",
+                "true",
+                "--AppHostProjectPath",
+                Path.GetRelativePath(outputPath, appHostFile.FullName),
+                "--AppHostProjectName",
+                "AppHost"
+            ],
+            extraArgs);
+        Assert.Equal(Path.Combine(outputPath, "IntegrationTest1.cs"), openedEditorPath);
+    }
+
+    [Fact]
     public void NewCommand_WhenIdentityChannelIsStaging_DescribesStagingChannelOption()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
