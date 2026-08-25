@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Aspire.Cli;
 using Aspire.Cli.Certificates;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -282,7 +283,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             }
             catch
             {
-                // If we couldn't load the file, then we also can't safely overwite it.
+                // If we couldn't load the file, then we also can't safely overwrite it.
                 Log.UnixNotOverwritingCertificate(certPath);
                 return TrustLevel.None;
             }
@@ -577,7 +578,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         }
         else
         {
-            Directory.CreateDirectory(directoryPath, DirectoryPermissions);
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryPath);
         }
 #pragma warning restore CA1416 // Validate platform compatibility
     }
@@ -693,9 +694,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             RedirectStandardError = true,
         };
 
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
-        return process.ExitCode == 0;
+        return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
     }
 
     /// <remarks>
@@ -712,9 +711,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            WaitForExit(process, cancellationToken);
-            return process.ExitCode == 0;
+            return CertificateProcessRunner.Run(startInfo, cancellationToken).ExitCode == 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -726,25 +723,6 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             // This method is used to determine whether more trust is needed, so it's better to underestimate the amount of trust.
             return false;
         }
-    }
-
-    private static void WaitForExit(Process process, CancellationToken cancellationToken)
-    {
-        using var cancellationRegistration = cancellationToken.Register(static state =>
-        {
-            var process = (Process)state!;
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
-            {
-                // The process either exited concurrently or could not be killed by this platform.
-            }
-        }, process);
-
-        process.WaitForExit();
-        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <remarks>
@@ -760,9 +738,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            return process.ExitCode == 0;
+            return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
         }
         catch (Exception ex)
         {
@@ -780,9 +756,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            if (process.ExitCode == 0)
+            if (CertificateProcessRunner.Run(startInfo).ExitCode == 0)
             {
                 return true;
             }
@@ -961,17 +935,14 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 RedirectStandardError = true
             };
 
-            using var process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+            if (processResult.ExitCode != 0)
             {
                 Log.UnixOpenSslVersionFailed();
                 return false;
             }
 
-            var match = OpenSslVersionRegex.Match(stdout);
+            var match = OpenSslVersionRegex.Match(processResult.StandardOutput);
             if (!match.Success)
             {
                 Log.UnixOpenSslVersionParsingFailed();
@@ -1005,17 +976,14 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 RedirectStandardError = true
             };
 
-            using var process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+            if (processResult.ExitCode != 0)
             {
                 Log.UnixOpenSslHashFailed(certificatePath);
                 return false;
             }
 
-            hash = stdout.Trim();
+            hash = processResult.StandardOutput.Trim();
             return true;
         }
         catch (Exception ex)

@@ -249,6 +249,10 @@ public class OtlpSpan
     public static Dictionary<string, int> GetFieldValuesFromTraces(IEnumerable<OtlpTrace> traces, string attributeName)
     {
         var attributeValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        if (attributeName is KnownTraceFields.DurationField or KnownTraceFields.TimestampField)
+        {
+            return attributeValues;
+        }
 
         foreach (var trace in traces)
         {

@@ -51,7 +51,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, NpgsqlEntityFram
         "Npgsql.Exception"
     };
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override string ValidJsonConfig => """
         {
@@ -81,7 +81,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, NpgsqlEntityFram
     public ConformanceTests(PostgreSQLContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
                                         ? _containerFixture.GetConnectionString()
                                         : "Server=localhost;User ID=root;Password=password;Database=test_aspire_mysql";
     }
@@ -134,7 +134,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, NpgsqlEntityFram
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, obj => obj.ActivitySourceTest(key: null)),

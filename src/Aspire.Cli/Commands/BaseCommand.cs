@@ -23,6 +23,9 @@ internal abstract class BaseCommand : Command
 
     internal virtual bool PrefetchesTemplatePackageMetadata => false;
 
+    internal bool PrefetchesTemplatePackageMetadataForInvocation
+        => _prefetchesTemplatePackageMetadataForInvocation ?? PrefetchesTemplatePackageMetadata;
+
     // JSON output cannot display update notifications, so apply this invocation-level gate outside
     // the overridable command policy to prevent metadata-only consumers from bypassing it.
     internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isJsonFormatRequested;
@@ -49,6 +52,7 @@ internal abstract class BaseCommand : Command
 
     private readonly CliExecutionContext _executionContext;
     private bool _isJsonFormatRequested;
+    private bool? _prefetchesTemplatePackageMetadataForInvocation;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
 
@@ -74,7 +78,7 @@ internal abstract class BaseCommand : Command
 
             // Route human-readable output to stderr when JSON is requested so
             // that only machine-readable data appears on stdout.
-            if (IsJsonFormatRequested(parseResult))
+            if (_isJsonFormatRequested)
             {
                 InteractionService.Console = ConsoleOutput.Error;
             }
@@ -93,8 +97,14 @@ internal abstract class BaseCommand : Command
     internal void SelectForExecution(ParseResult parseResult)
     {
         _isJsonFormatRequested = IsJsonFormatRequested(parseResult);
+        _prefetchesTemplatePackageMetadataForInvocation = PrefetchesTemplatePackageMetadata;
         PrepareForExecution(parseResult);
         _executionContext.Command = this;
+    }
+
+    protected void DisableTemplatePackageMetadataPrefetchingForInvocation()
+    {
+        _prefetchesTemplatePackageMetadataForInvocation = false;
     }
 
     internal virtual void PrepareForExecution(ParseResult parseResult)
@@ -250,7 +260,7 @@ internal abstract class BaseCommand : Command
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.
     /// </summary>
-    private bool IsJsonFormatRequested(ParseResult parseResult)
+    protected virtual bool IsJsonFormatRequested(ParseResult parseResult)
     {
         foreach (var option in Options)
         {

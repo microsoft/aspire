@@ -116,6 +116,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public bool IsUnsupported { get; set; }
         public string LanguageId => "test";
         public string DisplayName => "Test";
+        public bool SupportsLaunchProfiles => false;
         public string? AppHostFileName => null;
 
         public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken) => throw new NotSupportedException();

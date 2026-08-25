@@ -97,6 +97,11 @@
         <target state="needs-review-translation">此环境中不支持交互式输入。使用 --non-interactive 标志或确保 CLI 在交互式终端中运行。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]有关详细信息，请参阅: [link]{0}[/][/]</target>
@@ -157,9 +162,9 @@
         <target state="needs-review-translation">未指定 --apphost 选项，并且检测到多个应用主机项目文件。</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">未指定项目参数，并且未检测到应用主机项目文件。</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

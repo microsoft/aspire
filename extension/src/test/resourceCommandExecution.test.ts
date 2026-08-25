@@ -1,9 +1,21 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { executeResourceCommand, ResourceCommandRunner } from '../views/resourceCommandExecution';
-import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../views/AppHostDataRepository';
+import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../data/AppHostDataRepository';
+import { resourceCommandLogOpenFailed } from '../loc/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
+
+// Diagnostic log references are only offered as actions when they parse as absolute, and the opened
+// Uri round-trips through `fsPath`, so both sides have to use the host separator ('\tmp\cli.log' on
+// Windows).
+function p(...segments: string[]): string {
+    return path.join(path.sep, ...segments);
+}
+
+const cliLogPath = p('tmp', 'cli.log');
+const appHostLogPath = p('tmp', 'apphost.log');
 
 suite('executeResourceCommand', () => {
     let sandbox: sinon.SinonSandbox;
@@ -83,6 +95,171 @@ suite('executeResourceCommand', () => {
         assert.match(message, /more detail/);
         assert.strictEqual(infoStub.called, false);
         assert.deepStrictEqual(rendered, []);
+    });
+
+    test('shows a complete CLI failure once and offers its diagnostic logs as actions', async () => {
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            [
+                "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
+                `📄 See logs at ${cliLogPath}`,
+                `🔍 See AppHost logs at ${appHostLogPath}`,
+            ].join('\n')));
+
+        const outcome = await executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+
+        assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
+        sinon.assert.calledOnceWithExactly(
+            errorStub,
+            "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
+            'Open CLI Log',
+            'Open AppHost Log');
+    });
+
+    test('recognizes localized CLI failures and diagnostic log labels by status icon', async () => {
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            [
+                "❌ Ressource 'app-id' konnte nicht neu gestartet werden.",
+                `📄 Diagnoseprotokoll: ${cliLogPath}`,
+                `🔍 AppHost-Protokoll: ${appHostLogPath}`,
+            ].join('\n')));
+
+        await executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+
+        sinon.assert.calledOnceWithExactly(
+            errorStub,
+            "❌ Ressource 'app-id' konnte nicht neu gestartet werden.",
+            'Open CLI Log',
+            'Open AppHost Log');
+    });
+
+    test('preserves non-absolute log references as diagnostic text', async () => {
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            [
+                "❌ Failed to restart resource 'app-id'.",
+                '📄 See logs at relative/cli.log',
+            ].join('\n')));
+
+        await executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+
+        sinon.assert.calledOnceWithExactly(
+            errorStub,
+            [
+                "❌ Failed to restart resource 'app-id'.",
+                '📄 See logs at relative/cli.log',
+            ].join('\n'));
+    });
+
+    test('completes while the failure notification remains open', async () => {
+        errorStub.returns(new Promise<string | undefined>(() => { }));
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            "❌ Failed to restart resource 'app-id'."));
+
+        const execution = executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+        const result = await Promise.race([
+            execution,
+            new Promise<'pending'>(resolve => setImmediate(() => resolve('pending'))),
+        ]);
+
+        assert.deepStrictEqual(result, { success: false, hadOutput: false });
+    });
+
+    test('opens the CLI diagnostic log selected from a failure notification', async () => {
+        const document = {} as vscode.TextDocument;
+        const openDocumentStub = sandbox.stub(vscode.workspace, 'openTextDocument').resolves(document);
+        const showDocumentStub = sandbox.stub(vscode.window, 'showTextDocument').resolves({} as vscode.TextEditor);
+        errorStub.resolves('Open CLI Log');
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            [
+                "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
+                `📄 See logs at ${cliLogPath}`,
+            ].join('\n')));
+
+        await executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+
+        sinon.assert.calledOnce(openDocumentStub);
+        assert.strictEqual((openDocumentStub.firstCall.args[0] as vscode.Uri).fsPath, cliLogPath);
+        assert.strictEqual(showDocumentStub.calledOnce, true);
+        assert.strictEqual(showDocumentStub.firstCall.args[0], document);
+        assert.deepStrictEqual(showDocumentStub.firstCall.args[1], { preview: false });
+    });
+
+    test('opens the AppHost diagnostic log selected from a failure notification', async () => {
+        const document = {} as vscode.TextDocument;
+        const openDocumentStub = sandbox.stub(vscode.workspace, 'openTextDocument').resolves(document);
+        const showDocumentStub = sandbox.stub(vscode.window, 'showTextDocument').resolves({} as vscode.TextEditor);
+        errorStub.resolves('Open AppHost Log');
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            [
+                "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
+                `🔍 See AppHost logs at ${appHostLogPath}`,
+            ].join('\n')));
+
+        await executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+
+        sinon.assert.calledOnce(openDocumentStub);
+        assert.strictEqual((openDocumentStub.firstCall.args[0] as vscode.Uri).fsPath, appHostLogPath);
+        assert.strictEqual(showDocumentStub.calledOnce, true);
+        assert.strictEqual(showDocumentStub.firstCall.args[0], document);
+        assert.deepStrictEqual(showDocumentStub.firstCall.args[1], { preview: false });
+    });
+
+    test('reports a diagnostic log open failure without rethrowing', async () => {
+        sandbox.stub(vscode.workspace, 'openTextDocument').rejects(new Error('access denied'));
+        const warningStub = sandbox.stub(vscode.window, 'showWarningMessage');
+        errorStub.resolves('Open CLI Log');
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource restart',
+            16,
+            '',
+            [
+                "❌ Failed to restart resource 'app-id': Failed to stop resource 'app-id'.",
+                `📄 See logs at ${cliLogPath}`,
+            ].join('\n')));
+
+        const outcome = await executeResourceCommand(
+            runner,
+            () => { throw new Error('renderer should not be called'); },
+            { resourceName: 'app-id', commandName: 'restart', appHostPath: '/repo/apphost.rs' });
+
+        assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
+        assert.strictEqual(warningStub.calledOnce, true);
+        assert.strictEqual(String(warningStub.firstCall.args[0]), resourceCommandLogOpenFailed(cliLogPath, 'access denied'));
     });
 
     test('reports CLI command output to the user without writing it to extension logs', async () => {

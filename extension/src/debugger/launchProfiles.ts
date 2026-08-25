@@ -1,9 +1,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+import { DebugConfigurationArguments, ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
-import { stripComments, parseTree, findNodeAtLocation } from 'jsonc-parser';
+import { getNodeValue, Node, parse, ParseError, parseTree } from 'jsonc-parser';
 import { aspireConfigFileName, AspireConfigProfile } from '../utils/cliTypes';
 
 /*
@@ -30,6 +30,61 @@ export interface LaunchProfile {
     launchUrl?: string;
 }
 
+export function hasSdkCompatibleLaunchProfileProperties(profile: unknown): profile is LaunchProfile {
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
+        return false;
+    }
+
+    const value = profile as Record<string, unknown>;
+    if (typeof value.commandName !== 'string') {
+        return false;
+    }
+
+    for (const property of ['commandLineArgs']) {
+        if (value[property] !== undefined && value[property] !== null && typeof value[property] !== 'string') {
+            return false;
+        }
+    }
+
+    for (const property of ['dotnetRunMessages']) {
+        if (value[property] !== undefined && typeof value[property] !== 'boolean') {
+            return false;
+        }
+    }
+
+    if (value.environmentVariables !== undefined && value.environmentVariables !== null) {
+        if (typeof value.environmentVariables !== 'object' ||
+            Array.isArray(value.environmentVariables) ||
+            Object.values(value.environmentVariables).some(environmentValue => typeof environmentValue !== 'string')) {
+            return false;
+        }
+    }
+
+    // The SDK deserializes each provider with a different model and ignores properties from
+    // other providers, so validate only the fields consumed by the selected parser.
+    // https://github.com/dotnet/sdk/tree/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings
+    switch (value.commandName) {
+        case LaunchProfileCommandName.project:
+            for (const property of ['applicationUrl', 'launchUrl']) {
+                if (value[property] !== undefined && value[property] !== null && typeof value[property] !== 'string') {
+                    return false;
+                }
+            }
+
+            return value.launchBrowser === undefined || typeof value.launchBrowser === 'boolean';
+        case LaunchProfileCommandName.executable:
+            for (const property of ['executablePath', 'workingDirectory']) {
+                if (value[property] !== undefined && value[property] !== null && typeof value[property] !== 'string') {
+                    return false;
+                }
+            }
+
+            return true;
+        default:
+            return true;
+    }
+}
+
 /**
  * Expands environment variable references in a string.
  * Supports $(VAR) and %VAR% syntax used by launch profiles.
@@ -40,6 +95,63 @@ export function expandEnvironmentVariables(value: string): string {
     // Expand %VAR% syntax (Windows)
     result = result.replace(/%([^%]+)%/g, (_, varName) => process.env[varName] ?? '');
     return result;
+}
+
+export function expandSdkEnvironmentVariables(
+    value: string,
+    environment: NodeJS.ProcessEnv = process.env
+): string {
+    // Match Environment.ExpandEnvironmentVariables, which the SDK launch-profile parser uses:
+    // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/ExecutableLaunchProfileParser.cs
+    let result = '';
+    let currentIndex = 0;
+
+    while (currentIndex < value.length) {
+        const variableStart = value.indexOf('%', currentIndex);
+        if (variableStart < 0) {
+            result += value.slice(currentIndex);
+            break;
+        }
+
+        const variableEnd = value.indexOf('%', variableStart + 1);
+        if (variableEnd < 0) {
+            result += value.slice(currentIndex);
+            break;
+        }
+
+        const variableName = value.slice(variableStart + 1, variableEnd);
+        const variableValue = getSdkEnvironmentVariable(environment, variableName);
+        if (variableValue !== undefined) {
+            result += value.slice(currentIndex, variableStart) + variableValue;
+            currentIndex = variableEnd + 1;
+        } else if (process.platform === 'win32') {
+            // Windows delegates to ExpandEnvironmentStringsW, which leaves an unresolved span
+            // intact and continues after its closing delimiter.
+            // https://learn.microsoft.com/windows/win32/api/processenv/nf-processenv-expandenvironmentstringsw
+            result += value.slice(currentIndex, variableEnd + 1);
+            currentIndex = variableEnd + 1;
+        } else {
+            // The Unix runtime reconsiders the closing '%' as the start of another variable, so
+            // adjacent references can share a delimiter.
+            // https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Environment.UnixOrBrowser.cs
+            result += value.slice(currentIndex, variableEnd);
+            currentIndex = variableEnd;
+        }
+    }
+
+    return result;
+}
+
+function getSdkEnvironmentVariable(environment: NodeJS.ProcessEnv, name: string): string | undefined {
+    if (process.platform !== 'win32') {
+        return environment[name];
+    }
+
+    // Windows environment names are case-insensitive, including when the supplied environment is
+    // a plain snapshot rather than Node's special process.env object.
+    const normalizedName = name.toLowerCase();
+    const matchingName = Object.keys(environment).find(candidate => candidate.toLowerCase() === normalizedName);
+    return matchingName ? environment[matchingName] : undefined;
 }
 
 /**
@@ -67,6 +179,8 @@ const defaultLaunchProfileCommandNames: ReadonlySet<string> = new Set([
 
 export interface LaunchSettings {
     profiles: { [key: string]: LaunchProfile };
+    // Relative profile paths are resolved from the launch-settings file, not the project file.
+    sourceDirectory?: string;
     // The profile names in launchSettings.json *source order*. JavaScript objects enumerate
     // integer-like keys (e.g. "10", "2") in ascending numeric order rather than insertion order, so
     // `Object.keys(profiles)` cannot be trusted to reflect the order profiles appear in the file. The
@@ -74,11 +188,19 @@ export interface LaunchSettings {
     // the file in source order, so we must preserve that order here to pick the same default profile.
     // Populated by readLaunchSettings; may be absent for LaunchSettings constructed by other means.
     profileOrder?: readonly string[];
+    profileEntries?: readonly LaunchProfileSourceEntry[];
+}
+
+export interface LaunchProfileSourceEntry {
+    name: string;
+    profile: LaunchProfile;
+    hasInvalidProperties: boolean;
 }
 
 export interface LaunchProfileResult {
     profile: LaunchProfile | null;
     profileName: string | null;
+    hasInvalidProperties?: boolean;
 }
 
 /**
@@ -93,13 +215,10 @@ export interface LaunchProfileResult {
  * Returns undefined when the content has no `profiles` object so callers can fall back to key order.
  */
 function extractProfileOrder(content: string): string[] | undefined {
-    const root = parseTree(content);
-    if (!root) {
-        return undefined;
-    }
-
-    const profilesNode = findNodeAtLocation(root, ['profiles']);
-    if (profilesNode?.type !== 'object' || !profilesNode.children) {
+    // JSON permits duplicate properties in practice, and both JSON.parse and the SDK use the last
+    // top-level "profiles" value. Preserve the order from that same object.
+    const profilesNode = extractProfilesNode(content);
+    if (!profilesNode?.children) {
         return undefined;
     }
 
@@ -115,14 +234,129 @@ function extractProfileOrder(content: string): string[] | undefined {
     return order;
 }
 
+function extractProfilesNode(content: string): Node | undefined {
+    const root = parseTree(content, [], { allowTrailingComma: true });
+    const profileProperties = root?.children?.filter(propertyNode =>
+        propertyNode.type === 'property' &&
+        propertyNode.children?.[0]?.value === 'profiles');
+
+    const profilesNode = profileProperties?.[profileProperties.length - 1]?.children?.[1];
+    return profilesNode?.type === 'object' ? profilesNode : undefined;
+}
+
+function extractLaunchProfileSourceEntries(content: string): LaunchProfileSourceEntry[] | undefined {
+    const profilesNode = extractProfilesNode(content);
+    if (!profilesNode?.children) {
+        return undefined;
+    }
+
+    const entries: LaunchProfileSourceEntry[] = [];
+    for (const profileProperty of profilesNode.children) {
+        const profileName = profileProperty.children?.[0]?.value;
+        const profileNode = profileProperty.children?.[1];
+        if (typeof profileName !== 'string' || !profileNode) {
+            continue;
+        }
+
+        const profile = getNodeValue(profileNode) as LaunchProfile;
+        if (profileNode.type !== 'object' || !profileNode.children) {
+            entries.push({ name: profileName, profile, hasInvalidProperties: false });
+            continue;
+        }
+
+        const commandNameNode = profileNode.children
+            .filter(propertyNode => propertyNode.children?.[0]?.value === 'commandName')
+            .at(-1)?.children?.[1];
+        if (commandNameNode?.type !== 'string') {
+            entries.push({ name: profileName, profile, hasInvalidProperties: false });
+            continue;
+        }
+
+        const stringProperties = new Set(['commandLineArgs']);
+        const booleanProperties = new Set(['dotnetRunMessages']);
+        if (commandNameNode.value === LaunchProfileCommandName.project) {
+            stringProperties.add('applicationUrl').add('launchUrl');
+            booleanProperties.add('launchBrowser');
+        } else if (commandNameNode.value === LaunchProfileCommandName.executable) {
+            stringProperties.add('executablePath').add('workingDirectory');
+        } else {
+            entries.push({ name: profileName, profile, hasInvalidProperties: false });
+            continue;
+        }
+
+        const hasInvalidProperty = profileNode.children.some(propertyNode => {
+            const propertyName = propertyNode.children?.[0]?.value;
+            const propertyValue = propertyNode.children?.[1];
+            if (typeof propertyName !== 'string' || !propertyValue) {
+                return false;
+            }
+
+            if (stringProperties.has(propertyName)) {
+                return propertyValue.type !== 'string' && propertyValue.type !== 'null';
+            }
+
+            if (booleanProperties.has(propertyName)) {
+                return propertyValue.type !== 'boolean';
+            }
+
+            if (propertyName !== 'environmentVariables') {
+                return false;
+            }
+
+            if (propertyValue.type === 'null') {
+                return false;
+            }
+
+            return propertyValue.type !== 'object' ||
+                propertyValue.children?.some(environmentProperty =>
+                    environmentProperty.children?.[1]?.type !== 'string') === true;
+        });
+
+        entries.push({ name: profileName, profile, hasInvalidProperties: hasInvalidProperty });
+    }
+
+    return entries;
+}
+
+function parseJsonContent<T>(content: string): { value: T; normalizedContent: string } {
+    const normalizedContent = content.charCodeAt(0) === 0xFEFF ? content.slice(1) : content;
+    const errors: ParseError[] = [];
+    const value = parse(normalizedContent, errors, { allowTrailingComma: true }) as T;
+    if (errors.length > 0) {
+        throw new SyntaxError(`Invalid JSON at offset ${errors[0].offset}.`);
+    }
+
+    return { value, normalizedContent };
+}
+
+function equalsOrdinalIgnoreCase(left: string, right: string): boolean {
+    if (left.length !== right.length) {
+        return false;
+    }
+
+    const toOrdinalUpperCase = (value: string) => Array.from(value, character => {
+        // .NET ordinal casing deliberately excludes the Turkish dotless I and long S mappings.
+        // JavaScript also performs multi-character uppercase expansions that ordinal casing omits.
+        if (character === '\u0131' || character === '\u017F') {
+            return character;
+        }
+
+        const upper = character.toUpperCase();
+        return upper.length === character.length ? upper : character;
+    }).join('');
+
+    return toOrdinalUpperCase(left) === toOrdinalUpperCase(right);
+}
+
 /**
  * Reads and parses the launchSettings.json file for a given project
  */
 export async function readLaunchSettings(projectPath: string): Promise<LaunchSettings | null> {
     try {
         let launchSettingsPath: string;
+        const isFileBasedProject = isFileBasedApp(projectPath);
 
-        if (isFileBasedApp(projectPath)) {
+        if (isFileBasedProject) {
             // Mirror the .NET SDK's launch-settings discovery for `dotnet run` / `dotnet run-api`
             // (LaunchSettings.TryFindLaunchSettingsFile): for a file-based app the SDK looks next to the
             // entry-point `.cs` file and prefers `Properties/launchSettings.json`, only falling back to
@@ -143,16 +377,31 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
             }
         } else {
             const projectDir = path.dirname(projectPath);
-            launchSettingsPath = path.join(projectDir, 'Properties', 'launchSettings.json');
+            const projectName = path.basename(projectPath, path.extname(projectPath));
+            const launchSettingsDirectory = path.extname(projectPath).toLowerCase() === '.vbproj'
+                ? 'My Project'
+                : 'Properties';
+            const propertiesLaunchSettingsPath = path.join(projectDir, launchSettingsDirectory, 'launchSettings.json');
+            const runJsonPath = path.join(projectDir, `${projectName}.run.json`);
+
+            if (fs.existsSync(propertiesLaunchSettingsPath)) {
+                if (fs.existsSync(runJsonPath)) {
+                    extensionLogOutputChannel.warn(`Both '${propertiesLaunchSettingsPath}' and '${runJsonPath}' exist; using '${propertiesLaunchSettingsPath}' to match 'dotnet run'. '${runJsonPath}' is ignored.`);
+                }
+
+                launchSettingsPath = propertiesLaunchSettingsPath;
+            } else {
+                launchSettingsPath = runJsonPath;
+            }
         }
 
         if (fs.existsSync(launchSettingsPath)) {
-            let content = fs.readFileSync(launchSettingsPath, 'utf8');
-            // We need to strip comments from the JSON file before parsing
-            content = stripComments(content);
-            const launchSettings = JSON.parse(content) as LaunchSettings;
+            const { value: launchSettings, normalizedContent } = parseJsonContent<LaunchSettings>(
+                fs.readFileSync(launchSettingsPath, 'utf8'));
             // Capture the profile order from the file so the default-profile selection matches the SDK.
-            launchSettings.profileOrder = extractProfileOrder(content);
+            launchSettings.profileEntries = extractLaunchProfileSourceEntries(normalizedContent);
+            launchSettings.profileOrder = launchSettings.profileEntries?.map(entry => entry.name);
+            launchSettings.sourceDirectory = path.dirname(launchSettingsPath);
 
             extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
             return launchSettings;
@@ -160,12 +409,15 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
 
         extensionLogOutputChannel.debug(`Launch settings file not found at: ${launchSettingsPath}`);
 
-        // Fall back to aspire.config.json profiles
+        if (!isFileBasedProject) {
+            return null;
+        }
+
+        // File-based apps created by older CLI versions stored profiles in aspire.config.json.
         const aspireConfigPath = path.join(path.dirname(projectPath), aspireConfigFileName);
         if (fs.existsSync(aspireConfigPath)) {
-            let content = fs.readFileSync(aspireConfigPath, 'utf8');
-            content = stripComments(content);
-            const aspireConfig = JSON.parse(content);
+            const { value: aspireConfig, normalizedContent } = parseJsonContent<Record<string, unknown>>(
+                fs.readFileSync(aspireConfigPath, 'utf8'));
 
             if (aspireConfig?.profiles && typeof aspireConfig.profiles === 'object') {
                 // Convert aspire.config.json profiles to LaunchSettings format
@@ -180,7 +432,11 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
                 }
 
                 extensionLogOutputChannel.debug(`Successfully read launch profiles from: ${aspireConfigPath}`);
-                return { profiles, profileOrder: extractProfileOrder(content) };
+                return {
+                    profiles,
+                    profileOrder: extractProfileOrder(normalizedContent),
+                    sourceDirectory: path.dirname(aspireConfigPath)
+                };
             }
         }
 
@@ -212,15 +468,23 @@ export function determineBaseLaunchProfile(
     // If launch_profile property is set, check if that profile exists
     if (launchConfig.launch_profile) {
         const profileName = launchConfig.launch_profile;
-        const profile = launchSettings.profiles[profileName];
-
-        if (profile) {
+        const profileEntries = launchSettings.profileEntries ??
+            (launchSettings.profileOrder ?? Object.keys(launchSettings.profiles))
+                .map(name => ({ name, profile: launchSettings.profiles[name], hasInvalidProperties: false }));
+        const matchingProfileEntries = profileEntries
+            .filter(candidate => equalsOrdinalIgnoreCase(candidate.name, profileName));
+        if (matchingProfileEntries.length === 1) {
+            const matchingProfile = matchingProfileEntries[0];
             extensionLogOutputChannel.debug(`Using explicit launch profile: ${profileName}`);
-            return { profile, profileName };
-        } else {
-            extensionLogOutputChannel.debug(`Explicit launch profile '${profileName}' not found in launch settings`);
-            return { profile: null, profileName: null };
+            return {
+                profile: matchingProfile.profile,
+                profileName,
+                hasInvalidProperties: matchingProfile.hasInvalidProperties
+            };
         }
+
+        extensionLogOutputChannel.debug(`Explicit launch profile '${profileName}' not found uniquely in launch settings`);
+        return { profile: null, profileName: null };
     }
 
     // If launch_profile is absent, fall back to the profile that `dotnet run` applies by default.
@@ -255,16 +519,22 @@ export function determineDefaultLaunchProfile(launchSettings: LaunchSettings | n
     }
 
     // Enumerate profiles in file source order to match the SDK's `JsonElement.EnumerateObject()`.
-    // profileOrder (populated by readLaunchSettings) preserves that order even for integer-like
-    // profile names; fall back to Object.keys for LaunchSettings constructed without it.
-    const profileNames = launchSettings.profileOrder ?? Object.keys(launchSettings.profiles);
+    // profileEntries (populated by readLaunchSettings) preserves both source order and duplicate
+    // profile values; fall back to profileOrder/Object.keys for programmatically constructed settings.
+    const profileEntries = launchSettings.profileEntries ??
+        (launchSettings.profileOrder ?? Object.keys(launchSettings.profiles))
+            .map(name => ({ name, profile: launchSettings.profiles[name], hasInvalidProperties: false }));
 
-    for (const name of profileNames) {
-        const profile = launchSettings.profiles[name];
+    for (const entry of profileEntries) {
+        const { name, profile, hasInvalidProperties } = entry;
         // Match the SDK's exact, case-sensitive provider lookup: a profile whose commandName differs only
         // in casing (e.g. "executable") is not a supported provider, so `dotnet run-api` would skip it too.
         if (profile?.commandName && defaultLaunchProfileCommandNames.has(profile.commandName)) {
-            return { profile, profileName: name };
+            return {
+                profile,
+                profileName: name,
+                hasInvalidProperties
+            };
         }
     }
 
@@ -307,18 +577,19 @@ export function mergeEnvironmentVariables(
 }
 
 /**
- * Determines the final arguments array according to launch profile rules
+ * Determines the final debugger arguments according to launch profile rules.
+ * Launch-profile-authored text stays a string, while forwarded run-session tokens stay tokenized.
  * If run session args are present (including empty array), they completely replace launch profile args
  * If run session args are absent/null, launch profile args are used if available
  */
 export function determineArguments(
     baseProfileArgs: string | undefined,
     runSessionArgs: string[] | undefined | null
-): string | undefined {
+): DebugConfigurationArguments | undefined {
     // If run session args are explicitly provided (including empty array), use them
     if (runSessionArgs !== undefined && runSessionArgs !== null) {
-        extensionLogOutputChannel.debug(`Using run session arguments: ${JSON.stringify(runSessionArgs)}`);
-        return runSessionArgs.join(' ');
+        extensionLogOutputChannel.debug(`Using run session arguments (count: ${runSessionArgs.length})`);
+        return [...runSessionArgs];
     }
 
     // If run session args are absent/null, use launch profile args if available
@@ -337,17 +608,25 @@ export function determineArguments(
  */
 export function determineWorkingDirectory(
     projectPath: string,
-    baseProfile: LaunchProfile | null
+    baseProfile: LaunchProfile | null,
+    launchSettingsDirectory?: string
 ): string {
-    if (baseProfile?.workingDirectory) {
-        const workingDirectory = expandEnvironmentVariables(baseProfile.workingDirectory);
-        // If working directory is relative, resolve it relative to project directory
-        if (path.isAbsolute(workingDirectory)) {
-            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${workingDirectory}`);
-            return workingDirectory;
+    if (baseProfile?.workingDirectory !== undefined && baseProfile.workingDirectory !== null) {
+        const workingDirectory = launchSettingsDirectory !== undefined
+            ? expandSdkEnvironmentVariables(baseProfile.workingDirectory)
+            : expandEnvironmentVariables(baseProfile.workingDirectory);
+        // The SDK resolves a relative workingDirectory from the launch-settings file. This matters
+        // for Properties/launchSettings.json because its directory differs from the project directory.
+        const isRooted = path.isAbsolute(workingDirectory) ||
+            (process.platform === 'win32' && /^[a-zA-Z]:/.test(workingDirectory));
+        if (isRooted) {
+            // Preserve existing behavior for callers that construct profiles without source metadata.
+            const workingDir = launchSettingsDirectory !== undefined ? path.resolve(workingDirectory) : workingDirectory;
+            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${workingDir}`);
+            return workingDir;
         } else {
-            const projectDir = path.dirname(projectPath);
-            const workingDir = path.resolve(projectDir, workingDirectory);
+            const baseDirectory = launchSettingsDirectory ?? path.dirname(projectPath);
+            const workingDir = path.resolve(baseDirectory, workingDirectory);
             extensionLogOutputChannel.debug(`Using relative working directory from launch profile: ${workingDir}`);
             return workingDir;
         }
@@ -357,65 +636,4 @@ export function determineWorkingDirectory(
     const projectDir = path.dirname(projectPath);
     extensionLogOutputChannel.debug(`Using default working directory (project directory): ${projectDir}`);
     return projectDir;
-}
-
-interface ServerReadyAction {
-    action: "openExternally";
-    pattern: "\\bNow listening on:\\s+https?://\\S+";
-    uriFormat: string;
-}
-
-export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string, launchUrl?: string): ServerReadyAction | undefined {
-    if (!launchBrowser || !applicationUrl) {
-        return undefined;
-    }
-
-    let uriFormat = applicationUrl.includes(';') ? applicationUrl.split(';')[0] : applicationUrl;
-
-    if (launchUrl) {
-        uriFormat = resolveLaunchUrl(launchUrl, uriFormat);
-    }
-
-    return {
-        action: "openExternally",
-        pattern: "\\bNow listening on:\\s+https?://\\S+",
-        uriFormat: uriFormat
-    };
-}
-
-function resolveLaunchUrl(launchUrl: string, applicationUrl: string): string {
-    const absoluteLaunchUrl = tryCreateUrl(launchUrl);
-    if (absoluteLaunchUrl) {
-        return getHttpUrlOrFallback(absoluteLaunchUrl, applicationUrl, launchUrl);
-    }
-
-    const resolvedLaunchUrl = tryCreateUrl(launchUrl, applicationUrl);
-    if (resolvedLaunchUrl) {
-        return getHttpUrlOrFallback(resolvedLaunchUrl, applicationUrl, launchUrl);
-    }
-
-    extensionLogOutputChannel.warn(`Failed to resolve launchUrl '${launchUrl}' against applicationUrl '${applicationUrl}'. Falling back to applicationUrl.`);
-    return applicationUrl;
-}
-
-function tryCreateUrl(url: string, base?: string): URL | undefined {
-    try {
-        return base ? new URL(url, base) : new URL(url);
-    } catch {
-        return undefined;
-    }
-}
-
-function getHttpUrlOrFallback(url: URL, fallback: string, launchUrl: string): string {
-    if (url.protocol === 'http:' || url.protocol === 'https:') {
-        if (url.hostname === '*') {
-            extensionLogOutputChannel.warn(`Ignoring launchUrl '${launchUrl}' because it resolves to wildcard host '*'. Falling back to applicationUrl.`);
-            return fallback;
-        }
-
-        return url.href;
-    }
-
-    extensionLogOutputChannel.warn(`Ignoring launchUrl '${launchUrl}' because it resolves to unsupported scheme '${url.protocol}'. Falling back to applicationUrl.`);
-    return fallback;
 }

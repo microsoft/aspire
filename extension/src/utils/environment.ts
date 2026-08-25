@@ -12,10 +12,46 @@ export function mergeEnvs(base: NodeJS.ProcessEnv, envVars?: EnvVar[]): Record<s
     return merged;
 }
 
-export function getEnvironmentWithoutE2EBridgeVariables(): NodeJS.ProcessEnv {
-    return Object.fromEntries(
+export function setEnvironmentVariable(environment: NodeJS.ProcessEnv, name: string, value: string | undefined): void {
+    if (process.platform === 'win32') {
+        // Windows environment variables are case-insensitive, but JavaScript object keys are not.
+        // Remove differently-cased keys so Node cannot select a stale value when spawning the process.
+        const normalizedName = name.toLowerCase();
+        for (const key of Object.keys(environment)) {
+            if (key !== name && key.toLowerCase() === normalizedName) {
+                delete environment[key];
+            }
+        }
+    }
+
+    environment[name] = value;
+}
+
+export function deleteEnvironmentVariable(environment: NodeJS.ProcessEnv, name: string): void {
+    if (process.platform === 'win32') {
+        const normalizedName = name.toLowerCase();
+        for (const key of Object.keys(environment)) {
+            if (key.toLowerCase() === normalizedName) {
+                delete environment[key];
+            }
+        }
+
+        return;
+    }
+
+    delete environment[name];
+}
+
+export function getEnvironmentForChildProcess(): NodeJS.ProcessEnv {
+    const environment = Object.fromEntries(
         Object.entries(process.env).filter(([key]) => !key.startsWith('ASPIRE_EXTENSION_E2E_') && !filteredEnvironmentKeyCounts.has(key))
     );
+    if (process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true'
+        && process.env.ASPIRE_EXTENSION_E2E_NUGET_PACKAGES) {
+        environment.NUGET_PACKAGES = process.env.ASPIRE_EXTENSION_E2E_NUGET_PACKAGES;
+    }
+
+    return environment;
 }
 
 export function addFilteredEnvironmentKeys(keys: string[]): void {
@@ -43,6 +79,7 @@ export const enum EnvironmentVariables {
     ASPIRE_CLI_STOP_ON_ENTRY = "ASPIRE_CLI_STOP_ON_ENTRY",
     ASPIRE_APPHOST_STOP_ON_ENTRY = "ASPIRE_APPHOST_STOP_ON_ENTRY",
     ASPIRE_CLI_START_TIMEOUT = "ASPIRE_CLI_START_TIMEOUT",
+    ASPIRE_CLI_APPHOST_SELECTION_ORIGIN = "ASPIRE_CLI_APPHOST_SELECTION_ORIGIN",
     ASPIRE_NON_INTERACTIVE = "ASPIRE_NON_INTERACTIVE"
 }
 

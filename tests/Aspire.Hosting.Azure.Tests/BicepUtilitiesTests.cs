@@ -364,7 +364,7 @@ public class BicepUtilitiesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
-        bicep.Scope = AzureBicepResourceScope.ForSubscription("12345678-1234-1234-1234-123456789012");
+        bicep.Scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
         var scope = new JsonObject();
 
@@ -379,7 +379,7 @@ public class BicepUtilitiesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
-        bicep.Scope = AzureBicepResourceScope.ForSubscription("12345678-1234-1234-1234-123456789012");
+        bicep.Scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
         var scope = new JsonObject
         {
@@ -398,7 +398,7 @@ public class BicepUtilitiesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
-        bicep.Scope = AzureBicepResourceScope.ForTenant();
+        bicep.Scope = AzureBicepResourceScope.CreateForTenant();
 
         var scope = new JsonObject();
 
@@ -489,7 +489,7 @@ public class BicepUtilitiesTests
         await BicepUtilities.SetParametersAsync(legacyParameters, bicep);
         var legacyChecksum = BicepUtilities.GetChecksum(bicep, legacyParameters, scope: null);
 
-        bicep.Scope = AzureBicepResourceScope.ForSubscription("12345678-1234-1234-1234-123456789012");
+        bicep.Scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
         var configurationBuilder = new ConfigurationBuilder();
         configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>

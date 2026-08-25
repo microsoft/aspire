@@ -197,6 +197,22 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExtractAsync_PayloadWithoutDcpExecutableFailsVerification()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var payload = CreateFakeBundlePayload(includeDcpExecutable: false);
+        var service = CreateService(
+            new TestBundlePayloadProvider(payload),
+            new TestLayoutDiscovery(layoutRoot));
+
+        var result = await service.ExtractAsync(layoutRoot, force: true);
+
+        Assert.Equal(BundleExtractResult.ExtractionFailed, result);
+        Assert.False(Directory.Exists(Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName)));
+    }
+
+    [Fact]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Windows file sharing semantics are required.")]
     public async Task MoveDirectoryWithRetryAsync_FileTemporarilyLocked_RetriesUntilReleased()
     {
@@ -528,7 +544,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     /// Creates a tar.gz byte array containing a fake bundle layout with the
     /// required wrapper directory for strip-components=1 extraction.
     /// </summary>
-    internal static byte[] CreateFakeBundlePayload(string contentMarker = "fake-bundle")
+    internal static byte[] CreateFakeBundlePayload(string contentMarker = "fake-bundle", bool includeDcpExecutable = true)
     {
         using var ms = new MemoryStream();
 
@@ -548,14 +564,19 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             };
             tar.WriteEntry(managedEntry);
 
-            // dcp/ directory with a placeholder file.
+            // dcp/ directory and platform executable.
             tar.WriteEntry(new PaxTarEntry(TarEntryType.Directory, $"aspire-payload/{BundleDiscovery.DcpDirectoryName}/"));
 
-            var dcpEntry = new PaxTarEntry(TarEntryType.RegularFile, $"aspire-payload/{BundleDiscovery.DcpDirectoryName}/dcp-placeholder")
+            if (includeDcpExecutable)
             {
-                DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"dcp-{contentMarker}\n"))
-            };
-            tar.WriteEntry(dcpEntry);
+                var dcpEntry = new PaxTarEntry(
+                    TarEntryType.RegularFile,
+                    $"aspire-payload/{BundleDiscovery.DcpDirectoryName}/{BundleDiscovery.GetDcpExecutableName()}")
+                {
+                    DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes($"dcp-{contentMarker}\n"))
+                };
+                tar.WriteEntry(dcpEntry);
+            }
         }
 
         return ms.ToArray();
@@ -608,8 +629,9 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             var dcpDir = Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName);
             var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
             var managedExe = Path.Combine(managedDir, managedExeName);
+            var dcpExe = BundleDiscovery.GetDcpExecutablePath(dcpDir);
 
-            if (!Directory.Exists(managedDir) || !File.Exists(managedExe) || !Directory.Exists(dcpDir))
+            if (!Directory.Exists(managedDir) || !File.Exists(managedExe) || !Directory.Exists(dcpDir) || !File.Exists(dcpExe))
             {
                 return null;
             }

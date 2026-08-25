@@ -74,7 +74,9 @@ jobs:
           inputs:
             targetType: 'inline'
             script: |
-              npm install -g @vscode/vsce@3.7.1
+              # Pin Azure Identity explicitly so VSCE's transitive dependency graph
+              # remains stable across npm feed updates.
+              npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1
               vsce --version
             workingDirectory: '$(Build.SourcesDirectory)'
 

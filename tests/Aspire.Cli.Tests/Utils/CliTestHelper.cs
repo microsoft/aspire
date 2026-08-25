@@ -56,6 +56,27 @@ internal static class CliTestHelper
         return new InstallSidecarReader(loggerFactory.CreateLogger<InstallSidecarReader>());
     }
 
+    public static ServiceProvider CreateExtensionServiceProvider(
+        TemporaryWorkspace workspace,
+        ITestOutputHelper outputHelper,
+        Action<string, string?, bool, DebugSessionOptions?> startDebugSessionCallback,
+        Action<CliServiceCollectionTestOptions>? configureOptions = null,
+        Action<IServiceCollection>? configureServices = null)
+    {
+        var services = CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            configureOptions?.Invoke(testOptions);
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                StartDebugSessionCallback = startDebugSessionCallback
+            };
+        });
+        configureServices?.Invoke(services);
+
+        return services.BuildServiceProvider();
+    }
+
     public static IServiceCollection CreateServiceCollection(TemporaryWorkspace workspace, ITestOutputHelper outputHelper, Action<CliServiceCollectionTestOptions>? configure = null)
     {
         var options = new CliServiceCollectionTestOptions(outputHelper, workspace.WorkspaceRoot);
@@ -201,6 +222,7 @@ internal static class CliTestHelper
         // pattern as production wiring in Program.cs.
         services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<IEnvironment, TestEnvironment>();
+        services.AddSingleton<ProfileCaptureState>();
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
@@ -296,6 +318,7 @@ internal static class CliTestHelper
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
+        services.AddTransient<SdkExportCommand>();
         services.AddTransient<ApiCommand>();
         services.AddTransient<ApiListCommand>();
         services.AddTransient<ApiSearchCommand>();
@@ -453,7 +476,8 @@ internal sealed class CliServiceCollectionTestOptions
         var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
             ?? new AppHostCandidateFinder(gitRepository, environment, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry, configuration);
     }
 
     public ISolutionLocator CreateDefaultSolutionLocatorFactory(IServiceProvider serviceProvider)
@@ -509,7 +533,10 @@ internal sealed class CliServiceCollectionTestOptions
         var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>());
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var logger = serviceProvider.GetRequiredService<ILogger<CertificateService>>();
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, environment, executionContext, logger);
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -618,14 +645,7 @@ internal sealed class CliServiceCollectionTestOptions
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        // Force prerelease-shaped CLI version semantics in tests so PackagingService's
-        // identity-staging quality default does not depend on whether the test-host assembly
-        // was produced under StabilizePackageVersion=true. Without this, tests that rely on
-        // the shared-daily routing for `staging` identity (quality=Both → useSharedFeed=true)
-        // would fail under the stabilization-check job which builds with a stable-shaped
-        // version (no '-' suffix) baked in. Tests that specifically exercise the stable-shape
-        // branch construct PackagingService directly with isStableShapedCliVersion: () => true.
-        return new PackagingService(executionContext, nuGetPackageCache, features, configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => false);
+        return new PackagingService(executionContext, nuGetPackageCache, features, configuration, NullLogger<PackagingService>.Instance);
     };
 
     public Func<IServiceProvider, IDiskCache> DiskCacheFactory { get; set; } = (IServiceProvider serviceProvider) => new NullDiskCache();

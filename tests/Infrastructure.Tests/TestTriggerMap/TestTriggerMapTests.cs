@@ -280,7 +280,6 @@ public sealed class TestTriggerMapTests
             ["job:typescript-api-compat"] = () => WorkflowExists("typescript-api-compat.yml") && JobExists("typescript_api_compat"),
             ["job:extension-unit"] = () => JobExists("extension_tests_win") && JobExists("extension_bootstrap_linux"),
             ["job:extension-e2e"] = () => WorkflowExists("extension-e2e-tests.yml"),
-            ["job:cli-starter"] = () => JobExists("cli_starter_validation_windows"),
             ["job:winget-installer"] = () => JobExists("prepare_winget_installer_artifacts"),
             ["job:homebrew-installer"] = () => JobExists("prepare_homebrew_installer_artifacts"),
             ["job:nix-package"] = () => JobExists("nix_package"),
@@ -369,7 +368,8 @@ public sealed class TestTriggerMapTests
         // This list is hand-maintained intent (like EveryJobTargetResolvesToExistingWorkflowOrJob's
         // job-id mapping): a new gated job must be added here too. The check is substring containment,
         // so it catches a job NOT referencing its own var; it intentionally tolerates extra vars -- the
-        // extension jobs additionally OR-in run_extension_e2e for need-propagation.
+        // extension jobs additionally OR-in run_extension_e2e because extension_e2e_tests needs the
+        // VSIX and the corepack bootstrap they produce.
         var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
 
         var bindings = new[]
@@ -380,7 +380,6 @@ public sealed class TestTriggerMapTests
             ("extension_tests_win", "run_extension_unit"),
             ("extension_bootstrap_linux", "run_extension_unit"),
             ("extension_e2e_tests", "run_extension_e2e"),
-            ("cli_starter_validation_windows", "run_cli_starter"),
             ("prepare_winget_installer_artifacts", "run_winget_installer"),
             ("prepare_homebrew_installer_artifacts", "run_homebrew_installer"),
             ("nix_package", "run_nix_package"),

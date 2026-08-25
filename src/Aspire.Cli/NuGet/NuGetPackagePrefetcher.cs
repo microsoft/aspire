@@ -117,7 +117,7 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
     }
 
     private static bool ShouldPrefetchTemplatePackages(SystemCommand? command)
-        => command is BaseCommand { PrefetchesTemplatePackageMetadata: true };
+        => command is BaseCommand { PrefetchesTemplatePackageMetadataForInvocation: true };
 
     private static bool ShouldPrefetchCliPackages(SystemCommand? command, bool updateNotificationsEnabled)
         => command is BaseCommand baseCommand && baseCommand.ShouldPrefetchCliPackageMetadata(updateNotificationsEnabled);

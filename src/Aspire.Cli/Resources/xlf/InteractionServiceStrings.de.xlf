@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Interaktive Eingaben werden in dieser Umgebung nicht unterstützt. Verwenden Sie das Flag „--non-interactive“, oder stellen Sie sicher, dass die CLI in einem interaktiven Terminal ausgeführt wird.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Weitere Informationen finden Sie unter: [Link]{0}[/][/]</target>
@@ -157,9 +162,9 @@
         <target state="needs-review-translation">Die Option „--apphost“ wurde nicht angegeben, und es wurden mehrere App-Hostprojektdateien erkannt.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">Das Projektargument wurde nicht angegeben, und es wurden keine App-Hostprojektdateien erkannt.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

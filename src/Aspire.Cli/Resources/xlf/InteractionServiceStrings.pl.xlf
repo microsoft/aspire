@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Interakcyjne dane wejściowe nie są obsługiwane w tym środowisku. Użyj flagi --non-interactive lub upewnij się, że interfejs wiersza polecenia jest uruchomiony w terminalu interaktywnym.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Aby uzyskać więcej informacji, zobacz: [link]{0}[/][/]</target>
@@ -157,9 +162,9 @@
         <target state="needs-review-translation">Nie określono opcji --apphost i wykryto wiele plików projektu hosta aplikacji.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no AppHost project files were detected.</source>
-        <target state="needs-review-translation">Nie określono argumentu projektu i nie wykryto plików projektu hosta aplikacji.</target>
+      <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
+        <source>The --apphost option was not specified and no AppHost project files were detected.</source>
+        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">

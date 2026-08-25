@@ -29,6 +29,9 @@ spec:
         - name: "media"
           persistentVolumeClaim:
             claimName: "media"
+      securityContext:
+        fsGroup: 2000
+        fsGroupChangePolicy: "OnRootMismatch"
   selector:
     matchLabels:
       app.kubernetes.io/name: "{{ .Chart.Name }}"

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { spawnCliProcess } from '../debugger/languages/cli';
+import { spawnCliProcess } from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
@@ -7,13 +7,14 @@ import {
     resourceCommandDynamicInputsFailed,
     resourceCommandLoadingDynamicInputs,
 } from '../loc/strings';
-import { ResourceCommandArgumentInputJson } from './AppHostDataRepository';
+import { ResourceCommandArgumentInputJson } from '../data/AppHostDataRepository';
 import {
     buildResourceCommandCliArgs,
     ResourceCommandArgumentLoader,
     ResourceCommandArgumentValue,
 } from './ResourceCommandArguments';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
+import { getCliPathTargetForUri } from '../utils/cliPathVariables';
 
 export interface ResourceCommandArgumentLoaderContext {
     cliExecutionProvider: AspireTerminalProvider;
@@ -46,7 +47,7 @@ async function loadResourceCommandArgumentInputs(
         { location: vscode.ProgressLocation.Window, title: resourceCommandLoadingDynamicInputs },
         async () => {
             try {
-                const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath();
+                const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath(getCliPathTargetForUri(vscode.Uri.file(context.appHostPath!)));
                 const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--non-interactive', '--apphost', context.appHostPath!, noLogoOption];
                 args.push(...buildResourceCommandCliArgs(values));
 

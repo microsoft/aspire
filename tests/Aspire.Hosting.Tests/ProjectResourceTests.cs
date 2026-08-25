@@ -222,6 +222,27 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("aspire-dashboard", false)]
+    [InlineData("projectName", true)]
+    public async Task AddProjectAddsOtlpExporterEnvironmentVariablesBasedOnResourceName(string resourceName, bool expectedOtlpExporter)
+    {
+        var appBuilder = CreateBuilder(args: ["--environment", "Development", $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:18889"],
+            DistributedApplicationOperation.Run);
+
+        appBuilder.AddProject<TestProject>(resourceName, launchProfileName: null);
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.GetProjectResources());
+
+        Assert.Equal(expectedOtlpExporter, resource.Annotations.OfType<OtlpExporterAnnotation>().Any());
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal(expectedOtlpExporter, config.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint));
+    }
+
+    [Theory]
     [InlineData("true", false)]
     [InlineData("1", false)]
     [InlineData("false", true)]

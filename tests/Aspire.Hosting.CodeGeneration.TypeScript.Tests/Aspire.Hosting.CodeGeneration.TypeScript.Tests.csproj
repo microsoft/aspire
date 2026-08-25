@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <DefineConstants>$(DefineConstants);ASPIRE_TYPESCRIPT_CODEGEN_TESTS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

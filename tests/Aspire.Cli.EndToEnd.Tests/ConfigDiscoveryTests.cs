@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -21,6 +22,110 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </remarks>
 public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
 {
+    /// <summary>
+    /// Verifies that an explicit alternate AppHost can run without replacing the
+    /// workspace default or recreating a local config beside the alternate AppHost.
+    /// </summary>
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task RunWithExplicitAlternateAppHost_PreservesExistingDefault()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot, strategy, output,
+            mountDockerSocket: true,
+            workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewCSharpEmptyAppHostAsync("Primary", counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync("Alternate", counter);
+
+        var workspaceRoot = workspace.WorkspaceRoot.FullName;
+        var primaryConfigPath = Path.Combine(workspaceRoot, "Primary", "aspire.config.json");
+        var alternateConfigPath = Path.Combine(workspaceRoot, "Alternate", "aspire.config.json");
+        var alternateAppHostPath = Path.Combine(workspaceRoot, "Alternate", "apphost.cs");
+        var alternateRunMarkerPath = Path.Combine(workspaceRoot, "Alternate", "alternate-run-marker.txt");
+        var workspaceConfigPath = Path.Combine(workspaceRoot, "aspire.config.json");
+
+        Assert.True(File.Exists(primaryConfigPath), $"Expected Primary config at: {primaryConfigPath}");
+        Assert.True(File.Exists(alternateConfigPath), $"Expected Alternate config at: {alternateConfigPath}");
+        Assert.True(File.Exists(alternateAppHostPath), $"Expected Alternate AppHost source file to exist at: {alternateAppHostPath}");
+
+        // `aspire new` scaffolds a config next to each AppHost. Deleting both leaves the workspace-root
+        // config written below as the only configured default, which is what this test protects.
+        File.Delete(primaryConfigPath);
+        File.Delete(alternateConfigPath);
+
+        // Patch only the alternate AppHost so the marker proves `--apphost Alternate/apphost.cs` actually
+        // launched the override. Without it, a silent fallback to the configured Primary AppHost would
+        // leave the config untouched and pass the persistence assertion vacuously.
+        var alternateAppHostSource = File.ReadAllText(alternateAppHostPath);
+        Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", alternateAppHostSource);
+        File.WriteAllText(
+            alternateAppHostPath,
+            alternateAppHostSource.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                $$"""
+                System.IO.File.WriteAllText({{JsonSerializer.Serialize(CliE2ETestHelpers.ToContainerPath(alternateRunMarkerPath, workspace))}}, "alternate");
+
+                var builder = DistributedApplication.CreateBuilder(args);
+                """));
+
+        // Compared byte-for-byte after the run, so an explicit `--apphost` must not rewrite, reformat, or
+        // re-point this file. Written with '\n' so the comparison is stable on Windows checkouts too.
+        const string expectedWorkspaceConfigContent =
+            "{\n" +
+            "  \"appHost\": {\n" +
+            "    \"path\": \"Primary/apphost.cs\",\n" +
+            "    \"language\": \"csharp\"\n" +
+            "  }\n" +
+            "}";
+        var originalWorkspaceConfigBytes = Encoding.UTF8.GetBytes(expectedWorkspaceConfigContent);
+        File.WriteAllBytes(workspaceConfigPath, originalWorkspaceConfigBytes);
+
+        await auto.TypeAsync(CliE2EAutomatorHelpers.GetAspireRunCommand("--apphost Alternate/apphost.cs"));
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(
+            s =>
+            {
+                // An explicit `--apphost` must resolve without asking. Failing fast here reports the actual
+                // defect instead of stalling for the whole startup budget on a prompt nothing will answer.
+                if (s.ContainsText("Select an AppHost to use:"))
+                {
+                    throw new InvalidOperationException(
+                        "aspire run prompted for an AppHost even though --apphost Alternate/apphost.cs was supplied.");
+                }
+
+                if (s.ContainsText("ERR:"))
+                {
+                    throw new InvalidOperationException(
+                        "aspire run failed before the explicit alternate AppHost became ready.");
+                }
+
+                return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+            },
+            timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout,
+            description: "Press CTRL+C message from aspire run for the explicit alternate AppHost");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.True(File.Exists(alternateRunMarkerPath), $"Expected the Alternate AppHost to run and write: {alternateRunMarkerPath}");
+        Assert.Equal("alternate", File.ReadAllText(alternateRunMarkerPath));
+        Assert.Equal(originalWorkspaceConfigBytes, File.ReadAllBytes(workspaceConfigPath));
+        Assert.False(File.Exists(alternateConfigPath), $"Explicit alternate AppHost should not create a local config at: {alternateConfigPath}");
+    }
+
     /// <summary>
     /// Verifies that running <c>aspire run</c> from a parent directory discovers the
     /// existing <c>aspire.config.json</c> next to the apphost rather than creating a

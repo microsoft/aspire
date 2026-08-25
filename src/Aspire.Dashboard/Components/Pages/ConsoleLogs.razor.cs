@@ -82,7 +82,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required ILogger<ConsoleLogs> Logger { get; init; }
@@ -195,6 +197,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
     private bool _showNoLogsMessage;
+    private bool _consoleLogsWereLoaded = true;
     private string _logFilter = string.Empty;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
@@ -206,7 +209,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
         _resourceSubscriptionToken = _resourceSubscriptionCts.Token;
-        _logEntries = new(Options.Value.Frontend.MaxConsoleLogCount);
+        _logEntries = new(DashboardUIHelpers.GetVirtualizedItemCount(Options.Value.Frontend.MaxConsoleLogCount));
         _allResource = new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] };
         PageViewModel = new ConsoleLogsViewModel { SelectedResource = _allResource, Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
         _logEntryChannelReaderTask = StartLogEntryChannelReaderTask();
@@ -265,7 +268,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 return;
             }
 
-            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_resourceSubscriptionToken);
+            var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_resourceSubscriptionToken);
 
             Logger.LogDebug("Received initial resource snapshot with {ResourceCount} resources.", snapshot.Length);
 
@@ -518,8 +521,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _activeView = ConsoleLogsView.Console;
         }
 
-        if (!isAllSelected && selectedResourceName is not null &&
-            _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
+        var selectedResource = selectedResourceName is not null
+            ? _resourceByName.GetValueOrDefault(selectedResourceName)
+            : null;
+
+        if (!DashboardClient.IsReadOnly &&
+            !isAllSelected && selectedResource is not null &&
             selectedResource.HasTerminal() &&
             selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
         {
@@ -560,6 +567,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
         ResetNoLogsMessage();
 
+        _consoleLogsWereLoaded = !DashboardClient.IsReadOnly || WereConsoleLogsLoaded(isAllSelected, selectedResource);
+
         await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
 
         if (isAllSelected)
@@ -568,11 +577,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _isSubscribedToAll = true;
             await SubscribeToAllResourcesAsync();
         }
-        else if (selectedResourceName is not null && _resourceByName.TryGetValue(selectedResourceName, out var resource))
+        else if (selectedResource is not null)
         {
             // Subscribe to single resource
             _isSubscribedToAll = false;
-            await SubscribeToSingleResourceAsync(resource);
+            await SubscribeToSingleResourceAsync(selectedResource);
         }
         else
         {
@@ -592,6 +601,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // that has no WithTerminal(), and be missing on the reverse switch.
         UpdateMenuButtons();
     }
+
+    private bool WereConsoleLogsLoaded(bool isAllSelected, ResourceViewModel? selectedResource)
+    {
+        if (isAllSelected)
+        {
+            return _resourceByName.Values
+                .Where(resource => !resource.IsResourceHidden(_showHiddenResources))
+                .Any(resource => resource.ConsoleLogsLoaded);
+        }
+
+        return selectedResource?.ConsoleLogsLoaded == true;
+    }
+
+    private string GetNoLogsMessage() => _consoleLogsWereLoaded
+        ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoLogsFound)]
+        : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNotCapturedForRun)];
 
     private bool IsAllSelected()
     {
@@ -1210,6 +1235,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task ClearConsoleLogs(ResourceKey? key)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var resourceNames = key is null
+            ? DataSource.ResourceRepository.GetResources().Select(resource => resource.Name).ToList()
+            : [key.Value.ToString()];
+
+        await DataSource.ResourceRepository.ClearConsoleLogsAsync(resourceNames, now);
+
         var newFilters = key is null
             ? ConsoleLogsFilters.CreateClearAll(now)
             : ConsoleLogsManager.Filters.WithResourceCleared(key.Value.ToString(), now);
@@ -1218,6 +1249,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // This makes remove behavior persistent which matches removing telemetry.
         await ConsoleLogsManager.UpdateFiltersAsync(newFilters);
     }
+
+    private string? PauseText => PauseManager.ConsoleLogPauseIntervals.LastOrDefault() is { End: null } pause
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            Loc[nameof(Dashboard.Resources.ConsoleLogs.PauseInProgressText)],
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, pause.Start))
+        : null;
 
     private void OnPausedChanged(bool isPaused)
     {
