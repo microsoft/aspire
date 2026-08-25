@@ -1,0 +1,65 @@
+{
+  "run_id": 32834178883,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32834178883",
+  "analyzed_at": "2026-08-25T10:23:25Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19656,
+    "title": "Work around Azure CLI import deadlock in deployment tests",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-fix-azure-scope-deployment-test",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19656"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Radius / Hosting.Radius (ubuntu-latest)",
+      "id": 97759796875,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32834178883/job/97759796875",
+      "classification": "flaky-test",
+      "reason": "Timing-sensitive SealedSecretApplyStepTests wait/timeout test failed with Assert.True() expected True actual False; PR only touches Azure deployment test workaround files, not Hosting.Radius code.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97761624111,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32834178883/job/97761624111",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring issue 19596: CLI smoke test (aspire new + restore) fails during Homebrew cask preparation, unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97762373672,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32834178883/job/97762373672",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring issue 19547: VS Code extension E2E (Windows, edge-cases) shard fails with generic exit code, unrelated to PR changes (PR only touches Azure deployment test/workflow files).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97762989924,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32834178883/job/97762989924",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring issue 19596: CLI smoke test (aspire new + restore) fails during WinGet manifest preparation, unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut",
+      "job": "Tests / Hosting.Radius / Hosting.Radius (ubuntu-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Radius.Tests/Secrets/SealedSecretApplyStepTests.cs:line 513\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Timing/polling-based 'keeps waiting then times out' test asserting a boolean outcome; PR changes are limited to Azure deployment E2E test workaround and CI workflow files, not Hosting.Radius code."
+    }
+  ],
+  "causes": ["hosting-radius-sealedsecretapply-timeout-flaky", "cli-smoke-test-homebrew-winget-unrelated", "vscode-e2e-windows-edge-cases-flaky"]
+}
