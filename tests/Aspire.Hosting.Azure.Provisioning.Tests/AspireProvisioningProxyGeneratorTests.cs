@@ -107,7 +107,7 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
-    public void CoreProvisioningTypesAreGeneratedIntoEachProxyPackage()
+    public void SharedCoreTypesAreGeneratedIntoEachProxyPackage()
     {
         var result = ProvisioningGeneratorTest.Run(
             SharedProvisioningSource,
@@ -252,6 +252,7 @@ public class AspireProvisioningProxyGeneratorTests
                 }
 
                 public Azure.Provisioning.Resources.ManagedServiceIdentity Identity { get; set; } = new();
+                public Azure.Provisioning.BicepList<Azure.Core.ResourceIdentifier> NetworkAclBypassResourceIds { get; } = new();
             }
         }
         """;

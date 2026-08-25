@@ -18,6 +18,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private const string BicepValueBaseMetadataName = "Azure.Provisioning.BicepValue";
     private const string BicepValueMetadataName = "Azure.Provisioning.BicepValue<T>";
     private const string CoreProvisioningAssemblyName = "Azure.Provisioning";
+    private const string AzureCoreAssemblyName = "Azure.Core";
+    private const string AzureLocationMetadataName = "Azure.Core.AzureLocation";
+    private const string ResourceIdentifierMetadataName = "Azure.Core.ResourceIdentifier";
+    private const string ResourceTypeMetadataName = "Azure.Core.ResourceType";
     private const string SystemDataMetadataName = "Azure.Provisioning.SystemData";
     private const string BicepValueProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.BicepValueProxy";
     private const string ProvisionableResourceProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.ProvisionableResourceProxy";
@@ -309,6 +313,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             }
 
             type = type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+            if (TryGetNullableValueType(type, out var nullableValueType))
+            {
+                type = nullableValueType;
+            }
 
             if (TryGetCollection(type, out var collectionKind, out var elementType, out var collectionType))
             {
@@ -334,10 +342,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         bool IsInProxyScope(INamedTypeSymbol type)
         {
-            // Core provisioning models are duplicated as internal proxies in each opt-in package.
-            // Service SDK assemblies remain namespace-bounded so one integration cannot pull in
-            // another service's entire API surface through a transitive reference.
-            if (type.ContainingAssembly.Name == CoreProvisioningAssemblyName)
+            // Core provisioning models and the small Azure.Core value-type graph they depend on are
+            // duplicated as internal proxies in each opt-in package. Service SDK assemblies remain
+            // namespace-bounded so one integration cannot pull in another service's entire API surface.
+            if (IsSharedProxyType(type))
             {
                 return true;
             }
@@ -379,7 +387,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 var type = group.Single();
                 names.Add(
                     type,
-                    (type.ContainingAssembly.Name == CoreProvisioningAssemblyName ? coreTypePrefix : string.Empty) +
+                    (IsSharedProxyType(type) ? coreTypePrefix : string.Empty) +
                     type.Name +
                     "Proxy");
                 continue;
@@ -391,7 +399,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 var qualifiedName = SanitizeIdentifier(type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
                 names.Add(
                     type,
-                    (type.ContainingAssembly.Name == CoreProvisioningAssemblyName ? coreTypePrefix : string.Empty) +
+                    (IsSharedProxyType(type) ? coreTypePrefix : string.Empty) +
                     qualifiedName +
                     "_" +
                     (++index).ToString(System.Globalization.CultureInfo.InvariantCulture) +
@@ -1391,6 +1399,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         string proxyName,
         string factoryTypeName)
     {
+        // AzureLocation exposes every known region as a static property. Exporting those convenience
+        // constants into every provisioning package would dominate the opt-in API surface, while the
+        // generated string constructor provides the same functionality for polyglot callers.
+        if (IsAzureCoreType(type, AzureLocationMetadataName))
+        {
+            return;
+        }
+
         foreach (var property in type.GetMembers()
             .OfType<IPropertySymbol>()
             .Where(static property =>
@@ -1783,12 +1799,22 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             return true;
         }
 
+        var isNullableValueType = TryGetNullableValueType(type, out var nullableProxyValueType);
+        if (isNullableValueType)
+        {
+            type = nullableProxyValueType;
+        }
+
         if (type is INamedTypeSymbol namedType)
         {
             if (proxyNames.TryGetValue(namedType, out var proxyName))
             {
-                var isNullable = type.NullableAnnotation == NullableAnnotation.Annotated;
-                mappedType = new MappedType(proxyName + (isNullable ? "?" : string.Empty), MappedTypeKind.Proxy, isNullable: isNullable);
+                var isNullable = isNullableValueType || type.NullableAnnotation == NullableAnnotation.Annotated;
+                mappedType = new MappedType(
+                    proxyName + (isNullable ? "?" : string.Empty),
+                    MappedTypeKind.Proxy,
+                    isNullable: isNullable,
+                    isNullableValueType: isNullableValueType);
                 return true;
             }
 
@@ -1820,6 +1846,22 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             namedType.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) == BicepValueMetadataName)
         {
             valueType = namedType.TypeArguments[0];
+            return true;
+        }
+
+        valueType = null!;
+        return false;
+    }
+
+    private static bool TryGetNullableValueType(ITypeSymbol type, out ITypeSymbol valueType)
+    {
+        if (type is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+                TypeArguments.Length: 1
+            } nullableType)
+        {
+            valueType = nullableType.TypeArguments[0];
             return true;
         }
 
@@ -1863,6 +1905,20 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         return type.MetadataName == "ProvisionableResource" &&
             type.ContainingNamespace.ToDisplayString() == "Azure.Provisioning.Primitives";
+    }
+
+    private static bool IsSharedProxyType(INamedTypeSymbol type)
+    {
+        return type.ContainingAssembly.Name == CoreProvisioningAssemblyName ||
+            IsAzureCoreType(type, AzureLocationMetadataName) ||
+            IsAzureCoreType(type, ResourceIdentifierMetadataName) ||
+            IsAzureCoreType(type, ResourceTypeMetadataName);
+    }
+
+    private static bool IsAzureCoreType(INamedTypeSymbol type, string metadataName)
+    {
+        return type.ContainingAssembly.Name == AzureCoreAssemblyName &&
+            type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) == metadataName;
     }
 
     private static bool IsProvisionableFrameworkBase(INamedTypeSymbol type)
@@ -1998,7 +2054,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 if (mappedType.IsNullable)
                 {
                     source.Append(expression).Append(" is null ? null : new ")
-                        .Append(mappedType.ExposedTypeName.TrimEnd('?')).Append('(').Append(expression).Append(')');
+                        .Append(mappedType.ExposedTypeName.TrimEnd('?')).Append('(').Append(expression);
+                    if (mappedType.IsNullableValueType)
+                    {
+                        source.Append(".Value");
+                    }
+                    source.Append(')');
                 }
                 else
                 {
@@ -2148,13 +2209,15 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             MappedTypeKind kind,
             string? literalTypeName = null,
             string? valueTypeName = null,
-            bool isNullable = false)
+            bool isNullable = false,
+            bool isNullableValueType = false)
         {
             ExposedTypeName = exposedTypeName;
             Kind = kind;
             LiteralTypeName = literalTypeName;
             ValueTypeName = valueTypeName;
             IsNullable = isNullable;
+            IsNullableValueType = isNullableValueType;
         }
 
         public string ExposedTypeName { get; }
@@ -2166,5 +2229,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         public string? ValueTypeName { get; }
 
         public bool IsNullable { get; }
+
+        public bool IsNullableValueType { get; }
     }
 }
