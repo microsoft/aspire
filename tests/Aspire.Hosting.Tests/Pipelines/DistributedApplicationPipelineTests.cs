@@ -146,6 +146,65 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public void FilterStepsForExecution_DoesNotPersistConcurrencyDependencies()
+    {
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var step1 = new PipelineStep { Name = "step1", Action = _ => Task.CompletedTask };
+        step1.DeploymentConcurrencyGroups.Add(group);
+        var step2 = new PipelineStep { Name = "step2", Action = _ => Task.CompletedTask };
+        step2.DeploymentConcurrencyGroups.Add(group);
+        var allSteps = new List<PipelineStep> { step1, step2 };
+
+        var (fullSteps, _) = DistributedApplicationPipeline.FilterStepsForExecution(allSteps, stepName: null);
+
+        Assert.Equal(["step1"], fullSteps.Single(step => step.Name == "step2").DependsOnSteps);
+        Assert.All(allSteps, step => Assert.Empty(step.DependsOnSteps));
+
+        var (targetedSteps, _) = DistributedApplicationPipeline.FilterStepsForExecution(allSteps, "step2");
+
+        var targetedStep = Assert.Single(targetedSteps);
+        Assert.Equal("step2", targetedStep.Name);
+        Assert.Empty(targetedStep.DependsOnSteps);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResolveStepsAsync_WithReplacedDeploymentTarget_AssignsConcurrencyGroup(bool hasProvisionStep)
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var deploymentTarget = new CustomResource("target");
+        var replacementTarget = new CustomResource("target");
+        var deploymentTargetAnnotation = new DeploymentTargetAnnotation(deploymentTarget);
+        deploymentTargetAnnotation.DeploymentConcurrencyGroups.Add(group);
+
+        var resource = builder.AddContainer("app", "myimage").Resource;
+        resource.Annotations.Add(deploymentTargetAnnotation);
+        resource.Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+        {
+            Name = "deploy-target",
+            Resource = replacementTarget,
+            Tags =
+            [
+                hasProvisionStep
+                    ? WellKnownPipelineTags.ProvisionInfrastructure
+                    : WellKnownPipelineTags.DeployCompute
+            ],
+            Action = _ => Task.CompletedTask
+        }));
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var step = Assert.Single(steps, step => step.Name == "deploy-target");
+        Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithTargetedConcurrencyGroupMember_DoesNotExecutePeer()
     {
         using var builder = CreatePipelineTestBuilder(step: "provision-target2");
