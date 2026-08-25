@@ -55,8 +55,9 @@ void main() throws Exception {
         infrastructure.publishAsExisting(existingName, existingResourceGroup);
         infrastructure.asExisting(existingName, existingResourceGroup);
         var identity = builder.addAzureUserAssignedIdentity("identity");
+        var identityBicepIdentifier = identity.getBicepIdentifier();
         identity.configureInfrastructure((infrastructureContext) -> {
-            var provisionedIdentity = infrastructureContext.getUserAssignedIdentity();
+            var provisionedIdentity = infrastructureContext.getSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier);
             provisionedIdentity.setName("polyglot-identity");
             provisionedIdentity.setLocation(infrastructureContext.bicep().location("westus2"));
         });
@@ -70,7 +71,6 @@ void main() throws Exception {
         identity.withParameter("identityFromEndpoint", endpoint);
         identity.publishAsConnectionString();
         identity.clearDefaultRoleAssignments();
-        identity.getBicepIdentifier();
         identity.isExisting();
         identity.runAsExisting("identity-existing", "rg-identity");
         identity.runAsExisting(existingName, existingResourceGroup);

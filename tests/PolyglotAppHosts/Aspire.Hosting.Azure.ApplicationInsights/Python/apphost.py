@@ -7,7 +7,7 @@ from aspire_app import AzureResourceInfrastructure, create_builder
 def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
     component = infrastructure.get_app_insights_component()
     component.tags.set("provisioning-proxy", "python")
-    identity = infrastructure.add_user_assigned_identity("validationIdentity")
+    identity = infrastructure.add_app_insights_user_assigned_identity("validationIdentity")
     role = infrastructure.get_app_insights_built_in_role_monitoring_metrics_publisher()
     role_assignment = component.create_role_assignment(
         role,

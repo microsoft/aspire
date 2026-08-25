@@ -143,10 +143,14 @@ output inlineUrl string = 'https://inline.example.com'
 	if identity.Err() != nil {
 		log.Fatalf(aspire.FormatError(identity.Err()))
 	}
+	identityBicepIdentifier, err := identity.GetBicepIdentifier()
+	if err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 	_ = identity.ConfigureInfrastructure(func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
 		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
-		provisionedIdentity := ctx.GetUserAssignedIdentity()
+		provisionedIdentity := ctx.GetSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier)
 		deploymentLocation := ctx.Bicep().Location("westus2")
 		_ = provisionedIdentity.SetName("polyglot-identity")
 		_ = provisionedIdentity.SetLocation(deploymentLocation)
@@ -162,7 +166,6 @@ output inlineUrl string = 'https://inline.example.com'
 	identity.WithParameter("identityFromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
 	_ = identity.PublishAsConnectionString()
 	_ = identity.ClearDefaultRoleAssignments()
-	_, _ = identity.GetBicepIdentifier()
 	_, _ = identity.IsExisting()
 	_ = identity.RunAsExisting("identity-existing", &aspire.RunAsExistingOptions{ResourceGroup: "rg-identity"})
 	_ = identity.RunAsExisting(existingName, &aspire.RunAsExistingOptions{ResourceGroup: existingResourceGroup})

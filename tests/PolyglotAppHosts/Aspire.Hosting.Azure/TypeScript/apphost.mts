@@ -65,10 +65,11 @@ await infrastructure.publishAsExisting(existingName, { resourceGroup: existingRe
 await infrastructure.asExisting(existingName, { resourceGroup: existingResourceGroup });
 
 const identity = await builder.addAzureUserAssignedIdentity("identity");
+const identityBicepIdentifier = await identity.getBicepIdentifier();
 await identity.configureInfrastructure(async infrastructureContext => {
     await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
-    const provisionedIdentity = await infrastructureContext.getUserAssignedIdentity();
+    const provisionedIdentity = await infrastructureContext.getSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier);
     const bicep = infrastructureContext.bicep();
     const resourceGroup = await bicep.resourceGroup();
     const resourceGroupId = await bicep.member(resourceGroup, "id");
@@ -91,7 +92,6 @@ await identity.withParameter("identityFromExpression", { value: refExpr`${locati
 await identity.withParameter("identityFromEndpoint", { value: endpoint });
 await identity.publishAsConnectionString();
 await identity.clearDefaultRoleAssignments();
-await identity.getBicepIdentifier();
 await identity.isExisting();
 await identity.runAsExisting("identity-existing", { resourceGroup: "rg-identity" });
 await identity.runAsExisting(existingName, { resourceGroup: existingResourceGroup });

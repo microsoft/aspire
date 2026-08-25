@@ -97,7 +97,7 @@ internal sealed class BicepValueFactoryProxy
     {
         ArgumentNullException.ThrowIfNull(parameter);
 
-        return BicepValueProxy.Create(parameter.AsProvisioningParameter(_infrastructure, bicepIdentifier));
+        return BicepValueProxy.Create<string>(parameter.AsProvisioningParameter(_infrastructure, bicepIdentifier));
     }
 
     [AspireExport]
@@ -108,7 +108,7 @@ internal sealed class BicepValueFactoryProxy
     {
         ArgumentNullException.ThrowIfNull(expression);
 
-        return BicepValueProxy.Create(expression.AsProvisioningParameter(_infrastructure, bicepIdentifier, isSecure));
+        return BicepValueProxy.Create<string>(expression.AsProvisioningParameter(_infrastructure, bicepIdentifier, isSecure));
     }
 
     [AspireExport]

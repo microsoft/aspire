@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using Aspire.Hosting.ApplicationModel;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
@@ -36,6 +38,20 @@ public class BicepValueProxyTests
     }
 
     [Fact]
+    public void AssignToPreservesSecureLiteralMetadata()
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<string>("secret"), isSecure: true);
+        var target = new BicepValue<string>("initial");
+
+        proxy.AssignTo(target);
+
+        var assigned = (IBicepValue)target;
+        Assert.True(assigned.IsSecure);
+        Assert.Equal(BicepValueKind.Literal, assigned.Kind);
+        Assert.Equal("secret", assigned.LiteralValue);
+    }
+
+    [Fact]
     public void AssignToPreservesExpression()
     {
         var proxy = BicepValueProxy.Create(
@@ -65,6 +81,20 @@ public class BicepValueProxyTests
     }
 
     [Fact]
+    public void AssignToAllowsCompatibleNullableLiteralTarget()
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<int>(42));
+        var target = new BicepValue<int?>(null);
+
+        proxy.AssignTo(target);
+
+        var assigned = (IBicepValue)target;
+        Assert.Equal(BicepValueKind.Literal, assigned.Kind);
+        Assert.Equal(42, assigned.LiteralValue);
+        Assert.Equal(42, target.Value);
+    }
+
+    [Fact]
     public void ConvertPreservesExpression()
     {
         var proxy = BicepValueProxy.Create(
@@ -74,6 +104,19 @@ public class BicepValueProxyTests
 
         Assert.Equal(BicepValueKind.Expression, ((IBicepValue)converted).Kind);
         Assert.Equal("(20 + 10)", converted.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void ConvertPreservesSecureLiteralMetadata()
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<string>("secret"), isSecure: true);
+
+        var converted = BicepValueProxy.Convert<string>(proxy);
+
+        var assigned = (IBicepValue)converted;
+        Assert.True(assigned.IsSecure);
+        Assert.Equal(BicepValueKind.Literal, assigned.Kind);
+        Assert.Equal("secret", assigned.LiteralValue);
     }
 
     [Fact]
@@ -119,5 +162,52 @@ public class BicepValueProxyTests
         Assert.True(assigned.IsSecure);
         Assert.Equal(BicepValueKind.Expression, assigned.Kind);
         Assert.Equal("'prefix-${secretValue}'", target.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void ParameterFactoryCreatesSecureParameterReference()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var parameter = builder.AddParameter("secret", "value", secret: true);
+        var target = new BicepValue<string>("initial");
+
+        CreateInfrastructure()
+            .Create()
+            .Parameter(parameter, "secretParam")
+            .AssignTo(target);
+
+        var assigned = (IBicepValue)target;
+        Assert.True(assigned.IsSecure);
+        Assert.Equal(BicepValueKind.Expression, assigned.Kind);
+        Assert.Equal("secretParam", target.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void ReferenceExpressionFactoryCreatesSecureParameterReference()
+    {
+        var target = new BicepValue<string>("initial");
+
+        CreateInfrastructure()
+            .Create()
+            .ReferenceExpression(ReferenceExpression.Create($"secretValue"), "secretParam", isSecure: true)
+            .AssignTo(target);
+
+        var assigned = (IBicepValue)target;
+        Assert.True(assigned.IsSecure);
+        Assert.Equal(BicepValueKind.Expression, assigned.Kind);
+        Assert.Equal("secretParam", target.ToBicepExpression().ToString());
+    }
+
+    private static AzureResourceInfrastructure CreateInfrastructure()
+    {
+        var constructor = typeof(AzureResourceInfrastructure).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            [typeof(AzureProvisioningResource), typeof(string)],
+            modifiers: null);
+
+        Assert.NotNull(constructor);
+
+        return (AzureResourceInfrastructure)constructor.Invoke([new AzureProvisioningResource("test", _ => { }), "test"]);
     }
 }

@@ -80,7 +80,17 @@ public sealed class BicepValueProxy
         EnsureLiteralType<T>();
         if (_value.Kind == BicepValueKind.Literal)
         {
-            target.Assign(new BicepValue<T>((T)_value.LiteralValue!));
+            var literalValue = new BicepValue<T>((T)_value.LiteralValue!);
+            target.Assign(literalValue);
+
+            if (IsSecure && !((IBicepValue)target).IsSecure)
+            {
+                // Azure Provisioning only copies the typed literal when the source is a BicepValue<T>,
+                // but it only propagates secure metadata through IBicepValue.Assign. Apply the typed
+                // literal first, then re-apply the secure flag without disturbing the assigned value.
+                ((IBicepValue)target).Assign(new SecureBicepValue(literalValue));
+            }
+
             return;
         }
 
@@ -102,11 +112,6 @@ public sealed class BicepValueProxy
         if (value is BicepValueProxy proxy)
         {
             proxy.EnsureLiteralType<T>();
-
-            if (proxy._value.Kind == BicepValueKind.Literal)
-            {
-                return (T)proxy._value.LiteralValue!;
-            }
 
             var converted = new BicepValue<T>((T)default!);
             proxy.AssignTo(converted);
@@ -140,10 +145,24 @@ public sealed class BicepValueProxy
 
     private void EnsureLiteralType<T>()
     {
-        if (_value.Kind == BicepValueKind.Literal && !typeof(T).IsAssignableFrom(_valueType))
+        if (_value.Kind != BicepValueKind.Literal)
+        {
+            return;
+        }
+
+        var targetType = typeof(T);
+        if (targetType.IsAssignableFrom(_valueType))
+        {
+            return;
+        }
+
+        var sourceUnderlyingType = Nullable.GetUnderlyingType(_valueType) ?? _valueType;
+        var targetUnderlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        if (sourceUnderlyingType != targetUnderlyingType)
         {
             throw new ArgumentException(
-                $"A literal of type {_valueType.Name} cannot be assigned to a BicepValue<{typeof(T).Name}>.");
+                $"A literal of type {_valueType.Name} cannot be assigned to a BicepValue<{targetType.Name}>.");
         }
     }
 

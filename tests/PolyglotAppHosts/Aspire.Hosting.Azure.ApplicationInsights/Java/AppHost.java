@@ -9,7 +9,7 @@ void main() throws Exception {
         appInsights.configureInfrastructure((infrastructure) -> {
             var component = infrastructure.getApplicationInsightsComponent();
             component.tags().set("provisioning-proxy", "java");
-            var identity = infrastructure.addUserAssignedIdentity("validationIdentity");
+            var identity = infrastructure.addApplicationInsightsUserAssignedIdentity("validationIdentity");
             var identityReference = infrastructure.bicep().resourceIdentifier(identity);
             var identityProperties = infrastructure.bicep().member(identityReference, "properties");
             var principalId = infrastructure.bicep().member(identityProperties, "principalId");

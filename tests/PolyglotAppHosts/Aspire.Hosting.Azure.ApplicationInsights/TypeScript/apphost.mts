@@ -12,7 +12,7 @@ await appInsights.configureInfrastructure(async infrastructure => {
     const tags = await component.tags.get();
     await tags.set("provisioning-proxy", "typescript");
 
-    const identity = await infrastructure.addUserAssignedIdentity("validationIdentity");
+    const identity = await infrastructure.addApplicationInsightsUserAssignedIdentity("validationIdentity");
     const role = await infrastructure.getApplicationInsightsBuiltInRoleMonitoringMetricsPublisher();
     const roleAssignment = await component.createRoleAssignment(
         role,

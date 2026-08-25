@@ -26,15 +26,27 @@ internal static class ProvisioningGeneratorTest
         string source,
         params TestAssemblySource[] additionalAssemblies)
     {
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp13);
+        return RunWithAssemblyName("ProvisioningGeneratorTests", source, additionalAssemblies);
+    }
+
+    public static GeneratorTestResult RunWithAssemblyName(
+        string assemblyName,
+        string source,
+        params TestAssemblySource[] additionalAssemblies)
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp13, documentationMode: DocumentationMode.Diagnose);
         var references = s_references.AddRange(additionalAssemblies.Select(CompileReference));
         var compilation = CSharpCompilation.Create(
-            "ProvisioningGeneratorTests",
+            assemblyName,
             [CSharpSyntaxTree.ParseText(source, parseOptions)],
             references,
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
-                nullableContextOptions: NullableContextOptions.Enable));
+                nullableContextOptions: NullableContextOptions.Enable,
+                specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic>
+                {
+                    ["CS1591"] = ReportDiagnostic.Suppress
+                }));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new AspireProvisioningProxyGenerator().AsSourceGenerator()],
@@ -54,7 +66,11 @@ internal static class ProvisioningGeneratorTest
                 s_references,
                 new CSharpCompilationOptions(
                     OutputKind.DynamicallyLinkedLibrary,
-                    nullableContextOptions: NullableContextOptions.Enable));
+                    nullableContextOptions: NullableContextOptions.Enable,
+                    specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic>
+                    {
+                        ["CS1591"] = ReportDiagnostic.Suppress
+                    }));
             using var stream = new MemoryStream();
             var emitResult = referenceCompilation.Emit(stream);
             Assert.True(

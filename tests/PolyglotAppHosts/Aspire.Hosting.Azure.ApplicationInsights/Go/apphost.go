@@ -17,7 +17,7 @@ func main() {
 	_ = appInsights.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		component := infrastructure.GetApplicationInsightsComponent()
 		component.Tags().Set("provisioning-proxy", "go")
-		identity := infrastructure.AddUserAssignedIdentity("validationIdentity")
+		identity := infrastructure.AddApplicationInsightsUserAssignedIdentity("validationIdentity")
 		principalID, err := identity.PrincipalId()
 		if err != nil {
 			log.Fatalf(aspire.FormatError(err))

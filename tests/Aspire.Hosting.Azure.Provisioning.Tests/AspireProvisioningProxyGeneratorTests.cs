@@ -51,6 +51,18 @@ public class AspireProvisioningProxyGeneratorTests
                 "TransformValue"
             ],
             GetExportedMembers<IMethodSymbol>(resourceProxy));
+        AssertDocumentationContains(
+            resourceProxy,
+            "<summary>",
+            "Represents the SampleResource Azure Provisioning model.");
+        AssertDocumentationContains(
+            Assert.Single(resourceProxy.GetMembers("Name").OfType<IPropertySymbol>()),
+            "Gets or sets the Name provisioning property.");
+        AssertDocumentationContains(
+            Assert.Single(resourceProxy.GetMembers("TransformValue").OfType<IMethodSymbol>()),
+            "Invokes TransformValue on the SampleResource provisioning model.",
+            "<param name=\"value\">",
+            "<returns>");
 
         var factory = result.Compilation.GetTypeByMetadataName(
             "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
@@ -68,6 +80,12 @@ public class AspireProvisioningProxyGeneratorTests
             GetExportedMembers<IMethodSymbol>(factory));
         var createBuiltInRole = Assert.Single(factory.GetMembers("CreateBuiltInRole").OfType<IMethodSymbol>());
         Assert.Equal(2, createBuiltInRole.Parameters.Length);
+        AssertDocumentationContains(
+            Assert.Single(factory.GetMembers("AddSampleResource").OfType<IMethodSymbol>()),
+            "Adds a SampleResource provisioning model.",
+            "<param name=\"bicepIdentifier\">",
+            "<param name=\"resourceVersion\">",
+            "<param name=\"infrastructure\">");
     }
 
     [Fact]
@@ -125,6 +143,116 @@ public class AspireProvisioningProxyGeneratorTests
             "ProvisioningGeneratorTests.Generated.ProvisionableProxy"));
     }
 
+    [Fact]
+    public void NullableProxyConstructorParametersGenerateCompilableFactoryMethods()
+    {
+        var result = ProvisioningGeneratorTest.Run(NullableProxyConstructorSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var factory = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
+        Assert.NotNull(factory);
+
+        var createArgumentContainer = Assert.Single(factory.GetMembers("CreateArgumentContainer").OfType<IMethodSymbol>());
+        Assert.Equal(2, createArgumentContainer.Parameters.Length);
+
+        var parameter = createArgumentContainer.Parameters[1];
+        Assert.Equal("args", parameter.Name);
+        Assert.Equal("ChildModelProxy", parameter.Type.Name);
+        Assert.Equal(NullableAnnotation.Annotated, parameter.NullableAnnotation);
+    }
+
+    [Fact]
+    public void GeneratedNamespaceSanitizesEachAssemblyNameSegment()
+    {
+        var result = ProvisioningGeneratorTest.RunWithAssemblyName(
+            "3P.class..4leaf",
+            NamespaceSanitizationSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        Assert.NotNull(result.Compilation.GetTypeByMetadataName(
+            "_3P._class.__._4leaf.Generated.NamespaceModelProxy"));
+    }
+
+    [Fact]
+    public void MutableStructRootsGenerateDiagnosticsWhileReadonlyStructRootsRemainSupported()
+    {
+        var result = ProvisioningGeneratorTest.Run(MutableStructSource);
+        var diagnostic = Assert.Single(result.RunResult.Diagnostics);
+
+        AssertDiagnostic(diagnostic, "ASPIREAZUREPROVISIONING006", "Test.Provisioning.MutableCatalog");
+        Assert.Empty(result.Compilation.GetDiagnostics());
+        Assert.NotNull(result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.ImmutableCatalogProxy"));
+        Assert.Null(result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.MutableCatalogProxy"));
+    }
+
+    [Fact]
+    public void SharedCoreFactoryMethodsRemainPackageQualified()
+    {
+        var result = ProvisioningGeneratorTest.Run(
+            SharedProvisioningSource,
+            new TestAssemblySource("Azure.Provisioning", SharedProvisioningAssemblySource));
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var factory = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
+        Assert.NotNull(factory);
+        Assert.Single(factory.GetMembers("CreateProvisioningGeneratorTestsManagedServiceIdentity").OfType<IMethodSymbol>());
+        Assert.Empty(factory.GetMembers("CreateManagedServiceIdentity"));
+    }
+
+    [Fact]
+    public void XmlDocumentationPropagatesToGeneratedProxySurface()
+    {
+        var result = ProvisioningGeneratorTest.Run(DocumentationPropagationSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var proxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.DocumentedModelProxy");
+        Assert.NotNull(proxy);
+
+        AssertDocumentationContains(proxy, "<summary>", "Represents a documented model.");
+
+        var nameProperty = Assert.Single(proxy.GetMembers("Name").OfType<IPropertySymbol>());
+        AssertDocumentationContains(nameProperty, "<summary>", "Gets or sets the display name.");
+
+        var formatMethod = Assert.Single(proxy.GetMembers("Format").OfType<IMethodSymbol>());
+        AssertDocumentationContains(
+            formatMethod,
+            "<summary>",
+            "Formats the supplied value.",
+            "<param name=\"value\">",
+            "The value to format.");
+
+        var factory = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
+        Assert.NotNull(factory);
+
+        var createDocumentedModel = Assert.Single(factory.GetMembers("CreateDocumentedModel").OfType<IMethodSymbol>());
+        AssertDocumentationContains(
+            createDocumentedModel,
+            "<summary>",
+            "Initializes the documented model for",
+            "<paramref name=\"args\"",
+            "&amp; safely.",
+            "<param name=\"args\">",
+            "The child model argument.",
+            "<param name=\"infrastructure\">");
+
+        var getDefaultChild = Assert.Single(factory.GetMembers("GetDocumentedModelDefaultChild").OfType<IMethodSymbol>());
+        AssertDocumentationContains(getDefaultChild, "<summary>", "Gets the default child.");
+    }
+
     private static string[] GetExportedMembers<TSymbol>(INamedTypeSymbol type)
         where TSymbol : ISymbol
     {
@@ -137,6 +265,17 @@ public class AspireProvisioningProxyGeneratorTests
             .ToArray();
     }
 
+    private static void AssertDocumentationContains(ISymbol symbol, params string[] expectedFragments)
+    {
+        var documentation = symbol.GetDocumentationCommentXml();
+        Assert.False(string.IsNullOrWhiteSpace(documentation));
+
+        foreach (var expectedFragment in expectedFragments)
+        {
+            Assert.Contains(expectedFragment, documentation, StringComparison.Ordinal);
+        }
+    }
+
     private static void AssertDiagnostic(Diagnostic diagnostic, string id, string memberName)
     {
         Assert.Equal(id, diagnostic.Id);
@@ -145,6 +284,14 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     private const string SupportedSource = SupportedAttributes + CommonSource + SupportedTypes;
+
+    private const string NullableProxyConstructorSource = NullableProxyConstructorAttributes + CommonSource + NullableProxyConstructorTypes;
+
+    private const string NamespaceSanitizationSource = NamespaceSanitizationAttributes + CommonSource + NamespaceSanitizationTypes;
+
+    private const string MutableStructSource = MutableStructAttributes + CommonSource + MutableStructTypes;
+
+    private const string DocumentationPropagationSource = DocumentationPropagationAttributes + CommonSource + DocumentationPropagationTypes;
 
     private const string SupportedAttributes = """
         [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
@@ -228,6 +375,123 @@ public class AspireProvisioningProxyGeneratorTests
                 public void Set(int value)
                 {
                 }
+            }
+        }
+        """;
+
+    private const string NullableProxyConstructorAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.ArgumentContainer),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string NullableProxyConstructorTypes = """
+        namespace Test.Provisioning
+        {
+            public sealed class ChildModel
+            {
+                public string Value { get; set; } = string.Empty;
+            }
+
+            public sealed class ArgumentContainer
+            {
+                public ArgumentContainer(ChildModel? arguments = null)
+                {
+                    Child = arguments;
+                }
+
+                public ChildModel? Child { get; set; }
+            }
+        }
+        """;
+
+    private const string NamespaceSanitizationAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.NamespaceModel),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string NamespaceSanitizationTypes = """
+        namespace Test.Provisioning
+        {
+            public sealed class NamespaceModel
+            {
+                public string Value { get; set; } = string.Empty;
+            }
+        }
+        """;
+
+    private const string MutableStructAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.ImmutableCatalog),
+            IsInfrastructureRoot = false)]
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.MutableCatalog),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string MutableStructTypes = """
+        namespace Test.Provisioning
+        {
+            public readonly struct ImmutableCatalog
+            {
+                public ImmutableCatalog(string name)
+                {
+                    Name = name;
+                }
+
+                public string Name { get; }
+            }
+
+            public struct MutableCatalog
+            {
+                public string Name { get; set; }
+            }
+        }
+        """;
+
+    private const string DocumentationPropagationAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.DocumentedModel),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string DocumentationPropagationTypes = """
+        namespace Test.Provisioning
+        {
+            /// <summary>Represents a documented child.</summary>
+            public sealed class DocumentedChild
+            {
+                /// <summary>Gets or sets the child value.</summary>
+                public string Value { get; set; } = string.Empty;
+            }
+
+            /// <summary>Represents a documented model.</summary>
+            public sealed class DocumentedModel
+            {
+                /// <summary>Gets the default child.</summary>
+                public static DocumentedChild DefaultChild { get; } = new();
+
+                /// <summary>Initializes the documented model for <paramref name="arguments"/> &amp; safely.</summary>
+                /// <param name="arguments">The child model argument.</param>
+                public DocumentedModel(DocumentedChild? arguments = null)
+                {
+                    Child = arguments;
+                }
+
+                /// <summary>Gets or sets the child model.</summary>
+                public DocumentedChild? Child { get; set; }
+
+                /// <summary>Gets or sets the display name.</summary>
+                public string Name { get; set; } = string.Empty;
+
+                /// <summary>Formats the supplied value.</summary>
+                /// <param name="value">The value to format.</param>
+                public string Format(string value) => value;
             }
         }
         """;

@@ -5,7 +5,7 @@
 
 Use this integration to compose Bicep values and expressions in polyglot Aspire AppHosts that reference an opt-in Azure Provisioning integration.
 
-Resource-specific provisioning integrations reference this package, so the shared expression types and common Azure resources are exported once even when an AppHost references multiple provisioning integrations.
+Resource-specific provisioning integrations reference this package for the shared expression runtime. Each opt-in provisioning package still projects its own Azure Provisioning model proxies, including common models such as user-assigned identities.
 
 Use the generated Bicep factories to compose deployment-time values from literals, resource properties, operators, functions, and interpolated strings. These values can be assigned to generated properties backed by `BicepValue<T>`.
 

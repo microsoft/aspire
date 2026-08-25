@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Text;
+using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
@@ -57,6 +58,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         id: "ASPIREAZUREPROVISIONING005",
         title: "Unsupported provisioning proxy root",
         messageFormat: "Type '{0}' cannot be used as a provisioning proxy root because it is not a non-generic, non-static class or struct",
+        category: DiagnosticCategory,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor s_unsupportedMutableStructRoot = new(
+        id: "ASPIREAZUREPROVISIONING006",
+        title: "Unsupported mutable provisioning proxy root",
+        messageFormat: "Type '{0}' cannot be used as a provisioning proxy root because mutable structs are not supported",
         category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -171,7 +180,17 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         {
             if (CanGenerateProxy(root.Type))
             {
-                validRoots.Add(root);
+                if (IsMutableStruct(root.Type))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        s_unsupportedMutableStructRoot,
+                        GetDiagnosticLocation(root.Type),
+                        root.Type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)));
+                }
+                else
+                {
+                    validRoots.Add(root);
+                }
             }
             else
             {
@@ -237,12 +256,16 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             return "Aspire.Hosting.Provisioning.Generated";
         }
 
-        var namespaceName = new StringBuilder(assemblyName.Length + ".Generated".Length);
-        foreach (var character in assemblyName)
+        var namespaceName = new StringBuilder(assemblyName.Length + ".Generated".Length + 8);
+        var segments = assemblyName.Split('.');
+        for (var index = 0; index < segments.Length; index++)
         {
-            namespaceName.Append(char.IsLetterOrDigit(character) || character is '_' or '.'
-                ? character
-                : '_');
+            if (index > 0)
+            {
+                namespaceName.Append('.');
+            }
+
+            namespaceName.Append(SanitizeNamespaceSegment(segments[index]));
         }
         namespaceName.Append(".Generated");
         return namespaceName.ToString();
@@ -366,7 +389,9 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         void AddType(INamedTypeSymbol type)
         {
             type = (INamedTypeSymbol)type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
-            if (CanGenerateProxy(type) && seenTypes.Add(type))
+            if (CanGenerateProxy(type) &&
+                !IsMutableStruct(type) &&
+                seenTypes.Add(type))
             {
                 types.Add(type);
             }
@@ -528,6 +553,29 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         return identifier.ToString();
     }
 
+    private static string SanitizeNamespaceSegment(string value)
+    {
+        var identifier = new StringBuilder(value.Length + 2);
+        foreach (var character in value)
+        {
+            identifier.Append(char.IsLetterOrDigit(character) || character == '_' ? character : '_');
+        }
+
+        if (identifier.Length == 0 || !SyntaxFacts.IsIdentifierStartCharacter(identifier[0]))
+        {
+            identifier.Insert(0, '_');
+        }
+
+        while (!SyntaxFacts.IsValidIdentifier(identifier.ToString()) ||
+            SyntaxFacts.GetKeywordKind(identifier.ToString()) != SyntaxKind.None ||
+            SyntaxFacts.GetContextualKeywordKind(identifier.ToString()) != SyntaxKind.None)
+        {
+            identifier.Insert(0, '_');
+        }
+
+        return identifier.ToString();
+    }
+
     private static void GenerateProxy(
         SourceProductionContext context,
         StringBuilder source,
@@ -541,6 +589,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var isProvisionableResource = IsProvisionableResource(type);
         var proxyBaseType = GetProxyBaseType(type, proxyNames);
 
+        if (!AppendDocumentationComment(source, type, "    "))
+        {
+            AppendDocumentationSummary(source, "    ", $"Represents the {type.Name} Azure Provisioning model.");
+        }
         source.AppendLine("    [global::Aspire.Hosting.AspireExportAttribute]");
         source.Append("    internal class ").Append(proxyName);
         if (proxyBaseType is not null)
@@ -660,6 +712,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private static void GenerateAddToMethod(StringBuilder source, string proxyName)
     {
         source.AppendLine();
+        AppendDocumentationSummary(
+            source,
+            "        ",
+            "Adds this provisioning resource to the Azure resource infrastructure.");
+        AppendInfrastructureParameterDocumentation(source, "        ");
         AppendMethodExportAttribute(source, proxyName + ".addTo", "AddTo");
         source.Append("        internal void AddTo(").Append(AzureResourceInfrastructureTypeName)
             .AppendLine(" infrastructure)");
@@ -687,6 +744,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
 
         source.AppendLine();
+        if (!AppendDocumentationComment(source, property, "        ", includeValue: true))
+        {
+            var accessor = canRead && canWrite ? "Gets or sets" : canRead ? "Gets" : "Sets";
+            AppendDocumentationSummary(
+                source,
+                "        ",
+                $"{accessor} the {property.Name} provisioning property.");
+        }
         source.AppendLine("        [global::Aspire.Hosting.AspireExportAttribute]");
         if (mappedType is { Kind: MappedTypeKind.BicepValue, LiteralTypeName: not null })
         {
@@ -722,6 +787,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         if (canWrite && mappedType.Kind == MappedTypeKind.BicepValue)
         {
             source.AppendLine();
+            AppendDocumentationSummary(
+                source,
+                "        ",
+                $"Clears the {property.Name} provisioning property.");
             AppendMethodExportAttribute(source, proxyName + ".clear" + property.Name, "Clear" + property.Name);
             source.Append("        internal void Clear").Append(property.Name).AppendLine("()");
             source.AppendLine("        {");
@@ -928,6 +997,28 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
 
         source.AppendLine();
+        if (!AppendDocumentationComment(
+            source,
+            method,
+            "        ",
+            parameters: [.. mappedMethod.Parameters.Select(static parameter =>
+                new DocumentationParameter(parameter.Parameter.Name, GetParameterName(parameter.Parameter)))],
+            includeReturns: !method.ReturnsVoid))
+        {
+            AppendDocumentationSummary(
+                source,
+                "        ",
+                $"Invokes {method.Name} on the {method.ContainingType.Name} provisioning model.");
+            AppendGeneratedParameterDocumentation(source, mappedMethod.Parameters);
+            if (!method.ReturnsVoid)
+            {
+                AppendDocumentationElement(
+                    source,
+                    "        ",
+                    new XElement("returns", $"The result of {method.Name}."),
+                    parameterNames: null);
+            }
+        }
         AppendMethodExportAttribute(source, capabilityId, method.Name);
         source.Append("        internal ").Append(mappedMethod.ReturnType.ExposedTypeName).Append(" @").Append(method.Name).Append('(');
 
@@ -1260,13 +1351,15 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var names = new Dictionary<INamedTypeSymbol, string>(SymbolEqualityComparer.Default);
         foreach (var group in types.GroupBy(static type => type.Name, StringComparer.Ordinal))
         {
+            var groupCount = group.Count();
             foreach (var type in group)
             {
+                var proxyBasedName = proxyNames[type].Substring(0, proxyNames[type].Length - "Proxy".Length);
                 names.Add(
                     type,
-                    group.Count() == 1
+                    groupCount == 1 && !IsSharedProxyType(type)
                         ? type.Name
-                        : proxyNames[type].Substring(0, proxyNames[type].Length - "Proxy".Length));
+                        : proxyBasedName);
             }
         }
 
@@ -1282,6 +1375,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var methodName = "Get" + factoryTypeName;
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
         source.AppendLine();
+        if (!AppendDocumentationComment(source, type, "        "))
+        {
+            AppendDocumentationSummary(
+                source,
+                "        ",
+                $"Gets the {type.Name} provisioning resource for the current Aspire resource.");
+        }
+        AppendInfrastructureParameterDocumentation(source, "        ");
         AppendFactoryExportAttribute(source, proxyName, methodName, "root");
         source.Append("        internal static ").Append(proxyName).Append(' ').Append(methodName)
             .Append("(this ").Append(AzureResourceInfrastructureTypeName).AppendLine(" infrastructure)");
@@ -1305,6 +1406,16 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
         var getMethodName = "Get" + factoryTypeName + "ByIdentifier";
         source.AppendLine();
+        if (!AppendDocumentationComment(source, type, "        "))
+        {
+            AppendDocumentationSummary(
+                source,
+                "        ",
+                $"Gets a {type.Name} provisioning resource by its Bicep identifier.");
+        }
+        AppendInfrastructureParameterDocumentation(source, "        ");
+        source.Append("        ")
+            .AppendLine("/// <param name=\"bicepIdentifier\">The Bicep identifier of the provisioning resource to return.</param>");
         AppendFactoryExportAttribute(source, proxyName, getMethodName, "byIdentifier");
         source.Append("        internal static ").Append(proxyName).Append(' ').Append(getMethodName)
             .Append("(this ").Append(AzureResourceInfrastructureTypeName)
@@ -1320,6 +1431,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         var getAllMethodName = "Get" + PluralizeIdentifier(factoryTypeName);
         source.AppendLine();
+        if (!AppendDocumentationComment(source, type, "        "))
+        {
+            AppendDocumentationSummary(
+                source,
+                "        ",
+                $"Gets all {type.Name} provisioning resources.");
+        }
+        AppendInfrastructureParameterDocumentation(source, "        ");
         AppendFactoryExportAttribute(source, proxyName, getAllMethodName, "all");
         source.Append("        internal static ").Append(proxyName).Append("[] ").Append(getAllMethodName)
             .Append("(this ").Append(AzureResourceInfrastructureTypeName).AppendLine(" infrastructure)");
@@ -1349,6 +1468,17 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var methodName = (isProvisionableResource ? "Add" : "Create") + factoryTypeName;
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
         source.AppendLine();
+        var hasSourceDocumentation = AppendDocumentationComment(
+            source,
+            constructor.Constructor,
+            "        ",
+            parameters: [.. constructor.Parameters.Select(static parameter =>
+                new DocumentationParameter(parameter.Parameter.Name, GetParameterName(parameter.Parameter)))]);
+        if (!hasSourceDocumentation)
+        {
+            AppendGeneratedFactoryDocumentation(source, type, constructor.Parameters, isProvisionableResource);
+        }
+        AppendInfrastructureParameterDocumentation(source, "        ");
         AppendFactoryExportAttribute(source, proxyName, methodName, "factory");
         source.Append("        internal static ").Append(proxyName).Append(' ').Append(methodName)
             .Append("(this ").Append(AzureResourceInfrastructureTypeName).Append(" infrastructure");
@@ -1373,8 +1503,9 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             var parameter = constructor.Parameters[index];
             if (IsNullableFactoryProxyParameter(parameter))
             {
-                source.Append('@').Append(parameter.Parameter.Name)
-                    .Append(" is null ? null : @").Append(GetParameterName(parameter.Parameter)).Append(".Inner");
+                var parameterName = GetParameterName(parameter.Parameter);
+                source.Append('@').Append(parameterName)
+                    .Append(" is null ? null : @").Append(parameterName).Append(".Inner");
             }
             else
             {
@@ -1423,6 +1554,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
             var methodName = "Get" + factoryTypeName + property.Name;
             source.AppendLine();
+            if (!AppendDocumentationComment(source, property, "        ", includeValue: true))
+            {
+                AppendDocumentationSummary(
+                    source,
+                    "        ",
+                    $"Gets the {property.Name} value defined by {type.Name}.");
+            }
+            AppendInfrastructureParameterDocumentation(source, "        ");
             AppendFactoryExportAttribute(source, proxyName, methodName, "staticProperty");
             source.Append("        internal static ").Append(mappedType.ExposedTypeName).Append(' ')
                 .Append(methodName).Append("(this ").Append(AzureResourceInfrastructureTypeName)
@@ -1515,7 +1654,9 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         AppendUnionAttribute(source, mappedParameter.Type, string.Empty);
         source.Append(mappedParameter.Type.ExposedTypeName);
-        if (includeDefaultValue && IsNullableFactoryProxyParameter(mappedParameter))
+        if (includeDefaultValue &&
+            IsNullableFactoryProxyParameter(mappedParameter) &&
+            !mappedParameter.Type.IsNullable)
         {
             source.Append('?');
         }
@@ -1623,6 +1764,205 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine("                throw new global::System.ArgumentNullException(nameof(infrastructure));");
         source.AppendLine("            }");
         source.AppendLine();
+    }
+
+    private static void AppendInfrastructureParameterDocumentation(StringBuilder source, string indentation)
+    {
+        source.Append(indentation)
+            .AppendLine("/// <param name=\"infrastructure\">The Azure resource infrastructure that owns the exported provisioning resources.</param>");
+    }
+
+    private static void AppendDocumentationSummary(StringBuilder source, string indentation, string summary)
+    {
+        AppendDocumentationElement(
+            source,
+            indentation,
+            new XElement("summary", summary),
+            parameterNames: null);
+    }
+
+    private static bool AppendDocumentationComment(
+        StringBuilder source,
+        ISymbol symbol,
+        string indentation,
+        IReadOnlyList<DocumentationParameter>? parameters = null,
+        bool includeReturns = false,
+        bool includeValue = false)
+    {
+        var xml = symbol.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: default);
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            return false;
+        }
+
+        XElement root;
+        try
+        {
+            root = XElement.Parse("<root>" + xml + "</root>");
+        }
+        catch (System.Xml.XmlException)
+        {
+            return false;
+        }
+
+        root = root.Element("member") ?? root;
+
+        Dictionary<string, string>? parameterNames = null;
+        if (parameters is not null)
+        {
+            parameterNames = parameters.ToDictionary(
+                static parameter => parameter.SourceName,
+                static parameter => parameter.GeneratedName,
+                StringComparer.Ordinal);
+        }
+
+        var emittedDocumentation = AppendDocumentationElement(source, indentation, root.Element("summary"), parameterNames);
+        emittedDocumentation |= AppendDocumentationElement(source, indentation, root.Element("remarks"), parameterNames);
+
+        if (includeValue)
+        {
+            emittedDocumentation |= AppendDocumentationElement(source, indentation, root.Element("value"), parameterNames);
+        }
+
+        if (includeReturns)
+        {
+            emittedDocumentation |= AppendDocumentationElement(source, indentation, root.Element("returns"), parameterNames);
+        }
+
+        if (parameters is not null)
+        {
+            foreach (var parameter in parameters)
+            {
+                var parameterElement = root.Elements("param").FirstOrDefault(element =>
+                    string.Equals(element.Attribute("name")?.Value, parameter.SourceName, StringComparison.Ordinal))
+                    ?? new XElement(
+                        "param",
+                        new XAttribute("name", parameter.SourceName),
+                        $"The {parameter.SourceName} value.");
+                emittedDocumentation |= AppendDocumentationElement(
+                    source,
+                    indentation,
+                    parameterElement,
+                    parameterNames,
+                    replacementName: parameter.GeneratedName);
+            }
+        }
+
+        return emittedDocumentation;
+    }
+
+    private static void AppendGeneratedFactoryDocumentation(
+        StringBuilder source,
+        INamedTypeSymbol type,
+        IReadOnlyList<MappedParameter> parameters,
+        bool isProvisionableResource)
+    {
+        AppendDocumentationElement(
+            source,
+            "        ",
+            new XElement(
+                "summary",
+                $"{(isProvisionableResource ? "Adds" : "Creates")} a {type.Name} provisioning model."),
+            parameterNames: null);
+
+        foreach (var parameter in parameters)
+        {
+            AppendGeneratedParameterDocumentation(source, parameter);
+        }
+    }
+
+    private static void AppendGeneratedParameterDocumentation(
+        StringBuilder source,
+        IEnumerable<MappedParameter> parameters)
+    {
+        foreach (var parameter in parameters)
+        {
+            AppendGeneratedParameterDocumentation(source, parameter);
+        }
+    }
+
+    private static void AppendGeneratedParameterDocumentation(StringBuilder source, MappedParameter parameter)
+    {
+        AppendDocumentationElement(
+            source,
+            "        ",
+            new XElement(
+                "param",
+                new XAttribute("name", GetParameterName(parameter.Parameter)),
+                $"The {parameter.Parameter.Name} value."),
+            parameterNames: null);
+    }
+
+    private static bool AppendDocumentationElement(
+        StringBuilder source,
+        string indentation,
+        XElement? element,
+        IReadOnlyDictionary<string, string>? parameterNames,
+        string? replacementName = null)
+    {
+        if (element is null)
+        {
+            return false;
+        }
+
+        // Rehydrate the XML so renamed parameters (for example, arguments -> args) are
+        // updated consistently while preserving safe XML documentation output.
+        var rewritten = RewriteDocumentationElement(element, parameterNames, replacementName);
+        foreach (var line in rewritten.ToString().Replace("\r\n", "\n").Split('\n'))
+        {
+            source.Append(indentation)
+                .Append("/// ")
+                .AppendLine(line);
+        }
+        return true;
+    }
+
+    private static XElement RewriteDocumentationElement(
+        XElement element,
+        IReadOnlyDictionary<string, string>? parameterNames,
+        string? replacementName)
+    {
+        var rewritten = new XElement(
+            element.Name,
+            element.Attributes().Select(attribute => RewriteDocumentationAttribute(element, attribute, parameterNames, replacementName)),
+            element.Nodes().Select(node => RewriteDocumentationNode(node, parameterNames)));
+
+        return rewritten;
+    }
+
+    private static XNode RewriteDocumentationNode(XNode node, IReadOnlyDictionary<string, string>? parameterNames)
+    {
+        return node switch
+        {
+            XElement element => RewriteDocumentationElement(element, parameterNames, replacementName: null),
+            XText text => new XText(text.Value),
+            XComment comment => new XComment(comment.Value),
+            _ => new XText(node.ToString())
+        };
+    }
+
+    private static XAttribute RewriteDocumentationAttribute(
+        XElement element,
+        XAttribute attribute,
+        IReadOnlyDictionary<string, string>? parameterNames,
+        string? replacementName)
+    {
+        if (attribute.Name.LocalName == "name" &&
+            element.Name.LocalName == "param" &&
+            replacementName is not null)
+        {
+            return new XAttribute(attribute.Name, replacementName);
+        }
+
+        if (attribute.Name.LocalName == "name" &&
+            element.Name.LocalName == "paramref" &&
+            parameterNames is not null &&
+            parameterNames.TryGetValue(attribute.Value, out var generatedName))
+        {
+            return new XAttribute(attribute.Name, generatedName);
+        }
+
+        return new XAttribute(attribute.Name, attribute.Value);
     }
 
     private static void AppendFactoryExportAttribute(
@@ -1938,6 +2278,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             !type.IsStatic;
     }
 
+    private static bool IsMutableStruct(INamedTypeSymbol type)
+    {
+        return type.TypeKind == TypeKind.Struct && !type.IsReadOnly;
+    }
+
     private static Location GetDiagnosticLocation(ISymbol symbol)
     {
         return symbol.Locations.FirstOrDefault(static location => location.IsInSource) ?? Location.None;
@@ -2200,6 +2545,19 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         public IParameterSymbol Parameter { get; }
 
         public MappedType Type { get; }
+    }
+
+    private readonly struct DocumentationParameter
+    {
+        public DocumentationParameter(string sourceName, string generatedName)
+        {
+            SourceName = sourceName;
+            GeneratedName = generatedName;
+        }
+
+        public string SourceName { get; }
+
+        public string GeneratedName { get; }
     }
 
     private readonly struct MappedType

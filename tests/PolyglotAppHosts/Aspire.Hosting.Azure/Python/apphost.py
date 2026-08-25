@@ -7,14 +7,6 @@ from aspire_app import AzureResourceInfrastructure, ReferenceExpression, create_
 def configure_infrastructure(_infrastructure: AzureResourceInfrastructure):
     pass
 
-
-def configure_identity_infrastructure(infrastructure: AzureResourceInfrastructure):
-    provisioned_identity = infrastructure.get_user_assigned_identity()
-    deployment_location = infrastructure.bicep().location("westus2")
-    provisioned_identity.name = "polyglot-identity"
-    provisioned_identity.location = deployment_location
-
-
 with create_builder() as builder:
     builder.add_azure_provisioning()
     location = builder.add_parameter("parameter")
@@ -69,6 +61,16 @@ with create_builder() as builder:
     infrastructure.publish_as_existing(existing_name, resource_group=existing_resource_group)
     infrastructure.as_existing(existing_name)
     identity = builder.add_azure_user_assigned_identity("resource")
+    identity_bicep_identifier = identity.get_bicep_identifier()
+
+    def configure_identity_infrastructure(infrastructure: AzureResourceInfrastructure):
+        provisioned_identity = infrastructure.get_sql_user_assigned_identity_by_identifier(
+            identity_bicep_identifier
+        )
+        deployment_location = infrastructure.bicep().location("westus2")
+        provisioned_identity.name = "polyglot-identity"
+        provisioned_identity.location = deployment_location
+
     identity_client_id = identity.get_output("clientId")
     identity_client_id_expression = ReferenceExpression.format_string("{0}", identity_client_id)
     identity.configure_infrastructure(configure_identity_infrastructure)
@@ -82,7 +84,6 @@ with create_builder() as builder:
     identity.with_parameter("endpoint", value=endpoint)
     identity.publish_as_connection_string()
     identity.clear_default_role_assignments()
-    identity.get_bicep_identifier()
     identity.is_existing()
     identity.run_as_existing(existing_name)
     identity.run_as_existing(existing_name, resource_group=existing_resource_group)
