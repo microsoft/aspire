@@ -58,6 +58,9 @@
     <trans-unit id="aspire-vscode.strings.cliNotAvailable">
       <source xml:lang="en">Aspire CLI is not available on PATH. Please install it and restart VS Code.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.outdatedAspireCliWarning">
+      <source xml:lang="en">Aspire CLI {0} is older than {1}. Update it to avoid a known AppHost startup failure in VS Code.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireOutputChannelName">
       <source xml:lang="en">Aspire Extension</source>
     </trans-unit>
@@ -1002,6 +1005,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.unableToAddFolderToWorkspace">
       <source xml:lang="en">Unable to add folder to workspace: {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.updateAspireCliAction">
+      <source xml:lang="en">Update Aspire CLI</source>
     </trans-unit>
     <trans-unit id="command.updateSelf">
       <source xml:lang="en">Update Aspire CLI</source>

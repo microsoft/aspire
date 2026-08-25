@@ -58,7 +58,22 @@ export interface ConfigInfoOptions {
     timeoutMs?: number;
 }
 
+export interface CliVersionStatusOptions {
+    cliPath?: string;
+    cancellationToken?: vscode.CancellationToken;
+    /** The resolution scope to use when `cliPath` is not already known. Defaults to the window scope. */
+    target?: CliPathResolutionTarget;
+    timeoutMs?: number;
+}
+
+export interface CliVersionStatus {
+    cliPath: string;
+    version: string;
+    status: Exclude<CapabilityStatus, 'unavailable'>;
+}
+
 interface CliVersion {
+    value: string;
     major: number;
     minor: number;
     patch: number;
@@ -189,6 +204,35 @@ export class ConfigInfoProvider {
     }
 
     /**
+     * Compares the exact resolved Aspire CLI against a minimum stable version. The bounded
+     * `aspire --version` probe is locale-independent and intentionally uncached so replacing an
+     * executable in place is observed on the next check. Probe failures return `null` without
+     * showing an error notification.
+     */
+    async getCliVersionStatus(minimumVersion: string, options?: CliVersionStatusOptions): Promise<CliVersionStatus | null> {
+        const parsedMinimumVersion = parseCliVersion(minimumVersion);
+        if (!parsedMinimumVersion) {
+            extensionLogOutputChannel.warn(`Unable to probe Aspire CLI version: invalid minimum version '${minimumVersion}'.`);
+            return null;
+        }
+
+        const target = options?.target ?? windowCliPathTarget;
+        const startTime = Date.now();
+        const timeoutMs = Math.min(options?.timeoutMs ?? cliVersionProbeTimeoutMs, cliVersionProbeTimeoutMs);
+        const cliPath = options?.cliPath ?? await this._resolveCliPath(true, target, options?.cancellationToken);
+        if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
+            return null;
+        }
+
+        const remainingTimeoutMs = timeoutMs - (Date.now() - startTime);
+        if (remainingTimeoutMs <= 0) {
+            return null;
+        }
+
+        return await this._getCliVersionStatus(cliPath, parsedMinimumVersion, remainingTimeoutMs, options?.cancellationToken);
+    }
+
+    /**
      * Distinguishes a successful probe of an older CLI from a probe that could not complete.
      * Callers that must honor an explicit capability-dependent choice cannot safely treat both
      * cases as unsupported.
@@ -232,23 +276,24 @@ export class ConfigInfoProvider {
             return 'unavailable';
         }
 
-        return await this._getCliMinimumVersionStatus(cliPath, minimumVersion, remainingTimeoutMs, options.cancellationToken);
+        return (await this._getCliVersionStatus(cliPath, minimumVersion, remainingTimeoutMs, options.cancellationToken))?.status
+            ?? 'unavailable';
     }
 
-    private _getCliMinimumVersionStatus(
+    private _getCliVersionStatus(
         cliPath: string,
         minimumVersion: CliVersion,
         timeoutMs: number,
         cancellationToken?: vscode.CancellationToken,
-    ): Promise<CapabilityStatus> {
-        return new Promise<CapabilityStatus>((resolve) => {
+    ): Promise<CliVersionStatus | null> {
+        return new Promise<CliVersionStatus | null>((resolve) => {
             let childProcess: ChildProcessWithoutNullStreams | undefined;
             let output = '';
             let outputTooLong = false;
             let settled = false;
             let timeout: ReturnType<typeof setTimeout> | undefined;
             let cancellation: vscode.Disposable | undefined;
-            const settle = (result: CapabilityStatus) => {
+            const settle = (result: CliVersionStatus | null) => {
                 if (settled) {
                     return;
                 }
@@ -266,15 +311,15 @@ export class ConfigInfoProvider {
                 }
 
                 extensionLogOutputChannel.warn(`Unable to probe Aspire CLI version: ${String(error)}`);
-                settle('unavailable');
+                settle(null);
             };
             if (cancellationToken?.isCancellationRequested) {
-                settle('unavailable');
+                settle(null);
                 return;
             }
 
             timeout = setTimeout(() => {
-                settle('unavailable');
+                settle(null);
                 if (childProcess) {
                     void terminateCliProcess(childProcess, 'timed-out Aspire CLI version probe').catch(error => {
                         extensionLogOutputChannel.error(`Failed to terminate timed-out Aspire CLI version probe: ${String(error)}`);
@@ -282,7 +327,7 @@ export class ConfigInfoProvider {
                 }
             }, Math.min(timeoutMs, cliVersionProbeTimeoutMs));
             cancellation = cancellationToken?.onCancellationRequested(() => {
-                settle('unavailable');
+                settle(null);
                 if (childProcess) {
                     void terminateCliProcess(childProcess, 'cancelled Aspire CLI version probe').catch(error => {
                         extensionLogOutputChannel.error(`Failed to terminate cancelled Aspire CLI version probe: ${String(error)}`);
@@ -303,13 +348,13 @@ export class ConfigInfoProvider {
                     },
                     exitCallback: code => {
                         if (code !== 0 || outputTooLong) {
-                            settle('unavailable');
+                            settle(null);
                             return;
                         }
 
                         const version = parseCliVersion(output);
                         if (!version) {
-                            settle('unavailable');
+                            settle(null);
                             return;
                         }
 
@@ -318,9 +363,13 @@ export class ConfigInfoProvider {
                         // introduced the option, so treat it as known unsupported. Prerelease/dev
                         // builds with a higher numeric core remain supported because the feature
                         // already exists on that later release line.
-                        settle(comparison > 0 || (comparison === 0 && (!version.isPrerelease || minimumVersion.isPrerelease))
-                            ? 'supported'
-                            : 'unsupported');
+                        settle({
+                            cliPath,
+                            version: version.value,
+                            status: comparison > 0 || (comparison === 0 && (!version.isPrerelease || minimumVersion.isPrerelease))
+                                ? 'supported'
+                                : 'unsupported',
+                        });
                     },
                     errorCallback: reportUnavailable,
                     noExtensionVariables: true,
@@ -601,6 +650,7 @@ function parseCliVersion(value: string): CliVersion | undefined {
     }
 
     return {
+        value: normalized,
         major: Number.parseInt(match[1], 10),
         minor: Number.parseInt(match[2], 10),
         patch: Number.parseInt(match[3], 10),

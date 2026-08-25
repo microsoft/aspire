@@ -12,7 +12,7 @@ import AspireDcpServer from './dcp/AspireDcpServer';
 import { TestRunSessionManager } from './dcp/TestRunSessionManager';
 import { AspireTerminalProvider } from './utils/AspireTerminalProvider';
 import { MessageConnection } from 'vscode-jsonrpc';
-import { checkForExistingAppHostPathInWorkspace } from './utils/workspace';
+import { checkForExistingAppHostPathInWorkspace, onDidResolveCliForOperation } from './utils/workspace';
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
@@ -38,6 +38,7 @@ import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
 import { initializeHotReloadAdvisory } from './debugger/hotReload';
+import { OutdatedCliNotifier } from './utils/outdatedCliNotifier';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -101,6 +102,13 @@ export async function activate(context: vscode.ExtensionContext) {
   terminalProvider.closeAllOpenAspireTerminals();
 
   const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+  const outdatedCliNotifier = new OutdatedCliNotifier(configInfoProvider);
+  context.subscriptions.push(outdatedCliNotifier);
+  context.subscriptions.push(onDidResolveCliForOperation(({ target, cliPath }) => {
+    void outdatedCliNotifier.notifyIfOutdated(target, cliPath).catch(error => {
+      extensionLogOutputChannel.warn(`Unable to check Aspire CLI version: ${String(error)}`);
+    });
+  }));
   const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
   context.subscriptions.push(appHostDiscoveryService);
 
@@ -119,7 +127,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
-  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
+  const dataRepository = new AppHostDataRepository(
+    terminalProvider,
+    appHostDiscoveryService,
+    configInfoProvider,
+    () => {
+      void outdatedCliNotifier.notifyForActiveCliTargets().catch(error => {
+        extensionLogOutputChannel.warn(`Unable to check Aspire CLI version: ${String(error)}`);
+      });
+    });
   appHostLaunchService.setEditorSessionProvider(() => aspireExtensionContext.aspireDebugSessions);
   appHostLaunchService.setRunningAppHostProvider(async token => {
     const appHosts = await dataRepository.fetchRunningAppHostsOnce(token);

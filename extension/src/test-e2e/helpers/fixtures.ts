@@ -442,6 +442,22 @@ export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initia
     return { cliPath, invocationLogPath };
 }
 
+export function writeOutdatedCliWarningWrapper(version = '13.4.9'): { cliPath: string; cleanup: () => void } {
+    const name = 'aspire-outdated-cli-warning';
+    const cliPath = writeCliWrapper(name, {
+        versionOutput: version,
+    });
+    const scriptPath = path.join(path.dirname(cliPath), `${name}.js`);
+
+    return {
+        cliPath,
+        cleanup: () => {
+            removePath(cliPath, { force: true });
+            removePath(scriptPath, { force: true });
+        },
+    };
+}
+
 export function getCliWrapperInvocationCount(invocationLogPath: string): number {
     if (!fs.existsSync(invocationLogPath)) {
         return 0;

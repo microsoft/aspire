@@ -6213,6 +6213,29 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
+    test('notifies only when Aspire data sources become active', () => {
+        let activationCount = 0;
+        const repository = new AppHostDataRepository(
+            terminalProvider,
+            undefined,
+            undefined,
+            () => activationCount++);
+
+        repository.activate();
+        assert.strictEqual(activationCount, 0);
+
+        repository.setPanelVisible(true);
+        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+        assert.strictEqual(activationCount, 1);
+
+        repository.setPanelVisible(false);
+        repository.setAppHostFilesOpen([]);
+        repository.setPanelVisible(true);
+        assert.strictEqual(activationCount, 2);
+
+        repository.dispose();
+    });
+
     test('global ps follow and one-shot refresh resolve with the window target', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 

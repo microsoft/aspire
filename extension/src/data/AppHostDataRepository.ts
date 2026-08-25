@@ -147,7 +147,12 @@ export class AppHostDataRepository {
     private _disposed = false;
     private readonly _cliRunner: AppHostCliRunner;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService, configInfoProvider?: ConfigInfoProvider) {
+    constructor(
+        private readonly _terminalProvider: AspireTerminalProvider,
+        appHostDiscoveryService?: AppHostDiscoveryService,
+        configInfoProvider?: ConfigInfoProvider,
+        private readonly _onDataActivated?: () => void,
+    ) {
         this._cliRunner = new AppHostCliRunner(_terminalProvider);
         this._psPoller = new AppHostPsPoller(
             _terminalProvider,
@@ -286,6 +291,9 @@ export class AppHostDataRepository {
         if (this._dataActive) {
             this._hasEverBeenDataActive = true;
         }
+        if (becameDataActive) {
+            this._onDataActivated?.();
+        }
         this._syncPolling(resumedFromInactive);
     }
 
@@ -299,6 +307,9 @@ export class AppHostDataRepository {
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         this._hasEverBeenDataActive = true;
+        if (becameDataActive) {
+            this._onDataActivated?.();
+        }
         this._syncPolling(resumedFromInactive);
 
         let disposed = false;
@@ -337,6 +348,9 @@ export class AppHostDataRepository {
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
             this._hasEverBeenDataActive = true;
+        }
+        if (becameDataActive) {
+            this._onDataActivated?.();
         }
         // Re-scope the displayed AppHosts against the new open-tab set right away.
         this._handlePsSnapshot(this._appHosts, { force: true });

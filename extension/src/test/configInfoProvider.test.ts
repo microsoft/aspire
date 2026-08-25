@@ -267,6 +267,68 @@ suite('configInfoProvider tests', () => {
         assert.deepStrictEqual(spawnStub.secondCall.args[2], ['config', 'info', '--json']);
     });
 
+    test('getCliVersionStatus enforces the 13.5 stable boundary without running config info', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const versions = [
+            ['13.4.99', 'unsupported'],
+            ['13.5.0-preview.1.12345.6', 'unsupported'],
+            ['13.5.0', 'supported'],
+            ['13.5.1+abcdef', 'supported'],
+            ['14.0.0-preview.1', 'supported'],
+        ] as const;
+        let versionIndex = 0;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, '/exact/aspire');
+            assert.deepStrictEqual(args, ['--version']);
+            options?.stdoutCallback?.(`${versions[versionIndex++][0]}\n`);
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        for (const [version, expectedStatus] of versions) {
+            assert.deepStrictEqual(
+                await provider.getCliVersionStatus('13.5.0', { cliPath: '/exact/aspire' }),
+                {
+                    cliPath: '/exact/aspire',
+                    version,
+                    status: expectedStatus,
+                });
+        }
+
+        assert.strictEqual(spawnStub.callCount, versions.length);
+        for (const call of spawnStub.getCalls()) {
+            assert.strictEqual(call.args[3]?.createProcessGroup, true);
+            assert.strictEqual(call.args[3]?.noExtensionVariables, true);
+        }
+    });
+
+    test('getCliVersionStatus keeps failed and malformed probes silent', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        let attempt = 0;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            if (attempt++ === 0) {
+                options?.exitCallback?.(1);
+            } else {
+                options?.stdoutCallback?.('Aspire CLI 13.4.0');
+                options?.exitCallback?.(0);
+            }
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        assert.strictEqual(await provider.getCliVersionStatus('13.5.0', { cliPath: '/exact/aspire' }), null);
+        assert.strictEqual(await provider.getCliVersionStatus('13.5.0', { cliPath: '/exact/aspire' }), null);
+        assert.strictEqual(showErrorMessage.callCount, 0);
+    });
+
     test('getCapabilityStatus uses advertised capabilities before the minimum-version fallback', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
