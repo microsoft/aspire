@@ -143,6 +143,58 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommand_IntegrationTestTemplateRejectsMissingAppHostBeforeTemplateSelection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Missing.AppHost", "Missing.AppHost.csproj");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
+        var promptedForTemplate = false;
+        var generatedProject = false;
+        TestInteractionService? interactionService = null;
+        var runner = CreateTestRunnerWithStandardPackages();
+        runner.NewProjectAsyncCallback = (_, _, _, _, _) =>
+        {
+            generatedProject = true;
+            return 0;
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => runner;
+            options.InteractionServiceFactory = _ =>
+            {
+                interactionService = new TestInteractionService();
+                return interactionService;
+            };
+            options.NewCommandPrompterFactory = serviceProvider =>
+            {
+                var prompter = new TestNewCommandPrompter(serviceProvider.GetRequiredService<IInteractionService>())
+                {
+                    PromptForTemplateCallback = templates =>
+                    {
+                        promptedForTemplate = true;
+                        return templates[0];
+                    }
+                };
+                return prompter;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new aspire-test --name AppHost.Tests --output \"{outputPath}\" --apphost \"{appHostPath}\" --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
+        Assert.False(promptedForTemplate);
+        Assert.False(generatedProject);
+        Assert.NotNull(interactionService);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Equal(InteractionServiceStrings.ProjectOptionDoesntExist, error);
+    }
+
+    [Fact]
     public void NewCommand_IntegrationTestTemplateAppHostOptionDescribesProjectFile()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
