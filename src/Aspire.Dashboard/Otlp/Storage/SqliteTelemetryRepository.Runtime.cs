@@ -340,22 +340,31 @@ public sealed partial class SqliteTelemetryRepository
             watchers = _spanWatchers?.ToArray() ?? [];
         }
 
-        foreach (var span in spans)
+        var spanIdentities = spans.Select(span => (span.TraceId, span.SpanId)).ToArray();
+        foreach (var watcher in watchers)
         {
-            foreach (var watcher in watchers)
+            var request = watcher.Request;
+            var matchingIdentities = new HashSet<(string TraceId, string SpanId)>();
+            foreach (var identityBatch in spanIdentities.Chunk(MaxSpanDetailBatchSize))
             {
-                var request = watcher.Request;
-                if (request.ResourceKeys is { Count: > 0 } keys &&
-                    !keys.Contains(span.Source.ResourceKey) &&
-                    (span.UninstrumentedPeer is null || !keys.Contains(span.UninstrumentedPeer.ResourceKey)))
+                matchingIdentities.UnionWith(GetMatchingSpanIdentitiesFromDatabase(new GetSpansRequest
                 {
-                    continue;
-                }
-                if (!MatchesSpanWatcherRequest(span, request))
+                    ResourceKeys = request.ResourceKeys,
+                    StartIndex = 0,
+                    Count = identityBatch.Length,
+                    Filters = request.Filters,
+                    TraceId = request.TraceId,
+                    HasError = request.HasError,
+                    TextFragments = request.TextFragments,
+                    SpanIdentities = identityBatch
+                }));
+            }
+            foreach (var span in spans)
+            {
+                if (matchingIdentities.Contains((span.TraceId, span.SpanId)))
                 {
-                    continue;
+                    watcher.Channel.Writer.TryWrite(span);
                 }
-                watcher.Channel.Writer.TryWrite(span);
             }
         }
     }
@@ -368,82 +377,31 @@ public sealed partial class SqliteTelemetryRepository
             watchers = _logWatchers?.ToArray() ?? [];
         }
 
-        foreach (var log in logs)
+        var logIds = logs.Select(log => log.InternalId).ToArray();
+        foreach (var watcher in watchers)
         {
-            foreach (var watcher in watchers)
+            var request = watcher.Request;
+            var matchingIds = new HashSet<long>();
+            foreach (var logIdBatch in logIds.Chunk(MaxLogAttributeReadBatchSize))
             {
-                var request = watcher.Request;
-                if (request.ResourceKeys is { Count: > 0 } keys && !keys.Contains(log.ResourceView.ResourceKey))
+                matchingIds.UnionWith(GetMatchingLogIdsFromDatabase(new GetLogsContext
                 {
-                    continue;
-                }
-                if (!MatchesLogWatcherRequest(log, request))
+                    ResourceKeys = request.ResourceKeys,
+                    StartIndex = 0,
+                    Count = logIdBatch.Length,
+                    Filters = request.Filters,
+                    TextFragments = request.TextFragments,
+                    LogIds = logIdBatch
+                }));
+            }
+            foreach (var log in logs)
+            {
+                if (matchingIds.Contains(log.InternalId))
                 {
-                    continue;
+                    watcher.Channel.Writer.TryWrite(log);
                 }
-                watcher.Channel.Writer.TryWrite(log);
             }
         }
-    }
-
-    private static bool MatchesSpanWatcherRequest(OtlpSpan span, WatchSpansRequest request)
-    {
-        if (!string.IsNullOrEmpty(request.TraceId) && !OtlpHelpers.MatchTelemetryId(request.TraceId, span.TraceId))
-        {
-            return false;
-        }
-        if (request.HasError.HasValue && (span.Status == OtlpSpanStatusCode.Error) != request.HasError.Value)
-        {
-            return false;
-        }
-        if (request.Filters.Any(filter => filter.Enabled && !filter.Apply(span)))
-        {
-            return false;
-        }
-        return request.TextFragments is not { Length: > 0 } fragments || MatchesSpanTextFragments(span, fragments);
-    }
-
-    private static bool MatchesLogWatcherRequest(OtlpLogEntry log, WatchLogsRequest request)
-    {
-        IEnumerable<OtlpLogEntry> matches = [log];
-        foreach (var filter in request.Filters.Where(filter => filter.Enabled))
-        {
-            matches = filter.Apply(matches);
-        }
-        return matches.Any() &&
-            (request.TextFragments is not { Length: > 0 } fragments || MatchesLogTextFragments(log, fragments));
-    }
-
-    private static bool MatchesSpanTextFragments(OtlpSpan span, string[] fragments)
-    {
-        return SearchTextParser.MatchesAllFragments(fragments, span, static (candidate, fragment) =>
-            candidate.Name.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.SpanId.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.TraceId.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.Scope.Name.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.Source.Resource.ResourceName.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.Status.ToString().Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.Kind.ToString().Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.StatusMessage?.Contains(fragment, StringComparisons.FullTextSearch) == true ||
-            candidate.Attributes.Any(attribute =>
-                attribute.Key.Contains(fragment, StringComparisons.FullTextSearch) ||
-                attribute.Value.Contains(fragment, StringComparisons.FullTextSearch)) ||
-            candidate.Events.Any(spanEvent => spanEvent.Name.Contains(fragment, StringComparisons.FullTextSearch)));
-    }
-
-    private static bool MatchesLogTextFragments(OtlpLogEntry log, string[] fragments)
-    {
-        return SearchTextParser.MatchesAllFragments(fragments, log, static (candidate, fragment) =>
-            candidate.Message.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.Scope.Name.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.TraceId.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.SpanId.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.Severity.ToString().Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.ResourceView.Resource.ResourceName.Contains(fragment, StringComparisons.FullTextSearch) ||
-            candidate.EventName?.Contains(fragment, StringComparisons.FullTextSearch) == true ||
-            candidate.Attributes.Any(attribute =>
-                attribute.Key.Contains(fragment, StringComparisons.FullTextSearch) ||
-                attribute.Value.Contains(fragment, StringComparisons.FullTextSearch)));
     }
 
     private void DisposeWatchers()

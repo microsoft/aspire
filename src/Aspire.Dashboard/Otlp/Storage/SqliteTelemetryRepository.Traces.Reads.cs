@@ -373,6 +373,11 @@ public sealed partial class SqliteTelemetryRepository
         {
             var sourcePredicate = BuildStringPredicate("r.resource_name", condition, parameterName);
             var peerPredicate = BuildStringPredicate("pr.resource_name", condition, parameterName);
+            if (condition is FilterCondition.NotEqual or FilterCondition.NotContains)
+            {
+                return $"({sourcePredicate} AND (pr.resource_id IS NULL OR {peerPredicate}))";
+            }
+
             return $"({sourcePredicate} OR (pr.resource_id IS NOT NULL AND {peerPredicate}))";
         }
 
@@ -421,6 +426,19 @@ public sealed partial class SqliteTelemetryRepository
             WHERE 1 = 1
             """);
         var parameters = new DynamicParameters();
+        if (context.SpanIdentities is { Count: > 0 })
+        {
+            var identityPredicates = new List<string>(context.SpanIdentities.Count);
+            for (var index = 0; index < context.SpanIdentities.Count; index++)
+            {
+                parameters.Add($"SpanIdentityTraceId{index}", context.SpanIdentities[index].TraceId);
+                parameters.Add($"SpanIdentitySpanId{index}", context.SpanIdentities[index].SpanId);
+                identityPredicates.Add($"(s.trace_id = @SpanIdentityTraceId{index} AND s.span_id = @SpanIdentitySpanId{index})");
+            }
+            sql.Append(" AND (");
+            sql.AppendJoin(" OR ", identityPredicates);
+            sql.Append(')');
+        }
         if (context.ResourceKeys.Count > 0)
         {
             var predicates = new List<string>(context.ResourceKeys.Count);
@@ -464,6 +482,8 @@ public sealed partial class SqliteTelemetryRepository
         {
             if (filter is not FieldTelemetryFilter fieldFilter)
             {
+                sql.Append(" AND ");
+                sql.Append(BuildSpanTypePredicate(filter, parameters, ref filterIndex));
                 continue;
             }
             if (fieldFilter.Field == KnownTraceFields.DurationField)
@@ -512,6 +532,8 @@ public sealed partial class SqliteTelemetryRepository
                         s.trace_id LIKE @{parameterName} ESCAPE '!' OR
                         sc.scope_name LIKE @{parameterName} ESCAPE '!' OR
                         r.resource_name LIKE @{parameterName} ESCAPE '!' OR
+                        COALESCE(pr.resource_name, '') LIKE @{parameterName} ESCAPE '!' OR
+                        s.display_summary LIKE @{parameterName} ESCAPE '!' OR
                         ss.status_name LIKE @{parameterName} ESCAPE '!' OR
                         sk.kind_name LIKE @{parameterName} ESCAPE '!' OR
                         COALESCE(s.status_message, '') LIKE @{parameterName} ESCAPE '!' OR
@@ -522,6 +544,15 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
         return new TraceQuery(sql.ToString(), parameters);
+    }
+
+    private HashSet<(string TraceId, string SpanId)> GetMatchingSpanIdentitiesFromDatabase(GetSpansRequest context)
+    {
+        using var connection = _database.OpenConnection();
+        var query = BuildSpanQuery(context);
+        return connection.Query<SpanIdentityRecord>($"SELECT s.trace_id AS TraceId, s.span_id AS SpanId {query.FromAndWhere};", query.Parameters)
+            .Select(identity => (identity.TraceId, identity.SpanId))
+            .ToHashSet();
     }
 
     private List<string> GetTracePropertyKeysFromDatabase(ResourceKey? resourceKey, CancellationToken cancellationToken)

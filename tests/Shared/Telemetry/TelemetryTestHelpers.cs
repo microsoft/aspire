@@ -6,20 +6,11 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Configuration;
-#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
-using Aspire.Dashboard.Model;
-#endif
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
-#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
-using Aspire.Dashboard.Otlp.Storage;
-#endif
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
-using Microsoft.Extensions.Options;
-#endif
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -244,63 +235,6 @@ internal static class TelemetryTestHelpers
 
         return resource;
     }
-
-#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
-    public static InMemoryTelemetryRepository CreateRepository(
-        int? maxMetricsCount = null,
-        int? maxAttributeCount = null,
-        int? maxAttributeLength = null,
-        int? maxSpanEventCount = null,
-        int? maxTraceCount = null,
-        int? maxLogCount = null,
-        int? maxResourceCount = null,
-        TimeSpan? subscriptionMinExecuteInterval = null,
-        ILoggerFactory? loggerFactory = null,
-        PauseManager? pauseManager = null,
-        IOutgoingPeerResolver[]? outgoingPeerResolvers = null)
-    {
-        var options = new TelemetryLimitOptions();
-        if (maxMetricsCount != null)
-        {
-            options.MaxMetricsCount = maxMetricsCount.Value;
-        }
-        if (maxAttributeCount != null)
-        {
-            options.MaxAttributeCount = maxAttributeCount.Value;
-        }
-        if (maxAttributeLength != null)
-        {
-            options.MaxAttributeLength = maxAttributeLength.Value;
-        }
-        if (maxSpanEventCount != null)
-        {
-            options.MaxSpanEventCount = maxSpanEventCount.Value;
-        }
-        if (maxTraceCount != null)
-        {
-            options.MaxTraceCount = maxTraceCount.Value;
-        }
-        if (maxLogCount != null)
-        {
-            options.MaxLogCount = maxLogCount.Value;
-        }
-        if (maxResourceCount != null)
-        {
-            options.MaxResourceCount = maxResourceCount.Value;
-        }
-
-        var repository = new InMemoryTelemetryRepository(
-            loggerFactory ?? NullLoggerFactory.Instance,
-            Options.Create(new DashboardOptions { TelemetryLimits = options }),
-            pauseManager ?? new PauseManager(),
-            outgoingPeerResolvers ?? []);
-        if (subscriptionMinExecuteInterval != null)
-        {
-            repository._subscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
-        }
-        return repository;
-    }
-#endif
 
     public static ulong DateTimeToUnixNanoseconds(DateTime dateTime)
     {
