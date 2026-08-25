@@ -5,8 +5,8 @@
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIRECOMPUTE002
 
-using Aspire.Hosting.Utils;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Utils;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -91,6 +91,27 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public void AddAzureApiManagementRejectsPublisherFieldsOverMaximumLength()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var emailException = Assert.Throws<ArgumentException>(() =>
+            builder.AddAzureApiManagement("email-apim", new()
+            {
+                PublisherEmail = new string('a', 101),
+            }));
+        var nameException = Assert.Throws<ArgumentException>(() =>
+            builder.AddAzureApiManagement("name-apim", new()
+            {
+                PublisherEmail = "api-owners@example.com",
+                PublisherName = new string('a', 101),
+            }));
+
+        Assert.Contains("publisher email address", emailException.Message);
+        Assert.Contains("publisher name", nameException.Message);
+    }
+
+    [Fact]
     public void AddApiAndOperationCreateParentedResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -159,6 +180,33 @@ public class AzureApiManagementTests
             apim.AddApi("invalid-api", backend, "invalid", apiName: "invalid?api"));
         Assert.Throws<ArgumentException>(() =>
             api.AddOperation("invalid-operation", "GET", "/", operationName: new string('o', 81)));
+    }
+
+    [Fact]
+    public void ApiAndOperationValidatePropertyLengthConstraints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var api = apim.AddApi("catalog-api", backend, "catalog");
+
+        Assert.Throws<ArgumentException>(() =>
+            apim.AddApi("long-path-api", backend, new string('p', 401)));
+        Assert.Throws<ArgumentException>(() =>
+            apim.AddApi("long-display-api", backend, "long-display", new string('d', 301)));
+        Assert.Throws<ArgumentException>(() =>
+            apim.AddApi("blank-display-api", backend, "blank-display", " "));
+        Assert.Throws<ArgumentException>(() =>
+            api.AddOperation("long-template", "GET", new string('u', 1001)));
+        Assert.Throws<ArgumentException>(() =>
+            api.AddOperation("long-display", "GET", "/", new string('d', 301)));
+        Assert.Throws<ArgumentException>(() =>
+            api.AddOperation("blank-display", "GET", "/", " "));
     }
 
     [Fact]
@@ -485,6 +533,96 @@ public class AzureApiManagementTests
         Assert.Contains("not supported by the API Management Consumption SKU", exception.Message);
     }
 
+    [Theory]
+    [InlineData(AzureApiManagementSku.BasicV2)]
+    [InlineData(AzureApiManagementSku.StandardV2)]
+    [InlineData(AzureApiManagementSku.PremiumV2)]
+    public void V2SkusRejectManagementAndScmCustomDomains(AzureApiManagementSku sku)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = sku,
+        });
+
+        Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain(
+                "management.contoso.example",
+                vault.GetSecret("management-certificate"),
+                AzureApiManagementHostnameType.Management));
+        Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain(
+                "scm.contoso.example",
+                vault.GetSecret("scm-certificate"),
+                AzureApiManagementHostnameType.Scm));
+    }
+
+    [Theory]
+    [InlineData(AzureApiManagementSku.Basic)]
+    [InlineData(AzureApiManagementSku.BasicV2)]
+    [InlineData(AzureApiManagementSku.Standard)]
+    [InlineData(AzureApiManagementSku.StandardV2)]
+    public void NonPremiumProductionSkusRejectMultipleGatewayCustomDomains(AzureApiManagementSku sku)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = sku,
+        });
+        apim.WithCustomDomain("api.contoso.example", vault.GetSecret("certificate"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain("api2.contoso.example", vault.GetSecret("certificate-2")));
+
+        Assert.Contains("Multiple gateway custom domains", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(AzureApiManagementSku.Developer)]
+    [InlineData(AzureApiManagementSku.Premium)]
+    [InlineData(AzureApiManagementSku.PremiumV2)]
+    public void SupportedSkusAllowMultipleGatewayCustomDomains(AzureApiManagementSku sku)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = sku,
+        });
+
+        apim.WithCustomDomain("api.contoso.example", vault.GetSecret("certificate"));
+        apim.WithCustomDomain("api2.contoso.example", vault.GetSecret("certificate-2"));
+
+        Assert.Equal(2, apim.Resource.CustomDomains.Count);
+    }
+
+    [Fact]
+    public void ProductRejectsSubscriptionLimitWhenSubscriptionsAreDisabled()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            apim.AddProduct(
+                "product",
+                "Product",
+                new()
+                {
+                    SubscriptionRequired = false,
+                    SubscriptionsLimit = 1,
+                }));
+
+        Assert.Contains("only be configured when subscriptions are required", exception.Message);
+    }
+
     [Fact]
     public async Task AddAzureApiManagementWithInternalContainerAppBackendGeneratesBicep()
     {
@@ -510,7 +648,7 @@ public class AzureApiManagementTests
 
         var (manifest, bicep) = await GetManifestWithBicep(apim.Resource);
 
-        Assert.Contains("param catalog_api_url string", bicep);
+        Assert.Contains("param _apim_computeBackendUrl_catalog_api string", bicep);
         Assert.Contains("catalog-backend.internal", manifest.ToJsonString());
     }
 
@@ -656,6 +794,42 @@ public class AzureApiManagementTests
         Assert.Contains("openai/deployments/chat", manifestJson);
         Assert.Single(bicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Skip(1));
         Assert.Contains("5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", bicep);
+    }
+
+    [Fact]
+    public async Task GeneratedBicepIdentifiersCannotCollideWithUserResourceNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithComputeEnvironment(environment)
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        }).WithInboundPolicy("<set-header name=\"x-test\" exists-action=\"override\"><value>true</value></set-header>");
+        var api = apim.AddApi("apimPolicy", backend, "catalog")
+            .WithInboundPolicy("<set-header name=\"x-api\" exists-action=\"override\"><value>true</value></set-header>");
+        api.AddOperation("apimPolicyProxy", "GET", "/products")
+            .WithInboundPolicy("<set-header name=\"x-operation\" exists-action=\"override\"><value>true</value></set-header>");
+        apim.AddBackend("apimPolicyBackend", ReferenceExpression.Create($"https://example.com"));
+        apim.AddNamedValue("apimPolicyPolicy", "api-policy-collision");
+        apim.AddNamedValue("apimPolicyProxyPolicy", "operation-policy-collision");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+        var declarations = bicep.Split('\n')
+            .Where(line => line.StartsWith("resource ", StringComparison.Ordinal) ||
+                line.StartsWith("param ", StringComparison.Ordinal) ||
+                line.StartsWith("output ", StringComparison.Ordinal))
+            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1])
+            .ToArray();
+
+        Assert.Equal(declarations.Length, declarations.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains("resource _apim_", bicep);
     }
 
     [Fact]

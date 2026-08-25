@@ -129,16 +129,16 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             await auto.TypeAsync(
-                $"GATEWAY=$(az apim list -g \"{resourceGroupName}\" --query \"[0].gatewayUrl\" -o tsv) && " +
+                $"GATEWAY=$(az apim list -g \"{resourceGroupName}\" --subscription \"{subscriptionId}\" --query \"[0].gatewayUrl\" -o tsv) && " +
                 "[ -n \"$GATEWAY\" ] && " +
-                $"BACKEND=$(az containerapp show -g \"{resourceGroupName}\" -n apiservice --query \"properties.configuration.ingress.fqdn\" -o tsv) && " +
+                $"BACKEND=$(az containerapp show -g \"{resourceGroupName}\" -n apiservice --subscription \"{subscriptionId}\" --query \"properties.configuration.ingress.fqdn\" -o tsv) && " +
                 "[ -n \"$BACKEND\" ] && " +
-                "if getent hosts \"$BACKEND\" >/dev/null; then BACKEND_PRIVATE=0; else BACKEND_PRIVATE=1; fi; " +
+                "{ if getent hosts \"$BACKEND\" >/dev/null; then BACKEND_PRIVATE=0; else BACKEND_PRIVATE=1; fi; " +
                 "OK=0; for i in $(seq 1 24); do " +
                 "STATUS=$(curl -s -o /tmp/apim-response.json -w \"%{http_code}\" \"$GATEWAY/api/weatherforecast\" --max-time 30); " +
                 "if [ \"$STATUS\" = \"200\" ]; then cat /tmp/apim-response.json; OK=1; break; fi; " +
                 "echo \"Attempt $i returned $STATUS; retrying in 10s\"; sleep 10; " +
-                "done; [ \"$BACKEND_PRIVATE\" = \"1\" ] && [ \"$OK\" = \"1\" ]");
+                "done; [ \"$BACKEND_PRIVATE\" = \"1\" ] && [ \"$OK\" = \"1\" ]; }");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(12));
 
@@ -163,25 +163,32 @@ builder.Build().Run();
         }
         finally
         {
-            TriggerCleanupResourceGroup(resourceGroupName);
+            TriggerCleanupResourceGroup(resourceGroupName, subscriptionId);
             DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
     }
 
-    private static void TriggerCleanupResourceGroup(string resourceGroupName)
+    private static void TriggerCleanupResourceGroup(string resourceGroupName, string subscriptionId)
     {
         using var process = new System.Diagnostics.Process
         {
             StartInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "az",
-                Arguments = $"group delete --name {resourceGroupName} --yes --no-wait",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             },
         };
+        process.StartInfo.ArgumentList.Add("group");
+        process.StartInfo.ArgumentList.Add("delete");
+        process.StartInfo.ArgumentList.Add("--name");
+        process.StartInfo.ArgumentList.Add(resourceGroupName);
+        process.StartInfo.ArgumentList.Add("--subscription");
+        process.StartInfo.ArgumentList.Add(subscriptionId);
+        process.StartInfo.ArgumentList.Add("--yes");
+        process.StartInfo.ArgumentList.Add("--no-wait");
 
         process.Start();
     }

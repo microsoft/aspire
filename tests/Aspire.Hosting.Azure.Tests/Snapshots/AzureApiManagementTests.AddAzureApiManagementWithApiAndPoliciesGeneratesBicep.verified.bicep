@@ -1,7 +1,7 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param catalog_api_url string
+param _apim_computeBackendUrl_catalog_api string
 
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   name: take('apim${uniqueString(resourceGroup().id)}', 24)
@@ -24,7 +24,7 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   }
 }
 
-resource apimPolicy 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
+resource _apim_servicePolicy_apim 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
@@ -33,11 +33,11 @@ resource apimPolicy 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
   parent: apim
 }
 
-resource catalog_apiBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+resource _apim_computeBackend_catalog_api 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   name: 'catalog_apiBackend'
   properties: {
     protocol: 'http'
-    url: catalog_api_url
+    url: _apim_computeBackendUrl_catalog_api
     title: 'Catalog API'
     type: 'Single'
     tls: {
@@ -62,7 +62,7 @@ resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   parent: apim
 }
 
-resource catalog_apiProxy 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+resource _apim_proxyOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
   name: 'proxy'
   properties: {
     displayName: 'Proxy'
@@ -89,7 +89,7 @@ resource get_product 'Microsoft.ApiManagement/service/apis/operations@2024-05-01
   parent: catalog_api
 }
 
-resource get_productPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = {
+resource _apim_operationPolicy_get_product 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
@@ -98,7 +98,7 @@ resource get_productPolicy 'Microsoft.ApiManagement/service/apis/operations/poli
   parent: get_product
 }
 
-resource catalog_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
@@ -106,7 +106,7 @@ resource catalog_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-0
   }
   parent: catalog_api
   dependsOn: [
-    catalog_apiBackend
+    _apim_computeBackend_catalog_api
   ]
 }
 

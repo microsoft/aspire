@@ -1,9 +1,9 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param chat_primary_backend_url string
+param _apim_backendUrl_chat_primary_backend string
 
-param chat_secondary_backend_url string
+param _apim_backendUrl_chat_secondary_backend string
 
 param foundry_primary_outputs_name string
 
@@ -34,7 +34,7 @@ resource chat_primary_backend 'Microsoft.ApiManagement/service/backends@2024-05-
   name: 'chat-primary-backend'
   properties: {
     protocol: 'http'
-    url: chat_primary_backend_url
+    url: _apim_backendUrl_chat_primary_backend
     title: 'chat-primary-backend'
     type: 'Single'
     tls: {
@@ -68,7 +68,7 @@ resource chat_secondary_backend 'Microsoft.ApiManagement/service/backends@2024-0
   name: 'chat-secondary-backend'
   properties: {
     protocol: 'http'
-    url: chat_secondary_backend_url
+    url: _apim_backendUrl_chat_secondary_backend
     title: 'chat-secondary-backend'
     type: 'Single'
     tls: {
@@ -167,7 +167,7 @@ resource openai_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   parent: apim
 }
 
-resource openai_apiProxy 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+resource _apim_proxyOperation_openai_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
   name: 'proxy'
   properties: {
     displayName: 'Proxy'
@@ -187,7 +187,7 @@ resource openai_api_chat_completions 'Microsoft.ApiManagement/service/apis/opera
   parent: openai_api
 }
 
-resource openai_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+resource _apim_apiPolicy_openai_api 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'

@@ -6,12 +6,12 @@ param vault_outputs_name string
 @secure()
 param api_key_value string
 
-param catalog_api_url string
+param _apim_computeBackendUrl_catalog_api string
 
 param insights_outputs_name string
 
-resource apimKeyVaultIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: take('apimKeyVaultIdentity-${uniqueString(resourceGroup().id)}', 128)
+resource _apim_keyVaultIdentity_apim 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: take('_apim_keyVaultIdentity_apim-${uniqueString(resourceGroup().id)}', 128)
   location: location
 }
 
@@ -25,9 +25,9 @@ resource vault_gateway_certificate 'Microsoft.KeyVault/vaults/secrets@2024-11-01
 }
 
 resource vault_KeyVaultCertificateUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(vault.id, apimKeyVaultIdentity.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba'))
+  name: guid(vault.id, _apim_keyVaultIdentity_apim.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba'))
   properties: {
-    principalId: apimKeyVaultIdentity.properties.principalId
+    principalId: _apim_keyVaultIdentity_apim.properties.principalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
     principalType: 'ServicePrincipal'
   }
@@ -47,7 +47,7 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
         type: 'Proxy'
         hostName: 'api.contoso.example'
         keyVaultId: '${vault.properties.vaultUri}secrets/gateway-certificate'
-        identityClientId: apimKeyVaultIdentity.properties.clientId
+        identityClientId: _apim_keyVaultIdentity_apim.properties.clientId
         defaultSslBinding: true
         negotiateClientCertificate: false
       }
@@ -60,7 +60,7 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   identity: {
     type: 'SystemAssigned, UserAssigned'
     userAssignedIdentities: {
-      '${apimKeyVaultIdentity.id}': { }
+      '${_apim_keyVaultIdentity_apim.id}': { }
     }
   }
   tags: {
@@ -110,9 +110,9 @@ resource vault_upstream_secret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' ex
 }
 
 resource vault_KeyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(vault.id, apimKeyVaultIdentity.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))
+  name: guid(vault.id, _apim_keyVaultIdentity_apim.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))
   properties: {
-    principalId: apimKeyVaultIdentity.properties.principalId
+    principalId: _apim_keyVaultIdentity_apim.properties.principalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
     principalType: 'ServicePrincipal'
   }
@@ -126,7 +126,7 @@ resource upstream_secret 'Microsoft.ApiManagement/service/namedValues@2024-05-01
     secret: true
     keyVault: {
       secretIdentifier: '${vault.properties.vaultUri}secrets/upstream-secret'
-      identityClientId: apimKeyVaultIdentity.properties.clientId
+      identityClientId: _apim_keyVaultIdentity_apim.properties.clientId
     }
   }
   parent: apim
@@ -135,7 +135,7 @@ resource upstream_secret 'Microsoft.ApiManagement/service/namedValues@2024-05-01
   ]
 }
 
-resource apimPolicy 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
+resource _apim_servicePolicy_apim 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
@@ -147,11 +147,11 @@ resource apimPolicy 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
   ]
 }
 
-resource catalog_apiBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+resource _apim_computeBackend_catalog_api 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   name: 'catalog_apiBackend'
   properties: {
     protocol: 'http'
-    url: catalog_api_url
+    url: _apim_computeBackendUrl_catalog_api
     title: 'catalog-api'
     type: 'Single'
     tls: {
@@ -176,7 +176,7 @@ resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   parent: apim
 }
 
-resource catalog_apiProxy 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
+resource _apim_proxyOperation_catalog_api 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
   name: 'proxy'
   properties: {
     displayName: 'Proxy'
@@ -203,7 +203,7 @@ resource get_product 'Microsoft.ApiManagement/service/apis/operations@2024-05-01
   parent: catalog_api
 }
 
-resource get_productPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = {
+resource _apim_operationPolicy_get_product 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
@@ -215,7 +215,7 @@ resource get_productPolicy 'Microsoft.ApiManagement/service/apis/operations/poli
   ]
 }
 
-resource catalog_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   name: 'policy'
   properties: {
     format: 'rawxml'
@@ -223,7 +223,7 @@ resource catalog_apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-0
   }
   parent: catalog_api
   dependsOn: [
-    catalog_apiBackend
+    _apim_computeBackend_catalog_api
     correlation
   ]
 }
@@ -241,7 +241,7 @@ resource catalog_product 'Microsoft.ApiManagement/service/products@2024-05-01' =
   parent: apim
 }
 
-resource catalog_product_catalog_api 'Microsoft.ApiManagement/service/products/apis@2024-05-01' = {
+resource _apim_productApi_catalog_product_catalog_api 'Microsoft.ApiManagement/service/products/apis@2024-05-01' = {
   name: 'catalog-api'
   parent: catalog_product
   dependsOn: [
@@ -264,7 +264,7 @@ resource insights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: insights_outputs_name
 }
 
-resource insightsLogger 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
+resource _apim_logger_insights 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
   name: 'insights-application-insights'
   properties: {
     loggerType: 'applicationInsights'
@@ -277,10 +277,10 @@ resource insightsLogger 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
   parent: apim
 }
 
-resource apimApplicationInsightsDiagnostic 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = {
+resource _apim_serviceDiagnostic_apim 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = {
   name: 'applicationinsights'
   properties: {
-    loggerId: insightsLogger.id
+    loggerId: _apim_logger_insights.id
     alwaysLog: 'allErrors'
     sampling: {
       samplingType: 'fixed'
@@ -294,14 +294,14 @@ resource apimApplicationInsightsDiagnostic 'Microsoft.ApiManagement/service/diag
   }
   parent: apim
   dependsOn: [
-    insightsLogger
+    _apim_logger_insights
   ]
 }
 
-resource catalog_apiApplicationInsightsDiagnostic 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = {
+resource _apim_apiDiagnostic_catalog_api 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = {
   name: 'applicationinsights'
   properties: {
-    loggerId: insightsLogger.id
+    loggerId: _apim_logger_insights.id
     alwaysLog: 'allErrors'
     sampling: {
       samplingType: 'fixed'
@@ -315,7 +315,7 @@ resource catalog_apiApplicationInsightsDiagnostic 'Microsoft.ApiManagement/servi
   }
   parent: catalog_api
   dependsOn: [
-    insightsLogger
+    _apim_logger_insights
   ]
 }
 

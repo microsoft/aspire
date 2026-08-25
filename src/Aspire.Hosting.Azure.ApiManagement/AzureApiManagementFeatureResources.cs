@@ -164,34 +164,34 @@ public class AzureApiManagementPolicyFragmentResource(
 public sealed class AzureApiManagementProductOptions
 {
     /// <summary>
-    /// Gets or sets the product description.
+    /// Gets the product description.
     /// </summary>
-    public string? Description { get; set; }
+    public string? Description { get; init; }
 
     /// <summary>
-    /// Gets or sets the terms of use presented to subscribers.
+    /// Gets the terms of use presented to subscribers.
     /// </summary>
-    public string? Terms { get; set; }
+    public string? Terms { get; init; }
 
     /// <summary>
-    /// Gets or sets whether a subscription is required to access APIs in the product.
+    /// Gets whether a subscription is required to access APIs in the product.
     /// </summary>
-    public bool SubscriptionRequired { get; set; } = true;
+    public bool SubscriptionRequired { get; init; } = true;
 
     /// <summary>
-    /// Gets or sets whether subscription requests require administrator approval.
+    /// Gets whether subscription requests require administrator approval.
     /// </summary>
-    public bool ApprovalRequired { get; set; }
+    public bool ApprovalRequired { get; init; }
 
     /// <summary>
-    /// Gets or sets the maximum number of subscriptions a user may create for the product. A null value allows unlimited subscriptions.
+    /// Gets the maximum number of subscriptions a user may create for the product. A null value allows unlimited subscriptions.
     /// </summary>
-    public int? SubscriptionsLimit { get; set; }
+    public int? SubscriptionsLimit { get; init; }
 
     /// <summary>
-    /// Gets or sets the product publication state.
+    /// Gets the product publication state.
     /// </summary>
-    public AzureApiManagementProductState State { get; set; } = AzureApiManagementProductState.Published;
+    public AzureApiManagementProductState State { get; init; } = AzureApiManagementProductState.Published;
 }
 
 /// <summary>
@@ -220,19 +220,19 @@ public sealed class AzureApiManagementSubscriptionOptions
 public sealed class AzureApiManagementDiagnosticOptions
 {
     /// <summary>
-    /// Gets or sets the percentage of requests to sample, from 0 to 100.
+    /// Gets the percentage of requests to sample, from 0 to 100.
     /// </summary>
-    public double SamplingPercentage { get; set; } = 100;
+    public double SamplingPercentage { get; init; } = 100;
 
     /// <summary>
-    /// Gets or sets the diagnostic verbosity.
+    /// Gets the diagnostic verbosity.
     /// </summary>
-    public AzureApiManagementDiagnosticVerbosity Verbosity { get; set; } = AzureApiManagementDiagnosticVerbosity.Information;
+    public AzureApiManagementDiagnosticVerbosity Verbosity { get; init; } = AzureApiManagementDiagnosticVerbosity.Information;
 
     /// <summary>
-    /// Gets or sets whether the client IP address is included in telemetry.
+    /// Gets whether the client IP address is included in telemetry.
     /// </summary>
-    public bool LogClientIp { get; set; }
+    public bool LogClientIp { get; init; }
 }
 
 /// <summary>

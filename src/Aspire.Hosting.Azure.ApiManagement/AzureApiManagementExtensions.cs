@@ -63,6 +63,8 @@ public static class AzureApiManagementExtensions
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrEmpty(options.PublisherEmail);
         ArgumentException.ThrowIfNullOrEmpty(options.PublisherName);
+        ValidateMaximumLength(options.PublisherEmail, 100, "The publisher email address", nameof(options));
+        ValidateMaximumLength(options.PublisherName, 100, "The publisher name", nameof(options));
         ValidateCapacity(options.Sku, options.Capacity);
 
         var resource = new AzureApiManagementResource(name, options, ConfigureInfrastructure);
@@ -218,6 +220,10 @@ public static class AzureApiManagementExtensions
         if (options.ApprovalRequired && !options.SubscriptionRequired)
         {
             throw new ArgumentException("Product approval can only be required when subscriptions are required.", nameof(options));
+        }
+        if (options.SubscriptionsLimit is not null && !options.SubscriptionRequired)
+        {
+            throw new ArgumentException("A product subscription limit can only be configured when subscriptions are required.", nameof(options));
         }
         if (options.SubscriptionsLimit is <= 0)
         {
@@ -618,6 +624,19 @@ public static class AzureApiManagementExtensions
         {
             throw new InvalidOperationException("Custom domains are not supported by the API Management Consumption SKU.");
         }
+        if (builder.Resource.Options.Sku is AzureApiManagementSku.BasicV2 or AzureApiManagementSku.StandardV2 or AzureApiManagementSku.PremiumV2 &&
+            type is AzureApiManagementHostnameType.Management or AzureApiManagementHostnameType.Scm)
+        {
+            throw new InvalidOperationException(
+                $"Custom domains for the '{type}' endpoint are not supported by API Management v2 SKUs.");
+        }
+        if (type == AzureApiManagementHostnameType.Proxy &&
+            builder.Resource.CustomDomains.Any(domain => domain.Type == AzureApiManagementHostnameType.Proxy) &&
+            builder.Resource.Options.Sku is not (AzureApiManagementSku.Developer or AzureApiManagementSku.Premium or AzureApiManagementSku.PremiumV2))
+        {
+            throw new InvalidOperationException(
+                $"Multiple gateway custom domains are not supported by the API Management '{builder.Resource.Options.Sku}' SKU.");
+        }
         if (builder.Resource.CustomDomains.Any(domain =>
             domain.Type == type &&
             string.Equals(domain.Hostname, hostname, StringComparison.OrdinalIgnoreCase)))
@@ -917,6 +936,8 @@ public static class AzureApiManagementExtensions
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
+        ValidateMaximumLength(normalizedPath, 400, "The API path", nameof(path));
+        ValidateDisplayName(displayName ?? name, "API display name", nameof(displayName));
         ValidateApiUniqueness(builder.Resource, apiName ?? name, normalizedPath);
 
         var resource = target is null
@@ -1034,6 +1055,8 @@ public static class AzureApiManagementExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(method);
         ArgumentException.ThrowIfNullOrEmpty(urlTemplate);
+        ValidateMaximumLength(urlTemplate, 1000, "The operation URL template", nameof(urlTemplate));
+        ValidateDisplayName(displayName ?? name, "operation display name", nameof(displayName));
         var physicalOperationName = operationName ?? name;
         ValidateOperationIdentifier(physicalOperationName, nameof(operationName));
 
@@ -1289,7 +1312,7 @@ public static class AzureApiManagementExtensions
             azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
         {
             keyVaultIdentity = new UserAssignedIdentity(
-                Infrastructure.NormalizeBicepIdentifier($"{azureResource.Name}KeyVaultIdentity"));
+                CreateGeneratedBicepIdentifier("keyVaultIdentity", azureResource.Name));
             infrastructure.Add(keyVaultIdentity);
 
             service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
@@ -1387,7 +1410,7 @@ public static class AzureApiManagementExtensions
         }
 
         var policy = new ApiManagementServicePolicyProvisioningResource(
-            $"{service.BicepIdentifier}Policy")
+            CreateGeneratedBicepIdentifier("servicePolicy", service.BicepIdentifier))
         {
             Parent = service,
             Name = "policy",
@@ -1521,7 +1544,7 @@ public static class AzureApiManagementExtensions
             foreach (var apiResource in productResource.Apis)
             {
                 var productApi = new ApiManagementProductApiProvisioningResource(
-                    Infrastructure.NormalizeBicepIdentifier($"{productResource.Name}_{apiResource.Name}"))
+                    CreateGeneratedBicepIdentifier("productApi", productResource.Name, apiResource.Name))
                 {
                     Parent = product,
                     Name = apiResource.ApiName,
@@ -1583,7 +1606,7 @@ public static class AzureApiManagementExtensions
 
             var applicationInsights = (ApplicationInsightsComponent)diagnostic.ApplicationInsights.AddAsExistingResource(infrastructure);
             var logger = new ApiManagementLoggerProvisioningResource(
-                Infrastructure.NormalizeBicepIdentifier($"{diagnostic.ApplicationInsights.Name}Logger"))
+                CreateGeneratedBicepIdentifier("logger", diagnostic.ApplicationInsights.Name))
             {
                 Parent = service,
                 Name = CreateBoundedIdentifier($"{diagnostic.ApplicationInsights.Name}-application-insights", 256),
@@ -1629,7 +1652,7 @@ public static class AzureApiManagementExtensions
         AzureApiManagementDiagnosticOptions options)
     {
         var diagnostic = new ApiManagementServiceDiagnosticProvisioningResource(
-            $"{service.BicepIdentifier}ApplicationInsightsDiagnostic")
+            CreateGeneratedBicepIdentifier("serviceDiagnostic", service.BicepIdentifier))
         {
             Parent = service,
             Name = "applicationinsights",
@@ -1656,7 +1679,7 @@ public static class AzureApiManagementExtensions
         AzureApiManagementDiagnosticOptions options)
     {
         var diagnostic = new ApiManagementApiDiagnosticProvisioningResource(
-            $"{api.BicepIdentifier}ApplicationInsightsDiagnostic")
+            CreateGeneratedBicepIdentifier("apiDiagnostic", api.BicepIdentifier))
         {
             Parent = api,
             Name = "applicationinsights",
@@ -1742,7 +1765,7 @@ public static class AzureApiManagementExtensions
         infrastructure.Add(api);
 
         var catchAllOperation = new ApiManagementOperationProvisioningResource(
-            $"{apiIdentifier}Proxy")
+            CreateGeneratedBicepIdentifier("proxyOperation", apiIdentifier))
         {
             Parent = api,
             Name = "proxy",
@@ -1764,7 +1787,7 @@ public static class AzureApiManagementExtensions
                 managedIdentityResource: managedIdentityResource);
 
         var policy = new ApiManagementApiPolicyProvisioningResource(
-            $"{apiIdentifier}Policy")
+            CreateGeneratedBicepIdentifier("apiPolicy", apiIdentifier))
         {
             Parent = api,
             Name = "policy",
@@ -1833,11 +1856,13 @@ public static class AzureApiManagementExtensions
             }
         }
 
-        var backendIdentifier = $"{apiIdentifier}Backend";
-        var backendName = CreateBoundedIdentifier(backendIdentifier, 80);
+        var backendIdentifier = CreateGeneratedBicepIdentifier("computeBackend", apiIdentifier);
+        var backendName = CreateBoundedIdentifier($"{apiIdentifier}Backend", 80);
         var endpointExpression = computeEnvironment.GetEndpointPropertyExpression(
             endpoint.Property(EndpointProperty.Url));
-        var backendUrl = endpointExpression.AsProvisioningParameter(infrastructure, $"{apiIdentifier}_url");
+        var backendUrl = endpointExpression.AsProvisioningParameter(
+            infrastructure,
+            CreateGeneratedBicepIdentifier("computeBackendUrl", apiIdentifier));
 
         var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
         {
@@ -1869,7 +1894,9 @@ public static class AzureApiManagementExtensions
                 Parent = service,
                 Name = backendResource.BackendName,
                 Protocol = GetProvisioningBackendProtocol(backendResource.Options.Protocol),
-                Uri = backendResource.UriExpression.AsProvisioningParameter(infrastructure, $"{backendIdentifier}_url"),
+                Uri = backendResource.UriExpression.AsProvisioningParameter(
+                    infrastructure,
+                    CreateGeneratedBicepIdentifier("backendUrl", backendIdentifier)),
                 Title = backendResource.Options.Title ?? backendResource.Name,
                 Type = "Single",
                 ValidateCertificateChain = backendResource.Options.ValidateCertificateChain,
@@ -2067,7 +2094,7 @@ public static class AzureApiManagementExtensions
         }
 
         var policy = new ApiManagementOperationPolicyProvisioningResource(
-            $"{operationIdentifier}Policy")
+            CreateGeneratedBicepIdentifier("operationPolicy", operationIdentifier))
         {
             Parent = operation,
             Name = "policy",
@@ -2245,6 +2272,14 @@ public static class AzureApiManagementExtensions
             throw new ArgumentException(
                 $"The {description} must be between 1 and 300 characters.",
                 parameterName);
+        }
+    }
+
+    private static void ValidateMaximumLength(string value, int maximumLength, string description, string parameterName)
+    {
+        if (value.Length > maximumLength)
+        {
+            throw new ArgumentException($"{description} cannot exceed {maximumLength} characters.", parameterName);
         }
     }
 
@@ -2509,6 +2544,14 @@ public static class AzureApiManagementExtensions
 
         var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..8];
         return $"{value[..(maximumLength - hash.Length - 1)]}-{hash}";
+    }
+
+    private static string CreateGeneratedBicepIdentifier(string kind, params string[] resourceNames)
+    {
+        // Aspire resource names must start with a letter, so this prefix reserves a namespace for
+        // generated APIM symbols that cannot collide with symbols derived from user resource names.
+        return Infrastructure.NormalizeBicepIdentifier(
+            string.Join('_', resourceNames.Prepend(kind).Prepend("apim").Prepend(string.Empty)));
     }
 
     private static void ValidateCapacity(AzureApiManagementSku sku, int capacity)
