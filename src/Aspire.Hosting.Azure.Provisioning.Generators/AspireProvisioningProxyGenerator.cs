@@ -17,7 +17,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private const string BicepListMetadataName = "Azure.Provisioning.BicepList<T>";
     private const string BicepValueBaseMetadataName = "Azure.Provisioning.BicepValue";
     private const string BicepValueMetadataName = "Azure.Provisioning.BicepValue<T>";
-    private const string ProvisionableResourceMetadataName = "Azure.Provisioning.Primitives.ProvisionableResource";
+    private const string CoreProvisioningAssemblyName = "Azure.Provisioning";
     private const string BicepValueProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.BicepValueProxy";
     private const string ProvisionableResourceProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.ProvisionableResourceProxy";
     private const string AzureResourceInfrastructureTypeName = "global::Aspire.Hosting.Azure.AzureResourceInfrastructure";
@@ -51,7 +51,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor s_unsupportedRootType = new(
         id: "ASPIREAZUREPROVISIONING005",
         title: "Unsupported provisioning proxy root",
-        messageFormat: "Type '{0}' cannot be used as a provisioning proxy root because it is not a non-generic, non-static class",
+        messageFormat: "Type '{0}' cannot be used as a provisioning proxy root because it is not a non-generic, non-static class or struct",
         category: DiagnosticCategory,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
@@ -190,7 +190,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             return;
         }
 
-        var proxyNames = CreateProxyNames(discovery.Types);
+        var proxyNames = CreateProxyNames(discovery.Types, generatedNamespace);
         var collectionNames = CreateCollectionNames(discovery.Collections, proxyNames, generatedNamespace);
         var source = new StringBuilder(
             """
@@ -321,18 +321,26 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             }
 
             if (type is INamedTypeSymbol namedType &&
-                namedType.TypeKind == TypeKind.Class &&
+                namedType.TypeKind is TypeKind.Class or TypeKind.Struct &&
                 !IsProvisionableResourceBase(namedType) &&
                 namedType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) != BicepValueBaseMetadataName &&
-                IsInRootNamespace(namedType) &&
+                IsInProxyScope(namedType) &&
                 !IsSimpleType(namedType))
             {
                 AddType(namedType);
             }
         }
 
-        bool IsInRootNamespace(INamedTypeSymbol type)
+        bool IsInProxyScope(INamedTypeSymbol type)
         {
+            // Core provisioning models are duplicated as internal proxies in each opt-in package.
+            // Service SDK assemblies remain namespace-bounded so one integration cannot pull in
+            // another service's entire API surface through a transitive reference.
+            if (type.ContainingAssembly.Name == CoreProvisioningAssemblyName)
+            {
+                return true;
+            }
+
             var namespaceName = type.ContainingNamespace.ToDisplayString();
             foreach (var rootNamespace in rootNamespaces)
             {
@@ -356,16 +364,23 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
     }
 
-    private static Dictionary<INamedTypeSymbol, string> CreateProxyNames(List<INamedTypeSymbol> types)
+    private static Dictionary<INamedTypeSymbol, string> CreateProxyNames(
+        List<INamedTypeSymbol> types,
+        string generatedNamespace)
     {
         var names = new Dictionary<INamedTypeSymbol, string>(SymbolEqualityComparer.Default);
+        var coreTypePrefix = GetPackageIdentifier(generatedNamespace);
 
         foreach (var group in types.GroupBy(static type => type.Name, StringComparer.Ordinal))
         {
             if (group.Count() == 1)
             {
                 var type = group.Single();
-                names.Add(type, type.Name + "Proxy");
+                names.Add(
+                    type,
+                    (type.ContainingAssembly.Name == CoreProvisioningAssemblyName ? coreTypePrefix : string.Empty) +
+                    type.Name +
+                    "Proxy");
                 continue;
             }
 
@@ -373,11 +388,27 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             foreach (var type in group.OrderBy(static type => type.ToDisplayString(), StringComparer.Ordinal))
             {
                 var qualifiedName = SanitizeIdentifier(type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
-                names.Add(type, qualifiedName + "_" + (++index).ToString(System.Globalization.CultureInfo.InvariantCulture) + "Proxy");
+                names.Add(
+                    type,
+                    (type.ContainingAssembly.Name == CoreProvisioningAssemblyName ? coreTypePrefix : string.Empty) +
+                    qualifiedName +
+                    "_" +
+                    (++index).ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                    "Proxy");
             }
         }
 
         return names;
+    }
+
+    private static string GetPackageIdentifier(string generatedNamespace)
+    {
+        const string generatedSuffix = ".Generated";
+        var packageNamespace = generatedNamespace.EndsWith(generatedSuffix, StringComparison.Ordinal)
+            ? generatedNamespace.Substring(0, generatedNamespace.Length - generatedSuffix.Length)
+            : generatedNamespace;
+        var separatorIndex = packageNamespace.LastIndexOf('.');
+        return SanitizeIdentifier(packageNamespace.Substring(separatorIndex + 1));
     }
 
     private static Dictionary<INamedTypeSymbol, string> CreateCollectionNames(
@@ -522,7 +553,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine("        {");
         if (proxyBaseType is null && !isProvisionableResource)
         {
-            source.AppendLine("            Inner = value ?? throw new global::System.ArgumentNullException(nameof(value));");
+            if (type.IsValueType)
+            {
+                source.AppendLine("            Inner = value;");
+            }
+            else
+            {
+                source.AppendLine("            Inner = value ?? throw new global::System.ArgumentNullException(nameof(value));");
+            }
         }
         source.AppendLine("        }");
         source.AppendLine();
@@ -534,6 +572,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         else
         {
             source.Append("        internal ").Append(underlyingTypeName).AppendLine(" Inner { get; }");
+        }
+
+        if (isProvisionableResource)
+        {
+            GenerateAddToMethod(source, proxyName);
         }
 
         foreach (var property in GetExportableProperties(type, includeInherited: proxyBaseType is null))
@@ -603,6 +646,22 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         source.AppendLine("    }");
         source.AppendLine();
+    }
+
+    private static void GenerateAddToMethod(StringBuilder source, string proxyName)
+    {
+        source.AppendLine();
+        AppendMethodExportAttribute(source, proxyName + ".addTo", "AddTo");
+        source.Append("        internal void AddTo(").Append(AzureResourceInfrastructureTypeName)
+            .AppendLine(" infrastructure)");
+        source.AppendLine("        {");
+        source.AppendLine("            if (infrastructure is null)");
+        source.AppendLine("            {");
+        source.AppendLine("                throw new global::System.ArgumentNullException(nameof(infrastructure));");
+        source.AppendLine("            }");
+        source.AppendLine();
+        source.AppendLine("            infrastructure.Add(Inner);");
+        source.AppendLine("        }");
     }
 
     private static void GenerateProperty(
@@ -1171,6 +1230,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             {
                 GenerateCreationMethod(source, type, proxyName, factoryTypeName, constructor, isProvisionableResource: false);
             }
+
+            GenerateStaticPropertyFactoryMethods(
+                source,
+                type,
+                proxyNames,
+                collectionNames,
+                proxyName,
+                factoryTypeName);
         }
 
         source.AppendLine("    }");
@@ -1286,7 +1353,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine(")");
         source.AppendLine("        {");
         AppendInfrastructureNullCheck(source);
-        source.Append("            var value = new ").Append(underlyingTypeName).Append('(');
+        source.Append("            var instance = new ").Append(underlyingTypeName).Append('(');
         for (var index = 0; index < constructor.Parameters.Count; index++)
         {
             if (index > 0)
@@ -1308,11 +1375,51 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine(");");
         if (isProvisionableResource)
         {
-            source.AppendLine("            infrastructure.Add(value);");
+            source.AppendLine("            infrastructure.Add(instance);");
         }
         source.AppendLine();
-        source.Append("            return new ").Append(proxyName).AppendLine("(value);");
+        source.Append("            return new ").Append(proxyName).AppendLine("(instance);");
         source.AppendLine("        }");
+    }
+
+    private static void GenerateStaticPropertyFactoryMethods(
+        StringBuilder source,
+        INamedTypeSymbol type,
+        Dictionary<INamedTypeSymbol, string> proxyNames,
+        Dictionary<INamedTypeSymbol, string> collectionNames,
+        string proxyName,
+        string factoryTypeName)
+    {
+        foreach (var property in type.GetMembers()
+            .OfType<IPropertySymbol>()
+            .Where(static property =>
+                property.IsStatic &&
+                !property.IsIndexer &&
+                property.DeclaredAccessibility == Accessibility.Public &&
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
+            .OrderBy(static property => property.Name, StringComparer.Ordinal))
+        {
+            if (!TryMapType(property.Type, proxyNames, collectionNames, out var mappedType))
+            {
+                continue;
+            }
+
+            var methodName = "Get" + factoryTypeName + property.Name;
+            source.AppendLine();
+            AppendFactoryExportAttribute(source, proxyName, methodName, "staticProperty");
+            source.Append("        internal static ").Append(mappedType.ExposedTypeName).Append(' ')
+                .Append(methodName).Append("(this ").Append(AzureResourceInfrastructureTypeName)
+                .AppendLine(" infrastructure)");
+            source.AppendLine("        {");
+            AppendInfrastructureNullCheck(source);
+            source.Append("            return ");
+            AppendMappedFromUnderlying(
+                source,
+                type.ToDisplayString(s_typeDisplayFormat) + ".@" + property.Name,
+                mappedType);
+            source.AppendLine(";");
+            source.AppendLine("        }");
+        }
     }
 
     private static SelectedConstructor? SelectConstructor(
@@ -1349,6 +1456,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         if (constructors.Count == 0)
         {
             return null;
+        }
+
+        if (type.IsValueType && constructors.Any(static constructor => !constructor.Constructor.IsImplicitlyDeclared))
+        {
+            constructors.RemoveAll(static constructor => constructor.Constructor.IsImplicitlyDeclared);
         }
 
         if (!isProvisionableResource)
@@ -1570,9 +1682,15 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         var seenPropertyNames = new HashSet<string>(StringComparer.Ordinal);
         for (INamedTypeSymbol? current = type;
-            current is not null && current.SpecialType != SpecialType.System_Object;
+            current is not null &&
+            current.SpecialType is not SpecialType.System_Object and not SpecialType.System_ValueType;
             current = includeInherited ? current.BaseType : null)
         {
+            if (IsProvisionableFrameworkBase(current))
+            {
+                yield break;
+            }
+
             foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
             {
                 if (!property.IsStatic &&
@@ -1583,10 +1701,6 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 }
             }
 
-            if (IsProvisionableResourceBase(current))
-            {
-                yield break;
-            }
         }
     }
 
@@ -1596,14 +1710,20 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
         for (INamedTypeSymbol? current = type;
-            current is not null && current.SpecialType != SpecialType.System_Object;
+            current is not null &&
+            current.SpecialType is not SpecialType.System_Object and not SpecialType.System_ValueType;
             current = includeInherited ? current.BaseType : null)
         {
+            if (IsProvisionableFrameworkBase(current))
+            {
+                yield break;
+            }
+
             foreach (var method in current.GetMembers().OfType<IMethodSymbol>())
             {
                 if (!method.IsStatic &&
                     method.MethodKind == MethodKind.Ordinary &&
-                    method.Name != nameof(ToString) &&
+                    method.Name is not nameof(ToString) and not nameof(Equals) and not nameof(GetHashCode) &&
                     method.DeclaredAccessibility == Accessibility.Public &&
                     seenSignatures.Add(GetMethodSignature(method)))
                 {
@@ -1611,10 +1731,6 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 }
             }
 
-            if (IsProvisionableResourceBase(current))
-            {
-                yield break;
-            }
         }
     }
 
@@ -1744,13 +1860,23 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static bool IsProvisionableResourceBase(INamedTypeSymbol type)
     {
-        return type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
-            .ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) == ProvisionableResourceMetadataName;
+        return type.MetadataName == "ProvisionableResource" &&
+            type.ContainingNamespace.ToDisplayString() == "Azure.Provisioning.Primitives";
+    }
+
+    private static bool IsProvisionableFrameworkBase(INamedTypeSymbol type)
+    {
+        return type.ContainingNamespace.ToDisplayString() == "Azure.Provisioning.Primitives" &&
+            type.MetadataName is
+                "Provisionable" or
+                "ProvisionableConstruct" or
+                "NamedProvisionableConstruct" or
+                "ProvisionableResource";
     }
 
     private static bool CanGenerateProxy(INamedTypeSymbol type)
     {
-        return type.TypeKind == TypeKind.Class &&
+        return type.TypeKind is TypeKind.Class or TypeKind.Struct &&
             !type.IsGenericType &&
             !type.IsStatic;
     }

@@ -8,9 +8,7 @@ using Azure.Provisioning.CosmosDB;
     typeof(CosmosDBAccount),
     ExcludedMemberNames = new[]
     {
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "NetworkAclBypassResourceIds",
         "SystemData"
     })]

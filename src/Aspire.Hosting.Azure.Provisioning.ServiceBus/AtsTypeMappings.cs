@@ -9,9 +9,7 @@ using Azure.Provisioning.ServiceBus;
     ExcludedMemberNames = new[]
     {
         "ApplicationProperties",
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusQueue), IsInfrastructureRoot = false)]

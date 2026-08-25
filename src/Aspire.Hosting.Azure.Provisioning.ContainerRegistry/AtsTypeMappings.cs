@@ -8,9 +8,7 @@ using Azure.Provisioning.ContainerRegistry;
     typeof(ContainerRegistryService),
     ExcludedMemberNames = new[]
     {
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerRegistryTask), IsInfrastructureRoot = false)]

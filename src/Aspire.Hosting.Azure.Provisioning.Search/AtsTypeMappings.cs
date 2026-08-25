@@ -8,8 +8,6 @@ using Azure.Provisioning.Search;
     typeof(SearchService),
     ExcludedMemberNames = new[]
     {
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]

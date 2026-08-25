@@ -6,5 +6,5 @@ using Azure.Provisioning.KeyVault;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(KeyVaultService),
-    ExcludedMemberNames = new[] { "CreateRoleAssignment", "GetResourceNameRequirements", "SystemData" })]
+    ExcludedMemberNames = new[] { "GetResourceNameRequirements", "SystemData" })]
 [assembly: GenerateAspireProvisioningProxy(typeof(KeyVaultSecret), IsInfrastructureRoot = false)]

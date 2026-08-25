@@ -10,6 +10,5 @@ using Azure.Provisioning.OperationalInsights;
     {
         "AdditionalProperties",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]

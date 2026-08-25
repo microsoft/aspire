@@ -8,9 +8,7 @@ using Azure.Provisioning.EventHubs;
     typeof(EventHubsNamespace),
     ExcludedMemberNames = new[]
     {
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]
 [assembly: GenerateAspireProvisioningProxy(typeof(EventHub), IsInfrastructureRoot = false)]

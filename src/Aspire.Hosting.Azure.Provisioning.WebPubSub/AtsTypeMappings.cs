@@ -8,9 +8,7 @@ using Azure.Provisioning.WebPubSub;
     typeof(WebPubSubService),
     ExcludedMemberNames = new[]
     {
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]
 [assembly: GenerateAspireProvisioningProxy(typeof(WebPubSubHub), IsInfrastructureRoot = false)]

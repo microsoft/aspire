@@ -6,4 +6,4 @@ using Azure.Provisioning.ApplicationInsights;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(ApplicationInsightsComponent),
-    ExcludedMemberNames = new[] { "CreateRoleAssignment", "GetResourceNameRequirements", "SystemData" })]
+    ExcludedMemberNames = new[] { "GetResourceNameRequirements", "SystemData" })]

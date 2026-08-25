@@ -6,6 +6,8 @@
   "packages": {
     "Aspire.Hosting.Azure.ApplicationInsights": "",
     "Aspire.Hosting.Azure.Provisioning.ApplicationInsights": "",
-    "Aspire.Hosting.Azure.OperationalInsights": ""
+    "Aspire.Hosting.Azure.OperationalInsights": "",
+    "Aspire.Hosting.Azure.Provisioning.OperationalInsights": "",
+    "Aspire.Hosting.Azure.Provisioning.ContainerRegistry": ""
   }
 }

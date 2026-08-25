@@ -9,9 +9,7 @@ using Azure.Provisioning.CognitiveServices;
     ExcludedMemberNames = new[]
     {
         "AdditionalProperties",
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
         "SystemData"
     })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccountDeployment), IsInfrastructureRoot = false)]

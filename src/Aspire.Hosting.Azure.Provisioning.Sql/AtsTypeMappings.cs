@@ -8,11 +8,8 @@ using Azure.Provisioning.Sql;
     typeof(SqlServer),
     ExcludedMemberNames = new[]
     {
-        "CreateRoleAssignment",
         "GetResourceNameRequirements",
-        "Identity",
-        "SystemData",
-        "UserAssignedIdentities"
+        "SystemData"
     })]
 [assembly: GenerateAspireProvisioningProxy(typeof(SqlDatabase), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServerExternalAdministrator), IsInfrastructureRoot = false)]

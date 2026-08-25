@@ -37,6 +37,8 @@ public class AspireProvisioningProxyGeneratorTests
             GetExportedMembers<IPropertySymbol>(resourceProxy));
         Assert.Equal(
             [
+                "AddTo",
+                "AssignRole",
                 "ClearComplexValue",
                 "ClearName",
                 "Format",
@@ -54,12 +56,16 @@ public class AspireProvisioningProxyGeneratorTests
         Assert.Equal(
             [
                 "AddSampleResource",
+                "CreateBuiltInRole",
                 "CreateChildModel",
+                "GetBuiltInRoleContributor",
                 "GetSampleResource",
                 "GetSampleResourceByIdentifier",
                 "GetSampleResources"
             ],
             GetExportedMembers<IMethodSymbol>(factory));
+        var createBuiltInRole = Assert.Single(factory.GetMembers("CreateBuiltInRole").OfType<IMethodSymbol>());
+        Assert.Equal(2, createBuiltInRole.Parameters.Length);
     }
 
     [Fact]
@@ -96,6 +102,25 @@ public class AspireProvisioningProxyGeneratorTests
 
         AssertDiagnostic(diagnostic, "ASPIREAZUREPROVISIONING004", "Collide");
         Assert.Empty(result.Compilation.GetDiagnostics());
+    }
+
+    [Fact]
+    public void CoreProvisioningTypesAreGeneratedIntoEachProxyPackage()
+    {
+        var result = ProvisioningGeneratorTest.Run(
+            SharedProvisioningSource,
+            new TestAssemblySource("Azure.Provisioning", SharedProvisioningAssemblySource));
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var sharedProxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.ProvisioningGeneratorTestsManagedServiceIdentityProxy");
+        Assert.NotNull(sharedProxy);
+        Assert.Equal(Accessibility.Internal, sharedProxy.DeclaredAccessibility);
+        Assert.Equal(["IdentityType"], GetExportedMembers<IPropertySymbol>(sharedProxy));
+        Assert.Null(result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.ProvisionableProxy"));
     }
 
     private static string[] GetExportedMembers<TSymbol>(INamedTypeSymbol type)
@@ -142,6 +167,20 @@ public class AspireProvisioningProxyGeneratorTests
                 public string Value { get; set; } = string.Empty;
             }
 
+            public readonly struct BuiltInRole
+            {
+                private readonly string _value;
+
+                public BuiltInRole(string value)
+                {
+                    _value = value;
+                }
+
+                public static BuiltInRole Contributor { get; } = new("contributor");
+
+                public override string ToString() => _value;
+            }
+
             public sealed class SampleResource : Azure.Provisioning.Primitives.ProvisionableResource
             {
                 public SampleResource(string bicepIdentifier, string? resourceVersion = null)
@@ -166,6 +205,10 @@ public class AspireProvisioningProxyGeneratorTests
                 {
                 }
 
+                public void AssignRole(BuiltInRole role)
+                {
+                }
+
                 public string Format(string value, bool enabled) => value;
 
                 public ChildModel Transform(ChildModel value) => value;
@@ -187,6 +230,36 @@ public class AspireProvisioningProxyGeneratorTests
     private const string UnsupportedSource = UnsupportedAttributes + CommonSource + UnsupportedTypes;
 
     private const string InheritedCollisionSource = InheritedCollisionAttributes + CommonSource + InheritedCollisionTypes;
+
+    private const string SharedProvisioningSource = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.ServiceResource),
+            IsInfrastructureRoot = false)]
+
+        """ + AspireRuntimeSource + """
+        namespace Test.Provisioning
+        {
+            public sealed class ServiceResource : Azure.Provisioning.Primitives.ProvisionableResource
+            {
+                public ServiceResource(string bicepIdentifier)
+                    : base(bicepIdentifier)
+                {
+                }
+
+                public Azure.Provisioning.Resources.ManagedServiceIdentity Identity { get; set; } = new();
+            }
+        }
+        """;
+
+    private const string SharedProvisioningAssemblySource = AzureProvisioningSource + "\n" + """
+        namespace Azure.Provisioning.Resources
+        {
+            public sealed class ManagedServiceIdentity
+            {
+                public string IdentityType { get; set; } = string.Empty;
+            }
+        }
+        """;
 
     private const string InheritedCollisionAttributes = """
         [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
@@ -283,7 +356,9 @@ public class AspireProvisioningProxyGeneratorTests
         }
         """;
 
-    private const string CommonSource = """
+    private const string CommonSource = AspireRuntimeSource + "\n" + AzureProvisioningSource;
+
+    private const string AspireRuntimeSource = """
         #nullable enable
 
         namespace Aspire.Hosting
@@ -368,6 +443,10 @@ public class AspireProvisioningProxyGeneratorTests
                 public global::Azure.Provisioning.Primitives.ProvisionableResource Inner { get; }
             }
         }
+        """;
+
+    private const string AzureProvisioningSource = """
+        #nullable enable
 
         namespace Azure.Provisioning
         {
@@ -425,11 +504,35 @@ public class AspireProvisioningProxyGeneratorTests
                 public bool Remove(string key) => _items.Remove(key);
                 public void Clear() => _items.Clear();
             }
+
+            public sealed class Infrastructure
+            {
+            }
+
+            public sealed class ProvisioningPlan
+            {
+            }
         }
 
         namespace Azure.Provisioning.Primitives
         {
-            public abstract class ProvisionableResource
+            public abstract class Provisionable
+            {
+                public System.Collections.Generic.IEnumerable<Provisionable> GetProvisionableResources() => [];
+
+                public global::Azure.Provisioning.ProvisioningPlan Build() => new();
+            }
+
+            public abstract class ProvisionableConstruct : Provisionable
+            {
+                public global::Azure.Provisioning.Infrastructure? ParentInfrastructure { get; }
+            }
+
+            public abstract class NamedProvisionableConstruct : ProvisionableConstruct
+            {
+            }
+
+            public abstract class ProvisionableResource : NamedProvisionableConstruct
             {
                 protected ProvisionableResource(string bicepIdentifier)
                 {
