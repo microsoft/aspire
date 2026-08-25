@@ -110,13 +110,13 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
 
-        var sandboxOptions = options ?? new AzureSandboxOptions();
-        ValidateSandboxOptions(sandboxOptions);
-
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
+
+        var sandboxOptions = options ?? new AzureSandboxOptions();
+        ValidateSandboxOptions(sandboxOptions);
 
         var copiedOptions = CopyAzureSandboxOptions(sandboxOptions);
 
@@ -146,6 +146,11 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
         ArgumentNullException.ThrowIfNull(configure);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
 
         var options = new AzureSandboxOptions();
         configure(options);

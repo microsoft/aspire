@@ -200,10 +200,10 @@ public class AzureSandboxesTests
         var buildOptionsCallbackCount = container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
         container.PublishAsAzureSandbox(sandboxGroup, options => configureCalled = true);
-        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
         {
             AutoSuspendMode = (AzureSandboxAutoSuspendMode)(-1)
-        }));
+        });
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -212,7 +212,7 @@ public class AzureSandboxesTests
         Assert.DoesNotContain(model.Resources, resource => resource is AzureSandboxGroupResource or AzureSandboxCleanupResource);
         Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-acr");
         Assert.Null(computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
-        Assert.True(configureCalled);
+        Assert.False(configureCalled);
         Assert.Equal(buildOptionsCallbackCount, container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
     }
 
@@ -581,7 +581,8 @@ public class AzureSandboxesTests
                 Protocol: "Http",
                 Anonymous: false)
         };
-        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(endpoints);
+        const string imageReference = "example/image@sha256:first";
+        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(imageReference, endpoints);
         var previousState = new DeploymentStateSection(
             "Azure:Sandboxes:frontend-sandbox-container",
             new JsonObject
@@ -595,14 +596,19 @@ public class AzureSandboxesTests
 
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
-        previousState.Data["EndpointSecurityFingerprint"] = $"example/image@sha256:first|{fingerprint}";
-        Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        var updatedImageFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            "example/image@sha256:second",
+            endpoints);
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
+        previousState.Data["EndpointSecurityFingerprint"] = fingerprint[(imageReference.Length + 1)..];
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         previousState.Data["PendingSecurityCleanup"] = true;
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         previousState.Data["PendingSecurityCleanup"] = false;
 
         var anonymousFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
         [
             endpoints[0] with { Anonymous = true }
         ]);
@@ -699,6 +705,24 @@ public class AzureSandboxesTests
             throwOnError: false);
 
         Assert.True(client.DeleteSandboxCalled);
+    }
+
+    [Fact]
+    public async Task SandboxDiskImageCreateResponseLossReconcilesLabeledDiskImage()
+    {
+        var client = await RunCreateResponseLossAsync(includeSandbox: false);
+
+        Assert.False(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
+    }
+
+    [Fact]
+    public async Task SandboxCreateResponseLossReconcilesLabeledResources()
+    {
+        var client = await RunCreateResponseLossAsync(includeSandbox: true);
+
+        Assert.True(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
     }
 
     [Fact]
@@ -1966,6 +1990,44 @@ public class AzureSandboxesTests
         return results;
     }
 
+    private static async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(bool includeSandbox)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var app = builder.Build();
+        using var pipelineCts = new CancellationTokenSource();
+        pipelineCts.Cancel();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            pipelineCts.Token);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var client = new ResponseLossCleanupClient(includeSandbox);
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            AzureSandboxContainerDeployment.CreateWithResponseLossCleanupAsync(
+                client.CreateResourceThenLoseResponseAsync,
+                stepContext,
+                client,
+                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
+                "owner",
+                "frontend-sandbox-container",
+                "deploy"));
+
+        Assert.Equal("create response lost", exception.Message);
+        Assert.Equal(
+            "aspire-owner=owner,aspire-resource=frontend-sandbox-container,aspire-deploy=deploy",
+            client.LabelSelector);
+        Assert.False(client.CleanupCancellationRequested);
+        return client;
+    }
+
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "testproject";
@@ -2029,6 +2091,93 @@ public class AzureSandboxesTests
         public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class ResponseLossCleanupClient(bool includeSandbox) : IAzureDevComputeClient
+    {
+        private bool _resourceCreated;
+
+        private static readonly Dictionary<string, string> s_labels = new()
+        {
+            ["aspire-owner"] = "owner",
+            ["aspire-resource"] = "frontend-sandbox-container",
+            ["aspire-deploy"] = "deploy"
+        };
+
+        public string? LabelSelector { get; private set; }
+        public bool DeleteSandboxCalled { get; private set; }
+        public bool DeleteDiskImageCalled { get; private set; }
+        public bool CleanupCancellationRequested { get; private set; }
+
+        public Task<string> CreateResourceThenLoseResponseAsync()
+        {
+            _resourceCreated = true;
+            throw new HttpRequestException("create response lost");
+        }
+
+        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(
+            AzureDevComputeResourceScope scope,
+            string? labels,
+            CancellationToken cancellationToken)
+        {
+            LabelSelector = labels;
+            CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
+            return Task.FromResult(_resourceCreated && includeSandbox
+                ? new List<AzureDevComputeSandbox>
+                {
+                    new()
+                    {
+                        Id = "sandbox",
+                        Labels = s_labels
+                    }
+                }
+                : []);
+        }
+
+        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(
+            AzureDevComputeResourceScope scope,
+            string? labels,
+            CancellationToken cancellationToken)
+        {
+            Assert.Equal(LabelSelector, labels);
+            CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
+            return Task.FromResult(_resourceCreated
+                ? new List<AzureDevComputeDiskImage>
+                {
+                    new()
+                    {
+                        Id = "disk-image",
+                        Labels = s_labels,
+                        Status = new AzureDevComputeDiskImageStatus { State = "Ready" }
+                    }
+                }
+                : []);
+        }
+
+        public Task DeleteSandboxAsync(
+            AzureDevComputeResourceScope scope,
+            string sandboxId,
+            CancellationToken cancellationToken)
+        {
+            DeleteSandboxCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteDiskImageAsync(
+            AzureDevComputeResourceScope scope,
+            string diskImageId,
+            CancellationToken cancellationToken)
+        {
+            DeleteDiskImageCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();

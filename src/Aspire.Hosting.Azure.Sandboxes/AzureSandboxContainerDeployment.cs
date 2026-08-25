@@ -231,7 +231,6 @@ internal static class AzureSandboxContainerDeployment
         var deployId = Guid.NewGuid().ToString("N");
         var diskImageId = string.Empty;
         var sandboxId = string.Empty;
-        var addedPorts = new List<SandboxEndpoint>();
         var deploymentCommitted = false;
 
         try
@@ -244,7 +243,14 @@ internal static class AzureSandboxContainerDeployment
             var diskTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox disk image for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (diskTask.ConfigureAwait(false))
             {
-                var diskImage = await CreateDiskImageAsync(context, client, dataPlaneScope, resource, diskImageReference, diskImageName, ownerId, deployId).ConfigureAwait(false);
+                var diskImage = await CreateWithResponseLossCleanupAsync(
+                    () => CreateDiskImageAsync(context, client, dataPlaneScope, resource, diskImageReference, diskImageName, ownerId, deployId),
+                    context,
+                    client,
+                    dataPlaneScope,
+                    ownerId,
+                    resource.Name,
+                    deployId).ConfigureAwait(false);
                 diskImageId = diskImage.Id;
                 diskImage = await WaitForDiskImageReadyAsync(context, client, dataPlaneScope, diskImage).ConfigureAwait(false);
                 await diskTask.CompleteAsync($"Created sandbox disk image {diskImageId}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
@@ -260,7 +266,14 @@ internal static class AzureSandboxContainerDeployment
             var createTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (createTask.ConfigureAwait(false))
             {
-                var sandbox = await CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, ownerId, deployId).ConfigureAwait(false);
+                var sandbox = await CreateWithResponseLossCleanupAsync(
+                    () => CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, ownerId, deployId),
+                    context,
+                    client,
+                    dataPlaneScope,
+                    ownerId,
+                    resource.Name,
+                    deployId).ConfigureAwait(false);
                 sandboxId = sandbox.Id;
                 await createTask.CompleteAsync($"Created sandbox {sandboxId}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
             }
@@ -286,7 +299,6 @@ internal static class AzureSandboxContainerDeployment
                 await using (exposeTask.ConfigureAwait(false))
                 {
                     var addedPort = await AddPortAsync(context, client, dataPlaneScope, sandboxId, endpoint).ConfigureAwait(false);
-                    addedPorts.Add(endpoint);
 
                     var endpointUrl = addedPort.Url.ToString();
                     if (endpoint.IsExternal && endpoint.IsHttp)
@@ -309,7 +321,7 @@ internal static class AzureSandboxContainerDeployment
                 }
             }
 
-            var endpointSecurityFingerprint = CreateDeploymentSecurityFingerprint(endpoints);
+            var endpointSecurityFingerprint = CreateDeploymentSecurityFingerprint(diskImageReference, endpoints);
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
                 endpointSecurityFingerprint);
@@ -413,42 +425,26 @@ internal static class AzureSandboxContainerDeployment
         }
         catch
         {
-            if (!deploymentCommitted && !string.IsNullOrWhiteSpace(sandboxId))
+            if (!deploymentCommitted)
             {
-                using var sandboxCleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                using var deploymentCleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
                 try
                 {
-                    await DeleteSandboxAsync(
+                    await CleanupFailedDeploymentAsync(
                         context,
                         client,
                         dataPlaneScope,
-                        sandboxId,
-                        addedPorts.Select(static endpoint => endpoint.TargetPort),
-                        throwOnError: true,
-                        sandboxCleanupCts.Token).ConfigureAwait(false);
+                        ownerId,
+                        resource.Name,
+                        deployId,
+                        deploymentCleanupCts.Token).ConfigureAwait(false);
                 }
                 catch (Exception cleanupException)
                 {
-                    context.Logger.LogWarning(cleanupException, "Failed to clean up sandbox '{SandboxId}' after deployment failure.", sandboxId);
-                }
-            }
-
-            if (!deploymentCommitted && !string.IsNullOrWhiteSpace(diskImageId))
-            {
-                using var diskImageCleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-                try
-                {
-                    await DeleteDiskImageAsync(
-                        context,
-                        client,
-                        dataPlaneScope,
-                        diskImageId,
-                        throwOnError: true,
-                        diskImageCleanupCts.Token).ConfigureAwait(false);
-                }
-                catch (Exception cleanupException)
-                {
-                    context.Logger.LogWarning(cleanupException, "Failed to clean up sandbox disk image '{DiskImageId}' after deployment failure.", diskImageId);
+                    context.Logger.LogWarning(
+                        cleanupException,
+                        "Failed to reconcile Azure sandbox resources after deployment '{DeployId}' failed.",
+                        deployId);
                 }
             }
 
@@ -1409,6 +1405,101 @@ internal static class AzureSandboxContainerDeployment
         }
     }
 
+    internal static async Task CleanupFailedDeploymentAsync(
+        PipelineStepContext context,
+        IAzureDevComputeClient client,
+        AzureDevComputeResourceScope scope,
+        string ownerId,
+        string resourceName,
+        string deployId,
+        CancellationToken cancellationToken)
+    {
+        var labelSelector = CreateLabelSelector(ownerId, resourceName, deployId);
+        List<AzureDevComputeSandbox> sandboxes;
+        try
+        {
+            sandboxes = await client.ListSandboxesAsync(scope, labelSelector, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            context.Logger.LogWarning(ex, "Failed to list sandboxes while reconciling failed deployment '{DeployId}'.", deployId);
+            sandboxes = [];
+        }
+
+        foreach (var sandbox in sandboxes.Where(sandbox => HasDeploymentLabels(sandbox.Labels, ownerId, resourceName, deployId)))
+        {
+            await DeleteSandboxAsync(
+                context,
+                client,
+                scope,
+                sandbox.Id,
+                sandbox.Ports.Select(static port => port.Port),
+                throwOnError: false,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        List<AzureDevComputeDiskImage> diskImages;
+        try
+        {
+            diskImages = await client.ListDiskImagesAsync(scope, labelSelector, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            context.Logger.LogWarning(ex, "Failed to list disk images while reconciling failed deployment '{DeployId}'.", deployId);
+            diskImages = [];
+        }
+
+        foreach (var diskImage in diskImages.Where(diskImage => HasDeploymentLabels(diskImage.Labels, ownerId, resourceName, deployId)))
+        {
+            await DeleteDiskImageAsync(
+                context,
+                client,
+                scope,
+                diskImage.Id,
+                throwOnError: false,
+                cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    internal static async Task<T> CreateWithResponseLossCleanupAsync<T>(
+        Func<Task<T>> createResource,
+        PipelineStepContext context,
+        IAzureDevComputeClient client,
+        AzureDevComputeResourceScope scope,
+        string ownerId,
+        string resourceName,
+        string deployId)
+    {
+        try
+        {
+            return await createResource().ConfigureAwait(false);
+        }
+        catch
+        {
+            using var cleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            try
+            {
+                await CleanupFailedDeploymentAsync(
+                    context,
+                    client,
+                    scope,
+                    ownerId,
+                    resourceName,
+                    deployId,
+                    cleanupCts.Token).ConfigureAwait(false);
+            }
+            catch (Exception cleanupException)
+            {
+                context.Logger.LogWarning(
+                    cleanupException,
+                    "Failed to reconcile Azure sandbox resources after create operation for deployment '{DeployId}' failed.",
+                    deployId);
+            }
+
+            throw;
+        }
+    }
+
     internal static bool ShouldDeleteLabeledDeployment(
         string id,
         IReadOnlyDictionary<string, string> labels,
@@ -1434,6 +1525,20 @@ internal static class AzureSandboxContainerDeployment
 
     internal static string CreateLabelSelector(string ownerId, string resourceName) =>
         $"aspire-owner={ownerId},aspire-resource={resourceName}";
+
+    internal static string CreateLabelSelector(string ownerId, string resourceName, string deployId) =>
+        $"{CreateLabelSelector(ownerId, resourceName)},aspire-deploy={deployId}";
+
+    private static bool HasDeploymentLabels(
+        IReadOnlyDictionary<string, string> labels,
+        string ownerId,
+        string resourceName,
+        string deployId)
+    {
+        return HasLabel(labels, "aspire-owner", ownerId) &&
+            HasLabel(labels, "aspire-resource", resourceName) &&
+            HasLabel(labels, "aspire-deploy", deployId);
+    }
 
     private static bool HasLabel(IReadOnlyDictionary<string, string> labels, string name, string value)
     {
@@ -1481,14 +1586,20 @@ internal static class AzureSandboxContainerDeployment
             : throw new InvalidOperationException("AppHost:PathSha256 is required to isolate Azure sandbox ownership between AppHosts.");
     }
 
-    internal static string CreateDeploymentSecurityFingerprint(IReadOnlyList<SandboxEndpoint> endpoints)
+    internal static string CreateDeploymentSecurityFingerprint(
+        string immutableImageReference,
+        IReadOnlyList<SandboxEndpoint> endpoints)
     {
-        return string.Join(
+        ArgumentException.ThrowIfNullOrWhiteSpace(immutableImageReference);
+
+        var endpointFingerprint = string.Join(
             "|",
             endpoints
                 .OrderBy(static endpoint => endpoint.Name, StringComparer.Ordinal)
                 .Select(static endpoint =>
                     $"{endpoint.Name}:{endpoint.TargetPort}:{endpoint.Protocol}:{endpoint.IsExternal}:{endpoint.Anonymous}"));
+
+        return $"{immutableImageReference}|{endpointFingerprint}";
     }
 
     internal static bool HasSecurityRelevantEndpointChange(
@@ -1511,11 +1622,7 @@ internal static class AzureSandboxContainerDeployment
             return false;
         }
 
-        // Older preview state included the image reference before the endpoint-only
-        // fingerprint. Ignore that prefix so an image rollout does not become an
-        // immediate security cleanup during migration to the corrected format.
-        return previousFingerprint is null ||
-            !previousFingerprint.EndsWith($"|{currentFingerprint}", StringComparison.Ordinal);
+        return true;
     }
 
     private static void SetRecoveryStateIfMissing(
