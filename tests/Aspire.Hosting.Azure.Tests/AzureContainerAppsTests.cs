@@ -3290,6 +3290,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     public async Task AliasesWithImplicitAndExplicitCurrentScopeShareConcurrencyGroup()
     {
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        const string otherSubscriptionId = "87654321-4321-4321-4321-210987654321";
         const string resourceGroup = "shared-rg";
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
@@ -3299,9 +3300,44 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .PublishAsExisting("shared-env", resourceGroup: null);
         var explicitScope = builder.AddAzureContainerAppEnvironment("explicit")
             .PublishAsExistingInResourceGroup("shared-env", resourceGroup, subscriptionId);
+        var otherScope = builder.AddAzureContainerAppEnvironment("other")
+            .PublishAsExistingInResourceGroup("shared-env", resourceGroup, otherSubscriptionId);
 
         builder.AddContainer("api", "myimage").WithComputeEnvironment(implicitScope);
         builder.AddContainer("worker", "myimage").WithComputeEnvironment(explicitScope);
+        builder.AddContainer("other-app", "myimage").WithComputeEnvironment(otherScope);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var otherGroup = Assert.Single(GetComputeResource(model, "other-app").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+
+        Assert.Same(apiGroup, workerGroup);
+        Assert.NotSame(apiGroup, otherGroup);
+    }
+
+    [Fact]
+    public async Task AliasesUsingDistinctParametersWithSameValuesShareConcurrencyGroup()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var name1 = builder.AddParameter("name1", "shared-env");
+        var resourceGroup1 = builder.AddParameter("resourceGroup1", "shared-rg");
+        var subscription1 = builder.AddParameter("subscription1", "12345678-1234-1234-1234-123456789012");
+        var name2 = builder.AddParameter("name2", "shared-env");
+        var resourceGroup2 = builder.AddParameter("resourceGroup2", "shared-rg");
+        var subscription2 = builder.AddParameter("subscription2", "12345678-1234-1234-1234-123456789012");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("env1")
+            .PublishAsExistingInResourceGroup(name1, resourceGroup1, subscription1);
+        var env2 = builder.AddAzureContainerAppEnvironment("env2")
+            .PublishAsExistingInResourceGroup(name2, resourceGroup2, subscription2);
+
+        builder.AddContainer("api", "myimage").WithComputeEnvironment(env1);
+        builder.AddContainer("worker", "myimage").WithComputeEnvironment(env2);
 
         using var app = builder.Build();
 

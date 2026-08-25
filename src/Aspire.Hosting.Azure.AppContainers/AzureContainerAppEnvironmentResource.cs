@@ -13,6 +13,7 @@ using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -211,7 +212,7 @@ public class AzureContainerAppEnvironmentResource :
             this,
             services);
 
-        var deploymentConcurrencyGroup = GetDeploymentConcurrencyGroup(appModel);
+        var deploymentConcurrencyGroup = await GetDeploymentConcurrencyGroupAsync(appModel, services, cancellationToken).ConfigureAwait(false);
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -251,42 +252,64 @@ public class AzureContainerAppEnvironmentResource :
         containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
     }
 
-    private DeploymentConcurrencyGroup GetDeploymentConcurrencyGroup(DistributedApplicationModel model)
+    private async Task<DeploymentConcurrencyGroup> GetDeploymentConcurrencyGroupAsync(
+        DistributedApplicationModel model,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
     {
         if (!this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource))
         {
             return _deploymentConcurrencyGroup;
         }
 
-        var existingEnvironments = new List<(AzureContainerAppEnvironmentResource Environment, ExistingAzureResourceAnnotation Resource)>();
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var currentSubscription = configuration["Azure:SubscriptionId"];
+        var currentResourceGroup = configuration["Azure:ResourceGroup"];
+
+        if (currentResourceGroup is null &&
+            model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } azureEnvironment)
+        {
+            currentResourceGroup = await ResolveParameterValueAsync(azureEnvironment.ResourceGroupName, cancellationToken).ConfigureAwait(false);
+        }
+
+        var existingEnvironments = new List<(
+            AzureContainerAppEnvironmentResource Environment,
+            (object? Name, object? Subscription, object? ResourceGroup) Identity)>();
         foreach (var environment in model.Resources.OfType<AzureContainerAppEnvironmentResource>())
         {
             if (environment.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var resource))
             {
-                existingEnvironments.Add((environment, resource));
+                var identity = await ResolveExistingResourceIdentityAsync(
+                    resource,
+                    currentSubscription,
+                    currentResourceGroup,
+                    cancellationToken).ConfigureAwait(false);
+                existingEnvironments.Add((environment, identity));
             }
         }
 
-        // A null scope part means the current deployment scope, whose value might not be known while
-        // deployment targets are materialized. Treat it as potentially matching an explicit value.
-        // Because that relationship is not transitive, walk the connected component before choosing
-        // a canonical owner so model ordering cannot split potentially identical aliases across groups.
+        // The current deployment scope and parameter values can remain unresolved while deployment
+        // targets are materialized. Treat only those unresolved parts as potentially matching explicit
+        // values. Because that relationship is not transitive, walk the connected component before
+        // choosing a canonical owner so model ordering cannot split potentially identical aliases.
         var possibleAliases = new HashSet<AzureContainerAppEnvironmentResource>(ReferenceEqualityComparer.Instance)
         {
             this
         };
-        var pendingAliases = new Queue<ExistingAzureResourceAnnotation>();
-        pendingAliases.Enqueue(existingResource);
+        var pendingAliases = new Queue<(object? Name, object? Subscription, object? ResourceGroup)>();
+        pendingAliases.Enqueue(existingEnvironments
+            .Single(candidate => ReferenceEquals(candidate.Environment, this))
+            .Identity);
 
         while (pendingAliases.TryDequeue(out var alias))
         {
             foreach (var candidate in existingEnvironments)
             {
                 if (!possibleAliases.Contains(candidate.Environment) &&
-                    ExistingResourceIdentityEqualsOrUsesImplicitScope(alias, candidate.Resource))
+                    ExistingResourceIdentityMayMatch(alias, candidate.Identity))
                 {
                     possibleAliases.Add(candidate.Environment);
-                    pendingAliases.Enqueue(candidate.Resource);
+                    pendingAliases.Enqueue(candidate.Identity);
                 }
             }
         }
@@ -298,22 +321,56 @@ public class AzureContainerAppEnvironmentResource :
         return canonicalEnvironment._deploymentConcurrencyGroup;
     }
 
-    private static bool ExistingResourceIdentityEqualsOrUsesImplicitScope(
-        ExistingAzureResourceAnnotation left,
-        ExistingAzureResourceAnnotation right)
+    private static async ValueTask<(object? Name, object? Subscription, object? ResourceGroup)> ResolveExistingResourceIdentityAsync(
+        ExistingAzureResourceAnnotation resource,
+        string? currentSubscription,
+        string? currentResourceGroup,
+        CancellationToken cancellationToken)
     {
-        return ExistingResourceScopePartEqualsOrIsImplicit(left.Subscription, right.Subscription) &&
-               ExistingResourceScopePartEqualsOrIsImplicit(left.ResourceGroup, right.ResourceGroup) &&
-               ExistingResourceIdentityPartEquals(left.Name, right.Name);
+        var name = await ResolveIdentityPartAsync(resource.Name, cancellationToken).ConfigureAwait(false);
+        var subscription = await ResolveIdentityPartAsync(resource.Subscription ?? currentSubscription, cancellationToken).ConfigureAwait(false);
+        var resourceGroup = await ResolveIdentityPartAsync(resource.ResourceGroup ?? currentResourceGroup, cancellationToken).ConfigureAwait(false);
+
+        return (name, subscription, resourceGroup);
     }
 
-    private static bool ExistingResourceScopePartEqualsOrIsImplicit(object? left, object? right)
+    private static async ValueTask<object?> ResolveIdentityPartAsync(object? part, CancellationToken cancellationToken)
     {
-        return left is null || right is null || ExistingResourceIdentityPartEquals(left, right);
+        return part is ParameterResource parameter
+            ? await ResolveParameterValueAsync(parameter, cancellationToken).ConfigureAwait(false)
+            : part;
     }
 
-    private static bool ExistingResourceIdentityPartEquals(object left, object right)
+    private static async ValueTask<string?> ResolveParameterValueAsync(ParameterResource parameter, CancellationToken cancellationToken)
     {
+        try
+        {
+            return await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (MissingParameterValueException)
+        {
+            // Parameter prompting happens later when the Azure provisioning context is created.
+            // Keep an unresolved marker so alias grouping remains conservative until then.
+            return null;
+        }
+    }
+
+    private static bool ExistingResourceIdentityMayMatch(
+        (object? Name, object? Subscription, object? ResourceGroup) left,
+        (object? Name, object? Subscription, object? ResourceGroup) right)
+    {
+        return ExistingResourceIdentityPartMayMatch(left.Subscription, right.Subscription) &&
+               ExistingResourceIdentityPartMayMatch(left.ResourceGroup, right.ResourceGroup) &&
+               ExistingResourceIdentityPartMayMatch(left.Name, right.Name);
+    }
+
+    private static bool ExistingResourceIdentityPartMayMatch(object? left, object? right)
+    {
+        if (left is null || right is null)
+        {
+            return true;
+        }
+
         if (left is string leftString && right is string rightString)
         {
             return string.Equals(leftString, rightString, StringComparison.OrdinalIgnoreCase);
