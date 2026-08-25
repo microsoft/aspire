@@ -258,27 +258,61 @@ public class AzureContainerAppEnvironmentResource :
             return _deploymentConcurrencyGroup;
         }
 
-        // Multiple logical resources can alias one existing managed environment. Use the first
-        // provably identical alias as the canonical group owner so those physical writes remain serialized.
-        var canonicalEnvironment = model.Resources
-            .OfType<AzureContainerAppEnvironmentResource>()
-            .First(environment =>
-                environment.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var candidate) &&
-                ExistingResourceIdentityEquals(existingResource, candidate));
+        var existingEnvironments = new List<(AzureContainerAppEnvironmentResource Environment, ExistingAzureResourceAnnotation Resource)>();
+        foreach (var environment in model.Resources.OfType<AzureContainerAppEnvironmentResource>())
+        {
+            if (environment.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var resource))
+            {
+                existingEnvironments.Add((environment, resource));
+            }
+        }
+
+        // A null scope part means the current deployment scope, whose value might not be known while
+        // deployment targets are materialized. Treat it as potentially matching an explicit value.
+        // Because that relationship is not transitive, walk the connected component before choosing
+        // a canonical owner so model ordering cannot split potentially identical aliases across groups.
+        var possibleAliases = new HashSet<AzureContainerAppEnvironmentResource>(ReferenceEqualityComparer.Instance)
+        {
+            this
+        };
+        var pendingAliases = new Queue<ExistingAzureResourceAnnotation>();
+        pendingAliases.Enqueue(existingResource);
+
+        while (pendingAliases.TryDequeue(out var alias))
+        {
+            foreach (var candidate in existingEnvironments)
+            {
+                if (!possibleAliases.Contains(candidate.Environment) &&
+                    ExistingResourceIdentityEqualsOrUsesImplicitScope(alias, candidate.Resource))
+                {
+                    possibleAliases.Add(candidate.Environment);
+                    pendingAliases.Enqueue(candidate.Resource);
+                }
+            }
+        }
+
+        var canonicalEnvironment = existingEnvironments
+            .First(candidate => possibleAliases.Contains(candidate.Environment))
+            .Environment;
 
         return canonicalEnvironment._deploymentConcurrencyGroup;
     }
 
-    private static bool ExistingResourceIdentityEquals(
+    private static bool ExistingResourceIdentityEqualsOrUsesImplicitScope(
         ExistingAzureResourceAnnotation left,
         ExistingAzureResourceAnnotation right)
     {
-        return ExistingResourceIdentityPartEquals(left.Subscription, right.Subscription) &&
-               ExistingResourceIdentityPartEquals(left.ResourceGroup, right.ResourceGroup) &&
+        return ExistingResourceScopePartEqualsOrIsImplicit(left.Subscription, right.Subscription) &&
+               ExistingResourceScopePartEqualsOrIsImplicit(left.ResourceGroup, right.ResourceGroup) &&
                ExistingResourceIdentityPartEquals(left.Name, right.Name);
     }
 
-    private static bool ExistingResourceIdentityPartEquals(object? left, object? right)
+    private static bool ExistingResourceScopePartEqualsOrIsImplicit(object? left, object? right)
+    {
+        return left is null || right is null || ExistingResourceIdentityPartEquals(left, right);
+    }
+
+    private static bool ExistingResourceIdentityPartEquals(object left, object right)
     {
         if (left is string leftString && right is string rightString)
         {
