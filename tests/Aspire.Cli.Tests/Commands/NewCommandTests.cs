@@ -86,7 +86,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommand_IntegrationTestTemplatePassesAppHostToSelectedTemplate()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var appHostDirectory = workspace.CreateDirectory("AppHost_$(literal);100%@'&");
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.Tests");
@@ -134,7 +134,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 "--WithAppHostReference",
                 "true",
                 "--AppHostProjectPath",
-                Path.GetRelativePath(outputPath, appHostFile.FullName),
+                Path.Combine("..", "AppHost_%24%28literal%29%3B100%25%40%27&", "AppHost.csproj"),
                 "--AppHostProjectName",
                 "AppHost"
             ],
