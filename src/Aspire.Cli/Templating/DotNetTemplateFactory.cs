@@ -215,36 +215,33 @@ internal class DotNetTemplateFactory(
 
         // Prepends a test framework selection step then calls the
         // underlying test template.
-        if (showAllTemplates)
-        {
-            yield return new CallbackTemplate(
-                "aspire-test",
-                TemplatingStrings.IntegrationTestsTemplate_Description,
-                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
-                command => AddOptionIfMissing(command, _appHostOption),
-                async (template, inputs, parseResult, ct) =>
+        yield return new CallbackTemplate(
+            "aspire-test",
+            TemplatingStrings.IntegrationTestsTemplate_Description,
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+            command => AddOptionIfMissing(command, _appHostOption),
+            async (template, inputs, parseResult, ct) =>
+            {
+                var appHostProject = parseResult.GetValue(_appHostOption);
+                if (appHostProject is { Exists: false })
                 {
-                    var appHostProject = parseResult.GetValue(_appHostOption);
-                    if (appHostProject is { Exists: false })
-                    {
-                        interactionService.DisplayError(InteractionServiceStrings.ProjectOptionDoesntExist);
-                        return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
-                    }
+                    interactionService.DisplayError(InteractionServiceStrings.ProjectOptionDoesntExist);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+                }
 
-                    var testTemplate = await prompter.PromptForTemplateAsync(
-                        [msTestTemplate, xunitTemplate, nunitTemplate],
-                        ct
-                    );
+                var testTemplate = await prompter.PromptForTemplateAsync(
+                    [msTestTemplate, xunitTemplate, nunitTemplate],
+                    ct
+                );
 
-                    var testCallbackTemplate = (CallbackTemplate)testTemplate;
-                    Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback = testCallbackTemplate.Name == "aspire-xunit"
-                        ? PromptForExtraAspireXUnitOptionsAsync
-                        : (_, _) => Task.FromResult(Array.Empty<string>());
+                var testCallbackTemplate = (CallbackTemplate)testTemplate;
+                Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback = testCallbackTemplate.Name == "aspire-xunit"
+                    ? PromptForExtraAspireXUnitOptionsAsync
+                    : (_, _) => Task.FromResult(Array.Empty<string>());
 
-                    return await ApplyTemplateAsync(testCallbackTemplate, inputs, parseResult, extraArgsCallback, ct, appHostProject);
-                },
-                languageId: KnownLanguageId.CSharp);
-        }
+                return await ApplyTemplateAsync(testCallbackTemplate, inputs, parseResult, extraArgsCallback, ct, appHostProject);
+            },
+            languageId: KnownLanguageId.CSharp);
     }
 
     private CallbackTemplate CreateSingleFileTemplate()

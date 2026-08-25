@@ -104,7 +104,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var services = CreateServiceCollection(workspace, options =>
         {
-            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
             options.DotNetCliRunnerFactory = _ => runner;
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
