@@ -47,6 +47,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                             public GenerateAspireProvisioningProxyAttribute(global::System.Type type)
                             {
                             }
+
+                            public bool IsInfrastructureRoot { get; set; } = true;
                         }
                     }
                     """,
@@ -66,33 +68,51 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 input.Right.SelectMany(static roots => roots).ToImmutableArray()));
     }
 
-    private static ImmutableArray<INamedTypeSymbol> GetRootTypes(GeneratorAttributeSyntaxContext context)
+    private static ImmutableArray<ProxyRoot> GetRootTypes(GeneratorAttributeSyntaxContext context)
     {
-        var types = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+        var roots = ImmutableArray.CreateBuilder<ProxyRoot>();
 
         foreach (var attribute in context.Attributes)
         {
             if (attribute.ConstructorArguments.Length == 1 &&
                 attribute.ConstructorArguments[0] is { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol type })
             {
-                types.Add(type);
+                var isInfrastructureRoot = true;
+                foreach (var namedArgument in attribute.NamedArguments)
+                {
+                    if (namedArgument.Key == "IsInfrastructureRoot" &&
+                        namedArgument.Value.Value is bool value)
+                    {
+                        isInfrastructureRoot = value;
+                        break;
+                    }
+                }
+
+                roots.Add(new ProxyRoot(type, isInfrastructureRoot));
             }
         }
 
-        return types.ToImmutable();
+        return roots.ToImmutable();
     }
 
     private static void Generate(
         SourceProductionContext context,
         string generatedNamespace,
-        ImmutableArray<INamedTypeSymbol> roots)
+        ImmutableArray<ProxyRoot> roots)
     {
         if (roots.IsDefaultOrEmpty)
         {
             return;
         }
 
-        var discovery = DiscoverProxyTypes(roots);
+        var normalizedRoots = roots
+            .GroupBy(static root => root.Type, SymbolEqualityComparer.Default)
+            .Select(static group => new ProxyRoot(
+                (INamedTypeSymbol)group.Key,
+                group.Any(static root => root.IsInfrastructureRoot)))
+            .ToImmutableArray();
+        var rootTypes = normalizedRoots.Select(static root => root.Type).ToImmutableArray();
+        var discovery = DiscoverProxyTypes(rootTypes);
         if (discovery.Types.Count == 0)
         {
             return;
@@ -124,7 +144,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         GenerateFactoryClass(
             source,
-            roots.Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default).ToImmutableArray(),
+            normalizedRoots,
             discovery.Types,
             proxyNames,
             collectionNames);
@@ -157,11 +177,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var collections = new List<CollectionShape>();
         var seenTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         var seenCollections = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-        var rootAssemblies = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+        var rootNamespaces = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var root in roots)
         {
-            rootAssemblies.Add(root.ContainingAssembly);
+            rootNamespaces.Add(root.ContainingNamespace.ToDisplayString());
             AddType(root);
         }
 
@@ -210,11 +230,26 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 namedType.TypeKind == TypeKind.Class &&
                 !IsProvisionableResourceBase(namedType) &&
                 namedType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) != BicepValueBaseMetadataName &&
-                rootAssemblies.Contains(namedType.ContainingAssembly) &&
+                IsInRootNamespace(namedType) &&
                 !IsSimpleType(namedType))
             {
                 AddType(namedType);
             }
+        }
+
+        bool IsInRootNamespace(INamedTypeSymbol type)
+        {
+            var namespaceName = type.ContainingNamespace.ToDisplayString();
+            foreach (var rootNamespace in rootNamespaces)
+            {
+                if (namespaceName == rootNamespace ||
+                    namespaceName.StartsWith(rootNamespace + ".", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         void AddType(INamedTypeSymbol type)
@@ -879,7 +914,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static void GenerateFactoryClass(
         StringBuilder source,
-        ImmutableArray<INamedTypeSymbol> roots,
+        ImmutableArray<ProxyRoot> roots,
         List<INamedTypeSymbol> types,
         Dictionary<INamedTypeSymbol, string> proxyNames,
         Dictionary<INamedTypeSymbol, string> collectionNames)
@@ -895,10 +930,16 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine("    {");
 
         foreach (var root in roots
-            .Where(root => IsProvisionableResource(root) && proxyNames.ContainsKey(root))
-            .OrderBy(static root => root.ToDisplayString(), StringComparer.Ordinal))
+            .Where(root => root.IsInfrastructureRoot &&
+                IsProvisionableResource(root.Type) &&
+                proxyNames.ContainsKey(root.Type))
+            .OrderBy(static root => root.Type.ToDisplayString(), StringComparer.Ordinal))
         {
-            GenerateRootLookupMethod(source, root, proxyNames[root], factoryTypeNames[root]);
+            GenerateRootLookupMethod(
+                source,
+                root.Type,
+                proxyNames[root.Type],
+                factoryTypeNames[root.Type]);
         }
 
         foreach (var type in concreteTypes)
@@ -1330,6 +1371,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                     yield return property;
                 }
             }
+
+            if (IsProvisionableResourceBase(current))
+            {
+                yield break;
+            }
         }
     }
 
@@ -1353,6 +1399,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 {
                     yield return method;
                 }
+            }
+
+            if (IsProvisionableResourceBase(current))
+            {
+                yield break;
             }
         }
     }
@@ -1616,6 +1667,19 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         public List<INamedTypeSymbol> Types { get; }
 
         public List<CollectionShape> Collections { get; }
+    }
+
+    private readonly struct ProxyRoot
+    {
+        public ProxyRoot(INamedTypeSymbol type, bool isInfrastructureRoot)
+        {
+            Type = type;
+            IsInfrastructureRoot = isInfrastructureRoot;
+        }
+
+        public INamedTypeSymbol Type { get; }
+
+        public bool IsInfrastructureRoot { get; }
     }
 
     private readonly struct CollectionShape

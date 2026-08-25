@@ -5,4 +5,4 @@ using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.WebPubSub;
 
 [assembly: GenerateAspireProvisioningProxy(typeof(WebPubSubService))]
-[assembly: GenerateAspireProvisioningProxy(typeof(WebPubSubHub))]
+[assembly: GenerateAspireProvisioningProxy(typeof(WebPubSubHub), IsInfrastructureRoot = false)]

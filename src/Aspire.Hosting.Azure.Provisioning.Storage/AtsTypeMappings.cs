@@ -5,4 +5,4 @@ using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.Storage;
 
 [assembly: GenerateAspireProvisioningProxy(typeof(StorageAccount))]
-[assembly: GenerateAspireProvisioningProxy(typeof(Azure.Provisioning.Storage.FileShare))]
+[assembly: GenerateAspireProvisioningProxy(typeof(Azure.Provisioning.Storage.FileShare), IsInfrastructureRoot = false)]

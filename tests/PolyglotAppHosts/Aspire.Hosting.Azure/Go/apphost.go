@@ -147,7 +147,9 @@ output inlineUrl string = 'https://inline.example.com'
 		_, _ = ctx.BicepName()
 		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
 		provisionedIdentity := ctx.GetUserAssignedIdentity()
+		deploymentLocation := ctx.Bicep().Location("westus2")
 		_ = provisionedIdentity.SetName("polyglot-identity")
+		_ = provisionedIdentity.SetLocation(deploymentLocation)
 	})
 
 	identity.WithParameter("identityEmpty")

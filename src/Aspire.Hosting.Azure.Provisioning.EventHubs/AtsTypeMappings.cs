@@ -5,5 +5,5 @@ using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.EventHubs;
 
 [assembly: GenerateAspireProvisioningProxy(typeof(EventHubsNamespace))]
-[assembly: GenerateAspireProvisioningProxy(typeof(EventHub))]
-[assembly: GenerateAspireProvisioningProxy(typeof(EventHubsConsumerGroup))]
+[assembly: GenerateAspireProvisioningProxy(typeof(EventHub), IsInfrastructureRoot = false)]
+[assembly: GenerateAspireProvisioningProxy(typeof(EventHubsConsumerGroup), IsInfrastructureRoot = false)]

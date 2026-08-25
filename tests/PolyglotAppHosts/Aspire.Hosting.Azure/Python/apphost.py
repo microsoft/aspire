@@ -10,7 +10,9 @@ def configure_infrastructure(_infrastructure: AzureResourceInfrastructure):
 
 def configure_identity_infrastructure(infrastructure: AzureResourceInfrastructure):
     provisioned_identity = infrastructure.get_user_assigned_identity()
+    deployment_location = infrastructure.bicep().location("westus2")
     provisioned_identity.name = "polyglot-identity"
+    provisioned_identity.location = deployment_location
 
 
 with create_builder() as builder:

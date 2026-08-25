@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Aspire.Hosting.ApplicationModel;
@@ -70,6 +71,17 @@ internal sealed class BicepValueFactoryProxy
         ArgumentNullException.ThrowIfNull(value);
 
         return BicepValueProxy.Create(new BicepValue<Uri>(value));
+    }
+
+    /// <summary>
+    /// Creates an Azure location literal.
+    /// </summary>
+    [AspireExport]
+    internal BicepValueProxy Location(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return BicepValueProxy.Create(new BicepValue<AzureLocation>(new AzureLocation(name)));
     }
 
     [AspireExport]

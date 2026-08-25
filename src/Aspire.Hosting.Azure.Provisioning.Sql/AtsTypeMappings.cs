@@ -5,5 +5,5 @@ using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.Sql;
 
 [assembly: GenerateAspireProvisioningProxy(typeof(SqlServer))]
-[assembly: GenerateAspireProvisioningProxy(typeof(SqlDatabase))]
-[assembly: GenerateAspireProvisioningProxy(typeof(ServerExternalAdministrator))]
+[assembly: GenerateAspireProvisioningProxy(typeof(SqlDatabase), IsInfrastructureRoot = false)]
+[assembly: GenerateAspireProvisioningProxy(typeof(ServerExternalAdministrator), IsInfrastructureRoot = false)]

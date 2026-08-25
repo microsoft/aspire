@@ -5,7 +5,7 @@ using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.ServiceBus;
 
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusNamespace))]
-[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusQueue))]
-[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusTopic))]
-[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusSubscription))]
-[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusRule))]
+[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusQueue), IsInfrastructureRoot = false)]
+[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusTopic), IsInfrastructureRoot = false)]
+[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusSubscription), IsInfrastructureRoot = false)]
+[assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusRule), IsInfrastructureRoot = false)]

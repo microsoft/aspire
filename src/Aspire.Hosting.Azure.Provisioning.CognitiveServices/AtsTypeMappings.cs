@@ -5,4 +5,4 @@ using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
 
 [assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccount))]
-[assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccountDeployment))]
+[assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccountDeployment), IsInfrastructureRoot = false)]

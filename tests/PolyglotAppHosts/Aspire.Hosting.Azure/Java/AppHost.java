@@ -58,6 +58,7 @@ void main() throws Exception {
         identity.configureInfrastructure((infrastructureContext) -> {
             var provisionedIdentity = infrastructureContext.getUserAssignedIdentity();
             provisionedIdentity.setName("polyglot-identity");
+            provisionedIdentity.setLocation(infrastructureContext.bicep().location("westus2"));
         });
         identity.withParameter("identityEmpty");
         identity.withParameter("identityPlain", "value");

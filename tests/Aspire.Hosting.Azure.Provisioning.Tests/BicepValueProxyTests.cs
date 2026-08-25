@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Xunit;
@@ -73,6 +74,19 @@ public class BicepValueProxyTests
 
         Assert.Equal(BicepValueKind.Expression, ((IBicepValue)converted).Kind);
         Assert.Equal("(20 + 10)", converted.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void AssignToPreservesAzureLocationLiteral()
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<AzureLocation>(AzureLocation.WestUS2));
+        var target = new BicepValue<AzureLocation>(AzureLocation.EastUS);
+
+        proxy.AssignTo(target);
+
+        var assigned = (IBicepValue)target;
+        Assert.Equal(BicepValueKind.Literal, assigned.Kind);
+        Assert.Equal(AzureLocation.WestUS2, assigned.LiteralValue);
     }
 
     [Fact]

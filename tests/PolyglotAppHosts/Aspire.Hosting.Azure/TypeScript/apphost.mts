@@ -77,7 +77,9 @@ await identity.configureInfrastructure(async infrastructureContext => {
         .appendLiteral("mi-")
         .appendValue(uniqueName)
         .build();
+    const deploymentLocation = bicep.location("westus2");
     await provisionedIdentity.name.set(identityName);
+    await provisionedIdentity.location.set(deploymentLocation);
 });
 await identity.withParameter("identityEmpty");
 await identity.withParameter("identityPlain", { value: "value" });
