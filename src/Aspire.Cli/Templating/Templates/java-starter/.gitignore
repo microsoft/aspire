@@ -1,3 +1,7 @@
 .java-build/
 .aspire/
 .modules/
+
+# Maven build output for the api service, including the OpenTelemetry agent the POM
+# downloads into target/agent during the build.
+target/

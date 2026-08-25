@@ -1,0 +1,8 @@
+﻿config:
+  myapp:
+    host: "01"
+    SOME_URL: "http://01/test"
+secrets:
+  myapp:
+    token: "1.0"
+    SECRET_URL: "http://01/test?token=1.0"

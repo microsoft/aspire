@@ -53,6 +53,7 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardErrorCallback { get; set; }
 
     public bool NoLaunchProfile { get; set; }
+    public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
 
@@ -114,6 +115,18 @@ internal sealed class ProcessInvocationOptions
     public Func<string, bool>? EnvironmentVariableFilter { get; set; }
 
     /// <summary>
+    /// Index of the first argument that is user-supplied AppHost input rather than a CLI-owned
+    /// option, for invocations whose argument list has no <c>--</c> separator to key off. Leave
+    /// <see langword="null"/> when the separator is present or the whole list is CLI-owned.
+    /// </summary>
+    /// <remarks>
+    /// Launching a built AppHost directly (rather than through <c>dotnet run</c>) appends the
+    /// forwarded arguments straight onto the executable's command line, so the redaction boundary
+    /// has to travel with the invocation instead of being recovered from the arguments.
+    /// </remarks>
+    internal int? AppHostArgumentStartIndex { get; set; }
+
+    /// <summary>
     /// Issues the graceful shutdown signal during the shutdown ladder (DCP
     /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
     /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
@@ -138,6 +151,7 @@ internal sealed class ProcessInvocationOptions
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
         NoLaunchProfile = NoLaunchProfile,
+        LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
         SuppressLogging = SuppressLogging,
@@ -147,6 +161,7 @@ internal sealed class ProcessInvocationOptions
         Detached = Detached,
         DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
+        AppHostArgumentStartIndex = AppHostArgumentStartIndex,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
     };
@@ -224,6 +239,7 @@ internal sealed class DotNetCliRunner(
         processActivity.SetDotNetResolvedExecutable(
             processFileName,
             effectiveArgs,
+            options.AppHostArgumentStartIndex,
             finalEnv.TryGetValue("DOTNET_CLI_USE_MSBUILD_SERVER", out var msBuildServerValue) ? msBuildServerValue : null);
         processActivity.SetDotNetArgsCount(effectiveArgs.Length);
 
@@ -379,6 +395,9 @@ internal sealed class DotNetCliRunner(
             Detached = options.Detached,
             DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
+            // Without this the redaction boundary is lost between the runner and the process
+            // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
+            AppHostArgumentStartIndex = options.AppHostArgumentStartIndex,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
@@ -487,7 +506,7 @@ internal sealed class DotNetCliRunner(
         logger.LogDebug("Starting backchannel connection to AppHost at {SocketPath}", socketPath);
 
         var startTime = DateTimeOffset.UtcNow;
-        var connectionTimeout = GetBackchannelConnectionTimeout(configuration);
+        var connectionTimeout = AppHostStartupTimeout.GetBackchannelConnectionTimeout(configuration);
 
         do
         {
@@ -657,24 +676,6 @@ internal sealed class DotNetCliRunner(
     {
         return BundleDiscovery.TryDiscoverDcpFromDirectory(bundleRoot, out _, out _, out _)
             && BundleDiscovery.TryDiscoverManagedFromDirectory(bundleRoot, out _);
-    }
-
-    internal static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
-    {
-        var configuredValue = configuration[KnownConfigNames.CliBackchannelConnectTimeoutSeconds];
-        if (double.TryParse(configuredValue, CultureInfo.InvariantCulture, out var seconds) && seconds >= 0)
-        {
-            return TimeSpan.FromSeconds(seconds);
-        }
-
-        var timeout = TimeSpan.FromSeconds(WaitCommand.DefaultTimeoutSeconds);
-        var configuredStartupTimeout = configuration[CliConfigNames.AppHostStartupTimeout];
-        if (int.TryParse(configuredStartupTimeout, CultureInfo.InvariantCulture, out var startupTimeoutSeconds) && startupTimeoutSeconds > timeout.TotalSeconds)
-        {
-            timeout = TimeSpan.FromSeconds(startupTimeoutSeconds);
-        }
-
-        return timeout;
     }
 
     // Cache expiry/max age handled inside DiskCache implementation.
@@ -909,22 +910,29 @@ internal sealed class DotNetCliRunner(
         var noBuildSwitch = noBuild ? "--no-build" : string.Empty;
         var noRestoreSwitch = noRestore && !noBuild ? "--no-restore" : string.Empty; // --no-build implies --no-restore
         var noProfileSwitch = options.NoLaunchProfile ? "--no-launch-profile" : string.Empty;
+        var launchProfile = options.NoLaunchProfile ? null : options.LaunchProfile;
+        string[] launchProfileSwitch = !string.IsNullOrEmpty(launchProfile)
+            ? [$"--launch-profile={launchProfile}"]
+            : [];
         var suppressCliRunHookProperty = $"/p:{KnownConfigNames.SuppressCliRunHook}=true";
         // Add --non-interactive flag when using watch to prevent interactive prompts during automation
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
         // Add --verbose flag when using watch and debug is enabled
         var verboseSwitch = watch && options.Debug ? "--verbose" : string.Empty;
 
-        string[] cliArgs = isSingleFile switch
+        string[] cliOptions = isSingleFile switch
         {
-            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName, "--", .. args],
+            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, "--project", projectFile.FullName],
             // File-based dotnet run only recomputes RunCommand during build. Omit --no-build
             // for single-file AppHosts so the suppression property is applied before launch
             // and a CLI-launched AppHost cannot recursively enter the run hook.
-            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName, "--", .. args]
+            true => ["run", noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName]
         };
 
-        cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
+        // Empty extension-owned entries represent omitted optional switches, while empty or
+        // whitespace-only entries after "--" are valid AppHost arguments. Filter only the
+        // option prefix so application argument boundaries survive CLI-to-extension delegation.
+        string[] cliArgs = [.. cliOptions.Where(arg => !string.IsNullOrWhiteSpace(arg)), "--", .. args];
 
         var finalEnv = CreateRunEnvironment(
             env,

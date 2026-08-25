@@ -12,6 +12,33 @@
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true"
       }
     },
+    "https-unlimited-dashboard": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://Stress.dev.localhost:16309;http://Stress.dev.localhost:16310",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true",
+        "STRESS_REMOVE_DASHBOARD_LIMITS": "true"
+      }
+    },
+    "https-unlimited-dashboard (profiling)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://Stress.dev.localhost:16309;http://Stress.dev.localhost:16310",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true",
+        "STRESS_REMOVE_DASHBOARD_LIMITS": "true",
+        "AppHost__DefaultLaunchProfileName": "https",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"
+      }
+    },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,

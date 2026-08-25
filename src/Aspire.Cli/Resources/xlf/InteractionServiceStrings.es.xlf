@@ -97,6 +97,11 @@
         <target state="needs-review-translation">La entrada interactiva no es compatible con este entorno. Use la marca --non-interactive o asegúrese de que la CLI se esté ejecutando en un terminal interactivo.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Para obtener más información, consulte: [link]{0}[/][/]</target>

@@ -41,12 +41,12 @@ Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, ex
 
 The root `flake.nix` packages the stable Aspire CLI from the versioned GitHub release archive URLs and hashes tracked in `eng/nix/versions.json`. It is a binary package, not a Nix source build of this repository. This keeps the Nix package aligned with the same canonical signed native archive consumed by the other installers.
 
-For stable releases, the GitHub release assets must exist before the Nix manifest is updated. `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml` after `PublishReleaseAssetsJob` uploads the `aspire-cli-*` archives and `.sha512` sidecars to the GitHub release. The workflow runs:
+For stable releases, `release-publish-nuget`'s `UpdateNixPackageJob` dispatches `.github/workflows/update-nix-cli-flake.yml`. The job reads the `aspire-cli-*.tar.gz.sha512` checksums from the signed source build's `BlobArtifacts` and passes them to the workflow as inputs, so the manifest is built from the build — not from the GitHub release. This lets it run while the release is still a **draft** (immutable releases don't serve draft assets from the public download URL). The workflow runs:
 
 ```sh
-eng/nix/update-versions.sh --version <VERSION>
+eng/nix/update-versions.sh --version <VERSION> --sha512 osx-arm64=<hex> --sha512 osx-x64=<hex> --sha512 linux-arm64=<hex> --sha512 linux-x64=<hex>
 ```
 
-The workflow commits the Nix manifest change to the `update-baseline-<VERSION>` branch created by `release-github-tasks.yml`, then creates or updates the baseline PR. Merging that PR is the in-repo Nix "ship" step: it publishes the flake metadata that points at the already-published release assets. The updater reads the official `.sha512` assets and writes Nix-compatible SRI hashes. Do not point the manifest at mutable `aka.ms` channel URLs; Nix fixed-output fetches require stable versioned URLs.
+The workflow commits the Nix manifest change to the `update-baseline-<VERSION>` branch created by `release-github-tasks.yml`, then creates or updates the baseline PR. Merging that PR is the in-repo Nix "ship" step: it publishes the flake metadata that points at the versioned release download URLs (which go live when the release manager publishes the draft). When the `--sha512` inputs are supplied the updater uses them directly; run manually without them (against an already-published release) it downloads the official `.sha512` assets instead. Either way it writes Nix-compatible SRI hashes. Do not point the manifest at mutable `aka.ms` channel URLs; Nix fixed-output fetches require stable versioned URLs.
 
 The Nix derivation writes `{"source":"nix"}` to `.aspire-install.json` next to the packaged native binary. `BundleService` treats this route as read-only and extracts the embedded bundle payload into the user-owned Aspire home instead of the Nix store.

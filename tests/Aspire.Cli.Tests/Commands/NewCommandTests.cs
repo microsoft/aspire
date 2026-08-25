@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Utils;
-using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 using Aspire.Cli.Configuration;
@@ -25,6 +24,7 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Commands;
 
+[Collection(LocalizedResourceMutatingTestCollection.Name)]
 public class NewCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
@@ -99,7 +99,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommand_CSharpEmptyTemplateUnderStagingIdentity_WritesStagingNuGetConfig()
+    public async Task NewCommand_CSharpEmptyTemplateUnderStagingIdentity_WritesStagingConfiguration()
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
 
@@ -154,7 +154,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var config = AspireConfigFile.Load(outputDirectory);
         Assert.NotNull(config);
-        Assert.Null(config.Channel);
+        Assert.Equal(PackageChannelNames.Staging, config.Channel);
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), config.SdkVersion);
     }
 
     [Fact]
@@ -169,6 +170,48 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Theory]
+    [InlineData("None", null)]
+    [InlineData("Ninguno", null)]
+    [InlineData("MSTest", "MSTest")]
+    public async Task NewCommandForwardsLocalizedTestFrameworkSelection(string testFramework, string? expectedTestFramework)
+    {
+        var originalCulture = TemplatingStrings.Culture;
+
+        try
+        {
+            TemplatingStrings.Culture = CultureInfo.GetCultureInfo("es-ES");
+
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+            var runner = CreateTestRunnerWithStandardPackages();
+            var services = CreateServiceCollection(workspace, options => options.DotNetCliRunnerFactory = _ => runner);
+            using var provider = services.BuildServiceProvider();
+
+            var command = provider.GetRequiredService<NewCommand>();
+            var result = command.Parse($"new aspire-starter --use-redis-cache --test-framework {testFramework}");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            var extraArgs = Assert.IsType<string[]>(runner.LastNewProjectExtraArgs);
+            var testFrameworkArgumentIndex = Array.IndexOf(extraArgs, "--test-framework");
+            var forwardedTestFramework = testFrameworkArgumentIndex >= 0
+                ? extraArgs[testFrameworkArgumentIndex + 1]
+                : null;
+            Assert.Equal(expectedTestFramework, forwardedTestFramework);
+        }
+        finally
+        {
+            TemplatingStrings.Culture = originalCulture;
+        }
+    }
+
+    [CollectionDefinition(Name, DisableParallelization = true)]
+    public sealed class LocalizedResourceMutatingTestCollection
+    {
+        public const string Name = nameof(LocalizedResourceMutatingTestCollection);
     }
 
     [Fact]
@@ -500,13 +543,17 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --channel pr-12345 --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-starter --channel pr-12345 --name TestApp --output ./output --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.Equal(cliVersion, selectedVersion);
         Assert.False(promptedForVersion);
+        var config = AspireConfigFile.Load(Path.Combine(workspace.WorkspaceRoot.FullName, "output"));
+        Assert.NotNull(config);
+        Assert.Equal("pr-12345", config.Channel);
+        Assert.Equal(cliVersion, config.SdkVersion);
     }
 
     [Fact]
@@ -609,45 +656,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommand_WhenCertificateServiceThrows_ReturnsNonZeroExitCode()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.NewCommandPrompterFactory = (sp) => {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-                return prompter;
-            };
-            options.CertificateServiceFactory = _ => new ThrowingCertificateService();
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = CreateTestRunnerWithStandardPackages();
-
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, options, cancellationToken) =>
-                {
-                    return (0, version); // Success, return the template version
-                };
-
-                runner.NewProjectAsyncCallback = (templateName, name, outputPath, options, cancellationToken) =>
-                {
-                    return 0; // Success
-                };
-
-                return runner;
-            };
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(CliExitCodes.FailedToTrustCertificates, exitCode);
-    }
-
-    [Fact]
     public async Task NewCommandWithExitCode73ShowsUserFriendlyError()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -691,6 +699,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         return CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Stable);
             options.DotNetCliRunnerFactory = _ => CreateTestRunnerWithStandardPackages();
             configure?.Invoke(options);
         });
@@ -741,16 +750,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             .Where(pattern => pattern is not null)
             .Select(pattern => pattern!)
             .ToArray();
-    }
-
-    private sealed class ThrowingCertificateService : ICertificateService
-    {
-        public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
-        {
-            throw new CertificateServiceException("Failed to trust certificates");
-        }
-
-        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     [Fact]
@@ -1186,19 +1185,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
-    [Theory]
-    [InlineData("https://proxy.example/v3/index.json", false)]
-    [InlineData("relative-feed", true)]
-    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery(string sourceOverride, bool isRelative)
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverrideUsesSourceForTemplateDiscovery()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var expectedSource = isRelative
-            ? Path.Combine(workspace.WorkspaceRoot.FullName, sourceOverride)
-            : sourceOverride;
-        if (isRelative)
-        {
-            Directory.CreateDirectory(expectedSource);
-        }
+        const string sourceOverride = "https://proxy.example/v3/index.json";
+        var expectedSource = sourceOverride;
 
         string? discoveryAspireSource = null;
         string? discoveryFallbackSource = null;
@@ -1258,6 +1250,49 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
     }
 
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndRelativeLocalSourceOverrideDiscoversTemplatesFromResolvedDirectory()
+    {
+        // A local directory passed to --source is enumerated directly instead of going through
+        // `dotnet package search`, which cannot see hierarchical local feeds. The relative path must
+        // still be resolved against the invocation directory before it is used or persisted.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var expectedSource = Path.Combine(workspace.WorkspaceRoot.FullName, "relative-feed");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(expectedSource, "aspire.projecttemplates", "9.2.0"));
+        File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [
+                new PackageMapping("Aspire*", "https://channel.example/v3/index.json"),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --channel staging --source relative-feed");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), expectedSource);
+    }
+
     [Theory]
     [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
@@ -1269,6 +1304,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         Directory.CreateDirectory(sourceOverride);
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
         string? capturedPackageSourceOverride = null;
         TestInteractionService? interactionService = null;
 
@@ -1316,6 +1352,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         Directory.CreateDirectory(sourceOverride);
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
 
         var services = CreateServiceCollection(workspace);
 
@@ -2044,6 +2081,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         Directory.CreateDirectory(sourceOverride);
+        // A local --source directory is enumerated directly rather than searched, so the template
+        // package has to exist on disk for version resolution to succeed.
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>
         {
@@ -2151,6 +2191,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceOverride = Path.Combine(workspace.WorkspaceRoot.FullName, "source-feed");
         Directory.CreateDirectory(sourceOverride);
+        // A local --source directory is enumerated directly rather than searched, so the template
+        // package has to exist on disk for version resolution to succeed.
+        File.WriteAllText(Path.Combine(sourceOverride, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
 
         TestInteractionService? interactionService = null;
         var services = CreateServiceCollection(workspace, options =>
@@ -2902,6 +2945,87 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandInExtensionModeRetriesFolderPickerAfterProjectSubdirectoryCollision()
+    {
+        const string projectName = "aspire-starter";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var collidingParent = workspace.CreateDirectory("colliding-parent");
+        var collidingProject = Directory.CreateDirectory(Path.Combine(collidingParent.FullName, projectName));
+        File.WriteAllText(Path.Combine(collidingProject.FullName, "existing.txt"), "existing content");
+        var validParent = workspace.CreateDirectory("valid-parent");
+        var selectedParents = new Queue<string?>([collidingParent.FullName, validParent.FullName]);
+        var displayedErrors = new List<string>();
+        var promptCount = 0;
+        string? capturedOutputPath = null;
+
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(
+                capability is KnownCapabilities.Baseline or KnownCapabilities.FilePickers),
+            PromptForFilePathAsyncCallback = (_, _, _) =>
+            {
+                promptCount++;
+                return Task.FromResult(selectedParents.Dequeue());
+            },
+            DisplayErrorAsyncCallback = error =>
+            {
+                displayedErrors.Add(error);
+                return Task.CompletedTask;
+            }
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.ExtensionBackchannelFactory = _ => backchannel;
+            options.InteractionServiceFactory = sp =>
+            {
+                var consoleInteractionService = new ConsoleInteractionService(
+                    sp.GetRequiredService<ConsoleEnvironment>(),
+                    sp.GetRequiredService<CliExecutionContext>(),
+                    sp.GetRequiredService<ICliHostEnvironment>(),
+                    sp.GetRequiredService<IProcessPathProvider>(),
+                    NullLoggerFactory.Instance,
+                    sp.GetRequiredService<ConsoleLogBufferContext>());
+
+                return new ExtensionInteractionService(
+                    consoleInteractionService,
+                    backchannel,
+                    extensionPromptEnabled: true,
+                    logger: NullLogger<ExtensionInteractionService>.Instance);
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = CreateTestRunnerWithStandardPackages();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    capturedOutputPath = outputPath;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            $"new aspire-starter --name {projectName} --version 9.2.0 --use-redis-cache --test-framework None --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(2, promptCount);
+        Assert.Equal(Path.Combine(validParent.FullName, projectName), capturedOutputPath);
+        var expectedError = string.Format(
+            CultureInfo.CurrentCulture,
+            NewCommandStrings.OutputDirectoryNotEmptyInteractive,
+            collidingProject.FullName);
+        Assert.Equal([expectedError], displayedErrors);
+    }
+
+    [Fact]
     public async Task NewCommandInExtensionModePromptsBeforeFolderPickerForCliTemplateSubdirectory()
     {
         const string projectName = "MyFirstApp";
@@ -3308,7 +3432,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 // Use projectDir as the working directory but root the .aspire/*
                 // directories under the workspace so test infra doesn't pollute the project dir.
                 return TestExecutionContextHelper.CreateExecutionContext(
-                    projectDir);
+                    projectDir,
+                    identityChannel: PackageChannelNames.Stable);
             };
 
             options.DotNetCliRunnerFactory = _ =>

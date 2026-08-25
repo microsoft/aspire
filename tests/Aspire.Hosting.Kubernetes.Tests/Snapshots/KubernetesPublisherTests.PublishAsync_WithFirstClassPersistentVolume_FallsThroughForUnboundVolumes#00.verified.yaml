@@ -30,6 +30,9 @@ spec:
             claimName: "data"
         - name: "scratch"
           emptyDir: {}
+      securityContext:
+        fsGroup: 2000
+        fsGroupChangePolicy: "OnRootMismatch"
   selector:
     matchLabels:
       app.kubernetes.io/name: "{{ .Chart.Name }}"

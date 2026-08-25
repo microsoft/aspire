@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import {
+    CliPathResolver,
     getConfiguredCliPath,
     getResolvedCliPathForForwarding,
     isConfiguredCliPathRejectedForForwarding,
@@ -10,6 +11,12 @@ import {
     onDidChangeResolvedCliPathForForwarding,
     resolveCliPath,
 } from './cliPath';
+import {
+    CliPathResolutionTarget,
+    getCliPathTargetKey,
+    windowCliPathTarget,
+    workspaceFolderCliPathTarget,
+} from './cliPathVariables';
 import { extensionLogOutputChannel } from './logging';
 import { aspireCliPathEnvironmentDescription } from '../loc/strings';
 
@@ -40,10 +47,13 @@ export interface CliPathEnvironmentCollection {
     delete(variable: string): void;
 }
 
-export interface ForwardableCliPathDependencies {
+export interface ResolvedCliPathDependencies {
     isAbsolute: (cliPath: string) => boolean;
     fileExists: (cliPath: string) => boolean;
     realpath: (cliPath: string) => string | undefined;
+}
+
+export interface ForwardableCliPathDependencies extends ResolvedCliPathDependencies {
     isRejectedForForwarding: (cliPath: string) => boolean;
 }
 
@@ -57,12 +67,16 @@ export interface CliPathEnvironmentDependencies extends ForwardableCliPathDepend
     log?: (message: string) => void;
 }
 
-const defaultForwardableCliPathDeps: ForwardableCliPathDependencies = {
+const defaultResolvedCliPathDeps: ResolvedCliPathDependencies = {
     isAbsolute: cliPath => process.platform === 'win32'
         ? isFullyQualifiedWindowsPath(cliPath)
         : path.isAbsolute(cliPath),
     fileExists: fileExists,
     realpath: realpath,
+};
+
+const defaultForwardableCliPathDeps: ForwardableCliPathDependencies = {
+    ...defaultResolvedCliPathDeps,
     isRejectedForForwarding: isConfiguredCliPathRejectedForForwarding,
 };
 
@@ -73,18 +87,22 @@ const defaultDeps: CliPathEnvironmentDependencies = {
     log: (message) => extensionLogOutputChannel.info(message),
 };
 
+function isForwardableResolvedCliPath(cliPath: string, deps: ResolvedCliPathDependencies): boolean {
+    return cliPath.length > 0
+        && deps.isAbsolute(cliPath)
+        && deps.fileExists(cliPath)
+        && !isUnbundledFrameworkDependentCliPath(cliPath, deps)
+        && !isResolvedUnbundledFrameworkDependentCliPath(cliPath, deps);
+}
+
 export function isForwardableAspireCliPath(
     configuredPath: string,
     deps: ForwardableCliPathDependencies = defaultForwardableCliPathDeps,
 ): boolean {
-    return configuredPath.length > 0
-        && deps.isAbsolute(configuredPath)
-        && deps.fileExists(configuredPath)
-        // CLI resolution rejected this path and is running a different CLI, so forwarding it
-        // would make ResolveAspireCliBundle stamp bundle paths from a CLI that never ran.
-        && !deps.isRejectedForForwarding(configuredPath)
-        && !isUnbundledFrameworkDependentCliPath(configuredPath, deps)
-        && !isResolvedUnbundledFrameworkDependentCliPath(configuredPath, deps);
+    // CLI resolution rejected this path and is running a different CLI, so forwarding it
+    // would make ResolveAspireCliBundle stamp bundle paths from a CLI that never ran.
+    return isForwardableResolvedCliPath(configuredPath, deps)
+        && !deps.isRejectedForForwarding(configuredPath);
 }
 
 export function getForwardableAspireCliPath(deps: CliPathEnvironmentDependencies = defaultDeps): string | undefined {
@@ -96,6 +114,23 @@ export function getForwardableAspireCliPath(deps: CliPathEnvironmentDependencies
     const resolvedPath = deps.getResolvedPath(configuredPath);
     return resolvedPath !== undefined && isForwardableAspireCliPath(resolvedPath, deps)
         ? resolvedPath
+        : undefined;
+}
+
+/**
+ * Validates a concrete CLI path that has already been chosen and launched (for example, the
+ * exact executable `spawnCliProcess` invokes) so it can be forwarded to the child's environment.
+ * Unlike `getForwardableAspireCliPath`, this intentionally does not consult configured-path
+ * rejection state: that state describes a raw setting/target combination, but the caller here
+ * already selected and ran this exact executable, so rejection of a *different* configured value
+ * must not suppress it.
+ */
+export function getForwardableResolvedAspireCliPath(
+    cliPath: string | undefined,
+    deps: ResolvedCliPathDependencies = defaultResolvedCliPathDeps,
+): string | undefined {
+    return cliPath !== undefined && isForwardableResolvedCliPath(cliPath, deps)
+        ? cliPath
         : undefined;
 }
 
@@ -112,6 +147,52 @@ export function createAspireCliPathProcessEnvironment(
         ...baseEnv,
         [ASPIRE_CLI_PATH_ENV_VAR]: forwardablePath,
     };
+}
+
+/**
+ * Builds a child process environment that forwards exactly the concrete, already-resolved CLI
+ * path a caller is about to invoke (or run against a project via `dotnet build`/`msbuild`/
+ * `dotnet run-api`), rather than re-reading the configured setting.
+ *
+ * Unlike {@link createAspireCliPathProcessEnvironment}, this does not consult configured-path
+ * rejection state: the caller already resolved and is about to run this exact executable, so a
+ * *different* configured value being rejected must not suppress it. When the resolved path is
+ * not forwardable (relative, missing, or an unbundled framework-dependent build), any stale
+ * `AspireCliPath` already present in `baseEnv` is removed instead of being left to point at a
+ * different CLI than the one actually running.
+ */
+export function createResolvedAspireCliPathProcessEnvironment(
+    resolvedCliPath: string | undefined,
+    baseEnv: NodeJS.ProcessEnv = process.env,
+    deps: ResolvedCliPathDependencies = defaultResolvedCliPathDeps,
+): NodeJS.ProcessEnv {
+    const env = { ...baseEnv };
+    const forwardablePath = getForwardableResolvedAspireCliPath(resolvedCliPath, deps);
+    if (forwardablePath === undefined) {
+        deleteEnvVarCaseInsensitive(env, ASPIRE_CLI_PATH_ENV_VAR);
+        return env;
+    }
+
+    deleteEnvVarCaseInsensitive(env, ASPIRE_CLI_PATH_ENV_VAR);
+    env[ASPIRE_CLI_PATH_ENV_VAR] = forwardablePath;
+    return env;
+}
+
+// Windows environment variable names are case-insensitive, so a stale `AspireCliPath` (or
+// `ASPIRECLIPATH`, etc.) already in `baseEnv` must be removed regardless of casing, matching the
+// case-insensitive override semantics `mergeCliSpawnEnvironment` applies to spawned CLI processes.
+function deleteEnvVarCaseInsensitive(env: NodeJS.ProcessEnv, name: string): void {
+    if (process.platform !== 'win32') {
+        delete env[name];
+        return;
+    }
+
+    const lowerName = name.toLowerCase();
+    for (const key of Object.keys(env)) {
+        if (key.toLowerCase() === lowerName) {
+            delete env[key];
+        }
+    }
 }
 
 function fileExists(filePath: string): boolean {
@@ -132,7 +213,7 @@ function realpath(filePath: string): string | undefined {
     }
 }
 
-function isUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ForwardableCliPathDependencies): boolean {
+function isUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ResolvedCliPathDependencies): boolean {
     const cliDirectory = path.dirname(configuredPath);
     const cliAssemblyPath = path.join(cliDirectory, 'aspire.dll');
 
@@ -149,7 +230,7 @@ function isUnbundledFrameworkDependentCliPath(configuredPath: string, deps: Forw
     return !hasInstallSidecar(cliDirectory, deps) && !hasAdjacentBundleLayout(cliDirectory, deps);
 }
 
-function isResolvedUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ForwardableCliPathDependencies): boolean {
+function isResolvedUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ResolvedCliPathDependencies): boolean {
     const resolvedPath = deps.realpath(configuredPath);
     if (resolvedPath === undefined || resolvedPath === configuredPath || !deps.isAbsolute(resolvedPath) || !deps.fileExists(resolvedPath)) {
         return false;
@@ -158,18 +239,229 @@ function isResolvedUnbundledFrameworkDependentCliPath(configuredPath: string, de
     return isUnbundledFrameworkDependentCliPath(resolvedPath, deps);
 }
 
-function hasInstallSidecar(cliDirectory: string, deps: ForwardableCliPathDependencies): boolean {
+function hasInstallSidecar(cliDirectory: string, deps: ResolvedCliPathDependencies): boolean {
     return deps.fileExists(path.join(cliDirectory, '.aspire-install.json'));
 }
 
-function hasAdjacentBundleLayout(cliDirectory: string, deps: ForwardableCliPathDependencies): boolean {
+function hasAdjacentBundleLayout(cliDirectory: string, deps: ResolvedCliPathDependencies): boolean {
     return hasBundleRoot(cliDirectory, deps)
         || hasBundleRoot(path.join(cliDirectory, 'bundle'), deps);
 }
 
-function hasBundleRoot(bundleRoot: string, deps: ForwardableCliPathDependencies): boolean {
+function hasBundleRoot(bundleRoot: string, deps: ResolvedCliPathDependencies): boolean {
     return (deps.fileExists(path.join(bundleRoot, 'dcp', 'dcp')) || deps.fileExists(path.join(bundleRoot, 'dcp', 'dcp.exe')))
         && (deps.fileExists(path.join(bundleRoot, 'managed', 'aspire-managed')) || deps.fileExists(path.join(bundleRoot, 'managed', 'aspire-managed.exe')));
+}
+
+export interface CliPathEnvironmentSynchronizerDependencies {
+    getWorkspaceFolders: () => readonly vscode.WorkspaceFolder[];
+    getForwardablePath: (cliPath: string | undefined) => string | undefined;
+    onDidChangeConfiguration: vscode.Event<vscode.ConfigurationChangeEvent>;
+    onDidChangeWorkspaceFolders: vscode.Event<vscode.WorkspaceFoldersChangeEvent>;
+    onDidGrantWorkspaceTrust: vscode.Event<void>;
+}
+
+const defaultSynchronizerDependencies: CliPathEnvironmentSynchronizerDependencies = {
+    getWorkspaceFolders: () => vscode.workspace.workspaceFolders ?? [],
+    getForwardablePath: getForwardableResolvedAspireCliPath,
+    onDidChangeConfiguration: vscode.workspace.onDidChangeConfiguration,
+    onDidChangeWorkspaceFolders: vscode.workspace.onDidChangeWorkspaceFolders,
+    onDidGrantWorkspaceTrust: vscode.workspace.onDidGrantWorkspaceTrust,
+};
+
+/**
+ * Keeps VS Code's window and workspace-folder environment collections aligned with the
+ * exact CLI each target resolves. Folder collections are retained until their folder is
+ * removed so stale persisted mutations can be explicitly cleared.
+ */
+export class CliPathEnvironmentSynchronizer implements vscode.Disposable {
+    private readonly _scopedCollections = new Map<string, vscode.EnvironmentVariableCollection>();
+    private readonly _forwardedPaths = new Map<string, string | undefined>();
+    private readonly _activeFolderTargets = new Map<string, CliPathResolutionTarget>();
+    private readonly _syncGenerations = new Map<string, number>();
+    private readonly _disposable: vscode.Disposable;
+    private _disposed = false;
+
+    constructor(
+        private readonly _globalCollection: vscode.GlobalEnvironmentVariableCollection,
+        private readonly _resolver: CliPathResolver,
+        subscriptions: vscode.Disposable[],
+        private readonly _onForwardedPathChanged?: (
+            target: CliPathResolutionTarget,
+            previousPath: string | undefined,
+            currentPath: string | undefined,
+        ) => void,
+        private readonly _deps: CliPathEnvironmentSynchronizerDependencies = defaultSynchronizerDependencies,
+    ) {
+        this._disposable = vscode.Disposable.from(
+            this._deps.onDidChangeConfiguration(event => this.handleConfigurationChange(event)),
+            this._resolver.onDidChangeForwarding(target => this.syncTargetInBackground(target)),
+            this._deps.onDidChangeWorkspaceFolders(event => this.handleWorkspaceFoldersChange(event)),
+            this._deps.onDidGrantWorkspaceTrust(() => this.initializeInBackground()));
+        subscriptions.push(this._disposable);
+    }
+
+    async initialize(workspaceFolders: readonly vscode.WorkspaceFolder[] = this._deps.getWorkspaceFolders()): Promise<void> {
+        const nextFolderKeys = new Set(workspaceFolders.map(folder => getCliPathTargetKey(workspaceFolderCliPathTarget(folder))));
+        for (const [key, target] of this._activeFolderTargets) {
+            if (!nextFolderKeys.has(key)) {
+                this.removeFolderTarget(target);
+            }
+        }
+
+        const folderTargets = workspaceFolders.map(folder => workspaceFolderCliPathTarget(folder));
+        for (const target of folderTargets) {
+            this._activeFolderTargets.set(getCliPathTargetKey(target), target);
+        }
+        this.clearGlobalPathForFolders();
+
+        await Promise.all([
+            this.syncTarget(windowCliPathTarget),
+            ...folderTargets.map(target => this.syncTarget(target)),
+        ]);
+    }
+
+    async syncTarget(target: CliPathResolutionTarget): Promise<void> {
+        const key = getCliPathTargetKey(target);
+        if (this._disposed || (target.kind === 'workspaceFolder' && !this._activeFolderTargets.has(key))) {
+            return;
+        }
+
+        const generation = (this._syncGenerations.get(key) ?? 0) + 1;
+        this._syncGenerations.set(key, generation);
+        const result = await this._resolver.resolve(target);
+        if (this._disposed
+            || this._syncGenerations.get(key) !== generation
+            || (target.kind === 'workspaceFolder' && !this._activeFolderTargets.has(key))) {
+            return;
+        }
+
+        const collection = target.kind === 'window'
+            ? this._globalCollection
+            : this._globalCollection.getScoped({ workspaceFolder: target.workspaceFolder });
+        if (target.kind === 'workspaceFolder') {
+            this._scopedCollections.set(key, collection);
+        }
+
+        const resolvedPath = this._deps.getForwardablePath(result.available ? result.cliPath : undefined);
+        // An unscoped mutation is inherited by every workspace folder and cannot be masked by
+        // deleting a folder-scoped mutator. Use it only when no folder scopes exist.
+        const nextPath = target.kind === 'window' && this._activeFolderTargets.size > 0
+            ? undefined
+            : resolvedPath;
+        const hadPreviousPath = this._forwardedPaths.has(key);
+        const previousPath = this._forwardedPaths.get(key);
+        if (nextPath === undefined) {
+            collection.description = undefined;
+            collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
+        }
+        else {
+            collection.description = aspireCliPathEnvironmentDescription;
+            collection.replace(ASPIRE_CLI_PATH_ENV_VAR, nextPath);
+        }
+        this._forwardedPaths.set(key, nextPath);
+
+        if (hadPreviousPath && previousPath !== nextPath) {
+            this._onForwardedPathChanged?.(target, previousPath, nextPath);
+        }
+    }
+
+    dispose(): void {
+        this._disposed = true;
+        this._disposable.dispose();
+        this._scopedCollections.clear();
+        this._forwardedPaths.clear();
+        this._activeFolderTargets.clear();
+        this._syncGenerations.clear();
+    }
+
+    private handleConfigurationChange(event: vscode.ConfigurationChangeEvent): void {
+        const section = `aspire.${ASPIRE_CLI_EXECUTABLE_PATH_SETTING}`;
+        if (!event.affectsConfiguration(section)) {
+            return;
+        }
+
+        this.syncTargetInBackground(windowCliPathTarget);
+        for (const target of this._activeFolderTargets.values()) {
+            if (target.kind === 'workspaceFolder' && event.affectsConfiguration(section, target.workspaceFolder.uri)) {
+                this.syncTargetInBackground(target);
+            }
+        }
+    }
+
+    private handleWorkspaceFoldersChange(event: vscode.WorkspaceFoldersChangeEvent): void {
+        for (const folder of event.removed) {
+            this.removeFolderTarget(workspaceFolderCliPathTarget(folder));
+        }
+        const addedTargets = event.added.map(folder => workspaceFolderCliPathTarget(folder));
+        for (const target of addedTargets) {
+            this._activeFolderTargets.set(getCliPathTargetKey(target), target);
+        }
+        this.clearGlobalPathForFolders();
+
+        // A folder setting can reference any other folder through ${workspaceFolder:name},
+        // so additions and removals can change every active folder's effective executable.
+        for (const target of this._activeFolderTargets.values()) {
+            this.syncTargetInBackground(target);
+        }
+
+        // An unqualified ${workspaceFolder} window setting changes meaning as folders are
+        // added or removed, even when no configuration value itself changed.
+        this.syncTargetInBackground(windowCliPathTarget);
+    }
+
+    private clearGlobalPathForFolders(): void {
+        if (this._activeFolderTargets.size === 0) {
+            return;
+        }
+
+        this._globalCollection.description = undefined;
+        this._globalCollection.delete(ASPIRE_CLI_PATH_ENV_VAR);
+
+        const key = getCliPathTargetKey(windowCliPathTarget);
+        const hadPreviousPath = this._forwardedPaths.has(key);
+        const previousPath = this._forwardedPaths.get(key);
+        this._forwardedPaths.set(key, undefined);
+        if (hadPreviousPath && previousPath !== undefined) {
+            this._onForwardedPathChanged?.(windowCliPathTarget, previousPath, undefined);
+        }
+    }
+
+    private removeFolderTarget(target: CliPathResolutionTarget): void {
+        if (target.kind !== 'workspaceFolder') {
+            return;
+        }
+
+        const key = getCliPathTargetKey(target);
+        this._activeFolderTargets.delete(key);
+        this._syncGenerations.set(key, (this._syncGenerations.get(key) ?? 0) + 1);
+
+        // getScoped is stable for a folder scope and also reaches a mutation restored by VS Code
+        // before this activation's first asynchronous resolution completed.
+        const collection = this._globalCollection.getScoped({ workspaceFolder: target.workspaceFolder });
+        collection.description = undefined;
+        collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
+        this._scopedCollections.delete(key);
+
+        const hadPreviousPath = this._forwardedPaths.has(key);
+        const previousPath = this._forwardedPaths.get(key);
+        this._forwardedPaths.delete(key);
+        if (hadPreviousPath && previousPath !== undefined) {
+            this._onForwardedPathChanged?.(target, previousPath, undefined);
+        }
+    }
+
+    private syncTargetInBackground(target: CliPathResolutionTarget): void {
+        void this.syncTarget(target).catch(error => {
+            extensionLogOutputChannel.warn(`Aspire CLI path environment synchronization failed: ${String(error)}`);
+        });
+    }
+
+    private initializeInBackground(): void {
+        void this.initialize().catch(error => {
+            extensionLogOutputChannel.warn(`Aspire CLI path environment initialization failed: ${String(error)}`);
+        });
+    }
 }
 
 /**

@@ -59,7 +59,52 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select dashboard run.
+        /// </summary>
+        public static string DashboardRunSelectTitle {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select run: {0}.
+        /// </summary>
+        public static string DashboardRunSelectAccessibleLabel {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectAccessibleLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Live run.
+        /// </summary>
+        public static string DashboardRunSelectCurrent {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectCurrent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Pin run.
+        /// </summary>
+        public static string DashboardRunSelectPin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unpin run.
+        /// </summary>
+        public static string DashboardRunSelectUnpin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>

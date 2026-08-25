@@ -316,6 +316,8 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(typeof(StartCommand), "start --format json")]
     [InlineData(typeof(RunCommand), "run --detach --format json")]
+    [InlineData(typeof(DoCommand), "do --list-steps --format json")]
+    [InlineData(typeof(DoCommand), "do --list-steps --format=json")]
     public async Task JsonOutputStartsNoCliPackageMetadataPrefetching(Type commandType, string commandLine)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

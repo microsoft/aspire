@@ -522,6 +522,37 @@ map_quality_to_channel() {
     esac
 }
 
+# Writes install-route provenance and, when the archive came from a quality route,
+# the channel that must take precedence over the binary's build-time stamp.
+write_install_sidecar() {
+    local install_path="$1"
+    local quality="${2:-}"
+    local sidecar_path="$install_path/.aspire-install.json"
+    local temporary_path
+
+    mkdir -p "$install_path"
+    temporary_path=$(mktemp "$sidecar_path.tmp.XXXXXXXX")
+
+    if [[ -n "$quality" ]]; then
+        local channel
+        channel=$(map_quality_to_channel "$quality")
+        if ! printf '{"source":"script","channel":"%s"}\n' "$channel" > "$temporary_path"; then
+            rm -f "$temporary_path"
+            return 1
+        fi
+    else
+        if ! printf '{"source":"script"}\n' > "$temporary_path"; then
+            rm -f "$temporary_path"
+            return 1
+        fi
+    fi
+
+    if ! mv -f "$temporary_path" "$sidecar_path"; then
+        rm -f "$temporary_path"
+        return 1
+    fi
+}
+
 # Function to add PATH to shell configuration file
 # Parameters:
 #   $1 - config_file: Path to the shell configuration file
@@ -1135,8 +1166,13 @@ main() {
     if [[ "$DRY_RUN" == true ]]; then
         printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
     else
-        mkdir -p "$INSTALL_PATH"
-        printf '{"source":"script"}\n' > "$sidecar_path"
+        # An explicit version can come from any channel, so retain the archive's
+        # baked identity when there was no quality route to author the channel.
+        local sidecar_quality=""
+        if [[ -z "$VERSION" ]]; then
+            sidecar_quality="$QUALITY"
+        fi
+        write_install_sidecar "$INSTALL_PATH" "$sidecar_quality"
     fi
 
     if ! setup_cli_bundle; then

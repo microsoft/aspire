@@ -125,6 +125,10 @@
     <value>(none)</value>
     <comment>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</comment>
   </data>
+  <data name="SdkVersionUnknownPlaceholder" xml:space="preserve">
+    <value>(unknown)</value>
+    <comment>Displayed in place of the current SDK version when aspire.config.json has no SDK version pinned.</comment>
+  </data>
   <data name="NoAppHostFoundUpdateCliPrompt" xml:space="preserve">
     <value>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</value>
   </data>

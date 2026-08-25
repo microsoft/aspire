@@ -97,6 +97,11 @@
         <target state="needs-review-translation">此环境中不支持交互式输入。使用 --non-interactive 标志或确保 CLI 在交互式终端中运行。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]有关详细信息，请参阅: [link]{0}[/][/]</target>

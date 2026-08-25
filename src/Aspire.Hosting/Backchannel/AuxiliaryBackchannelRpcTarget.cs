@@ -973,10 +973,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var results = new List<ResourceSnapshot>();
 
-        // This is a point-in-time batch, so the set of resolved secret values is identical for
-        // every resource. Compute it once here rather than once per resource.
-        var secretParameterValues = GetResolvedSecretParameterValues();
-
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
         {
@@ -992,7 +988,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
             {
-                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
+                // The secret redaction set is resolved per snapshot inside CreateResourceSnapshotFromEventAsync,
+                // not once for the whole batch. Building each snapshot can await MCP tool discovery for up to
+                // s_mcpDiscoveryTimeout, and a parameter can resolve during that window, so a set computed once up
+                // front could miss a secret that a later resource's snapshot already carries and leak it in
+                // plaintext. Resolving per snapshot keeps redaction bound to each snapshot.
+                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
                 if (snapshot is not null)
                 {
                     results.Add(snapshot);
@@ -1024,11 +1025,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            // Recompute the resolved secret values for every event. Secrets can be resolved between
-            // events (e.g. interactive parameter entry after the watch starts), so caching the set
-            // once outside the loop would let a value that becomes secret later bypass redaction.
-            var secretParameterValues = GetResolvedSecretParameterValues();
-            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, secretParameterValues, cancellationToken).ConfigureAwait(false);
+            // The secret redaction set is resolved per event inside CreateResourceSnapshotFromEventAsync, so a
+            // secret resolved (or replaced, or newly referenced after a resource restart) while the watch is open
+            // is reflected on later events rather than fixed to when the watch started.
+            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
                 yield return snapshot;
@@ -1039,7 +1039,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     private async Task<ResourceSnapshot?> CreateResourceSnapshotFromEventAsync(
         ResourceEvent resourceEvent,
         bool resourcePropertiesAsJson,
-        HashSet<string> secretParameterValues,
         CancellationToken cancellationToken)
     {
         var resource = resourceEvent.Resource;
@@ -1112,11 +1111,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             })
             .ToArray();
 
+        // Resolve the secret redaction set for THIS snapshot, after the MCP discovery await above. The snapshot's
+        // environment values were captured before that await, so any secret they carry was already resolved by the
+        // time we get here. Resolving now (rather than once for a whole describe batch) keeps redaction bound to
+        // the snapshot even though building each snapshot can block on MCP discovery for up to s_mcpDiscoveryTimeout,
+        // during which another parameter can resolve. The redaction history is add-only and AppHost-scoped (see
+        // GetResolvedSecretParameterValuesAsync), so resolving per snapshot only ever grows the set and also keeps
+        // redacting a secret whose value has since been replaced or whose owning resource has restarted.
+        var secretParameterValues = await GetResolvedSecretParameterValuesAsync(cancellationToken).ConfigureAwait(false);
+
         // Build environment variables. Values that match a secret parameter's value are
         // redacted so secrets don't leak through clients (e.g. aspire describe --format json).
-        // The secret values are computed by the caller: once per batch for the one-shot
-        // GetResourceSnapshotsAsync, but per event for the streaming WatchResourceSnapshotsAsync
-        // so that secrets resolved mid-stream are still redacted.
         var environmentVariables = snapshot.EnvironmentVariables
             .Select(e => new ResourceSnapshotEnvironmentVariable
             {
@@ -1211,33 +1216,28 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         => value is not null && secretParameterValues.Contains(value) ? null : value;
 
     /// <summary>
-    /// Collects the resolved values of secret parameters in the application model so they can
-    /// be redacted from data sent to clients. Only values that have already been resolved are
-    /// returned; this never blocks waiting for interactive parameter resolution.
+    /// Collects the resolved values of secret parameters reachable from the application model so they can be
+    /// redacted from data sent to clients. Only values that have already been resolved are included; this never
+    /// blocks waiting for interactive parameter resolution. Resolved values are accumulated add-only in the
+    /// AppHost-scoped <see cref="SecretRedactionHistory"/> (which <c>ParameterProcessor</c> also populates at
+    /// assignment time), so a value a parameter has since been reassigned away from stays redacted while an older
+    /// snapshot can still carry it.
     /// </summary>
-    private HashSet<string> GetResolvedSecretParameterValues()
+    private async Task<HashSet<string>> GetResolvedSecretParameterValuesAsync(CancellationToken cancellationToken)
     {
-        var secretValues = new HashSet<string>(StringComparer.Ordinal);
+        // Resolve the current value of each accumulated secret parameter (peek-only; never blocks on interactive
+        // resolution), then merge into the AppHost-scoped add-only value history below.
+        var resolvedThisPass = new List<string>();
 
-        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        foreach (var parameter in await GetSecretParametersAsync(cancellationToken).ConfigureAwait(false))
         {
-            return secretValues;
-        }
-
-        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
-        {
-            if (!parameter.Secret)
-            {
-                continue;
-            }
-
             if (parameter.WaitForValueTcs is { } waitForValueTcs)
             {
                 // Run mode: peek at the resolved value without waiting for resolution.
                 if (waitForValueTcs.Task is { IsCompletedSuccessfully: true } valueTask &&
                     valueTask.Result is { Length: > 0 } value)
                 {
-                    secretValues.Add(value);
+                    resolvedThisPass.Add(value);
                 }
             }
             else
@@ -1246,7 +1246,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 {
                     if (parameter.ValueInternal is { Length: > 0 } value)
                     {
-                        secretValues.Add(value);
+                        resolvedThisPass.Add(value);
                     }
                 }
                 catch
@@ -1256,7 +1256,103 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             }
         }
 
-        return secretValues;
+        // Accumulate this pass's resolved secret strings add-only and return everything seen so far. A parameter's
+        // value can be replaced in place (the runtime "Set parameter" path swaps its completed WaitForValueTcs),
+        // so re-resolving a retained parameter later yields only the new value; keeping every value we have ever
+        // resolved ensures a still-current snapshot carrying the previous value is still redacted.
+        return serviceProvider.GetRequiredService<SecretRedactionHistory>().AddValuesAndSnapshot(resolvedThisPass);
+    }
+
+    /// <summary>
+    /// Gets the set of secret <see cref="ParameterResource"/> instances reachable from the application
+    /// model, including parameters that are only referenced by another resource rather than registered
+    /// as a top-level resource.
+    /// </summary>
+    /// <remarks>
+    /// The set includes generated parameters (such as the password created by <c>AddPostgres</c>) that are
+    /// referenced by a resource but never registered in the model, which enumerating
+    /// <c>appModel.Resources.OfType&lt;ParameterResource&gt;()</c> alone would miss and leak in plaintext
+    /// (https://github.com/microsoft/aspire/issues/19241).
+    /// <para>
+    /// Discovery is <em>peek-only</em>: it reads callback results that DCP already resolved and cached while
+    /// starting the resource (<see cref="ResourceDependencyDiscoveryOptions.PeekCachedCallbackResultsOnly"/>) and
+    /// never invokes a callback itself. This matters because <c>aspire describe</c> observes live resource
+    /// snapshots concurrently with DCP's own cache lifecycle: DCP forgets and re-evaluates a resource's callbacks
+    /// on restart (see <c>DcpExecutor.ForgetCachedCallbackResults</c>). Invoking a callback from here would run it
+    /// with the client's cancellation token and could cache a canceled or faulted task that DCP would then reuse on
+    /// the resource's execution path. A running resource can only appear in a snapshot after DCP has resolved and
+    /// cached its values, so peeking still observes every secret that a snapshot could expose.
+    /// </para>
+    /// <para>
+    /// The discovered set is merged into the AppHost-scoped, add-only <see cref="SecretRedactionHistory"/>: it only
+    /// ever grows for the life of the AppHost and is shared across connections. A restart can change which secret a
+    /// resource references, and a still-in-flight snapshot from the prior incarnation can carry the previous value,
+    /// so the redaction set must never shrink or that value would be emitted in plaintext.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<ParameterResource>> GetSecretParametersAsync(CancellationToken cancellationToken)
+    {
+        var history = serviceProvider.GetRequiredService<SecretRedactionHistory>();
+
+        if (serviceProvider.GetService<DistributedApplicationModel>() is not { } appModel)
+        {
+            // No model resolved yet; return the secrets accumulated so far without adding any.
+            return history.AddParametersAndSnapshot([]);
+        }
+
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        // Peek at the callback results DCP cached while starting each resource; never invoke a callback. This
+        // observes the same referenced resources that produced the running snapshot without racing DCP's cache
+        // lifecycle or running stateful callbacks with the client's cancellation token.
+        var discoveryOptions = new ResourceDependencyDiscoveryOptions
+        {
+            DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
+            PeekCachedCallbackResultsOnly = true
+        };
+
+        // Parameter resources referenced by annotations are not registered in the model, so they are not
+        // subject to its unique-name constraint. Collect by reference to preserve distinct same-named secrets.
+        var secretParameters = new HashSet<ParameterResource>(ReferenceEqualityComparer.Instance);
+
+        foreach (var parameter in appModel.Resources.OfType<ParameterResource>())
+        {
+            if (parameter.Secret)
+            {
+                secretParameters.Add(parameter);
+            }
+        }
+
+        // Compute the transitive dependency closure of every resource in a single multi-root walk. It shares
+        // one visited set across all roots, so each resource's (execution-cached) callbacks are read at most
+        // once. Discovering per resource instead would repeat the traversal for every resource and make the
+        // initial WatchAsync stream — which emits one event per resource — do quadratic work.
+        IReadOnlySet<IResource> dependencies;
+        try
+        {
+            dependencies = await ResourceExtensions.GetDependenciesAsync(appModel.Resources, executionContext, discoveryOptions, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Fail closed at this confidentiality boundary. Peek-only discovery does not invoke callbacks, so a
+            // failure here is unexpected; if it does happen the redaction set is incomplete and a snapshot built
+            // from it could expose a secret in plaintext, so propagate instead of continuing with a partial set.
+            // Cancellation is intentionally not caught here so it surfaces as cancellation rather than a leak.
+            logger.LogDebug(ex, "Failed to compute resource dependencies while collecting secret parameters for redaction.");
+            throw;
+        }
+
+        foreach (var parameter in dependencies.OfType<ParameterResource>())
+        {
+            if (parameter.Secret)
+            {
+                secretParameters.Add(parameter);
+            }
+        }
+
+        // Merge this pass's discoveries into the add-only history and return everything seen so far, so a secret
+        // referenced by an earlier incarnation stays redacted even after a restart re-points the resource.
+        return history.AddParametersAndSnapshot(secretParameters);
     }
 
     private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)

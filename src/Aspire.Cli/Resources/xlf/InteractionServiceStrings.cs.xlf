@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Interaktivní vstup se v tomto prostředí nepodporuje. Použijte příznak --non-interactive nebo zajistěte, aby rozhraní příkazového řádku běželo v interaktivním terminálu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Další informace najdete tady: [link]{0}[/][/]</target>

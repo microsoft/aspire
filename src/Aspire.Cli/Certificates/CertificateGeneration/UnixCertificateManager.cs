@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Aspire.Cli;
 using Aspire.Cli.Certificates;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -577,7 +578,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         }
         else
         {
-            Directory.CreateDirectory(directoryPath, DirectoryPermissions);
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryPath);
         }
 #pragma warning restore CA1416 // Validate platform compatibility
     }

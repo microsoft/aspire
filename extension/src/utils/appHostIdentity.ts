@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { isSameFileSystemEntry } from './appHostDiscovery';
+import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
+import { isAppHostSourceFile } from './paths/comparison';
 
 /** Whether two paths name the same AppHost. */
 export type AppHostIdentityRelation = 'same' | 'different' | 'ambiguous';
@@ -11,7 +12,6 @@ export interface AppHostIdentityKeyInfo {
 }
 
 const appHostProjectFileExtensions = ['.csproj'];
-const appHostSourceFileNames = ['apphost.cs', 'program.cs'];
 const appHostAliasKeySuffix = '\u0000apphost';
 
 export function getAppHostPathComparisonKey(value: string): string {
@@ -94,10 +94,6 @@ export function getAppHostIdentityKeyInfo(appHostPath: string): AppHostIdentityK
 
 export function isAppHostProjectFile(value: string): boolean {
     return appHostProjectFileExtensions.includes(path.extname(value).toLowerCase());
-}
-
-export function isAppHostSourceFile(value: string): boolean {
-    return appHostSourceFileNames.includes(path.basename(value).toLowerCase());
 }
 
 interface DirectoryAppHostShapes {

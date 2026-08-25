@@ -4,6 +4,7 @@ import { once } from 'events';
 import type { IncomingHttpHeaders } from 'http';
 import * as https from 'https';
 import * as sinon from 'sinon';
+import * as vscode from 'vscode';
 import WebSocket from 'ws';
 import type { AspireDebugSession } from '../debugger/AspireDebugSession';
 import * as debuggerExtensions from '../debugger/debuggerExtensions';
@@ -19,6 +20,7 @@ import type {
     ServiceLogsNotification,
     SessionTerminatedNotification,
 } from '../dcp/types';
+import { extensionLogOutputChannel } from '../utils/logging';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 
 interface DcpServerInternals {
@@ -344,6 +346,61 @@ suite('Aspire DCP run session lifecycle', () => {
             distinctResourceTypes: ['node'],
             anyNonZeroExit: true,
         });
+    });
+
+    test('launch cancellation is returned as a terminated run without failure telemetry', async () => {
+        sinon.stub(debuggerExtensions, 'prepareDebugSession').rejects(new vscode.CancellationError());
+        const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage');
+        const client = await openNotificationClient(harness);
+
+        const createResponse = await createRunResponse(harness, 'node', sinon.stub().resolves());
+        const terminal = await client.waitForNotification();
+
+        assert.strictEqual(createResponse.statusCode, 409);
+        assert.deepStrictEqual(JSON.parse(createResponse.body), {
+            error: {
+                code: 'RunSessionTerminated',
+                message: `Run session ${terminal.session_id} terminated while its debug session was starting.`,
+                details: [],
+            },
+        });
+        assert.deepStrictEqual(terminal, {
+            notification_type: 'sessionTerminated',
+            session_id: terminal.session_id,
+        });
+        assert.ok(showErrorMessage.notCalled);
+
+        const endEvents = telemetryReporter.events.filter(event => event.name === 'aspire/vscode/debug/runsession/end');
+        assert.strictEqual(endEvents.length, 1);
+        assert.deepStrictEqual(endEvents[0].properties, {
+            resource_type: 'node',
+            mode: 'Debug',
+            exit_code_bucket: 'canceled',
+        });
+        assert.strictEqual(endEvents[0].measurements?.exit_code, -1);
+        assert.strictEqual(endEvents[0].isError, undefined);
+        assert.deepStrictEqual(harness.dcpServer.takeDebugSessionAggregateStats('aspire-extension-run-test'), {
+            totalChildSessions: 1,
+            distinctResourceTypes: ['node'],
+            anyNonZeroExit: false,
+        });
+    });
+
+    test('does not duplicate launch error details in the extension log', async () => {
+        const details = 'bounded compiler diagnostics';
+        sinon.stub(debuggerExtensions, 'prepareDebugSession').rejects(new Error(`cargo failed: ${details}`));
+        sinon.stub(vscode.window, 'showErrorMessage');
+        const errorLog = sinon.stub(extensionLogOutputChannel, 'error');
+        const client = await openNotificationClient(harness);
+
+        const createResponse = await createRunResponse(harness, 'node', sinon.stub().resolves());
+        await client.waitForNotification();
+
+        assert.strictEqual(createResponse.statusCode, 500);
+        // DCP displays the protocol error message in the AppHost execution log, so language
+        // launchers must redact secrets before throwing. The extension log only needs the kind.
+        assert.ok(createResponse.body.includes(details));
+        assert.ok(errorLog.getCalls().every(call => !String(call.args[0]).includes(details)));
     });
 
     test('debugger did not start terminates exactly once', async () => {

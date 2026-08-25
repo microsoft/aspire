@@ -129,6 +129,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string ApplicationNameOptionDescription {
+            get {
+                return ResourceManager.GetString("ApplicationNameOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string PersistenceModeOptionDescription {
+            get {
+                return ResourceManager.GetString("PersistenceModeOptionDescription", resourceCulture);
+            }
+        }
+
         public static string ConfigFilePathOptionDescription {
             get {
                 return ResourceManager.GetString("ConfigFilePathOptionDescription", resourceCulture);

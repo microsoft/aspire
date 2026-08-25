@@ -5,7 +5,8 @@
 #
 # This is the scenario from https://github.com/microsoft/aspire/issues/17527:
 # a stable-shaped release-branch build still resolves from its own darc feed
-# (quality=Stable), not nuget.org.
+# (quality=Both), not nuget.org. Both keeps prerelease-only integrations from
+# that same build discoverable.
 #
 # See docs/cli-staging-validation.md for the full validation matrix.
 

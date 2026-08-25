@@ -23,7 +23,7 @@ internal abstract partial class BaseProvisioningContextProvider(
     IHostEnvironment environment,
     ILogger logger,
     IArmClientProvider armClientProvider,
-    IUserPrincipalProvider userPrincipalProvider,
+    IAzurePrincipalProvider azurePrincipalProvider,
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext distributedApplicationExecutionContext) : IProvisioningContextProvider
@@ -51,7 +51,7 @@ internal abstract partial class BaseProvisioningContextProvider(
     protected readonly IHostEnvironment _environment = environment;
     protected readonly ILogger _logger = logger;
     protected readonly IArmClientProvider _armClientProvider = armClientProvider;
-    protected readonly IUserPrincipalProvider _userPrincipalProvider = userPrincipalProvider;
+    protected readonly IAzurePrincipalProvider _azurePrincipalProvider = azurePrincipalProvider;
     protected readonly ITokenCredentialProvider _tokenCredentialProvider = tokenCredentialProvider;
     protected readonly IDeploymentStateManager _deploymentStateManager = deploymentStateManager;
     protected readonly DistributedApplicationExecutionContext _distributedApplicationExecutionContext = distributedApplicationExecutionContext;
@@ -180,7 +180,7 @@ internal abstract partial class BaseProvisioningContextProvider(
             _logger.LogInformation("Resource group {rgName} created.", resourceGroup.Name);
         }
 
-        var principal = await _userPrincipalProvider.GetUserPrincipalAsync(cancellationToken).ConfigureAwait(false);
+        var principal = await _azurePrincipalProvider.GetPrincipalAsync(cancellationToken).ConfigureAwait(false);
 
         await SaveProvisioningOptionsAsync(
             resourceGroupName,

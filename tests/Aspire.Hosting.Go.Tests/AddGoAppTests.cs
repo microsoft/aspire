@@ -514,7 +514,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
             gcFlags: "all=-N -l",
             raceDetector: true);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(app.Resource);
 
         Assert.Equal("go", launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
@@ -532,7 +532,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddGoApp("api", sourceDir.FullName);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(app.Resource);
 
         Assert.Null(launchConfig.BuildFlags);
     }
@@ -1183,18 +1183,11 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         await Verify(content);
     }
 
-    private static async Task<GoLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    private static async Task<GoLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-
-        var exe = Executable.Create("test", "go");
         var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigs));
-        return Assert.Single(launchConfigs);
+        return Assert.IsType<GoLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
     }
 
     private sealed class GoFilesContainer(string name, string command, string workingDirectory)
