@@ -143,6 +143,20 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void NewCommand_IntegrationTestTemplateAppHostOptionDescribesProjectFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var integrationTestTemplate = command.Subcommands.Single(subcommand => subcommand.Name == "aspire-test");
+        var appHostOption = integrationTestTemplate.Options.Single(option => option.Name == "--apphost");
+
+        Assert.Equal("The path to the Aspire AppHost project file", appHostOption.Description);
+    }
+
+    [Fact]
     public void NewCommand_WhenIdentityChannelIsStaging_DescribesStagingChannelOption()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

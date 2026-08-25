@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../TemplatingStrings.resx">
     <body>
+      <trans-unit id="AppHostProjectOptionDescription">
+        <source>The path to the Aspire AppHost project file</source>
+        <target state="new">The path to the Aspire AppHost project file</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AspireAppHost_Description">
         <source>AppHost</source>
         <target state="translated">AppHost</target>
