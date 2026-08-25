@@ -9,7 +9,6 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITelemetryRepository
 {
-    public Func<GetLogsContext, CancellationToken, Task<PagedResult<OtlpLogEntry>>>? GetLogsAsyncHandler { get; init; }
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
@@ -31,8 +30,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Subscription OnNewMetrics(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewMetrics(resourceKey, subscriptionType, callback);
     public Subscription OnNewTraces(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewTraces(resourceKey, subscriptionType, callback);
 
-    public Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken) =>
-        GetLogsAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetLogsAsync(context, cancellationToken);
+    public Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken) => inner.GetLogsAsync(context, cancellationToken);
     public Task<PagedResult<LogSummary>> GetLogSummariesAsync(GetLogsContext context, CancellationToken cancellationToken) =>
         GetLogSummariesAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetLogSummariesAsync(context, cancellationToken);
     public OtlpLogEntry? GetLog(long logId) => inner.GetLog(logId);

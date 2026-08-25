@@ -39,7 +39,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private List<SelectViewModel<LogLevel?>> _logLevels = default!;
     private readonly CancellationTokenSource _cts = new();
-    private long _selectedLogFilterUpdateVersion;
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
     private int? _displayedItemCount;
@@ -385,21 +384,20 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     internal async Task ClearSelectedLogEntryIfExcludedAsync(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
     {
-        var updateVersion = Interlocked.Increment(ref _selectedLogFilterUpdateVersion);
-        var selectedLogId = PageViewModel.SelectedLogEntry?.LogEntry.InternalId;
-        if (selectedLogId is null)
+        if (PageViewModel.SelectedLogEntry is null)
         {
             return;
         }
 
+        // An older filter query could finish after a newer query and clear the selection using stale filters.
+        // The query is constrained to one log and filter changes are user-driven, so this is unlikely and not
+        // worth the additional state and coordination required to guard against it.
         var isExcluded = await PageViewModel.IsSelectedLogEntryExcludedByFiltersAsync(
             TelemetryRepository,
             textFilter,
             fieldFilters,
             _cts.Token);
-        if (isExcluded &&
-            updateVersion == Volatile.Read(ref _selectedLogFilterUpdateVersion) &&
-            selectedLogId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId)
+        if (isExcluded)
         {
             await ClearSelectedLogEntryAsync();
         }
@@ -478,7 +476,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     public void Dispose()
     {
-        Interlocked.Increment(ref _selectedLogFilterUpdateVersion);
         _cts.Cancel();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();

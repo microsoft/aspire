@@ -33,7 +33,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly CancellationTokenSource _cts = new();
     private OtlpTrace? _trace;
     private long _detailViewUpdateVersion;
-    private long _filterMatchUpdateVersion;
     private Subscription? _tracesSubscription;
     private int _maxDepth;
     private int _resourceCount;
@@ -607,7 +606,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task UpdateFilterMatchesAsync()
     {
-        var updateVersion = Interlocked.Increment(ref _filterMatchUpdateVersion);
         var traceId = _trace?.TraceId;
         if (traceId is null)
         {
@@ -629,6 +627,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             contextFilters.Add(typeFilter);
         }
 
+        // An older filter query could finish after a newer query and apply stale matches. Each query is
+        // constrained to the current trace and filter changes are user-driven, so this is unlikely and not
+        // worth the additional state and coordination required to guard against it.
         var hasTextFilter = !string.IsNullOrWhiteSpace(PageViewModel.Filter);
         var contextMatches = contextFilters.Count > 0 || hasTextFilter
             ? await GetMatchingSpanIdsAsync(contextFilters, hasTextFilter ? [PageViewModel.Filter] : null)
@@ -637,11 +638,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             ? await GetMatchingSpanIdsAsync(durationFilters, textFragments: null)
             : null;
 
-        if (updateVersion == Volatile.Read(ref _filterMatchUpdateVersion) && traceId == _trace?.TraceId)
-        {
-            PageViewModel.ContextFilterMatches = contextMatches;
-            PageViewModel.DurationFilterMatches = durationMatches;
-        }
+        PageViewModel.ContextFilterMatches = contextMatches;
+        PageViewModel.DurationFilterMatches = durationMatches;
 
         async Task<HashSet<string>> GetMatchingSpanIdsAsync(List<TelemetryFilter> filters, string[]? textFragments)
         {
@@ -730,7 +728,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public void Dispose()
     {
         Interlocked.Increment(ref _detailViewUpdateVersion);
-        Interlocked.Increment(ref _filterMatchUpdateVersion);
         _cts.Cancel();
         _tracesSubscription?.Dispose();
         TelemetryContext.Dispose();

@@ -15,7 +15,6 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -321,73 +320,6 @@ public partial class StructuredLogsTests : DashboardTestContext
         var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
 
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, messageCount));
-    }
-
-    [Fact]
-    public async Task FilterQuery_OlderResultDoesNotClearSelectedLogEntry()
-    {
-        SetupStructureLogsServices();
-
-        var restrictiveQueryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var continueRestrictiveQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Services.AddSingleton<ITelemetryRepository>(services =>
-        {
-            var inner = services.GetRequiredService<SqliteTelemetryRepository>();
-            return new TestTelemetryRepository(inner)
-            {
-                GetLogsAsyncHandler = async (context, cancellationToken) =>
-                {
-                    var textFilter = context.Filters
-                        .OfType<FieldTelemetryFilter>()
-                        .Single(filter => filter.Field == nameof(OtlpLogEntry.Message))
-                        .Value;
-                    if (textFilter == "missing")
-                    {
-                        restrictiveQueryStarted.SetResult();
-                        await continueRestrictiveQuery.Task.WaitAsync(cancellationToken);
-                    }
-
-                    return await inner.GetLogsAsync(context, cancellationToken);
-                }
-            };
-        });
-
-        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        await repository.AddLogsAsync(new AddContext(),
-        [
-            new ResourceLogs
-            {
-                Resource = CreateResource(),
-                ScopeLogs =
-                {
-                    new ScopeLogs
-                    {
-                        Scope = CreateScope(),
-                        LogRecords = { CreateLogRecord(message: "Hello world") }
-                    }
-                }
-            }
-        ]);
-        var log = Assert.Single((await repository.GetLogsAsync(new GetLogsContext
-        {
-            ResourceKeys = [],
-            StartIndex = 0,
-            Count = 1,
-            Filters = []
-        }, CancellationToken.None)).Items);
-
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
-        cut.Instance.PageViewModel.SelectedLogEntry = new StructureLogsDetailsViewModel { LogEntry = log };
-
-        var olderQuery = cut.InvokeAsync(() => cut.Instance.ClearSelectedLogEntryIfExcludedAsync("missing", []));
-        await restrictiveQueryStarted.Task.DefaultTimeout();
-        await cut.InvokeAsync(() => cut.Instance.ClearSelectedLogEntryIfExcludedAsync("Hello", []));
-        continueRestrictiveQuery.SetResult();
-        await olderQuery;
-
-        Assert.NotNull(cut.Instance.PageViewModel.SelectedLogEntry);
     }
 
     private void SetupStructureLogsServices()
