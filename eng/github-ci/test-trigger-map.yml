@@ -22,8 +22,6 @@
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:nix-package            tests.yml nix_package
-#   job:api-diffs              generate-api-diffs.yml    (schedule-only today)
-#   job:ats-diffs              generate-ats-diffs.yml    (schedule-only today)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
 #   ALL                        full test matrix + all jobs
 #   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
@@ -70,6 +68,12 @@ prefilter:
 ignore:
   - src/Components/Common/**                            # link-compiled into many components; Layer 1 covers
   - src/Vendoring/OpenTelemetry.Instrumentation.*/**    # glob-compiled into the Redis/Kafka components; Layer 1 covers
+  # These verifiers run in every unconditional native CLI archive build. Selecting a test target for
+  # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
+  - eng/scripts/verify-cli-npm-package.ps1
+  - eng/scripts/verify-cli-tool-nupkg.ps1
+  # The stabilization job invokes this script independently of the tests selector.
+  - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
   # helpers and the AzDO native-symbol validator. Listed so they do not show as unattributed audit noise.
   # (verify-cli-archive.ps1 and validate-npm-release-aliases.ps1 are NOT here -- they have test consumers
@@ -77,7 +81,11 @@ ignore:
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
-  # Schedule-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
+  - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
+  - eng/scripts/cli-starter-validation.ps1              # exercised by unconditional cross-platform CLI starter PR jobs
+  - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
+  - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
+  # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
   - .github/workflows/generate-api-diffs.yml
   - .github/workflows/generate-ats-diffs.yml
   # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes
@@ -94,6 +102,7 @@ path_rules:
   - paths:
       - global.json
       - NuGet.config
+      - .gitattributes
       - .config/dotnet-tools.json
       - Directory.Build.props
       - Directory.Build.targets
@@ -134,11 +143,14 @@ path_rules:
                              # leftovers, but route them to ALL explicitly so the intent is recorded
                              # and pinned by TestTriggerMapTests.EveryLocalActionUsedByAWorkflowIsRoutedToAll.
       - eng/scripts/split-test-matrix-by-deps.ps1
+      - eng/scripts/split-test-projects-for-ci.ps1   # discovers every split project's partitions/classes
+      - eng/scripts/gha-testreport.ps1   # invoked by the shared MTP targets after every GitHub test run
       - eng/scripts/build-test-matrix.ps1   # canonical-matrix builder; a bug skews every PR's matrix -> err toward ALL (also runs its BuildTestMatrixTests verifier)
       - eng/scripts/expand-test-matrix-github.ps1   # GitHub matrix expansion; a bug skews every PR's matrix -> err toward ALL (also runs its ExpandTestMatrixGitHubTests verifier)
       - eng/scripts/write-class-mode-test-props.ps1   # enumerate-tests class-mode restriction; a bug skews every PR's matrix -> err toward ALL (also runs its WriteClassModeTestPropsTests verifier)
       - eng/scripts/scan-test-partitions-from-source.ps1   # source partition discovery in the runsheet builder; a bug skews every split project's enumeration -> err toward ALL
       - eng/TestEnumerationRunsheetBuilder/**
+      - tools/ExtractTestPartitions/**   # compiled partition extractor used for every split test project
       - eng/testing/CITestsProperties.props
       - .github/workflows/tests.yml
       - .github/workflows/run-tests.yml
@@ -195,9 +207,13 @@ path_rules:
       - src/Aspire.Hosting*/api/*.ats.txt
     targets: [job:typescript-api-compat, job:polyglot]
     reason: an integration's *.ats.txt baseline tracks its exported ATS surface; the polyglot playground regenerates+compiles that surface per language, so a baseline change must run polyglot too
-  - paths: [extension/**]
+  - paths:
+      - extension/**
+      - .vscode/launch.json
+      - .vscode/tasks.json
+      - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
     targets: [job:extension-unit]
-    reason: extension_tests_win + extension_bootstrap_linux run yarn build/test in extension/
+    reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
   - paths:
       - extension/**
       - src/Aspire.Cli/**
@@ -223,6 +239,10 @@ path_rules:
       - .github/workflows/deployment-tests.yml
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in affected_project_rules
+  - paths:
+      - .github/workflows/prepare-installer-artifacts.yml
+    targets: [job:winget-installer, job:homebrew-installer]
+    reason: the reusable workflow implements both gated installer artifact jobs
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -246,8 +266,9 @@ path_rules:
     reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e and packaged into the WinGet/Homebrew installer artifacts
   - paths:
       - .github/workflows/build-cli-e2e-image.yml
+      - eng/scripts/load-cli-e2e-images.sh
     targets: [test:Aspire.Cli.EndToEnd.Tests]
-    reason: builds the CLI E2E Docker image consumed only by the requiresCliArchive test shards (Aspire.Cli.EndToEnd.Tests, the sole RequiresCliArchive=true project); the build_cli_e2e_image job self-gates on tests_matrix_requires_cli_archive, so it only runs when that test is selected anyway -> route there, not ALL
+    reason: builds or loads the CLI E2E images consumed only by Aspire.Cli.EndToEnd.Tests
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
@@ -275,6 +296,11 @@ path_rules:
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
   - paths:
+      - eng/scripts/aspire-skills-bundle.common.ps1
+      - eng/test-retry-patterns.json
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests validates the shared Aspire skills bundle helpers and transient retry-pattern configuration
+  - paths:
       - eng/scripts/verify-cli-archive.ps1
     targets: [test:Aspire.Acquisition.Tests]
     reason: Aspire.Acquisition.Tests/Scripts/VerifyCliArchivePowerShellTests invokes eng/scripts/verify-cli-archive.ps1
@@ -283,9 +309,17 @@ path_rules:
     targets: [test:Aspire.Acquisition.Tests, job:winget-installer]
     reason: WinGet manifest generation; prepare_winget_installer_artifacts builds from eng/winget, Acquisition.Tests exercises installer-mode
   - paths:
+      - eng/scripts/smoke-installed-cli.ps1
+    targets: [job:winget-installer]
+    reason: the WinGet installer artifact job invokes this installed-CLI smoke test
+  - paths:
       - eng/homebrew/**
     targets: [test:Aspire.Acquisition.Tests, job:homebrew-installer]
     reason: Homebrew cask generation; prepare_homebrew_installer_artifacts builds from eng/homebrew, Acquisition.Tests exercises installer-mode
+  - paths:
+      - eng/scripts/smoke-installed-cli.sh
+    targets: [job:homebrew-installer]
+    reason: the Homebrew installer artifact job invokes this installed-CLI smoke test
   - paths:
       - eng/dashboardpack/**
     targets: [test:Aspire.Hosting.Sdk.Tests]
