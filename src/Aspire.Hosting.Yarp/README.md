@@ -182,7 +182,7 @@ builder.AddYarp("gateway")
 
 ```csharp
 builder.AddYarp("gateway")
-    .WithHttpsHostPort(8080)
+    .WithHostHttpsPort(8080)
     .WithConfiguration(yarp =>
     {
         var cluster = yarp.AddCluster(
@@ -198,6 +198,7 @@ builder.AddYarp("gateway")
 ```
 
 The destination must use `http://` and the backend must be configured to accept HTTP/2 without TLS (h2c).
+Aspire uses the local development certificate for TLS termination when it is available. For certificate setup or trust issues, see https://aka.ms/aspire/devcerts.
 
 ## Additional documentation
 
