@@ -123,6 +123,13 @@
       "job": "Tests / Cli / Cli (windows-latest)",
       "pr_number": 19032,
       "observed_at": "2026-08-25T05:49:10Z"
+    },
+    {
+      "run_id": 32814771945,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32814771945",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 18924,
+      "observed_at": "2026-08-25T06:27:52Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"

@@ -1,0 +1,60 @@
+{
+  "run_id": 32814771945,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32814771945",
+  "analyzed_at": "2026-08-25T06:27:52Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18924,
+    "title": "Add SQLite persistence and run history to the Dashboard",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/dashboard-run-history",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18924"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97702589782,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32814771945/job/97702589782",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause 'cli-smoke-test-homebrew-winget-unrelated' (15 prior occurrences): 'Smoke test installed CLI' step fails intermittently with exit code 4 unrelated to PR changes, which only touch Dashboard SQLite persistence and unrelated CLI dashboard-run features, not the Homebrew installer artifact packaging.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97703144238,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32814771945/job/97703144238",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause 'cli-smoke-test-homebrew-winget-unrelated' (15 prior occurrences): 'Smoke test installed CLI' step fails intermittently with exit code 1 unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97703198648,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32814771945/job/97703198648",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause 'vscode-e2e-linux-workspace-target-proof-flaky' (11 prior occurrences): generic exit code 1 with unavailable job logs, unrelated to PR changes (PR does not touch extension/ code).",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97703198738,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32814771945/job/97703198738",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring cause 'vscode-e2e-windows-edge-cases-flaky' (17 prior occurrences): generic exit code 1 with unavailable job logs, unrelated to PR changes (PR does not touch extension/ code).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky"
+  ]
+}
