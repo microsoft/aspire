@@ -3171,7 +3171,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SameEnvironmentContainerAppDeploymentTargetsAreChained()
+    public async Task SameEnvironmentContainerAppDeploymentTargetsDoNotAddDependencyEdges()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -3188,8 +3188,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "api"));
-        Assert.Equal(["api"], GetContainerAppDeploymentTargetReferences(model, "worker"));
-        Assert.Equal(["worker"], GetContainerAppDeploymentTargetReferences(model, "cache"));
+        Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "worker"));
+        Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "cache"));
 
         Assert.Empty(GetComputeResource(model, "api").Annotations.OfType<ResourceRelationshipAnnotation>());
         Assert.Empty(GetComputeResource(model, "worker").Annotations.OfType<ResourceRelationshipAnnotation>());
@@ -3197,7 +3197,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SameEnvironmentContainerAppJobDeploymentTargetsAreChained()
+    public async Task SameEnvironmentContainerAppAndJobDeploymentTargetsShareConcurrencyGroup()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -3214,12 +3214,19 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "api"));
-        Assert.Equal(["api"], GetContainerAppDeploymentTargetReferences(model, "worker"));
-        Assert.Equal(["worker"], GetContainerAppDeploymentTargetReferences(model, "cache"));
+        Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "worker"));
+        Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "cache"));
+
+        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var cacheGroup = Assert.Single(GetComputeResource(model, "cache").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+
+        Assert.Same(apiGroup, workerGroup);
+        Assert.Same(apiGroup, cacheGroup);
     }
 
     [Fact]
-    public async Task ContainerAppsInDifferentEnvironmentsAreChainedIndependently()
+    public async Task ContainerAppsInDifferentEnvironmentsUseIndependentConcurrencyGroups()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -3240,9 +3247,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "a"));
-        Assert.Equal(["a"], GetContainerAppDeploymentTargetReferences(model, "b"));
+        Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "b"));
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "c"));
-        Assert.Equal(["c"], GetContainerAppDeploymentTargetReferences(model, "d"));
+        Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "d"));
 
         var containers = model.GetContainerResources().ToDictionary(resource => resource.Name);
         var groupA = Assert.Single(containers["a"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
@@ -3253,6 +3260,30 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Same(groupA, groupB);
         Assert.Same(groupC, groupD);
         Assert.NotSame(groupA, groupC);
+    }
+
+    [Fact]
+    public async Task AliasesOfSameExistingEnvironmentShareConcurrencyGroup()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env1 = builder.AddAzureContainerAppEnvironment("env1")
+            .PublishAsExisting("shared-env", "shared-rg");
+        var env2 = builder.AddAzureContainerAppEnvironment("env2")
+            .PublishAsExisting("shared-env", "shared-rg");
+
+        builder.AddContainer("api", "myimage").WithComputeEnvironment(env1);
+        builder.AddContainer("worker", "myimage").WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+
+        Assert.Same(apiGroup, workerGroup);
     }
 
     [Fact]

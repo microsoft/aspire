@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECOMPUTE004
 
 using System.Diagnostics;
 using System.Globalization;
@@ -579,6 +580,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
 
+        // Concurrency groups are lowered only after filtering. Adding these edges to the complete
+        // graph would cause a targeted deployment to pull unrelated group members into its closure.
+        ApplyDeploymentConcurrencyGroups(stepsToExecute);
+
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
     }
@@ -639,11 +644,84 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Convert RequiredBy relationships to DependsOn relationships before filtering
         var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
         NormalizeRequiredByToDependsOn(allSteps, allStepsByName);
+        AssignDeploymentConcurrencyGroups(context.Model, allSteps);
 
         // Capture resolved pipeline data for diagnostics (before filtering)
         _lastResolvedSteps = allSteps;
 
         return allSteps;
+    }
+
+    private static void AssignDeploymentConcurrencyGroups(
+        DistributedApplicationModel model,
+        List<PipelineStep> steps)
+    {
+        foreach (var computeResource in model.GetComputeResources())
+        {
+            foreach (var deploymentTarget in computeResource.Annotations.OfType<DeploymentTargetAnnotation>())
+            {
+                if (deploymentTarget.DeploymentConcurrencyGroups.Count == 0)
+                {
+                    continue;
+                }
+
+                var deploymentStep = steps.FirstOrDefault(step =>
+                    ReferenceEquals(step.Resource, deploymentTarget.DeploymentTarget) &&
+                    step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure))
+                    ?? steps.FirstOrDefault(step =>
+                        ReferenceEquals(step.Resource, deploymentTarget.DeploymentTarget) &&
+                        step.Tags.Contains(WellKnownPipelineTags.DeployCompute));
+
+                if (deploymentStep is null)
+                {
+                    continue;
+                }
+
+                foreach (var group in deploymentTarget.DeploymentConcurrencyGroups)
+                {
+                    if (!deploymentStep.DeploymentConcurrencyGroups.Any(existing => ReferenceEquals(existing, group)))
+                    {
+                        deploymentStep.DeploymentConcurrencyGroups.Add(group);
+                    }
+                }
+            }
+        }
+    }
+
+    internal static void ApplyDeploymentConcurrencyGroups(List<PipelineStep> selectedSteps)
+    {
+        if (!selectedSteps.Any(step => step.DeploymentConcurrencyGroups.Count > 0))
+        {
+            return;
+        }
+
+        // Use one global topological order for every group. Every generated edge therefore points
+        // backwards in the same order, which prevents overlapping group memberships from forming cycles.
+        var orderedSteps = GetTopologicalOrder(selectedSteps);
+        var lanesByGroup = new Dictionary<DeploymentConcurrencyGroup, Queue<PipelineStep>>(ReferenceEqualityComparer.Instance);
+
+        foreach (var step in orderedSteps)
+        {
+            foreach (var group in step.DeploymentConcurrencyGroups.Distinct<DeploymentConcurrencyGroup>(ReferenceEqualityComparer.Instance))
+            {
+                if (!lanesByGroup.TryGetValue(group, out var lane))
+                {
+                    lane = new Queue<PipelineStep>(group.MaxConcurrentDeployments);
+                    lanesByGroup.Add(group, lane);
+                }
+
+                if (lane.Count == group.MaxConcurrentDeployments)
+                {
+                    var predecessor = lane.Dequeue();
+                    if (!step.DependsOnSteps.Contains(predecessor.Name))
+                    {
+                        step.DependsOnSteps.Add(predecessor.Name);
+                    }
+                }
+
+                lane.Enqueue(step);
+            }
+        }
     }
 
     /// <summary>

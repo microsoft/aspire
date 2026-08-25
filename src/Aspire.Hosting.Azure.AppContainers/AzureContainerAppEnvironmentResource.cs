@@ -211,7 +211,7 @@ public class AzureContainerAppEnvironmentResource :
             this,
             services);
 
-        var concurrencyPredecessors = new Queue<AzureBicepResource>(_deploymentConcurrencyGroup.MaxConcurrentDeployments);
+        var deploymentConcurrencyGroup = GetDeploymentConcurrencyGroup(appModel);
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -235,16 +235,6 @@ public class AzureContainerAppEnvironmentResource :
 
             var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
 
-            if (concurrencyPredecessors.Count == _deploymentConcurrencyGroup.MaxConcurrentDeployments)
-            {
-                // AzureBicepResource converts references into provision-step dependencies. Linking
-                // each target to the target one concurrency window behind produces the same maximum
-                // concurrency declared by the shared group without changing the application graph.
-                containerApp.References.Add(concurrencyPredecessors.Dequeue());
-            }
-
-            concurrencyPredecessors.Enqueue(containerApp);
-
             // Capture information about the container registry used by the
             // container app environment in the deployment target information
             // associated with each compute resource that needs an image
@@ -253,12 +243,46 @@ public class AzureContainerAppEnvironmentResource :
                 ContainerRegistry = this,
                 ComputeEnvironment = this
             };
-            deploymentTargetAnnotation.DeploymentConcurrencyGroups.Add(_deploymentConcurrencyGroup);
+            deploymentTargetAnnotation.DeploymentConcurrencyGroups.Add(deploymentConcurrencyGroup);
             r.Annotations.Add(deploymentTargetAnnotation);
         }
 
         // Log once about all HTTP endpoints upgraded to HTTPS
         containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
+    private DeploymentConcurrencyGroup GetDeploymentConcurrencyGroup(DistributedApplicationModel model)
+    {
+        if (!this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource))
+        {
+            return _deploymentConcurrencyGroup;
+        }
+
+        // Multiple logical resources can alias one existing managed environment. Use the first
+        // provably identical alias as the canonical group owner so those physical writes remain serialized.
+        var canonicalEnvironment = model.Resources
+            .OfType<AzureContainerAppEnvironmentResource>()
+            .First(environment =>
+                environment.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var candidate) &&
+                ExistingResourceIdentityEquals(existingResource, candidate));
+
+        return canonicalEnvironment._deploymentConcurrencyGroup;
+    }
+
+    private static bool ExistingResourceIdentityEquals(
+        ExistingAzureResourceAnnotation left,
+        ExistingAzureResourceAnnotation right)
+    {
+        return ExistingResourceIdentityPartEquals(left.Subscription, right.Subscription) &&
+               ExistingResourceIdentityPartEquals(left.ResourceGroup, right.ResourceGroup) &&
+               ExistingResourceIdentityPartEquals(left.Name, right.Name);
+    }
+
+    private static bool ExistingResourceIdentityPartEquals(object? left, object? right)
+    {
+        return left is string leftString && right is string rightString
+            ? string.Equals(leftString, rightString, StringComparison.OrdinalIgnoreCase)
+            : ReferenceEquals(left, right) || Equals(left, right);
     }
 
     internal bool UseAzdNamingConvention { get; set; }
