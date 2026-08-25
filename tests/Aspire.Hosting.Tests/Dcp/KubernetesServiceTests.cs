@@ -68,25 +68,69 @@ public class KubernetesServiceTests
     }
 
     [Fact]
-    public async Task ExecuteWithRetry_UsesApiRetryDuration_AfterKubernetesClientInitialization()
+    public async Task ExecuteWithRetry_UsesInitializationTimeout_UntilFirstApiOperationSucceeds()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
 
         var (service, kubeconfigPath, fileSystem) = CreateService(
             maxRetryDuration: TimeSpan.FromMilliseconds(500),
-            kubernetesConfigInitializationTimeout: TimeSpan.FromSeconds(5));
+            kubernetesInitializationTimeout: TimeSpan.FromSeconds(5));
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
 
         // The fourth API request succeeds after exponential retry delays of 100, 200, and 400 milliseconds.
-        // It is reachable under the initialization budget but not the 500-millisecond API budget.
+        // It is reachable under the initialization budget but not the 500-millisecond steady-state budget.
         await using var server = await TestDcpApiServer.StartAsync(cts.Token, successfulRequestNumber: 4);
         var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
 
         await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
         WriteKubeconfig(kubeconfigPath, server.Port);
 
-        await Assert.ThrowsAsync<TimeoutRejectedException>(() => listTask);
+        var result = await listTask;
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ExecuteWithRetry_UsesApiRetryDuration_AfterFirstApiOperationSucceeds()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            maxRetryDuration: TimeSpan.FromMilliseconds(500),
+            kubernetesInitializationTimeout: TimeSpan.FromSeconds(5));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.ListAsync<Container>(cancellationToken: cts.Token);
+        Assert.Empty(result);
+
+        server.FailNextRequests(3);
+        await Assert.ThrowsAsync<TimeoutRejectedException>(
+            () => service.ListAsync<Container>(cancellationToken: cts.Token));
+    }
+
+    [Fact]
+    public async Task ExecuteWithRetry_CancelsApiRequest_WhenRetryDurationExpires()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            maxRetryDuration: TimeSpan.FromMilliseconds(500),
+            kubernetesInitializationTimeout: TimeSpan.FromSeconds(5));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
+
+        server.DelayResponses(TimeSpan.FromSeconds(2));
+        await Assert.ThrowsAsync<TimeoutRejectedException>(
+            () => service.ListAsync<Container>(cancellationToken: cts.Token));
+        await server.WaitForRequestCancellationAsync(cts.Token);
     }
 
     // Verifies that establishing the connection survives a partially-written kubeconfig: when the file exists
@@ -120,7 +164,7 @@ public class KubernetesServiceTests
 
     private static (KubernetesService Service, string KubeconfigPath, IDisposable FileSystem) CreateService(
         TimeSpan? maxRetryDuration = null,
-        TimeSpan? kubernetesConfigInitializationTimeout = null)
+        TimeSpan? kubernetesInitializationTimeout = null)
     {
         var configuration = new ConfigurationBuilder().Build();
 
@@ -141,7 +185,7 @@ public class KubernetesServiceTests
             {
                 // Generous enough that the test can flip the kubeconfig before the retry budget is exhausted.
                 MaxRetryDuration = maxRetryDuration ?? TimeSpan.FromSeconds(30),
-                KubernetesConfigInitializationTimeout = kubernetesConfigInitializationTimeout ?? TimeSpan.FromSeconds(60),
+                KubernetesInitializationTimeout = kubernetesInitializationTimeout ?? TimeSpan.FromSeconds(60),
             };
 
             return (service, locations.DcpKubeconfigPath, fileSystem);
@@ -290,14 +334,35 @@ public class KubernetesServiceTests
     private sealed class TestDcpApiServer : IAsyncDisposable
     {
         private readonly WebApplication _app;
+        private readonly ResponseState _responseState;
 
-        private TestDcpApiServer(WebApplication app, int port)
+        private TestDcpApiServer(WebApplication app, int port, ResponseState responseState)
         {
             _app = app;
+            _responseState = responseState;
             Port = port;
         }
 
         public int Port { get; }
+
+        public void FailNextRequests(int count)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(count);
+            Volatile.Write(
+                ref _responseState.SuccessfulRequestNumber,
+                Volatile.Read(ref _responseState.RequestCount) + count + 1);
+        }
+
+        public void DelayResponses(TimeSpan delay)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);
+            Interlocked.Exchange(ref _responseState.ResponseDelayTicks, delay.Ticks);
+        }
+
+        public Task WaitForRequestCancellationAsync(CancellationToken cancellationToken)
+        {
+            return _responseState.RequestCancellationObserved.Task.WaitAsync(cancellationToken);
+        }
 
         public static async Task<TestDcpApiServer> StartAsync(
             CancellationToken cancellationToken = default,
@@ -311,11 +376,28 @@ public class KubernetesServiceTests
             builder.WebHost.UseUrls("http://127.0.0.1:0");
 
             var app = builder.Build();
+            var responseState = new ResponseState
+            {
+                SuccessfulRequestNumber = successfulRequestNumber,
+            };
 
-            var requestCount = 0;
             app.Run(async context =>
             {
-                if (Interlocked.Increment(ref requestCount) < successfulRequestNumber)
+                var responseDelayTicks = Interlocked.Read(ref responseState.ResponseDelayTicks);
+                if (responseDelayTicks > 0)
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromTicks(responseDelayTicks), context.RequestAborted);
+                    }
+                    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                    {
+                        responseState.RequestCancellationObserved.TrySetResult(true);
+                        throw;
+                    }
+                }
+
+                if (Interlocked.Increment(ref responseState.RequestCount) < Volatile.Read(ref responseState.SuccessfulRequestNumber))
                 {
                     context.Response.StatusCode = StatusCodes.Status409Conflict;
                     return;
@@ -332,13 +414,22 @@ public class KubernetesServiceTests
             var address = app.Urls.First();
             var port = new Uri(address).Port;
 
-            return new TestDcpApiServer(app, port);
+            return new TestDcpApiServer(app, port, responseState);
         }
 
         public async ValueTask DisposeAsync()
         {
             await _app.StopAsync().ConfigureAwait(false);
             await _app.DisposeAsync().ConfigureAwait(false);
+        }
+
+        private sealed class ResponseState
+        {
+            public int RequestCount;
+            public TaskCompletionSource<bool> RequestCancellationObserved { get; } =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public long ResponseDelayTicks;
+            public int SuccessfulRequestNumber;
         }
     }
 }
