@@ -88,7 +88,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private readonly SemaphoreSlim _kubeconfigReadSemaphore = new(1);
 
     private DcpKubernetesClient? _kubernetes;
-    private int _kubernetesApiReady;
+    private bool _kubernetesApiReady;
     private ResiliencePipeline? _resiliencePipeline;
     private bool _disposed;
 
@@ -296,8 +296,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 #pragma warning restore CS0618 // Type or member is obsolete
                 },
                 RetryOnConnectivityAndConflictErrors,
-                restartCancellationToken,
-                marksApiReady: false);
+                restartCancellationToken);
         };
 
         await foreach (var item in PeriodicRestartAsyncEnumerable.CreateAsync(innerWatchFactory, restartInterval: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false))
@@ -457,16 +456,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         string resourceType,
         Func<DcpKubernetesClient, TResult> operation,
         Func<Exception, bool> isRetryable,
-        CancellationToken cancellationToken,
-        bool marksApiReady = true)
+        CancellationToken cancellationToken)
     {
         return ExecuteWithRetry<TResult>(
             operationType,
             resourceType,
             (DcpKubernetesClient kubernetes, CancellationToken _) => Task.FromResult(operation(kubernetes)),
             isRetryable,
-            cancellationToken,
-            marksApiReady);
+            cancellationToken);
     }
 
     private async Task<TResult> ExecuteWithRetry<TResult>(
@@ -474,12 +471,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         string resourceType,
         Func<DcpKubernetesClient, CancellationToken, Task<TResult>> operation,
         Func<Exception, bool> isRetryable,
-        CancellationToken cancellationToken,
-        bool marksApiReady = true)
+        CancellationToken cancellationToken)
     {
         using var activity = ProfilingTelemetry.StartDcpKubernetesApi(configuration, operationType, resourceType);
         var retryCount = 0;
-        var useInitializationTimeout = Volatile.Read(ref _kubernetesApiReady) == 0;
 
         try
         {
@@ -506,9 +501,9 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
             // A parsed kubeconfig does not guarantee that DCP can process requests yet. Keep using the startup
             // budget until an API operation succeeds, then fail steady-state API calls on the normal budget.
-            var retryDuration = useInitializationTimeout
-                ? KubernetesInitializationTimeout
-                : MaxRetryDuration;
+            var retryDuration = Volatile.Read(ref _kubernetesApiReady)
+                ? MaxRetryDuration
+                : KubernetesInitializationTimeout;
 
             var resiliencePipeline = CreateKubernetesCallResiliencePipeline(retryDuration, isRetryable, activity, () => retryCount++);
             return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
@@ -516,10 +511,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 // Keep connection establishment inside the retry loop so kubeconfig read failures remain retryable.
                 await EnsureKubernetesClientAsync(cancellationToken).ConfigureAwait(false);
                 var result = await operation(_kubernetes!, cancellationToken).ConfigureAwait(false);
-                if (marksApiReady)
-                {
-                    Volatile.Write(ref _kubernetesApiReady, 1);
-                }
+                Volatile.Write(ref _kubernetesApiReady, true);
+
                 return result;
             }, cancellationToken).ConfigureAwait(false);
         }
