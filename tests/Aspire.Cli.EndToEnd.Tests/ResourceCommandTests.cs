@@ -108,6 +108,93 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
+    public async Task ResourceCommand_InvalidArgumentShowsErrorBeforeCommandHelp()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"ResourceCmdInvalidArgApp_{projectSuffix}";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
+
+        await auto.TypeAsync($"cd {projectName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
+        var content = File.ReadAllText(appHostFilePath);
+        var sdkLine = content.Split('\n', 2)[0].TrimEnd('\r');
+
+        var newContent = $$"""
+            {{sdkLine}}
+
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            var resource = builder.AddParameter("test-resource");
+
+            resource.WithCommand(
+                name: "configure",
+                displayName: "Configure",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Description = "Configures the resource.",
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            Label = "Message",
+                            Description = "Message to send.",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+            builder.Build().Run();
+            """;
+
+        File.WriteAllText(appHostFilePath, newContent);
+
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync($"aspire resource test-resource configure --unknown value > /tmp/resource-invalid-output.txt 2>&1; if [ $? -eq {CliExitCodes.InvalidCommand} ]; then echo RESOURCE_CMD_EXIT_CODE_CORRECT; else echo RESOURCE_CMD_UNEXPECTED_EXIT_CODE; fi");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("RESOURCE_CMD_EXIT_CODE_CORRECT", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.RunCommandAsync(
+            "grep -qF \"Unrecognized command option '--unknown value'.\" /tmp/resource-invalid-output.txt && grep -qF 'Configures the resource.' /tmp/resource-invalid-output.txt && grep -qF 'Usage:' /tmp/resource-invalid-output.txt && grep -qF -- '--message <value>' /tmp/resource-invalid-output.txt",
+            counter,
+            TimeSpan.FromSeconds(10));
+
+        await auto.RunCommandAsync(
+            "ERROR_LINE=$(grep -nF \"Unrecognized command option '--unknown value'.\" /tmp/resource-invalid-output.txt | head -n1 | cut -d: -f1); HELP_LINE=$(grep -nF 'Usage:' /tmp/resource-invalid-output.txt | head -n1 | cut -d: -f1); test -n \"$ERROR_LINE\" && test -n \"$HELP_LINE\" && test \"$ERROR_LINE\" -lt \"$HELP_LINE\"",
+            counter,
+            TimeSpan.FromSeconds(10));
+
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/17485")]
     public async Task ResourceCommand_FailsWhenInteractionServiceIsRequired()
     {

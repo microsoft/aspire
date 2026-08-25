@@ -273,7 +273,7 @@ internal abstract class BaseCommand : Command
         return false;
     }
 
-    private static async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
+    protected static async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
     {
         if (interactionService is not IExtensionInteractionService extensionInteractionService)
         {

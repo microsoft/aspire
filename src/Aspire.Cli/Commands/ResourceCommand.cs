@@ -144,6 +144,15 @@ internal sealed class ResourceCommand : BaseCommand
         var commandArgumentsResult = CreateCommandArguments(command, capturedArguments, loadArguments ? CommandArgumentParseMode.LoadArguments : CommandArgumentParseMode.Execute);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
+            if (!loadArguments && command is not null)
+            {
+                InteractionService.DisplayError(errorMessage);
+                await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
+
+                ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
+                return CommandResult.FromExitCode(CliExitCodes.InvalidCommand);
+            }
+
             return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
 
@@ -735,7 +744,6 @@ internal sealed class ResourceCommand : BaseCommand
             var appHostOptionValue = GetOptionTokenValue(parseResult, s_appHostOption.InnerOption) ?? GetOptionTokenValue(parseResult, s_appHostOption.LegacyOption);
 
             var hasResourceName = !string.IsNullOrEmpty(resourceName) && !IsOptionLikeToken(resourceName);
-
             // The command slot is considered empty when it has no token, when it captured an option like --help,
             // or when it captured the value for --apphost/--project instead of an actual resource command name.
             var hasNoCommandName = string.IsNullOrEmpty(commandName) ||
@@ -751,7 +759,7 @@ internal sealed class ResourceCommand : BaseCommand
             return result?.Tokens.Count > 0 ? result.Tokens[0].Value : null;
         }
 
-        private static void WriteResourceCommandHelp(TextWriter writer, System.CommandLine.Parsing.CommandResult commandResult, string resourceName, ResourceSnapshotCommand command)
+        internal static void WriteResourceCommandHelp(TextWriter writer, System.CommandLine.Parsing.CommandResult commandResult, string resourceName, ResourceSnapshotCommand command)
         {
             var cliOptionNames = GetCliOptionNames(commandResult);
 
@@ -897,5 +905,4 @@ internal sealed class ResourceCommand : BaseCommand
             return string.Join(" ", parts);
         }
     }
-
 }
