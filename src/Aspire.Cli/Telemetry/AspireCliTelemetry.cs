@@ -55,6 +55,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly CliExecutionContext _executionContext;
     private readonly TelemetryTagsSource _tagsSource;
     private Task _internalMicrosoftDiagnosticsTask = Task.CompletedTask;
+    private Task? _internalMicrosoftDiagnosticsCompletionTask;
 
     private bool _isInitialized;
 
@@ -234,11 +235,25 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => CompleteInternalMicrosoftDiagnosticsAsync(cancellationToken);
 
-    internal async Task CompleteInternalMicrosoftDiagnosticsAsync(CancellationToken cancellationToken = default)
+    internal Task CompleteInternalMicrosoftDiagnosticsAsync(CancellationToken cancellationToken = default)
+    {
+        var completionTask = Volatile.Read(ref _internalMicrosoftDiagnosticsCompletionTask);
+        if (completionTask is null)
+        {
+            var newCompletionTask = WaitForInternalMicrosoftDiagnosticsAsync();
+            completionTask = Interlocked.CompareExchange(ref _internalMicrosoftDiagnosticsCompletionTask, newCompletionTask, comparand: null) ?? newCompletionTask;
+        }
+
+        return cancellationToken.CanBeCanceled
+            ? completionTask.WaitAsync(cancellationToken)
+            : completionTask;
+    }
+
+    private async Task WaitForInternalMicrosoftDiagnosticsAsync()
     {
         try
         {
-            await _internalMicrosoftDiagnosticsTask.WaitAsync(s_internalMicrosoftDiagnosticsCompletionTimeout, cancellationToken).ConfigureAwait(false);
+            await _internalMicrosoftDiagnosticsTask.WaitAsync(s_internalMicrosoftDiagnosticsCompletionTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {

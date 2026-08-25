@@ -280,6 +280,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private async Task<InternalMicrosoftProbeStageResult> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
     {
+        var stageStartTimestamp = Stopwatch.GetTimestamp();
+        var stageDeadlineTimestamp = stageStartTimestamp + (long)(_probeStageTimeout.TotalSeconds * Stopwatch.Frequency);
         using var stageTimeout = new CancellationTokenSource(_probeStageTimeout);
         using var stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stageTimeout.Token);
         var probeTasks = probes.Select(probe => RunProbeAsync(probe, stageCancellation.Token)).ToList();
@@ -307,12 +309,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             {
                 completedResults.Add(task.Result);
                 var diagnostic = task.Result.Diagnostic;
-                diagnostics.Add(timedOut && diagnostic.Outcome == InternalMicrosoftProbeOutcome.Cancelled
+                diagnostics.Add(task.Result.CompletionTimestamp > stageDeadlineTimestamp
                     ? diagnostic with { Outcome = InternalMicrosoftProbeOutcome.TimedOut }
                     : diagnostic);
             }
         }
 
+        timedOut |= completedResults.Any(result => result.CompletionTimestamp > stageDeadlineTimestamp);
         foreach (var probe in probes)
         {
             if (!completedResults.Any(result => result.Source.Equals(probe.Name, StringComparison.Ordinal)))
@@ -321,7 +324,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
         }
 
+        // Probe tasks can ignore cancellation and complete while the cancellation drain runs.
+        // Compare their recorded completion time with the actual stage deadline so scheduler
+        // latency between deadline expiry and the timeout continuation cannot admit late results.
         var result = completedResults
+            .Where(result => result.CompletionTimestamp <= stageDeadlineTimestamp)
             .Where(result => result.Result.IsInternalMicrosoft)
             .OrderByDescending(result => GetProbeResultScore(result.Result))
             .ThenBy(result => GetProbeIndex(probes, result.Probe))
@@ -350,7 +357,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     probe,
                     probe.Name,
                     result,
-                    new InternalMicrosoftProbeDiagnostic(probe.Name, outcome, stopwatch.Elapsed, !string.IsNullOrEmpty(result.Alias), !string.IsNullOrEmpty(result.Domain)));
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, outcome, stopwatch.Elapsed, !string.IsNullOrEmpty(result.Alias), !string.IsNullOrEmpty(result.Domain)),
+                    Stopwatch.GetTimestamp());
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -359,7 +367,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     probe,
                     probe.Name,
                     InternalMicrosoftProbeResult.NotDetected,
-                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Cancelled, stopwatch.Elapsed, HasAlias: false, HasDomain: false));
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Cancelled, stopwatch.Elapsed, HasAlias: false, HasDomain: false),
+                    Stopwatch.GetTimestamp());
             }
             catch (Exception ex)
             {
@@ -372,7 +381,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     probe,
                     probe.Name,
                     InternalMicrosoftProbeResult.NotDetected,
-                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Failed, stopwatch.Elapsed, HasAlias: false, HasDomain: false));
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Failed, stopwatch.Elapsed, HasAlias: false, HasDomain: false),
+                    Stopwatch.GetTimestamp());
             }
         }, CancellationToken.None);
     }
@@ -1821,7 +1831,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly record struct TenantAliasEvidence(string TenantId, string? Alias);
     private sealed record InternalMicrosoftCacheReadResult(InternalMicrosoftDetectorCacheEntry? Entry, string CacheStatus);
     private sealed record InternalMicrosoftProbeStageResult(InternalMicrosoftDetectionResult? Result, IReadOnlyList<InternalMicrosoftProbeDiagnostic> Diagnostics, bool TimedOut);
-    private sealed record InternalMicrosoftProbeRunResult(InternalMicrosoftProbe Probe, string Source, InternalMicrosoftProbeResult Result, InternalMicrosoftProbeDiagnostic Diagnostic);
+    private sealed record InternalMicrosoftProbeRunResult(InternalMicrosoftProbe Probe, string Source, InternalMicrosoftProbeResult Result, InternalMicrosoftProbeDiagnostic Diagnostic, long CompletionTimestamp);
 }
 
 internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<InternalMicrosoftProbeResult>> DetectAsync);

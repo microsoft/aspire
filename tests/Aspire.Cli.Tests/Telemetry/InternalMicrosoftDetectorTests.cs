@@ -156,6 +156,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     public async Task IsInternalMicrosoftMachineAsync_StageTimeoutBoundsSlowProbeWhenFastProbeDetects()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var slowProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var slowProbeCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
@@ -164,11 +165,12 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                 [
                     new InternalMicrosoftProbe("positive", async _ =>
                     {
-                        await Task.Yield();
+                        await slowProbeStarted.Task;
                         return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "positive.alias", Domain: "POSITIVE");
                     }),
                     new InternalMicrosoftProbe("slow", async cancellationToken =>
                     {
+                        slowProbeStarted.SetResult();
                         try
                         {
                             await Task.Delay(TimeSpan.FromMinutes(5), cancellationToken);
@@ -183,7 +185,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                     })
                 ]
             ],
-            probeStageTimeout: TimeSpan.FromMilliseconds(50));
+            probeStageTimeout: TimeSpan.FromSeconds(2));
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
@@ -193,6 +195,36 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("POSITIVE", result.Domain);
         await slowProbeCancelled.Task.DefaultTimeout();
         Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_IgnoresPositiveResultThatCompletesDuringCancellationDrain()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var probeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stageCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("late positive", async cancellationToken =>
+            {
+                using var registration = cancellationToken.Register(stageCancelled.SetResult);
+                probeStarted.SetResult();
+                await releaseProbe.Task;
+                return new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "late.alias", Domain: "LATE");
+            })]],
+            probeStageTimeout: TimeSpan.FromMilliseconds(50));
+
+        var detectionTask = detector.IsInternalMicrosoftMachineAsync();
+        await probeStarted.Task.DefaultTimeout();
+        await stageCancelled.Task.DefaultTimeout();
+        releaseProbe.SetResult();
+        var result = await detectionTask;
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "late positive" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
     }
 
     [Fact]

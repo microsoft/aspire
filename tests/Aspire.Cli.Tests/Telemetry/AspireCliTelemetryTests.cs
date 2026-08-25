@@ -444,6 +444,17 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public void CompleteInternalMicrosoftDiagnosticsAsync_ReusesOneCompletionWait()
+    {
+        using var fixture = new TelemetryFixture();
+
+        var firstWait = fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+        var secondWait = fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+
+        Assert.Same(firstWait, secondWait);
+    }
+
+    [Fact]
     public void Initialize_EmitsBoundedInternalMicrosoftDiagnosticActivity()
     {
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
