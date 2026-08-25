@@ -6,6 +6,10 @@ import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWork
 import { getWorkspaceRoot } from './helpers/paths';
 import { cancelActiveInput, chooseActiveQuickPick, chooseActiveQuickPickAtIndex, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
 
+// Dynamic launch output is emitted before the selected single-file AppHost finishes its cold build.
+// Hosted Windows exceeded the old 60-second process-state wait while the build was still running.
+const appHostProcessStateTimeoutMs = 120000;
+
 suite('Aspire dynamic debug configuration E2E', function () {
     this.timeout(240000);
 
@@ -91,7 +95,8 @@ suite('Aspire dynamic debug configuration E2E', function () {
         assert.ok(isSamePath(secondLaunch.appHostPath, appHostPath));
     });
 
-    test('launches the selected AppHost from an ambiguous single-folder workspace', async () => {
+    test('launches the selected AppHost from an ambiguous single-folder workspace', async function () {
+        this.timeout(300000);
         createAmbiguousWorkspaceFixture();
         await openAmbiguousWorkspace();
 
@@ -103,7 +108,9 @@ suite('Aspire dynamic debug configuration E2E', function () {
         const launch = await waitForLaunchOutput(beforeLaunch);
         assert.ok(launch.appHostPath);
         assert.ok(isSamePath(launch.appHostPath, ambiguousSecondAppHostPath));
-        const appHostPid = await waitForRunningAppHostPid(ambiguousSecondAppHostPath, 60000);
+        const appHostPid = await waitForRunningAppHostPid(
+            ambiguousSecondAppHostPath,
+            appHostProcessStateTimeoutMs);
         assert.ok(appHostPid > 0);
         assert.strictEqual(getRunningAppHostPid(ambiguousFirstAppHostPath), undefined);
         assert.deepStrictEqual(

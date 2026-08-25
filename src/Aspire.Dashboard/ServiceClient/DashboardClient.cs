@@ -36,7 +36,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <para>
 /// If the <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
 /// no known endpoint to connect to, and this dashboard client will be disabled. Calls to
-/// <see cref="IDashboardClient.SubscribeResourcesAsync"/> and <see cref="IDashboardClient.SubscribeConsoleLogs"/>
+/// <see cref="IResourceRepository.SubscribeResourcesAsync"/> and <see cref="IResourceRepository.SubscribeConsoleLogs"/>
 /// will throw if <see cref="IDashboardClient.IsEnabled"/> is <see langword="false"/>. Callers should
 /// check this property first, before calling these methods.
 /// </para>
@@ -45,12 +45,14 @@ internal sealed class DashboardClient : IDashboardClient
 {
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
+    internal const string LiveAppHostServiceKey = "LiveAppHost";
 
     // The dashboard's own version, extracted from its assembly at startup. Used to compare against
     // the minimum version required by the AppHost.
     private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
+    private readonly ActivitySource _activitySource;
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -66,6 +68,7 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly DashboardOptions _dashboardOptions;
     private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
+    private readonly IResourceRepositoryWriter _resourceRepositoryWriter;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
@@ -90,17 +93,21 @@ internal sealed class DashboardClient : IDashboardClient
     private Task? _connection;
 
     public DashboardClient(
+        DashboardActivitySource activitySource,
         ILoggerFactory loggerFactory,
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
         IStringLocalizer<DashboardResources> loc,
+        IResourceRepositoryWriter resourceRepositoryWriter,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
+        _activitySource = activitySource.ActivitySource;
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
         _loc = loc;
+        _resourceRepositoryWriter = resourceRepositoryWriter;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -324,7 +331,12 @@ internal sealed class DashboardClient : IDashboardClient
         }
 
         SetConnectionState(DashboardConnectionState.Connecting);
-        _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        // The connection watches resources for the lifetime of the dashboard. Don't let the request or
+        // component that first accesses the client become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
+        {
+            _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        }
     }
 
     async Task ConnectAndWatchAsync(CancellationToken cancellationToken)
@@ -551,6 +563,9 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
+            using var activity = _activitySource.StartActivity("Process resource update", ActivityKind.Consumer);
+            activity?.SetTag("aspire.dashboard.resource_update.type", response.KindCase.ToString());
+
             List<ResourceViewModelChange>? changes = null;
             ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
@@ -566,6 +581,11 @@ internal sealed class DashboardClient : IDashboardClient
 
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
                 {
+                    var resourcesWithLoadedConsoleLogs = _resourceByName.Values
+                        .Where(resource => resource.ConsoleLogsLoaded)
+                        .Select(resource => resource.Name)
+                        .ToHashSet(StringComparers.ResourceName);
+
                     // Populate our map using the initial data.
                     _resourceByName.Clear();
 
@@ -575,6 +595,7 @@ internal sealed class DashboardClient : IDashboardClient
                     {
                         // Add to map.
                         var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
+                        viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
                         _resourceByName[resource.Name] = viewModel;
 
                         // Send this update to any subscribers too.
@@ -595,6 +616,10 @@ internal sealed class DashboardClient : IDashboardClient
                         {
                             // Upsert (i.e. add or replace)
                             var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
+                            if (_resourceByName.TryGetValue(change.Upsert.Name, out var existingResource))
+                            {
+                                viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
+                            }
                             _resourceByName[change.Upsert.Name] = viewModel;
                             changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                         }
@@ -633,6 +658,15 @@ internal sealed class DashboardClient : IDashboardClient
                     // point receives the updated model in its initial snapshot and must not also receive this change.
                     resourceChannels = _outgoingResourceChannels;
                 }
+            }
+
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
+            {
+                await _resourceRepositoryWriter.ReplaceResourcesAsync(response.InitialData.Resources).ConfigureAwait(false);
+            }
+            else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
+            {
+                await _resourceRepositoryWriter.ApplyChangesAsync(response.Changes.Value).ConfigureAwait(false);
             }
 
             // Update connection state outside the lock to avoid potential deadlocks
@@ -899,6 +933,12 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        // Console-log persistence is demand-driven rather than always-on. This known limitation means
+        // historical runs can omit logs for resources that were never viewed or exported. The historical
+        // Console Logs page checks this capture state and displays a notice when logs aren't available.
+        // See https://github.com/microsoft/aspire/issues/18823.
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+
         // It's ok to dispose CTS with using because this method exits after it is finished being used.
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
@@ -918,6 +958,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
                 {
+                    await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(CreateLogLines(response.LogLines));
                 }
@@ -940,6 +981,8 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
         var call = _client!.WatchResourceConsoleLogs(
@@ -949,8 +992,26 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
         {
+            await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
             yield return CreateLogLines(response.LogLines);
         }
+    }
+
+    /// <inheritdoc/>
+    public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) =>
+        _resourceRepositoryWriter.ClearConsoleLogsAsync(resourceNames, clearDate);
+
+    private async Task MarkConsoleLogsLoadedAsync(string resourceName)
+    {
+        lock (_lock)
+        {
+            if (_resourceByName.TryGetValue(resourceName, out var resource))
+            {
+                resource.ConsoleLogsLoaded = true;
+            }
+        }
+
+        await _resourceRepositoryWriter.MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
     }
 
     private static ResourceLogLine[] CreateLogLines(IList<ConsoleLogLine> logLines)

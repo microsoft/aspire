@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Cli.Utils;
+namespace Aspire.Shared;
 
 /// <summary>
 /// A cross-process file-based lock that is safe to use with async/await.
@@ -30,6 +30,7 @@ internal sealed class FileLock : IDisposable
     // Short delay keeps latency low under contention without busy-spinning.
     // Matches the delay used by NuGet.Common.ConcurrencyUtilities.
     private static readonly TimeSpan s_defaultRetryDelay = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan s_defaultTimeout = TimeSpan.FromMinutes(5);
 
     private readonly FileStream _stream;
 
@@ -39,9 +40,29 @@ internal sealed class FileLock : IDisposable
     }
 
     /// <summary>
-    /// Default maximum time to wait for the lock before giving up.
+    /// Acquires an exclusive file lock without waiting.
     /// </summary>
-    private static readonly TimeSpan s_defaultTimeout = TimeSpan.FromMinutes(5);
+    public static FileLock Acquire(string lockPath)
+    {
+        CreateLockDirectory(lockPath);
+
+        return new FileLock(CreateLockStream(lockPath));
+    }
+
+    /// <summary>
+    /// Attempts to acquire an exclusive file lock without waiting.
+    /// </summary>
+    public static FileLock? TryAcquire(string lockPath)
+    {
+        try
+        {
+            return Acquire(lockPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Acquires an exclusive file lock, retrying on contention.
@@ -57,11 +78,7 @@ internal sealed class FileLock : IDisposable
         var effectiveTimeout = timeout ?? s_defaultTimeout;
         var deadline = DateTime.UtcNow + effectiveTimeout;
 
-        var directory = Path.GetDirectoryName(lockPath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
+        CreateLockDirectory(lockPath);
 
         while (true)
         {
@@ -99,6 +116,15 @@ internal sealed class FileLock : IDisposable
     public void Dispose()
     {
         _stream.Dispose();
+    }
+
+    private static void CreateLockDirectory(string lockPath)
+    {
+        var directory = Path.GetDirectoryName(lockPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
     }
 
     /// <summary>

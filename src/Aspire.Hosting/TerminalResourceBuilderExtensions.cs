@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -188,21 +189,15 @@ public static class TerminalResourceBuilderExtensions
         // 0700 on Unix so other local users cannot enumerate which terminals exist on
         // this machine. On Windows the user-profile ACLs (per-user by default) make this
         // a no-op; CreateDirectory is idempotent.
-        Directory.CreateDirectory(trmnlDirectory);
-        if (!OperatingSystem.IsWindows())
+        try
         {
-            try
-            {
-                File.SetUnixFileMode(
-                    trmnlDirectory,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-            {
-                // Best-effort: directory may already have stricter perms or be on a filesystem
-                // that does not support chmod (e.g. some FAT-formatted home dirs). Per-socket
-                // 0600 in TerminalHostControlListener still protects each endpoint.
-            }
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(trmnlDirectory);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Best-effort: directory may already have stricter perms or be on a filesystem
+            // that does not support chmod (e.g. some FAT-formatted home dirs). Per-socket
+            // 0600 in TerminalHostControlListener still protects each endpoint.
         }
 
         var terminalHosts = new TerminalHostResource[replicaCount];

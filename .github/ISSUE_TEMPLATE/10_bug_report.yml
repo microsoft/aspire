@@ -60,6 +60,7 @@ body:
       label: Aspire doctor output
       description: |
         Run `aspire doctor` and paste output here
+      render: plain
     validations:
       required: false
   - type: textarea

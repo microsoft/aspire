@@ -90,7 +90,11 @@ suite('Aspire debug dashboard E2E', function () {
         await waitForNoDebugSessions();
     });
 
-    test('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows', async () => {
+    test('starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+
         writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome');
 
         await openAspireView();
@@ -109,24 +113,20 @@ suite('Aspire debug dashboard E2E', function () {
         // look like a missing browser session.
         await waitForDebugDashboardUrl();
 
-        if (process.platform === 'win32') {
-            const browserSession = await waitForBrowserDebugSession();
-            assert.deepStrictEqual(
-                getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
-                [{ id: browserSession.id, type: 'pwa-chrome' }]);
-        }
+        const browserSession = await waitForBrowserDebugSession();
+        assert.deepStrictEqual(
+            getBrowserDebugSessions().filter(session => session.parentSessionType === 'aspire').map(session => ({ id: session.id, type: session.type })),
+            [{ id: browserSession.id, type: 'pwa-chrome' }]);
 
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
 
-        if (process.platform === 'win32') {
-            // The Aspire session ending is not enough on its own. VS Code leaves the child browser
-            // session running unless the extension stops it explicitly, which is what left orphaned
-            // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
-            // on the extension's own debugSessions cannot catch that regression: it was already empty
-            // while the browser kept running.
-            await waitForNoBrowserDebugSessions();
-        }
+        // The Aspire session ending is not enough on its own. VS Code leaves the child browser
+        // session running unless the extension stops it explicitly, which is what left orphaned
+        // dashboard browsers behind in https://github.com/microsoft/aspire/issues/19289. Asserting
+        // on the extension's own debugSessions cannot catch that regression: it was already empty
+        // while the browser kept running.
+        await waitForNoBrowserDebugSessions();
     });
 
     test('workspace debug stop removes running apphost', async () => {

@@ -447,7 +447,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ConnectionStringAvailableEventPublishesConnectionStringAndResolvableProperties()
+    public async Task ConnectionStringAvailableEventUpdatesConnectionStringAndResolvablePropertiesWithoutDuplicates()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
@@ -465,48 +465,30 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: applicationEventing);
         await appOrchestrator.RunApplicationAsync();
 
-        string? connectionStringProperty = null;
-        IReadOnlyDictionary<string, string?>? connectionProperties = null;
-        bool? isConnectionStringSensitive = null;
-        bool? areConnectionPropertiesSensitive = null;
-        var hasDatabaseNameProperty = false;
-        var watchResourceTask = Task.Run(async () =>
-        {
-            await foreach (var item in resourceNotificationService.WatchAsync())
-            {
-                if (item.Resource == resource.Resource)
-                {
-                    var connectionStringProp = item.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.ConnectionString);
-                    if (connectionStringProp is not null)
-                    {
-                        connectionStringProperty = connectionStringProp.Value?.ToString();
-                        isConnectionStringSensitive = connectionStringProp.IsSensitive;
-                        var connectionPropertiesProp = item.Snapshot.Properties.Single(p => p.Name == KnownProperties.Resource.ConnectionProperties);
-                        connectionProperties = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProp.Value);
-                        areConnectionPropertiesSensitive = connectionPropertiesProp.IsSensitive;
-                        hasDatabaseNameProperty = item.Snapshot.Properties.Any(p => p.Name == "resource.DatabaseName");
-                        return;
-                    }
-                }
-            }
-        });
-
-        // Publish the ConnectionStringAvailableEvent to trigger the update
+        await applicationEventing.PublishAsync(new ConnectionStringAvailableEvent(resource.Resource, app.Services), CancellationToken.None);
         await applicationEventing.PublishAsync(new ConnectionStringAvailableEvent(resource.Resource, app.Services), CancellationToken.None);
 
-        await watchResourceTask.DefaultTimeout();
-
-        Assert.Equal("Server=localhost:5432;Database=testdb", connectionStringProperty);
-        Assert.True(isConnectionStringSensitive);
-        Assert.Equal(
-            new Dictionary<string, string?>
+        Assert.True(resourceNotificationService.TryGetCurrentState(resource.Resource.Name, out var currentState));
+        Assert.Collection(
+            currentState.Snapshot.Properties,
+            connectionStringProperty =>
             {
-                ["DatabaseName"] = "testdb",
-                ["Host"] = "localhost"
+                Assert.Equal(KnownProperties.Resource.ConnectionString, connectionStringProperty.Name);
+                Assert.Equal("Server=localhost:5432;Database=testdb", connectionStringProperty.Value);
+                Assert.True(connectionStringProperty.IsSensitive);
             },
-            connectionProperties);
-        Assert.True(areConnectionPropertiesSensitive);
-        Assert.False(hasDatabaseNameProperty);
+            connectionPropertiesProperty =>
+            {
+                Assert.Equal(KnownProperties.Resource.ConnectionProperties, connectionPropertiesProperty.Name);
+                Assert.Equal(
+                    new Dictionary<string, string?>
+                    {
+                        ["DatabaseName"] = "testdb",
+                        ["Host"] = "localhost"
+                    },
+                    Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProperty.Value));
+                Assert.True(connectionPropertiesProperty.IsSensitive);
+            });
     }
 
     [Fact]

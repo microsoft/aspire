@@ -586,6 +586,61 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task DcpStartupPublishesDevTunnelUrls()
+    {
+        const int targetPort = 3000;
+        const string tunnelUrl = "https://n4skq32k-3000.use.devtunnels.ms";
+        const string inspectUrl = "https://n4skq32k-3000-inspect.use.devtunnels.ms";
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        var client = new TestDevTunnelClient
+        {
+            TunnelStatus = new("mytunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
+            {
+                Ports =
+                [
+                    new(targetPort, "http")
+                    {
+                        PortUri = new Uri($"{tunnelUrl}/")
+                    }
+                ]
+            }
+        };
+        var (command, arguments) = GetLongRunningCommand();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["ASPIRE_DEVTUNNEL_CLI_PATH"] = command;
+        builder.Services.AddSingleton<IDevTunnelClient>(client);
+        builder.Services.AddSingleton<IRequiredCommandValidator, TestRequiredCommandValidator>();
+
+        var target = builder.AddExecutable("target", command, Environment.CurrentDirectory, arguments)
+            .WithHttpEndpoint(targetPort: targetPort, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
+            .WithReference(target);
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        foreach (var annotation in tunnel.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().ToArray())
+        {
+            tunnel.Resource.Annotations.Remove(annotation);
+        }
+        tunnel.WithArgs(arguments);
+
+        using var app = builder.Build();
+
+        var startTask = app.StartAsync(cts.Token);
+        var resourceEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            tunnelPort.Name,
+            e => e.Snapshot.State?.Text == KnownResourceStates.Running &&
+                e.Snapshot.Urls.Any(u => u.Url == tunnelUrl && !u.IsInactive) &&
+                e.Snapshot.Urls.Any(u => u.Url == inspectUrl && !u.IsInactive),
+            cts.Token);
+        await startTask;
+
+        Assert.Equal("n4skq32k-3000.use.devtunnels.ms", tunnelPort.TunnelEndpointAnnotation.AllocatedEndpoint?.Address);
+        Assert.Contains(resourceEvent.Snapshot.Urls, u => u.Url == tunnelUrl && !u.IsInactive);
+        Assert.Contains(resourceEvent.Snapshot.Urls, u => u.Url == inspectUrl && !u.IsInactive);
+
+        await app.StopAsync(cts.Token);
+    }
+
+    [Fact]
     public async Task ResourceReady_PublishesUrlProperties()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -634,6 +689,15 @@ public class DevTunnelResourceBuilderExtensionsTests
                 Assert.Equal("http://localhost:3000", property.Value);
                 Assert.True(property.IsHighlighted);
             });
+    }
+
+    private static (string Command, string[] Arguments) GetLongRunningCommand()
+    {
+        // Windows has no sleep executable, and `timeout` exits immediately when stdin is redirected.
+        // Loopback ping is dependency-free and remains bounded if test cleanup is interrupted.
+        return OperatingSystem.IsWindows()
+            ? ("cmd.exe", ["/c", "ping", "-n", "180", "127.0.0.1"])
+            : ("sleep", ["180"]);
     }
 
     private sealed class ProjectA : IProjectMetadata
