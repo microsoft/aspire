@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.Versioning;
@@ -35,9 +36,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CorpMicrosoftDomainSuffix = ".corp.microsoft.com";
     private const string CacheSubdirectoryName = "internal-microsoft";
     private const string CacheFileName = "detector.json";
+    private const int CacheVersion = 1;
     private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
+    private static readonly TimeSpan s_probeStageTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_processProbeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_cancelledProbeDrainTimeout = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan s_gitHubHttpTimeout = TimeSpan.FromSeconds(3);
@@ -53,6 +56,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
+    private readonly TimeSpan _probeStageTimeout;
 
     public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory)
         : this(
@@ -76,7 +80,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
         TimeSpan? gitHubCandidateTimeout = null,
-        TimeSpan? gitHubHttpTimeout = null)
+        TimeSpan? gitHubHttpTimeout = null,
+        TimeSpan? probeStageTimeout = null)
     {
         _cacheFilePath = cacheFilePath;
         _executionContext = executionContext;
@@ -87,6 +92,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _gitHubHttpTimeout = gitHubHttpTimeout ?? s_gitHubHttpTimeout;
         _timeProvider = timeProvider;
         _logger = logger;
+        _probeStageTimeout = probeStageTimeout ?? s_probeStageTimeout;
         _probeStages = probeStages ?? CreateDefaultProbeStages();
     }
 
@@ -94,14 +100,23 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         try
         {
-            var cached = await TryReadFreshCacheAsync(cancellationToken).ConfigureAwait(false);
-            if (cached is not null)
+            var stopwatch = Stopwatch.StartNew();
+            var cached = await TryReadCacheAsync(cancellationToken).ConfigureAwait(false);
+            if (cached.Entry is not null && cached.CacheStatus == InternalMicrosoftDetectorCacheStatus.Hit)
             {
-                return new InternalMicrosoftDetectionResult(cached.IsInternalMicrosoft, cached.Source, cached.Alias, cached.Domain);
+                stopwatch.Stop();
+                return new InternalMicrosoftDetectionResult(
+                    cached.Entry.IsInternalMicrosoft,
+                    cached.Entry.Source,
+                    cached.Entry.Alias,
+                    cached.Entry.Domain,
+                    cached.Entry.IsInternalMicrosoft ? InternalMicrosoftDetectorOutcome.Detected : InternalMicrosoftDetectorOutcome.NotDetected,
+                    InternalMicrosoftDetectorCacheStatus.Hit,
+                    stopwatch.Elapsed,
+                    []);
             }
 
-            var result = await RunProbeStagesAsync(cancellationToken).ConfigureAwait(false) ??
-                new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null);
+            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, cancellationToken).ConfigureAwait(false);
             await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
 
             return result;
@@ -117,7 +132,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 _logger.LogDebug(ex, "Internal Microsoft detection failed.");
             }
 
-            return new InternalMicrosoftDetectionResult(IsInternalMicrosoft: false, Source: null, Alias: null, Domain: null);
+            return new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft: false,
+                Source: null,
+                Alias: null,
+                Domain: null,
+                Outcome: InternalMicrosoftDetectorOutcome.Failed,
+                CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                Duration: TimeSpan.Zero,
+                ProbeDiagnostics: []);
         }
     }
 
@@ -149,18 +172,20 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         };
 
         // Probes that may involve more extensive process execution/network calls or are a weaker signal, run last
-        // to avoid delaying detection when faster/better quality signals are available
-        var stage3 = new List<InternalMicrosoftProbe>
+        // to avoid delaying detection when faster/better quality signals are available. CI environments can expose
+        // GitHub tokens that identify automation rather than a human, so skip token-membership probes there.
+        var stage3 = new List<InternalMicrosoftProbe>();
+        if (!IsCIEnvironment())
         {
             // Is there a GitHub token in the environment that has an active membership in the Microsoft GitHub org?
-            new("Environment GitHub token membership", CheckEnvironmentGitHubTokenAsync),
+            stage3.Add(new("Environment GitHub token membership", CheckEnvironmentGitHubTokenAsync));
 
             // Is there a GitHub token from the gh CLI that has an active membership in the Microsoft GitHub org?
-            new("gh CLI GitHub org membership", CheckGhCliAsync),
+            stage3.Add(new("gh CLI GitHub org membership", CheckGhCliAsync));
 
             // Is there a GitHub token from the Copilot CLI that has an active membership in the Microsoft GitHub org?
-            new("Copilot CLI GitHub org membership", CheckCopilotCliAsync)
-        };
+            stage3.Add(new("Copilot CLI GitHub org membership", CheckCopilotCliAsync));
+        }
 
         if (_environment.IsWindows())
         {
@@ -203,8 +228,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return [stage1, stage2, stage3];
     }
 
-    private async Task<InternalMicrosoftDetectionResult?> RunProbeStagesAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(string cacheStatus, Stopwatch stopwatch, CancellationToken cancellationToken)
     {
+        var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
+        var timedOut = false;
         foreach (var stage in _probeStages)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -214,54 +241,113 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            var result = await RunProbeStageAsync(stage, cancellationToken).ConfigureAwait(false);
-            if (result is not null)
+            var stageResult = await RunProbeStageAsync(stage, cancellationToken).ConfigureAwait(false);
+            diagnostics.AddRange(stageResult.Diagnostics);
+            timedOut |= stageResult.TimedOut;
+            if (stageResult.Result is not null)
             {
-                return result;
+                stopwatch.Stop();
+                return stageResult.Result with
+                {
+                    Outcome = InternalMicrosoftDetectorOutcome.Detected,
+                    CacheStatus = cacheStatus,
+                    Duration = stopwatch.Elapsed,
+                    ProbeDiagnostics = diagnostics
+                };
             }
         }
 
-        return null;
+        stopwatch.Stop();
+        return new InternalMicrosoftDetectionResult(
+            IsInternalMicrosoft: false,
+            Source: null,
+            Alias: null,
+            Domain: null,
+            Outcome: timedOut ? InternalMicrosoftDetectorOutcome.TimedOut : InternalMicrosoftDetectorOutcome.NotDetected,
+            CacheStatus: cacheStatus,
+            Duration: stopwatch.Elapsed,
+            ProbeDiagnostics: diagnostics);
     }
 
-    private async Task<InternalMicrosoftDetectionResult?> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftProbeStageResult> RunProbeStageAsync(IReadOnlyList<InternalMicrosoftProbe> probes, CancellationToken cancellationToken)
     {
-        using var stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var stageTimeout = new CancellationTokenSource(_probeStageTimeout);
+        using var stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stageTimeout.Token);
         var probeTasks = probes.Select(probe => RunProbeAsync(probe, stageCancellation.Token)).ToList();
-        var pendingTasks = probeTasks.ToList();
+        var timedOut = false;
 
-        while (pendingTasks.Count > 0)
+        try
         {
-            var completedTask = await Task.WhenAny(pendingTasks).ConfigureAwait(false);
-            pendingTasks.Remove(completedTask);
+            await Task.WhenAll(probeTasks).WaitAsync(stageCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stageTimeout.IsCancellationRequested)
+        {
+            timedOut = true;
+        }
+        finally
+        {
+            await stageCancellation.CancelAsync().ConfigureAwait(false);
+            await DrainCancelledProbesAsync(probeTasks).ConfigureAwait(false);
+        }
 
-            var result = await completedTask.ConfigureAwait(false);
-            if (result is not null)
+        var completedResults = new List<InternalMicrosoftProbeRunResult>();
+        var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
+        foreach (var task in probeTasks)
+        {
+            if (task.IsCompletedSuccessfully)
             {
-                await stageCancellation.CancelAsync().ConfigureAwait(false);
-                await DrainCancelledProbesAsync(probeTasks).ConfigureAwait(false);
-                return result;
+                completedResults.Add(task.Result);
+                diagnostics.Add(task.Result.Diagnostic);
             }
         }
 
-        return null;
+        foreach (var probe in probes)
+        {
+            if (!completedResults.Any(result => result.Source.Equals(probe.Name, StringComparison.Ordinal)))
+            {
+                diagnostics.Add(new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.TimedOut, TimeSpan.Zero, HasAlias: false, HasDomain: false));
+            }
+        }
+
+        var result = completedResults
+            .Where(result => result.Result.IsInternalMicrosoft)
+            .OrderByDescending(result => GetProbeResultScore(result.Result))
+            .ThenBy(result => GetProbeIndex(probes, result.Probe))
+            .FirstOrDefault();
+
+        return new InternalMicrosoftProbeStageResult(
+            result is { Result.IsInternalMicrosoft: true }
+                ? new InternalMicrosoftDetectionResult(IsInternalMicrosoft: true, Source: result.Source, Alias: result.Result.Alias, Domain: result.Result.Domain, Outcome: InternalMicrosoftDetectorOutcome.Detected, CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss, Duration: TimeSpan.Zero, ProbeDiagnostics: [])
+                : null,
+            diagnostics,
+            timedOut);
     }
 
-    private Task<InternalMicrosoftDetectionResult?> RunProbeAsync(InternalMicrosoftProbe probe, CancellationToken cancellationToken)
+    private Task<InternalMicrosoftProbeRunResult> RunProbeAsync(InternalMicrosoftProbe probe, CancellationToken cancellationToken)
     {
         return Task.Run(async () =>
         {
+            var stopwatch = Stopwatch.StartNew();
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await probe.DetectAsync(cancellationToken).ConfigureAwait(false);
-                return result.IsInternalMicrosoft
-                    ? new InternalMicrosoftDetectionResult(IsInternalMicrosoft: true, Source: probe.Name, Alias: result.Alias, Domain: result.Domain)
-                    : null;
+                stopwatch.Stop();
+                var outcome = result.IsInternalMicrosoft ? InternalMicrosoftProbeOutcome.Detected : InternalMicrosoftProbeOutcome.NotDetected;
+                return new InternalMicrosoftProbeRunResult(
+                    probe,
+                    probe.Name,
+                    result,
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, outcome, stopwatch.Elapsed, !string.IsNullOrEmpty(result.Alias), !string.IsNullOrEmpty(result.Domain)));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return null;
+                stopwatch.Stop();
+                return new InternalMicrosoftProbeRunResult(
+                    probe,
+                    probe.Name,
+                    InternalMicrosoftProbeResult.NotDetected,
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Cancelled, stopwatch.Elapsed, HasAlias: false, HasDomain: false));
             }
             catch (Exception ex)
             {
@@ -269,12 +355,46 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 {
                     _logger.LogDebug(ex, "Microsoft internal probe '{ProbeName}' failed.", probe.Name);
                 }
-                return null;
+                stopwatch.Stop();
+                return new InternalMicrosoftProbeRunResult(
+                    probe,
+                    probe.Name,
+                    InternalMicrosoftProbeResult.NotDetected,
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Failed, stopwatch.Elapsed, HasAlias: false, HasDomain: false));
             }
         }, CancellationToken.None);
     }
 
-    private async Task DrainCancelledProbesAsync(IReadOnlyList<Task<InternalMicrosoftDetectionResult?>> probeTasks)
+    private static int GetProbeResultScore(InternalMicrosoftProbeResult result)
+    {
+        var score = 0;
+        if (!string.IsNullOrEmpty(result.Alias))
+        {
+            score += 2;
+        }
+
+        if (!string.IsNullOrEmpty(result.Domain))
+        {
+            score += 1;
+        }
+
+        return score;
+    }
+
+    private static int GetProbeIndex(IReadOnlyList<InternalMicrosoftProbe> probes, InternalMicrosoftProbe probe)
+    {
+        for (var index = 0; index < probes.Count; index++)
+        {
+            if (ReferenceEquals(probes[index], probe))
+            {
+                return index;
+            }
+        }
+
+        return int.MaxValue;
+    }
+
+    private async Task DrainCancelledProbesAsync(IReadOnlyList<Task<InternalMicrosoftProbeRunResult>> probeTasks)
     {
         try
         {
@@ -296,11 +416,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private async Task<InternalMicrosoftDetectorCacheEntry?> TryReadFreshCacheAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftCacheReadResult> TryReadCacheAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_cacheFilePath))
         {
-            return null;
+            return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Miss);
         }
 
         try
@@ -309,13 +429,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var entry = JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.InternalMicrosoftDetectorCacheEntry);
             if (entry is null)
             {
-                return null;
+                return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
             }
 
+            entry = NormalizeCacheEntry(entry);
             var hasRequiredSource = !entry.IsInternalMicrosoft || !string.IsNullOrEmpty(entry.Source);
-            return hasRequiredSource && _timeProvider.GetUtcNow() - entry.LastRunUtc < s_cacheRefreshInterval
-                ? entry
-                : null;
+            var isFresh = hasRequiredSource && _timeProvider.GetUtcNow() - entry.LastRunUtc < s_cacheRefreshInterval;
+            return isFresh
+                ? new InternalMicrosoftCacheReadResult(entry, InternalMicrosoftDetectorCacheStatus.Hit)
+                : new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -323,8 +445,29 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             {
                 _logger.LogDebug(ex, "Failed to read Microsoft internal detector cache from {CacheFilePath}.", _cacheFilePath);
             }
-            return null;
+            return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
         }
+    }
+
+    private static InternalMicrosoftDetectorCacheEntry NormalizeCacheEntry(InternalMicrosoftDetectorCacheEntry entry)
+    {
+        var alias = NormalizeAlias(entry.Alias);
+        var domain = NormalizeAdDomainName(entry.Domain);
+
+        if (entry.Version == 0 && entry.Source?.Contains("VS Code", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            // Legacy VS Code cache entries may have been produced from raw SQLite bytes where adjacent
+            // key/value payloads formed a synthetic email address. Keep the coarse detection result but
+            // discard the identity fields because their record boundaries cannot be reconstructed.
+            alias = null;
+            domain = null;
+        }
+
+        return entry with
+        {
+            Alias = alias,
+            Domain = domain
+        };
     }
 
     private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, CancellationToken cancellationToken)
@@ -342,6 +485,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             var entry = new InternalMicrosoftDetectorCacheEntry
             {
+                Version = CacheVersion,
                 IsInternalMicrosoft = result.IsInternalMicrosoft,
                 Source = result.Source,
                 Alias = result.Alias,
@@ -469,7 +613,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<InternalMicrosoftProbeResult> CheckVsCodeMicrosoftTenantAsync(CancellationToken cancellationToken)
+    internal async Task<InternalMicrosoftProbeResult> CheckVsCodeMicrosoftTenantAsync(CancellationToken cancellationToken)
     {
         foreach (var stateDatabasePath in GetVsCodeStateDatabasePaths())
         {
@@ -486,11 +630,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            var text = Encoding.UTF8.GetString(bytes);
-            var result = DetectMicrosoftTenant(text, cancellationToken);
-            if (result.IsInternalMicrosoft)
+            foreach (var value in ExtractSqliteRecordTextValues(bytes, cancellationToken))
             {
-                return result;
+                var result = DetectMicrosoftTenant(value, cancellationToken);
+                if (result.IsInternalMicrosoft)
+                {
+                    return result;
+                }
             }
         }
 
@@ -528,6 +674,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private async Task<InternalMicrosoftProbeResult> CheckGhCliAsync(CancellationToken cancellationToken)
     {
+        if (IsCIEnvironment())
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
         if (!CommandExists("gh"))
         {
             return InternalMicrosoftProbeResult.NotDetected;
@@ -547,6 +698,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private async Task<InternalMicrosoftProbeResult> CheckWslWindowsGhCliAsync(CancellationToken cancellationToken)
     {
+        if (IsCIEnvironment())
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
         if (!CommandExists("gh.exe"))
         {
             return InternalMicrosoftProbeResult.NotDetected;
@@ -566,6 +722,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private async Task<InternalMicrosoftProbeResult> CheckEnvironmentGitHubTokenAsync(CancellationToken cancellationToken)
     {
+        if (IsCIEnvironment())
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
         var tokenCandidates = DeduplicateTokenCandidates(GetGitHubTokenEnvironmentCandidates(cancellationToken));
         if (tokenCandidates.Count == 0)
         {
@@ -579,6 +740,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     internal async Task<InternalMicrosoftProbeResult> CheckCopilotCliAsync(CancellationToken cancellationToken)
     {
+        if (IsCIEnvironment())
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
         var tokenCandidates = new List<TokenCandidate>();
         foreach (var (name, value) in GetEnvironmentVariables())
         {
@@ -1107,6 +1273,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
+    internal IReadOnlyList<string> GetVsCodeStateDatabasePathsForTesting() => [.. GetVsCodeStateDatabasePaths()];
+
     private static string[] GetVsCodeProductNames()
     {
         return ["Code", "Code - Insiders", "VSCodium"];
@@ -1140,6 +1308,33 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         {
             return false;
         }
+    }
+
+    private bool IsCIEnvironment()
+    {
+        foreach (var variableName in new[] { "TF_BUILD", "GITHUB_ACTIONS", "APPVEYOR", "CI", "TRAVIS", "CIRCLECI" })
+        {
+            var value = _environment.GetEnvironmentVariable(variableName);
+            if (value?.Equals("true", StringComparison.OrdinalIgnoreCase) == true || value == "1")
+            {
+                return true;
+            }
+        }
+
+        foreach (var variableName in new[] { "TEAMCITY_VERSION", "JB_SPACE_API_URL" })
+        {
+            if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(variableName)))
+            {
+                return true;
+            }
+        }
+
+        return (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("CODEBUILD_BUILD_ID")) &&
+                !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("AWS_REGION"))) ||
+            (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
+                !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_URL"))) ||
+            (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
+                !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("PROJECT_ID")));
     }
 
     private bool CommandExists(string command)
@@ -1295,7 +1490,179 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var normalized = alias.Trim();
-        return normalized.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-') ? normalized : null;
+        return normalized.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-')
+            ? normalized.ToLowerInvariant()
+            : null;
+    }
+
+    private static IEnumerable<string> ExtractSqliteRecordTextValues(byte[] bytes, CancellationToken cancellationToken)
+    {
+        // VS Code's state.vscdb is a SQLite database. Read text values from leaf table records so
+        // adjacent key/value payload bytes (for example "extension-microsoft" + "user@microsoft.com")
+        // are never treated as one string.
+        if (bytes.Length < 100 || !bytes.AsSpan(0, 16).SequenceEqual("SQLite format 3\0"u8))
+        {
+            yield break;
+        }
+
+        var pageSize = ReadUInt16BigEndian(bytes, 16);
+        if (pageSize == 1)
+        {
+            pageSize = 65536;
+        }
+
+        if (pageSize <= 0)
+        {
+            yield break;
+        }
+
+        for (var pageOffset = 0; pageOffset < bytes.Length; pageOffset += pageSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var headerOffset = pageOffset == 0 ? 100 : pageOffset;
+            if (headerOffset + 8 > bytes.Length || bytes[headerOffset] != 0x0D)
+            {
+                continue;
+            }
+
+            var cellCount = ReadUInt16BigEndian(bytes, headerOffset + 3);
+            var cellPointerArrayOffset = headerOffset + 8;
+            for (var index = 0; index < cellCount; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var pointerOffset = cellPointerArrayOffset + (index * 2);
+                if (pointerOffset + 2 > bytes.Length)
+                {
+                    yield break;
+                }
+
+                var cellOffsetInPage = ReadUInt16BigEndian(bytes, pointerOffset);
+                var cellOffset = pageOffset + cellOffsetInPage;
+                foreach (var value in ExtractSqliteLeafTableCellTextValues(bytes, cellOffset, pageOffset + pageSize))
+                {
+                    yield return value;
+                }
+            }
+        }
+    }
+
+    internal static IReadOnlyList<string> ExtractSqliteRecordTextValuesForTesting(byte[] bytes, CancellationToken cancellationToken)
+        => [.. ExtractSqliteRecordTextValues(bytes, cancellationToken)];
+
+    private static IEnumerable<string> ExtractSqliteLeafTableCellTextValues(byte[] bytes, int cellOffset, int pageEnd)
+    {
+        if (!TryReadSqliteVarint(bytes, cellOffset, out var payloadLength, out var payloadLengthBytes) ||
+            !TryReadSqliteVarint(bytes, cellOffset + payloadLengthBytes, out _, out var rowIdBytes))
+        {
+            yield break;
+        }
+
+        var payloadOffset = cellOffset + payloadLengthBytes + rowIdBytes;
+        if (payloadLength <= 0 || payloadLength > int.MaxValue || payloadOffset + (int)payloadLength > bytes.Length)
+        {
+            yield break;
+        }
+
+        if (payloadOffset + (int)payloadLength > pageEnd)
+        {
+            // Large SQLite records can spill to overflow pages. The detector only needs complete
+            // logical text values and must not accidentally stitch local fragments together, so
+            // skip overflow records instead of implementing a broader SQLite reader here. Pulling
+            // in a SQLite native dependency or shelling out would complicate Native AOT publishing
+            // and cross-platform CLI packaging for a best-effort local telemetry probe.
+            yield break;
+        }
+
+        if (!TryReadSqliteVarint(bytes, payloadOffset, out var headerLength, out var headerLengthBytes) ||
+            headerLength <= headerLengthBytes ||
+            headerLength > payloadLength)
+        {
+            yield break;
+        }
+
+        var serialTypeOffset = payloadOffset + headerLengthBytes;
+        var headerEnd = payloadOffset + (int)headerLength;
+        var valueOffset = headerEnd;
+        while (serialTypeOffset < headerEnd)
+        {
+            if (!TryReadSqliteVarint(bytes, serialTypeOffset, out var serialType, out var serialTypeBytes))
+            {
+                yield break;
+            }
+
+            serialTypeOffset += serialTypeBytes;
+            var valueLength = GetSqliteSerialTypeLength(serialType);
+            if (valueLength < 0 || valueOffset + valueLength > payloadOffset + (int)payloadLength)
+            {
+                yield break;
+            }
+
+            if (serialType >= 13 && serialType % 2 == 1)
+            {
+                yield return Encoding.UTF8.GetString(bytes, valueOffset, valueLength);
+            }
+
+            valueOffset += valueLength;
+        }
+    }
+
+    private static int GetSqliteSerialTypeLength(long serialType)
+    {
+        return serialType switch
+        {
+            0 or 8 or 9 => 0,
+            1 => 1,
+            2 => 2,
+            3 => 3,
+            4 => 4,
+            5 => 6,
+            6 or 7 => 8,
+            >= 12 => (int)((serialType - 12) / 2),
+            _ => -1
+        };
+    }
+
+    private static bool TryReadSqliteVarint(byte[] bytes, int offset, out long value, out int bytesRead)
+    {
+        value = 0;
+        bytesRead = 0;
+        if (offset < 0 || offset >= bytes.Length)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < 9; index++)
+        {
+            if (offset + index >= bytes.Length)
+            {
+                return false;
+            }
+
+            var current = bytes[offset + index];
+            bytesRead++;
+            if (index == 8)
+            {
+                value = (value << 8) | current;
+                return true;
+            }
+
+            value = (value << 7) | (uint)(current & 0x7F);
+            if ((current & 0x80) == 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int ReadUInt16BigEndian(byte[] bytes, int offset)
+    {
+        return offset >= 0 && offset + 1 < bytes.Length
+            ? (bytes[offset] << 8) | bytes[offset + 1]
+            : 0;
     }
 
     private static bool HasJsonStringProperty(JsonObject json, string propertyName, string expectedValue)
@@ -1329,6 +1696,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
     private readonly record struct TokenCandidate(string Token);
     private readonly record struct TenantAliasEvidence(string TenantId, string? Alias);
+    private sealed record InternalMicrosoftCacheReadResult(InternalMicrosoftDetectorCacheEntry? Entry, string CacheStatus);
+    private sealed record InternalMicrosoftProbeStageResult(InternalMicrosoftDetectionResult? Result, IReadOnlyList<InternalMicrosoftProbeDiagnostic> Diagnostics, bool TimedOut);
+    private sealed record InternalMicrosoftProbeRunResult(InternalMicrosoftProbe Probe, string Source, InternalMicrosoftProbeResult Result, InternalMicrosoftProbeDiagnostic Diagnostic);
 }
 
 internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<InternalMicrosoftProbeResult>> DetectAsync);
@@ -1338,10 +1708,59 @@ internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicr
     public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null, Domain: null);
 }
 
-internal sealed record InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source, string? Alias, string? Domain);
+internal static class InternalMicrosoftDetectorOutcome
+{
+    public const string Detected = "detected";
+    public const string NotDetected = "not_detected";
+    public const string Failed = "failed";
+    public const string TimedOut = "timed_out";
+}
+
+internal static class InternalMicrosoftDetectorCacheStatus
+{
+    public const string Hit = "hit";
+    public const string Miss = "miss";
+    public const string Stale = "stale";
+}
+
+internal static class InternalMicrosoftProbeOutcome
+{
+    public const string Detected = "detected";
+    public const string NotDetected = "not_detected";
+    public const string Failed = "failed";
+    public const string Cancelled = "cancelled";
+    public const string TimedOut = "timed_out";
+}
+
+internal sealed record InternalMicrosoftProbeDiagnostic(string Source, string Outcome, TimeSpan Duration, bool HasAlias, bool HasDomain);
+
+internal sealed record InternalMicrosoftDetectionResult(
+    bool IsInternalMicrosoft,
+    string? Source,
+    string? Alias,
+    string? Domain,
+    string Outcome,
+    string CacheStatus,
+    TimeSpan Duration,
+    IReadOnlyList<InternalMicrosoftProbeDiagnostic> ProbeDiagnostics)
+{
+    public InternalMicrosoftDetectionResult(bool IsInternalMicrosoft, string? Source, string? Alias, string? Domain)
+        : this(
+            IsInternalMicrosoft,
+            Source,
+            Alias,
+            Domain,
+            IsInternalMicrosoft ? InternalMicrosoftDetectorOutcome.Detected : InternalMicrosoftDetectorOutcome.NotDetected,
+            InternalMicrosoftDetectorCacheStatus.Miss,
+            TimeSpan.Zero,
+            [])
+    {
+    }
+}
 
 internal sealed record InternalMicrosoftDetectorCacheEntry
 {
+    public int Version { get; init; }
     public bool IsInternalMicrosoft { get; init; }
     public string? Source { get; init; }
     public string? Alias { get; init; }

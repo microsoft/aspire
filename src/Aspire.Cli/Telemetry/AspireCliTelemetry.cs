@@ -274,25 +274,38 @@ internal sealed class AspireCliTelemetry : IHostedService
                         {
                             _logger.LogDebug(ex, "Internal Microsoft detection failed.");
                         }
+
+                        internalMicrosoftResult = new InternalMicrosoftDetectionResult(
+                            IsInternalMicrosoft: false,
+                            Source: null,
+                            Alias: null,
+                            Domain: null,
+                            Outcome: InternalMicrosoftDetectorOutcome.Failed,
+                            CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                            Duration: TimeSpan.Zero,
+                            ProbeDiagnostics: []);
                     }
                 }
 
+                var isCIEnvironment = _ciEnvironmentDetector.IsCIEnvironment();
                 tagsList.Add(new(TelemetryConstants.Tags.MacAddressHash, macAddressHashTask.Result));
                 tagsList.Add(new(TelemetryConstants.Tags.DeviceId, deviceIdTask.Result));
-                if (internalMicrosoftResult is { IsInternalMicrosoft: true })
+                if (internalMicrosoftResult is not null)
                 {
                     tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftResult.IsInternalMicrosoft));
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Source))
+                    EmitInternalMicrosoftDetectorDiagnostics(internalMicrosoftResult);
+
+                    if (internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Source))
                     {
                         tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftSource, internalMicrosoftResult.Source));
                     }
 
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Alias))
+                    if (!isCIEnvironment && internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Alias))
                     {
                         tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftAlias, internalMicrosoftResult.Alias));
                     }
 
-                    if (!string.IsNullOrEmpty(internalMicrosoftResult.Domain))
+                    if (!isCIEnvironment && internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Domain))
                     {
                         tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoftDomain, internalMicrosoftResult.Domain));
                     }
@@ -318,7 +331,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                     tagsList.Add(new(TelemetryConstants.Tags.CodingAgent, codingAgent));
                 }
 
-                tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, _ciEnvironmentDetector.IsCIEnvironment() ? "ci" : "local"));
+                tagsList.Add(new(TelemetryConstants.Tags.DeploymentEnvironmentName, isCIEnvironment ? "ci" : "local"));
 
                 tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
                 tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
@@ -333,6 +346,40 @@ internal sealed class AspireCliTelemetry : IHostedService
                 return Array.Empty<KeyValuePair<string, object?>>();
             }
         });
+    }
+
+    private void EmitInternalMicrosoftDetectorDiagnostics(InternalMicrosoftDetectionResult result)
+    {
+        using var activity = StartDiagnosticActivity(TelemetryConstants.Activities.InternalMicrosoftDetector);
+        if (activity is null)
+        {
+            return;
+        }
+
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome);
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus);
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds);
+        if (!string.IsNullOrEmpty(result.Source))
+        {
+            activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
+        }
+
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias));
+        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain));
+
+        foreach (var probe in result.ProbeDiagnostics)
+        {
+            var tags = new ActivityTagsCollection
+            {
+                [TelemetryConstants.Tags.InternalMicrosoftSource] = probe.Source,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeOutcome] = probe.Outcome,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeDurationMs] = (long)probe.Duration.TotalMilliseconds,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeHasAlias] = probe.HasAlias,
+                [TelemetryConstants.Tags.InternalMicrosoftProbeHasDomain] = probe.HasDomain
+            };
+
+            activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.InternalMicrosoftProbe, tags: tags));
+        }
     }
 
     /// <summary>
