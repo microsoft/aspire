@@ -10,9 +10,8 @@ public class DeploymentConcurrencyGroupTests
     [Fact]
     public void ConstructorInitializesGroup()
     {
-        var group = new DeploymentConcurrencyGroup("group", maxConcurrentDeployments: 2);
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
 
-        Assert.Equal("group", group.Name);
         Assert.Equal(2, group.MaxConcurrentDeployments);
     }
 
@@ -22,28 +21,8 @@ public class DeploymentConcurrencyGroupTests
     public void ConstructorRejectsNonPositiveLimit(int maxConcurrentDeployments)
     {
         var exception = Assert.Throws<ArgumentOutOfRangeException>(
-            () => new DeploymentConcurrencyGroup("group", maxConcurrentDeployments));
+            () => new DeploymentConcurrencyGroup(maxConcurrentDeployments));
 
         Assert.Equal(nameof(maxConcurrentDeployments), exception.ParamName);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(" ")]
-    public void ConstructorRejectsEmptyName(string name)
-    {
-        var exception = Assert.Throws<ArgumentException>(
-            () => new DeploymentConcurrencyGroup(name, maxConcurrentDeployments: 1));
-
-        Assert.Equal(nameof(name), exception.ParamName);
-    }
-
-    [Fact]
-    public void ConstructorRejectsNullName()
-    {
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => new DeploymentConcurrencyGroup(null!, maxConcurrentDeployments: 1));
-
-        Assert.Equal("name", exception.ParamName);
     }
 }
