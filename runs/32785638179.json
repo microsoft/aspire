@@ -1,0 +1,60 @@
+{
+  "run_id": 32785638179,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32785638179",
+  "analyzed_at": "2026-08-25T00:12:55Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19583,
+    "title": "Add dotnet-tools feed for diagnostics dependencies",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-oneloc-github-app-migration",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19583"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97622756141,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32785638179/job/97622756141",
+      "classification": "flaky-test",
+      "reason": "CLI smoke test step fails during Homebrew cask prep, unrelated to PR changes (NuGet.config feed addition + test). Matches known recurring cause with 11 prior occurrences.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97623552584,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32785638179/job/97623552584",
+      "classification": "flaky-test",
+      "reason": "VS Code extension E2E shard fails with generic exit code 1, unrelated to PR changes which only touch NuGet.config and NuGetConfigTests.cs. Matches known recurring cause with 10 prior occurrences.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97623552637,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32785638179/job/97623552637",
+      "classification": "flaky-test",
+      "reason": "VS Code extension E2E shard fails with generic exit code 1, unrelated to PR changes. Matches known recurring cause with 13 prior occurrences.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97623778009,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32785638179/job/97623778009",
+      "classification": "flaky-test",
+      "reason": "CLI smoke test step fails during WinGet manifest prep, unrelated to PR changes. Matches known recurring cause with 11 prior occurrences.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky"
+  ]
+}
