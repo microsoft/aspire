@@ -15,7 +15,8 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
         TestTargetFramework tfm,
         string? error,
         string? appHostDirectoryNamePrefix = null,
-        bool withAppHostReference = true)
+        bool withAppHostReference = true,
+        bool runTests = false)
     {
         var id = GetNewProjectId(prefix: $"new_build_{FixupSymbolName(templateName)}");
         var topLevelDir = Path.Combine(BuildEnvironment.TestRootPath, id + "_root");
@@ -66,12 +67,42 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
                                         withAppHostReference: withAppHostReference);
 
             await project.BuildAsync(extraBuildArgs: [$"-c {config}"], workingDirectory: testProjectDir);
+            if (runTests)
+            {
+                using var testCommand = new DotNetCommand(_testOutput, buildEnv: buildEnvToUse, label: $"test-{templateName}")
+                    .WithWorkingDirectory(testProjectDir)
+                    .WithTimeout(TimeSpan.FromMinutes(3));
+
+                var testResult = await testCommand.ExecuteAsync($"test -c {config} --no-build");
+
+                Assert.Equal(0, testResult.ExitCode);
+                Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testResult.Output);
+            }
         }
         catch (ToolCommandException tce) when (error is not null)
         {
             Assert.NotNull(tce.Result);
             Assert.Contains(error, tce.Result.Value.Output);
         }
+    }
+}
+
+public class Wired_NewUpAndTestSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
+{
+    [Theory]
+    [InlineData("aspire-mstest", "")]
+    [InlineData("aspire-nunit", "")]
+    [InlineData("aspire-xunit", "--xunit-version v2")]
+    [InlineData("aspire-xunit", "--xunit-version v3mtp")]
+    public Task CanNewAndTestWithAppHostReference(string templateName, string extraTestCreationArgs)
+    {
+        return CanNewAndBuildActual(
+            templateName,
+            extraTestCreationArgs,
+            TestSdk.Net10,
+            TestTargetFramework.Net10,
+            error: null,
+            runTests: true);
     }
 }
 
