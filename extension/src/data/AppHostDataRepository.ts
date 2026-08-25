@@ -12,12 +12,12 @@ import { nonInteractiveCliEnvironment } from '../utils/environment';
 import { getComparisonKey, isAppHostPathUnderFolder, isSameAppHostPath } from '../utils/paths/comparison';
 import { FileSystemEntryDescriptor, FileSystemEntryDescriptorIndex, getFileSystemEntryDescriptor } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
-import { AppHostDisplayInfo, AspireCliFailedError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
+import { AppHostDisplayInfo, AspireCliFailedError, AspireCliNotInstalledError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
 import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';
 import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } from './appHostPathMatching';
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
-import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export * from './appHostCliContracts';
@@ -551,13 +551,14 @@ export class AppHostDataRepository {
         }
 
         try {
-            const output = await this._cliRunner.runCliCommand(`aspire resource ${commandName}`, args, {
+            const options = await this._resolveOneShotCli({
                 timeoutMs: null,
                 stdoutBufferLimit: AppHostDataRepository._oneShotOutputBufferLimit,
                 cancellationToken,
                 env: nonInteractiveCliEnvironment,
                 target,
             });
+            const output = await this._cliRunner.runCliCommand(`aspire resource ${commandName}`, args, options);
             return {
                 stdout: filterResourceCommandStatusOutput(output.stdout, resourceName, commandName),
                 stderr: output.stderr,
@@ -1346,13 +1347,28 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const { stdout } = await this._cliRunner.runCliCommand(command, args, options);
+        const resolvedOptions = await this._resolveOneShotCli(options);
+        const { stdout } = await this._cliRunner.runCliCommand(command, args, resolvedOptions);
 
         try {
             return parseCliJsonOutput<T>(stdout);
         } catch (error) {
             throw new AspireCliParseError(command, stdout, error);
         }
+    }
+
+    private async _resolveOneShotCli(options: RunCliCommandOptions): Promise<RunCliCommandOptions> {
+        const target = options.target ?? windowCliPathTarget;
+        const cliPath = options.cliPath
+            ?? await this._terminalProvider.getAspireCliExecutablePath(target).catch(error => {
+                throw new AspireCliNotInstalledError(String(error));
+            });
+        if (options.cancellationToken?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        reportCliResolvedForOperation(target, cliPath);
+        return { ...options, target, cliPath };
     }
 
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {

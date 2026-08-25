@@ -1372,6 +1372,8 @@ suite('AppHostDataRepository', () => {
         spawnStub.onFirstCall().returns(psProcess);
         spawnStub.onSecondCall().returns(describeProcess);
         const repository = new AppHostDataRepository(terminalProvider);
+        const resolutions: Array<{ target: typeof windowCliPathTarget | typeof target; cliPath: string }> = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
 
         try {
             const fetchPromise = repository.fetchAppHostsOnce();
@@ -1421,7 +1423,15 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(describeProcess.killed, true);
             assert.strictEqual(appHosts.length, 1);
             assert.strictEqual(appHosts[0].resources?.[0].name, 'api');
+            assert.deepStrictEqual(resolutions, [{
+                target: windowCliPathTarget,
+                cliPath: '/global/bin/aspire',
+            }, {
+                target,
+                cliPath: '/workspace/bin/aspire',
+            }]);
         } finally {
+            resolutionSubscription.dispose();
             repository.dispose();
             getWorkspaceFolderStub.restore();
         }
@@ -1534,6 +1544,12 @@ suite('AppHostDataRepository', () => {
         const resourceProcess = new TestChildProcess();
         spawnStub.returns(resourceProcess);
         const repository = new AppHostDataRepository(terminalProvider);
+        const resolutions: Array<{ target: typeof target; cliPath: string }> = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => {
+            if (resolution.target.kind === 'workspaceFolder') {
+                resolutions.push({ target: resolution.target, cliPath: resolution.cliPath });
+            }
+        });
 
         try {
             const runPromise = repository.runResourceCommand('api', ' /workspace/AppHost.csproj ', 'stop');
@@ -1549,7 +1565,12 @@ suite('AppHostDataRepository', () => {
             spawnStub.firstCall.args[3].exitCallback(0);
 
             await runPromise;
+            assert.deepStrictEqual(resolutions, [{
+                target,
+                cliPath: '/workspace/bin/aspire',
+            }]);
         } finally {
+            resolutionSubscription.dispose();
             repository.dispose();
             getWorkspaceFolderStub.restore();
         }
