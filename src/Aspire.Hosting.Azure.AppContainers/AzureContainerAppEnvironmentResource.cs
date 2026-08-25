@@ -27,6 +27,8 @@ public class AzureContainerAppEnvironmentResource :
     AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    private readonly DeploymentConcurrencyGroup _deploymentConcurrencyGroup;
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
@@ -38,10 +40,12 @@ public class AzureContainerAppEnvironmentResource :
     public AzureContainerAppEnvironmentResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
-        // ACA permits only one active create or update operation per managed environment. Keep the
-        // policy on the environment so deployment publishers can enforce it without interpreting
-        // application relationships as deployment dependencies.
-        Annotations.Add(new DeploymentConcurrencyAnnotation(maxConcurrentDeployments: 1));
+        // ACA permits only one active create or update operation per managed environment. All
+        // deployment targets materialized for this environment share this group so every publisher
+        // can enforce the constraint without interpreting application relationships as dependencies.
+        _deploymentConcurrencyGroup = new DeploymentConcurrencyGroup(
+            name: $"azure-container-apps-{name}",
+            maxConcurrentDeployments: 1);
 
         // Add pipeline step annotation to create steps and expand deployment target steps
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
@@ -209,7 +213,7 @@ public class AzureContainerAppEnvironmentResource :
             this,
             services);
 
-        AzureBicepResource? previousDeploymentTarget = null;
+        var concurrencyPredecessors = new Queue<AzureBicepResource>(_deploymentConcurrencyGroup.MaxConcurrentDeployments);
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -233,25 +237,26 @@ public class AzureContainerAppEnvironmentResource :
 
             var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
 
-            if (previousDeploymentTarget is not null)
+            if (concurrencyPredecessors.Count == _deploymentConcurrencyGroup.MaxConcurrentDeployments)
             {
-                // Azure Container Apps permits only one create or update operation at a time within
-                // a managed environment. Keep this deployment constraint off the application
-                // relationship graph; AzureBicepResource converts references into provision-step
-                // dependencies when the deployment pipeline is built.
-                containerApp.References.Add(previousDeploymentTarget);
+                // AzureBicepResource converts references into provision-step dependencies. Linking
+                // each target to the target one concurrency window behind produces the same maximum
+                // concurrency declared by the shared group without changing the application graph.
+                containerApp.References.Add(concurrencyPredecessors.Dequeue());
             }
 
-            previousDeploymentTarget = containerApp;
+            concurrencyPredecessors.Enqueue(containerApp);
 
             // Capture information about the container registry used by the
             // container app environment in the deployment target information
             // associated with each compute resource that needs an image
-            r.Annotations.Add(new DeploymentTargetAnnotation(containerApp)
+            var deploymentTargetAnnotation = new DeploymentTargetAnnotation(containerApp)
             {
                 ContainerRegistry = this,
                 ComputeEnvironment = this
-            });
+            };
+            deploymentTargetAnnotation.DeploymentConcurrencyGroups.Add(_deploymentConcurrencyGroup);
+            r.Annotations.Add(deploymentTargetAnnotation);
         }
 
         // Log once about all HTTP endpoints upgraded to HTTPS

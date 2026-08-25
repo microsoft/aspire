@@ -3150,22 +3150,25 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ContainerAppDeploymentTargetDeclaresComputeEnvironmentConcurrencyLimit()
+    public async Task ContainerAppDeploymentTargetsShareEnvironmentConcurrencyGroup()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddAzureContainerAppEnvironment("env");
         builder.AddContainer("api", "myimage");
+        builder.AddContainer("worker", "myimage");
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var container = Assert.Single(model.GetContainerResources());
-        var environment = Assert.IsType<AzureContainerAppEnvironmentResource>(container.GetDeploymentTargetAnnotation()?.ComputeEnvironment);
-        var annotation = Assert.Single(environment.Annotations.OfType<DeploymentConcurrencyAnnotation>());
+        var containers = model.GetContainerResources().ToDictionary(resource => resource.Name);
+        var apiGroup = Assert.Single(containers["api"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var workerGroup = Assert.Single(containers["worker"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
 
-        Assert.Equal(1, annotation.MaxConcurrentDeployments);
+        Assert.Same(apiGroup, workerGroup);
+        Assert.Equal("azure-container-apps-env", apiGroup.Name);
+        Assert.Equal(1, apiGroup.MaxConcurrentDeployments);
     }
 
     [Fact]
@@ -3241,6 +3244,18 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Equal(["a"], GetContainerAppDeploymentTargetReferences(model, "b"));
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "c"));
         Assert.Equal(["c"], GetContainerAppDeploymentTargetReferences(model, "d"));
+
+        var containers = model.GetContainerResources().ToDictionary(resource => resource.Name);
+        var groupA = Assert.Single(containers["a"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var groupB = Assert.Single(containers["b"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var groupC = Assert.Single(containers["c"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var groupD = Assert.Single(containers["d"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+
+        Assert.Same(groupA, groupB);
+        Assert.Same(groupC, groupD);
+        Assert.NotSame(groupA, groupC);
+        Assert.Equal("azure-container-apps-env1", groupA.Name);
+        Assert.Equal("azure-container-apps-env2", groupC.Name);
     }
 
     [Fact]
