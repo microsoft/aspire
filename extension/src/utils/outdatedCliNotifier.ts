@@ -113,13 +113,20 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return false;
         }
 
-        this._activeProbeCount++;
+        // The releasing probe transfers its slot directly to this waiter. Do not increment here:
+        // keeping the count at the limit prevents a new arrival from taking the same slot before
+        // this continuation resumes.
         return true;
     }
 
     private _releaseProbeSlot(): void {
+        const waiter = this._probeWaiters.shift();
+        if (waiter) {
+            waiter();
+            return;
+        }
+
         this._activeProbeCount--;
-        this._probeWaiters.shift()?.();
     }
 
     dispose(): void {

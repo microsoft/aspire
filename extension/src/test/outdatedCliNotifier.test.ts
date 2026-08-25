@@ -165,6 +165,38 @@ suite('outdatedCliNotifier', () => {
         notifier.dispose();
     });
 
+    test('transfers a released probe slot without exposing it to a new arrival', async () => {
+        const notifier = new OutdatedCliNotifier(new FakeVersionProvider(), new FakeSurface());
+        const slots = notifier as unknown as {
+            _activeProbeCount: number;
+            _acquireProbeSlot(): Promise<boolean>;
+            _releaseProbeSlot(): void;
+        };
+
+        assert.deepStrictEqual(
+            await Promise.all(Array.from({ length: 4 }, () => slots._acquireProbeSlot())),
+            [true, true, true, true]);
+        const firstWaiter = slots._acquireProbeSlot();
+
+        slots._releaseProbeSlot();
+        const newArrival = slots._acquireProbeSlot();
+        let newArrivalResolved = false;
+        void newArrival.then(() => newArrivalResolved = true);
+        assert.strictEqual(await firstWaiter, true);
+        await Promise.resolve();
+
+        assert.strictEqual(slots._activeProbeCount, 4);
+        assert.strictEqual(newArrivalResolved, false);
+
+        slots._releaseProbeSlot();
+        assert.strictEqual(await newArrival, true);
+        for (let i = 0; i < 4; i++) {
+            slots._releaseProbeSlot();
+        }
+        assert.strictEqual(slots._activeProbeCount, 0);
+        notifier.dispose();
+    });
+
     test('reprobes the same active CLI path and observes an in-place replacement', async () => {
         const results: CliVersionStatus[] = [{
             cliPath: '/cli/aspire',
