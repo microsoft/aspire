@@ -248,7 +248,7 @@ Step: provision-cache-containerapp
 
 Step: provision-python-app-containerapp
     Description: Provisions the Azure Bicep resource python-app-containerapp using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env, ✓ provision-cache-containerapp, ✓ push-python-app
+    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env, ✓ push-python-app
     Resource: python-app-containerapp (AzureContainerAppResource)
     Tags: provision-infra
 
@@ -446,7 +446,7 @@ If targeting 'deploy-prereq':
 
 If targeting 'deploy-python-app':
   Direct dependencies: print-python-app-summary
-  Total steps: 19
+  Total steps: 18
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
@@ -454,7 +454,7 @@ If targeting 'deploy-python-app':
     [3] create-provisioning-context
     [4] provision-aas-env-acr | provision-aca-env-acr (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aca-env (parallel)
-    [6] provision-cache-containerapp | push-prereq (parallel)
+    [6] push-prereq
     [7] push-python-app
     [8] provision-python-app-containerapp
     [9] print-python-app-summary
@@ -586,7 +586,7 @@ If targeting 'print-dashboard-url-aca-env':
 
 If targeting 'print-python-app-summary':
   Direct dependencies: provision-python-app-containerapp
-  Total steps: 18
+  Total steps: 17
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
@@ -594,7 +594,7 @@ If targeting 'print-python-app-summary':
     [3] create-provisioning-context
     [4] provision-aas-env-acr | provision-aca-env-acr (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aca-env (parallel)
-    [6] provision-cache-containerapp | push-prereq (parallel)
+    [6] push-prereq
     [7] push-python-app
     [8] provision-python-app-containerapp
     [9] print-python-app-summary
@@ -689,8 +689,8 @@ If targeting 'provision-cache-containerapp':
     [6] provision-cache-containerapp
 
 If targeting 'provision-python-app-containerapp':
-  Direct dependencies: create-provisioning-context, provision-aca-env, provision-cache-containerapp, push-python-app
-  Total steps: 17
+  Direct dependencies: create-provisioning-context, provision-aca-env, push-python-app
+  Total steps: 16
   Execution order:
     [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
@@ -698,7 +698,7 @@ If targeting 'provision-python-app-containerapp':
     [3] create-provisioning-context
     [4] provision-aas-env-acr | provision-aca-env-acr (parallel)
     [5] login-to-acr-aas-env-acr | login-to-acr-aca-env-acr | provision-aca-env (parallel)
-    [6] provision-cache-containerapp | push-prereq (parallel)
+    [6] push-prereq
     [7] push-python-app
     [8] provision-python-app-containerapp
 

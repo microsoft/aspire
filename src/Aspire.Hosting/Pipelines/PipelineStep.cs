@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRECOMPUTE004
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -62,6 +63,8 @@ public class PipelineStep
     [AspireExportIgnore(Reason = "The associated resource is an internal runtime link and may be null for steps that are not tied to a resource.")]
     public IResource? Resource { get; set; }
 
+    internal List<DeploymentConcurrencyGroup> DeploymentConcurrencyGroups { get; init; } = [];
+
     /// <summary>
     /// Adds a dependency on another step.
     /// </summary>
@@ -115,9 +118,10 @@ public class PipelineStep
 
     /// <summary>
     /// Creates a shallow clone of this step with fresh copies of its
-    /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, <see cref="Tags"/>,
-    /// and final action lists. Used by <see cref="DistributedApplicationPipeline"/> when
-    /// isolating step-graph mutations during a phase such as BeforeStart.
+    /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, <see cref="Tags"/>, and
+    /// <see cref="DeploymentConcurrencyGroups"/> and final action lists. Used by
+    /// <see cref="DistributedApplicationPipeline"/> when isolating step-graph mutations
+    /// during a phase such as BeforeStart.
     /// </summary>
     internal PipelineStep Clone()
     {
@@ -130,6 +134,7 @@ public class PipelineStep
             RequiredBySteps = [.. RequiredBySteps],
             Tags = [.. Tags],
             Resource = Resource,
+            DeploymentConcurrencyGroups = [.. DeploymentConcurrencyGroups],
         };
         clone._finalActions.AddRange(_finalActions);
         return clone;
