@@ -306,7 +306,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             if (task.IsCompletedSuccessfully)
             {
                 completedResults.Add(task.Result);
-                diagnostics.Add(task.Result.Diagnostic);
+                var diagnostic = task.Result.Diagnostic;
+                diagnostics.Add(timedOut && diagnostic.Outcome == InternalMicrosoftProbeOutcome.Cancelled
+                    ? diagnostic with { Outcome = InternalMicrosoftProbeOutcome.TimedOut }
+                    : diagnostic);
             }
         }
 
@@ -314,7 +317,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         {
             if (!completedResults.Any(result => result.Source.Equals(probe.Name, StringComparison.Ordinal)))
             {
-                diagnostics.Add(new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.TimedOut, TimeSpan.Zero, HasAlias: false, HasDomain: false));
+                diagnostics.Add(new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.TimedOut, _probeStageTimeout, HasAlias: false, HasDomain: false));
             }
         }
 

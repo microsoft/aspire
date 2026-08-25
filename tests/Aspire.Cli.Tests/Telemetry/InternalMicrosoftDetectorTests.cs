@@ -192,7 +192,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("positive.alias", result.Alias);
         Assert.Equal("POSITIVE", result.Domain);
         await slowProbeCancelled.Task.DefaultTimeout();
-        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome is InternalMicrosoftProbeOutcome.Cancelled or InternalMicrosoftProbeOutcome.TimedOut);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
     }
 
     [Fact]
@@ -304,8 +304,33 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         Assert.False(result.IsInternalMicrosoft);
         Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
-        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome is InternalMicrosoftProbeOutcome.Cancelled or InternalMicrosoftProbeOutcome.TimedOut);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome == InternalMicrosoftProbeOutcome.TimedOut);
         Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReportsStageTimeoutDurationWhenProbeIgnoresCancellation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var releaseProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probeStageTimeout = TimeSpan.FromMilliseconds(50);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("hung", async _ =>
+            {
+                await releaseProbe.Task;
+                return InternalMicrosoftProbeResult.NotDetected;
+            })]],
+            probeStageTimeout: probeStageTimeout);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+        releaseProbe.SetResult();
+
+        var diagnostic = Assert.Single(result.ProbeDiagnostics);
+        Assert.Equal("hung", diagnostic.Source);
+        Assert.Equal(InternalMicrosoftProbeOutcome.TimedOut, diagnostic.Outcome);
+        Assert.Equal(probeStageTimeout, diagnostic.Duration);
     }
 
     [Fact]
