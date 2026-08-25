@@ -12,7 +12,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class ApiManagementDeploymentTests(ITestOutputHelper output)
 {
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(60);
 
     [Fact]
     public async Task DeployStarterTemplateWithApiManagement()
@@ -77,19 +77,32 @@ public sealed class ApiManagementDeploymentTests(ITestOutputHelper output)
                 $"{projectName}.AppHost",
                 "AppHost.cs");
             var content = File.ReadAllText(appHostFilePath);
-            content = "using Aspire.Hosting.Azure;\n" + content;
+            content = "using Aspire.Hosting.Azure;\nusing Azure.Provisioning.Network;\n" + content;
             content = content.Replace(
                 "builder.Build().Run();",
                 """
-apiService.WithExternalHttpEndpoints();
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+var apiManagementSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24")
+    .AllowInbound(port: "3443", from: "ApiManagement", protocol: SecurityRuleProtocol.Tcp)
+    .AllowInbound(port: "6390", from: AzureServiceTags.AzureLoadBalancer, protocol: SecurityRuleProtocol.Tcp)
+    .AllowInbound(port: "443", from: AzureServiceTags.Internet, protocol: SecurityRuleProtocol.Tcp);
 
-builder.AddAzureContainerAppEnvironment("aca");
+var environment = builder.AddAzureContainerAppEnvironment("aca")
+    .WithDelegatedSubnet(containerAppsSubnet)
+    .WithInternalLoadBalancer(vnet);
+
+apiService
+    .WithComputeEnvironment(environment)
+    .WithExternalHttpEndpoints();
 
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
-    Sku = AzureApiManagementSku.StandardV2,
-});
+    Sku = AzureApiManagementSku.Developer,
+}).WithClassicVirtualNetwork(
+    apiManagementSubnet,
+    AzureApiManagementVirtualNetworkMode.External);
 
 apim.AddApi(
     "weather-api",
@@ -112,12 +125,15 @@ builder.Build().Run();
 
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(35));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(50));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             await auto.TypeAsync(
                 $"GATEWAY=$(az apim list -g \"{resourceGroupName}\" --query \"[0].gatewayUrl\" -o tsv) && " +
                 "[ -n \"$GATEWAY\" ] && " +
+                $"BACKEND=$(az containerapp list -g \"{resourceGroupName}\" --query \"[?properties.configuration.ingress.fqdn != null].properties.configuration.ingress.fqdn | [0]\" -o tsv) && " +
+                "[ -n \"$BACKEND\" ] && " +
+                "! getent hosts \"$BACKEND\" >/dev/null && " +
                 "OK=0; for i in $(seq 1 24); do " +
                 "STATUS=$(curl -s -o /tmp/apim-response.json -w \"%{http_code}\" \"$GATEWAY/api/weatherforecast\" --max-time 30); " +
                 "if [ \"$STATUS\" = \"200\" ]; then cat /tmp/apim-response.json; OK=1; break; fi; " +
