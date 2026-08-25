@@ -171,6 +171,163 @@ public class PostCallbackSecretValidationTests : IDisposable
     }
 
     /// <summary>
+    /// The legacy <c>Applications.Core/secretStores</c> spelling of the certificate case is not a
+    /// member of this type's enum, so carrying it across during migration is a deploy-time schema
+    /// rejection rather than a kind a newer control plane might understand.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingTheLegacyCertificateKind_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Kind = "certificate"));
+
+        Assert.Contains("ASPIRERADIUS092", ex.Message);
+        Assert.Contains("certificate-pem", ex.Message);
+    }
+
+    /// <summary>
+    /// The replacement spelling carries the same key contract the legacy <c>certificate</c> type
+    /// did, and must be recognized — sharing the legacy table would have missed it entirely.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingCertificatePemWithoutItsRequiredKeys_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Kind = "certificate-pem"));
+
+        Assert.Contains("ASPIRERADIUS092", ex.Message);
+        Assert.Contains("tls.crt", ex.Message);
+    }
+
+    /// <summary>
+    /// The reference recipe documents no per-key contract for <c>certificate-pkcs12</c>, so it is
+    /// accepted with whatever data the callback supplied.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingCertificatePkcs12_StillPublishes()
+    {
+        var bicep = GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Kind = "certificate-pkcs12");
+
+        Assert.Contains("certificate-pkcs12", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>properties.environment</c> is required by the type. An unset <see cref="BicepValue{T}"/>
+    /// is simply omitted from the emitted Bicep, so the artifact would compile and be rejected only
+    /// by Radius schema validation at deploy.
+    /// </summary>
+    [Fact]
+    public void CallbackAddingASecuritySecretWithoutAnEnvironment_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts =>
+            {
+                var orphan = new RadiusSecuritySecretConstruct("orphanSecret")
+                {
+                    SecretName = "orphan-secret",
+                };
+                orphan.Data["username"] = new RadiusSecuritySecretDataEntryConstruct { Value = "value" };
+                opts.SecuritySecrets.Add(orphan);
+            }));
+
+        Assert.Contains("ASPIRERADIUS093", ex.Message);
+        Assert.Contains(nameof(RadiusSecuritySecretConstruct.EnvironmentId), ex.Message);
+    }
+
+    /// <summary>
+    /// Every <c>data</c> entry must carry a value; an entry without one emits an empty object that
+    /// Radius rejects.
+    /// </summary>
+    [Fact]
+    public void CallbackAddingADataEntryWithoutAValue_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Data["extra"] = new RadiusSecuritySecretDataEntryConstruct
+            {
+                Encoding = "string",
+            }));
+
+        Assert.Contains("ASPIRERADIUS093", ex.Message);
+        Assert.Contains("extra", ex.Message);
+    }
+
+    /// <summary>
+    /// The encoding vocabulary is the one place this type diverges from the legacy type it
+    /// replaces — <c>string</c>/<c>base64</c> rather than <c>raw</c>/<c>base64</c> — so the legacy
+    /// spelling is the likely mistake and the message names the divergence.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingTheLegacyRawEncoding_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = "raw"));
+
+        Assert.Contains("ASPIRERADIUS093", ex.Message);
+        Assert.Contains("'raw'", ex.Message);
+    }
+
+    /// <summary>
+    /// The mirror of <see cref="CallbackAddingADataEntryWithoutAValue_FailsThePublish"/> reached
+    /// through the dictionary rather than the construct: a key whose entry is null carries no value
+    /// either, and there is no construct left to inspect.
+    /// </summary>
+    [Fact]
+    public void CallbackAddingANullDataEntry_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Data["extra"] = null!));
+
+        Assert.Contains("ASPIRERADIUS093", ex.Message);
+        Assert.Contains("extra", ex.Message);
+    }
+
+    /// <summary>
+    /// The legacy <c>Applications.Core/secretStores</c> counterpart of
+    /// <see cref="CallbackSettingAKindWithoutItsRequiredKeys_FailsThePublish"/>. The two
+    /// vocabularies are validated from separate tables, so the legacy <c>certificate</c> spelling
+    /// must still be recognized here even though the replacement type rejects it.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingALegacyStoreTypeWithoutItsRequiredKeys_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            builder =>
+            {
+                builder.AddRadiusSecretStore("store", RadiusSecretStoreType.Generic)
+                    .WithData("tls.crt", builder.AddParameter("cert", secret: true));
+                builder.AddContainer("api", "myapp/api:latest");
+            },
+            opts => opts.SecretStores[0].StoreType = "certificate"));
+
+        Assert.Contains("ASPIRERADIUS092", ex.Message);
+        Assert.Contains("tls.key", ex.Message);
+    }
+
+    /// <summary>
+    /// The mirror of <see cref="CallbackSettingAnUnrecognizedKind_StillPublishes"/> for the
+    /// encoding vocabulary: only the known-legacy <c>raw</c> spelling is rejected, because any
+    /// other unrecognized value may be one a newer control plane introduced and there is no way
+    /// for an AppHost author to opt out of this gate.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAnUnrecognizedEncoding_StillPublishes()
+    {
+        var bicep = GenerateBicep(
+            AddContainerWithSecretEnvironment,
+            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = "somethingNewer");
+
+        Assert.Contains("somethingNewer", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Data keys are copied verbatim into the Kubernetes <c>Secret</c>'s <c>data</c> map, which
     /// permits a much narrower alphabet than Bicep does.
     /// </summary>

@@ -1294,6 +1294,7 @@ internal sealed class RadiusInfrastructureBuilder
             }
 
             ValidateSecretKindRequiredKeys(secret);
+            ValidateSecuritySecretRequiredFields(secret);
         }
 
         // Secret stores reach the same Kubernetes `data` map, and an inline store's `StoreName`
@@ -1325,33 +1326,58 @@ internal sealed class RadiusInfrastructureBuilder
             {
                 ValidateSecretDataKey(key, "secret store", store.BicepIdentifier);
             }
+
+            ValidateSecretStoreTypeRequiredKeys(store);
         }
     }
 
     /// <summary>
-    /// Rejects a literal <see cref="RadiusSecuritySecretConstruct.Kind"/> whose Radius-required
-    /// keys are not all present in <c>data</c>.
+    /// Rejects a literal <see cref="RadiusSecuritySecretConstruct.Kind"/> whose recipe-required keys
+    /// are not all present in <c>data</c>, or which is the one spelling known to be a migration
+    /// mistake. Every other unrecognized literal is passed through.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <c>Kind</c> is public and freely mutable, so a callback can select a kind that carries a
     /// data-shape contract the builder API's enum-typed surface would have enforced — for example
-    /// <c>basicAuthentication</c> requires <c>username</c> and <c>password</c>, <c>certificate</c>
-    /// requires <c>tls.crt</c>/<c>tls.key</c>. The pinned secrets recipe does not validate this;
-    /// it turns the missing-fields error into the Kubernetes Secret's <c>metadata.name</c>, so
-    /// publish succeeds and the failure only surfaces during deployment as an unrelated-looking
-    /// name error. Only literal, recognized kinds are checked: an expression cannot be evaluated
-    /// statically, and an unrecognized string may be a kind a newer control plane understands.
+    /// <c>basicAuthentication</c> requires <c>username</c> and <c>password</c>, and
+    /// <c>certificate-pem</c> requires <c>tls.crt</c>/<c>tls.key</c>. The control plane does not
+    /// enforce those keys; the pinned secrets recipe does, and it turns the missing-fields error
+    /// into the Kubernetes Secret's <c>metadata.name</c>, so publish succeeds and the failure only
+    /// surfaces during deployment as an unrelated-looking name error.
+    /// </para>
+    /// <para>
+    /// The bare <c>certificate</c> spelling gets its own message. It is valid on the legacy
+    /// <c>Applications.Core/secretStores</c> type this one replaces but is not a member of this
+    /// type's enum, so it is a migration mistake rather than a kind a newer control plane might
+    /// know. Every other unrecognized kind is allowed through, and expressions are not evaluated
+    /// statically.
+    /// </para>
     /// </remarks>
     private static void ValidateSecretKindRequiredKeys(RadiusSecuritySecretConstruct secret)
     {
-        if (IsBicepExpression(secret.Kind) ||
-            RenderBicepLiteral(secret.Kind) is not { } kind ||
-            !RadiusSecretStoreTypeExtensions.TryParseRadiusTypeString(kind, out var storeType))
+        if (IsBicepExpression(secret.Kind) || RenderBicepLiteral(secret.Kind) is not { } kind)
         {
             return;
         }
 
-        var missing = storeType.RequiredKeys().Where(required => !secret.Data.ContainsKey(required)).ToList();
+        if (kind is RadiusSecuritySecretKinds.LegacyCertificate)
+        {
+            throw new InvalidOperationException(
+                $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' declares kind " +
+                $"'{RadiusSecuritySecretKinds.LegacyCertificate}', which belongs to the legacy " +
+                $"'Applications.Core/secretStores' type this one replaces. " +
+                $"'{RadiusResourceTypes.SecuritySecrets}' accepts " +
+                $"'{RadiusSecuritySecretKinds.CertificatePem}' or 'certificate-pkcs12' instead, so Radius would " +
+                $"reject the deployment. Diagnostic: ASPIRERADIUS092.");
+        }
+
+        if (!RadiusSecuritySecretKinds.TryGetRequiredKeys(kind, out var requiredKeys))
+        {
+            return;
+        }
+
+        var missing = requiredKeys.Where(required => !secret.Data.ContainsKey(required)).ToList();
         if (missing.Count == 0)
         {
             return;
@@ -1363,8 +1389,127 @@ internal sealed class RadiusInfrastructureBuilder
             $"{string.Join(", ", missing.Select(key => $"'{key}'"))}, but 'data' does not contain " +
             $"{(missing.Count == 1 ? "it" : "them")}. Radius does not reject the missing fields directly — the " +
             $"secrets recipe surfaces them as an invalid Kubernetes object name at deploy time — so add the " +
-            $"missing {(missing.Count == 1 ? "entry" : "entries")} or use kind 'generic'. " +
-            $"Diagnostic: ASPIRERADIUS092.");
+            $"missing {(missing.Count == 1 ? "entry" : "entries")} or use kind " +
+            $"'{RadiusSecuritySecretKinds.Generic}'. Diagnostic: ASPIRERADIUS092.");
+    }
+
+    /// <summary>
+    /// The legacy <c>Applications.Core/secretStores</c> counterpart of
+    /// <see cref="ValidateSecretKindRequiredKeys"/>, checking
+    /// <see cref="RadiusSecretStoreConstruct.StoreType"/> against that type's own vocabulary.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RadiusSecretStoreExtensions.AddRadiusSecretStore"/> enforces this at the API boundary through the
+    /// <see cref="RadiusSecretStoreType"/> enum, but <c>StoreType</c> is a public, freely settable
+    /// string on the construct, so a callback can reach a shape the builder would have rejected.
+    /// The two vocabularies are kept apart on purpose: <c>certificate</c> is valid here and invalid
+    /// on the replacement type, and <c>certificate-pem</c> is the reverse.
+    /// </remarks>
+    private static void ValidateSecretStoreTypeRequiredKeys(RadiusSecretStoreConstruct store)
+    {
+        if (IsBicepExpression(store.StoreType) ||
+            RenderBicepLiteral(store.StoreType) is not { } storeTypeString ||
+            !RadiusSecretStoreTypeExtensions.TryParseRadiusTypeString(storeTypeString, out var storeType))
+        {
+            return;
+        }
+
+        var missing = storeType.RequiredKeys().Where(required => !store.Data.ContainsKey(required)).ToList();
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The secret store '{store.BicepIdentifier}' declares type '{storeTypeString}', which requires the " +
+            $"data {(missing.Count == 1 ? "key" : "keys")} {string.Join(", ", missing.Select(key => $"'{key}'"))}, " +
+            $"but 'data' does not contain {(missing.Count == 1 ? "it" : "them")}. Add the missing " +
+            $"{(missing.Count == 1 ? "entry" : "entries")} or use type 'generic'. Diagnostic: ASPIRERADIUS092.");
+    }
+
+    /// <summary>
+    /// Rejects a <see cref="RadiusSecuritySecretConstruct"/> that is missing a field the
+    /// <c>Radius.Security/secrets</c> schema requires, or that carries the one literal
+    /// <c>encoding</c> known to be a migration mistake.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The publisher always writes <see cref="RadiusSecuritySecretConstruct.EnvironmentId"/> and a
+    /// <see cref="RadiusSecuritySecretDataEntryConstruct.Value"/> for every entry, so every state
+    /// rejected here comes from a callback: both properties are public and independently settable,
+    /// and an unset <see cref="BicepValue{T}"/> is simply omitted from the emitted Bicep rather than
+    /// producing a compile error. The result is a resource block that is syntactically fine and is
+    /// rejected only by Radius schema validation at <c>rad deploy</c> time, with a message that
+    /// points at the generated artifact rather than at the callback that produced it.
+    /// </para>
+    /// <para>
+    /// The encoding vocabulary is the one place the new type diverges from the legacy
+    /// <c>Applications.Core/secretStores</c> type it replaces: <c>Radius.Security/secrets</c>
+    /// accepts <c>string</c> and <c>base64</c>, where the legacy type accepted <c>raw</c> and
+    /// <c>base64</c>. Radius rejects every value outside its own enum, but only <c>raw</c> is
+    /// rejected here: it is the legacy vocabulary rather than a value a newer control plane might
+    /// introduce, so it is the one spelling that can be called wrong without risking a false
+    /// positive on a gate the AppHost author cannot opt out of.
+    /// </para>
+    /// </remarks>
+    private static void ValidateSecuritySecretRequiredFields(RadiusSecuritySecretConstruct secret)
+    {
+        if (RenderBicepValue(secret.EnvironmentId) is null && !IsBicepExpression(secret.EnvironmentId))
+        {
+            throw new InvalidOperationException(
+                $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has no " +
+                $"'{nameof(RadiusSecuritySecretConstruct.EnvironmentId)}'. The type requires " +
+                $"'properties.environment', so Radius would reject the deployment. Assign the environment scope, " +
+                $"or remove the resource. Diagnostic: ASPIRERADIUS093.");
+        }
+
+        foreach (var (key, entry) in secret.Data)
+        {
+            // A callback can leave a hole by assigning null, or by adding a key it never populated.
+            // Either way the entry carries no value, which is the same defect the Value check below
+            // catches — reported here because there is no construct left to inspect. An entry whose
+            // whole wrapper is an expression is a different case: it resolves at deploy time and is
+            // skipped rather than rejected, the same way an expression-valued property is.
+            if (entry is null || (entry.Value is null && !IsBicepExpression(entry)))
+            {
+                throw new InvalidOperationException(
+                    $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has a data " +
+                    $"entry '{key}' with no value. The type requires a value for every entry, so Radius would " +
+                    $"reject the deployment. Assign a " +
+                    $"'{nameof(RadiusSecuritySecretDataEntryConstruct)}', or remove the entry. " +
+                    $"Diagnostic: ASPIRERADIUS093.");
+            }
+
+            if (entry.Value is not { } dataEntry)
+            {
+                continue;
+            }
+
+            if (RenderBicepValue(dataEntry.Value) is null && !IsBicepExpression(dataEntry.Value))
+            {
+                throw new InvalidOperationException(
+                    $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has a data " +
+                    $"entry '{key}' with no '{nameof(RadiusSecuritySecretDataEntryConstruct.Value)}'. The type " +
+                    $"requires a value for every entry, so Radius would reject the deployment. Assign the value — " +
+                    $"normally a reference to a valueless '@secure()' parameter so no credential is written into the " +
+                    $"published artifacts — or remove the entry. Diagnostic: ASPIRERADIUS093.");
+            }
+
+            // Unlike `kind`, the legacy spelling is the only encoding rejected here. `encoding` is a
+            // schema enum a newer control plane could extend, and a false positive would block a
+            // valid deploy with no way to opt out — but `raw` is not a future value, it is the
+            // legacy vocabulary this type replaced, so carrying it across is always a mistake.
+            if (!IsBicepExpression(dataEntry.Encoding) &&
+                RenderBicepLiteral(dataEntry.Encoding) is RadiusSecuritySecretKinds.LegacyRawEncoding)
+            {
+                throw new InvalidOperationException(
+                    $"The '{RadiusResourceTypes.SecuritySecrets}' resource '{secret.BicepIdentifier}' has a data " +
+                    $"entry '{key}' with the encoding '{RadiusSecuritySecretKinds.LegacyRawEncoding}', which belongs " +
+                    $"to the legacy 'Applications.Core/secretStores' type this one replaces. " +
+                    $"'{RadiusResourceTypes.SecuritySecrets}' accepts 'string' or 'base64', so Radius would reject " +
+                    $"the deployment. Diagnostic: ASPIRERADIUS093.");
+            }
+        }
     }
 
     private static void ValidateSecretDataKey(string key, string ownerType, string ownerIdentifier)
@@ -4724,6 +4869,37 @@ internal sealed class RadiusInfrastructureBuilder
                         $"A secret reference needs both halves to name a key of a " +
                         $"'{RadiusResourceTypes.SecuritySecrets}' resource. Assign both, or assign Value instead. " +
                         $"Diagnostic: ASPIRERADIUS087.");
+                }
+
+                // A complete-but-invalid reference is as broken as an incomplete one, just later:
+                // the recipe copies both halves verbatim into the pod spec's `secretKeyRef`, so an
+                // unrepresentable name or key is rejected by the API server when the pod is created
+                // rather than by `rad deploy`. Only literals are checked — RewireContainerEnvSecrets
+                // deliberately assigns the secret's own BicepValue here, and an expression cannot be
+                // resolved until deploy time.
+                if (!IsBicepExpression(envVar.SecretName) &&
+                    RenderBicepLiteral(envVar.SecretName) is { } literalSecretName &&
+                    !KubernetesName.IsDns1123Subdomain(literalSecretName))
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback pointed environment variable '{key}' on container " +
+                        $"'{container.ContainerMapKey}' at the secret name '{literalSecretName}', which is not a valid " +
+                        $"Kubernetes object name. The recipe copies it verbatim into the pod's " +
+                        $"'valueFrom.secretKeyRef.name', so the pod would be rejected. A name must be a DNS-1123 " +
+                        $"subdomain: 1-253 characters of lowercase letters, digits, '-' and '.', starting and ending " +
+                        $"alphanumeric. Diagnostic: ASPIRERADIUS087.");
+                }
+
+                if (!IsBicepExpression(envVar.SecretKey) &&
+                    RenderBicepLiteral(envVar.SecretKey) is { } literalSecretKey &&
+                    !KubernetesName.IsValidSecretDataKey(literalSecretKey))
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback pointed environment variable '{key}' on container " +
+                        $"'{container.ContainerMapKey}' at the secret key '{literalSecretKey}', which is not a valid " +
+                        $"Kubernetes Secret data key. The recipe copies it verbatim into the pod's " +
+                        $"'valueFrom.secretKeyRef.key', so the pod would be rejected. A key is limited to letters, " +
+                        $"digits, '-', '_' and '.'. Diagnostic: ASPIRERADIUS087.");
                 }
             }
         }

@@ -414,4 +414,48 @@ public class ContainerSecretEnvironmentTests
         Assert.Contains("ASPIRERADIUS087", ex.Message);
         Assert.Contains("SecretKey is set but SecretName is not", ex.Message);
     }
+
+    /// <summary>
+    /// A complete reference can still be unrepresentable. Both halves are copied verbatim into the
+    /// pod's <c>secretKeyRef</c>, so an invalid literal passes publish and Radius deploy and is
+    /// rejected only when the API server creates the pod.
+    /// </summary>
+    [Fact]
+    public void CallbackThatAddsAnEntryWithAnInvalidLiteralSecretName_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PLAIN", "value");
+        }, opts => opts.Containers[0].Env["ADDED"] = new ContainerEnvVarConstruct
+        {
+            SecretName = "Bad_Name",
+            SecretKey = "some-key",
+        }));
+
+        Assert.Contains("ASPIRERADIUS087", ex.Message);
+        Assert.Contains("Bad_Name", ex.Message);
+        Assert.Contains("DNS-1123 subdomain", ex.Message);
+    }
+
+    /// <summary>
+    /// The key half has its own, different alphabet: a Kubernetes <c>Secret</c> data key permits
+    /// letters, digits, <c>-</c>, <c>_</c> and <c>.</c>, so a path-like key is rejected.
+    /// </summary>
+    [Fact]
+    public void CallbackThatAddsAnEntryWithAnInvalidLiteralSecretKey_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(builder =>
+        {
+            builder.AddContainer("api", "myapp/api:latest")
+                .WithEnvironment("PLAIN", "value");
+        }, opts => opts.Containers[0].Env["ADDED"] = new ContainerEnvVarConstruct
+        {
+            SecretName = "some-secret",
+            SecretKey = "bad/key",
+        }));
+
+        Assert.Contains("ASPIRERADIUS087", ex.Message);
+        Assert.Contains("bad/key", ex.Message);
+    }
 }

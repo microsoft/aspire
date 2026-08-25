@@ -86,13 +86,17 @@ internal static class RadiusSecretStoreTypeExtensions
     };
 
     /// <summary>
-    /// Maps a Radius <c>type</c>/<c>kind</c> string back to its enum value. Used to validate a
-    /// literal value a callback assigned to the public, freely mutable
-    /// <c>RadiusSecuritySecretConstruct.Kind</c> / <c>RadiusSecretStoreConstruct.StoreType</c>,
-    /// which bypass the enum-typed builder API. Returns <see langword="false"/> for an unrecognized
-    /// string so the caller can leave a value it does not understand alone rather than rejecting a
-    /// kind a newer control plane may have added.
+    /// Maps a legacy <c>Applications.Core/secretStores</c> <c>properties.type</c> string back to its
+    /// enum value. Used to validate a literal a callback assigned to the public, freely mutable
+    /// <c>RadiusSecretStoreConstruct.StoreType</c>, which bypasses the enum-typed builder API.
     /// </summary>
+    /// <remarks>
+    /// This vocabulary belongs to the <em>legacy</em> type only. The replacement
+    /// <c>Radius.Security/secrets</c> type spells its equivalent field <c>kind</c> and uses a
+    /// different vocabulary — see <see cref="RadiusSecuritySecretKinds"/>. Returns
+    /// <see langword="false"/> for an unrecognized string so the caller can leave a value it does
+    /// not understand alone rather than rejecting a type a newer control plane may have added.
+    /// </remarks>
     internal static bool TryParseRadiusTypeString(string? value, out RadiusSecretStoreType type)
     {
         switch (value)
