@@ -2,8 +2,11 @@
 
 ## v42.42.42
 
-<!-- aspire-ext-changelog from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=44c3f9f424cc239cca79e658aee6405b329c8d9d base=1.19.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=44c3f9f424cc239cca79e658aee6405b329c8d9d base=1.19.0 -->
+
+### Features
+
+- Rewrite the extension README and getting-started walkthrough with clearer setup steps and updated screenshots ([#19632](https://github.com/microsoft/aspire/pull/19632)).
 
 ## v1.19.0
 
