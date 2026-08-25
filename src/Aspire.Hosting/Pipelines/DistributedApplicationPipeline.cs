@@ -580,10 +580,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
 
-        // Concurrency groups are lowered only after filtering. Adding these edges to the complete
-        // graph would cause a targeted deployment to pull unrelated group members into its closure.
-        ApplyDeploymentConcurrencyGroups(stepsToExecute);
-
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
     }
@@ -706,7 +702,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 if (!lanesByGroup.TryGetValue(group, out var lane))
                 {
-                    lane = new Queue<PipelineStep>(group.MaxConcurrentDeployments);
+                    lane = new Queue<PipelineStep>();
                     lanesByGroup.Add(group, lane);
                 }
 
@@ -757,11 +753,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         PipelineContext context)
     {
         var pipelineOptions = context.Services.GetService<Microsoft.Extensions.Options.IOptions<PipelineOptions>>();
-        var stepName = pipelineOptions?.Value.Step;
+        return FilterStepsForExecution(allSteps, pipelineOptions?.Value.Step);
+    }
+
+    internal static (List<PipelineStep> StepsToExecute, Dictionary<string, PipelineStep> StepsByName) FilterStepsForExecution(
+        List<PipelineStep> allSteps,
+        string? stepName)
+    {
         var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
         if (string.IsNullOrWhiteSpace(stepName))
         {
+            ApplyDeploymentConcurrencyGroups(allSteps);
             return (allSteps, allStepsByName);
         }
 
@@ -776,6 +779,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Since RequiredBy relationships have been normalized to DependsOn,
         // this automatically includes all steps that the target depends on
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        // Concurrency groups are lowered only after filtering. Adding these edges to the complete
+        // graph would cause a targeted deployment to pull unrelated group members into its closure.
+        ApplyDeploymentConcurrencyGroups(stepsToExecute);
 
         var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
         return (stepsToExecute, filteredStepsByName);
