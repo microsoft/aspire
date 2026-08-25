@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -3146,6 +3147,25 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var hasPrintDashboardUrlStep = steps.Any(s => s.Name == "print-dashboard-url-env");
 
         Assert.Equal(enableDashboard, hasPrintDashboardUrlStep);
+    }
+
+    [Fact]
+    public async Task ContainerAppDeploymentTargetDeclaresComputeEnvironmentConcurrencyLimit()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var container = Assert.Single(model.GetContainerResources());
+        var environment = Assert.IsType<AzureContainerAppEnvironmentResource>(container.GetDeploymentTargetAnnotation()?.ComputeEnvironment);
+        var annotation = Assert.Single(environment.Annotations.OfType<DeploymentConcurrencyAnnotation>());
+
+        Assert.Equal(1, annotation.MaxConcurrentDeployments);
     }
 
     [Fact]
