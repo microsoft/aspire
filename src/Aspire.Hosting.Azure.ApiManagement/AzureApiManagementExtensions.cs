@@ -27,6 +27,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureApiManagementExtensions
 {
+    private static readonly char[] s_invalidApiIdentifierCharacters = ['*', '#', '&', '+', ':', '<', '>', '?'];
+
     /// <summary>
     /// Adds an Azure API Management service.
     /// </summary>
@@ -107,7 +109,7 @@ public static class AzureApiManagementExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrEmpty(path);
-        ValidateApiManagementIdentifier(apiName ?? name, nameof(apiName));
+        ValidateApiIdentifier(apiName ?? name, nameof(apiName));
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
@@ -161,7 +163,7 @@ public static class AzureApiManagementExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(path);
-        ValidateApiManagementIdentifier(apiName ?? name, nameof(apiName));
+        ValidateApiIdentifier(apiName ?? name, nameof(apiName));
 
         if (builder.Resource.Options.Sku == AzureApiManagementSku.Consumption)
         {
@@ -287,7 +289,7 @@ public static class AzureApiManagementExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(method);
         ArgumentException.ThrowIfNullOrEmpty(urlTemplate);
-        ValidateApiManagementIdentifier(operationName ?? name, nameof(operationName));
+        ValidateOperationIdentifier(operationName ?? name, nameof(operationName));
 
         var resource = new AzureApiManagementOperationResource(
             name,
@@ -876,9 +878,9 @@ public static class AzureApiManagementExtensions
         int weight)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentOutOfRangeException.ThrowIfLessThan(priority, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(priority);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(priority, 100);
-        ArgumentOutOfRangeException.ThrowIfLessThan(weight, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(weight);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(weight, 100);
 
         if (builder.Resource.Target is not null)
@@ -923,47 +925,47 @@ public static class AzureApiManagementExtensions
         }
 
         var builder = new StringBuilder();
-        builder.AppendLine("<policies>");
-        builder.AppendLine("  <inbound>");
+        builder.Append("<policies>\n");
+        builder.Append("  <inbound>\n");
         if (inheritParentPolicy)
         {
-            builder.AppendLine("    <base />");
+            builder.Append("    <base />\n");
         }
 
         if (authenticateWithManagedIdentity)
         {
-            builder.AppendLine("    <authentication-managed-identity resource=\"https://cognitiveservices.azure.com\" />");
+            builder.Append("    <authentication-managed-identity resource=\"https://cognitiveservices.azure.com\" />\n");
         }
 
         if (backendIdentifier is not null)
         {
             builder.Append("    <set-backend-service backend-id=\"")
                 .Append(backendIdentifier)
-                .AppendLine("\" />");
+                .Append("\" />\n");
         }
 
         foreach (var statement in inboundStatements)
         {
             foreach (var line in statement.Split('\n'))
             {
-                builder.Append("    ").AppendLine(line.TrimEnd('\r'));
+                builder.Append("    ").Append(line.TrimEnd('\r')).Append('\n');
             }
         }
 
-        builder.AppendLine("  </inbound>");
+        builder.Append("  </inbound>\n");
         if (inheritParentPolicy)
         {
-            builder.AppendLine("  <backend><base /></backend>");
-            builder.AppendLine("  <outbound><base /></outbound>");
-            builder.AppendLine("  <on-error><base /></on-error>");
+            builder.Append("  <backend><base /></backend>\n");
+            builder.Append("  <outbound><base /></outbound>\n");
+            builder.Append("  <on-error><base /></on-error>\n");
         }
         else
         {
             // A service policy is the root of the policy hierarchy, so <base /> has no parent
             // scope to inherit. It must forward the request explicitly instead.
-            builder.AppendLine("  <backend><forward-request /></backend>");
-            builder.AppendLine("  <outbound />");
-            builder.AppendLine("  <on-error />");
+            builder.Append("  <backend><forward-request /></backend>\n");
+            builder.Append("  <outbound />\n");
+            builder.Append("  <on-error />\n");
         }
         builder.Append("</policies>");
 
@@ -1063,14 +1065,33 @@ public static class AzureApiManagementExtensions
         }
     }
 
-    private static void ValidateApiManagementIdentifier(string value, string parameterName)
+    private static void ValidateApiIdentifier(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value, parameterName);
+
+        if (value.Length > 256)
+        {
+            throw new ArgumentException(
+                "API Management API identifiers cannot exceed 256 characters.",
+                parameterName);
+        }
+
+        if (value.IndexOfAny(s_invalidApiIdentifierCharacters) >= 0)
+        {
+            throw new ArgumentException(
+                "API Management API identifiers cannot contain '*', '#', '&', '+', ':', '<', '>', or '?'.",
+                parameterName);
+        }
+    }
+
+    private static void ValidateOperationIdentifier(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrEmpty(value, parameterName);
 
         if (value.Length > 80)
         {
             throw new ArgumentException(
-                "API Management identifiers cannot exceed 80 characters.",
+                "API Management operation identifiers cannot exceed 80 characters.",
                 parameterName);
         }
     }

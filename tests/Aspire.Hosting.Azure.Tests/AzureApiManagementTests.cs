@@ -139,6 +139,28 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public void ApiAndOperationValidatePhysicalIdentifierConstraints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+
+        var longApiName = new string('a', 256);
+        var api = apim.AddApi("catalog-api", backend, "catalog", apiName: longApiName);
+
+        Assert.Equal(longApiName, api.Resource.ApiName);
+        Assert.Throws<ArgumentException>(() =>
+            apim.AddApi("invalid-api", backend, "invalid", apiName: "invalid?api"));
+        Assert.Throws<ArgumentException>(() =>
+            api.AddOperation("invalid-operation", "GET", "/", operationName: new string('o', 81)));
+    }
+
+    [Fact]
     public void PolicyHelpersValidateAndPreserveScopeSemantics()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -394,6 +416,25 @@ public class AzureApiManagementTests
         var exception = Assert.Throws<InvalidOperationException>(() => apim.AddOpenAIApi("openai-api", "openai"));
 
         Assert.Contains("not supported by the Consumption SKU", exception.Message);
+    }
+
+    [Fact]
+    public void OpenAIBackendPoolAcceptsZeroPriorityAndWeight()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var foundry = builder.AddFoundry("foundry");
+        var model = foundry.AddDeployment("chat", "gpt-5-mini", "2025-08-07", "OpenAI");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+
+        var api = apim.AddOpenAIApi("openai-api", "openai")
+            .WithFoundryBackend(model, priority: 0, weight: 0);
+
+        var backend = Assert.Single(api.Resource.OpenAIBackends);
+        Assert.Equal(0, backend.Priority);
+        Assert.Equal(0, backend.Weight);
     }
 
     [Fact]

@@ -407,8 +407,12 @@ public static class AzureContainerAppExtensions
                 containerAppEnvironment.VnetConfiguration = new ContainerAppVnetConfiguration
                 {
                     InfrastructureSubnetId = subnetAnnotation.SubnetId.AsProvisioningParameter(infra),
-                    IsInternal = appEnvResource.InternalLoadBalancerVirtualNetwork is not null,
                 };
+
+                if (appEnvResource.InternalLoadBalancerVirtualNetwork is not null)
+                {
+                    containerAppEnvironment.VnetConfiguration.IsInternal = true;
+                }
             }
             else if (appEnvResource.InternalLoadBalancerVirtualNetwork is not null)
             {
@@ -627,7 +631,12 @@ public static class AzureContainerAppExtensions
                 Value = laWorkspace.Id.ToBicepExpression()
             });
 
-            AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+            AddSharedContainerAppEnvironmentOutputs(
+                infra,
+                containerRegistry,
+                containerAppEnvironment,
+                managedIdentityIdOutputValue,
+                appEnvResource.InternalLoadBalancerVirtualNetwork is not null);
         });
 
         // Create the default container registry resource before creating the environment
@@ -857,7 +866,12 @@ public static class AzureContainerAppExtensions
             infra.Add(pullRa);
         }
 
-        AddSharedContainerAppEnvironmentOutputs(infra, containerRegistry, containerAppEnvironment, managedIdentityIdOutputValue);
+        AddSharedContainerAppEnvironmentOutputs(
+            infra,
+            containerRegistry,
+            containerAppEnvironment,
+            managedIdentityIdOutputValue,
+            includeStaticIp: false);
     }
 
     /// <summary>
@@ -870,7 +884,8 @@ public static class AzureContainerAppExtensions
         AzureResourceInfrastructure infra,
         ContainerRegistryService containerRegistry,
         ContainerAppManagedEnvironment containerAppEnvironment,
-        BicepValue<string> managedIdentityIdOutputValue)
+        BicepValue<string> managedIdentityIdOutputValue,
+        bool includeStaticIp)
     {
         // Required by the IContainerRegistry interface
         infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
@@ -905,10 +920,13 @@ public static class AzureContainerAppExtensions
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
         });
 
-        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+        if (includeStaticIp)
         {
-            Value = containerAppEnvironment.StaticIP.ToBicepExpression()
-        });
+            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
+            {
+                Value = containerAppEnvironment.StaticIP.ToBicepExpression()
+            });
+        }
     }
 
     private static void AddInternalEnvironmentPrivateDns(

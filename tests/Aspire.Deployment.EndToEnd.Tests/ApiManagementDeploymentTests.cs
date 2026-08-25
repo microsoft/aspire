@@ -131,14 +131,14 @@ builder.Build().Run();
             await auto.TypeAsync(
                 $"GATEWAY=$(az apim list -g \"{resourceGroupName}\" --query \"[0].gatewayUrl\" -o tsv) && " +
                 "[ -n \"$GATEWAY\" ] && " +
-                $"BACKEND=$(az containerapp list -g \"{resourceGroupName}\" --query \"[?properties.configuration.ingress.fqdn != null].properties.configuration.ingress.fqdn | [0]\" -o tsv) && " +
+                $"BACKEND=$(az containerapp show -g \"{resourceGroupName}\" -n apiservice --query \"properties.configuration.ingress.fqdn\" -o tsv) && " +
                 "[ -n \"$BACKEND\" ] && " +
-                "! getent hosts \"$BACKEND\" >/dev/null && " +
+                "if getent hosts \"$BACKEND\" >/dev/null; then BACKEND_PRIVATE=0; else BACKEND_PRIVATE=1; fi; " +
                 "OK=0; for i in $(seq 1 24); do " +
                 "STATUS=$(curl -s -o /tmp/apim-response.json -w \"%{http_code}\" \"$GATEWAY/api/weatherforecast\" --max-time 30); " +
                 "if [ \"$STATUS\" = \"200\" ]; then cat /tmp/apim-response.json; OK=1; break; fi; " +
                 "echo \"Attempt $i returned $STATUS; retrying in 10s\"; sleep 10; " +
-                "done; [ \"$OK\" = \"1\" ]");
+                "done; [ \"$BACKEND_PRIVATE\" = \"1\" ] && [ \"$OK\" = \"1\" ]");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(12));
 
