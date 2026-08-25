@@ -205,16 +205,9 @@ jobs:
     env:
       ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
     steps:
-      # Azure CLI can deadlock when an AAZ worker imports requests concurrently with another
-      # command-loading thread. Preload requests while the embedded Python interpreter is still
-      # single-threaded, matching the upstream fix from Azure/azure-cli#26287 that was removed in
-      # Azure/azure-cli#32824. Remove this after the runner's Azure CLI includes a durable fix.
-      # See https://github.com/Azure/azure-cli/issues/26272.
-      - name: Work around Azure CLI import deadlock
-        run: |
-          azure_cli_site_packages=$(/opt/az/bin/python3 -I -c 'import site; print(site.getsitepackages()[0])')
-          echo 'import requests' | sudo tee "$azure_cli_site_packages/aspire_requests_preload.pth" > /dev/null
-          /opt/az/bin/python3 -I -c "import sys; assert 'requests' in sys.modules; print('Preloaded requests ' + sys.modules['requests'].__version__)"
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: ./.github/actions/preload-azure-cli-requests
 
       - name: Azure Login (OIDC)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -516,16 +509,7 @@ jobs:
           echo "Extracted bundle layout:"
           ls -la "$ASPIRE_HOME/versions/"*/ 2>/dev/null || { echo "❌ No extracted bundle under $ASPIRE_HOME/versions/"; exit 1; }
 
-      # Azure CLI can deadlock when an AAZ worker imports requests concurrently with another
-      # command-loading thread. Preload requests while the embedded Python interpreter is still
-      # single-threaded, matching the upstream fix from Azure/azure-cli#26287 that was removed in
-      # Azure/azure-cli#32824. Remove this after the runner's Azure CLI includes a durable fix.
-      # See https://github.com/Azure/azure-cli/issues/26272.
-      - name: Work around Azure CLI import deadlock
-        run: |
-          azure_cli_site_packages=$(/opt/az/bin/python3 -I -c 'import site; print(site.getsitepackages()[0])')
-          echo 'import requests' | sudo tee "$azure_cli_site_packages/aspire_requests_preload.pth" > /dev/null
-          /opt/az/bin/python3 -I -c "import sys; assert 'requests' in sys.modules; print('Preloaded requests ' + sys.modules['requests'].__version__)"
+      - uses: ./.github/actions/preload-azure-cli-requests
 
       - name: Azure Login (OIDC)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
