@@ -1231,7 +1231,7 @@ public sealed partial class SqliteTelemetryRepository
                 DELETE FROM telemetry_traces
                 WHERE @ClearAll OR trace_id IN (
                     SELECT DISTINCT trace_id
-                    FROM telemetry_spans
+                    FROM telemetry_trace_resources
                     WHERE resource_id IN (SELECT resource_id FROM telemetry_resources{where})
                 );
 

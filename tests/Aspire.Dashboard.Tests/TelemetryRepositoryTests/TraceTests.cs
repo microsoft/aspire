@@ -2815,6 +2815,56 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task ClearTraces_UninstrumentedPeer_RemovesAssociatedTrace()
+    {
+        var outgoingPeerResolver = new TestOutgoingPeerResolver();
+        using var repositoryContext = await CreateRepositoryAsync(
+            outgoingPeerResolvers: [outgoingPeerResolver]);
+
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(10),
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "value-1")],
+                                kind: Span.Types.SpanKind.Client)
+                        }
+                    }
+                }
+            }
+        });
+
+        var peerResource = Assert.Single(
+            repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true),
+            resource => resource.UninstrumentedPeer);
+
+        await repositoryContext.Repository.AsWriter().ClearTracesAsync(peerResource.ResourceKey);
+
+        var traces = await repositoryContext.Repository.GetTracesAsync(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.Empty(traces.PagedResult.Items);
+        Assert.DoesNotContain(repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true), resource => resource.UninstrumentedPeer);
+    }
+
+    [Fact]
     public async Task AddTraces_OnPeerUpdated_HaveUninstrumentedPeers()
     {
         // Arrange
