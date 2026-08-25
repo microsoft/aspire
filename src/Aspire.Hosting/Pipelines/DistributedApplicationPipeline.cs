@@ -1203,10 +1203,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// reasons why certain steps may not be executed.
     /// </summary>
     private static void DumpDependencyGraphDiagnostics(
-        List<PipelineStep> allSteps,
+        List<PipelineStep> resolvedSteps,
         PipelineStepContext context)
     {
         var sb = new StringBuilder();
+        var (allSteps, allStepsByName) = FilterStepsForExecution(resolvedSteps, stepName: null);
 
         sb.AppendLine();
         sb.AppendLine("PIPELINE DEPENDENCY GRAPH DIAGNOSTICS");
@@ -1223,8 +1224,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Always show full pipeline analysis for diagnostics
         sb.AppendLine("Analysis for full pipeline execution (showing all steps and their relationships)");
         sb.AppendLine();
-
-        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
         // Build execution order (topological sort)
         var executionOrder = GetTopologicalOrder(allSteps);
@@ -1346,8 +1345,12 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         sb.AppendLine("─────────────────────────────────────────────────────────────────────────────");
 
         // Show execution simulation for each step as a potential target
-        foreach (var targetStep in allSteps.OrderBy(s => s.Name, StringComparer.Ordinal))
+        foreach (var targetStepDefinition in resolvedSteps.OrderBy(s => s.Name, StringComparer.Ordinal))
         {
+            var (stepsForTarget, stepsForTargetByName) =
+                FilterStepsForExecution(resolvedSteps, targetStepDefinition.Name);
+            var targetStep = stepsForTargetByName[targetStepDefinition.Name];
+
             sb.AppendLine(CultureInfo.InvariantCulture, $"If targeting '{targetStep.Name}':");
 
             // Debug: Show what dependencies this step has after normalization
@@ -1361,9 +1364,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 sb.AppendLine("  Direct dependencies: none");
             }
 
-            // Compute what would execute for this target
-            var stepsForTarget = ComputeTransitiveDependencies(targetStep, allStepsByName);
-            var executionLevels = GetExecutionLevelsByStep(stepsForTarget, allStepsByName);
+            var executionLevels = GetExecutionLevelsByStep(stepsForTarget, stepsForTargetByName);
 
             if (stepsForTarget.Count == 0)
             {
