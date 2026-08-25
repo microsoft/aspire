@@ -83,6 +83,23 @@ suite('waitForNotificationMessage', () => {
         assert.deepStrictEqual(waitState.pollResults, [false, freshNotification]);
     });
 
+    test('skips a hidden dismissed notification before reading the visible notification', async () => {
+        const hiddenNotification = createNotification(() => {
+            throw new webDriverError.TimeoutError('Waiting until element is visible');
+        });
+        const freshNotification = createNotification('Aspire Dashboard ready');
+        const { stub, vscode } = loadNotificationWaitModules();
+
+        stub.setNotificationPolls([[hiddenNotification, freshNotification]]);
+
+        const notification = await vscode.waitForNotificationMessage('Dashboard ready', 5000);
+        const waitState = stub.getNotificationWaitState();
+
+        assert.strictEqual(notification, freshNotification);
+        assert.strictEqual(waitState.notificationPollCount, 1);
+        assert.deepStrictEqual(waitState.pollResults, [freshNotification]);
+    });
+
     test('propagates non-stale WebDriver failures', async () => {
         const sessionError = new webDriverError.NoSuchSessionError('session closed');
         const { stub, vscode } = loadNotificationWaitModules();

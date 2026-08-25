@@ -357,9 +357,22 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
         try {
             const notifications = await new Workbench().getNotifications();
             for (const notification of notifications) {
-                const message = await notification.getMessage();
-                if (message.includes(expectedText)) {
-                    return notification;
+                try {
+                    const message = await notification.getMessage();
+                    if (message.includes(expectedText)) {
+                        return notification;
+                    }
+                }
+                catch (error) {
+                    // VS Code keeps dismissed notifications in the DOM briefly. ExTester waits for
+                    // visibility before reading them, so skip a hidden stale entry and continue to
+                    // the current visible notification in the same poll.
+                    if (error instanceof webDriverError.StaleElementReferenceError ||
+                        error instanceof webDriverError.TimeoutError) {
+                        continue;
+                    }
+
+                    throw error;
                 }
             }
 

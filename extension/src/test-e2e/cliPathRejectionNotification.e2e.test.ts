@@ -18,7 +18,7 @@ import {
 } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { VSBrowser } from './helpers/extester';
-import { closeAllEditors, openAspireView, waitForNotificationMessage, waitForWorkbenchText } from './helpers/vscode';
+import { openAspireView, waitForNotificationMessage, waitForWorkbenchText } from './helpers/vscode';
 
 // Mirrors configuredCliPathRejected in src/loc/strings.ts.
 const rejectionNotificationText = 'The configured Aspire CLI path could not be used';
@@ -33,7 +33,7 @@ suite('Configured CLI path rejection E2E', function () {
 
     teardown(async () => {
         await runE2eTeardown([
-            () => closeAllEditors(),
+            () => executeE2eControlCommand({ name: 'closeAllEditors' }),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceCliPath(),
