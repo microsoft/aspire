@@ -1,0 +1,17 @@
+{
+  "id": "cli-apphostserversession-graceful-treekill-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill times out intermittently on Windows",
+  "test_name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 294",
+  "occurrences": [
+    {
+      "run_id": 32812190860,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32812190860",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 19032,
+      "observed_at": "2026-08-25T05:49:10Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19659"
+}

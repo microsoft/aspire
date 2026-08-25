@@ -1,0 +1,65 @@
+{
+  "run_id": 32812190860,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32812190860",
+  "analyzed_at": "2026-08-25T05:49:10Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19032,
+    "title": "Export canonical TypeScript API data from the CLI",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/versioned-ts-api-docs",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19032"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 97693916372,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32812190860/job/97693916372",
+      "classification": "flaky-test",
+      "reason": "Test AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill timed out with System.TimeoutException, matching a known class of flaky graceful-shutdown/tree-kill escalation timeout tests on Windows runners (e.g. processguest-launchasync-expireescalatestotreekill, processguest-signalerThrows-treekill-timeout). The PR does not modify AppHostServerSessionTests process-teardown logic in a way that would cause this timeout.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97695525366,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32812190860/job/97695525366",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) step failed with exit code 4 and unrelated Homebrew tap-trust warnings. Matches known recurring cause 'cli-smoke-test-homebrew-winget-unrelated' (14 prior occurrences), unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97695782633,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32812190860/job/97695782633",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1 and unavailable job logs, matching known recurring cause 'vscode-e2e-windows-edge-cases-flaky' for this shard, unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97695855568,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32812190860/job/97695855568",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI (aspire new + restore) step failed with exit code 1, matching known recurring cause 'cli-smoke-test-homebrew-winget-unrelated', unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 294\n   at Aspire.Cli.Tests.Projects.AppHostServerSessionTests.Start_StopRequested_GracefulIgnored_ExpireEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\AppHostServerSessionTests.cs:line 300\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Timing-sensitive graceful-shutdown-to-tree-kill escalation test timing out on Windows CI runner; part of a known family of similar timeout-prone tests (ProcessGuestLauncherTests escalation tests) with several tracked flaky issues. PR changes do not touch this teardown/escalation code path."
+    }
+  ],
+  "causes": ["cli-apphostserversession-graceful-treekill-timeout", "cli-smoke-test-homebrew-winget-unrelated", "vscode-e2e-windows-edge-cases-flaky"]
+}
