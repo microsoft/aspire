@@ -280,9 +280,18 @@ public class AzureContainerAppEnvironmentResource :
 
     private static bool ExistingResourceIdentityPartEquals(object? left, object? right)
     {
-        return left is string leftString && right is string rightString
-            ? string.Equals(leftString, rightString, StringComparison.OrdinalIgnoreCase)
-            : ReferenceEquals(left, right) || Equals(left, right);
+        if (left is string leftString && right is string rightString)
+        {
+            return string.Equals(leftString, rightString, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (left is BicepOutputReference leftOutput && right is BicepOutputReference rightOutput)
+        {
+            return ReferenceEquals(leftOutput.Resource, rightOutput.Resource) &&
+                   string.Equals(leftOutput.Name, rightOutput.Name, StringComparison.Ordinal);
+        }
+
+        return ReferenceEquals(left, right) || Equals(left, right);
     }
 
     internal bool UseAzdNamingConvention { get; set; }
