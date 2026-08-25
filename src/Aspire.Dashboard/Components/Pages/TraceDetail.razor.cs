@@ -32,8 +32,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private const int RootSpanDepth = 1;
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<IDisposable> _peerChangesSubscriptions = new();
     private OtlpTrace? _trace;
+    private long _detailViewUpdateVersion;
     private Subscription? _tracesSubscription;
     private int _maxDepth;
     private int _resourceCount;
@@ -64,10 +64,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
 
-    [Inject]
-    public required IEnumerable<IOutgoingPeerResolver> OutgoingPeerResolvers { get; init; }
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -109,16 +108,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             new GridColumn(Name: TicksColumn, DesktopWidth: "12fr", MobileWidth: "12fr"),
             new GridColumn(Name: ActionsColumn, DesktopWidth: "100px", MobileWidth: null)
         ];
-
-        foreach (var resolver in OutgoingPeerResolvers)
-        {
-            _peerChangesSubscriptions.Add(resolver.OnPeerChanges(async () =>
-            {
-                UpdateDetailViewData();
-                await InvokeAsync(StateHasChanged);
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
-            }));
-        }
 
         UpdateTraceActionsMenu();
 
@@ -181,12 +170,15 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private IEnumerable<SpanWaterfallViewModel> GetVisibleSpanViewModels()
     {
-        Debug.Assert(PageViewModel.SpanWaterfallViewModels != null);
+        if (PageViewModel.SpanWaterfallViewModels is null)
+        {
+            return [];
+        }
 
         return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
     }
 
-    private string? GetPageTitle()
+    internal string? GetPageTitle()
     {
         if (_trace is null)
         {
@@ -205,7 +197,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // If the new trace has a SpanId query parameter, it will be re-opened below.
             PageViewModel.SelectedData = null;
 
-            UpdateDetailViewData();
+            await UpdateDetailViewDataAsync();
             UpdateSubscription();
 
             // If parameters change after render then the grid is automatically updated.
@@ -251,20 +243,28 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
     }
 
-    private void UpdateDetailViewData()
+    private async Task UpdateDetailViewDataAsync()
     {
-        _resources = TelemetryRepository.GetResources();
+        var updateVersion = Interlocked.Increment(ref _detailViewUpdateVersion);
+        var traceId = TraceId;
+        var resources = TelemetryRepository.GetResources();
+        var trace = _trace;
 
         // Copying a large trace can be expensive so only do this if required.
-        if (_trace == null || _trace.TraceId != TraceId || TelemetryRepository.HasUpdatedTrace(_trace))
+        if (trace == null || trace.TraceId != traceId || TelemetryRepository.HasUpdatedTrace(trace))
         {
-            Logger.LogInformation("Getting trace '{TraceId}'.", TraceId);
-            _trace = (TraceId != null) ? TelemetryRepository.GetTrace(TraceId) : null;
+            Logger.LogInformation("Getting trace '{TraceId}'.", traceId);
+            trace = TelemetryRepository.GetTrace(traceId);
+            // The asynchronous log query below allows an intermediate render. Publish resources before the trace so
+            // page title rendering never observes a trace without the resource list used to format its source name.
+            _resources = resources;
+            _trace = trace;
         }
 
-        if (_trace == null)
+        if (trace == null)
         {
-            Logger.LogInformation("Couldn't find trace '{TraceId}'.", TraceId);
+            Logger.LogInformation("Couldn't find trace '{TraceId}'.", traceId);
+            _resources = resources;
             PageViewModel.SpanWaterfallViewModels = null;
             _maxDepth = 0;
             _resourceCount = 0;
@@ -275,14 +275,35 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         // Get logs for the trace. Note that there isn't a limit on this query so all logs are returned.
         // There is a limit on the number of logs stored by the dashboard so this is implicitly limited.
         // If there are performance issues with displaying all logs then consider adding a limit to this query.
-        var result = TelemetryRepository.GetLogsForTrace(_trace.TraceId);
+        var result = (await TelemetryRepository.GetLogSummariesAsync(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownStructuredLogFields.TraceIdField,
+                    Condition = FilterCondition.Equals,
+                    Value = trace.TraceId
+                }
+            ]
+        }, _cts.Token)).Items;
 
-        Logger.LogInformation("Trace '{TraceId}' has {SpanCount} spans.", _trace.TraceId, _trace.Spans.Count);
-        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(OutgoingPeerResolvers.ToArray(), _collapsedSpanIds, _resources));
+        if (updateVersion != Volatile.Read(ref _detailViewUpdateVersion))
+        {
+            return;
+        }
+
+        _trace = trace;
+        _resources = resources;
+        Logger.LogInformation("Trace '{TraceId}' has {SpanCount} spans.", trace.TraceId, trace.Spans.Count);
+        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(trace, result, new SpanWaterfallViewModel.TraceDetailState(_collapsedSpanIds, resources));
         _maxDepth = PageViewModel.SpanWaterfallViewModels.Max(s => s.Depth);
 
         var apps = new HashSet<OtlpResource>();
-        foreach (var span in _trace.Spans)
+        foreach (var span in trace.Spans)
         {
             apps.Add(span.Source.Resource);
             if (span.UninstrumentedPeer != null)
@@ -332,7 +353,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
                 // Only update trace if required.
                 if (TelemetryRepository.HasUpdatedTrace(_trace))
                 {
-                    UpdateDetailViewData();
+                    await UpdateDetailViewDataAsync();
                     StateHasChanged();
                     await _dataGrid.SafeRefreshDataAsync();
                 }
@@ -384,7 +405,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private async Task RefreshSpanViewAsync()
     {
-        UpdateDetailViewData();
+        await UpdateDetailViewDataAsync();
         UpdateTraceActionsMenu();
         await _dataGrid.SafeRefreshDataAsync();
 
@@ -488,7 +509,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private string GetResourceName(OtlpResourceView app) => OtlpResource.GetResourceName(app, _resources);
 
-    private async Task ToggleSpanLogsAsync(OtlpLogEntry logEntry)
+    private async Task ToggleSpanLogsAsync(LogSummary logEntry)
     {
         if (PageViewModel.SelectedData?.LogEntryViewModel?.LogEntry.InternalId == logEntry.InternalId)
         {
@@ -496,10 +517,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
         else
         {
-            PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
+            if (TelemetryRepository.GetLog(logEntry.InternalId) is { } fullLogEntry)
             {
-                LogEntryViewModel = new StructureLogsDetailsViewModel { LogEntry = logEntry }
-            };
+                PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
+                {
+                    LogEntryViewModel = new StructureLogsDetailsViewModel { LogEntry = fullLogEntry }
+                };
+            }
         }
     }
 
@@ -526,7 +550,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
                     genAISpans.Add(vm.Span);
                 }
                 return genAISpans;
-            });
+            },
+            _cts.Token);
     }
 
     private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
@@ -540,9 +565,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             entry,
             DialogService,
             DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            propertyKeys: GetTraceSpanPropertyKeys(),
+            getPropertyKeysAsync: GetTraceSpanPropertyKeysAsync,
             knownKeys: KnownTraceFields.AllFields,
-            getFieldValues: GetTraceSpanFieldValues,
+            getFieldValuesAsync: GetTraceSpanFieldValuesAsync,
             FilterLoc);
     }
 
@@ -603,11 +628,11 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     // Computed fresh on each dialog open. A single trace typically has a small number of spans,
     // so caching is unnecessary and avoids stale data if the trace is updated while the page is open.
-    private List<string> GetTraceSpanPropertyKeys()
+    private Task<List<string>> GetTraceSpanPropertyKeysAsync(CancellationToken cancellationToken)
     {
         if (_trace is null)
         {
-            return [];
+            return Task.FromResult<List<string>>([]);
         }
 
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -619,18 +644,19 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             }
         }
 
-        return keys.OrderBy(k => k).ToList();
+        return Task.FromResult(keys.OrderBy(k => k).ToList());
     }
 
-    // Computed fresh on each dialog open for the same reason as GetTraceSpanPropertyKeys.
-    private Dictionary<string, int> GetTraceSpanFieldValues(string attributeName)
+    // Computed fresh on each dialog open for the same reason as GetTraceSpanPropertyKeysAsync.
+    private Task<Dictionary<string, int>> GetTraceSpanFieldValuesAsync(string attributeName, CancellationToken cancellationToken)
     {
         if (_trace is null)
         {
-            return new Dictionary<string, int>(StringComparers.OtlpAttribute);
+            return Task.FromResult(new Dictionary<string, int>(StringComparers.OtlpAttribute));
         }
 
-        return OtlpSpan.GetFieldValuesFromTraces([_trace], attributeName);
+        var fieldValues = OtlpSpan.GetFieldValuesFromTraces([_trace], attributeName);
+        return Task.FromResult(fieldValues);
     }
 
     private List<MenuButtonItem> GetFilterMenuItems()
@@ -646,11 +672,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     public void Dispose()
     {
+        Interlocked.Increment(ref _detailViewUpdateVersion);
         _cts.Cancel();
-        foreach (var subscription in _peerChangesSubscriptions)
-        {
-            subscription.Dispose();
-        }
         _tracesSubscription?.Dispose();
         TelemetryContext.Dispose();
     }

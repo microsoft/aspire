@@ -13,7 +13,7 @@ import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunch
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECodeLensProbeResult, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
@@ -787,6 +787,11 @@ export async function executeE2eControlCommand(
     case 'getDiagnostics': {
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
+    }
+    case 'getCodeLenses': {
+      const filePath = getE2eRunPath(command.filePath, command.name);
+      markStarted();
+      return await getCodeLensesForFile(filePath);
     }
     case 'snapshotClipboard': {
       markStarted();
@@ -1845,13 +1850,13 @@ function getWorkspaceFolderInfo(): Array<{ name: string; uri: string; fileName: 
   })) ?? [];
 }
 
-function getE2eRunPath(filePath: unknown): string {
+function getE2eRunPath(filePath: unknown, commandName = 'openFile'): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
-    throw new Error('Aspire extension E2E openFile requires an absolute file path.');
+    throw new Error(`Aspire extension E2E ${commandName} requires an absolute file path.`);
   }
 
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    throw new Error(`Aspire extension E2E openFile requires an existing file: ${filePath}`);
+    throw new Error(`Aspire extension E2E ${commandName} requires an existing file: ${filePath}`);
   }
 
   // The workspace root is normally inside the run root, but a run whose workspace has to live
@@ -1863,7 +1868,7 @@ function getE2eRunPath(filePath: unknown): string {
   ].filter((root): root is string => typeof root === 'string' && root.length > 0);
 
   if (!allowedRoots.some(root => isPathWithinDirectory(filePath, root))) {
-    throw new Error('Aspire extension E2E openFile can only open files inside the configured E2E run root or workspace root.');
+    throw new Error(`Aspire extension E2E ${commandName} can only open files inside the configured E2E run root or workspace root.`);
   }
 
   return filePath;
@@ -1991,6 +1996,20 @@ export async function getDiagnosticsForFile(filePath: string): Promise<{ message
   }
 
   return diagnostics;
+}
+
+export async function getCodeLensesForFile(filePath: string): Promise<AspireExtensionE2ECodeLensProbeResult> {
+  const uri = vscode.Uri.file(filePath);
+  const document = await vscode.workspace.openTextDocument(uri);
+  const codeLenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
+
+  return {
+    filePath: document.uri.fsPath,
+    languageId: document.languageId,
+    commandTitles: (codeLenses ?? [])
+      .map(codeLens => codeLens.command?.title)
+      .filter((title): title is string => typeof title === 'string' && title.length > 0),
+  };
 }
 
 function isFileOpenInAnyTab(uri: vscode.Uri): boolean {

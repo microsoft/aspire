@@ -1389,22 +1389,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("123", message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void GenerateChildLogFilePath_UsesDetachChildNamingWithoutProcessId()
-    {
-        var logsDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-tests");
-        var now = new DateTimeOffset(2026, 02, 12, 18, 00, 00, TimeSpan.Zero);
-        var timeProvider = new FixedTimeProvider(now);
-
-        var path = AppHostLauncher.GenerateChildLogFilePath(logsDirectory, timeProvider);
-        var fileName = Path.GetFileName(path);
-
-        Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith("cli_20260212T180000000_detach-child_", fileName, StringComparison.Ordinal);
-        Assert.EndsWith(".log", fileName, StringComparison.Ordinal);
-        Assert.DoesNotContain($"_{Environment.ProcessId}", fileName, StringComparison.Ordinal);
-    }
-
     private sealed class ProjectFileDoesNotExistLocator : Aspire.Cli.Projects.IProjectLocator
     {
         public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
@@ -1428,38 +1412,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
 
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
-    }
-
-    [Fact]
-    public async Task RunCommand_WhenCertificateServiceThrows_ReturnsNonZeroExitCode()
-    {
-        var runnerFactory = (IServiceProvider sp) =>
-        {
-            var runner = new TestDotNetCliRunner();
-
-            // Fake apphost information to return a compatable app host.
-            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
-
-            return runner;
-        };
-
-        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
-
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.CertificateServiceFactory = _ => new ThrowingCertificateService();
-            options.DotNetCliRunnerFactory = runnerFactory;
-            options.ProjectLocatorFactory = projectLocatorFactory;
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(CliExitCodes.FailedToTrustCertificates, exitCode);
     }
 
     [Fact]
@@ -2115,16 +2067,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
             yield break;
         }
-    }
-
-    private sealed class ThrowingCertificateService : Aspire.Cli.Certificates.ICertificateService
-    {
-        public Task<Aspire.Cli.Certificates.EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
-        {
-            throw new Aspire.Cli.Certificates.CertificateServiceException("Failed to trust certificates");
-        }
-
-        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
@@ -4395,21 +4337,25 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     {
         using var fixture = new TelemetryFixture();
 
-        var runnerFactory = (IServiceProvider sp) =>
-        {
-            var runner = new TestDotNetCliRunner();
-            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
-            return runner;
-        };
-
-        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
-
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(false);
+                return Task.FromResult(CliExitCodes.FailedToBuildArtifacts);
+            }
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CertificateServiceFactory = _ => new ThrowingCertificateService();
-            options.DotNetCliRunnerFactory = runnerFactory;
-            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
             options.TelemetryFactory = _ => fixture.Telemetry;
 
             if (detached)
@@ -4435,7 +4381,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(KnownLanguageId.CSharp, tags[TelemetryConstants.Tags.AppHostLanguage]);
         Assert.Equal(detached, tags[TelemetryConstants.Tags.AppHostDetached]);
         Assert.Equal(isolated, tags[TelemetryConstants.Tags.AppHostIsolated]);
-        Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
+        Assert.Equal("build_failed", tags[TelemetryConstants.Tags.ErrorType]);
     }
 
     private async Task AssertProfileTransferAsync(

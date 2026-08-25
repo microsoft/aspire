@@ -169,15 +169,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while trusting the certificates: {0}.
-        /// </summary>
-        public static string CertificateTrustError {
-            get {
-                return ResourceManager.GetString("CertificateTrustError", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Create NuGet.config for selected channels?.
         /// </summary>
         public static string CreateNugetConfigConfirmation {

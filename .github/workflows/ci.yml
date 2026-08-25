@@ -28,6 +28,12 @@ jobs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
       EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
+      # Trusted extension-release fast path (see microsoft/aspire#19581). Classification is
+      # centralized in .github/actions/is-trusted-extension-release-pr. Any classification
+      # failure (missing/empty step output) evaluates the
+      # comparison below to false, which routes the PR through normal CI --
+      # never silently onto the fast path.
+      is_trusted_extension_release_pr: ${{ github.event_name == 'pull_request' && steps.classify_release_pr.outputs.is_trusted == 'true' && 'true' || 'false' }}
 
     steps:
       - name: Checkout code
@@ -35,6 +41,34 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+
+      - name: Checkout trusted extension release classifier
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted-extension-release-classifier
+          persist-credentials: false
+
+      # Classify once, here, and share the result with the tests / stabilization_check /
+      # extension_release_tests jobs below via this job's outputs, so the
+      # whole workflow uses one predicate instead of re-deriving it per job.
+      - name: Classify trusted extension release PR
+        id: classify_release_pr
+        if: ${{ github.event_name == 'pull_request' }}
+        # See the is_trusted_extension_release_pr output comment above: a failure
+        # here must default to normal CI, not to the fast path.
+        continue-on-error: true
+        uses: ./.trusted-extension-release-classifier/.github/actions/is-trusted-extension-release-pr
+        with:
+          repository: ${{ github.repository }}
+          base_ref: ${{ github.event.pull_request.base.ref }}
+          head_repo: ${{ github.event.pull_request.head.repo.full_name }}
+          head_ref: ${{ github.event.pull_request.head.ref }}
+          author: ${{ github.event.pull_request.user.login }}
+          base_sha: ${{ github.event.pull_request.base.sha }}
+          head_sha: ${{ github.event.pull_request.head.sha }}
 
       - name: Check for any changes that require CI
         id: check_for_changes
@@ -80,10 +114,32 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' }}
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
       extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
+
+  # Trusted extension-release fast path (see microsoft/aspire#19581).
+  #
+  # The release PR (aspire-repo-bot, base=main, head=extension-release/vX.Y.Z,
+  # diff limited to extension/package.json + extension/CHANGELOG.md) has no
+  # need for the full test graph -- no .NET changes, no CLI archives, no E2E,
+  # no stabilization build. The release-only mode runs just the VS Code
+  # extension unit tests inside the same reusable workflow as normal CI.
+  extension_release_tests:
+    name: Extension release tests
+    needs: [prepare_for_ci]
+    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' }}
+    uses: ./.github/workflows/tests.yml
+    # GitHub validates every permission requested by a reusable workflow, including jobs skipped
+    # by extensionReleaseOnly. Keep this in sync with the normal tests caller above.
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    with:
+      extensionReleaseOnly: true
 
   # Stabilization gate.
   #
@@ -109,7 +165,7 @@ jobs:
     name: Stabilization Check
     runs-on: 8-core-ubuntu-latest
     needs: [prepare_for_ci]
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' }}
     steps:
       # The actual stabilization work only makes sense for pull_request events. On push
       # (including push to release branches with StabilizePackageVersion=true) the build is
@@ -188,25 +244,30 @@ jobs:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [prepare_for_ci, tests, stabilization_check]
+    needs: [prepare_for_ci, tests, stabilization_check, extension_release_tests]
 
     steps:
       - name: Fail if any of the dependent jobs failed
         # Don't fail if the workflow is being skipped.
-        # Check skip_workflow on all declared dependencies. Workflows without
-        # skip_workflow outputs (e.g., tests, build_cli_archives) evaluate to
-        # empty string, so the check still works ('!= true' is true for empty).
         #
-        # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
-        # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
-        # 'skipped'
+        # Exactly one graph is legal when CI is required:
+        #   trusted release: normal tests + stabilization skipped, release tests succeeded
+        #   normal CI: normal tests + stabilization succeeded, release tests skipped
+        # This catches unexpected skips from failed transitive dependencies while preserving
+        # the successful Final Results context for docs-only changes.
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
-              needs.tests.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
-               contains(needs.*.result, 'skipped')) }}
+               (needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' &&
+                (needs.tests.result != 'skipped' ||
+                needs.stabilization_check.result != 'skipped' ||
+                needs.extension_release_tests.result != 'success')) ||
+               (needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' &&
+                (needs.tests.result != 'success' ||
+                needs.stabilization_check.result != 'success' ||
+                needs.extension_release_tests.result != 'skipped'))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

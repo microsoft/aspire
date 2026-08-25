@@ -92,6 +92,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private bool _disposed;
 
     public TimeSpan MaxRetryDuration { get; set; } = TimeSpan.FromSeconds(20);
+    public TimeSpan KubernetesConfigInitializationTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
@@ -474,20 +475,34 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         using var activity = ProfilingTelemetry.StartDcpKubernetesApi(configuration, operationType, resourceType);
         var retryCount = 0;
 
-        var resiliencePipeline = CreateKubernetesCallResiliencePipeline(isRetryable, activity, () => retryCount++);
-
         try
         {
-            return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
+            async ValueTask EnsureKubernetesClientAsync(CancellationToken cancellationToken)
             {
-                // Establish (or re-establish) the connection to DCP inside the retry loop,
-                // to guard against a failure from missing or partially-written kubeconfig.
                 var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
                 if (clientReady.Initialized)
                 {
                     activity.AddKubernetesClientReady(clientReady.WaitMilliseconds, clientReady.Initialized);
                 }
+            }
 
+            if (_kubernetes is null)
+            {
+                // The first DCP request must also wait for DCP to create its kubeconfig. Give that initialization
+                // its own budget so slower hosts do not consume the shorter already-running API retry budget.
+                var initializationPipeline = CreateKubernetesCallResiliencePipeline(
+                    KubernetesConfigInitializationTimeout,
+                    RetryOnConnectivityErrors,
+                    activity,
+                    () => retryCount++);
+                await initializationPipeline.ExecuteAsync(EnsureKubernetesClientAsync, cancellationToken).ConfigureAwait(false);
+            }
+
+            var resiliencePipeline = CreateKubernetesCallResiliencePipeline(MaxRetryDuration, isRetryable, activity, () => retryCount++);
+            return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
+            {
+                // Keep connection establishment inside the retry loop so kubeconfig read failures remain retryable.
+                await EnsureKubernetesClientAsync(cancellationToken).ConfigureAwait(false);
                 return await operation(_kubernetes!).ConfigureAwait(false);
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -503,7 +518,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         ex is KubeConfigException ||
         (ex is HttpOperationException hoe && hoe.Response.StatusCode == System.Net.HttpStatusCode.Conflict);
 
-    private ResiliencePipeline CreateKubernetesCallResiliencePipeline(
+    private static ResiliencePipeline CreateKubernetesCallResiliencePipeline(
+        TimeSpan retryDuration,
         Func<Exception, bool> isRetryable,
         ProfilingTelemetry.ActivityScope activity,
         Action recordRetry)
@@ -511,7 +527,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         var resiliencePipeline = new ResiliencePipelineBuilder()
             .AddTimeout(new TimeoutStrategyOptions
             {
-                Timeout = MaxRetryDuration,
+                Timeout = retryDuration,
                 OnTimeout = (_) =>
                 {
                     activity.AddKubernetesApiTimeout();

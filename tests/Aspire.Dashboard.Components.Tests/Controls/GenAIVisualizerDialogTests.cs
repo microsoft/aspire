@@ -41,10 +41,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             dialogService: dialogService,
             span: CreateOtlpSpan(resource, trace, scope, spanId: "abc", parentSpanId: null, startDate: s_testTime),
             selectedLogEntryId: null,
-            telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
+            telemetryRepository: Services.GetRequiredService<SqliteTelemetryRepository>(),
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
             );
 
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
@@ -107,10 +108,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             dialogService: dialogService,
             span: span,
             selectedLogEntryId: null,
-            telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
+            telemetryRepository: Services.GetRequiredService<SqliteTelemetryRepository>(),
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
             );
 
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
@@ -129,8 +131,8 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var span = CreateOtlpSpan(resource, trace, scope, spanId: GetHexId("abc"), parentSpanId: null, startDate: s_testTime);
 
         var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -152,7 +154,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
                 }
             }
         });
-        var selectedLogEntryId = repository.GetLogsForSpan(trace.TraceId, span.SpanId).Single().InternalId;
+        var selectedLogEntryId = (await repository.GetLogsForSpanAsync(trace.TraceId, span.SpanId, CancellationToken.None)).Single().InternalId;
 
         await GenAIVisualizerDialog.OpenDialogAsync(
             dialogService: dialogService,
@@ -161,7 +163,8 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             telemetryRepository: repository,
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
             );
 
         var copyButton = cut.Find("fluent-button.message-copy-button");
@@ -177,11 +180,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
     {
         // Arrange - Setup dialog infrastructure and repository
         var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -203,13 +206,13 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         // Get the resource and trace
         var resources = repository.GetResources();
         var resource = resources[0];
-        var tracesResult = repository.GetTraces(new GetTracesRequest
+        var tracesResult = await repository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, CancellationToken.None);
         var trace = tracesResult.PagedResult.Items[0];
         var span = trace.Spans[0];
 
@@ -221,14 +224,15 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             telemetryRepository: repository,
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: resources,
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
         );
 
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
         var originalContent = instance.Content;
 
         // Act - Add a DIFFERENT trace to the repository
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -260,11 +264,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
     {
         // Arrange - Setup dialog infrastructure and repository
         var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -286,26 +290,20 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         // Get the resource and trace
         var resources = repository.GetResources();
         var resource = resources[0];
-        var tracesResult = repository.GetTraces(new GetTracesRequest
+        var tracesResult = await repository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, CancellationToken.None);
         var trace = tracesResult.PagedResult.Items[0];
         var span = trace.Spans[0];
 
         // Create a function that retrieves the current list of spans from the trace
         List<OtlpSpan> GetContextGenAISpans()
         {
-            var currentTrace = repository.GetTraces(new GetTracesRequest
-            {
-                ResourceKeys = [resource.ResourceKey],
-                StartIndex = 0,
-                Count = 10,
-                Filters = []
-            }).PagedResult.Items.FirstOrDefault(t => t.TraceId == trace.TraceId);
+            var currentTrace = repository.GetTrace(trace.TraceId);
             
             return currentTrace?.Spans.ToList() ?? [];
         }
@@ -318,14 +316,15 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             telemetryRepository: repository,
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: resources,
-            getContextGenAISpans: GetContextGenAISpans
+            getContextGenAISpans: GetContextGenAISpans,
+            cancellationToken: CancellationToken.None
         );
 
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
         var originalContent = instance.Content;
 
         // Act - Add a new span to the SAME trace that the dialog is displaying
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {

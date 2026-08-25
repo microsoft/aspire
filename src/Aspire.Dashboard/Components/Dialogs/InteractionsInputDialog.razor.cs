@@ -34,9 +34,6 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    [Inject]
-    public required IDashboardClient DashboardClient { get; init; }
-
     private readonly CancellationTokenSource _disposalCts = new();
     private InteractionsInputsDialogViewModel? _content;
     private EditContext _editContext = default!;
@@ -243,7 +240,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             try
             {
                 using var stream = file.OpenReadStream(maxFileSize);
-                var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, Content.Interaction.InteractionId, inputModel.Input.Name, _disposalCts.Token);
+                var fileId = await Content.DashboardClient.UploadFileAsync(stream, file.Name, file.Size, Content.Interaction.InteractionId, inputModel.Input.Name, _disposalCts.Token);
                 fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

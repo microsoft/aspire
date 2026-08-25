@@ -777,9 +777,7 @@ public class AtsTypeScriptCodeGeneratorTests
     [Fact]
     public void MapInputUnionTypeToTypeScript_ThrowsOnEmptyUnion()
     {
-        var method = typeof(AtsTypeScriptCodeGenerator).GetMethod("MapInputUnionTypeToTypeScript", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
         var typeRef = new AtsTypeRef
         {
             TypeId = "test/EmptyUnion",
@@ -787,9 +785,8 @@ public class AtsTypeScriptCodeGeneratorTests
             UnionTypes = [],
         };
 
-        var ex = Assert.Throws<TargetInvocationException>(() => method.Invoke(_generator, [typeRef]));
-        Assert.IsType<InvalidOperationException>(ex.InnerException);
-        Assert.Equal("Union input types must define at least one member type.", ex.InnerException.Message);
+        var ex = Assert.Throws<InvalidOperationException>(() => projector.MapInputUnionTypeToTypeScript(typeRef));
+        Assert.Equal("Union input types must define at least one member type.", ex.Message);
     }
 
     [Fact]
@@ -1233,6 +1230,12 @@ public class AtsTypeScriptCodeGeneratorTests
     // a leading capital so "PromiseLike", bare "Promise" and "trackPromise" are not matched.
     private static readonly Regex s_promiseReferencePattern =
         new(@"\b[A-Z]\w*Promise(?:Impl)?\b", RegexOptions.Compiled);
+
+    private static readonly Regex s_apiDeclarationPattern =
+        new(@"\b(?:interface|enum|type)\s+([A-Z]\w*)\b", RegexOptions.Compiled);
+
+    private static readonly Regex s_apiTypeReferencePattern =
+        new(@"\b[A-Z]\w*\b", RegexOptions.Compiled);
 
     /// <summary>
     /// Removes line and block comments from generated TypeScript. Deliberately simple: generated
@@ -2292,5 +2295,634 @@ public class AtsTypeScriptCodeGeneratorTests
                && !id.Contains("ViteApp", StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.NodeAppResource), StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
+    }
+
+    private const string ApiExportPackageName = "Aspire.Hosting.CodeGeneration.TypeScript.Tests";
+    private const string ApiExportPackageVersion = "13.5.0";
+
+    [Fact]
+    public async Task ApiExportWriterProducesFocusedCanonicalJson()
+    {
+        var model = new TypeScriptApiModel
+        {
+            SchemaVersion = 1,
+            Language = "typescript",
+            Generator = new TypeScriptApiGeneratorIdentity("Aspire.Hosting.CodeGeneration.TypeScript", "13.5.0"),
+            Package = new TypeScriptApiPackageIdentity("Aspire.Hosting.Contoso", "1.2.3"),
+            Modules =
+            [
+                new TypeScriptApiModule
+                {
+                    Name = "index",
+                    Items =
+                    [
+                        new TypeScriptApiItem
+                        {
+                            Id = "interface:ContosoResource",
+                            TypeId = "Aspire.Hosting.Contoso/ContosoResource",
+                            Kind = TypeScriptApiItemKind.Interface,
+                            Name = "ContosoResource",
+                            Declaration = "export interface ContosoResource",
+                            OwningAssemblyName = "Aspire.Hosting.Contoso",
+                            Summary = "A Contoso resource.",
+                            Members =
+                            [
+                                new TypeScriptApiMember
+                                {
+                                    Id = "member:ContosoResource.configure",
+                                    Kind = TypeScriptApiItemKind.Method,
+                                    Name = "configure",
+                                    Declaration = "configure(enabled?: boolean): Promise<void>",
+                                    CapabilityId = "Aspire.Hosting.Contoso/configure",
+                                    OwningAssemblyName = "Aspire.Hosting.Contoso",
+                                    Parameters =
+                                    [
+                                        new TypeScriptApiParameter
+                                        {
+                                            Name = "enabled",
+                                            DeclaredType = "boolean",
+                                            IsOptional = true,
+                                            Summary = "Whether configuration is enabled."
+                                        }
+                                    ],
+                                    ReturnType = "Promise<void>"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            Declarations =
+            [
+                new TypeScriptApiDeclaration
+                {
+                    Id = "interface:ContosoResource",
+                    Content = "export interface ContosoResource {\r\n    configure(enabled?: boolean): Promise<void>;\r\n}",
+                    OwningAssemblyName = "Aspire.Hosting.Contoso"
+                }
+            ]
+        };
+
+        var json = TypeScriptApiExportWriter.WriteToJson(model, indented: true);
+
+        await Verify(json, extension: "json")
+            .UseFileName("AtsTypeScriptCodeGeneratorTests.FocusedApiExport");
+    }
+
+    [Fact]
+    public void ApiExportIncludesCodeGeneratorIdentity()
+    {
+        var model = ProjectApi(CreateEntryPointContext(ApiExportPackageName), ApiExportPackageName);
+        using var document = System.Text.Json.JsonDocument.Parse(TypeScriptApiExportWriter.WriteToJson(model));
+        var generator = document.RootElement.GetProperty("generator");
+        var assembly = typeof(AtsTypeScriptCodeGenerator).Assembly;
+
+        Assert.Equal(assembly.GetName().Name, generator.GetProperty("name").GetString());
+        Assert.Equal(
+            assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion,
+            generator.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public void ApiExportIncludesExportedValuesWithGeneratedDeclaration()
+    {
+        var context = CreateContextFromTestAssembly();
+        var generatedSource = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        using var document = System.Text.Json.JsonDocument.Parse(
+            TypeScriptApiExportWriter.WriteToJson(ProjectApi(context, ApiExportPackageName)));
+        var items = document.RootElement.GetProperty("modules")[0].GetProperty("items").EnumerateArray();
+        var testConfigs = Assert.Single(
+            items,
+            item => item.GetProperty("name").GetString() == "TestConfigs");
+
+        Assert.Equal("namespace", testConfigs.GetProperty("kind").GetString());
+        Assert.Equal("export namespace TestConfigs", testConfigs.GetProperty("declaration").GetString());
+        var defaultConfig = Assert.Single(
+            testConfigs.GetProperty("members").EnumerateArray(),
+            member => member.GetProperty("name").GetString() == "Default");
+        const string expectedDeclaration =
+            "export const Default = { name: \"default\", port: 6379, enabled: true, optionalField: \"cache\" } as TestConfigDto";
+        Assert.Equal("constant", defaultConfig.GetProperty("kind").GetString());
+        Assert.Equal(expectedDeclaration, defaultConfig.GetProperty("declaration").GetString());
+        Assert.Equal("The default test configuration.", defaultConfig.GetProperty("summary").GetString());
+        Assert.Contains($"{expectedDeclaration};", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiExportPromiseDeclarationContainsOnlySourcePromiseMembers()
+    {
+        var targetType = new AtsTypeRef
+        {
+            TypeId = $"{ApiExportPackageName}/PromiseContext",
+            Category = AtsTypeCategory.Handle
+        };
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            Category = AtsTypeCategory.Primitive
+        };
+        var voidType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Void,
+            Category = AtsTypeCategory.Primitive
+        };
+        var context = CreateApiContext(
+            new AtsCapabilityInfo
+            {
+                CapabilityId = $"{ApiExportPackageName}/PromiseContext.readOnly.get",
+                MethodName = "readOnly",
+                OwningTypeName = "PromiseContext",
+                Parameters = [],
+                ReturnType = stringType,
+                TargetTypeId = targetType.TypeId,
+                TargetType = targetType,
+                ExpandedTargetTypes = [],
+                CapabilityKind = AtsCapabilityKind.PropertyGetter
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = $"{ApiExportPackageName}/PromiseContext.mutable.get",
+                MethodName = "mutable",
+                OwningTypeName = "PromiseContext",
+                Parameters = [],
+                ReturnType = stringType,
+                TargetTypeId = targetType.TypeId,
+                TargetType = targetType,
+                ExpandedTargetTypes = [],
+                CapabilityKind = AtsCapabilityKind.PropertyGetter
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = $"{ApiExportPackageName}/PromiseContext.mutable.set",
+                MethodName = "setMutable",
+                OwningTypeName = "PromiseContext",
+                Parameters = [new AtsParameterInfo { Name = "value", Type = stringType }],
+                ReturnType = voidType,
+                TargetTypeId = targetType.TypeId,
+                TargetType = targetType,
+                ExpandedTargetTypes = [],
+                CapabilityKind = AtsCapabilityKind.PropertySetter
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = $"{ApiExportPackageName}/PromiseContext.run",
+                MethodName = "run",
+                OwningTypeName = "PromiseContext",
+                Parameters = [],
+                ReturnType = voidType,
+                TargetTypeId = targetType.TypeId,
+                TargetType = targetType,
+                ExpandedTargetTypes = [],
+                CapabilityKind = AtsCapabilityKind.InstanceMethod
+            });
+
+        var declaration = Assert.Single(
+            ProjectApi(context, ApiExportPackageName).Declarations,
+            declaration => declaration.Content.StartsWith(
+                "export interface PromiseContextPromise ",
+                StringComparison.Ordinal));
+        var expectedDeclaration = """
+            export interface PromiseContextPromise extends PromiseLike<PromiseContext> {
+                readOnly(): Promise<string>;
+                run(): PromiseContextPromise;
+            }
+            """.ReplaceLineEndings("\n");
+
+        Assert.Equal(expectedDeclaration, declaration.Content);
+        Assert.Contains(
+            expectedDeclaration,
+            _generator.GenerateDistributedApplication(context)["aspire.mts"].ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiReferenceExporterRequiresAndHonorsCancellation()
+    {
+        var method = typeof(IApiReferenceExporter).GetMethod(nameof(IApiReferenceExporter.ExportApi));
+
+        Assert.NotNull(method);
+        Assert.Collection(
+            method.GetParameters(),
+            parameter => Assert.Equal(typeof(AtsContext), parameter.ParameterType),
+            parameter => Assert.Equal(typeof(ApiReferenceExportOptions), parameter.ParameterType),
+            parameter =>
+            {
+                Assert.Equal(typeof(CancellationToken), parameter.ParameterType);
+                Assert.False(parameter.HasDefaultValue);
+            });
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var context = new AtsContext
+        {
+            Capabilities = null!,
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+
+        IApiReferenceExporter exporter = new AtsTypeScriptApiReferenceExporter();
+        Assert.Throws<OperationCanceledException>(() => exporter.ExportApi(
+            context,
+            new ApiReferenceExportOptions(
+                ApiExportPackageName,
+                ApiExportPackageVersion,
+                [ApiExportPackageName]),
+            cancellation.Token));
+    }
+
+    [Fact]
+    public void ApiReferenceExportOptionsCopiesExportingAssemblyNames()
+    {
+        var exportingAssemblyNames = new List<string> { ApiExportPackageName };
+        var options = new ApiReferenceExportOptions(
+            ApiExportPackageName,
+            ApiExportPackageVersion,
+            exportingAssemblyNames);
+
+        exportingAssemblyNames.Clear();
+
+        Assert.Equal(ApiExportPackageName, Assert.Single(options.ExportingAssemblyNames));
+    }
+
+    [Fact]
+    public void ApiReferenceExportOptionsExposesReadOnlyExportingAssemblyNames()
+    {
+        var options = new ApiReferenceExportOptions(
+            ApiExportPackageName,
+            ApiExportPackageVersion,
+            [ApiExportPackageName]);
+        var exportingAssemblyNames = Assert.IsAssignableFrom<IList<string>>(options.ExportingAssemblyNames);
+
+        Assert.Throws<NotSupportedException>(() => exportingAssemblyNames[0] = "Changed");
+    }
+
+    [Fact]
+    public void ApiReferenceExportOptionsRequiresAnExportingAssembly()
+    {
+        Assert.Throws<ArgumentException>(() => new ApiReferenceExportOptions(
+            ApiExportPackageName,
+            ApiExportPackageVersion,
+            []));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void ApiReferenceExportOptionsRequiresValidExportingAssemblyNames(string? exportingAssemblyName)
+    {
+        Assert.Throws<ArgumentException>(() => new ApiReferenceExportOptions(
+            ApiExportPackageName,
+            ApiExportPackageVersion,
+            [exportingAssemblyName!]));
+    }
+
+    [Fact]
+    public void ApiExportEntrypointIdsIncludeTheOwningAssembly()
+    {
+        const string firstPackage = "Aspire.Hosting.Contoso.EntryPoints";
+        const string secondPackage = "Aspire.Hosting.Fabrikam.EntryPoints";
+
+        var firstModel = ProjectApi(CreateEntryPointContext(firstPackage), firstPackage);
+        var first = Assert.Single(firstModel.Modules.SelectMany(module => module.Items));
+        var second = Assert.Single(ProjectApi(CreateEntryPointContext(secondPackage), secondPackage)
+            .Modules.SelectMany(module => module.Items));
+
+        Assert.Equal($"entrypoint:{firstPackage}:startThing", first.Id);
+        Assert.Equal($"entrypoint:{secondPackage}:startThing", second.Id);
+        Assert.NotEqual(first.Id, second.Id);
+        Assert.Equal(
+            "function startThing(client: AspireClientRpc, name: string, retries?: number): Promise<void>",
+            first.Declaration);
+        var declaration = Assert.Single(
+            firstModel.Declarations,
+            declaration => declaration.Id == $"{firstPackage}:entrypoint:startThing");
+        Assert.Equal(
+            "export declare function startThing(client: AspireClientRpc, name: string, retries?: number): Promise<void>;",
+            declaration.Content);
+
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(CreateEntryPointContext(firstPackage))["aspire.mts"];
+        Assert.Contains($"export async {first.Declaration} {{", generatedSource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiExportKeepsPackageLocalOptionsNamesAndCombinedGenerationIsDeterministic()
+    {
+        const string eventHubsPackage = "Aspire.Hosting.Azure.EventHubs";
+        const string serviceBusPackage = "Aspire.Hosting.Azure.ServiceBus";
+        var eventHubsCapability = CreateRunAsEmulatorCapability(
+            eventHubsPackage,
+            "DistributedApplicationBuilder",
+            new AtsTypeRef
+            {
+                TypeId = $"{eventHubsPackage}/AzureEventHubsEmulatorResource",
+                Category = AtsTypeCategory.Handle
+            });
+        var serviceBusCapability = CreateRunAsEmulatorCapability(
+            serviceBusPackage,
+            "DistributedApplicationBuilder",
+            new AtsTypeRef
+            {
+                TypeId = $"{serviceBusPackage}/AzureServiceBusEmulatorResource",
+                Category = AtsTypeCategory.Handle
+            });
+
+        var eventHubsModel = ProjectApi(CreateApiContext(eventHubsCapability), eventHubsPackage);
+        var serviceBusModel = ProjectApi(CreateApiContext(serviceBusCapability), serviceBusPackage);
+        var eventHubsOptions = Assert.Single(
+            eventHubsModel.Declarations,
+            declaration => declaration.Content.StartsWith("export interface RunAsEmulatorOptions ", StringComparison.Ordinal));
+        var serviceBusOptions = Assert.Single(
+            serviceBusModel.Declarations,
+            declaration => declaration.Content.StartsWith("export interface RunAsEmulatorOptions ", StringComparison.Ordinal));
+
+        Assert.Equal(
+            (eventHubsPackage, ApiExportPackageVersion, $"{eventHubsPackage}:options:RunAsEmulatorOptions"),
+            (eventHubsModel.Package.Name, eventHubsModel.Package.Version, eventHubsOptions.Id));
+        Assert.Equal(
+            (serviceBusPackage, ApiExportPackageVersion, $"{serviceBusPackage}:options:RunAsEmulatorOptions"),
+            (serviceBusModel.Package.Name, serviceBusModel.Package.Version, serviceBusOptions.Id));
+        Assert.Equal(
+            """
+            export interface RunAsEmulatorOptions {
+                configure?: (emulator: AzureEventHubsEmulatorResourceHandle) => Promise<void>;
+            }
+            """.ReplaceLineEndings("\n"),
+            eventHubsOptions.Content);
+        Assert.Equal(
+            """
+            export interface RunAsEmulatorOptions {
+                configure?: (emulator: AzureServiceBusEmulatorResourceHandle) => Promise<void>;
+            }
+            """.ReplaceLineEndings("\n"),
+            serviceBusOptions.Content);
+        Assert.NotEqual(eventHubsOptions.Content, serviceBusOptions.Content);
+        AssertApiDeclarationsAreSelfContained(eventHubsModel);
+        AssertApiDeclarationsAreSelfContained(serviceBusModel);
+        Assert.Contains(
+            "runAsEmulator(options?: RunAsEmulatorOptions)",
+            Assert.Single(
+                eventHubsModel.Modules.SelectMany(module => module.Items).SelectMany(item => item.Members),
+                member => member.CapabilityId == eventHubsCapability.CapabilityId).Declaration,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "runAsEmulator(options?: RunAsEmulatorOptions)",
+            Assert.Single(
+                serviceBusModel.Modules.SelectMany(module => module.Items).SelectMany(item => item.Members),
+                member => member.CapabilityId == serviceBusCapability.CapabilityId).Declaration,
+            StringComparison.Ordinal);
+
+        var forwardContext = CreateApiContext(eventHubsCapability, serviceBusCapability);
+        var reverseContext = CreateApiContext(serviceBusCapability, eventHubsCapability);
+        var forwardSource = _generator.GenerateDistributedApplication(forwardContext)["aspire.mts"];
+        var reverseSource = _generator.GenerateDistributedApplication(reverseContext)["aspire.mts"];
+        Assert.Equal(forwardSource, reverseSource);
+
+        var combinedPackage = new TypeScriptApiPackageIdentity("Aspire.Hosting.Combined", ApiExportPackageVersion);
+        var combinedAssemblies = new[] { eventHubsPackage, serviceBusPackage };
+        var forwardModel = new TypeScriptApiProjector(forwardContext)
+            .BuildApiModel(combinedPackage, combinedAssemblies, CancellationToken.None);
+        var reverseModel = new TypeScriptApiProjector(reverseContext)
+            .BuildApiModel(combinedPackage, combinedAssemblies, CancellationToken.None);
+        Assert.Equal(
+            TypeScriptApiExportWriter.WriteToJson(forwardModel),
+            TypeScriptApiExportWriter.WriteToJson(reverseModel));
+
+        var methodsByCapability = forwardModel.Modules
+            .SelectMany(module => module.Items)
+            .SelectMany(item => item.Members)
+            .Where(member => member.CapabilityId is not null)
+            .ToDictionary(member => member.CapabilityId!, StringComparer.Ordinal);
+        Assert.Contains(
+            "options?: RunAsEmulatorOptions",
+            methodsByCapability[eventHubsCapability.CapabilityId].Declaration,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "options?: RunAsEmulator1Options",
+            methodsByCapability[serviceBusCapability.CapabilityId].Declaration,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiExportExplicitInterfaceMemberNameMatchesItsDeclaration()
+    {
+        const string targetTypeId = ApiExportPackageName + "/Contoso.WidgetContext";
+        var targetType = new AtsTypeRef
+        {
+            TypeId = targetTypeId,
+            Category = AtsTypeCategory.Handle
+        };
+        var context = new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = ApiExportPackageName + "/IWidget.configure",
+                    MethodName = "IWidget.configure",
+                    OwningTypeName = "WidgetContext",
+                    Parameters = [],
+                    ReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    },
+                    TargetTypeId = targetTypeId,
+                    TargetType = targetType,
+                    ExpandedTargetTypes = [],
+                    CapabilityKind = AtsCapabilityKind.InstanceMethod
+                }
+            ],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = [],
+            ExportedValues = [],
+            Diagnostics = []
+        };
+
+        var member = Assert.Single(ProjectApi(context, ApiExportPackageName)
+            .Modules.SelectMany(module => module.Items)
+            .SelectMany(item => item.Members));
+
+        Assert.Equal("configure", member.Name);
+        Assert.StartsWith($"{member.Name}(", member.Declaration, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApiExportUsesGeneratedSignaturesAndSeparatesReferencedTypes()
+    {
+        var context = CreateContextFromBothAssemblies();
+        var model = ProjectApi(context, ApiExportPackageName);
+        var generatedSource = new AtsTypeScriptCodeGenerator()
+            .GenerateDistributedApplication(context)["aspire.mts"];
+        var items = model.Modules.SelectMany(module => module.Items).ToList();
+
+        Assert.NotEmpty(items);
+        Assert.All(
+            items.Where(item => item.Kind != TypeScriptApiItemKind.Augmentation),
+            item => Assert.Equal(ApiExportPackageName, item.OwningAssemblyName));
+        Assert.All(
+            items.SelectMany(item => item.Members).Where(member => member.Kind == TypeScriptApiItemKind.Method),
+            member => Assert.Contains(member.Declaration, generatedSource, StringComparison.Ordinal));
+
+        var itemIds = items.Select(item => item.Id).ToList();
+        Assert.Equal(itemIds.Count, itemIds.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(
+            model.Declarations,
+            declaration => declaration.OwningAssemblyName == "Aspire.Hosting");
+        Assert.All(
+            model.Declarations,
+            declaration => Assert.DoesNotContain('\r', declaration.Content));
+    }
+
+    private static TypeScriptApiModel ProjectApi(AtsContext context, string packageName)
+        => new TypeScriptApiProjector(context).BuildApiModel(
+            new TypeScriptApiPackageIdentity(packageName, ApiExportPackageVersion),
+            [packageName],
+            CancellationToken.None);
+
+    private static void AssertApiDeclarationsAreSelfContained(TypeScriptApiModel model)
+    {
+        var completeSource = string.Join("\n", model.Declarations.Select(declaration => declaration.Content));
+        var declared = s_apiDeclarationPattern.Matches(completeSource)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // The runtime declaration is a fixed compiler baseline. Scan every package-produced fragment
+        // after removing comments and branded-handle string literals so only TypeScript names remain.
+        var packageSource = string.Join(
+            "\n",
+            model.Declarations
+                .Where(declaration => declaration.Id != "aspire:runtime:base")
+                .Select(declaration => declaration.Content));
+        var referenced = s_apiTypeReferencePattern.Matches(StripCommentsAndStringLiterals(packageSource))
+            .Select(match => match.Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.NotEmpty(declared);
+        Assert.NotEmpty(referenced);
+        referenced.ExceptWith(declared);
+        referenced.ExceptWith(["Promise", "PromiseLike"]);
+        Assert.True(
+            referenced.Count == 0,
+            $"Package '{model.Package.Name}' declarations reference type(s) that are never declared: " +
+            string.Join(", ", referenced.Order(StringComparer.Ordinal)));
+    }
+
+    private static AtsContext CreateApiContext(params AtsCapabilityInfo[] capabilities)
+        => new()
+        {
+            Capabilities = capabilities,
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = [],
+            ExportedValues = [],
+            Diagnostics = []
+        };
+
+    private static AtsCapabilityInfo CreateRunAsEmulatorCapability(
+        string packageName,
+        string targetTypeName,
+        AtsTypeRef callbackPayloadType)
+    {
+        var targetType = new AtsTypeRef
+        {
+            TypeId = $"Aspire.Hosting/{targetTypeName}",
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsCapabilityInfo
+        {
+            CapabilityId = $"{packageName}/runAsEmulator",
+            MethodName = "runAsEmulator",
+            Parameters =
+            [
+                new AtsParameterInfo
+                {
+                    Name = "configure",
+                    Type = new AtsTypeRef
+                    {
+                        TypeId = "callback",
+                        Category = AtsTypeCategory.Callback
+                    },
+                    IsOptional = true,
+                    IsCallback = true,
+                    CallbackParameters =
+                    [
+                        new AtsCallbackParameterInfo
+                        {
+                            Name = "emulator",
+                            Type = callbackPayloadType
+                        }
+                    ],
+                    CallbackReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    }
+                }
+            ],
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            },
+            TargetTypeId = targetType.TypeId,
+            TargetType = targetType,
+            ExpandedTargetTypes = [],
+            CapabilityKind = AtsCapabilityKind.InstanceMethod
+        };
+    }
+
+    private static AtsContext CreateEntryPointContext(string packageName)
+    {
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = $"{packageName}/startThing",
+                    MethodName = "startThing",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "name",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = AtsConstants.String,
+                                Category = AtsTypeCategory.Primitive
+                            }
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "retries",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = AtsConstants.Number,
+                                Category = AtsTypeCategory.Primitive
+                            },
+                            IsOptional = true
+                        }
+                    ],
+                    ReturnType = new AtsTypeRef
+                    {
+                        TypeId = AtsConstants.Void,
+                        Category = AtsTypeCategory.Primitive
+                    },
+                    ExpandedTargetTypes = [],
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = [],
+            ExportedValues = [],
+            Diagnostics = []
+        };
     }
 }
