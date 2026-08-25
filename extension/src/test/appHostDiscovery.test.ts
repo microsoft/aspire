@@ -15,6 +15,7 @@ import { lsJsonStreamCapability } from '../types/configInfo';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 import { workspaceFolderCliPathTarget, getCliPathTargetKey } from '../utils/cliPathVariables';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 import { removeDirectorySafely } from './testHelpers';
 interface RecordedEvent {
@@ -206,6 +207,48 @@ suite('AppHost discovery', () => {
 
         teardown(() => {
             sandbox.restore();
+        });
+
+        test('reports only active discovery CLI resolutions and observes a scoped path change', async () => {
+            stubFileSystemWatchers(sandbox);
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            let cliPath = buildPath('cli', 'first', 'aspire');
+            const terminalProvider = {
+                getAspireCliExecutablePath: async () => cliPath,
+                createEnvironment: () => ({}),
+            } as unknown as AspireTerminalProvider;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                emitLsOutput(options, []);
+                return { kill: () => { } } as any;
+            });
+            const resolutions: Array<{ targetKey: string; cliPath: string }> = [];
+            const resolutionSubscription = onDidResolveCliForOperation(resolution => resolutions.push({
+                targetKey: getCliPathTargetKey(resolution.target),
+                cliPath: resolution.cliPath,
+            }));
+            const service = new AppHostDiscoveryService(terminalProvider);
+
+            try {
+                await service.discover(workspaceFolder);
+                assert.deepStrictEqual(resolutions, []);
+
+                service.reportResolvedCliForWorkspace(workspaceFolder);
+                assert.deepStrictEqual(resolutions, [{
+                    targetKey: getCliPathTargetKey(workspaceFolderCliPathTarget(workspaceFolder)),
+                    cliPath,
+                }]);
+
+                cliPath = buildPath('cli', 'second', 'aspire');
+                await service.discover(workspaceFolder, true, undefined, undefined, true);
+                assert.deepStrictEqual(resolutions.at(-1), {
+                    targetKey: getCliPathTargetKey(workspaceFolderCliPathTarget(workspaceFolder)),
+                    cliPath,
+                });
+            }
+            finally {
+                resolutionSubscription.dispose();
+                service.dispose();
+            }
         });
 
         test('does not force refresh discovery after cached negative editor lookup', async () => {

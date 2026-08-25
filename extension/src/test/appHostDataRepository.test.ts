@@ -15,6 +15,7 @@ import * as configInfoProvider from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { errorFetchingAppHosts } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 import { removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
@@ -2741,6 +2742,30 @@ suite('AppHostDataRepository', () => {
 
             assert.strictEqual(context.repository.errorMessage, undefined);
         } finally {
+            context.dispose();
+        }
+    });
+
+    test('describe reports the exact CLI path for each active workspace folder', async () => {
+        const resolutions: Array<{ folder: string; cliPath: string }> = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => {
+            if (resolution.target.kind === 'workspaceFolder') {
+                resolutions.push({
+                    folder: resolution.target.workspaceFolder.name,
+                    cliPath: resolution.cliPath,
+                });
+            }
+        });
+        const context = await startTwoFolderDescribeStreams();
+
+        try {
+            assert.deepStrictEqual(resolutions.sort((left, right) => left.folder.localeCompare(right.folder)), [
+                { folder: 'peer', cliPath: '/cli/peer/aspire' },
+                { folder: 'selected', cliPath: '/cli/selected/aspire' },
+            ]);
+        }
+        finally {
+            resolutionSubscription.dispose();
             context.dispose();
         }
     });
@@ -6213,29 +6238,100 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
-    test('notifies only when Aspire data sources become active', () => {
-        let activationCount = 0;
-        const repository = new AppHostDataRepository(terminalProvider);
-        const subscription = repository.onDidBecomeDataActive(() => activationCount++);
+    test('reports cached discovery CLI paths only when data sources become active', async () => {
+        const workspaceFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const candidateChange = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const reportResolvedCliForWorkspace = sinon.stub();
+        const discoveryService = {
+            discover: sinon.stub().resolves([]),
+            reportResolvedCliForWorkspace,
+            onDidChangeCandidates: candidateChange.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
 
-        repository.activate();
-        assert.strictEqual(activationCount, 0);
+        try {
+            repository.activate();
+            await waitForMicrotasks();
+            assert.strictEqual(reportResolvedCliForWorkspace.callCount, 0);
 
-        repository.setPanelVisible(true);
-        repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
-        assert.strictEqual(activationCount, 1);
+            repository.setPanelVisible(true);
+            assert.ok(reportResolvedCliForWorkspace.calledOnceWithExactly(workspaceFolder));
 
-        repository.setPanelVisible(false);
-        repository.setAppHostFilesOpen([]);
-        repository.setPanelVisible(true);
-        assert.strictEqual(activationCount, 2);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            assert.strictEqual(reportResolvedCliForWorkspace.callCount, 1);
 
-        subscription.dispose();
-        repository.dispose();
+            repository.setPanelVisible(false);
+            repository.setAppHostFilesOpen([]);
+            repository.setPanelVisible(true);
+            assert.strictEqual(reportResolvedCliForWorkspace.callCount, 2);
+        }
+        finally {
+            repository.dispose();
+            candidateChange.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('an active scoped CLI path change forces discovery to report the new exact path', async () => {
+        const workspaceFolder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const configurationChange = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
+        const onDidChangeConfigurationStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration')
+            .callsFake(listener => configurationChange.event(listener));
+        const candidateChange = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discover = sinon.stub().resolves([]);
+        const discoveryService = {
+            discover,
+            reportResolvedCliForWorkspace: sinon.stub(),
+            onDidChangeCandidates: candidateChange.event,
+            dispose: () => { },
+        } as unknown as AppHostDiscoveryService;
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => discover.callCount > 0, 'initial workspace discovery did not complete');
+            discover.resetHistory();
+
+            configurationChange.fire({
+                affectsConfiguration: section => section === 'aspire.aspireCliExecutablePath',
+            });
+            await waitForCondition(() => discover.callCount > 0, 'CLI path change did not refresh workspace discovery');
+
+            assert.strictEqual(discover.lastCall.args[1], true);
+            assert.strictEqual(discover.lastCall.args[4], true);
+        }
+        finally {
+            repository.dispose();
+            candidateChange.dispose();
+            configurationChange.dispose();
+            onDidChangeConfigurationStub.restore();
+            workspaceFoldersStub.restore();
+        }
     });
 
     test('global ps follow and one-shot refresh resolve with the window target', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
+        const resolutions: Array<{ target: typeof windowCliPathTarget; cliPath: string }> = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => {
+            if (resolution.target.kind === 'window') {
+                resolutions.push({
+                    target: resolution.target,
+                    cliPath: resolution.cliPath,
+                });
+            }
+        });
 
         try {
             repository.activate();
@@ -6248,7 +6344,12 @@ suite('AppHostDataRepository global polling', () => {
 
             assert.deepStrictEqual(getCliPathStub.firstCall.args, [windowCliPathTarget]);
             assert.deepStrictEqual(getCliPathStub.secondCall.args, [windowCliPathTarget]);
+            assert.deepStrictEqual(resolutions, [
+                { target: windowCliPathTarget, cliPath: 'aspire' },
+                { target: windowCliPathTarget, cliPath: 'aspire' },
+            ]);
         } finally {
+            resolutionSubscription.dispose();
             repository.dispose();
         }
     });

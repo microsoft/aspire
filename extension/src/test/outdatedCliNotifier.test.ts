@@ -56,9 +56,9 @@ suite('outdatedCliNotifier', () => {
             status: 'supported',
         };
 
-        await notifier.notifyIfOutdated(windowCliPathTarget);
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
         versionProvider.result = null;
-        await notifier.notifyIfOutdated(windowCliPathTarget);
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
 
         assert.deepStrictEqual(surface.warnings, []);
         assert.deepStrictEqual(
@@ -75,14 +75,14 @@ suite('outdatedCliNotifier', () => {
             status: 'unsupported',
         };
 
-        await notifier.notifyIfOutdated(windowCliPathTarget);
-        await notifier.notifyIfOutdated(windowCliPathTarget);
-        await notifier.notifyIfOutdated(windowCliPathTarget);
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
 
         assert.strictEqual(surface.warnings.length, 1);
         assert.strictEqual(
             surface.warnings[0].message,
-            "Aspire CLI 13.4.9 is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later to avoid a known startup failure in VS Code.");
+            "Aspire CLI 13.4.9 at /cli/aspire is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later to avoid a known startup failure in VS Code.");
         notifier.dispose();
     });
 
@@ -103,7 +103,91 @@ suite('outdatedCliNotifier', () => {
         assert.deepStrictEqual(
             surface.warnings.map(warning => warning.message),
             outdatedVersions.map(version =>
-                `Aspire CLI ${version.version} is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later to avoid a known startup failure in VS Code.`));
+                `Aspire CLI ${version.version} at ${version.cliPath} is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later to avoid a known startup failure in VS Code.`));
+        assert.notStrictEqual(surface.warnings[0].message, surface.warnings[1].message);
+        notifier.dispose();
+    });
+
+    test('coalesces shared multi-root paths and bounds distinct version probes', async () => {
+        let activeProbeCount = 0;
+        let maximumActiveProbeCount = 0;
+        const probedPaths: string[] = [];
+        const releaseProbes: Array<() => void> = [];
+        const versionProvider = {
+            getCliVersionStatus: async (
+                _minimumVersion: string,
+                options?: CliVersionStatusOptions,
+            ): Promise<CliVersionStatus | null> => {
+                const cliPath = options?.cliPath;
+                assert.ok(cliPath);
+                probedPaths.push(cliPath);
+                activeProbeCount++;
+                maximumActiveProbeCount = Math.max(maximumActiveProbeCount, activeProbeCount);
+                return await new Promise(resolve => {
+                    releaseProbes.push(() => {
+                        activeProbeCount--;
+                        resolve({
+                            cliPath,
+                            version: '13.5.0',
+                            status: 'supported',
+                        });
+                    });
+                });
+            },
+        };
+        const surface = new FakeSurface();
+        const notifier = new OutdatedCliNotifier(versionProvider, surface);
+        const requests = Array.from({ length: 40 }, (_, index) => {
+            const target = workspaceFolderCliPathTarget({
+                uri: vscode.Uri.file(`/workspace/${index}`),
+                name: `folder-${index}`,
+                index,
+            });
+            const cliPath = index < 20 ? '/shared/aspire' : `/cli/${index}/aspire`;
+            return notifier.notifyIfOutdated(target, cliPath);
+        });
+        const expectedProbeCount = 21;
+        let releasedProbeCount = 0;
+
+        while (releasedProbeCount < expectedProbeCount) {
+            await new Promise(resolve => setImmediate(resolve));
+            const batch = releaseProbes.splice(0);
+            assert.ok(batch.length > 0, 'Expected a bounded batch of version probes to be ready.');
+            releasedProbeCount += batch.length;
+            batch.forEach(release => release());
+        }
+        await Promise.all(requests);
+
+        assert.strictEqual(probedPaths.filter(cliPath => cliPath === '/shared/aspire').length, 1);
+        assert.strictEqual(probedPaths.length, expectedProbeCount);
+        assert.strictEqual(maximumActiveProbeCount, 4);
+        assert.deepStrictEqual(surface.warnings, []);
+        notifier.dispose();
+    });
+
+    test('reprobes the same active CLI path and observes an in-place replacement', async () => {
+        const results: CliVersionStatus[] = [{
+            cliPath: '/cli/aspire',
+            version: '13.5.0',
+            status: 'supported',
+        }, {
+            cliPath: '/cli/aspire',
+            version: '13.4.9',
+            status: 'unsupported',
+        }];
+        let probeIndex = 0;
+        const versionProvider = {
+            getCliVersionStatus: async (): Promise<CliVersionStatus> => results[probeIndex++],
+        };
+        const surface = new FakeSurface();
+        const notifier = new OutdatedCliNotifier(versionProvider, surface);
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(probeIndex, 2);
+        assert.strictEqual(surface.warnings.length, 1);
+        assert.ok(surface.warnings[0].message.includes('Aspire CLI 13.4.9 at /cli/aspire is older than 13.5.0'));
         notifier.dispose();
     });
 
@@ -121,7 +205,7 @@ suite('outdatedCliNotifier', () => {
         };
         surface.selection = strings.updateAspireCliAction;
 
-        await notifier.notifyIfOutdated(target);
+        await notifier.notifyIfOutdated(target, '/workspace/a/.aspire/bin/aspire');
 
         assert.deepStrictEqual(surface.warnings[0].actions, [strings.updateAspireCliAction]);
         assert.deepStrictEqual(surface.commands, [{
@@ -137,6 +221,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.resultPromise = new Promise(resolve => resolveProbe = resolve);
 
         const notification = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await new Promise(resolve => setImmediate(resolve));
         const cancellationToken = versionProvider.calls[0].options?.cancellationToken;
         assert.ok(cancellationToken);
         assert.strictEqual(cancellationToken.isCancellationRequested, false);

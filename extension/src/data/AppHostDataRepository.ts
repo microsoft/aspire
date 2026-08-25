@@ -18,6 +18,7 @@ import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } f
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
@@ -83,9 +84,6 @@ export class AppHostDataRepository {
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
-
-    private readonly _onDidBecomeDataActive = new vscode.EventEmitter<void>();
-    readonly onDidBecomeDataActive = this._onDidBecomeDataActive.event;
 
     // ── Mode / panel state ──
     private _viewMode: ViewMode = 'workspace';
@@ -187,7 +185,19 @@ export class AppHostDataRepository {
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-            if ((e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
+            const cliPathChanged = e.affectsConfiguration('aspire.aspireCliExecutablePath');
+            if (cliPathChanged) {
+                this._markWorkspaceAppHostDiscoveryPending({ preserveCandidates: true });
+                this._fetchWorkspaceAppHost({ forceRefresh: true });
+                if (this._dataActive) {
+                    this._psPoller.startPsPolling();
+                    this._stopAllDescribes();
+                    this._reconcileDescribes();
+                }
+            }
+            if (!cliPathChanged &&
+                (e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) &&
+                this._dataActive) {
                 this._psPoller.startPsPolling();
             }
         });
@@ -290,7 +300,7 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         if (becameDataActive) {
-            this._onDidBecomeDataActive.fire();
+            this._reportWorkspaceDiscoveryCliResolutions();
         }
         this._syncPolling(resumedFromInactive);
     }
@@ -306,7 +316,7 @@ export class AppHostDataRepository {
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         this._hasEverBeenDataActive = true;
         if (becameDataActive) {
-            this._onDidBecomeDataActive.fire();
+            this._reportWorkspaceDiscoveryCliResolutions();
         }
         this._syncPolling(resumedFromInactive);
 
@@ -348,7 +358,7 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         if (becameDataActive) {
-            this._onDidBecomeDataActive.fire();
+            this._reportWorkspaceDiscoveryCliResolutions();
         }
         // Re-scope the displayed AppHosts against the new open-tab set right away.
         this._handlePsSnapshot(this._appHosts, { force: true });
@@ -580,9 +590,14 @@ export class AppHostDataRepository {
         this._psPollerDisposable.dispose();
         this._psPoller.dispose();
         this._onDidChangeData.dispose();
-        this._onDidBecomeDataActive.dispose();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
+        }
+    }
+
+    private _reportWorkspaceDiscoveryCliResolutions(): void {
+        for (const workspaceFolder of vscode.workspace.workspaceFolders ?? []) {
+            this._appHostDiscoveryService.reportResolvedCliForWorkspace?.(workspaceFolder);
         }
     }
 
@@ -716,7 +731,8 @@ export class AppHostDataRepository {
                             folderCandidates.workspaceFolder,
                             options?.forceRefresh,
                             cancellationSource.token,
-                            candidate => onIncrementalCandidate(folderCandidates, candidate));
+                            candidate => onIncrementalCandidate(folderCandidates, candidate),
+                            this._dataActive);
                     } catch (error) {
                         folderCandidates.candidates = [];
                         errors[workspaceFolderIndex] = {
@@ -1026,6 +1042,7 @@ export class AppHostDataRepository {
             if (this._disposed || this._describeStreams.get(appHostPath) !== stream || startVersion !== stream.version) {
                 return;
             }
+            reportCliResolvedForOperation(target, cliPath);
 
             // The capability is a property of the CLI this AppHost resolves to, not of the window: a
             // multi-root workspace can point each folder at a different aspire.cliPath, so a single

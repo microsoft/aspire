@@ -23,7 +23,8 @@ import { openAspireView, waitForNotificationMessage, waitForWorkbenchText } from
 // Mirrors configuredCliPathRejected in src/loc/strings.ts.
 const rejectionNotificationText = 'The configured Aspire CLI path could not be used';
 const openSettingActionText = 'Open Setting';
-const outdatedCliWarningText = "Aspire CLI 13.4.9 is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later";
+const outdatedCliWarningText = 'Aspire CLI 13.4.9 at ';
+const outdatedCliGuidanceText = "is older than 13.5.0. Update the CLI and the AppHost's Aspire packages to 13.5.0 or later";
 const updateCliActionText = 'Update Aspire CLI';
 
 suite('Configured CLI path rejection E2E', function () {
@@ -124,6 +125,8 @@ suite('Configured CLI path rejection E2E', function () {
         const message = await notification.getMessage();
         await VSBrowser.instance.takeScreenshot('outdated-aspire-cli-warning').catch(() => undefined);
         assert.ok(message.includes(outdatedCliWarningText), `Unexpected warning message: ${message}`);
+        assert.ok(message.includes(wrapper.cliPath), `Warning did not identify the exact CLI '${wrapper.cliPath}': ${message}`);
+        assert.ok(message.includes(outdatedCliGuidanceText), `Warning did not include the expected update guidance: ${message}`);
 
         const beforeTerminalCommand = getTerminalCommandCount();
         await notification.takeAction(updateCliActionText);

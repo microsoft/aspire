@@ -8,6 +8,7 @@ import { CliPathResolutionTarget } from './cliPathVariables';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import { sendTelemetryEvent } from './telemetry';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
+import { reportCliResolvedForOperation } from './cliOperationResolution';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
 
@@ -245,19 +246,6 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
     extensionLogOutputChannel.info(`Successfully set AppHost path to: ${appHostToUse} in ${settingsFileLocation.fsPath}`);
 }
 
-export interface CliOperationResolution {
-    target: CliPathResolutionTarget;
-    cliPath: string;
-}
-
-const cliOperationResolutionEmitter = new vscode.EventEmitter<CliOperationResolution>();
-
-/**
- * Fires only after a command or debug operation has resolved and validated the CLI it will use.
- * Activation-time environment synchronization and eager workspace discovery do not raise this event.
- */
-export const onDidResolveCliForOperation = cliOperationResolutionEmitter.event;
-
 /**
  * Checks if the Aspire CLI is available. If not found on PATH, it checks the default
  * installation directory and updates the VS Code setting accordingly.
@@ -295,7 +283,7 @@ export async function checkCliAvailableOrRedirect(
     });
 
     if (result.available) {
-        cliOperationResolutionEmitter.fire({ target, cliPath: result.cliPath });
+        reportCliResolvedForOperation(target, result.cliPath);
 
         // Show informational message if CLI was found at default path (not on PATH)
         if (result.source === 'default-install') {

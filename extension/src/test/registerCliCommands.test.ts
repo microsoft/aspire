@@ -13,7 +13,7 @@ import * as cliPathModule from '../utils/cliPath';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { CommandInvocationEvent, onDidInvokeCommand } from '../utils/telemetry';
-import { onDidResolveCliForOperation } from '../utils/workspace';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 suite('registerCliCommands', () => {
     let sandbox: sinon.SinonSandbox;

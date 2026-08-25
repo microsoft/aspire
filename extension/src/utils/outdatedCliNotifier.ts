@@ -1,8 +1,8 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as strings from '../loc/strings';
-import { CliVersionStatusOptions, ConfigInfoProvider } from './configInfoProvider';
-import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from './cliPathVariables';
+import { CliVersionStatus, CliVersionStatusOptions, ConfigInfoProvider } from './configInfoProvider';
+import { CliPathResolutionTarget } from './cliPathVariables';
 import { getComparisonKey } from './paths/comparison';
 
 export const minimumSupportedAspireCliVersion = '13.5.0';
@@ -26,8 +26,13 @@ const defaultSurface: OutdatedCliNotificationSurface = {
  * remains silent, while replacing a CLI in place with a different version is observed.
  */
 export class OutdatedCliNotifier implements vscode.Disposable {
+    private static readonly _maxConcurrentProbes = 4;
+
     private readonly _notifiedCliVersions = new Set<string>();
     private readonly _cancellationSource = new vscode.CancellationTokenSource();
+    private readonly _inFlightByCliPath = new Map<string, Promise<void>>();
+    private readonly _probeWaiters: Array<() => void> = [];
+    private _activeProbeCount = 0;
     private _disposed = false;
 
     constructor(
@@ -36,17 +41,44 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     ) {
     }
 
-    async notifyIfOutdated(target: CliPathResolutionTarget, cliPath?: string): Promise<void> {
+    async notifyIfOutdated(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
         if (this._disposed) {
             return;
         }
 
-        const options: CliVersionStatusOptions = {
-            target,
-            cliPath,
-            cancellationToken: this._cancellationSource.token,
-        };
-        const result = await this._versionProvider.getCliVersionStatus(minimumSupportedAspireCliVersion, options);
+        const cliPathKey = getComparisonKey(path.normalize(cliPath));
+        const existingProbe = this._inFlightByCliPath.get(cliPathKey);
+        if (existingProbe) {
+            await existingProbe;
+            return;
+        }
+
+        const probe = this._runProbe(target, cliPath).finally(() => {
+            if (this._inFlightByCliPath.get(cliPathKey) === probe) {
+                this._inFlightByCliPath.delete(cliPathKey);
+            }
+        });
+        this._inFlightByCliPath.set(cliPathKey, probe);
+        await probe;
+    }
+
+    private async _runProbe(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
+        if (!await this._acquireProbeSlot()) {
+            return;
+        }
+
+        let result: CliVersionStatus | null;
+        try {
+            const options: CliVersionStatusOptions = {
+                target,
+                cliPath,
+                cancellationToken: this._cancellationSource.token,
+            };
+            result = await this._versionProvider.getCliVersionStatus(minimumSupportedAspireCliVersion, options);
+        }
+        finally {
+            this._releaseProbeSlot();
+        }
         if (this._disposed || result?.status !== 'unsupported') {
             return;
         }
@@ -60,19 +92,34 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         // duplicate notifications while the first warning is still awaiting user input.
         this._notifiedCliVersions.add(notificationKey);
         const selection = await this._surface.showWarning(
-            strings.outdatedAspireCliWarning(result.version, minimumSupportedAspireCliVersion),
+            strings.outdatedAspireCliWarning(result.version, result.cliPath, minimumSupportedAspireCliVersion),
             strings.updateAspireCliAction);
         if (!this._disposed && selection === strings.updateAspireCliAction) {
             await this._surface.executeCommand(updateAspireCliCommand, target, result.cliPath);
         }
     }
 
-    async notifyForActiveCliTargets(): Promise<void> {
-        const targets = [
-            windowCliPathTarget,
-            ...(vscode.workspace.workspaceFolders ?? []).map(workspaceFolderCliPathTarget),
-        ];
-        await Promise.all(targets.map(target => this.notifyIfOutdated(target)));
+    private async _acquireProbeSlot(): Promise<boolean> {
+        if (this._disposed) {
+            return false;
+        }
+        if (this._activeProbeCount < OutdatedCliNotifier._maxConcurrentProbes) {
+            this._activeProbeCount++;
+            return true;
+        }
+
+        await new Promise<void>(resolve => this._probeWaiters.push(resolve));
+        if (this._disposed) {
+            return false;
+        }
+
+        this._activeProbeCount++;
+        return true;
+    }
+
+    private _releaseProbeSlot(): void {
+        this._activeProbeCount--;
+        this._probeWaiters.shift()?.();
     }
 
     dispose(): void {
@@ -83,6 +130,9 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         this._disposed = true;
         this._cancellationSource.cancel();
         this._cancellationSource.dispose();
+        while (this._probeWaiters.length > 0) {
+            this._probeWaiters.shift()?.();
+        }
         this._notifiedCliVersions.clear();
     }
 }
