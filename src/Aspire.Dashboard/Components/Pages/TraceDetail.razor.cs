@@ -643,8 +643,10 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         async Task<HashSet<string>> GetMatchingSpanIdsAsync(List<TelemetryFilter> filters, string[]? textFragments)
         {
-            // GetSpansAsync materializes each distinct matching trace once. This request is constrained to
-            // the current trace, so matching many spans does not cause the trace to be materialized repeatedly.
+            // This intentionally uses GetSpansAsync instead of adding an identity-only repository query. The
+            // request is constrained to one trace, and GetSpansAsync materializes each distinct matching trace
+            // once, so each debounced filter update materializes at most one trace regardless of match count.
+            // That bounded work doesn't justify a separate repository API used only by this page.
             var response = await TelemetryRepository.GetSpansAsync(new GetSpansRequest
             {
                 ResourceKeys = [],

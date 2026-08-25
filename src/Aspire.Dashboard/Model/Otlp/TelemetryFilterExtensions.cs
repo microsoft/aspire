@@ -7,7 +7,4 @@ public static class TelemetryFilterExtensions
 {
     public static bool IsTraceDurationFilter(this TelemetryFilter filter)
         => filter is FieldTelemetryFilter { Field: KnownTraceFields.DurationField };
-
-    public static bool HasNumericMatch(this TelemetryFilter filter, double fieldValue)
-        => filter is FieldTelemetryFilter fieldFilter && fieldFilter.HasNumericMatch(fieldValue);
 }
