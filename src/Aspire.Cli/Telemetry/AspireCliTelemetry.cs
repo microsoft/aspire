@@ -52,6 +52,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     private readonly ILogger<AspireCliTelemetry> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly TelemetryTagsSource _tagsSource;
+    private Task _internalMicrosoftDiagnosticsTask = Task.CompletedTask;
 
     private bool _isInitialized;
 
@@ -125,7 +126,9 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// </summary>
     internal async Task<IReadOnlyList<KeyValuePair<string, object?>>> GetDefaultTagsAsync()
     {
-        return await _tagsSource.TagsTask.ConfigureAwait(false);
+        var tags = await _tagsSource.TagsTask.ConfigureAwait(false);
+        await _internalMicrosoftDiagnosticsTask.ConfigureAwait(false);
+        return tags;
     }
 
     /// <summary>
@@ -242,8 +245,10 @@ internal sealed class AspireCliTelemetry : IHostedService
 
         _isInitialized = true;
 
+        var internalMicrosoftResultSource = new TaskCompletionSource<InternalMicrosoftDetectionResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _tagsSource.StartCalculation(async () =>
         {
+            InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
             try
             {
                 var tagsList = new List<KeyValuePair<string, object?>>();
@@ -261,7 +266,6 @@ internal sealed class AspireCliTelemetry : IHostedService
 
                 await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
 
-                InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
                 if (internalMicrosoftTask is not null)
                 {
                     try
@@ -293,7 +297,6 @@ internal sealed class AspireCliTelemetry : IHostedService
                 if (internalMicrosoftResult is not null)
                 {
                     tagsList.Add(new(TelemetryConstants.Tags.InternalMicrosoft, internalMicrosoftResult.IsInternalMicrosoft));
-                    EmitInternalMicrosoftDetectorDiagnostics(internalMicrosoftResult);
 
                     if (internalMicrosoftResult.IsInternalMicrosoft && !string.IsNullOrEmpty(internalMicrosoftResult.Source))
                     {
@@ -345,12 +348,28 @@ internal sealed class AspireCliTelemetry : IHostedService
                 _logger.LogError(ex, "Error occurred initializing telemetry service.");
                 return Array.Empty<KeyValuePair<string, object?>>();
             }
+            finally
+            {
+                internalMicrosoftResultSource.TrySetResult(internalMicrosoftResult);
+            }
         });
+
+        // Detector diagnostics are reported only after default tag calculation completes. Reported
+        // activities are enriched on stop, so emitting from inside the calculation would make the
+        // enrichment processor synchronously wait on the task that is currently producing the activity.
+        _internalMicrosoftDiagnosticsTask = EmitInternalMicrosoftDetectorDiagnosticsAsync(internalMicrosoftResultSource.Task);
     }
 
-    private void EmitInternalMicrosoftDetectorDiagnostics(InternalMicrosoftDetectionResult result)
+    private async Task EmitInternalMicrosoftDetectorDiagnosticsAsync(Task<InternalMicrosoftDetectionResult?> resultTask)
     {
-        using var activity = StartDiagnosticActivity(TelemetryConstants.Activities.InternalMicrosoftDetector);
+        var result = await resultTask.ConfigureAwait(false);
+        await _tagsSource.TagsTask.ConfigureAwait(false);
+        if (result is null)
+        {
+            return;
+        }
+
+        using var activity = StartReportedActivity(TelemetryConstants.Activities.InternalMicrosoftDetector);
         if (activity is null)
         {
             return;

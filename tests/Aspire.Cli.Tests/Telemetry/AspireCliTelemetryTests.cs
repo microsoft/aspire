@@ -463,11 +463,14 @@ public class AspireCliTelemetryTests
 
         Assert.NotNull(activity);
         Assert.Equal(TelemetryConstants.Activities.InternalMicrosoftDetector, activity.OperationName);
+        Assert.Equal(fixture.ReportedSourceName, activity.Source.Name);
         Assert.Equal(InternalMicrosoftDetectorOutcome.Detected, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
         Assert.Equal(InternalMicrosoftDetectorCacheStatus.Miss, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus));
         Assert.Equal("test source", activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftSource));
         Assert.True((bool?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias));
         Assert.True((bool?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftAlias));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDomain));
         var probeEvent = Assert.Single(activity.Events);
         Assert.Equal(TelemetryConstants.Events.InternalMicrosoftProbe, probeEvent.Name);
         Assert.Contains(probeEvent.Tags, tag => tag.Key == TelemetryConstants.Tags.InternalMicrosoftProbeOutcome && (string?)tag.Value == InternalMicrosoftProbeOutcome.Detected);

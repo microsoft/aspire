@@ -268,11 +268,30 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReturnsFailedOutcomeAndDoesNotCacheWhenAllProbesFail()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("faulting", _ => throw new NotSupportedException("Unexpected probe failure."))]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
+        Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "faulting" && probe.Outcome == InternalMicrosoftProbeOutcome.Failed);
+        Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_ReturnsTimedOutOutcomeWhenProbeStageTimesOut()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
         var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
+            cacheFilePath,
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
             [[new InternalMicrosoftProbe("slow", async cancellationToken =>
             {
@@ -286,6 +305,41 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.False(result.IsInternalMicrosoft);
         Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
         Assert.Contains(result.ProbeDiagnostics, probe => probe.Source == "slow" && probe.Outcome is InternalMicrosoftProbeOutcome.Cancelled or InternalMicrosoftProbeOutcome.TimedOut);
+        Assert.False(File.Exists(cacheFilePath));
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_TreatsUnknownCacheVersionAsStale()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 99,
+              "isInternalMicrosoft": true,
+              "source": "future source",
+              "alias": "future.alias",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var probeRan = false;
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("current source", _ =>
+            {
+                probeRan = true;
+                return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "current.alias", Domain: "CURRENT"));
+            })]]);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(probeRan);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.Equal("current source", result.Source);
+        Assert.Equal("current.alias", result.Alias);
     }
 
     [Fact]
@@ -697,7 +751,23 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public void ExtractSqliteRecordTextValuesForTesting_SkipsOverflowPayloads()
     {
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(CreateSqliteDatabase(new string('a', 450)), CancellationToken.None);
+        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(CreateSqliteDatabaseWithOverflow(new string('a', 600)), CancellationToken.None);
+
+        Assert.Empty(values);
+    }
+
+    [Fact]
+    public void ExtractSqliteRecordTextValuesForTesting_RejectsCellPointerBeforeCellContentArea()
+    {
+        var database = CreateSqliteDatabase("user@microsoft.com");
+        var cellOffset = (database[108] << 8) | database[109];
+        var cellLength = database.Length - cellOffset;
+        const int corruptCellOffset = 110;
+        Array.Copy(database, cellOffset, database, corruptCellOffset, cellLength);
+        database[108] = 0;
+        database[109] = corruptCellOffset;
+
+        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
 
         Assert.Empty(values);
     }
@@ -941,6 +1011,51 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         database[108] = (byte)(cellOffset >> 8);
         database[109] = (byte)cellOffset;
         cell.CopyTo(database, cellOffset);
+        return database;
+    }
+
+    private static byte[] CreateSqliteDatabaseWithOverflow(string value)
+    {
+        const int pageSize = 512;
+        const int usableSize = pageSize;
+        const int leafPageNumber = 2;
+        const int overflowPageNumber = 3;
+        var database = new byte[pageSize * overflowPageNumber];
+        Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(database, 0);
+        database[16] = 0x02;
+        database[17] = 0x00;
+
+        var payload = CreateSqliteRecordPayload([value]);
+        var minimumLocalPayload = (((usableSize - 12) * 32) / 255) - 23;
+        var maximumLocalPayload = usableSize - 35;
+        var localPayloadLength = minimumLocalPayload + ((payload.Count - minimumLocalPayload) % (usableSize - 4));
+        if (localPayloadLength > maximumLocalPayload)
+        {
+            localPayloadLength = minimumLocalPayload;
+        }
+
+        var cell = new List<byte>();
+        WriteSqliteVarint(cell, payload.Count);
+        WriteSqliteVarint(cell, 1);
+        cell.AddRange(payload.Take(localPayloadLength));
+        cell.Add(0);
+        cell.Add(0);
+        cell.Add(0);
+        cell.Add(overflowPageNumber);
+
+        var leafPageOffset = (leafPageNumber - 1) * pageSize;
+        database[leafPageOffset] = 0x0D;
+        database[leafPageOffset + 3] = 0;
+        database[leafPageOffset + 4] = 1;
+        var cellOffsetInPage = pageSize - cell.Count;
+        database[leafPageOffset + 5] = (byte)(cellOffsetInPage >> 8);
+        database[leafPageOffset + 6] = (byte)cellOffsetInPage;
+        database[leafPageOffset + 8] = (byte)(cellOffsetInPage >> 8);
+        database[leafPageOffset + 9] = (byte)cellOffsetInPage;
+        cell.CopyTo(database, leafPageOffset + cellOffsetInPage);
+
+        var overflowPageOffset = (overflowPageNumber - 1) * pageSize;
+        payload.Skip(localPayloadLength).ToArray().CopyTo(database, overflowPageOffset + 4);
         return database;
     }
 

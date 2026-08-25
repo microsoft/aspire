@@ -59,6 +59,12 @@ internal sealed class TelemetryFixture : IDisposable
                 {
                     foreach (var tag in tagsTask.Result)
                     {
+                        if (activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector &&
+                            tag.Key is TelemetryConstants.Tags.InternalMicrosoftAlias or TelemetryConstants.Tags.InternalMicrosoftDomain)
+                        {
+                            continue;
+                        }
+
                         activity.SetTag(tag.Key, tag.Value);
                     }
                 }
@@ -70,7 +76,7 @@ internal sealed class TelemetryFixture : IDisposable
         Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
         Telemetry.Initialize();
         // Wait for background tag calculation to complete so tests can assert on tags.
-        TagsSource.TagsTask.GetAwaiter().GetResult();
+        Telemetry.GetDefaultTagsAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>

@@ -117,7 +117,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
 
             var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, cancellationToken).ConfigureAwait(false);
-            await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
+            if (result.Outcome is InternalMicrosoftDetectorOutcome.Detected or InternalMicrosoftDetectorOutcome.NotDetected)
+            {
+                await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
+            }
 
             return result;
         }
@@ -258,12 +261,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         stopwatch.Stop();
+        var allProbesFailed = diagnostics.Count > 0 &&
+            diagnostics.All(diagnostic => diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
         return new InternalMicrosoftDetectionResult(
             IsInternalMicrosoft: false,
             Source: null,
             Alias: null,
             Domain: null,
-            Outcome: timedOut ? InternalMicrosoftDetectorOutcome.TimedOut : InternalMicrosoftDetectorOutcome.NotDetected,
+            Outcome: timedOut
+                ? InternalMicrosoftDetectorOutcome.TimedOut
+                : allProbesFailed
+                    ? InternalMicrosoftDetectorOutcome.Failed
+                    : InternalMicrosoftDetectorOutcome.NotDetected,
             CacheStatus: cacheStatus,
             Duration: stopwatch.Elapsed,
             ProbeDiagnostics: diagnostics);
@@ -428,6 +437,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var json = await File.ReadAllTextAsync(_cacheFilePath, cancellationToken).ConfigureAwait(false);
             var entry = JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.InternalMicrosoftDetectorCacheEntry);
             if (entry is null)
+            {
+                return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
+            }
+
+            if (entry.Version is not 0 && entry.Version != CacheVersion)
             {
                 return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
             }
@@ -1516,31 +1530,50 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        for (var pageOffset = 0; pageOffset < bytes.Length; pageOffset += pageSize)
+        for (var pageOffset = 0; pageOffset <= bytes.Length - pageSize; pageOffset += pageSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var pageEnd = pageOffset + pageSize;
             var headerOffset = pageOffset == 0 ? 100 : pageOffset;
-            if (headerOffset + 8 > bytes.Length || bytes[headerOffset] != 0x0D)
+            if (headerOffset + 8 > pageEnd || bytes[headerOffset] != 0x0D)
             {
                 continue;
             }
 
             var cellCount = ReadUInt16BigEndian(bytes, headerOffset + 3);
             var cellPointerArrayOffset = headerOffset + 8;
+            var cellPointerArrayEnd = cellPointerArrayOffset + (cellCount * 2);
+            if (cellPointerArrayEnd > pageEnd)
+            {
+                continue;
+            }
+
+            var cellContentOffsetInPage = ReadUInt16BigEndian(bytes, headerOffset + 5);
+            if (cellContentOffsetInPage == 0 && pageSize == 65536)
+            {
+                cellContentOffsetInPage = 65536;
+            }
+
+            var minimumCellOffsetInPage = Math.Max(cellPointerArrayEnd - pageOffset, cellContentOffsetInPage);
+            if (minimumCellOffsetInPage <= 0 || minimumCellOffsetInPage > pageSize)
+            {
+                continue;
+            }
+
             for (var index = 0; index < cellCount; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var pointerOffset = cellPointerArrayOffset + (index * 2);
-                if (pointerOffset + 2 > bytes.Length)
+                var cellOffsetInPage = ReadUInt16BigEndian(bytes, pointerOffset);
+                if (cellOffsetInPage < minimumCellOffsetInPage || cellOffsetInPage >= pageSize)
                 {
-                    yield break;
+                    continue;
                 }
 
-                var cellOffsetInPage = ReadUInt16BigEndian(bytes, pointerOffset);
                 var cellOffset = pageOffset + cellOffsetInPage;
-                foreach (var value in ExtractSqliteLeafTableCellTextValues(bytes, cellOffset, pageOffset + pageSize))
+                foreach (var value in ExtractSqliteLeafTableCellTextValues(bytes, cellOffset, pageEnd))
                 {
                     yield return value;
                 }
@@ -1553,19 +1586,20 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private static IEnumerable<string> ExtractSqliteLeafTableCellTextValues(byte[] bytes, int cellOffset, int pageEnd)
     {
-        if (!TryReadSqliteVarint(bytes, cellOffset, out var payloadLength, out var payloadLengthBytes) ||
-            !TryReadSqliteVarint(bytes, cellOffset + payloadLengthBytes, out _, out var rowIdBytes))
+        if (!TryReadSqliteVarint(bytes, cellOffset, pageEnd, out var payloadLength, out var payloadLengthBytes) ||
+            !TryReadSqliteVarint(bytes, cellOffset + payloadLengthBytes, pageEnd, out _, out var rowIdBytes))
         {
             yield break;
         }
 
         var payloadOffset = cellOffset + payloadLengthBytes + rowIdBytes;
-        if (payloadLength <= 0 || payloadLength > int.MaxValue || payloadOffset + (int)payloadLength > bytes.Length)
+        if (payloadLength <= 0 || payloadLength > int.MaxValue)
         {
             yield break;
         }
 
-        if (payloadOffset + (int)payloadLength > pageEnd)
+        var payloadEnd = (long)payloadOffset + payloadLength;
+        if (payloadOffset < cellOffset || payloadEnd > pageEnd)
         {
             // Large SQLite records can spill to overflow pages. The detector only needs complete
             // logical text values and must not accidentally stitch local fragments together, so
@@ -1575,7 +1609,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        if (!TryReadSqliteVarint(bytes, payloadOffset, out var headerLength, out var headerLengthBytes) ||
+        if (!TryReadSqliteVarint(bytes, payloadOffset, (int)payloadEnd, out var headerLength, out var headerLengthBytes) ||
             headerLength <= headerLengthBytes ||
             headerLength > payloadLength)
         {
@@ -1587,7 +1621,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var valueOffset = headerEnd;
         while (serialTypeOffset < headerEnd)
         {
-            if (!TryReadSqliteVarint(bytes, serialTypeOffset, out var serialType, out var serialTypeBytes))
+            if (!TryReadSqliteVarint(bytes, serialTypeOffset, headerEnd, out var serialType, out var serialTypeBytes))
             {
                 yield break;
             }
@@ -1619,23 +1653,23 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             4 => 4,
             5 => 6,
             6 or 7 => 8,
-            >= 12 => (int)((serialType - 12) / 2),
+            >= 12 when (serialType - 12) / 2 <= int.MaxValue => (int)((serialType - 12) / 2),
             _ => -1
         };
     }
 
-    private static bool TryReadSqliteVarint(byte[] bytes, int offset, out long value, out int bytesRead)
+    private static bool TryReadSqliteVarint(byte[] bytes, int offset, int endOffset, out long value, out int bytesRead)
     {
         value = 0;
         bytesRead = 0;
-        if (offset < 0 || offset >= bytes.Length)
+        if (offset < 0 || offset >= endOffset || endOffset > bytes.Length)
         {
             return false;
         }
 
         for (var index = 0; index < 9; index++)
         {
-            if (offset + index >= bytes.Length)
+            if (offset + index >= endOffset)
             {
                 return false;
             }
