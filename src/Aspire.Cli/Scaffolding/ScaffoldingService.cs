@@ -22,17 +22,18 @@ namespace Aspire.Cli.Scaffolding;
 internal sealed class ScaffoldingService : IScaffoldingService
 {
     private const string PackageJsonFileName = "package.json";
+    private const string VsCodeSettingsFileName = ".vscode/settings.json";
     private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
     internal const string BrownfieldTypeScriptAppHostDirectoryName = "aspire-apphost";
 
-    private static readonly JsonSerializerOptions s_packageJsonSerializerOptions = new()
+    private static readonly JsonSerializerOptions s_scaffoldJsonSerializerOptions = new()
     {
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         IndentSize = 2
     };
 
-    private static readonly JsonDocumentOptions s_packageJsonDocumentOptions = new()
+    private static readonly JsonDocumentOptions s_scaffoldJsonDocumentOptions = new()
     {
         CommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true
@@ -176,7 +177,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
             return false;
         }
 
-        // Step 4: Write scaffold files to disk, merging package.json and .gitignore when they already exist.
+        // Step 4: Write scaffold files to disk, merging package.json, .gitignore, and VS Code
+        // settings when they already exist.
         foreach (var (fileName, content) in scaffoldFiles)
         {
             var filePath = Path.Combine(scaffoldDirectory.FullName, fileName);
@@ -200,6 +202,11 @@ internal sealed class ScaffoldingService : IScaffoldingService
             {
                 var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
                 contentToWrite = MergeGitIgnoreContent(existingContent, content);
+            }
+            else if (IsVsCodeSettingsFile(fileName) && File.Exists(filePath))
+            {
+                var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                contentToWrite = MergeVsCodeSettingsContent(existingContent, content, _logger);
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -290,7 +297,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         JsonObject packageJson;
         try
         {
-            packageJson = JsonNode.Parse(existingContent, documentOptions: s_packageJsonDocumentOptions) as JsonObject
+            packageJson = JsonNode.Parse(existingContent, documentOptions: s_scaffoldJsonDocumentOptions) as JsonObject
                 ?? throw new JsonException("The root package.json is not a JSON object.");
         }
         catch (JsonException ex)
@@ -334,7 +341,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
     internal static string SerializePackageJson(JsonObject packageJson, string existingContent)
     {
-        var serializedPackageJson = packageJson.ToJsonString(s_packageJsonSerializerOptions);
+        var serializedPackageJson = packageJson.ToJsonString(s_scaffoldJsonSerializerOptions);
         var trailingNewLine = existingContent.EndsWith("\r\n", StringComparison.Ordinal)
             ? "\r\n"
             : existingContent.EndsWith('\n') ? "\n" : null;
@@ -534,7 +541,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         foreach (var fileName in scaffoldFileNames)
         {
-            if (IsGitIgnoreFile(fileName) || IsPackageJsonFile(fileName))
+            if (IsGitIgnoreFile(fileName) || IsPackageJsonFile(fileName) || IsVsCodeSettingsFile(fileName))
             {
                 continue;
             }
@@ -589,6 +596,104 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
     private static bool IsPackageJsonFile(string fileName)
         => Path.GetFileName(fileName).Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVsCodeSettingsFile(string fileName)
+    {
+        // The scaffold keys are wire values that always use forward slashes.
+        var normalized = fileName.Replace('\\', '/');
+
+        return normalized.Equals(VsCodeSettingsFileName, StringComparison.OrdinalIgnoreCase)
+            || normalized.EndsWith("/" + VsCodeSettingsFileName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Merges the scaffolded VS Code workspace settings into the developer's existing ones.
+    /// </summary>
+    /// <remarks>
+    /// Settings the developer already chose win, because they configured their editor deliberately
+    /// and a scaffold has no standing to change that. Array-valued settings are unioned rather than
+    /// replaced: <c>java.project.sourcePaths</c> is how the generated SDK under <c>.aspire/modules</c>
+    /// becomes resolvable, and replacing it would break whatever source roots the project already
+    /// declared.
+    /// <para>
+    /// The existing file is returned unchanged when it already covers everything, so re-running init
+    /// preserves comments and formatting. When something has to be added the file is reserialized and
+    /// comments are lost; that is the same tradeoff the package.json merge makes, and VS Code writes
+    /// this file itself the same way.
+    /// </para>
+    /// <para>
+    /// An existing file that cannot be parsed is returned unchanged. A settings.json broken mid-edit,
+    /// or using a JSONC construct this parser does not accept, still represents editor configuration
+    /// the developer accumulated, and silently replacing it with the scaffold's three settings is a
+    /// far worse outcome than skipping the merge. The caller reports the skip.
+    /// </para>
+    /// </remarks>
+    /// <param name="existingContent">Content already on disk.</param>
+    /// <param name="scaffoldContent">Content the scaffold wants to contribute.</param>
+    /// <param name="logger">Receives a warning when the existing file could not be parsed.</param>
+    internal static string MergeVsCodeSettingsContent(string existingContent, string scaffoldContent, ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(existingContent);
+        ArgumentNullException.ThrowIfNull(scaffoldContent);
+
+        if (ParseJsonC(scaffoldContent) is not { } scaffold)
+        {
+            return scaffoldContent;
+        }
+
+        // VS Code settings are JSONC: its own generated file opens with a "// Place your settings"
+        // comment, and hand-edited ones routinely end with a trailing comma.
+        // https://code.visualstudio.com/docs/languages/json#_json-with-comments
+        if (ParseJsonC(existingContent) is not { } existing)
+        {
+            logger?.LogWarning(
+                "The existing VS Code settings file could not be parsed, so Aspire's settings were not merged into it. " +
+                "Fix the JSON and re-run the command, or add the settings by hand.");
+            return existingContent;
+        }
+
+        var changed = false;
+
+        foreach (var (key, scaffoldValue) in scaffold)
+        {
+            if (existing[key] is not { } existingValue)
+            {
+                existing[key] = scaffoldValue?.DeepClone();
+                changed = true;
+                continue;
+            }
+
+            if (existingValue is not JsonArray existingArray || scaffoldValue is not JsonArray scaffoldArray)
+            {
+                continue;
+            }
+
+            foreach (var entry in scaffoldArray)
+            {
+                if (!existingArray.Any(present => JsonNode.DeepEquals(present, entry)))
+                {
+                    existingArray.Add(entry?.DeepClone());
+                    changed = true;
+                }
+            }
+        }
+
+        return changed
+            ? existing.ToJsonString(s_scaffoldJsonSerializerOptions)
+            : existingContent;
+    }
+
+    private static JsonObject? ParseJsonC(string content)
+    {
+        try
+        {
+            return JsonNode.Parse(content, documentOptions: s_scaffoldJsonDocumentOptions) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static IEnumerable<string> ReadGitIgnoreEntries(string content)
     {

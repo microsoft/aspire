@@ -43,9 +43,6 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required List<OtlpResource> Resources { get; set; }
 
-    [Parameter, EditorRequired]
-    public required string? PauseText { get; set; }
-
     [Inject]
     public required TelemetryRepository TelemetryRepository { get; init; }
 

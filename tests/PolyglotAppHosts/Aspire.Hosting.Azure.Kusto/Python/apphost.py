@@ -8,8 +8,8 @@ with create_builder() as builder:
     kusto = builder.add_azure_kusto_cluster("resource")
     default_database = kusto.add_read_write_database("resource")
     custom_database = kusto.add_read_write_database("resource")
-    default_database.with_creation_script()
-    custom_database.with_creation_script()
+    default_database.with_creation_script(".create table Events (Id: string)")
+    custom_database.with_creation_script(".create table Metrics (Name: string, Value: real)")
     _is_emulator = kusto.is_emulator
     _cluster_uri = kusto.uri_expression
     _cluster_connection_string = kusto.connection_string_expression

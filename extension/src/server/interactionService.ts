@@ -12,11 +12,12 @@ import { AnsiColors } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
+import type { AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { isDirectory } from '../utils/io';
 import { sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 
-export interface IInteractionService {
+export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
     clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
@@ -38,7 +39,7 @@ export interface IInteractionService {
     openEditor: (path: string) => Promise<void>;
     logMessage: (logLevel: CSLogLevel, message: string) => void;
     launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void>;
-    stopDebugging: () => void;
+    stopDebugging: () => Promise<void>;
     closeDashboard: () => void;
     notifyAppHostStartupCompleted: () => void;
     startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => Promise<void>;
@@ -162,6 +163,7 @@ type DebugSessionOptions = {
     command?: string;
     args?: string[];
     env?: { [key: string]: string };
+    appHostSelectionOrigin?: AppHostSelectionOrigin;
 };
 
 export class InteractionService implements IInteractionService {
@@ -169,14 +171,22 @@ export class InteractionService implements IInteractionService {
 
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
+    private _isDisposed = false;
 
     constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
         this._rpcClient = rpcClient;
-        this._progressNotifier = new ProgressNotifier(this._rpcClient);
+        this._progressNotifier = new ProgressNotifier();
     }
 
     showStatus(statusText: string | null) {
+        if (this._isDisposed) {
+            // The RPC connection owning this service is gone. A status message that was still in
+            // flight when the transport closed must not paint progress that nothing is left alive
+            // to clear, which would strand the indicator for the rest of the window's lifetime.
+            return;
+        }
+
         delayStatusForE2E();
         this._progressNotifier.show(statusText);
     }
@@ -649,9 +659,12 @@ export class InteractionService implements IInteractionService {
         return debugSession.startAppHost(projectFile, args, environment, debug, { forceBuild });
     }
 
-    stopDebugging() {
+    async stopDebugging(): Promise<void> {
         this.clearProgressNotification();
-        this._getAspireDebugSession()?.dispose();
+        // Await the ordered shutdown so the CLI (and the user, via the endpoint middleware) learns
+        // if a resource, AppHost, or parent debug session did not stop. Disposable.dispose() starts
+        // the same bounded work in the background but cannot return its failures.
+        await this._getAspireDebugSession()?.stopDebugging();
     }
 
     notifyAppHostStartupCompleted() {
@@ -667,6 +680,8 @@ export class InteractionService implements IInteractionService {
         this.clearProgressNotification();
 
         const command = options?.command ?? 'run';
+        const appHostSelectionOrigin = options?.appHostSelectionOrigin
+            ?? (projectFile ? 'user-selection' : 'default-discovery');
 
         const debugConfiguration: AspireExtendedDebugConfiguration = {
             type: 'aspire',
@@ -677,7 +692,7 @@ export class InteractionService implements IInteractionService {
             args: options?.args,
             env: options?.env,
             noDebug: !debug,
-            [appHostSelectionOriginConfigKey]: projectFile ? 'user-selection' : 'default-discovery',
+            [appHostSelectionOriginConfigKey]: appHostSelectionOrigin,
         };
 
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workingDirectory));
@@ -688,6 +703,14 @@ export class InteractionService implements IInteractionService {
     }
 
     clearProgressNotification() {
+        this._progressNotifier.clear();
+    }
+
+    dispose() {
+        // The RPC connection owning this service is going away, so tear down any progress it
+        // still has on screen. Otherwise a CLI that dies with the extension leaves a permanent
+        // "Building..." indicator that nothing is left alive to clear.
+        this._isDisposed = true;
         this._progressNotifier.clear();
     }
 

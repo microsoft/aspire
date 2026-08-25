@@ -150,6 +150,7 @@ internal sealed class ProjectLocator(
     private const string AspireConfigAppHostPathKey = "appHost.path";
     private const string LegacySettingsAppHostPathKey = "appHostPath";
     private const string ExplicitLaunchConfigurationSelectionOrigin = "explicit-launch-configuration";
+    private const string ExplicitCliSelectionOrigin = "explicit-cli";
     private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
@@ -284,15 +285,15 @@ internal sealed class ProjectLocator(
         return await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), AppHostDiscoveryScope.AllFiles, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, List<FileInfo> UnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostsAsync()
+        async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, List<FileInfo> UnsupportedProjects)> FindAppHostsAsync()
         {
             var appHostProjects = new List<AppHostProjectCandidate>();
             var unbuildableSuspectedAppHostProjects = new List<AppHostProjectCandidate>();
-            var hasUnsupportedProjects = false;
+            var unsupportedProjects = new List<FileInfo>();
             var lockObject = new object();
             logger.LogDebug("Searching for project files in {SearchDirectory}", searchDirectory.FullName);
 
@@ -414,7 +415,7 @@ internal sealed class ProjectLocator(
                         logger.LogDebug("Skipping unsupported project {CandidateFile}", candidateFile.FullName);
                         lock (lockObject)
                         {
-                            hasUnsupportedProjects = true;
+                            unsupportedProjects.Add(candidateFile);
                         }
                     }
                     else if (validationResult.IsPossiblyUnbuildable)
@@ -443,13 +444,19 @@ internal sealed class ProjectLocator(
                 logger.LogDebug("Stopping AppHost discovery early after finding multiple valid AppHost projects.");
             }
 
-            await AddSettingsAppHostCandidateAsync().ConfigureAwait(false);
+            // Explicit-directory callers asked to inspect only the named subtree. Importing an
+            // AppHost from a parent aspire.config.json violates that boundary and can affect both
+            // selection and shallow probes such as `aspire doctor`.
+            if (scope is not AppHostDiscoveryScope.ExplicitDirectory)
+            {
+                await AddSettingsAppHostCandidateAsync().ConfigureAwait(false);
+            }
 
             // This sort is done here to make results deterministic since we get all the app
             // host information in parallel and the order may vary.
             appHostProjects.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
-            return (appHostProjects, unbuildableSuspectedAppHostProjects, hasUnsupportedProjects);
+            return (appHostProjects, unbuildableSuspectedAppHostProjects, unsupportedProjects);
 
             async Task AddSettingsAppHostCandidateAsync()
             {
@@ -506,7 +513,7 @@ internal sealed class ProjectLocator(
                     }
 
                     logger.LogDebug("Skipping configured AppHost project {SettingsAppHost} because no project handler was found.", settingsAppHost.FullName);
-                    hasUnsupportedProjects = true;
+                    unsupportedProjects.Add(settingsAppHost);
                     return;
                 }
 
@@ -542,7 +549,7 @@ internal sealed class ProjectLocator(
                     }
 
                     logger.LogDebug("Skipping unsupported configured AppHost project {SettingsAppHost}", settingsAppHost.FullName);
-                    hasUnsupportedProjects = true;
+                    unsupportedProjects.Add(settingsAppHost);
                 }
             }
         }
@@ -585,7 +592,53 @@ internal sealed class ProjectLocator(
         return settingsAppHost;
     }
 
-    private async Task<FileInfo?> GetValidatedAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken)
+    /// <summary>
+    /// The AppHost resolved from <c>aspire.config.json</c> (or migrated legacy settings), if any.
+    /// </summary>
+    /// <param name="AppHost">The configured AppHost, or <see langword="null"/> when none was usable.</param>
+    /// <param name="IsUnverified">
+    /// <see langword="true"/> when MSBuild could not evaluate the configured AppHost, so it could not be
+    /// confirmed to be an AppHost. The selection is still honored, but it must never be persisted back to
+    /// settings and callers are expected to surface the underlying build diagnostics.
+    /// </param>
+    private readonly record struct SettingsAppHostResult(FileInfo? AppHost, bool IsUnverified);
+
+    /// <summary>
+    /// Determines whether <paramref name="file"/> lives beneath <paramref name="directory"/>.
+    /// </summary>
+    /// <remarks>
+    /// Windows paths are compared case-insensitively. Other platforms use case-sensitive comparison
+    /// because macOS can use case-sensitive APFS volumes.
+    /// </remarks>
+    internal static bool IsUnderDirectory(FileInfo file, DirectoryInfo directory, IEnvironment environment)
+    {
+        var pathComparison = environment.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        // Compare the raw paths first. The discovery walk can reach a candidate by descending through
+        // a symlinked subdirectory, and canonicalizing that path would relocate it outside the
+        // directory the user actually named.
+        if (IsUnder(file.FullName, directory.FullName))
+        {
+            return true;
+        }
+
+        // Otherwise canonicalize both sides, because the same directory can be spelled two ways: on
+        // macOS /tmp is a symlink to /private/tmp, so a candidate discovered as /private/tmp/x/App.csproj
+        // would not textually start with /tmp/x. See https://github.com/microsoft/aspire/issues/17626.
+        return IsUnder(PathNormalizer.ResolveSymlinks(file.FullName), PathNormalizer.ResolveSymlinks(directory.FullName));
+
+        bool IsUnder(string filePath, string directoryPath)
+        {
+            // The trailing separator keeps a sibling with a shared name prefix (".../Services2")
+            // from matching ".../Services".
+            var prefix = directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return filePath.StartsWith(prefix, pathComparison);
+        }
+    }
+
+    private async Task<SettingsAppHostResult> GetValidatedAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken)
     {
         // This is reached from UseOrFindAppHostProjectFileAsync. When the configured
         // legacy settings point at a missing file we still want the warning to surface,
@@ -594,20 +647,20 @@ internal sealed class ProjectLocator(
         var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
         if (settingsAppHost is null)
         {
-            return null;
+            return default;
         }
 
         var handler = projectFactory.TryGetProject(settingsAppHost);
         if (handler is null)
         {
             logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because no project handler can process it.", settingsAppHost.FullName);
-            return null;
+            return default;
         }
 
         var validationResult = await handler.ValidateAppHostAsync(settingsAppHost, cancellationToken);
         if (validationResult.IsValid)
         {
-            return settingsAppHost;
+            return new SettingsAppHostResult(settingsAppHost, IsUnverified: false);
         }
 
         var messageSuffix = validationResult.Message is { Length: > 0 } message ? $": {message}" : string.Empty;
@@ -617,14 +670,19 @@ internal sealed class ProjectLocator(
         }
         else if (validationResult.IsPossiblyUnbuildable)
         {
-            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it may not be a buildable AppHost project{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
+            // A configured AppHost is as deliberate a choice as --apphost, so keep it rather than
+            // falling back to discovery. Discarding it reported "No AppHosts were found ..." for a path
+            // the CLI had already resolved, and could silently run a different application that
+            // discovery happened to find. See https://github.com/microsoft/aspire/issues/19035.
+            logger.LogWarning("AppHost path '{AppHostPath}' from settings could not be evaluated by MSBuild and may not be buildable{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
+            return new SettingsAppHostResult(settingsAppHost, IsUnverified: true);
         }
         else
         {
             logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it is no longer a valid AppHost project{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
         }
 
-        return null;
+        return default;
     }
 
     private async Task<FileInfo?> GetAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, bool silent, CancellationToken cancellationToken)
@@ -828,6 +886,7 @@ internal sealed class ProjectLocator(
     public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
+        var explicitSelectionWasPrompted = false;
 
         if (projectFile is not null)
         {
@@ -847,7 +906,12 @@ internal sealed class ProjectLocator(
                     scope: AppHostDiscoveryScope.ExplicitDirectory,
                     maxDepth: null,
                     cancellationToken: cancellationToken);
-                var appHostProjects = searchResults.BuildableAppHost.Select(c => c.AppHostFile).ToList();
+                // Keep the requested directory as the selection boundary even if additional
+                // explicit-discovery candidate sources are introduced later.
+                var appHostProjects = searchResults.BuildableAppHost
+                    .Where(c => IsUnderDirectory(c.AppHostFile, directory, environment))
+                    .Select(c => c.AppHostFile)
+                    .ToList();
 
                 if (displayProgress)
                 {
@@ -856,7 +920,37 @@ internal sealed class ProjectLocator(
 
                 if (appHostProjects.Count == 0)
                 {
-                    if (searchResults.HasUnsupportedProjects)
+                    var unbuildableInDirectory = searchResults.UnbuildableSuspectedAppHostProjects
+                        .Where(c => IsUnderDirectory(c.AppHostFile, directory, environment))
+                        .ToList();
+
+                    // The user pointed at this directory, and it holds exactly one candidate that only
+                    // failed because MSBuild could not evaluate it. Selecting it is the same intent as
+                    // naming the file, and it lets the caller's build surface the real MSBuild
+                    // diagnostics instead of a resolution error that hides them. See
+                    // https://github.com/microsoft/aspire/issues/19035.
+                    if (unbuildableInDirectory.Count == 1)
+                    {
+                        var unbuildableAppHost = unbuildableInDirectory[0].AppHostFile;
+                        logger.LogDebug(
+                            "Selecting AppHost project file {ProjectFile} in directory {Directory} even though MSBuild could not evaluate it.",
+                            unbuildableAppHost.FullName,
+                            directory.FullName);
+
+                        // Deliberately skip CreateSettingsFileAsync: this candidate was never confirmed to
+                        // be an AppHost, so persisting it would make later ambient invocations silently
+                        // reuse an unverified guess.
+                        return new AppHostProjectSearchResult(unbuildableAppHost, [unbuildableAppHost]);
+                    }
+
+                    if (unbuildableInDirectory.Count > 1)
+                    {
+                        // Several broken candidates under one directory is a genuine ambiguity rather than
+                        // a user selection, so this stays a project-resolution failure.
+                        throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable);
+                    }
+
+                    if (searchResults.UnsupportedProjects.Any(file => IsUnderDirectory(file, directory, environment)))
                     {
                         throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
                     }
@@ -874,6 +968,7 @@ internal sealed class ProjectLocator(
                     if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Prompt)
                     {
                         logger.LogDebug("Multiple AppHost project files found in directory {Directory}, prompting user to select", directory.FullName);
+                        explicitSelectionWasPrompted = true;
                         projectFile = await interactionService.PromptForSelectionAsync(
                             InteractionServiceStrings.SelectAppHostToUse,
                             appHostProjects,
@@ -884,7 +979,7 @@ internal sealed class ProjectLocator(
                     else if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.None)
                     {
                         logger.LogDebug("Multiple AppHost project files found in directory {Directory}, selecting none", directory.FullName);
-                        projectFile = null;
+                        return new AppHostProjectSearchResult(null, appHostProjects);
                     }
                     else if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw)
                     {
@@ -932,9 +1027,28 @@ internal sealed class ProjectLocator(
                         logger.LogDebug("Using {Language} apphost {ProjectFile}", handler.DisplayName, projectFile.FullName);
                         if (createSettingsFile)
                         {
-                            await CreateSettingsFileAsync(projectFile, cancellationToken);
+                            await CreateSettingsFileAsync(projectFile, preserveExistingDefault: !explicitSelectionWasPrompted, cancellationToken);
                         }
 
+                        return new AppHostProjectSearchResult(projectFile, [projectFile])
+                        {
+                            WasExplicitDirectorySelectionPrompted = explicitSelectionWasPrompted
+                        };
+                    }
+
+                    if (validationResult.IsPossiblyUnbuildable)
+                    {
+                        // The user named this exact file and it does exist. MSBuild simply could not
+                        // evaluate it (unresolvable Aspire.AppHost.Sdk, malformed XML, ...), so keep it
+                        // selected and let the caller's build print the real MSB4236/CS diagnostics.
+                        // Reporting a resolution failure here produced the misleading "the --apphost
+                        // option specified a project that does not exist" in
+                        // https://github.com/microsoft/aspire/issues/19035.
+                        logger.LogDebug(
+                            "Selecting explicitly specified AppHost {ProjectFile} even though MSBuild could not evaluate it.",
+                            projectFile.FullName);
+
+                        // Deliberately skip CreateSettingsFileAsync: see the explicit-directory path above.
                         return new AppHostProjectSearchResult(projectFile, [projectFile]);
                     }
                 }
@@ -953,15 +1067,18 @@ internal sealed class ProjectLocator(
             }
         }
 
-        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: true, cancellationToken);
+        var settingsResult = await GetValidatedAppHostProjectFileFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: true, cancellationToken);
+        var settingsAppHost = settingsResult.AppHost;
 
         if (settingsAppHost is not null && multipleAppHostProjectsFoundBehavior is not MultipleAppHostProjectsFoundBehavior.None)
         {
             logger.LogDebug("Using AppHost path from settings without scanning: {AppHost}", settingsAppHost.FullName);
 
-            if (createSettingsFile)
+            // An unverified selection is never persisted: rewriting settings would turn a candidate that
+            // was only kept because MSBuild failed into a confirmed choice.
+            if (createSettingsFile && !settingsResult.IsUnverified)
             {
-                await CreateSettingsFileAsync(settingsAppHost, cancellationToken);
+                await CreateSettingsFileAsync(settingsAppHost, preserveExistingDefault: false, cancellationToken);
             }
 
             return new AppHostProjectSearchResult(settingsAppHost, [settingsAppHost]);
@@ -988,7 +1105,7 @@ internal sealed class ProjectLocator(
             {
                 selectedAppHost = settingsAppHost;
             }
-            else if (results.HasUnsupportedProjects)
+            else if (results.UnsupportedProjects.Count > 0)
             {
                 throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
             }
@@ -1022,8 +1139,14 @@ internal sealed class ProjectLocator(
                 : StringComparison.Ordinal;
 
             if (settingsAppHost is not null
-                && results.BuildableAppHost.Any(c => string.Equals(c.AppHostFile.FullName, settingsAppHost.FullName, pathComparison)))
+                && (settingsResult.IsUnverified
+                    || results.BuildableAppHost.Any(c => string.Equals(c.AppHostFile.FullName, settingsAppHost.FullName, pathComparison))))
             {
+                // An unverified configured AppHost can never appear in BuildableAppHost by
+                // construction, but it is still an explicit user choice. Honoring it here keeps this
+                // branch consistent with the single-candidate branch above, which already prefers the
+                // configured AppHost, and lets the caller's build surface the real MSBuild error
+                // instead of prompting for (or silently running) a different application.
                 logger.LogDebug("Using previously-selected AppHost from settings: {AppHost}", settingsAppHost.FullName);
                 selectedAppHost = settingsAppHost;
             }
@@ -1040,9 +1163,15 @@ internal sealed class ProjectLocator(
             }
         }
 
-        if (createSettingsFile)
+        // A selection that came from unverified settings must not be persisted (see the early-return
+        // above); this path is reached when MultipleAppHostProjectsFoundBehavior.None skipped it.
+        var selectionIsUnverifiedSettingsAppHost = settingsResult.IsUnverified
+            && selectedAppHost is not null
+            && string.Equals(selectedAppHost.FullName, settingsAppHost?.FullName, environment.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+        if (createSettingsFile && !selectionIsUnverifiedSettingsAppHost)
         {
-            await CreateSettingsFileAsync(selectedAppHost!, cancellationToken);
+            await CreateSettingsFileAsync(selectedAppHost!, preserveExistingDefault: false, cancellationToken);
         }
 
         // Ensure the selected AppHost is always represented in the candidate list so callers
@@ -1077,10 +1206,22 @@ internal sealed class ProjectLocator(
         return string.Equals(persistedPath, selectedPath, pathComparison);
     }
 
-    private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    private async Task CreateSettingsFileAsync(FileInfo projectFile, bool preserveExistingDefault, CancellationToken cancellationToken)
     {
-        var selectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
-        var isExplicitLaunchConfiguration = string.Equals(selectionOrigin, ExplicitLaunchConfigurationSelectionOrigin, StringComparison.OrdinalIgnoreCase);
+        var configuredSelectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
+        var isExplicitLaunchConfigurationSelection = string.Equals(
+            configuredSelectionOrigin,
+            ExplicitLaunchConfigurationSelectionOrigin,
+            StringComparison.OrdinalIgnoreCase);
+        var isExplicitCliSelection = string.Equals(
+            configuredSelectionOrigin,
+            ExplicitCliSelectionOrigin,
+            StringComparison.OrdinalIgnoreCase);
+        var hasConfiguredSelectionOrigin = !string.IsNullOrEmpty(configuredSelectionOrigin);
+        var selectionOrigin = hasConfiguredSelectionOrigin ? configuredSelectionOrigin : "--apphost";
+        var shouldPreserveExistingDefault =
+            isExplicitLaunchConfigurationSelection ||
+            (preserveExistingDefault && (isExplicitCliSelection || !hasConfiguredSelectionOrigin));
 
         var (settingsFile, appHostDirForScopedConfig) = ResolveWorkspaceConfigTarget(projectFile);
 
@@ -1107,9 +1248,9 @@ internal sealed class ProjectLocator(
                 return;
             }
 
-            // A launch configuration or agent-selected target is for this invocation only. Preserve
+            // An explicit CLI target or launch configuration is for this invocation only. Preserve
             // an existing workspace default, but let the selected AppHost replace a deleted target.
-            if (isExplicitLaunchConfiguration && File.Exists(resolvedPath))
+            if (shouldPreserveExistingDefault && File.Exists(resolvedPath))
             {
                 logger.LogDebug(
                     "Not replacing recorded AppHost default {RecordedAppHost} with {AppHost} because the latter was selected by {SelectionOrigin}.",
@@ -1299,7 +1440,10 @@ internal enum ProjectLocatorFailureReason
     UnsupportedProjects,
 }
 
-internal record AppHostProjectSearchResult(FileInfo? SelectedProjectFile, List<FileInfo> AllProjectFileCandidates);
+internal record AppHostProjectSearchResult(FileInfo? SelectedProjectFile, List<FileInfo> AllProjectFileCandidates)
+{
+    internal bool WasExplicitDirectorySelectionPrompted { get; init; }
+}
 
 internal enum MultipleAppHostProjectsFoundBehavior
 {

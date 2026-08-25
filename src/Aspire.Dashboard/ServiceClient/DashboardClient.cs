@@ -552,6 +552,7 @@ internal sealed class DashboardClient : IDashboardClient
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             List<ResourceViewModelChange>? changes = null;
+            ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
 
             lock (_lock)
@@ -627,6 +628,10 @@ internal sealed class DashboardClient : IDashboardClient
                     var resolvedNames = _resourceByName.Values
                         .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
+
+                    // Capture subscribers atomically with the model transition. A subscriber added after this
+                    // point receives the updated model in its initial snapshot and must not also receive this change.
+                    resourceChannels = _outgoingResourceChannels;
                 }
             }
 
@@ -639,7 +644,7 @@ internal sealed class DashboardClient : IDashboardClient
 
             if (changes is not null)
             {
-                foreach (var channel in _outgoingResourceChannels)
+                foreach (var channel in resourceChannels)
                 {
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(changes);
@@ -1035,7 +1040,7 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
-    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken)
     {
         EnsureInitialized();
 
@@ -1064,6 +1069,8 @@ internal sealed class DashboardClient : IDashboardClient
             if (isFirst)
             {
                 chunk.FileName = fileName;
+                chunk.InteractionId = interactionId;
+                chunk.InputName = inputName;
             }
 
             await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);
@@ -1073,7 +1080,7 @@ internal sealed class DashboardClient : IDashboardClient
         // Handle case where the file was empty — still send filename.
         if (isFirst)
         {
-            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName }, combinedTokens.Token).ConfigureAwait(false);
+            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName, InteractionId = interactionId, InputName = inputName }, combinedTokens.Token).ConfigureAwait(false);
         }
 
         await call.RequestStream.CompleteAsync().ConfigureAwait(false);

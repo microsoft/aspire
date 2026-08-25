@@ -8,6 +8,7 @@ process.once('exit', () => rmSync(userDataDirectory, { recursive: true, force: t
 
 export default defineConfig({
 	files: 'out/test/**/*.test.js',
+	version: '1.131.0',
 	launchArgs: [`--user-data-dir=${userDataDirectory}`],
 	download: {
 		timeout: 60000

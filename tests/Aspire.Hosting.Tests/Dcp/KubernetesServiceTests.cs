@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Polly.Timeout;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -41,6 +42,51 @@ public class KubernetesServiceTests
 
         var result = await listTask;
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ExecuteWithRetry_UsesInitializationTimeout_WhenKubeconfigAppearsAfterApiRetryBudget()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            maxRetryDuration: TimeSpan.FromSeconds(1));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
+
+        // The kubeconfig appears after the normal API retry budget. Initial DCP connection establishment
+        // needs its own startup budget because DCP has not exposed an API endpoint yet.
+        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await listTask;
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ExecuteWithRetry_UsesApiRetryDuration_AfterKubernetesClientInitialization()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            maxRetryDuration: TimeSpan.FromMilliseconds(500),
+            kubernetesConfigInitializationTimeout: TimeSpan.FromSeconds(5));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        // The fourth API request succeeds after exponential retry delays of 100, 200, and 400 milliseconds.
+        // It is reachable under the initialization budget but not the 500-millisecond API budget.
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token, successfulRequestNumber: 4);
+        var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
+
+        await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        await Assert.ThrowsAsync<TimeoutRejectedException>(() => listTask);
     }
 
     // Verifies that establishing the connection survives a partially-written kubeconfig: when the file exists
@@ -72,7 +118,9 @@ public class KubernetesServiceTests
         Assert.Empty(result);
     }
 
-    private static (KubernetesService Service, string KubeconfigPath, IDisposable FileSystem) CreateService()
+    private static (KubernetesService Service, string KubeconfigPath, IDisposable FileSystem) CreateService(
+        TimeSpan? maxRetryDuration = null,
+        TimeSpan? kubernetesConfigInitializationTimeout = null)
     {
         var configuration = new ConfigurationBuilder().Build();
 
@@ -92,7 +140,8 @@ public class KubernetesServiceTests
             var service = new KubernetesService(NullLogger<KubernetesService>.Instance, dcpOptions, locations, configuration)
             {
                 // Generous enough that the test can flip the kubeconfig before the retry budget is exhausted.
-                MaxRetryDuration = TimeSpan.FromSeconds(30),
+                MaxRetryDuration = maxRetryDuration ?? TimeSpan.FromSeconds(30),
+                KubernetesConfigInitializationTimeout = kubernetesConfigInitializationTimeout ?? TimeSpan.FromSeconds(60),
             };
 
             return (service, locations.DcpKubeconfigPath, fileSystem);
@@ -232,8 +281,8 @@ public class KubernetesServiceTests
         }
     }
 
-    // A minimal stand-in for the DCP API server. It answers every request with an empty Kubernetes list, which
-    // is enough for ListAsync<Container>() to deserialize successfully.
+    // A minimal stand-in for the DCP API server. It can return conflicts for a configured number of requests,
+    // then answers with an empty Kubernetes list that ListAsync<Container>() can deserialize successfully.
     //
     // It runs a real Kestrel server bound to port 0 so the OS assigns a free port that Kestrel actually binds and
     // holds for the lifetime of the server. The bound port is read back after startup. This avoids the classic
@@ -250,7 +299,9 @@ public class KubernetesServiceTests
 
         public int Port { get; }
 
-        public static async Task<TestDcpApiServer> StartAsync(CancellationToken cancellationToken = default)
+        public static async Task<TestDcpApiServer> StartAsync(
+            CancellationToken cancellationToken = default,
+            int successfulRequestNumber = 1)
         {
             var builder = WebApplication.CreateSlimBuilder();
             // Keep the test output clean; the fake server's logs are noise.
@@ -261,9 +312,15 @@ public class KubernetesServiceTests
 
             var app = builder.Build();
 
-            // Answer every request with an empty container list.
+            var requestCount = 0;
             app.Run(async context =>
             {
+                if (Interlocked.Increment(ref requestCount) < successfulRequestNumber)
+                {
+                    context.Response.StatusCode = StatusCodes.Status409Conflict;
+                    return;
+                }
+
                 context.Response.StatusCode = StatusCodes.Status200OK;
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");

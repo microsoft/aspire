@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Resize;
@@ -827,7 +828,19 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Pause logs.");
         var pauseResumeButton = cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button");
         pauseResumeButton.Click();
-        cut.WaitForAssertion(() => Assert.True(pauseManager.ConsoleLogsPaused));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(pauseManager.ConsoleLogsPaused);
+            var activePause = pauseManager.ConsoleLogPauseIntervals[^1];
+            var pauseWarning = cut.FindComponent<PauseWarning>();
+            Assert.Equal(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    loc[nameof(Resources.ConsoleLogs.PauseInProgressText)],
+                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, activePause.Start)),
+                pauseWarning.Instance.PauseText);
+            Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
+        });
 
         logger.LogInformation("Wait for pause log.");
         var pauseConsoleLogLine = cut.WaitForElement(".log-pause");
@@ -857,7 +870,11 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // - the log viewer shows the new log
         // - the log viewer does not show the discarded log
         pauseResumeButton.Click();
-        cut.WaitForAssertion(() => Assert.False(pauseManager.ConsoleLogsPaused));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(pauseManager.ConsoleLogsPaused);
+            Assert.False(cut.HasComponent<PauseWarning>());
+        });
 
         logger.LogInformation("Assert that pause log has expected content.");
         cut.WaitForAssertion(() =>

@@ -289,7 +289,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         ? string.Format(
             CultureInfo.CurrentCulture,
             Loc[nameof(Dashboard.Resources.Traces.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value, MillisecondsDisplay.Truncated))
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
         : null;
 
     public void Dispose()

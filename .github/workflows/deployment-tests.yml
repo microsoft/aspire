@@ -8,7 +8,7 @@
 # Security:
 # - Uses OIDC (Workload Identity Federation) for Azure authentication
 # - No stored Azure secrets
-# - Only dotnet org members can trigger via PR command
+# - Only microsoft org members can trigger via PR command
 #
 name: Deployment E2E Tests
 

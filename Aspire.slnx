@@ -59,6 +59,7 @@
     <Project Path="src/Aspire.Hosting.GitHub.Models/Aspire.Hosting.GitHub.Models.csproj" />
     <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />
     <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
+    <Project Path="src/Aspire.Hosting.Java/Aspire.Hosting.Java.csproj" />
     <Project Path="src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj" />
     <Project Path="src/Aspire.Hosting.Kafka/Aspire.Hosting.Kafka.csproj" />
     <Project Path="src/Aspire.Hosting.Keycloak/Aspire.Hosting.Keycloak.csproj" />
@@ -77,6 +78,7 @@
     <Project Path="src/Aspire.Hosting.RabbitMQ/Aspire.Hosting.RabbitMQ.csproj" />
     <Project Path="src/Aspire.Hosting.Radius/Aspire.Hosting.Radius.csproj" />
     <Project Path="src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj" />
+    <Project Path="src/Aspire.Hosting.Rust/Aspire.Hosting.Rust.csproj" />
     <Project Path="src/Aspire.Hosting.Seq/Aspire.Hosting.Seq.csproj" />
     <Project Path="src/Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServer.csproj" />
     <Project Path="src/Aspire.Hosting.Tasks/Aspire.Hosting.Tasks.csproj" />
@@ -367,6 +369,18 @@
     <Project Path="playground/Redis/Redis.ApiService/Redis.ApiService.csproj" />
     <Project Path="playground/Redis/Redis.AppHost/Redis.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/JavaSpringBoot/">
+    <Project Path="playground/JavaSpringBoot/JavaSpringBoot.AppHost/JavaSpringBoot.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/JavaQuarkus/">
+    <Project Path="playground/JavaQuarkus/JavaQuarkus.AppHost/JavaQuarkus.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/JavaSwing/">
+    <Project Path="playground/JavaSwing/JavaSwing.AppHost/JavaSwing.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/rust/">
+    <Project Path="playground/rust/Rust.AppHost/Rust.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/seq/">
     <Project Path="playground/seq/Seq.ApiService/Seq.ApiService.csproj" />
     <Project Path="playground/seq/Seq.AppHost/Seq.AppHost.csproj" />
@@ -534,6 +548,7 @@
     <Project Path="tests/Aspire.Hosting.Garnet.Tests/Aspire.Hosting.Garnet.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.GitHub.Models.Tests/Aspire.Hosting.GitHub.Models.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Java.Tests/Aspire.Hosting.Java.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Kafka.Tests/Aspire.Hosting.Kafka.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Keycloak.Tests/Aspire.Hosting.Keycloak.Tests.csproj" />
@@ -553,6 +568,7 @@
     <Project Path="tests/Aspire.Hosting.Radius.Tests/Aspire.Hosting.Radius.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Redis.Tests/Aspire.Hosting.Redis.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Rust.Tests/Aspire.Hosting.Rust.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Seq.Tests/Aspire.Hosting.Seq.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.SqlServer.Tests/Aspire.Hosting.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj" />

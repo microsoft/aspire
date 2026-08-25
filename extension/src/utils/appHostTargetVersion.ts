@@ -200,7 +200,7 @@ async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<Fi
 }
 
 function isPolyglotAppHostFile(filePath: string): boolean {
-    return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].includes(extname(filePath).toLowerCase());
+    return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs', '.rs'].includes(extname(filePath).toLowerCase());
 }
 
 function isSingleFileCSharpAppHostEntry(entry: string, entries: readonly string[]): boolean {

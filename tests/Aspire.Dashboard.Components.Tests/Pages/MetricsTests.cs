@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Web;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
@@ -15,6 +17,7 @@ using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
@@ -182,6 +185,71 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal("test-instrument", query["instrument"]);
         Assert.Equal("720", query["duration"]);
         Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
+    }
+
+    [Fact]
+    public void PauseIncomingData_DisplaysPauseWarningInPageFooter()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument"));
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var cut = RenderComponent<Metrics>(builder =>
+        {
+            builder.Add(m => m.ResourceName, "TestApp");
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedInstrument is not null);
+
+        var pauseManager = Services.GetRequiredService<PauseManager>();
+        var timeProvider = Services.GetRequiredService<BrowserTimeProvider>();
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.Metrics>>();
+
+        cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(pauseManager.AreMetricsPaused(out var pausedAt));
+            var pauseWarning = cut.FindComponent<PauseWarning>();
+            Assert.Equal(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    loc[nameof(Resources.Metrics.PauseInProgressText)],
+                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, pausedAt.Value)),
+                pauseWarning.Instance.PauseText);
+            Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
+        });
+
+        cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(pauseManager.AreMetricsPaused(out _));
+            Assert.False(cut.HasComponent<PauseWarning>());
+        });
     }
 
     [Fact]

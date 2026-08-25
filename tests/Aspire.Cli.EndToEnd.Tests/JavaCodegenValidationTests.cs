@@ -44,11 +44,6 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire add Aspire.Hosting.SqlServer");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
-
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
@@ -60,18 +55,45 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
             throw new InvalidOperationException($".aspire/modules directory was not created at {modulesDir}");
         }
 
+        // The second integration is added only after `.aspire/modules` is already populated. A
+        // restore that treats a non-empty modules directory as up to date would leave the stale
+        // SDK in place and still report success, so the SqlServer assertions below are what
+        // actually prove the refresh. Adding both integrations before the first restore would
+        // generate everything in one pass and never exercise that path.
+        var codegenHashPath = Path.Combine(modulesDir, ".codegen-hash");
+        var initialCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
+
+        var builderPath = Path.Combine(modulesDir, "aspire", "IDistributedApplicationBuilder.java");
+        if (File.Exists(builderPath) && File.ReadAllText(builderPath).Contains("addSqlServer"))
+        {
+            throw new InvalidOperationException("Baseline SDK already exposes addSqlServer; test cannot verify refresh behavior after adding Aspire.Hosting.SqlServer.");
+        }
+
+        await auto.TypeAsync("aspire add Aspire.Hosting.SqlServer");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Generated sources are laid out by package: every file declares `package aspire;`, so javac
+        // expects them under a matching `aspire/` directory. Only sources.txt sits at the modules root,
+        // because the compiler is driven as `javac @.aspire/modules/sources.txt` from the AppHost directory.
         var expectedFiles = new[]
         {
-            "Aspire.java",
-            "AspireClient.java",
-            "DistributedApplication.java",
-            "IDistributedApplicationBuilder.java",
+            "aspire/Aspire.java",
+            "aspire/AspireClient.java",
+            "aspire/DistributedApplication.java",
+            "aspire/IDistributedApplicationBuilder.java",
             "sources.txt"
         };
 
         foreach (var file in expectedFiles)
         {
-            var filePath = Path.Combine(modulesDir, file);
+            var filePath = Path.Combine(modulesDir, Path.Combine(file.Split('/')));
             if (!File.Exists(filePath))
             {
                 throw new InvalidOperationException($"Expected generated file not found: {filePath}");
@@ -84,14 +106,20 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
             }
         }
 
-        var builderJava = File.ReadAllText(Path.Combine(modulesDir, "IDistributedApplicationBuilder.java"));
+        var builderJava = File.ReadAllText(Path.Combine(modulesDir, "aspire", "IDistributedApplicationBuilder.java"));
         if (!builderJava.Contains("addRedis"))
         {
             throw new InvalidOperationException("IDistributedApplicationBuilder.java does not contain addRedis from Aspire.Hosting.Redis");
         }
         if (!builderJava.Contains("addSqlServer"))
         {
-            throw new InvalidOperationException("IDistributedApplicationBuilder.java does not contain addSqlServer from Aspire.Hosting.SqlServer");
+            throw new InvalidOperationException("IDistributedApplicationBuilder.java does not contain addSqlServer from Aspire.Hosting.SqlServer; restore did not refresh an already-populated .aspire/modules");
+        }
+
+        var restoredCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
+        if (initialCodegenHash == restoredCodegenHash)
+        {
+            throw new InvalidOperationException(".aspire/modules/.codegen-hash did not change after adding Aspire.Hosting.SqlServer and running aspire restore.");
         }
     }
 }

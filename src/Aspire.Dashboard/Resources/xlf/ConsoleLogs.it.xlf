@@ -127,6 +127,11 @@
         <target state="translated">Stato del log del servizio</target>
         <note />
       </trans-unit>
+      <trans-unit id="PauseInProgressText">
+        <source>Console logs capture paused at {0}</source>
+        <target state="new">Console logs capture paused at {0}</target>
+        <note>{0} is a time</note>
+      </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
         <target state="new">Decrease font size</target>

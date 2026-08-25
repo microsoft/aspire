@@ -50,7 +50,7 @@ One test intentionally uses another region for a resource-specific requirement:
 | Resource | Quota Required | Notes |
 |----------|---------------|-------|
 | Resource Groups | 100+ | Each test creates a unique resource group (e.g., `e2e-starter-12345678-1`) |
-| Role Assignments | Default | Tests may create role assignments for managed identities |
+| Role Assignments | Default | Tests may create role assignments for managed identities, and `AzureRoleAssignmentRunModeTests` creates them for the ambient deployment principal |
 
 ### Requesting Quota Increases
 
@@ -175,8 +175,10 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureEventHubsDeploymentTests.cs       # Azure Event Hubs resource
 ├── AzureKeyVaultDeploymentTests.cs        # Azure Key Vault resource
 ├── AzureLogAnalyticsDeploymentTests.cs    # Azure Log Analytics resource
+├── AzureRoleAssignmentRunModeTests.cs     # Run-mode role assignments under the ambient credential
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
+├── AzureStorageRunModeTests.cs            # Run-mode resource commands against live Azure
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
 ├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
 ├── RadiusAzureResourcesDeploymentTests.cs # Gap: cloud-managed Azure resource refs on Radius
@@ -184,6 +186,36 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
 ```
+
+## Run-mode role assignment coverage
+
+Most tests here drive `aspire deploy` (publish mode). `AzureRoleAssignmentRunModeTests` and
+`AzureStorageRunModeTests` instead drive `aspire start`, which is a materially different code path
+for RBAC.
+
+In publish mode a role assignment targets a user-assigned managed identity, so `principalType` is
+statically `ServicePrincipal` and `BicepProvisioner` refuses to infer principal parameters at all.
+In run mode there is no managed identity: the assignment targets the ambient credential, and
+`principalType` / `principalId` / `principalName` become plain Bicep parameters filled from the
+signed-in identity's access token. ARM rejects a mismatched `principalType` with
+`UnmatchedPrincipalType` / `PrincipalNotFound`, which is exactly how
+[#13933](https://github.com/microsoft/aspire/issues/13933) surfaced.
+
+`AzureRoleAssignmentRunModeTests.RoleAssignmentsSucceedForAmbientCredentialInRunMode` covers that
+path. Its AppHost is a single `builder.AddAzureStorage("storage")` with **no**
+`ClearDefaultRoleAssignments()` — in run mode an Azure resource that no compute resource references
+still has its default role assignments applied, which synthesizes a `storage-roles` resource. The
+test waits for `storage-roles` and `storage` to come up, then reads the ARM deployment back with
+`az deployment group show` and asserts the recorded `principalType` matches the kind of identity
+`az account show` reports. In CI it additionally asserts that identity is a service principal, so
+the job fails loudly if the credential ever degrades to a user and silently stops covering the
+app-only scenario.
+
+This is the cheapest scenario in the matrix — one storage account plus one role-assignment
+deployment — and runs as its own parallel job with its own resource group.
+
+`AzureStorageRunModeTests` deliberately keeps `ClearDefaultRoleAssignments()`: it covers resource
+command metadata, and mixing the RBAC path into it would blur the failure signal.
 
 ## Radius deployment coverage
 

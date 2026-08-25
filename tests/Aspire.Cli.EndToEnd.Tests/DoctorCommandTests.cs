@@ -103,13 +103,16 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DoctorCommand_WithTraceLogging_DoesNotRenderProgress()
+    public async Task DoctorCommand_WithDebugLogging_DoesNotRenderSpinner()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
-        var testName = nameof(DoctorCommand_WithTraceLogging_DoesNotRenderProgress);
+        var testName = nameof(DoctorCommand_WithDebugLogging_DoesNotRenderSpinner);
         var recordingPath = CliE2ETestHelpers.GetTestResultsRecordingPath(testName);
+
+        // The recording path is stable across retries, so remove stale output before the recorder starts.
+        File.Delete(recordingPath);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace, testName: testName);
 
@@ -122,14 +125,14 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.ClearScreenAsync(counter);
 
         var recordingOffset = File.Exists(recordingPath) ? new FileInfo(recordingPath).Length : 0;
-        await auto.TypeAsync("aspire doctor -l trace");
+        await auto.TypeAsync("aspire doctor -l debug");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         var commandOutput = ReadRecordingOutput(recordingPath, recordingOffset);
         Assert.Contains("[dbug]", commandOutput, StringComparison.Ordinal);
         Assert.Contains(DoctorCommandStrings.EnvironmentCheckHeader, commandOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain(DoctorCommandStrings.CheckingPrerequisites, commandOutput, StringComparison.Ordinal);
+        Assert.Contains(DoctorCommandStrings.CheckingPrerequisites, commandOutput, StringComparison.Ordinal);
         Assert.DoesNotContain(commandOutput, SpinnerCharacters.Contains);
     }
 

@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Bu ortamda etkileşimli giriş desteklenmemektedir. --non-interactive bayrağını kullanın veya CLI'nin etkileşimli bir terminalde çalıştığından emin olun.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Daha fazla bilgi için bkz.: [link]{0}[/][/]</target>

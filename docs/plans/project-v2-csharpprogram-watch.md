@@ -237,10 +237,15 @@ working through the same generalized helpers unchanged.
   `CreatePublishCompanion`, `ForwardEndpointReference`) over a shared constraint so both gateway resource
   types share one implementation. The new variant supports **run mode**; **publish fails fast** because
   `DotnetProjectResource` is not an `IContainerFilesDestinationResource` (the WASM static-asset merge needs it).
-  This lifts once container execution lands for `DotnetProjectResource`.
-- Polyglot SDKs / `api/*` / `*.Capabilities.txt` / `*.ats.txt`: the `addDotnetProject` export is **additive**
-  (new capability in `Aspire.Hosting.Dotnet`); core `addCSharpApp` is unchanged, so core codegen snapshots
-  are unaffected.
+  This lifts once container execution lands for `DotnetProjectResource`. The built-in gateway scripts are packed
+  both as `buildTransitive` assets for C# AppHosts and beside the package assembly for package-backed polyglot
+  AppHosts, which load integration assemblies directly without running the package's MSBuild targets.
+- Polyglot SDKs: the `addDotnetProject` export is **additive** in `Aspire.Hosting.Dotnet`; core
+  `addCSharpApp` is unchanged. The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
+  `DotnetProjectResource` overload with the distinct `withDotnetProjectBlazorClientApp` capability ID while
+  retaining `withBlazorClientApp` as the generated method name on that resource type. Generated APIs compile in
+  TypeScript, Go, Java, and Python; a package-backed TypeScript run verifies the gateway serves an attached Blazor
+  client. `api/*`, `*.Capabilities.txt`, and `*.ats.txt` remain generated artifacts and are not hand-edited.
 
 ---
 
@@ -260,9 +265,12 @@ regenerate polyglot SDKs/api (additive).
 
 **Verify:** builds clean; a service added via `AddDotnetProject` runs
 (no debug) from a C# app host **and** a TS app host with endpoints/env/service discovery; the existing Blazor
-gateway is unchanged and the new variant works in run mode. *Depends on: none.*
+gateway is unchanged, the new variant serves an attached client from a package-backed TS app host, and the
+generated Blazor APIs compile from TypeScript, Go, Java, and Python AppHosts. *Depends on: none.*
 
-**Status: ✅ Complete** — commit `435f5d08`, PR [#18442](https://github.com/microsoft/aspire/pull/18442).
+**Status: ✅ Complete** — initial implementation commit `435f5d08`, PR
+[#18442](https://github.com/microsoft/aspire/pull/18442); polyglot exports, direct package-load assets, and
+validation added in follow-up PR [#19026](https://github.com/microsoft/aspire/pull/19026).
 
 ### Session 1b — `AddDotnetProject` playground sample (early dogfood harness)
 Add a **committed** `playground/` sample (name TBD, e.g. `ProjectV2AppHost`) that models services via
@@ -422,11 +430,16 @@ callbacks may need to run for build/closure even when a resource isn't "running"
   (POC was Windows-centric); TS-first verification exercises non-Windows.
 - **R7 — `--watch` vs `DefaultWatchEnabled` vs the old `dotnet watch`.** Reconcile UX/strings so the explicit
   flag, the feature flag, and the host-command behavior don't collide (Sessions 7–8).
-- **R8 — New polyglot capability.** `addDotnetProject` is a new capability in `Aspire.Hosting.Dotnet`
-  (additive; core `addCSharpApp` is unchanged); confirm guest SDK regeneration picks it up.
+- **R8 — New polyglot capabilities.** `addDotnetProject` is a new capability in `Aspire.Hosting.Dotnet`
+  (additive; core `addCSharpApp` is unchanged). The Blazor package also adds
+  `addDotnetProjectBlazorGateway` and `withDotnetProjectBlazorClientApp`; the latter keeps
+  `withBlazorClientApp` as its generated method name on `DotnetProjectResource`. Confirm guest SDK
+  regeneration picks them up in TypeScript, Go, Java, and Python.
 - **R9 — Blazor gateway variant (Session 1).** The new `DotnetProjectResource`-backed gateway shares one
   generalized helper implementation with the unchanged `ProjectResource` gateway; publish on the new variant
-  fails fast until `DotnetProjectResource` gains container-files support.
+  fails fast until `DotnetProjectResource` gains container-files support. Its scripts are available through both
+  C# `buildTransitive` output and direct polyglot package loading. Keep the generated APIs covered in all four
+  validation AppHosts and the run-mode behavior covered by a package-backed TypeScript test.
 - **O1 — Watch signal shape.** ✅ **Resolved (Session 3):** a `RunConfiguration` object with a
   `bool WatchEnabled` property, exposed read-only as `DistributedApplicationExecutionContext.RunConfiguration`.
   Additional run behaviors are added as further properties rather than as mutually exclusive modes.
