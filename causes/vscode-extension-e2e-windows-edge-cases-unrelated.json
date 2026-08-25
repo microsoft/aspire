@@ -1,0 +1,16 @@
+{
+  "id": "vscode-extension-e2e-windows-edge-cases-unrelated",
+  "type": "flaky-test",
+  "title": "VS Code extension E2E (Windows, edge-cases) job fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Run extension E2E tests step fails with 'Process completed with exit code 1'. Job logs unavailable ('Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies Aspire.Hosting/Dcp JsonPatch implementation, unrelated to VS Code extension code.",
+  "occurrences": [
+    {
+      "run_id": 32890578602,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32890578602",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 19498,
+      "observed_at": "2026-08-25T20:22:32Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19676"
+}
