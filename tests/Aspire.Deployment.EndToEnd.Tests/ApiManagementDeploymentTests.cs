@@ -163,12 +163,11 @@ builder.Build().Run();
         }
         finally
         {
-            TriggerCleanupResourceGroup(resourceGroupName, subscriptionId);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
+            await TriggerCleanupResourceGroupAsync(resourceGroupName, subscriptionId);
         }
     }
 
-    private static void TriggerCleanupResourceGroup(string resourceGroupName, string subscriptionId)
+    private static async Task TriggerCleanupResourceGroupAsync(string resourceGroupName, string subscriptionId)
     {
         using var process = new System.Diagnostics.Process
         {
@@ -190,6 +189,29 @@ builder.Build().Run();
         process.StartInfo.ArgumentList.Add("--yes");
         process.StartInfo.ArgumentList.Add("--no-wait");
 
-        process.Start();
+        if (!process.Start())
+        {
+            const string error = "Azure CLI process did not start.";
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, error);
+            throw new InvalidOperationException(error);
+        }
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var standardOutput = await standardOutputTask;
+        var standardError = await standardErrorTask;
+
+        if (process.ExitCode != 0)
+        {
+            var error = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+            DeploymentReporter.ReportCleanupStatus(
+                resourceGroupName,
+                success: false,
+                $"Azure CLI exited with code {process.ExitCode}: {error}");
+            throw new InvalidOperationException(
+                $"Failed to request deletion of resource group '{resourceGroupName}': {error}");
+        }
+
+        DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Deletion request accepted");
     }
 }

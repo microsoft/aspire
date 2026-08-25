@@ -4,7 +4,7 @@ param location string = resourceGroup().location
 param vault_outputs_name string
 
 @secure()
-param api_key_value string
+param _apim_namedValueParameter_api_key_value string
 
 param _apim_computeBackendUrl_catalog_api string
 
@@ -98,7 +98,7 @@ resource api_key_value 'Microsoft.ApiManagement/service/namedValues@2024-05-01' 
   name: 'api-key-value'
   properties: {
     displayName: 'ApiKey'
-    value: api_key_value
+    value: _apim_namedValueParameter_api_key_value
     secret: true
   }
   parent: apim

@@ -464,6 +464,7 @@ public class AzureApiManagementTests
 
         var (_, bicep) = await GetManifestWithBicep(apim.Resource);
 
+        Assert.Contains("param _apim_namedValueParameter_api_key_value string", bicep);
         await Verify(bicep, "bicep");
     }
 

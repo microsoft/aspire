@@ -1493,7 +1493,10 @@ public static class AzureApiManagementExtensions
             }
             else if (namedValueResource.Value is ParameterResource parameter)
             {
-                namedValue.Value = parameter.AsProvisioningParameter(infrastructure, isSecure: true);
+                namedValue.Value = parameter.AsProvisioningParameter(
+                    infrastructure,
+                    parameterName: CreateGeneratedBicepIdentifier("namedValueParameter", namedValueResource.Name),
+                    isSecure: true);
             }
             else
             {
