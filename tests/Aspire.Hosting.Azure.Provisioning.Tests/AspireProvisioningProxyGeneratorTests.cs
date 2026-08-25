@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Xunit;
 
 namespace Aspire.Hosting.Azure.Provisioning.Tests;
@@ -165,6 +167,42 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
+    public void NullableProxyReturningMethodsInvokeUnderlyingMethodOnce()
+    {
+        var result = ProvisioningGeneratorTest.Run(NullableProxyReturningMethodSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var proxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.NullableMethodOwnerProxy");
+        Assert.NotNull(proxy);
+
+        var method = Assert.Single(proxy.GetMembers("GetOptionalChild").OfType<IMethodSymbol>());
+        var methodSyntax = Assert.IsType<MethodDeclarationSyntax>(method.DeclaringSyntaxReferences.Single().GetSyntax());
+        var body = Assert.IsType<BlockSyntax>(methodSyntax.Body);
+        Assert.Collection(
+            body.Statements,
+            statement => Assert.IsType<LocalDeclarationStatementSyntax>(statement),
+            statement => Assert.IsType<ReturnStatementSyntax>(statement));
+
+        var semanticModel = result.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
+        var invocations = methodSyntax.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Select(syntax => semanticModel.GetOperation(syntax))
+            .OfType<IInvocationOperation>()
+            .ToArray();
+        var invocation = Assert.Single(invocations);
+        Assert.Equal("GetOptionalChild", invocation.TargetMethod.Name);
+        Assert.Equal(
+            "Test.Provisioning.NullableMethodOwner",
+            invocation.TargetMethod.ContainingType.ToDisplayString());
+
+        var returnStatement = Assert.IsType<ReturnStatementSyntax>(body.Statements[1]);
+        Assert.Empty(returnStatement.DescendantNodes().OfType<InvocationExpressionSyntax>());
+    }
+
+    [Fact]
     public void GeneratedNamespaceSanitizesEachAssemblyNameSegment()
     {
         var result = ProvisioningGeneratorTest.RunWithAssemblyName(
@@ -287,6 +325,8 @@ public class AspireProvisioningProxyGeneratorTests
 
     private const string NullableProxyConstructorSource = NullableProxyConstructorAttributes + CommonSource + NullableProxyConstructorTypes;
 
+    private const string NullableProxyReturningMethodSource = NullableProxyReturningMethodAttributes + CommonSource + NullableProxyReturningMethodTypes;
+
     private const string NamespaceSanitizationSource = NamespaceSanitizationAttributes + CommonSource + NamespaceSanitizationTypes;
 
     private const string MutableStructSource = MutableStructAttributes + CommonSource + MutableStructTypes;
@@ -402,6 +442,31 @@ public class AspireProvisioningProxyGeneratorTests
                 }
 
                 public ChildModel? Child { get; set; }
+            }
+        }
+        """;
+
+    private const string NullableProxyReturningMethodAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.NullableMethodOwner),
+            IsInfrastructureRoot = false)]
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.ChildModel),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string NullableProxyReturningMethodTypes = """
+        namespace Test.Provisioning
+        {
+            public sealed class ChildModel
+            {
+                public string Value { get; set; } = string.Empty;
+            }
+
+            public sealed class NullableMethodOwner
+            {
+                public ChildModel? GetOptionalChild(string __underlyingValue, string __mappedValue) => new();
             }
         }
         """;

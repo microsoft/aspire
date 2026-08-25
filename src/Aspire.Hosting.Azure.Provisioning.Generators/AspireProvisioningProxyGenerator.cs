@@ -1055,9 +1055,16 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
         else
         {
-            source.Append("            return ");
-            AppendMappedFromUnderlying(source, invocation.ToString(), mappedMethod.ReturnType);
-            source.AppendLine(";");
+            if (RequiresCapturedNullableReturnValue(mappedMethod.ReturnType))
+            {
+                AppendCapturedNullableReturnValue(source, invocation.ToString(), mappedMethod);
+            }
+            else
+            {
+                source.Append("            return ");
+                AppendMappedFromUnderlying(source, invocation.ToString(), mappedMethod.ReturnType);
+                source.AppendLine(";");
+            }
         }
 
         source.AppendLine("        }");
@@ -1068,6 +1075,37 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         return parameters.Count == 0
             ? "none"
             : SanitizeIdentifier(string.Join("_", parameters.Select(static parameter => parameter.Type.ExposedTypeName)));
+    }
+
+    private static bool RequiresCapturedNullableReturnValue(MappedType mappedType)
+        => mappedType.IsNullable &&
+        mappedType.Kind is MappedTypeKind.Proxy or MappedTypeKind.Collection or MappedTypeKind.ProvisionableResource;
+
+    private static void AppendCapturedNullableReturnValue(
+        StringBuilder source,
+        string expression,
+        MappedMethod mappedMethod)
+    {
+        var usedNames = new HashSet<string>(
+            mappedMethod.Parameters.Select(static parameter => GetParameterName(parameter.Parameter)),
+            StringComparer.Ordinal);
+        var underlyingValueName = GetUniqueGeneratedLocalName(usedNames, "__underlyingValue");
+        var mappedValueName = GetUniqueGeneratedLocalName(usedNames, "__mappedValue");
+
+        source.Append("            var ").Append(underlyingValueName).Append(" = ").Append(expression).AppendLine(";");
+        source.Append("            return ").Append(underlyingValueName).Append(" is { } ").Append(mappedValueName)
+            .Append(" ? new ").Append(mappedMethod.ReturnType.ExposedTypeName.TrimEnd('?'))
+            .Append('(').Append(mappedValueName).AppendLine(") : null;");
+    }
+
+    private static string GetUniqueGeneratedLocalName(HashSet<string> usedNames, string candidate)
+    {
+        while (!usedNames.Add(candidate))
+        {
+            candidate += "_";
+        }
+
+        return candidate;
     }
 
     private static void GenerateCollectionProxy(
