@@ -1558,6 +1558,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
+        var usablePageSize = pageSize - bytes[20];
+        // Table-leaf cells store at most U - 35 payload bytes locally. A larger declared payload
+        // always has an overflow-page pointer, even when its apparent end falls within this page.
+        // See https://www.sqlite.org/fileformat2.html#cell_payload_overflow_pages.
+        var maximumLocalPayloadLength = usablePageSize - 35;
+
         for (var pageOffset = 0; pageOffset <= bytes.Length - pageSize; pageOffset += pageSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -1568,7 +1574,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 continue;
             }
 
-            var pageEnd = pageOffset + pageSize;
+            var pageEnd = pageOffset + usablePageSize;
             var headerOffset = pageOffset == 0 ? 100 : pageOffset;
             if (headerOffset + 8 > pageEnd || bytes[headerOffset] != 0x0D)
             {
@@ -1590,7 +1596,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
 
             var minimumCellOffsetInPage = Math.Max(cellPointerArrayEnd - pageOffset, cellContentOffsetInPage);
-            if (minimumCellOffsetInPage <= 0 || minimumCellOffsetInPage > pageSize)
+            if (minimumCellOffsetInPage <= 0 || minimumCellOffsetInPage > usablePageSize)
             {
                 continue;
             }
@@ -1601,13 +1607,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
                 var pointerOffset = cellPointerArrayOffset + (index * 2);
                 var cellOffsetInPage = ReadUInt16BigEndian(bytes, pointerOffset);
-                if (cellOffsetInPage < minimumCellOffsetInPage || cellOffsetInPage >= pageSize)
+                if (cellOffsetInPage < minimumCellOffsetInPage || cellOffsetInPage >= usablePageSize)
                 {
                     continue;
                 }
 
                 var cellOffset = pageOffset + cellOffsetInPage;
-                foreach (var value in ExtractSqliteLeafTableCellTextValues(bytes, cellOffset, pageEnd))
+                foreach (var value in ExtractSqliteLeafTableCellTextValues(bytes, cellOffset, pageEnd, maximumLocalPayloadLength))
                 {
                     yield return value;
                 }
@@ -1685,7 +1691,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     internal static IReadOnlyList<string> ExtractSqliteRecordTextValuesForTesting(byte[] bytes, CancellationToken cancellationToken)
         => [.. ExtractSqliteRecordTextValues(bytes, cancellationToken)];
 
-    private static IEnumerable<string> ExtractSqliteLeafTableCellTextValues(byte[] bytes, int cellOffset, int pageEnd)
+    private static IEnumerable<string> ExtractSqliteLeafTableCellTextValues(byte[] bytes, int cellOffset, int pageEnd, int maximumLocalPayloadLength)
     {
         if (!TryReadSqliteVarint(bytes, cellOffset, pageEnd, out var payloadLength, out var payloadLengthBytes) ||
             !TryReadSqliteVarint(bytes, cellOffset + payloadLengthBytes, pageEnd, out _, out var rowIdBytes))
@@ -1694,7 +1700,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var payloadOffset = cellOffset + payloadLengthBytes + rowIdBytes;
-        if (payloadLength <= 0 || payloadLength > int.MaxValue)
+        if (payloadLength <= 0 || payloadLength > maximumLocalPayloadLength)
         {
             yield break;
         }
@@ -1702,11 +1708,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var payloadEnd = (long)payloadOffset + payloadLength;
         if (payloadOffset < cellOffset || payloadEnd > pageEnd)
         {
-            // Large SQLite records can spill to overflow pages. The detector only needs complete
-            // logical text values and must not accidentally stitch local fragments together, so
-            // skip overflow records instead of implementing a broader SQLite reader here. Pulling
-            // in a SQLite native dependency or shelling out would complicate Native AOT publishing
-            // and cross-platform CLI packaging for a best-effort local telemetry probe.
+            // The detector only reads complete page-local records. Reject corrupt cell bounds instead
+            // of decoding reserved bytes or adjacent page content as part of a logical value.
             yield break;
         }
 

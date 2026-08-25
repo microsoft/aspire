@@ -887,6 +887,16 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public void ExtractSqliteRecordTextValuesForTesting_SkipsOverflowPayloadsWhoseDeclaredEndFitsWithinPage()
+    {
+        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(
+            CreateSqliteDatabaseWithOverflow(new string('a', 480), placeCellAtStart: true),
+            CancellationToken.None);
+
+        Assert.Empty(values);
+    }
+
+    [Fact]
     public void ExtractSqliteRecordTextValuesForTesting_RejectsCellPointerBeforeCellContentArea()
     {
         var database = CreateSqliteDatabase("user@microsoft.com");
@@ -1150,7 +1160,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         cell.CopyTo(database, pageOffset + cellOffset);
     }
 
-    private static byte[] CreateSqliteDatabaseWithOverflow(string value)
+    private static byte[] CreateSqliteDatabaseWithOverflow(string value, bool placeCellAtStart = false)
     {
         const int pageSize = 512;
         const int usableSize = pageSize;
@@ -1183,7 +1193,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         database[leafPageOffset] = 0x0D;
         database[leafPageOffset + 3] = 0;
         database[leafPageOffset + 4] = 1;
-        var cellOffsetInPage = pageSize - cell.Count;
+        var cellOffsetInPage = placeCellAtStart ? 10 : pageSize - cell.Count;
         database[leafPageOffset + 5] = (byte)(cellOffsetInPage >> 8);
         database[leafPageOffset + 6] = (byte)cellOffsetInPage;
         database[leafPageOffset + 8] = (byte)(cellOffsetInPage >> 8);
