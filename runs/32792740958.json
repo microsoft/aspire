@@ -1,0 +1,47 @@
+{
+  "run_id": 32792740958,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32792740958",
+  "analyzed_at": "2026-08-25T01:47:17Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19608,
+    "title": "Add trusted fast path for extension release PRs",
+    "author": "SankeerthNara",
+    "state": "closed",
+    "head_branch": "reduce-extension-release-ci-friction",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19608"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97650010869,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32792740958/job/97650010869",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI step failed with exit code 4 during Homebrew cask preparation; job logs unavailable and PR does not touch Homebrew/CLI packaging code. Matches recurring prior cause cli-smoke-test-homebrew-winget-unrelated (13 prior occurrences).",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97650575647,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32792740958/job/97650575647",
+      "classification": "flaky-test",
+      "reason": "Smoke test installed CLI step failed with exit code 1 during WinGet manifest preparation; job logs unavailable and PR only touches release-PR CI workflow/scripts, not CLI packaging/install logic. Matches recurring prior cause cli-smoke-test-homebrew-winget-unrelated.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97650729656,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32792740958/job/97650729656",
+      "classification": "flaky-test",
+      "reason": "Run extension E2E tests step failed with generic exit code 1; job logs unavailable and no TRX failures extracted. PR does not modify VS Code extension code. Matches recurring prior cause vscode-e2e-windows-edge-cases-flaky (15 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["cli-smoke-test-homebrew-winget-unrelated", "vscode-e2e-windows-edge-cases-flaky"]
+}
