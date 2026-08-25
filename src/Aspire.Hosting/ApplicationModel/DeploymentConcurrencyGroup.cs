@@ -11,9 +11,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Share the same group instance across the <see cref="DeploymentTargetAnnotation"/> values whose
 /// deployment operations consume the same limited capacity. A deployment target can participate in
-/// multiple groups, and publishers should enforce every applicable group. In an in-process application
-/// model, group membership is determined by reference identity. <see cref="Name"/> provides a portable
-/// identity for serialized deployment artifacts and must be unique across distinct group instances.
+/// multiple groups, and publishers should enforce every applicable group. Group membership is determined
+/// by reference identity. Publishers lower group membership into their native scheduling dependencies
+/// before serializing deployment artifacts, so group identity does not become an artifact-level contract.
 /// </remarks>
 [Experimental("ASPIRECOMPUTE004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DeploymentConcurrencyGroup
@@ -21,35 +21,18 @@ public sealed class DeploymentConcurrencyGroup
     /// <summary>
     /// Initializes a new instance of the <see cref="DeploymentConcurrencyGroup"/> class.
     /// </summary>
-    /// <param name="name">
-    /// The stable name used to identify the group in diagnostics and serialized deployment artifacts.
-    /// The name must be unique within the application model.
-    /// </param>
     /// <param name="maxConcurrentDeployments">
     /// The maximum number of deployment operations in the group that can execute concurrently.
     /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// Thrown when <paramref name="name"/> is <see langword="null"/>.
-    /// </exception>
-    /// <exception cref="ArgumentException">
-    /// Thrown when <paramref name="name"/> is empty or consists only of white-space characters.
-    /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">
     /// Thrown when <paramref name="maxConcurrentDeployments"/> is less than one.
     /// </exception>
-    public DeploymentConcurrencyGroup(string name, int maxConcurrentDeployments)
+    public DeploymentConcurrencyGroup(int maxConcurrentDeployments)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxConcurrentDeployments, 1);
 
-        Name = name;
         MaxConcurrentDeployments = maxConcurrentDeployments;
     }
-
-    /// <summary>
-    /// Gets the stable name used to identify the group.
-    /// </summary>
-    public string Name { get; }
 
     /// <summary>
     /// Gets the maximum number of deployment operations in the group that can execute concurrently.

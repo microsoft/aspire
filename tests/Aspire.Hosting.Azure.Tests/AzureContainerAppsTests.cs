@@ -3167,7 +3167,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var workerGroup = Assert.Single(containers["worker"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
 
         Assert.Same(apiGroup, workerGroup);
-        Assert.Equal("azure-container-apps-env", apiGroup.Name);
         Assert.Equal(1, apiGroup.MaxConcurrentDeployments);
     }
 
@@ -3254,8 +3253,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Same(groupA, groupB);
         Assert.Same(groupC, groupD);
         Assert.NotSame(groupA, groupC);
-        Assert.Equal("azure-container-apps-env1", groupA.Name);
-        Assert.Equal("azure-container-apps-env2", groupC.Name);
     }
 
     [Fact]
