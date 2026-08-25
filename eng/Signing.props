@@ -66,9 +66,10 @@
     <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />
 
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="MicrosoftDotNet500" />
+    <!-- Aspire is a Microsoft product rather than a .NET runtime binary, so use Arcade's general Microsoft certificate. -->
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire-managed.exe" CertificateName="MicrosoftDotNet500" />
-    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="MicrosoftDotNet500" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-managed" CertificateName="MicrosoftDotNet500" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire" CertificateName="MacDeveloperHardenWithNotarization" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire-managed" CertificateName="MacDeveloperHardenWithNotarization" />
