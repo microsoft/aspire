@@ -3287,6 +3287,37 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AliasesUsingSameBicepOutputShareConcurrencyGroup()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var source = new AzureBicepResource(
+            "existing-environment",
+            templateString: "output environmentName string = 'shared-env'");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("env1");
+        env1.Resource.Annotations.Add(new ExistingAzureResourceAnnotation(
+            new BicepOutputReference("environmentName", source),
+            "shared-rg"));
+        var env2 = builder.AddAzureContainerAppEnvironment("env2");
+        env2.Resource.Annotations.Add(new ExistingAzureResourceAnnotation(
+            new BicepOutputReference("environmentName", source),
+            "shared-rg"));
+
+        builder.AddContainer("api", "myimage").WithComputeEnvironment(env1);
+        builder.AddContainer("worker", "myimage").WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+
+        Assert.Same(apiGroup, workerGroup);
+    }
+
+    [Fact]
     public async Task SingleContainerAppDeploymentTargetHasNoContainerAppReference()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

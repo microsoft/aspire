@@ -205,6 +205,66 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_DiagnosticsReflectsDeploymentConcurrencyGroups()
+    {
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+        using var builder = CreatePipelineTestBuilder(
+            step: WellKnownPipelineSteps.Diagnostics,
+            activityReporter: reporter);
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+
+        AddDeploymentTarget("app1", "target1");
+        AddDeploymentTarget("app2", "target2");
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        var diagnostics = Assert.Single(
+            reporter.LoggedMessages,
+            message => message.Message.Contains("PIPELINE DEPENDENCY GRAPH DIAGNOSTICS", StringComparison.Ordinal)).Message;
+
+        var fullAnalysisEnd = diagnostics.IndexOf("EXECUTION SIMULATION", StringComparison.Ordinal);
+        Assert.True(fullAnalysisEnd >= 0);
+        var fullAnalysis = diagnostics[..fullAnalysisEnd];
+        var target2StepStart = fullAnalysis.IndexOf("Step: provision-target2", StringComparison.Ordinal);
+        Assert.True(target2StepStart >= 0);
+        Assert.Contains("Dependencies: ✓ provision-target1", fullAnalysis[target2StepStart..]);
+
+        const string targetHeader = "If targeting 'provision-target2':";
+        var targetStart = diagnostics.IndexOf(targetHeader, StringComparison.Ordinal);
+        Assert.True(targetStart >= 0);
+        var nextTargetStart = diagnostics.IndexOf(
+            "If targeting '",
+            targetStart + targetHeader.Length,
+            StringComparison.Ordinal);
+        var targetAnalysis = nextTargetStart >= 0
+            ? diagnostics[targetStart..nextTargetStart]
+            : diagnostics[targetStart..];
+        Assert.Contains("Direct dependencies: none", targetAnalysis);
+        Assert.Contains("Total steps: 1", targetAnalysis);
+
+        void AddDeploymentTarget(string resourceName, string targetName)
+        {
+            var target = new CustomResource(targetName);
+            var deploymentTarget = new DeploymentTargetAnnotation(target);
+            deploymentTarget.DeploymentConcurrencyGroups.Add(group);
+
+            var resource = builder.AddContainer(resourceName, "myimage").Resource;
+            resource.Annotations.Add(deploymentTarget);
+            resource.Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+            {
+                Name = $"provision-{targetName}",
+                Resource = target,
+                Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
+                Action = _ => Task.CompletedTask
+            }));
+        }
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithTargetedConcurrencyGroupMember_DoesNotExecutePeer()
     {
         using var builder = CreatePipelineTestBuilder(step: "provision-target2");
