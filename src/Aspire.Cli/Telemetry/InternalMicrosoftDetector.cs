@@ -36,7 +36,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CorpMicrosoftDomainSuffix = ".corp.microsoft.com";
     private const string CacheSubdirectoryName = "internal-microsoft";
     private const string CacheFileName = "detector.json";
-    private const int CacheVersion = 1;
+    private const int CacheVersion = 2;
     private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
@@ -454,7 +454,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
             }
 
-            if (entry.Version is not 0 && entry.Version != CacheVersion)
+            var isCIEnvironment = IsCIEnvironment();
+            if (entry.Version == 0)
+            {
+                // Legacy entries do not record whether the probe set ran in CI mode. A positive
+                // signal remains useful across modes, but reusing an ambiguous negative could hide
+                // the GitHub probes that are intentionally skipped only in CI.
+                if (!entry.IsInternalMicrosoft)
+                {
+                    return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
+                }
+            }
+            else if (entry.Version != CacheVersion || entry.IsCIEnvironment != isCIEnvironment)
             {
                 return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
             }
@@ -517,6 +528,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 Source = result.Source,
                 Alias = result.Alias,
                 Domain = result.Domain,
+                IsCIEnvironment = IsCIEnvironment(),
                 LastRunUtc = _timeProvider.GetUtcNow()
             };
             var json = JsonSerializer.Serialize(entry, JsonSourceGenerationContext.Default.InternalMicrosoftDetectorCacheEntry);
@@ -1898,5 +1910,6 @@ internal sealed record InternalMicrosoftDetectorCacheEntry
     public string? Source { get; init; }
     public string? Alias { get; init; }
     public string? Domain { get; init; }
+    public bool IsCIEnvironment { get; init; }
     public DateTimeOffset LastRunUtc { get; init; }
 }

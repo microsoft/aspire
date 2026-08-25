@@ -66,8 +66,9 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 1,
+              "version": 2,
               "isInternalMicrosoft": false,
+              "isCIEnvironment": false,
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
             }
             """);
@@ -109,8 +110,9 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 1", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 2", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"isCIEnvironment\": false", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"alias\": \"stale.alias\"", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"domain\": \"STALE\"", updatedCache, StringComparison.Ordinal);
@@ -397,6 +399,43 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
         Assert.Equal("current source", result.Source);
         Assert.Equal("current.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_DoesNotReuseNegativeCacheAcrossCIAndLocalModes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var ciDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("CI negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
+            environmentVariables: new Dictionary<string, string?> { ["CI"] = "true" });
+
+        var ciResult = await ciDetector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, ciResult.Outcome);
+        var ciCache = await File.ReadAllTextAsync(cacheFilePath);
+        Assert.Contains("\"version\": 2", ciCache, StringComparison.Ordinal);
+        Assert.Contains("\"isCIEnvironment\": true", ciCache, StringComparison.Ordinal);
+
+        var localProbeRan = false;
+        var localDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("local positive", _ =>
+            {
+                localProbeRan = true;
+                return Task.FromResult(new InternalMicrosoftProbeResult(IsInternalMicrosoft: true, Alias: "local.alias", Domain: null));
+            })]]);
+
+        var localResult = await localDetector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(localProbeRan);
+        Assert.True(localResult.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, localResult.CacheStatus);
+        Assert.Equal("local.alias", localResult.Alias);
     }
 
     [Fact]
