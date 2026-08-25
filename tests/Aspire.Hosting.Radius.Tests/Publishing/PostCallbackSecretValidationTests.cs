@@ -111,7 +111,7 @@ public class PostCallbackSecretValidationTests : IDisposable
     /// permits a much narrower alphabet than Bicep does.
     /// </summary>
     [Fact]
-    public void CallbackAddingAnInvalidDataKeyToASecurititySecret_FailsThePublish()
+    public void CallbackAddingAnInvalidDataKeyToASecuritySecret_FailsThePublish()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
             AddContainerWithSecretEnvironment,

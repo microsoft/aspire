@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -511,6 +513,7 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
     /// </para>
     /// </remarks>
     [Fact]
+    [OuterloopTest("Creates a third KinD cluster and Radius control-plane install in this suite; the per-PR budget only carries the container and single-backing-resource deploys")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployRadiusRedisRabbitMqAndMongoBackingResourcesToKind()
     {
@@ -618,18 +621,43 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             Assert.True(File.Exists(appBicepPath), $"Expected generated Bicep at '{appBicepPath}'.");
             var appBicep = File.ReadAllText(appBicepPath);
 
-            // The 0.60 UDTs, not the legacy portable types they replaced.
-            Assert.Contains("Radius.Data/redisCaches", appBicep);
-            Assert.Contains("Radius.Messaging/rabbitMQ@", appBicep);
-            Assert.DoesNotContain("Applications.Datastores/redisCaches", appBicep);
-            Assert.DoesNotContain("Applications.Messaging/rabbitMQQueues", appBicep);
+            // Assert the complete set of emitted resource types rather than probing for individual
+            // absences: a set assertion also catches an unexpected extra resource or a renamed
+            // type, which `Assert.DoesNotContain` cannot.
+            //
+            // Declarations look like:
+            //   resource cache 'Radius.Data/redisCaches@2025-08-01-preview' = {
+            var emittedTypes = Regex.Matches(appBicep, @"^resource\s+\S+\s+'(?<type>[^']+)'", RegexOptions.Multiline)
+                .Select(match => match.Groups["type"].Value)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(type => type, StringComparer.Ordinal)
+                .ToArray();
 
-            // MongoDB is the opposite case, and deliberately so: no Kubernetes recipe has shipped
-            // for the `Radius.Data/mongoDatabases` UDT, so the legacy portable type — which has both
-            // a recipe and a `listSecrets()` action — is the only deployable mapping. This is the
-            // only resource in the suite that exercises that projection shape end to end.
-            Assert.Contains("Applications.Datastores/mongoDatabases", appBicep);
-            Assert.DoesNotContain("Radius.Data/mongoDatabases", appBicep);
+            Assert.Equal(
+                new[]
+                {
+                    // MongoDB is deliberately the one legacy mapping, and it drags the legacy
+                    // environment/application pair in with it: no Kubernetes recipe has shipped for
+                    // the `Radius.Data/mongoDatabases` UDT, so the legacy portable type — which has
+                    // both a recipe and a `listSecrets()` action — is the only deployable mapping.
+                    // This is the only resource in the suite that exercises that projection shape
+                    // end to end.
+                    "Applications.Core/applications@2023-10-01-preview",
+                    "Applications.Core/environments@2023-10-01-preview",
+                    "Applications.Datastores/mongoDatabases@2023-10-01-preview",
+                    "Radius.Compute/containers@2025-08-01-preview",
+                    "Radius.Core/applications@2025-08-01-preview",
+                    "Radius.Core/environments@2025-08-01-preview",
+                    "Radius.Core/recipePacks@2025-08-01-preview",
+                    // The 0.60 UDTs, not the legacy portable types (`Applications.Datastores/redisCaches`,
+                    // `Applications.Messaging/rabbitMQQueues`) they replaced.
+                    "Radius.Data/redisCaches@2025-08-01-preview",
+                    "Radius.Messaging/rabbitMQ@2025-08-01-preview",
+                    // Two of these are emitted — the broker's password and the consumer's env
+                    // secret — but the set is deduplicated by type.
+                    "Radius.Security/secrets@2025-08-01-preview",
+                },
+                emittedTypes);
 
             // The legacy shape: the credential comes from the deployed resource's `listSecrets()`
             // action and the user name from its properties, both resolved by Radius at deploy time.
@@ -641,7 +669,6 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // broker. If this ever regresses to an inline password the deploy below still succeeds
             // — Radius would store the string as the "secret ID" — so pin the shape here and let
             // the deploy prove it resolves.
-            Assert.Contains("Radius.Security/secrets", appBicep);
             Assert.Contains("password: queue_password_secret.id", appBicep);
 
             // Radius.Security/secrets is recipe-backed, so emitting one obliges the pack to carry

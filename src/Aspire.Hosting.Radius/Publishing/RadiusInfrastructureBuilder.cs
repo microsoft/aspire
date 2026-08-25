@@ -2328,7 +2328,8 @@ internal sealed class RadiusInfrastructureBuilder
         // The user name is a plain input on these types, so it is written straight onto the
         // resource. Omitting it would let the UDT apply its own default (`radius`), which disagrees
         // with the user name Aspire already composed into the connection string.
-        if (TryGetCredentialParameter(withConnectionString, "username") is { } userNameParameter)
+        var userNameParameter = TryGetCredentialParameter(withConnectionString, "username");
+        if (userNameParameter is not null)
         {
             // Both roles are written straight onto the resource here, so RegisterRecipeCredential's
             // same-owner check alone would not catch one parameter used for both: it only rejects
@@ -2370,8 +2371,16 @@ internal sealed class RadiusInfrastructureBuilder
         //     with no value provider to substitute (the same gap DefaultUserName_RemainsALiteral
         //     pins), so the two would disagree.
         // So this fails the publish instead, and names the one-line fix.
+        //
+        // Both spellings of `guest` have to be caught. A literal user name renders as the Bicep
+        // string literal `'guest'`, but a parameter-supplied one renders as a Bicep *identifier*
+        // (`param queueuser`), so the rendered text says nothing about the value. Supplying a
+        // parameter is exactly the remediation the message below recommends, so missing that case
+        // would route users around the guard with the guard's own advice. Parameter values are
+        // normally known at publish time, so resolve it and compare.
         if (construct.GetSchemaProperty("username") is { } emittedUserName &&
-            RenderBicepValue(emittedUserName) is "'guest'")
+            (RenderBicepValue(emittedUserName) is "'guest'" ||
+             await ResolvesToGuestUserNameAsync(userNameParameter).ConfigureAwait(false)))
         {
             throw new RadiusBackingResourceProjectionException(
                 resource,
@@ -2386,6 +2395,38 @@ internal sealed class RadiusInfrastructureBuilder
         // queue concept to map from — AddRabbitMQ declares a broker, not a queue — so any value here
         // would be invented. The UDT's own default (`jobs`) applies instead, and consumers create
         // the queues they need through the AMQP client.
+    }
+
+    /// <summary>
+    /// Determines whether a parameter-supplied user name resolves to RabbitMQ's <c>guest</c>
+    /// account, which the emitted Bicep cannot reveal because a parameter renders as an identifier
+    /// rather than as its value.
+    /// </summary>
+    /// <remarks>
+    /// A parameter whose value cannot be produced while publishing (no value configured, or a
+    /// default only the deployment can materialize) is treated as not being <c>guest</c>: the guard
+    /// exists to catch the value Aspire itself composed into the connection string, and failing the
+    /// publish on an unknowable value would reject models that are perfectly valid.
+    /// </remarks>
+    private async Task<bool> ResolvesToGuestUserNameAsync(ParameterResource? userNameParameter)
+    {
+        if (userNameParameter is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var value = await userNameParameter.GetValueAsync(_cancellationToken).ConfigureAwait(false);
+            return string.Equals(value, "guest", StringComparison.Ordinal);
+        }
+        catch (MissingParameterValueException)
+        {
+            // The parameter has no value configured while publishing, so `guest` cannot be ruled in
+            // or out. Deliberately narrow: any other failure resolving the parameter is a real error
+            // and must keep propagating rather than being swallowed by this guard.
+            return false;
+        }
     }
 
     /// <summary>

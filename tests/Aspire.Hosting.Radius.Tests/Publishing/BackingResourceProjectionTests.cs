@@ -142,8 +142,11 @@ public class BackingResourceProjectionTests
         });
 
         // Snapshotted rather than asserted with DoesNotContain: the guarantee is about the whole
-        // document (no `param cache_password` anywhere, and every consumer value reading
-        // listSecrets()), which a substring absence check cannot express.
+        // document (no `param cache_password` anywhere, and every consumer value composed from the
+        // recipe's own outputs), which a substring absence check cannot express. Redis's recipe
+        // publishes no credential output at all, so the correct projected credential here is
+        // *empty* — there is no `listSecrets()` in this snapshot to look for, and adding one would
+        // be the regression.
         return Verify(bicep, extension: "bicep");
     }
 

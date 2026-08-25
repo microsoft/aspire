@@ -73,6 +73,21 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             // after publish and RequiredBy deploy; a no-op when no sealed store is declared.
             var applySealedSecretsStep = new SealedSecretApplyStep(this).CreatePipelineStep();
 
+            // Control-plane version gate. It lives in its own step, rather than inside the deploy
+            // step, so it runs before anything else touches the cluster or the machine: registering
+            // cloud credentials rewrites installation-global `rad` state and applying sealed secrets
+            // mutates the cluster, and neither should happen on a control plane too old to deploy to
+            // (ASPIRERADIUS091). Contacting the cluster is deploy-only work, so nothing here is
+            // RequiredBy the publish step.
+            var verifyControlPlaneStep = new PipelineStep
+            {
+                Name = $"verify-radius-control-plane-{Name}",
+                Description = $"Verifies the Radius control plane version for {Name}.",
+                Action = stepContext => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(stepContext.Logger, stepContext.CancellationToken),
+                DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq],
+                RequiredBySteps = [applySealedSecretsStep.Name, deployStep.Name],
+            };
+
             // Only schedule the credential-register step when the environment
             // has cloud-provider configuration attached. Apps without the new
             // WithAzure/WithAws extensions emit byte-identical pipelines.
@@ -82,10 +97,11 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             if (hasCloudProviders)
             {
                 var registerStep = new RadCredentialRegisterStep(this).CreatePipelineStep();
-                return [validateSecretStoresStep, prepareStep, publishStep, registerStep, applySealedSecretsStep, deployStep];
+                verifyControlPlaneStep.RequiredBy(registerStep.Name);
+                return [validateSecretStoresStep, prepareStep, publishStep, verifyControlPlaneStep, registerStep, applySealedSecretsStep, deployStep];
             }
 
-            return [validateSecretStoresStep, prepareStep, publishStep, applySealedSecretsStep, deployStep];
+            return [validateSecretStoresStep, prepareStep, publishStep, verifyControlPlaneStep, applySealedSecretsStep, deployStep];
         }));
     }
 

@@ -692,6 +692,43 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
+    /// The same guard has to hold when `guest` arrives through a parameter. A parameter renders as
+    /// a Bicep identifier rather than as its value, so the emitted text alone cannot distinguish it
+    /// from any other user name — and supplying a parameter is precisely the remediation
+    /// ASPIRERADIUS082 recommends, so a value-blind check would route users around the guard using
+    /// the guard's own advice.
+    /// </summary>
+    [Fact]
+    public void ParameterSuppliedGuestRabbitMqUserName_AlsoFailsThePublish()
+    {
+        var ex = Assert.Throws<RadiusBackingResourceProjectionException>(() => GenerateBicep(b =>
+        {
+            var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser", "guest"));
+            b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
+        }));
+
+        Assert.Contains("ASPIRERADIUS082", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("guest", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The complement of <see cref="ParameterSuppliedGuestRabbitMqUserName_AlsoFailsThePublish"/>:
+    /// resolving the parameter's value must not turn every parameter-supplied user name into a
+    /// failure. Only `guest` is rejected.
+    /// </summary>
+    [Fact]
+    public void ParameterSuppliedNonGuestRabbitMqUserName_PublishesSuccessfully()
+    {
+        var (bicep, _) = GenerateBicep(b =>
+        {
+            var rabbit = b.AddRabbitMQ("rabbit", userName: b.AddParameter("rabbituser", "appuser"));
+            b.AddContainer("api", "myapp/api", "latest").WithReference(rabbit);
+        });
+
+        Assert.Contains("Radius.Messaging/rabbitMQ@", bicep, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The RabbitMQ UDT takes its password as the resource ID of a Radius.Security/secrets resource,
     /// so — unlike the listSecrets() types — the password the AppHost author chose is the one the
     /// recipe provisions. Nothing is overridden, so nothing is reported.

@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES004
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -31,6 +32,161 @@ internal sealed class RadiusDeploymentPipelineStep
     // then caught by RadCliDetectionTests.RadCliNotFoundException_ContainsInstallLinkAndRemediation exercising this method.
     internal static InvalidOperationException CreateRadCliNotFoundException() =>
         new($"The 'rad' CLI was not found. Please install it from {RadInstallUrl} and ensure it is available on your PATH.");
+
+    // The oldest Radius control plane whose schemas match the Bicep this integration emits.
+    // v0.60 renamed the `Radius.Core/recipePacks` fields `recipeKind`/`recipeLocation` to
+    // `kind`/`source`. The Radius API server *drops* fields it does not recognize rather than
+    // rejecting them, so deploying these artifacts to an older control plane silently produces an
+    // empty recipe pack: `rad deploy` reports success and every backing resource then fails to
+    // resolve a recipe. That failure mode is why this is a hard preflight rather than a README note.
+    internal static Version MinimumControlPlaneVersion { get; } = new(0, 60);
+
+    internal static InvalidOperationException CreateUnsupportedControlPlaneException(Version controlPlaneVersion) =>
+        new($"The Radius control plane is v{controlPlaneVersion}, but this integration requires " +
+            $"v{MinimumControlPlaneVersion} or later. Deploying to an older control plane appears to succeed while " +
+            $"silently discarding the recipe pack, leaving every backing resource without a recipe. Run " +
+            $"'rad upgrade kubernetes' to bring the control plane up to date, then deploy again. " +
+            $"The version is read with 'rad version', which inspects the cluster in your current Kubernetes " +
+            $"context — if your rad workspace targets a different cluster, switch to that cluster's context " +
+            $"before deploying. " +
+            $"Diagnostic: ASPIRERADIUS091.");
+
+    /// <summary>
+    /// Extracts the control plane version from <c>rad version -o json</c>.
+    /// </summary>
+    /// <remarks>
+    /// The payload is the CLI's <c>CombinedVersionInfo</c>:
+    /// <code>
+    /// { "cli": { "release": "0.60.0", "version": "v0.60.0", "bicep": "0.35.1", "commit": "abc123" },
+    ///   "controlPlane": { "version": "0.60.0", "status": "Installed" } }
+    /// </code>
+    /// When the cluster is unreachable or Radius is not installed the CLI still exits 0 and reports
+    /// <c>{ "version": "Not installed", "status": "Not connected" }</c>, and an edge/dev build
+    /// reports a non-numeric version such as <c>edge</c>. Every one of those is "unknown" rather
+    /// than "unsupported": the gate must not fail a deploy on a version it could not read.
+    /// See https://github.com/radius-project/radius/blob/main/pkg/cli/cmd/version/version.go.
+    /// </remarks>
+    internal static bool TryParseControlPlaneVersion(string json, out Version? version)
+    {
+        version = null;
+
+        try
+        {
+            // Read the node as a JsonValue and ask for a string rather than calling
+            // GetValue<string>() directly: a `version` that is a number, object or array would make
+            // GetValue<string>() throw InvalidOperationException, which would defeat the fail-open
+            // policy this method exists to implement.
+            if (JsonNode.Parse(json) is not JsonObject root ||
+                root["controlPlane"] is not JsonObject controlPlane ||
+                controlPlane["version"] is not JsonValue versionValue ||
+                !versionValue.TryGetValue<string>(out var rawVersion))
+            {
+                return false;
+            }
+
+            // Releases are reported bare (`0.60.0`) but tolerate the `v` prefix the CLI uses for its
+            // own version, in case the two ever converge on one format.
+            return Version.TryParse(rawVersion.TrimStart('v', 'V'), out version);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Fails the deploy when the target cluster runs a control plane older than
+    /// <see cref="MinimumControlPlaneVersion"/>. A version that cannot be determined is allowed
+    /// through: the gate exists to convert one specific silent failure into a loud one, not to
+    /// become a new way for deploys to fail.
+    /// </summary>
+    /// <remarks>
+    /// <c>rad version</c> takes no context flag and leaves the CLI's <c>KubeContext</c> unset, so it
+    /// reports the control plane in the ambient (current) Kubernetes context. That is the same
+    /// cluster <c>rad init</c> bound the workspace to in the normal case, but a user who switched
+    /// contexts without switching workspaces would have a workspace pointing elsewhere. The
+    /// exception message says which cluster was inspected for exactly that reason.
+    /// </remarks>
+    internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, CancellationToken cancellationToken)
+    {
+        string output;
+
+        using (var process = new Process())
+        {
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = "rad",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            process.StartInfo.ArgumentList.Add("version");
+            process.StartInfo.ArgumentList.Add("--output");
+            process.StartInfo.ArgumentList.Add("json");
+
+            try
+            {
+                process.Start();
+            }
+            catch (Win32Exception ex)
+            {
+                // `rad` is not on PATH. The deploy step's own detection reports that; this gate
+                // has nothing to check.
+                logger.LogDebug(ex, "Could not run 'rad version --output json'; skipping the control plane version check.");
+                return;
+            }
+
+            // Read both pipes concurrently, and start reading before waiting: draining only stdout
+            // lets a chatty stderr fill its pipe buffer, block the child, and hang the wait forever.
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                output = await stdoutTask.ConfigureAwait(false);
+                await stderrTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Disposing Process only releases the handle, so without this the cancelled deploy
+                // would leave `rad` — and the Helm/Kubernetes work it started — running.
+                if (!process.HasExited)
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Race: the process exited between the HasExited check and Kill. Nothing to do.
+                    }
+                }
+
+                throw;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                logger.LogDebug("'rad version --output json' exited with code {ExitCode}; skipping the control plane version check.", process.ExitCode);
+                return;
+            }
+        }
+
+        if (!TryParseControlPlaneVersion(output, out var controlPlaneVersion) || controlPlaneVersion is null)
+        {
+            logger.LogDebug("Could not determine the Radius control plane version; skipping the control plane version check.");
+            return;
+        }
+
+        if (controlPlaneVersion < MinimumControlPlaneVersion)
+        {
+            throw CreateUnsupportedControlPlaneException(controlPlaneVersion);
+        }
+
+        logger.LogInformation("Radius control plane v{ControlPlaneVersion} detected.", controlPlaneVersion);
+    }
 
     private readonly RadiusEnvironmentResource _environment;
 
