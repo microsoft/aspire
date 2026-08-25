@@ -1,0 +1,17 @@
+{
+  "id": "dashboard-runstore-writemetadata-windows-access-denied",
+  "type": "flaky-test",
+  "title": "Flaky: Dashboard DashboardDataSourceTests.RunMode_DeletesOldestRunWhenLimitIsExceeded fails with UnauthorizedAccessException on Windows during metadata file move",
+  "test_name": "Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeletesOldestRunWhenLimitIsExceeded",
+  "error_pattern": "System.UnauthorizedAccessException : Access to the path is denied.\n   at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata, String metadataPath) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 423\n   at DashboardRunStore.Dispose()",
+  "occurrences": [
+    {
+      "run_id": 32880916910,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32880916910",
+      "job": "Tests / Dashboard / Dashboard (windows-latest)",
+      "pr_number": 19620,
+      "observed_at": "2026-08-25T18:31:42Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19671"
+}

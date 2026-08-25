@@ -1,0 +1,79 @@
+{
+  "run_id": 32880916910,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32880916910",
+  "analyzed_at": "2026-08-25T18:31:42Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19620,
+    "title": "Remove unnecessary friend assembly declarations",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-audit-friend-assemblies",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19620"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (windows-latest)",
+      "id": 97910614797,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32880916910/job/97910614797",
+      "classification": "flaky-test",
+      "reason": "Test fails with UnauthorizedAccessException on Windows during DashboardRunStore.WriteMetadata/Dispose file move; unrelated to PR changes (friend-assembly cleanup, no Dashboard code touched). Consistent with Windows file-locking flakiness.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 97912924066,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32880916910/job/97912924066",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring flaky pattern 'cli-smoke-test-homebrew-winget-unrelated'; smoke test fails unrelated to PR changes which only touch csproj/AssemblyInfo friend-assembly declarations.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Prepare WinGet installer artifacts / Prepare WinGet manifests",
+      "id": 97913926443,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32880916910/job/97913926443",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring flaky pattern 'cli-smoke-test-homebrew-winget-unrelated'; smoke test fails unrelated to PR changes.",
+      "failed_steps": ["Smoke test installed CLI (aspire new + restore)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 97914135514,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32880916910/job/97914135514",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring flaky pattern 'vscode-e2e-linux-workspace-target-proof-flaky'; generic exit code 1, unrelated to PR changes which only touch hosting csproj/AssemblyInfo files.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 97914135597,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32880916910/job/97914135597",
+      "classification": "flaky-test",
+      "reason": "Matches known recurring flaky pattern 'vscode-e2e-windows-edge-cases-flaky'; generic exit code 1, unrelated to PR changes.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeletesOldestRunWhenLimitIsExceeded",
+      "job": "Tests / Dashboard / Dashboard (windows-latest)",
+      "error": "System.UnauthorizedAccessException : Access to the path is denied.",
+      "stack_trace": "at System.IO.FileSystem.MoveFile(String sourceFullPath, String destFullPath, Boolean overwrite)\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata, String metadataPath) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 423\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.WriteMetadata(DashboardRunMetadata metadata) in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 411\n   at Aspire.Dashboard.ServiceClient.DashboardRunStore.Dispose() in /_/src/Aspire.Dashboard/ServiceClient/DashboardRunStore.cs:line 392\n   at Aspire.Dashboard.Tests.Model.DashboardDataSourceTests.RunMode_DeletesOldestRunWhenLimitIsExceeded() in /_/tests/Aspire.Dashboard.Tests/Model/DashboardDataSourceTests.cs:line 609",
+      "classification": "flaky",
+      "reason": "Windows file-locking race (Access to the path is denied) during file move in Dispose; test/area not touched by this PR (PR only removes friend-assembly declarations)."
+    }
+  ],
+  "causes": [
+    "dashboard-runstore-writemetadata-windows-access-denied",
+    "cli-smoke-test-homebrew-winget-unrelated",
+    "vscode-e2e-linux-workspace-target-proof-flaky",
+    "vscode-e2e-windows-edge-cases-flaky"
+  ]
+}
