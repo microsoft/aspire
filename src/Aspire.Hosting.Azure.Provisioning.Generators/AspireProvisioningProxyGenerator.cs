@@ -18,6 +18,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private const string BicepValueBaseMetadataName = "Azure.Provisioning.BicepValue";
     private const string BicepValueMetadataName = "Azure.Provisioning.BicepValue<T>";
     private const string CoreProvisioningAssemblyName = "Azure.Provisioning";
+    private const string SystemDataMetadataName = "Azure.Provisioning.SystemData";
     private const string BicepValueProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.BicepValueProxy";
     private const string ProvisionableResourceProxyTypeName = "global::Aspire.Hosting.Azure.Provisioning.ProvisionableResourceProxy";
     private const string AzureResourceInfrastructureTypeName = "global::Aspire.Hosting.Azure.AzureResourceInfrastructure";
@@ -1890,11 +1891,39 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         ISymbol member,
         HashSet<string> excludedMemberNames)
     {
-        return excludedMemberNames.Contains(member.Name) ||
+        return IsNativelyExcluded(member) ||
+            excludedMemberNames.Contains(member.Name) ||
             excludedMemberNames.Contains(
                 member.ContainingType.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) +
                 "." +
                 member.Name);
+    }
+
+    private static bool IsNativelyExcluded(ISymbol member)
+    {
+        if (member is IPropertySymbol property &&
+            property.Type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) == SystemDataMetadataName)
+        {
+            return true;
+        }
+
+        if (member is IMethodSymbol
+            {
+                Name: "GetResourceNameRequirements",
+                Parameters.Length: 0,
+                OverriddenMethod: { } overriddenMethod
+            })
+        {
+            for (var current = overriddenMethod; current is not null; current = current.OverriddenMethod)
+            {
+                if (IsProvisionableResourceBase(current.ContainingType))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool IsProvisionableResource(INamedTypeSymbol type)

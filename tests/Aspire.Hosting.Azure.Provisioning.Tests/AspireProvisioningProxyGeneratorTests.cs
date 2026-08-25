@@ -19,6 +19,8 @@ public class AspireProvisioningProxyGeneratorTests
         var resourceProxy = result.Compilation.GetTypeByMetadataName(
             "ProvisioningGeneratorTests.Generated.SampleResourceProxy");
         Assert.NotNull(resourceProxy);
+        Assert.Null(result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.SystemDataProxy"));
         Assert.Equal(
             [
                 "Child",
@@ -200,6 +202,9 @@ public class AspireProvisioningProxyGeneratorTests
                 public Azure.Provisioning.BicepList<string> Tags { get; set; } = new();
                 public Azure.Provisioning.BicepList<ChildModel> Children { get; set; } = new();
                 public Azure.Provisioning.BicepDictionary<string> Labels { get; set; } = new();
+                public Azure.Provisioning.SystemData SystemData { get; } = new();
+
+                public override Azure.Provisioning.ResourceNameRequirements GetResourceNameRequirements() => new();
 
                 public void Reset()
                 {
@@ -512,6 +517,15 @@ public class AspireProvisioningProxyGeneratorTests
             public sealed class ProvisioningPlan
             {
             }
+
+            public sealed class ResourceNameRequirements
+            {
+            }
+
+            public sealed class SystemData
+            {
+                public string CreatedBy { get; set; } = string.Empty;
+            }
         }
 
         namespace Azure.Provisioning.Primitives
@@ -540,6 +554,8 @@ public class AspireProvisioningProxyGeneratorTests
                 }
 
                 public string BicepIdentifier { get; }
+
+                public virtual global::Azure.Provisioning.ResourceNameRequirements GetResourceNameRequirements() => new();
             }
         }
         """;

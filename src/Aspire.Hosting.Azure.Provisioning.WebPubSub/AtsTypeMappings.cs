@@ -4,11 +4,5 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.WebPubSub;
 
-[assembly: GenerateAspireProvisioningProxy(
-    typeof(WebPubSubService),
-    ExcludedMemberNames = new[]
-    {
-        "GetResourceNameRequirements",
-        "SystemData"
-    })]
+[assembly: GenerateAspireProvisioningProxy(typeof(WebPubSubService))]
 [assembly: GenerateAspireProvisioningProxy(typeof(WebPubSubHub), IsInfrastructureRoot = false)]

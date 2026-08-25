@@ -6,10 +6,5 @@ using Azure.Provisioning.CognitiveServices;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(CognitiveServicesAccount),
-    ExcludedMemberNames = new[]
-    {
-        "AdditionalProperties",
-        "GetResourceNameRequirements",
-        "SystemData"
-    })]
+    ExcludedMemberNames = new[] { "AdditionalProperties" })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CognitiveServicesAccountDeployment), IsInfrastructureRoot = false)]

@@ -4,13 +4,7 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.ContainerRegistry;
 
-[assembly: GenerateAspireProvisioningProxy(
-    typeof(ContainerRegistryService),
-    ExcludedMemberNames = new[]
-    {
-        "GetResourceNameRequirements",
-        "SystemData"
-    })]
+[assembly: GenerateAspireProvisioningProxy(typeof(ContainerRegistryService))]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerRegistryTask), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerRegistryEncodedTaskStep))]
 [assembly: GenerateAspireProvisioningProxy(typeof(ContainerRegistryTimerTrigger))]

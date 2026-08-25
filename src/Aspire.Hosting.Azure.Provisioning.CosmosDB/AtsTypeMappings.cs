@@ -6,11 +6,6 @@ using Azure.Provisioning.CosmosDB;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(CosmosDBAccount),
-    ExcludedMemberNames = new[]
-    {
-        "GetResourceNameRequirements",
-        "NetworkAclBypassResourceIds",
-        "SystemData"
-    })]
+    ExcludedMemberNames = new[] { "NetworkAclBypassResourceIds" })]
 [assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBSqlDatabase), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(CosmosDBSqlContainer), IsInfrastructureRoot = false)]

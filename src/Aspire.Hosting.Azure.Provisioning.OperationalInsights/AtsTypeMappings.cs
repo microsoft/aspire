@@ -6,9 +6,4 @@ using Azure.Provisioning.OperationalInsights;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(OperationalInsightsWorkspace),
-    ExcludedMemberNames = new[]
-    {
-        "AdditionalProperties",
-        "GetResourceNameRequirements",
-        "SystemData"
-    })]
+    ExcludedMemberNames = new[] { "AdditionalProperties" })]

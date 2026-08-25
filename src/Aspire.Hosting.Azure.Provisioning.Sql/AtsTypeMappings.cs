@@ -4,12 +4,6 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.Sql;
 
-[assembly: GenerateAspireProvisioningProxy(
-    typeof(SqlServer),
-    ExcludedMemberNames = new[]
-    {
-        "GetResourceNameRequirements",
-        "SystemData"
-    })]
+[assembly: GenerateAspireProvisioningProxy(typeof(SqlServer))]
 [assembly: GenerateAspireProvisioningProxy(typeof(SqlDatabase), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServerExternalAdministrator), IsInfrastructureRoot = false)]

@@ -6,12 +6,7 @@ using Azure.Provisioning.ServiceBus;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(ServiceBusNamespace),
-    ExcludedMemberNames = new[]
-    {
-        "ApplicationProperties",
-        "GetResourceNameRequirements",
-        "SystemData"
-    })]
+    ExcludedMemberNames = new[] { "ApplicationProperties" })]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusQueue), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusTopic), IsInfrastructureRoot = false)]
 [assembly: GenerateAspireProvisioningProxy(typeof(ServiceBusSubscription), IsInfrastructureRoot = false)]
