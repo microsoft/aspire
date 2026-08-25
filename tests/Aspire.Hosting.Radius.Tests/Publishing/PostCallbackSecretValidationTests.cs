@@ -145,6 +145,71 @@ public class PostCallbackSecretValidationTests : IDisposable
         Assert.Contains("not a key", ex.Message);
     }
 
+    /// <summary>
+    /// An inline store's <c>StoreName</c> becomes the backing Kubernetes <c>Secret</c>'s
+    /// <c>metadata.name</c> verbatim — the collision pass claims the object under exactly that name
+    /// — so it needs the same post-callback check the generated secret's name gets.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAnInvalidInlineStoreName_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            builder =>
+            {
+                builder.AddRadiusSecretStore("store", RadiusSecretStoreType.Generic)
+                    .WithData("good", builder.AddParameter("pw", secret: true));
+                builder.AddContainer("api", "myapp/api:latest");
+            },
+            opts => opts.SecretStores[0].StoreName = "Not_A_Valid_Name"));
+
+        Assert.Contains("ASPIRERADIUS088", ex.Message);
+        Assert.Contains("Not_A_Valid_Name", ex.Message);
+    }
+
+    /// <summary>
+    /// An existing-secret store names its Kubernetes object through <c>resource</c>, leaving
+    /// <c>StoreName</c> as the Radius-side resource name only. Validating it as an object name there
+    /// would reject a store that never materializes one.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAnInvalidExistingStoreName_StillPublishes()
+    {
+        var bicep = GenerateBicep(
+            builder =>
+            {
+                builder.AddRadiusSecretStore("store", RadiusSecretStoreType.Generic)
+                    .WithExistingSecret("default/preexisting", "username");
+                builder.AddContainer("api", "myapp/api:latest");
+            },
+            opts => opts.SecretStores[0].StoreName = "Not_A_Valid_Name");
+
+        Assert.Contains("Not_A_Valid_Name", bicep);
+    }
+
+    /// <summary>
+    /// A store name only knowable at deploy time cannot be checked statically, and rejecting it
+    /// would contradict the callback surface's last-write-wins contract.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingAnInlineStoreNameExpression_StillPublishes()
+    {
+        var bicep = GenerateBicep(
+            builder =>
+            {
+                builder.AddRadiusSecretStore("store", RadiusSecretStoreType.Generic)
+                    .WithData("good", builder.AddParameter("pw", secret: true));
+                builder.AddContainer("api", "myapp/api:latest");
+            },
+            opts =>
+            {
+                var parameter = new ProvisioningParameter("storeName", typeof(string));
+                opts.Parameters.Add(parameter);
+                opts.SecretStores[0].StoreName = parameter;
+            });
+
+        Assert.Contains("name: storeName", bicep);
+    }
+
     // ASPIRERADIUS090 — two Radius resources, one Kubernetes object.
 
     /// <summary>
@@ -302,6 +367,72 @@ public class PostCallbackSecretValidationTests : IDisposable
             opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Value = "hunter2"));
 
         Assert.Contains("ASPIRERADIUS089", ex.Message);
+    }
+
+    /// <summary>
+    /// The encoding decides how the recipe interprets the value: <c>base64</c> makes it decode
+    /// before writing the Kubernetes <c>Secret</c>, so the broker is provisioned with a different
+    /// credential than the byte-identical value consumers were given. Comparing the value alone
+    /// would let this through and leave a runtime-only authentication failure.
+    /// </summary>
+    [Fact]
+    public void CallbackMutatingTheCredentialEncodingInPlace_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddRabbitMqWithGeneratedPassword,
+            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = "base64"));
+
+        Assert.Contains("ASPIRERADIUS089", ex.Message);
+        Assert.Contains("encoding", ex.Message);
+    }
+
+    /// <summary>
+    /// Blanking the encoding lets the type's own default decide, which is no more knowable to the
+    /// consumers that already hold the credential than an explicit change is.
+    /// </summary>
+    [Fact]
+    public void CallbackBlankingTheCredentialEncoding_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddRabbitMqWithGeneratedPassword,
+            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = ""));
+
+        Assert.Contains("ASPIRERADIUS089", ex.Message);
+    }
+
+    /// <summary>
+    /// An expression-valued encoding is not knowable while publishing, so it cannot be shown to
+    /// still be <c>string</c>. Unlike a secret's <em>name</em> — where an expression stays coherent
+    /// because both sides resolve to the same value — an unknowable encoding decides how a credential
+    /// consumers already hold gets decoded, so it has to be rejected rather than trusted.
+    /// </summary>
+    [Fact]
+    public void CallbackSettingACredentialEncodingExpression_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(
+            AddRabbitMqWithGeneratedPassword,
+            opts =>
+            {
+                var parameter = new ProvisioningParameter("encoding", typeof(string));
+                opts.Parameters.Add(parameter);
+                opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = parameter;
+            }));
+
+        Assert.Contains("ASPIRERADIUS089", ex.Message);
+    }
+
+    /// <summary>
+    /// The encoding check must not fire on a callback that leaves the credential alone, which is the
+    /// overwhelmingly common case — a callback that only re-scopes or renames the secret.
+    /// </summary>
+    [Fact]
+    public void CallbackLeavingTheCredentialAlone_StillPublishes()
+    {
+        var bicep = GenerateBicep(
+            AddRabbitMqWithGeneratedPassword,
+            opts => opts.SecuritySecrets[0].Data.Values.First().Value!.Encoding = "string");
+
+        Assert.Contains("Radius.Security/secrets", bicep);
     }
 
     /// <summary>

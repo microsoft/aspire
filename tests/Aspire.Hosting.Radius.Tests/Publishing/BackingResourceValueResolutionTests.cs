@@ -412,8 +412,8 @@ public class BackingResourceValueResolutionTests
 
     /// <summary>
     /// An <see cref="InvalidOperationException"/> is only treated as "unknowable here" when the
-    /// condition is an <see cref="IManifestExpressionProvider"/> — a placeholder some other
-    /// deployment fills in. The marker gates the skip; the exception type alone never does.
+    /// condition resolves to a placeholder some other deployment fills in. The classification gates
+    /// the skip; the exception type alone never does.
     /// </summary>
     [Fact]
     public void ConditionalWhoseManifestExpressionConditionFails_SkipsJustThatVariable()
@@ -422,6 +422,152 @@ public class BackingResourceValueResolutionTests
             b.AddContainer("api", "myapp/api", "latest")
                 .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
                     new ThrowingDeploymentOutput(new InvalidOperationException("not deployed yet")),
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")))
+                .WithEnvironment("KEPT", "kept"));
+
+        Assert.DoesNotContain("MODE_URL", bicep, StringComparison.Ordinal);
+        Assert.Contains("'kept'", bicep, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS078", Assert.Single(logger.Matching(LogLevel.Warning, "MODE_URL")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A <see cref="ParameterResource"/> carries <see cref="IManifestExpressionProvider"/> — every
+    /// <c>IExpressionValue</c> does — so testing that marker on the condition itself would classify
+    /// a parameter whose value callback genuinely fails as "not deployed yet" and drop the variable.
+    /// A parameter is never deployment-substituted, so its failure must abort the publish.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseParameterConditionFails_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var mode = b.AddParameter("mode", () => throw new InvalidOperationException("cannot read mode"));
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    mode.Resource,
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")));
+        }));
+
+        Assert.Equal("cannot read mode", ex.Message);
+    }
+
+    /// <summary>
+    /// <see cref="ReferenceExpression"/> also carries <see cref="IManifestExpressionProvider"/>, so
+    /// wrapping a failing provider in one must not launder a real failure into a dropped variable.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseReferenceExpressionConditionFails_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var mode = b.AddParameter("mode", () => throw new InvalidOperationException("cannot read mode"));
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    ReferenceExpression.Create($"{mode.Resource}"),
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")));
+        }));
+
+        Assert.Equal("cannot read mode", ex.Message);
+    }
+
+    /// <summary>
+    /// The classification walks into a wrapper, so a deployment output reached through a
+    /// <see cref="ReferenceExpression"/> is still recognised as unknowable while publishing. Without
+    /// this the tightened check would break the composite conditions authors actually write.
+    /// </summary>
+    [Fact]
+    public void ConditionalWrappingAManifestExpressionCondition_SkipsJustThatVariable()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    ReferenceExpression.Create($"{new ThrowingDeploymentOutput(new InvalidOperationException("not deployed yet"))}"),
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")))
+                .WithEnvironment("KEPT", "kept"));
+
+        Assert.DoesNotContain("MODE_URL", bicep, StringComparison.Ordinal);
+        Assert.Contains("'kept'", bicep, StringComparison.Ordinal);
+        Assert.Contains("ASPIRERADIUS078", Assert.Single(logger.Matching(LogLevel.Warning, "MODE_URL")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <see cref="ContainerImageReference"/> carries <see cref="IManifestExpressionProvider"/> but
+    /// resolves eagerly against the running app's services, so its failure names a real
+    /// configuration error rather than a value another deployment supplies. Classifying by the
+    /// marker alone would drop the variable instead of reporting it.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseContainerImageConditionFails_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var target = b.AddContainer("worker", "myapp/worker", "latest");
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    new ContainerImageReference(target.Resource),
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")));
+        }));
+
+        // The failure is reported as itself rather than translated into ASPIRERADIUS078, which is
+        // the whole point: a RadiusUnresolvableValueException here would become a warning and take
+        // the variable with it.
+        Assert.IsNotType<RadiusUnresolvableValueException>(ex);
+    }
+
+    /// <summary>
+    /// A resource whose connection string refers back to itself makes the classification walk cycle.
+    /// Revisiting a node answers "not deployment-substituted" so the original failure propagates —
+    /// an incomplete traversal must never be the reason a variable is dropped.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseSelfReferentialConnectionStringConditionFails_FailsThePublish()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => GenerateBicep(b =>
+        {
+            var mode = b.AddParameter("mode", () => throw new InvalidOperationException("cannot read mode"));
+            var cyclic = new SelfReferentialConnectionStringResource("cyclic", mode.Resource);
+
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    cyclic.ConnectionStringExpression,
+                    "primary",
+                    ReferenceExpression.Create($"primary"),
+                    ReferenceExpression.Create($"secondary")));
+        }));
+
+        Assert.Equal("cannot read mode", ex.Message);
+    }
+
+    /// <summary>
+    /// A conditional expression's <c>ValueProviders</c> is the union of its two <em>branches</em> and
+    /// excludes its own condition, so a nested conditional hides the provider that decides the
+    /// classification. Walking only <c>ValueProviders</c> would classify this as a real failure and
+    /// abort a publish that should merely drop the variable.
+    /// </summary>
+    [Fact]
+    public void ConditionalWhoseNestedConditionalConditionIsAManifestExpression_SkipsJustThatVariable()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+            b.AddContainer("api", "myapp/api", "latest")
+                .WithEnvironment("MODE_URL", ReferenceExpression.CreateConditional(
+                    ReferenceExpression.CreateConditional(
+                        new ThrowingDeploymentOutput(new InvalidOperationException("not deployed yet")),
+                        "on",
+                        ReferenceExpression.Create($"primary"),
+                        ReferenceExpression.Create($"secondary")),
                     "primary",
                     ReferenceExpression.Create($"primary"),
                     ReferenceExpression.Create($"secondary")))
@@ -1114,6 +1260,21 @@ public class BackingResourceValueResolutionTests
 
         public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
             => throw exception;
+    }
+
+    /// <summary>
+    /// A resource whose connection string contains a reference back to itself. Nothing in the model
+    /// prevents an author from building one, so the classification walk has to survive it.
+    /// </summary>
+    private sealed class SelfReferentialConnectionStringResource : Resource, IResourceWithConnectionString
+    {
+        public SelfReferentialConnectionStringResource(string name, ParameterResource inner)
+            : base(name)
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"{inner};{new ConnectionStringReference(this, false)}");
+        }
+
+        public ReferenceExpression ConnectionStringExpression { get; }
     }
 
     /// <summary>

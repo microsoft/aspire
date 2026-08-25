@@ -896,13 +896,18 @@ internal sealed class RadiusInfrastructureBuilder
             }
 
             // Both an entry swapped for a new construct and one mutated in place are rejected: the
-            // credential Aspire projected to consumers is fixed at this point either way.
+            // credential Aspire projected to consumers is fixed at this point either way. The
+            // encoding is checked alongside the value because it decides how the recipe interprets
+            // that value — flipping `string` to `base64` makes the recipe decode before writing the
+            // Kubernetes Secret, so the provisioned credential diverges from the one consumers hold
+            // even though the value is byte-identical.
             if (!ReferenceEquals(liveEntry?.Value, credential.Entry) ||
-                !string.Equals(RenderBicepValue(credential.Entry.Value), credential.OriginalEntryValue, StringComparison.Ordinal))
+                !string.Equals(RenderBicepValue(credential.Entry.Value), credential.OriginalEntryValue, StringComparison.Ordinal) ||
+                !string.Equals(RenderBicepValue(credential.Entry.Encoding), credential.OriginalEntryEncoding, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"A ConfigureRadiusInfrastructure callback changed the value of key '{credential.SecretKey}' on the " +
-                    $"'{RadiusResourceTypes.SecuritySecrets}' resource '{credential.Secret.BicepIdentifier}', which supplies " +
+                    $"A ConfigureRadiusInfrastructure callback changed the value or encoding of key '{credential.SecretKey}' " +
+                    $"on the '{RadiusResourceTypes.SecuritySecrets}' resource '{credential.Secret.BicepIdentifier}', which supplies " +
                     $"'{credential.PropertyName}' for '{credential.Consumer.BicepIdentifier}'. Consumers were already given " +
                     $"the original credential in their connection strings, so the deployed resource would require a " +
                     $"credential no consumer has. Supply the credential as a parameter instead, or point " +
@@ -1217,7 +1222,8 @@ internal sealed class RadiusInfrastructureBuilder
     /// <para>
     /// The publisher's own names and keys are already checked where they are generated
     /// (<see cref="ToSecretKey"/>, and resource names are constrained by Aspire's model-name rules),
-    /// but <see cref="RadiusSecuritySecretConstruct.SecretName"/> and the <c>Data</c> dictionaries
+    /// but <see cref="RadiusSecuritySecretConstruct.SecretName"/>,
+    /// <see cref="RadiusSecretStoreConstruct.StoreName"/> and the <c>Data</c> dictionaries
     /// are public and freely mutable, so the final state is only knowable here.
     /// </para>
     /// <para>
@@ -1253,13 +1259,31 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        // Secret stores reach the same Kubernetes `data` map. AddRadiusSecretStore validates keys at
-        // the API boundary, but the construct is part of the callback surface too, so the final
-        // state still has to be checked. Both population modes key `Data` identically — an inline
-        // entry carries a value and an existing-secret entry is an empty object naming a key to
-        // expose — so the key contract is the same for both.
+        // Secret stores reach the same Kubernetes `data` map, and an inline store's `StoreName`
+        // becomes the object's `metadata.name`. AddRadiusSecretStore validates both at the API
+        // boundary, but the construct is part of the callback surface too, so the final state still
+        // has to be checked. Both population modes key `Data` identically — an inline entry carries
+        // a value and an existing-secret entry is an empty object naming a key to expose — so the
+        // key contract is the same for both.
         foreach (var store in options.SecretStores)
         {
+            // Only an inline store materializes an object under its own `StoreName`; an
+            // existing/sealed store names its object through `resource`, leaving `StoreName` as the
+            // Radius-side resource name only. The gate mirrors ValidateNoPhysicalSecretCollisions,
+            // which claims exactly these stores with `materializes: true`.
+            if (RenderBicepLiteral(store.ResourceReference) is null &&
+                !IsBicepExpression(store.ResourceReference) &&
+                RenderBicepLiteral(store.StoreName) is { } storeName &&
+                !KubernetesName.IsDns1123Subdomain(storeName))
+            {
+                throw new InvalidOperationException(
+                    $"The secret store '{store.BicepIdentifier}' has the name '{storeName}', which is not a valid " +
+                    $"Kubernetes object name. The recipe uses it verbatim as the Secret's 'metadata.name', so the " +
+                    $"deployment would be rejected. A name must be a DNS-1123 subdomain: 1-253 characters of " +
+                    $"lowercase letters, digits, '-' and '.', starting and ending alphanumeric. " +
+                    $"Diagnostic: ASPIRERADIUS088.");
+            }
+
             foreach (var (key, _) in store.Data)
             {
                 ValidateSecretDataKey(key, "secret store", store.BicepIdentifier);
@@ -2295,6 +2319,7 @@ internal sealed class RadiusInfrastructureBuilder
             secretKey,
             credentialEntry,
             RenderBicepValue(credentialEntry.Value),
+            RenderBicepValue(credentialEntry.Encoding),
             secret.BicepIdentifier,
             RenderBicepValue(idExpression)!,
             RenderBicepValue(secret.EnvironmentId),
@@ -3462,6 +3487,7 @@ internal sealed class RadiusInfrastructureBuilder
         string SecretKey,
         RadiusSecuritySecretDataEntryConstruct Entry,
         string? OriginalEntryValue,
+        string? OriginalEntryEncoding,
         string OriginalSecretIdentifier,
         string OriginalPropertyValue,
         string? OriginalEnvironmentId,
@@ -3819,11 +3845,6 @@ internal sealed class RadiusInfrastructureBuilder
             {
                 // Translate only the conditions the publisher recognises as legitimately unknown
                 // while publishing; everything else is a real failure and must abort the publish.
-                // This mirrors the default IValueProvider branch in ResolveEnvPartsAsync, and for
-                // the same reason: the outer environment loop turns a
-                // RadiusUnresolvableValueException into a warning and *drops the variable*, so a
-                // blanket catch here would let a configuration error, a network failure, or a bug
-                // inside a provider silently remove an environment variable from the deployed app.
                 var conditionContext = new ValueProviderContext { ExecutionContext = _executionContext, Caller = owner };
                 try
                 {
@@ -3836,9 +3857,17 @@ internal sealed class RadiusInfrastructureBuilder
                     ex is MissingParameterValueException ||
                     // A placeholder another deployment fills in (an Azure Bicep output is the
                     // canonical case), which throws until that deployment has run. Radius does not
-                    // run those deployments, so the value genuinely cannot be known here. The
-                    // marker gates the skip; the failure alone never does.
-                    (ex is InvalidOperationException && expression.Condition is IManifestExpressionProvider))
+                    // run those deployments, so the value genuinely cannot be known here.
+                    //
+                    // The classification, not the exception type, gates the skip. Testing
+                    // `Condition is IManifestExpressionProvider` directly would be nearly vacuous —
+                    // `IExpressionValue` derives from that marker, so a parameter, a reference
+                    // expression or a connection string all carry it — and because the outer
+                    // environment loop turns a RadiusUnresolvableValueException into a warning and
+                    // *drops the variable*, a configuration error, a network failure, or a bug
+                    // inside a provider would silently remove an environment variable from the
+                    // deployed app.
+                    (ex is InvalidOperationException && IsDeploymentSubstituted(expression.Condition)))
                 {
                     throw new RadiusUnresolvableValueException(
                         owner,
@@ -3927,6 +3956,89 @@ internal sealed class RadiusInfrastructureBuilder
         if (literal.Length > 0)
         {
             parts.Add(EnvPart.FromLiteral(literal.ToString()));
+        }
+    }
+
+    /// <summary>
+    /// Decides whether <paramref name="value"/> resolves to a placeholder that only another
+    /// deployment can fill in, and whose failure to evaluate is therefore expected while publishing
+    /// rather than a bug.
+    /// </summary>
+    /// <remarks>
+    /// This mirrors the type dispatch in <see cref="ResolveEnvPartsAsync"/>, where the
+    /// <see cref="IManifestExpressionProvider"/> test lives in the <c>default</c> arm and is
+    /// meaningful precisely <em>because</em> parameters, endpoints, connection strings and reference
+    /// expressions were already handled by earlier cases. Testing the marker on its own would be
+    /// nearly vacuous: <c>IExpressionValue</c> derives from <see cref="IManifestExpressionProvider"/>,
+    /// so <see cref="ParameterResource"/>, <see cref="ReferenceExpression"/> and
+    /// <see cref="ConnectionStringReference"/> all carry it, and a genuine failure inside any of them
+    /// would be misread as "not deployed yet".
+    /// </remarks>
+    private static bool IsDeploymentSubstituted(object? value) =>
+        IsDeploymentSubstituted(value, new HashSet<object>(ReferenceEqualityComparer.Instance));
+
+    private static bool IsDeploymentSubstituted(object? value, HashSet<object> visited)
+    {
+        // Revisiting a node means the walk has cycled. Answering false fails closed: the caller
+        // rethrows the original exception and the publish stops, rather than silently dropping an
+        // environment variable on the strength of an incomplete traversal.
+        if (value is not null && !visited.Add(value))
+        {
+            return false;
+        }
+
+        switch (value)
+        {
+            case null:
+            case string:
+            case bool:
+            case ParameterResource:
+            case IResourceBuilder<ParameterResource>:
+            case EndpointReference:
+            case EndpointReferenceExpression:
+                return false;
+
+            // A conditional expression's ValueProviders is the union of the two *branches* and
+            // deliberately excludes the expression's own Condition, so the ValueProviders walk below
+            // would miss a nested conditional whose condition is the deployment-substituted value.
+            // The branches are walked too because either one may itself be conditional and hide its
+            // own condition the same way.
+            case ReferenceExpression { IsConditional: true } conditional:
+                return IsDeploymentSubstituted(conditional.Condition, visited) ||
+                       IsDeploymentSubstituted(conditional.WhenTrue, visited) ||
+                       IsDeploymentSubstituted(conditional.WhenFalse, visited);
+
+            case ReferenceExpression referenceExpression:
+                foreach (var provider in referenceExpression.ValueProviders)
+                {
+                    if (IsDeploymentSubstituted(provider, visited))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+            case ConnectionStringReference connectionStringReference:
+                return IsDeploymentSubstituted(connectionStringReference.Resource.ConnectionStringExpression, visited);
+
+            case IResourceWithConnectionString resourceWithConnectionString:
+                return IsDeploymentSubstituted(resourceWithConnectionString.ConnectionStringExpression, visited);
+
+            case IFormattable:
+                return false;
+
+            default:
+                // A provider that positively declares manifest-expression semantics *and* is not one
+                // of the eagerly-resolved shapes above is a placeholder another deployment fills in
+                // — an Azure Bicep output is the canonical case, and it throws until that deployment
+                // has run.
+                //
+                // ContainerImageReference is the one core exception: it carries the marker but
+                // resolves eagerly, and throws a genuine InvalidOperationException
+                // ("RemoteImageName must be set.") that names a real configuration error rather than
+                // a value awaiting another deployment.
+                return value is IManifestExpressionProvider and not ContainerImageReference;
         }
     }
 
