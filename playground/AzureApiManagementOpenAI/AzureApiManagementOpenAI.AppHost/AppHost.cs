@@ -31,7 +31,8 @@ var apim = builder.AddAzureApiManagement("apim", new()
 apim.AddOpenAIApi(
         "openai-api",
         path: "openai",
-        displayName: "Load-balanced OpenAI API")
+        displayName: "Load-balanced OpenAI API",
+        subscriptionRequired: false)
     .WithFoundryBackend(primaryModel, priority: 1, weight: 3)
     .WithFoundryBackend(secondaryModel, priority: 1, weight: 1);
 

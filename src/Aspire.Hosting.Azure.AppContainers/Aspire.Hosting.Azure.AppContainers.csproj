@@ -31,4 +31,8 @@
     <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.ApiManagement" />
+  </ItemGroup>
+
 </Project>

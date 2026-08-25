@@ -47,7 +47,7 @@ const apim = await builder.addAzureApiManagement("apim", {
 await apim.addApi("catalog-api", catalog, "catalog");
 ```
 
-`AddApi` creates an API, an APIM backend, and a wildcard operation that forwards requests to the deployed endpoint of the target resource.
+`AddApi` creates an API, an APIM backend, and a wildcard operation that forwards requests to the deployed endpoint of the target resource. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
 
 API Management resources are automatically omitted during `aspire run`. Azure compute environments do not materialize their public endpoints in run mode, and a cloud-hosted APIM instance cannot reach a backend running on localhost. Use `aspire deploy` to provision APIM and exercise its routing; no execution-mode guard is required around the APIM resources.
 
@@ -73,7 +73,7 @@ apim.AddOpenAIApi("openai-api", path: "openai")
 
 The generated APIM backend pool uses weighted routing between healthy members at the same priority. A lower priority number is preferred; members at the next priority are used when every member in a preferred group has an open circuit. Each backend has a circuit breaker that opens on HTTP 429 and honors the Azure OpenAI `Retry-After` response header.
 
-The API authenticates with the APIM system-assigned managed identity. Aspire grants that identity the Cognitive Services User role on every backend account. Backend URLs include each physical deployment name, so a request such as:
+The API authenticates with the APIM system-assigned managed identity. Aspire grants that identity the Cognitive Services OpenAI User role on Azure OpenAI accounts and the Cognitive Services User role on Foundry accounts. The deploying principal needs `Microsoft.Authorization/roleAssignments/write` permission on those accounts, such as through the User Access Administrator or Owner role. Backend URLs include each physical deployment name, so a request such as:
 
 ```text
 POST https://<gateway>.azure-api.net/openai/chat/completions?api-version=<version>
@@ -96,7 +96,7 @@ var api = apim.AddApi("catalog-api", catalog, "catalog")
         """);
 ```
 
-Use `WithPolicy` when a complete APIM policy document is required. APIM replaces the complete policy at that scope; replacing an API policy also replaces Aspire's generated backend-routing statement.
+Use `WithPolicy` when a complete APIM policy document is required. APIM replaces the complete policy at that scope; replacing an API policy also replaces Aspire's generated backend-routing statement. `WithPolicy` and `WithInboundPolicy` cannot be combined at the same scope because doing so would silently discard one configuration.
 
 ## SKUs and networking
 
@@ -143,14 +143,7 @@ apim.AddApi("catalog-api", catalog, "catalog");
 
 Classic APIM VNet injection requires an NSG on the APIM subnet. Allow inbound TCP 3443 from the `ApiManagement` service tag, TCP 6390 from `AzureLoadBalancer`, and TCP 443 from `Internet` when the APIM gateway remains public.
 
-API Management also supports inbound private endpoints through the Azure network integration:
-
-```csharp
-var privateEndpointSubnet = builder.AddAzureVirtualNetwork("vnet")
-    .AddSubnet("private-endpoints", "10.0.1.0/24");
-
-privateEndpointSubnet.AddPrivateEndpoint(apim);
-```
+Inbound private endpoints are not yet supported by this integration. APIM must first be provisioned with public access enabled, then receive its private endpoint, and finally be updated to disable public access. The integration rejects this configuration until it can model that multi-phase lifecycle safely.
 
 ## Configure Azure provisioning for local development
 

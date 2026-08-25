@@ -51,6 +51,20 @@ public class AzureApiManagementTests
         Assert.Equal("get-product", operation.Resource.Name);
     }
 
+    [Fact]
+    public void InternalContainerAppEnvironmentIsIgnoredInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithInternalLoadBalancer(vnet);
+
+        Assert.Equal("env", environment.Resource.Name);
+        Assert.Equal(["azure-environment"], builder.Resources.Select(resource => resource.Name));
+    }
+
     [Theory]
     [InlineData(AzureApiManagementSku.Consumption, 1)]
     [InlineData(AzureApiManagementSku.Developer, 0)]
@@ -101,6 +115,30 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public void ApiAndOperationSupportDistinctPhysicalNamesAndSecureDefaults()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+
+        var api = apim.AddApi("catalog-api", backend, "catalog", apiName: "physical-api");
+        var operation = api.AddOperation(
+            "get-product",
+            "get",
+            "/products/{id}",
+            operationName: "physical-operation");
+
+        Assert.Equal("physical-api", api.Resource.ApiName);
+        Assert.True(api.Resource.SubscriptionRequired);
+        Assert.Equal("physical-operation", operation.Resource.OperationName);
+    }
+
+    [Fact]
     public void PolicyHelpersValidateAndPreserveScopeSemantics()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -123,6 +161,8 @@ public class AzureApiManagementTests
         Assert.NotNull(operation.Resource.PolicyXml);
         Assert.Throws<ArgumentException>(() => apim.WithInboundPolicy("<policies />"));
         Assert.Throws<ArgumentException>(() => api.WithPolicy("<rate-limit calls=\"10\" renewal-period=\"60\" />"));
+        Assert.Throws<InvalidOperationException>(() => operation.WithInboundPolicy("<rate-limit calls=\"10\" renewal-period=\"60\" />"));
+        Assert.Throws<InvalidOperationException>(() => apim.WithPolicy("<policies><inbound /></policies>"));
     }
 
     [Fact]
@@ -173,23 +213,42 @@ public class AzureApiManagementTests
     }
 
     [Fact]
-    public async Task ClassicVirtualNetworkCannotBeCombinedWithPrivateEndpoint()
+    public async Task PrivateEndpointIsRejectedUntilLifecycleCanBeModeled()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vnet = builder.AddAzureVirtualNetwork("vnet");
-        var apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.0.0/24");
         var privateEndpointSubnet = vnet.AddSubnet("private-endpoint-subnet", "10.0.1.0/24");
         var apim = builder.AddAzureApiManagement("apim", new()
         {
             PublisherEmail = "api-owners@example.com",
-        }).WithClassicVirtualNetwork(apimSubnet, AzureApiManagementVirtualNetworkMode.External);
+        });
         privateEndpointSubnet.AddPrivateEndpoint(apim);
 
         using var app = builder.Build();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
 
-        Assert.Contains("cannot combine a private endpoint with classic virtual network injection", exception.Message);
+        Assert.Contains("requires public network access during initial provisioning", exception.Message);
+    }
+
+    [Fact]
+    public async Task PrivateEndpointRejectsUnsupportedSku()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var subnet = builder.AddAzureVirtualNetwork("vnet")
+            .AddSubnet("private-endpoint-subnet", "10.0.0.0/24");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.Consumption,
+            Capacity = 0,
+        });
+        subnet.AddPrivateEndpoint(apim);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("does not support private endpoints", exception.Message);
     }
 
     [Fact]
@@ -322,6 +381,22 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public void ConsumptionSkuRejectsOpenAIBackendPools()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.Consumption,
+            Capacity = 0,
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => apim.AddOpenAIApi("openai-api", "openai"));
+
+        Assert.Contains("not supported by the Consumption SKU", exception.Message);
+    }
+
+    [Fact]
     public async Task AzureOpenAIBackendUsesAccountEndpointAndDeduplicatesRoleAssignments()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -345,6 +420,62 @@ public class AzureApiManagementTests
         Assert.Contains("openai.outputs.endpoint", manifestJson);
         Assert.Contains("openai/deployments/chat", manifestJson);
         Assert.Single(bicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Skip(1));
+        Assert.Contains("5e0bd9bd-7b93-4f28-af87-19fc36ad61bd", bicep);
+    }
+
+    [Fact]
+    public async Task ExistingApiManagementResourceIsRejected()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        }).PublishAsExisting("existing-apim", resourceGroup: null);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("cannot be published as an existing resource", exception.Message);
+    }
+
+    [Fact]
+    public async Task InternalContainerAppBackendRequiresSameVirtualNetworkEvenWhenIngressIsExternal()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backendVnet = builder.AddAzureVirtualNetwork("backend-vnet");
+        var backendSubnet = backendVnet.AddSubnet("backend-subnet", "10.0.0.0/23");
+        var apimVnet = builder.AddAzureVirtualNetwork("apim-vnet");
+        var apimSubnet = apimVnet.AddSubnet("apim-subnet", "10.1.0.0/24");
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(backendSubnet)
+            .WithInternalLoadBalancer(backendVnet);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(environment);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.Premium,
+        }).WithClassicVirtualNetwork(apimSubnet, AzureApiManagementVirtualNetworkMode.External);
+        apim.AddApi("catalog-api", backend, "catalog");
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Contains("must be injected into the same virtual network", exception.Message);
+    }
+
+    [Fact]
+    public void GeneratedIdentifiersAreBoundedAndStable()
+    {
+        var value = new string('a', 100);
+
+        var identifier = AzureApiManagementExtensions.CreateBoundedIdentifier(value, 80);
+
+        Assert.Equal(80, identifier.Length);
+        Assert.Equal(identifier, AzureApiManagementExtensions.CreateBoundedIdentifier(value, 80));
+        Assert.StartsWith(new string('a', 71), identifier, StringComparison.Ordinal);
     }
 
     [Fact]

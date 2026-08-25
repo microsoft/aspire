@@ -6,10 +6,12 @@
 #pragma warning disable ASPIRECOMPUTE002 // Compute environment endpoint projection is experimental.
 
 using System.Diagnostics;
+using System.IO.Hashing;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Aspire.Hosting.Foundry;
 using Azure.Provisioning;
@@ -81,7 +83,8 @@ public static class AzureApiManagementExtensions
     /// </param>
     /// <param name="path">The public path beneath the API Management gateway hostname.</param>
     /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
-    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key.</param>
+    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key. The default is <see langword="true"/>.</param>
+    /// <param name="apiName">The physical API identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the API resource.</returns>
     /// <remarks>
     /// The generated API contains a wildcard operation for all HTTP methods and paths. The generated policy routes
@@ -96,20 +99,22 @@ public static class AzureApiManagementExtensions
         IResourceBuilder<T> target,
         string path,
         string? displayName = null,
-        bool subscriptionRequired = false)
+        bool subscriptionRequired = true,
+        string? apiName = null)
         where T : IComputeResource, IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrEmpty(path);
+        ValidateApiManagementIdentifier(apiName ?? name, nameof(apiName));
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
 
         var resource = new AzureApiManagementApiResource(
             name,
-            apiName: name,
+            apiName ?? name,
             normalizedPath,
             displayName ?? name,
             subscriptionRequired,
@@ -135,7 +140,8 @@ public static class AzureApiManagementExtensions
     /// <param name="name">The globally unique Aspire resource name and default physical API name.</param>
     /// <param name="path">The public path beneath the API Management gateway hostname.</param>
     /// <param name="displayName">The API display name. The resource name is used when omitted.</param>
-    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key.</param>
+    /// <param name="subscriptionRequired">Whether callers must provide an API Management subscription key. The default is <see langword="true"/>.</param>
+    /// <param name="apiName">The physical API identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the API resource.</returns>
     /// <remarks>
     /// Add one or more pool members with <see cref="WithAzureOpenAIBackend"/> or
@@ -149,18 +155,26 @@ public static class AzureApiManagementExtensions
         [ResourceName] string name,
         string path,
         string? displayName = null,
-        bool subscriptionRequired = false)
+        bool subscriptionRequired = true,
+        string? apiName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(path);
+        ValidateApiManagementIdentifier(apiName ?? name, nameof(apiName));
+
+        if (builder.Resource.Options.Sku == AzureApiManagementSku.Consumption)
+        {
+            throw new InvalidOperationException(
+                "OpenAI backend pools require API Management backend circuit breakers, which are not supported by the Consumption SKU.");
+        }
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
 
         var resource = new AzureApiManagementApiResource(
             name,
-            apiName: name,
+            apiName ?? name,
             normalizedPath,
             displayName ?? name,
             subscriptionRequired,
@@ -178,10 +192,11 @@ public static class AzureApiManagementExtensions
             .WithIconName("DocumentTableArrowRight");
 
         apiBuilder.AddOperation(
-            $"{name}-chat-completions",
+            CreateBoundedIdentifier($"{name}-chat-completions", 64),
             method: "POST",
             urlTemplate: "/chat/completions",
-            displayName: "Create chat completion");
+            displayName: "Create chat completion",
+            operationName: "chat-completions");
 
         return apiBuilder;
     }
@@ -255,6 +270,7 @@ public static class AzureApiManagementExtensions
     /// <param name="method">The HTTP method.</param>
     /// <param name="urlTemplate">The URL template relative to the API path.</param>
     /// <param name="displayName">The operation display name. The resource name is used when omitted.</param>
+    /// <param name="operationName">The physical operation identifier in API Management. The Aspire resource name is used when omitted.</param>
     /// <returns>A builder for the operation resource.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when a required string is empty.</exception>
@@ -264,16 +280,18 @@ public static class AzureApiManagementExtensions
         [ResourceName] string name,
         string method,
         string urlTemplate,
-        string? displayName = null)
+        string? displayName = null,
+        string? operationName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(method);
         ArgumentException.ThrowIfNullOrEmpty(urlTemplate);
+        ValidateApiManagementIdentifier(operationName ?? name, nameof(operationName));
 
         var resource = new AzureApiManagementOperationResource(
             name,
-            operationName: name,
+            operationName ?? name,
             method.ToUpperInvariant(),
             urlTemplate,
             displayName ?? name,
@@ -305,6 +323,7 @@ public static class AzureApiManagementExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ValidatePolicyFragment(policyXml);
+        EnsurePolicyFragmentCanBeAdded(builder.Resource.PolicyXml, "service");
         builder.Resource.AddInboundPolicyStatement(policyXml);
         return builder;
     }
@@ -316,8 +335,9 @@ public static class AzureApiManagementExtensions
     /// <param name="policyXml">A complete APIM <c>policies</c> XML document.</param>
     /// <returns>The resource builder.</returns>
     /// <remarks>
-    /// APIM policy updates replace the complete policy document at a scope. This method therefore replaces all
-    /// service-level policies generated by <see cref="WithInboundPolicy(IResourceBuilder{AzureApiManagementResource}, string)"/>.
+    /// APIM policy updates replace the complete policy document at a scope. To prevent silently dropping policy fragments,
+    /// this method cannot be combined with <see cref="WithInboundPolicy(IResourceBuilder{AzureApiManagementResource}, string)"/>
+    /// at the same scope.
     /// </remarks>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyXml"/> is not a complete policy document.</exception>
     [AspireExport("withApiManagementServicePolicy", MethodName = "withPolicy")]
@@ -327,6 +347,7 @@ public static class AzureApiManagementExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ValidatePolicyDocument(policyXml);
+        EnsureCompletePolicyCanBeSet(builder.Resource.InboundPolicyStatements, "service");
         builder.Resource.PolicyXml = policyXml;
         return builder;
     }
@@ -345,6 +366,7 @@ public static class AzureApiManagementExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ValidatePolicyFragment(policyXml);
+        EnsurePolicyFragmentCanBeAdded(builder.Resource.PolicyXml, "API");
         builder.Resource.AddInboundPolicyStatement(policyXml);
         return builder;
     }
@@ -367,6 +389,7 @@ public static class AzureApiManagementExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ValidatePolicyDocument(policyXml);
+        EnsureCompletePolicyCanBeSet(builder.Resource.InboundPolicyStatements, "API");
         builder.Resource.PolicyXml = policyXml;
         return builder;
     }
@@ -385,6 +408,7 @@ public static class AzureApiManagementExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ValidatePolicyFragment(policyXml);
+        EnsurePolicyFragmentCanBeAdded(builder.Resource.PolicyXml, "operation");
         builder.Resource.AddInboundPolicyStatement(policyXml);
         return builder;
     }
@@ -403,6 +427,7 @@ public static class AzureApiManagementExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ValidatePolicyDocument(policyXml);
+        EnsureCompletePolicyCanBeSet(builder.Resource.InboundPolicyStatements, "operation");
         builder.Resource.PolicyXml = policyXml;
         return builder;
     }
@@ -455,12 +480,27 @@ public static class AzureApiManagementExtensions
     private static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
     {
         var azureResource = (AzureApiManagementResource)infrastructure.AspireResource;
-        var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
 
-        if (hasPrivateEndpoint && azureResource.VirtualNetworkConfiguration is not null)
+        if (azureResource.IsExisting())
         {
             throw new InvalidOperationException(
-                $"API Management resource '{azureResource.Name}' cannot combine a private endpoint with classic virtual network injection.");
+                $"API Management resource '{azureResource.Name}' cannot be published as an existing resource. " +
+                "Existing APIM services are not yet supported because child APIs and policies would mutate the service.");
+        }
+
+        var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
+        if (hasPrivateEndpoint)
+        {
+            if (azureResource.Options.Sku is AzureApiManagementSku.Consumption or AzureApiManagementSku.BasicV2)
+            {
+                throw new InvalidOperationException(
+                    $"API Management SKU '{azureResource.Options.Sku}' does not support private endpoints.");
+            }
+
+            throw new InvalidOperationException(
+                $"Private endpoints are not yet supported for API Management resource '{azureResource.Name}'. " +
+                "APIM requires public network access during initial provisioning and a separate post-deployment update after the private endpoint is created.");
         }
 
         var service = new ApiManagementServiceProvisioningResource(
@@ -474,7 +514,7 @@ public static class AzureApiManagementExtensions
             {
                 ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned,
             },
-            PublicNetworkAccess = hasPrivateEndpoint ? "Disabled" : "Enabled",
+            PublicNetworkAccess = "Enabled",
             VirtualNetworkType = "None",
             Tags =
             {
@@ -639,7 +679,23 @@ public static class AzureApiManagementExtensions
                 "Configure an Azure deployment environment before adding it to API Management.");
         }
 
+        if (computeEnvironment is AzureContainerAppEnvironmentResource
+            {
+                InternalLoadBalancerVirtualNetwork: { } backendVirtualNetwork,
+            })
+        {
+            var apiManagementNetwork = apiResource.Parent.VirtualNetworkConfiguration;
+            if (apiManagementNetwork is null ||
+                !ReferenceEquals(apiManagementNetwork.Subnet.Parent, backendVirtualNetwork))
+            {
+                throw new InvalidOperationException(
+                    $"Resource '{apiResource.Target.Name}' is deployed to an internal Container Apps environment. " +
+                    $"API Management resource '{apiResource.Parent.Name}' must be injected into the same virtual network.");
+            }
+        }
+
         var backendIdentifier = $"{apiIdentifier}Backend";
+        var backendName = CreateBoundedIdentifier(backendIdentifier, 80);
         var endpointExpression = computeEnvironment.GetEndpointPropertyExpression(
             endpoint.Property(EndpointProperty.Url));
         var backendUrl = endpointExpression.AsProvisioningParameter(infrastructure, $"{apiIdentifier}_url");
@@ -647,7 +703,7 @@ public static class AzureApiManagementExtensions
         var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
         {
             Parent = service,
-            Name = backendIdentifier,
+            Name = backendName,
             Protocol = "http",
             Uri = backendUrl,
             Title = apiResource.DisplayName,
@@ -657,7 +713,7 @@ public static class AzureApiManagementExtensions
         };
         infrastructure.Add(backend);
 
-        return (backendIdentifier, backend, false);
+        return (backendName, backend, false);
     }
 
     private static (string Identifier, ApiManagementBackendProvisioningResource Backend, bool AuthenticateWithManagedIdentity)
@@ -676,10 +732,11 @@ public static class AzureApiManagementExtensions
         }
 
         var poolIdentifier = $"{apiIdentifier}Pool";
+        var poolName = CreateBoundedIdentifier(poolIdentifier, 80);
         var pool = new ApiManagementBackendProvisioningResource(poolIdentifier)
         {
             Parent = service,
-            Name = poolIdentifier,
+            Name = poolName,
             Title = apiResource.DisplayName,
             Type = "Pool",
             Pool = new ApiManagementBackendPoolProvisioningModel(),
@@ -689,12 +746,13 @@ public static class AzureApiManagementExtensions
         {
             var backendIdentifier = Infrastructure.NormalizeBicepIdentifier(
                 $"{apiIdentifier}_{backendResource.Name}_Backend");
+            var backendName = CreateBoundedIdentifier(backendIdentifier, 80);
             var backendUrl = ReferenceExpression.Create(
                 $"{backendResource.Endpoint}openai/deployments/{backendResource.DeploymentName}");
             var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
             {
                 Parent = service,
-                Name = backendIdentifier,
+                Name = backendName,
                 Protocol = "http",
                 Uri = backendUrl.AsProvisioningParameter(infrastructure, $"{backendIdentifier}_url"),
                 Title = backendResource.Name,
@@ -722,14 +780,16 @@ public static class AzureApiManagementExtensions
         {
             var account = (CognitiveServicesAccount)accountResource.AddAsExistingResource(infrastructure);
             var roleAssignment = account.CreateRoleAssignment(
-                CognitiveServicesBuiltInRole.CognitiveServicesUser,
+                accountResource is AzureOpenAIResource
+                    ? CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser
+                    : CognitiveServicesBuiltInRole.CognitiveServicesUser,
                 RoleManagementPrincipalType.ServicePrincipal,
                 service.Identity.PrincipalId);
             roleAssignment.Name = BicepFunction.CreateGuid(account.Id, service.Id, roleAssignment.RoleDefinitionId);
             infrastructure.Add(roleAssignment);
         }
 
-        return (poolIdentifier, pool, true);
+        return (poolName, pool, true);
     }
 
     private static ApiManagementCircuitBreakerProvisioningModel CreateOpenAICircuitBreaker() =>
@@ -975,11 +1035,55 @@ public static class AzureApiManagementExtensions
                     "A complete policy document must have a <policies> root element.",
                     nameof(policyXml));
             }
+
         }
         catch (System.Xml.XmlException exception)
         {
             throw new ArgumentException("The policy document must be well-formed XML.", nameof(policyXml), exception);
         }
+    }
+
+    private static void EnsurePolicyFragmentCanBeAdded(string? completePolicyXml, string scope)
+    {
+        if (completePolicyXml is not null)
+        {
+            throw new InvalidOperationException(
+                $"A complete {scope}-level policy has already been configured. " +
+                $"{nameof(WithPolicy)} and {nameof(WithInboundPolicy)} cannot be combined at the same scope.");
+        }
+    }
+
+    private static void EnsureCompletePolicyCanBeSet(IReadOnlyList<string> inboundPolicyStatements, string scope)
+    {
+        if (inboundPolicyStatements.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"{scope}-level inbound policy statements have already been configured. " +
+                $"{nameof(WithPolicy)} and {nameof(WithInboundPolicy)} cannot be combined at the same scope.");
+        }
+    }
+
+    private static void ValidateApiManagementIdentifier(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value, parameterName);
+
+        if (value.Length > 80)
+        {
+            throw new ArgumentException(
+                "API Management identifiers cannot exceed 80 characters.",
+                parameterName);
+        }
+    }
+
+    internal static string CreateBoundedIdentifier(string value, int maximumLength)
+    {
+        if (value.Length <= maximumLength)
+        {
+            return value;
+        }
+
+        var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..8];
+        return $"{value[..(maximumLength - hash.Length - 1)]}-{hash}";
     }
 
     private static void ValidateCapacity(AzureApiManagementSku sku, int capacity)

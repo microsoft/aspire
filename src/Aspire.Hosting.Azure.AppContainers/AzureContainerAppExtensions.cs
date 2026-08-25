@@ -1115,6 +1115,11 @@ public static class AzureContainerAppExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(virtualNetwork);
 
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
         if (!builder.Resource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var delegatedSubnet))
         {
             throw new InvalidOperationException(

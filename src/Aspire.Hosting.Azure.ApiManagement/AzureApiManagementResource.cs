@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
 
@@ -11,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <remarks>
 /// API Management is provisioned in Azure and acts as a gateway for APIs added with
-/// <see cref="AzureApiManagementExtensions.AddApi{T}(IResourceBuilder{AzureApiManagementResource}, string, IResourceBuilder{T}, string, string?, bool)"/>.
+/// <see cref="AzureApiManagementExtensions.AddApi{T}"/>.
 /// </remarks>
 /// <param name="name">The name of the Aspire resource.</param>
 /// <param name="options">The API Management service options.</param>

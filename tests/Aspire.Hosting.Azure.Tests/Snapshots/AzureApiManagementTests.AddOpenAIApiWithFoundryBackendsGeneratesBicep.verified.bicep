@@ -158,7 +158,7 @@ resource openai_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   properties: {
     displayName: 'openai-api'
     path: 'openai'
-    subscriptionRequired: false
+    subscriptionRequired: true
     type: 'http'
     protocols: [
       'https'
@@ -178,7 +178,7 @@ resource openai_apiProxy 'Microsoft.ApiManagement/service/apis/operations@2024-0
 }
 
 resource openai_api_chat_completions 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = {
-  name: 'openai-api-chat-completions'
+  name: 'chat-completions'
   properties: {
     displayName: 'Create chat completion'
     method: 'POST'

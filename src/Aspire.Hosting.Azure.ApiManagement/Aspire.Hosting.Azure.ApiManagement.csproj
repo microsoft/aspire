@@ -6,6 +6,7 @@
     <PackageTags>aspire integration hosting azure api-management apim gateway reverse-proxy cloud</PackageTags>
     <Description>Azure API Management resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <NoWarn>$(NoWarn);AZPROVISION001;ASPIREAPIM001;ASPIREAZURE003;ASPIRECOMPUTE002</NoWarn>
     <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
@@ -13,15 +14,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.CognitiveServices\Aspire.Hosting.Azure.CognitiveServices.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.CognitiveServices" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared\ComputeEnvironmentEndpointResolver.cs" />
   </ItemGroup>
 
   <ItemGroup>
