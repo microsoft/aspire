@@ -113,6 +113,7 @@ public static class AzureApiManagementExtensions
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
+        ValidateApiUniqueness(builder.Resource, apiName ?? name, normalizedPath);
 
         var resource = new AzureApiManagementApiResource(
             name,
@@ -173,6 +174,7 @@ public static class AzureApiManagementExtensions
 
         var normalizedPath = path.Trim('/');
         ArgumentException.ThrowIfNullOrEmpty(normalizedPath);
+        ValidateApiUniqueness(builder.Resource, apiName ?? name, normalizedPath);
 
         var resource = new AzureApiManagementApiResource(
             name,
@@ -289,11 +291,26 @@ public static class AzureApiManagementExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(method);
         ArgumentException.ThrowIfNullOrEmpty(urlTemplate);
-        ValidateOperationIdentifier(operationName ?? name, nameof(operationName));
+        var physicalOperationName = operationName ?? name;
+        ValidateOperationIdentifier(physicalOperationName, nameof(operationName));
+
+        if (string.Equals(physicalOperationName, "proxy", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                "The API Management operation identifier 'proxy' is reserved for the generated catch-all operation.",
+                nameof(operationName));
+        }
+
+        if (builder.Resource.Operations.Any(
+            operation => string.Equals(operation.OperationName, physicalOperationName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"API '{builder.Resource.Name}' already contains an operation with the physical identifier '{physicalOperationName}'.");
+        }
 
         var resource = new AzureApiManagementOperationResource(
             name,
-            operationName ?? name,
+            physicalOperationName,
             method.ToUpperInvariant(),
             urlTemplate,
             displayName ?? name,
@@ -1093,6 +1110,24 @@ public static class AzureApiManagementExtensions
             throw new ArgumentException(
                 "API Management operation identifiers cannot exceed 80 characters.",
                 parameterName);
+        }
+    }
+
+    private static void ValidateApiUniqueness(
+        AzureApiManagementResource service,
+        string apiName,
+        string normalizedPath)
+    {
+        if (service.Apis.Any(api => string.Equals(api.ApiName, apiName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"API Management service '{service.Name}' already contains an API with the physical identifier '{apiName}'.");
+        }
+
+        if (service.Apis.Any(api => string.Equals(api.Path, normalizedPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"API Management service '{service.Name}' already contains an API at path '{normalizedPath}'.");
         }
     }
 

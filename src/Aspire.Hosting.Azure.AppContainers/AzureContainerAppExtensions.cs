@@ -7,6 +7,8 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppContainers;
@@ -1167,14 +1169,26 @@ public static class AzureContainerAppExtensions
 
         builder.Resource.InternalLoadBalancerVirtualNetwork = virtualNetwork.Resource;
 
+        var privateDnsResourceName = CreateBoundedIdentifier($"{builder.Resource.Name}-private-dns", 64);
         builder.ApplicationBuilder
             .AddAzureInfrastructure(
-                $"{builder.Resource.Name}-private-dns",
+                privateDnsResourceName,
                 infrastructure => AddInternalEnvironmentPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource))
             .WithParentRelationship(builder.Resource)
             .WithRelationship(virtualNetwork.Resource, "Virtual network link");
 
         return builder.WithRelationship(virtualNetwork.Resource, "Internal network");
+    }
+
+    private static string CreateBoundedIdentifier(string value, int maximumLength)
+    {
+        if (value.Length <= maximumLength)
+        {
+            return value;
+        }
+
+        var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..8];
+        return $"{value[..(maximumLength - hash.Length - 1)]}-{hash}";
     }
 
     /// <summary>

@@ -161,6 +161,53 @@ public class AzureApiManagementTests
     }
 
     [Fact]
+    public void ApiPhysicalIdentifiersAndPathsMustBeUnique()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddApi("catalog-api", backend, "/catalog/", apiName: "physical-api");
+
+        var duplicateName = Assert.Throws<InvalidOperationException>(
+            () => apim.AddOpenAIApi("openai-api", "openai", apiName: "PHYSICAL-API"));
+        var duplicatePath = Assert.Throws<InvalidOperationException>(
+            () => apim.AddOpenAIApi("other-api", "CATALOG"));
+
+        Assert.Contains("physical identifier 'PHYSICAL-API'", duplicateName.Message);
+        Assert.Contains("path 'CATALOG'", duplicatePath.Message);
+        Assert.Single(apim.Resource.Apis);
+    }
+
+    [Fact]
+    public void OperationPhysicalIdentifiersMustBeUniqueAndCannotUseProxy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var backend = builder.AddProject<Project>("backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var api = apim.AddApi("catalog-api", backend, "catalog");
+        api.AddOperation("get-product", "GET", "/products/{id}", operationName: "physical-operation");
+
+        var duplicateName = Assert.Throws<InvalidOperationException>(
+            () => api.AddOperation("get-other-product", "GET", "/products/other", operationName: "PHYSICAL-OPERATION"));
+        var reservedName = Assert.Throws<ArgumentException>(
+            () => api.AddOperation("custom-proxy", "GET", "/proxy", operationName: "PrOxY"));
+
+        Assert.Contains("physical identifier 'PHYSICAL-OPERATION'", duplicateName.Message);
+        Assert.Contains("'proxy' is reserved", reservedName.Message);
+        Assert.Single(api.Resource.Operations);
+    }
+
+    [Fact]
     public void PolicyHelpersValidateAndPreserveScopeSemantics()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -562,6 +609,27 @@ public class AzureApiManagementTests
         Assert.Contains("name: '*'", privateDnsBicep);
         Assert.Contains("ipv4Address:", privateDnsBicep);
         Assert.Contains("Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01", privateDnsBicep);
+    }
+
+    [Fact]
+    public void InternalContainerAppEnvironmentBoundsPrivateDnsResourceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var environmentName = new string('e', 53);
+
+        builder.AddAzureContainerAppEnvironment(environmentName)
+            .WithDelegatedSubnet(subnet)
+            .WithInternalLoadBalancer(vnet);
+
+        var privateDns = builder.Resources
+            .OfType<AzureProvisioningResource>()
+            .Single(resource => resource.Name.Length == 64);
+
+        Assert.Equal(64, privateDns.Name.Length);
+        Assert.StartsWith($"{environmentName}-p", privateDns.Name, StringComparison.Ordinal);
+        Assert.Matches("-[0-9a-f]{8}$", privateDns.Name);
     }
 
     [Fact]
