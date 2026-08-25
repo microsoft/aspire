@@ -904,6 +904,47 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task EvaluateMacPlatformSso_LiveManagedMac()
+    {
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Live Platform SSO validation requires macOS.");
+        Assert.SkipUnless(
+            Environment.GetEnvironmentVariable("ASPIRE_TEST_LIVE_MAC_PLATFORM_SSO") == "1",
+            "Run eng/scripts/validate-mac-platform-sso.sh on a managed Mac to enable this test.");
+
+        var startInfo = new ProcessStartInfo("/usr/bin/app-sso")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("platform");
+        startInfo.ArgumentList.Add("-s");
+
+        using var process = new Process { StartInfo = startInfo };
+        Assert.True(process.Start(), "Failed to start /usr/bin/app-sso.");
+
+        // Read both streams concurrently to avoid deadlock if a future app-sso version writes enough
+        // diagnostic data to fill either pipe.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await process.WaitForExitAsync(timeout.Token);
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        Assert.Equal(0, process.ExitCode);
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso($"{stdout}{Environment.NewLine}{stderr}");
+        outputHelper.WriteLine(
+            $"Detected={result.IsInternalMicrosoft}; HasAlias={result.Alias is not null}; HasDomain={result.Domain is not null}; Outcome={result.DiagnosticOutcome ?? "<none>"}");
+
+        Assert.True(
+            result.IsInternalMicrosoft,
+            $"Platform SSO did not detect a managed Microsoft identity. Outcome: {result.DiagnosticOutcome ?? InternalMicrosoftProbeOutcome.NotDetected}.");
+        Assert.NotNull(result.Alias);
+        Assert.NotNull(result.Domain);
+    }
+
+    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_ReportsProbeSpecificOutcome()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
