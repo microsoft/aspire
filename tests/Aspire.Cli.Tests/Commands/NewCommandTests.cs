@@ -104,6 +104,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var services = CreateServiceCollection(workspace, options =>
         {
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
             options.DotNetCliRunnerFactory = _ => runner;
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
@@ -160,6 +161,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var services = CreateServiceCollection(workspace, options =>
         {
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
             options.DotNetCliRunnerFactory = _ => runner;
             options.InteractionServiceFactory = _ =>
             {
@@ -198,7 +200,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public void NewCommand_IntegrationTestTemplateAppHostOptionDescribesProjectFile()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CreateServiceCollection(workspace);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
+        });
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();

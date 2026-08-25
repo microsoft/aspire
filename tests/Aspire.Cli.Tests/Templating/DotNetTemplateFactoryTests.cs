@@ -273,7 +273,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsStarterAndIntegrationTestTemplates()
+    public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsOnlyStarterTemplates()
     {
         // Arrange
         var features = new TestFeatures();
@@ -288,7 +288,7 @@ public class DotNetTemplateFactoryTests
         Assert.DoesNotContain(KnownTemplateId.DotNetEmptyAppHost, templateNames);
         Assert.DoesNotContain("aspire-apphost", templateNames);
         Assert.DoesNotContain("aspire-servicedefaults", templateNames);
-        Assert.Contains("aspire-test", templateNames);
+        Assert.DoesNotContain("aspire-test", templateNames);
     }
 
     [Fact]
