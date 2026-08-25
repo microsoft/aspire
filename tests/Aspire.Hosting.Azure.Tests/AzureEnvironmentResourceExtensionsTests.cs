@@ -17,6 +17,8 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Azure;
 using Azure.Core;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -526,6 +528,162 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.True(existingTcs.Task.IsCompletedSuccessfully);
         Assert.Equal("https://storage.blob.core.windows.net/", await outputTask.WaitAsync(s_testSynchronizationTimeout));
     }
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+    [Fact]
+    public async Task WaitForRoleAssignmentPropagationAsync_CompletesImmediately_WhenAssignmentAlreadyVisible()
+    {
+        var (app, controller, armClient, roleAssignmentResource, provisioningContext, principalId, acrPullRole) = CreateRoleAssignmentPropagationScenario();
+        using var _ = app;
+        controller.RoleAssignmentPropagationMaxAttempts = 5;
+        controller.RoleAssignmentPropagationPollInterval = TimeSpan.FromMilliseconds(1);
+
+        armClient.RoleAssignments.AssignmentsToReturn.Add(CreateRoleAssignmentData(principalId, acrPullRole));
+
+        await controller.WaitForRoleAssignmentPropagationAsync(roleAssignmentResource, provisioningContext, NullLogger.Instance, CancellationToken.None)
+            .WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(1, armClient.RoleAssignments.GetAllAsyncCallCount);
+        Assert.Equal($"principalId eq '{principalId:D}'", armClient.RoleAssignments.LastFilter);
+    }
+
+    [Fact]
+    public async Task WaitForRoleAssignmentPropagationAsync_RetriesUntilAssignmentBecomesVisible()
+    {
+        var (app, controller, armClient, roleAssignmentResource, provisioningContext, principalId, acrPullRole) = CreateRoleAssignmentPropagationScenario();
+        using var _ = app;
+        controller.RoleAssignmentPropagationMaxAttempts = 5;
+        controller.RoleAssignmentPropagationPollInterval = TimeSpan.FromMilliseconds(1);
+
+        // Not visible for the first two polls, then visible on the third.
+        armClient.RoleAssignments.GetAllAsyncResultsFactory = callNumber =>
+            callNumber < 3 ? [] : [CreateRoleAssignmentData(principalId, acrPullRole)];
+
+        await controller.WaitForRoleAssignmentPropagationAsync(roleAssignmentResource, provisioningContext, NullLogger.Instance, CancellationToken.None)
+            .WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(3, armClient.RoleAssignments.GetAllAsyncCallCount);
+    }
+
+    [Fact]
+    public async Task WaitForRoleAssignmentPropagationAsync_LogsWarningAndProceeds_WhenNeverVisible()
+    {
+        var (app, controller, armClient, roleAssignmentResource, provisioningContext, _, _) = CreateRoleAssignmentPropagationScenario();
+        using var _2 = app;
+        controller.RoleAssignmentPropagationMaxAttempts = 2;
+        controller.RoleAssignmentPropagationPollInterval = TimeSpan.FromMilliseconds(1);
+
+        var logger = new RecordingLogger();
+
+        // Never returns a matching assignment.
+        await controller.WaitForRoleAssignmentPropagationAsync(roleAssignmentResource, provisioningContext, logger, CancellationToken.None)
+            .WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(2, armClient.RoleAssignments.GetAllAsyncCallCount);
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task WaitForRoleAssignmentPropagationAsync_SkipsCheck_ForGlobalRoleAssignment()
+    {
+        var (app, controller, armClient, _, provisioningContext, _, _) = CreateRoleAssignmentPropagationScenario();
+        using var _3 = app;
+
+        var target = new AzureProvisioningResource("acr", _ => { });
+
+        // Global role assignments (granted to the deployment principal, not a managed identity) have
+        // no IdentityResource, so there is nothing for this check to poll for.
+        var globalRoleAssignment = new AzureRoleAssignmentResource(
+            "global-roles-acr",
+            target,
+            ownerResource: null,
+            identityResource: null,
+            configureInfrastructure: _ => { },
+            roles: new HashSet<RoleDefinition> { new("7f951dda-4ed3-4680-a7ca-43fe172d538d", "AcrPull") });
+
+        await controller.WaitForRoleAssignmentPropagationAsync(globalRoleAssignment, provisioningContext, NullLogger.Instance, CancellationToken.None)
+            .WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(0, armClient.RoleAssignments.GetAllAsyncCallCount);
+    }
+
+    [Fact]
+    public async Task WaitForRoleAssignmentPropagationAsync_SkipsCheck_WhenNoRolesTracked()
+    {
+        var target = new AzureProvisioningResource("acr", _ => { });
+        target.Outputs["id"] = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ContainerRegistry/registries/acr";
+
+        var identity = new AzureUserAssignedIdentityResource("identity");
+        identity.Outputs["principalId"] = Guid.NewGuid().ToString();
+
+        // Roles defaults to empty when not supplied (e.g. resources created before this property existed).
+        var roleAssignmentResource = new AzureRoleAssignmentResource(
+            "identity-roles-acr",
+            target,
+            identity,
+            identity,
+            _ => { });
+
+        var armClient = new TestArmClient();
+        var provisioningContext = ProvisioningTestHelpers.CreateTestProvisioningContext(armClient: armClient);
+
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+        using var app = builder.Build();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await controller.WaitForRoleAssignmentPropagationAsync(roleAssignmentResource, provisioningContext, NullLogger.Instance, CancellationToken.None)
+            .WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.Equal(0, armClient.RoleAssignments.GetAllAsyncCallCount);
+    }
+
+    private (
+        DistributedApplication App,
+        AzureProvisioningController Controller,
+        TestArmClient ArmClient,
+        AzureRoleAssignmentResource RoleAssignmentResource,
+        ProvisioningContext ProvisioningContext,
+        Guid PrincipalId,
+        RoleDefinition AcrPullRole) CreateRoleAssignmentPropagationScenario()
+    {
+        var acrPullRole = new RoleDefinition("7f951dda-4ed3-4680-a7ca-43fe172d538d", "AcrPull");
+        var principalId = Guid.NewGuid();
+
+        var target = new AzureProvisioningResource("acr", _ => { });
+        target.Outputs["id"] = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ContainerRegistry/registries/acr";
+
+        var identity = new AzureUserAssignedIdentityResource("identity");
+        identity.Outputs["principalId"] = principalId.ToString();
+
+        var roleAssignmentResource = new AzureRoleAssignmentResource(
+            "identity-roles-acr",
+            target,
+            identity,
+            identity,
+            _ => { },
+            new HashSet<RoleDefinition> { acrPullRole });
+
+        var armClient = new TestArmClient();
+        var provisioningContext = ProvisioningTestHelpers.CreateTestProvisioningContext(armClient: armClient);
+
+        var builder = CreateBuilder(isRunMode: true);
+        AddTestAzureProvisioning(builder);
+        var app = builder.Build();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        return (app, controller, armClient, roleAssignmentResource, provisioningContext, principalId, acrPullRole);
+    }
+
+    private static RoleAssignmentData CreateRoleAssignmentData(Guid principalId, RoleDefinition role)
+    {
+        return ArmAuthorizationModelFactory.RoleAssignmentData(
+            roleDefinitionId: new ResourceIdentifier($"/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Authorization/roleDefinitions/{role.Id}"),
+            principalId: principalId);
+    }
+
+#pragma warning restore ASPIREAZURE003
 
     [Fact]
     public async Task RunModeInitializeResource_ProvisionsAzureResourcesAfterPrepareStep()
@@ -5062,6 +5220,29 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(value, property.Value);
         Assert.Equal(displayName, property.DisplayName);
         Assert.True(property.IsHighlighted);
+    }
+
+    private sealed class RecordingLogger : ILogger
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+
+            public void Dispose()
+            {
+            }
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

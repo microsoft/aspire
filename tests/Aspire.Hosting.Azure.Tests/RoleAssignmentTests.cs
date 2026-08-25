@@ -333,6 +333,32 @@ public class RoleAssignmentTests()
         Assert.DoesNotContain(model.Resources, r => r.Name == "webfrontend-roles-cache");
     }
 
+    [Fact]
+    public async Task RoleAssignmentResourceTracksGrantedRoles()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var keyvault = builder.AddAzureKeyVault("keyvault");
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(keyvault, KeyVaultBuiltInRole.KeyVaultSecretsUser);
+
+        var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var projRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "api-roles-keyvault");
+
+        // AzureProvisioningController relies on Roles to know which role assignment to look for when
+        // confirming Azure RBAC propagation before dependents are allowed to deploy (see
+        // https://github.com/microsoft/aspire/issues/19658), so it must reflect exactly what was granted.
+        var role = Assert.Single(projRoles.Roles);
+        Assert.Equal(KeyVaultBuiltInRole.KeyVaultSecretsUser.ToString(), role.Id);
+        Assert.False(string.IsNullOrEmpty(role.Name));
+    }
+
     private static async Task RoleAssignmentTest(
         string azureResourceName,
         Action<IDistributedApplicationBuilder> configureBuilder,

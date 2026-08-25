@@ -414,12 +414,14 @@ internal sealed class AzureResourcePreparer(
         var roleAssignmentResources = new List<AzureRoleAssignmentResource>();
         foreach (var (targetResource, roles) in roleAssignments)
         {
+            var roleSet = roles as IReadOnlySet<RoleDefinition> ?? roles.ToHashSet();
             var roleAssignmentResource = new AzureRoleAssignmentResource(
                 $"{resource.Name}-roles-{targetResource.Name}",
                 targetResource,
                 resource,
                 appIdentityResource,
-                infra => AddRoleAssignmentsInfrastructure(infra, targetResource, roles, appIdentityResource))
+                infra => AddRoleAssignmentsInfrastructure(infra, targetResource, roles, appIdentityResource),
+                roleSet)
             {
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
             };
@@ -569,7 +571,8 @@ internal sealed class AzureResourcePreparer(
             targetResource,
             ownerResource: null,
             identityResource: null,
-            infra => AddGlobalRoleAssignmentsInfrastructure(infra, targetResource, roles))
+            infra => AddGlobalRoleAssignmentsInfrastructure(infra, targetResource, roles),
+            roles as IReadOnlySet<RoleDefinition> ?? roles.ToHashSet())
         {
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
         };
