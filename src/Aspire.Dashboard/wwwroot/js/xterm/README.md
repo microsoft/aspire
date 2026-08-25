@@ -37,17 +37,26 @@ example while a window is dragged or resized) leaks placements and renders
 stale copies. The build committed here comes from the PR that adds them:
 
 - PR: <https://github.com/xtermjs/xterm.js/pull/6098>
-- Commit: `d153c858b7f6bd1f1555f4c471fa2d3444dfa8ab`
+- Commit: `5b65c03690770673f407931c767f72ec908dce2c`
+- PR base (upstream master): `d3e32b344dfe7dd6015cff6a9aeaaeaeccdc2789`
 - Package version: `0.9.0`
-- Bundle SHA-256: `ca790754a5beaeefca9acbf10f52ea38e5b8dbf3b6ccdd9998ee60841cfac04c`
+- Bundle SHA-256: `94fb5ca7413520807bb1efd9639f06c869ad8e913620393d4d7a02dba2ac5093`
 - License: MIT (`addon-image.LICENSE.txt`)
 
 Replace this with the upstream npm package once PR #6098 ships.
 
 The hex1b sample vendors its own copy of this bundle at
 `samples/WebMuxerDemo/wwwroot/vendor/xterm-addon-image.js`, from an earlier commit
-on the same PR. That copy predates the placement-index fix described below, so the
-two are no longer byte-identical; this one is newer.
+on the same PR. That copy predates the fixes described below, so the two are no
+longer byte-identical; this one is newer.
+
+Note that the PR is periodically rebased, so its commit SHAs change. Match the
+bundle by its SHA-256 rather than assuming the commit above is still reachable.
+
+The core `xterm.min.js` is deliberately *not* rebuilt from this PR — the PR only
+touches `addons/addon-image/**`, and the addon's use of core internals (`_core.*`,
+`_extendedAttrs`, `_data`, `getBg`, the parser `register*Handler` hooks) is
+unchanged by it, so the npm core build below stays compatible.
 
 ### Placement index vs. `HAS_EXTENDED`
 
@@ -67,11 +76,15 @@ still drew. Hex1b moves a window by issuing `a=d,d=a`, freeing the old image wit
 left referencing a deleted image and rendered as grey checkerboard placeholders at
 every previous window position.
 
-Commit `d153c858` fixes this by aligning the index and deletion paths with the
-renderer (`getVisibleImageStorageIds`, `_clearImageCells`, `_rebuildImageCellIndex`,
+The PR fixes this by aligning the index and deletion paths with the renderer
+(`getVisibleImageStorageIds`, `_clearImageCells`, `_rebuildImageCellIndex`,
 `_untrackCell`, `_writeToCell`) rather than making the renderer strict. If a future
 re-vendor reintroduces grey rectangles after moving a window, this is the first
 place to look.
+
+Upstream is actively working the same area — `xtermjs/xterm.js#6131` ("Restore text
+overwrite of image tiles") landed on master and is included here — so this
+interaction is worth re-checking on every re-vendor.
 
 ## Rebuilding `addon-image.min.js` from source
 
