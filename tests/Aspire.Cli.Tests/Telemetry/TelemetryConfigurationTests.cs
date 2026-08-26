@@ -75,11 +75,13 @@ public class TelemetryConfigurationTests
         Assert.False(telemetryManager.HasAzureMonitor, $"Expected Azure Monitor to be disabled when telemetry opt-out is '{optOutValue}'");
     }
 
-    [Fact]
-    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided()
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided(string versionFlag)
     {
         var configuration = new ConfigurationBuilder().Build();
-        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--version"]);
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [versionFlag]);
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector

@@ -26,5 +26,5 @@ internal static class CommonOptionNames
     /// Options that represent informational commands (e.g. --version, --help) which should
     /// opt out of telemetry and suppress first-run experience.
     /// </summary>
-    public static readonly string[] InformationalOptionNames = [Version, Help, HelpShort, HelpAlt];
+    public static readonly string[] InformationalOptionNames = [Version, VersionShort, Help, HelpShort, HelpAlt];
 }
