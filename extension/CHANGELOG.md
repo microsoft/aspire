@@ -1,5 +1,10 @@
 # Aspire VS Code Extension Changelog
 
+## v1.20.0
+
+<!-- aspire-ext-changelog from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=b582f8071ea2c1e9cbe7fe21d9b5479d005cd753 base=1.19.0 -->
+_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+
 ## v1.19.0
 
 <!-- aspire-ext-changelog-done from=b5be9fc0742c7cdf5e02e4b6e2b7cb5c45e5c387 to=c1d2831ade34a050e8ea1111ac64aeda67c7321e base=1.18.0 -->
