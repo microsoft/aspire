@@ -91,62 +91,91 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    public void ApplyDeploymentConcurrencyGroups_CreatesBoundedAcyclicLanes()
+    public async Task ExecuteAsync_DeploymentConcurrencyGroupLimitsConcurrentSteps()
     {
-        var sharedCapacity = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
-        var exclusiveCapacity = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        using var builder = CreatePipelineTestBuilder();
+        var pipeline = new DistributedApplicationPipeline();
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
+        var releaseSteps = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var twoStepsEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activeSteps = 0;
+        var maximumActiveSteps = 0;
+        var sync = new object();
 
-        var step1 = new PipelineStep { Name = "step1", Action = _ => Task.CompletedTask };
-        step1.DeploymentConcurrencyGroups.Add(sharedCapacity);
+        for (var i = 0; i < 4; i++)
+        {
+            var step = new PipelineStep
+            {
+                Name = $"step{i}",
+                Action = async _ =>
+                {
+                    var currentActiveSteps = Interlocked.Increment(ref activeSteps);
+                    lock (sync)
+                    {
+                        maximumActiveSteps = Math.Max(maximumActiveSteps, currentActiveSteps);
+                    }
 
-        var step2 = new PipelineStep { Name = "step2", Action = _ => Task.CompletedTask };
-        step2.DeploymentConcurrencyGroups.Add(sharedCapacity);
-        step2.DeploymentConcurrencyGroups.Add(exclusiveCapacity);
+                    if (currentActiveSteps == 2)
+                    {
+                        twoStepsEntered.TrySetResult();
+                    }
 
-        var step3 = new PipelineStep { Name = "step3", Action = _ => Task.CompletedTask };
-        step3.DeploymentConcurrencyGroups.Add(sharedCapacity);
-        step3.DeploymentConcurrencyGroups.Add(exclusiveCapacity);
+                    await releaseSteps.Task.ConfigureAwait(false);
+                    Interlocked.Decrement(ref activeSteps);
+                }
+            };
+            step.DeploymentConcurrencyGroups.Add(group);
+            pipeline.AddStep(step);
+        }
 
-        var step4 = new PipelineStep { Name = "step4", Action = _ => Task.CompletedTask };
-        step4.DeploymentConcurrencyGroups.Add(sharedCapacity);
+        var context = CreateDeployingContext(builder.Build());
+        var executionTask = pipeline.ExecuteAsync(context);
 
-        DistributedApplicationPipeline.ApplyDeploymentConcurrencyGroups([step1, step2, step3, step4]);
+        await twoStepsEntered.Task.DefaultTimeout();
+        await Task.Delay(100);
+        var observedActiveSteps = Volatile.Read(ref activeSteps);
+        releaseSteps.TrySetResult();
+        await executionTask.DefaultTimeout();
 
-        Assert.Empty(step1.DependsOnSteps);
-        Assert.Empty(step2.DependsOnSteps);
-        Assert.Equal(["step1", "step2"], step3.DependsOnSteps.Order(StringComparer.Ordinal));
-        Assert.Equal(["step2"], step4.DependsOnSteps);
+        Assert.Equal(2, observedActiveSteps);
+        Assert.Equal(2, maximumActiveSteps);
     }
 
     [Fact]
-    public void ApplyDeploymentConcurrencyGroups_DoesNotAddUnselectedGroupMembers()
+    public async Task ExecuteAsync_FailedConcurrencyGroupMemberDoesNotSuppressIndependentMember()
     {
+        using var builder = CreatePipelineTestBuilder();
+        var pipeline = new DistributedApplicationPipeline();
         var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
-        var selectedStep = new PipelineStep { Name = "selected", Action = _ => Task.CompletedTask };
-        selectedStep.DeploymentConcurrencyGroups.Add(group);
+        var independentStepExecuted = false;
+        var failingStep = new PipelineStep
+        {
+            Name = "failing",
+            Action = _ => throw new InvalidOperationException("Expected failure")
+        };
+        failingStep.DeploymentConcurrencyGroups.Add(group);
+        pipeline.AddStep(failingStep);
 
-        DistributedApplicationPipeline.ApplyDeploymentConcurrencyGroups([selectedStep]);
+        var independentStep = new PipelineStep
+        {
+            Name = "independent",
+            Action = _ =>
+            {
+                independentStepExecuted = true;
+                return Task.CompletedTask;
+            }
+        };
+        independentStep.DeploymentConcurrencyGroups.Add(group);
+        pipeline.AddStep(independentStep);
 
-        Assert.Empty(selectedStep.DependsOnSteps);
+        var context = CreateDeployingContext(builder.Build());
+        await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context)).DefaultTimeout();
+
+        Assert.True(independentStepExecuted);
     }
 
     [Fact]
-    public void ApplyDeploymentConcurrencyGroups_DoesNotSerializeIndependentGroups()
-    {
-        var step1 = new PipelineStep { Name = "step1", Action = _ => Task.CompletedTask };
-        step1.DeploymentConcurrencyGroups.Add(new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1));
-
-        var step2 = new PipelineStep { Name = "step2", Action = _ => Task.CompletedTask };
-        step2.DeploymentConcurrencyGroups.Add(new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1));
-
-        DistributedApplicationPipeline.ApplyDeploymentConcurrencyGroups([step1, step2]);
-
-        Assert.Empty(step1.DependsOnSteps);
-        Assert.Empty(step2.DependsOnSteps);
-    }
-
-    [Fact]
-    public void FilterStepsForExecution_DoesNotPersistConcurrencyDependencies()
+    public void FilterStepsForExecution_DoesNotAddConcurrencyDependencies()
     {
         var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
         var step1 = new PipelineStep { Name = "step1", Action = _ => Task.CompletedTask };
@@ -157,7 +186,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var (fullSteps, _) = DistributedApplicationPipeline.FilterStepsForExecution(allSteps, stepName: null);
 
-        Assert.Equal(["step1"], fullSteps.Single(step => step.Name == "step2").DependsOnSteps);
+        Assert.All(fullSteps, step => Assert.Empty(step.DependsOnSteps));
+        Assert.All(fullSteps, step => Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups)));
         Assert.All(allSteps, step => Assert.Empty(step.DependsOnSteps));
 
         var (targetedSteps, _) = DistributedApplicationPipeline.FilterStepsForExecution(allSteps, "step2");
@@ -165,6 +195,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var targetedStep = Assert.Single(targetedSteps);
         Assert.Equal("step2", targetedStep.Name);
         Assert.Empty(targetedStep.DependsOnSteps);
+        Assert.Same(group, Assert.Single(targetedStep.DeploymentConcurrencyGroups));
     }
 
     [Theory]
@@ -204,6 +235,47 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResolveStepsAsync_WithMultipleMatchingDeploymentSteps_AssignsGroupToEveryStep(bool hasProvisionSteps)
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var target = new CustomResource("target");
+        target.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(group));
+
+        var resource = builder.AddContainer("app", "myimage").Resource;
+        resource.Annotations.Add(new DeploymentTargetAnnotation(target));
+
+        for (var i = 0; i < 2; i++)
+        {
+            var stepIndex = i;
+            resource.Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+            {
+                Name = $"deploy-target-{stepIndex}",
+                Resource = target,
+                Tags =
+                [
+                    hasProvisionSteps
+                        ? WellKnownPipelineTags.ProvisionInfrastructure
+                        : WellKnownPipelineTags.DeployCompute
+                ],
+                Action = _ => Task.CompletedTask
+            }));
+        }
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var deploymentSteps = steps.Where(step => step.Name.StartsWith("deploy-target-", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, deploymentSteps.Length);
+        Assert.All(deploymentSteps, step => Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups)));
+    }
+
     [Fact]
     public async Task ResolveStepsAsync_WithAnnotatedNonComputeResource_AssignsAllConcurrencyGroups()
     {
@@ -235,7 +307,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    public async Task ExecuteAsync_DiagnosticsReflectsDeploymentConcurrencyGroups()
+    public async Task ExecuteAsync_DiagnosticsDoesNotRepresentConcurrencyGroupsAsDependencies()
     {
         var reporter = new TestPipelineActivityReporter(testOutputHelper);
         using var builder = CreatePipelineTestBuilder(
@@ -261,7 +333,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var fullAnalysis = diagnostics[..fullAnalysisEnd];
         var target2StepStart = fullAnalysis.IndexOf("Step: provision-target2", StringComparison.Ordinal);
         Assert.True(target2StepStart >= 0);
-        Assert.Contains("Dependencies: ✓ provision-target1", fullAnalysis[target2StepStart..]);
+        Assert.Contains("Dependencies: none", fullAnalysis[target2StepStart..]);
 
         const string targetHeader = "If targeting 'provision-target2':";
         var targetStart = diagnostics.IndexOf(targetHeader, StringComparison.Ordinal);
