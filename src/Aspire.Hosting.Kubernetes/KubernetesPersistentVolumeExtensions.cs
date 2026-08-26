@@ -266,14 +266,14 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(volume);
 
-        VolumeResourceBuilderExtensions.AddRunModePathResolver(
-            builder,
-            volume.Resource.Name,
-            context =>
+        builder.WithAnnotation(new VolumeMountBindingAnnotation(volume.Resource.Name)
+        {
+            RunModeHostPathResolver = context =>
             {
                 var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
                 return KubernetesPersistentVolumeLocalStorage.GetOrCreatePath(store, volume.Resource);
-            });
+            }
+        });
 
         // This overload takes no env, but the name-match composition can still opt into the portable
         // path by spelling env on the mount instead:
@@ -411,19 +411,49 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(volume);
         ArgumentException.ThrowIfNullOrEmpty(mountPath);
 
+        if (env is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(env);
+
+            if (builder.Resource is not IResourceWithEnvironment)
+            {
+                throw new InvalidOperationException(
+                    $"Resource '{builder.Resource.Name}' does not support environment variables and cannot use the '{env}' volume path variable.");
+            }
+        }
+
         var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume);
 
-        VolumeResourceBuilderExtensions.WithVolumeCore(
-            builder,
-            volume.Resource.Name,
-            mountPath,
-            isReadOnly,
-            env,
-            context =>
+        // Declare the mount and its binding directly rather than through WithVolume, because the polyglot
+        // adapter only constrains T to IComputeResource while the env-carrying WithVolume overload also
+        // requires IResourceWithEnvironment. The env value itself still comes from the shared binding
+        // logic so the inner/outer loop decision lives in exactly one place.
+        var binding = new VolumeMountBindingAnnotation(volume.Resource.Name)
+        {
+            EnvironmentVariableName = env,
+            MountPath = mountPath,
+            RunModeHostPathResolver = context =>
             {
                 var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
                 return KubernetesPersistentVolumeLocalStorage.GetOrCreatePath(store, volume.Resource);
-            });
+            }
+        };
+
+        builder.WithAnnotation(new ContainerMountAnnotation(
+            volume.Resource.Name,
+            mountPath,
+            ContainerMountType.Volume,
+            isReadOnly));
+
+        builder.WithAnnotation(binding);
+
+        if (env is not null)
+        {
+            builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[env] = binding.ResolvePath(context);
+            }));
+        }
 
         builder.WithAnnotation(new KubernetesPersistentVolumeBindingAnnotation(
             volume.Resource,

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { getDiagnosticsForFile } from '../testing/e2eStateFileBridge';
+import { getCodeLensesForFile, getDiagnosticsForFile } from '../testing/e2eStateFileBridge';
 
 import { removeDirectorySafely } from './testHelpers';
 /**
@@ -84,6 +84,39 @@ suite('E2E diagnostics probe', () => {
         assert.ok(
             openPaths.includes(expectedPath),
             `Probing must not close an editor the caller already had open. Open tabs: ${JSON.stringify(openPaths)}`);
+    });
+
+    test('probing CodeLenses does not show the document', async () => {
+        temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-diagnostics-probe-'));
+
+        const filePath = path.join(temporaryDirectory, 'CodeLensProbe.ts');
+        fs.writeFileSync(filePath, 'const probe = true;\n');
+        const expectedPath = vscode.Uri.file(filePath).fsPath;
+        const provider = vscode.languages.registerCodeLensProvider(
+            { language: 'typescript', scheme: 'file' },
+            {
+                provideCodeLenses(document) {
+                    if (document.uri.fsPath !== expectedPath) {
+                        return [];
+                    }
+
+                    return [new vscode.CodeLens(
+                        new vscode.Range(0, 0, 0, 0),
+                        { title: 'Probe CodeLens', command: 'aspire-vscode.test.probeCodeLens' })];
+                },
+            });
+
+        try {
+            const result = await getCodeLensesForFile(filePath);
+
+            assert.strictEqual(result.filePath, expectedPath);
+            assert.strictEqual(result.languageId, 'typescript');
+            assert.ok(result.commandTitles.includes('Probe CodeLens'));
+            assert.ok(!vscode.window.visibleTextEditors.some(editor => editor.document.uri.fsPath === expectedPath));
+        }
+        finally {
+            provider.dispose();
+        }
     });
 });
 

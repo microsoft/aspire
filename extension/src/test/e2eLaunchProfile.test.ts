@@ -740,6 +740,36 @@ suite('E2E launch profile', () => {
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
+    test('scopes real debug browser cleanup to Windows while retaining deterministic nonblocking coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
+        const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+        const normalizedDebugBrowserTest = debugBrowserTest.replace(/\r\n/g, '\n');
+        const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
+        const nonWindowsSkip = `if (process.platform !== 'win32') {
+            this.skip();
+        }`;
+
+        assert.deepStrictEqual({
+            nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
+                && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
+            waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
+            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('await waitForNoBrowserDebugSessions()'),
+            hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
+            usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
+            removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
+        }, {
+            nonWindowsSkipPrecedesDashboardBrowserSetting: true,
+            waitsForBrowserDebugSession: true,
+            waitsForNoBrowserDebugSessions: true,
+            hasNonblockingUnitTest: true,
+            usesNeverSettlingBrowserLaunch: true,
+            removedOptionalModalHelper: true,
+        });
+    });
+
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
@@ -1026,6 +1056,37 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000)"));
         assert.ok(!zeroToRunning.includes("waitForEditorTitle(dashboardHost"));
         assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
+    });
+
+    test('keeps the ambiguous dynamic debug launch timeout above its process-state wait', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const dynamicDebugConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'dynamicDebugConfiguration.e2e.test.ts'), 'utf8');
+        const ambiguousLaunchTest = getTestBlock(dynamicDebugConfiguration, 'launches the selected AppHost from an ambiguous single-folder workspace');
+
+        assert.ok(dynamicDebugConfiguration.includes('const appHostProcessStateTimeoutMs = 120000;'));
+        assert.ok(ambiguousLaunchTest.includes('this.timeout(300000);'));
+        assert.ok(ambiguousLaunchTest.includes('appHostProcessStateTimeoutMs'));
+    });
+
+    test('uses state-specific assertions for debugger guidance and project creation readiness', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const workspaceTargetProofSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'workspaceTargetProof.e2e.test.ts'), 'utf8');
+
+        assert.ok(workspaceTargetProofSource.includes("const wrapperDirectory = path.join(fixtureRoot, '.workspace-target-cli-wrappers');"));
+        assert.ok(workspaceTargetProofSource.includes('const wrapperPath = path.join(wrapperDirectory, `aspire-${folderName}`);'));
+        assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
+
+        const edgeCases = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+        assert.ok(edgeCases.includes("executeE2eControlCommand({ name: 'getCodeLenses', filePath: appHostPath })"));
+        assert.ok(edgeCases.includes("title.includes('Set up Python debugger')"));
+        assert.ok(!edgeCases.includes("waitForCodeLensText("));
+        assert.ok(!edgeCases.includes("name: 'openFile'"));
+        assert.ok(!edgeCases.includes("waitForWorkbenchText('Set up Python debugger'"));
+
+        const workspaceCollision = getTestBlock(workspaceTargetProofSource, 'reopens the project folder picker after a colliding selection');
+        assert.ok(!workspaceCollision.includes('await openAspireView();'));
+        assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
     });
 
     test('uses integrated-browser webview text instead of editor title waits', () => {

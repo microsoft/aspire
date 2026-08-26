@@ -19,6 +19,9 @@
     <trans-unit id="command.add">
       <source xml:lang="en">Add an integration</source>
     </trans-unit>
+    <trans-unit id="walkthrough.getStarted.nextSteps.description">
+      <source xml:lang="en">Add integrations, move toward production, or go deeper in the Aspire docs.&#10;&#10;[Add an integration](command:aspire-vscode.add)&#10;&#10;[Open Aspire docs](https://aspire.dev/docs/)</source>
+    </trans-unit>
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
@@ -63,9 +66,6 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.configInfoTimedOut">
       <source xml:lang="en">Aspire config info timed out after {0} seconds.</source>
-    </trans-unit>
-    <trans-unit id="walkthrough.getStarted.welcome.description">
-      <source xml:lang="en">Aspire helps you build observable, production-ready distributed apps — orchestrating front ends, APIs, containers, and databases from code.&#10;&#10;It works with **any language**: C#, Python, JavaScript, Go, Java, and more.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireConfigExists">
       <source xml:lang="en">Aspire launch configuration already exists in launch.json.</source>
@@ -151,6 +151,12 @@
     <trans-unit id="aspire-vscode.strings.changelogLabel">
       <source xml:lang="en">Changelog</source>
     </trans-unit>
+    <trans-unit id="walkthrough.getStarted.installCli.description">
+      <source xml:lang="en">Choose a package manager, install the Aspire CLI, and get ready to run your first app.&#10;&#10;[Install the Aspire CLI](command:aspire-vscode.installCli)</source>
+    </trans-unit>
+    <trans-unit id="walkthrough.getStarted.createProject.description">
+      <source xml:lang="en">Choose a starter for your stack, or begin with an empty AppHost.&#10;&#10;[Create a new Aspire project](command:aspire-vscode.new)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.createWithAspirePlaceholder">
       <source xml:lang="en">Choose how to set up Aspire</source>
     </trans-unit>
@@ -215,7 +221,7 @@
       <source xml:lang="en">Create a new Aspire app</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
-      <source xml:lang="en">Create a new project</source>
+      <source xml:lang="en">Create your first Aspire app</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandCustomChoiceDescription">
       <source xml:lang="en">Custom value</source>
@@ -230,6 +236,9 @@
       <source xml:lang="en">Dashboard</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostDebugActionLabel">
+      <source xml:lang="en">Debug AppHost</source>
+    </trans-unit>
+    <trans-unit id="walkthrough.getStarted.runApp.title">
       <source xml:lang="en">Debug AppHost</source>
     </trans-unit>
     <trans-unit id="command.debugAppHost">
@@ -258,6 +267,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostDebuggingPipelineStepDescription">
       <source xml:lang="en">Debugging pipeline step...</source>
+    </trans-unit>
+    <trans-unit id="walkthrough.getStarted.welcome.description">
+      <source xml:lang="en">Define your distributed app in code, run it from VS Code, and see the whole system in the Aspire Dashboard.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostDeployActionLabel">
       <source xml:lang="en">Deploy AppHost</source>
@@ -352,9 +364,6 @@
     <trans-unit id="command.expandAll">
       <source xml:lang="en">Expand all resources</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.dashboard.title">
-      <source xml:lang="en">Explore the dashboard</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.extensionContextNotInitialized">
       <source xml:lang="en">Extension context is not initialized.</source>
     </trans-unit>
@@ -403,11 +412,17 @@
     <trans-unit id="aspire-vscode.strings.failedToStartProject">
       <source xml:lang="en">Failed to start project: {0}.</source>
     </trans-unit>
+    <trans-unit id="walkthrough.getStarted.dashboard.description">
+      <source xml:lang="en">Follow resources, endpoints, logs, traces, and metrics from one dashboard.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliPathEnvironmentDescription">
       <source xml:lang="en">Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
+    </trans-unit>
+    <trans-unit id="walkthrough.getStarted.description">
+      <source xml:lang="en">Go from a workspace to a running, observable distributed app.</source>
     </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.mode.description">
       <source xml:lang="en">How to start the AppHost: &apos;run&apos; starts it without attaching the debugger, &apos;debug&apos; starts it with the debugger attached.</source>
@@ -447,6 +462,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.javaDisplayName">
       <source xml:lang="en">Java: {0}</source>
+    </trans-unit>
+    <trans-unit id="walkthrough.getStarted.nextSteps.title">
+      <source xml:lang="en">Keep building</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.installCliDailyBuildDescription">
       <source xml:lang="en">Latest build from main via the install script</source>
@@ -502,9 +520,6 @@
     <trans-unit id="aspire-vscode.strings.launchingRunWithDirectory">
       <source xml:lang="en">Launching Aspire run session using directory {0}: attempting to determine effective AppHost...</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.description">
-      <source xml:lang="en">Learn how to create, run, and monitor distributed applications with Aspire.</source>
-    </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Legacy setting for Aspire Dashboard launch behavior. Use Aspire: Dashboard Browser instead. Explicit Aspire: Dashboard Browser none or notification values win. Otherwise, legacy notification or off values override browser-opening choices; launch uses Aspire: Dashboard Browser, falling back to VS Code&apos;s integrated browser for compatibility.</source>
     </trans-unit>
@@ -516,9 +531,6 @@
     </trans-unit>
     <trans-unit id="command.new">
       <source xml:lang="en">New Aspire project</source>
-    </trans-unit>
-    <trans-unit id="walkthrough.getStarted.nextSteps.title">
-      <source xml:lang="en">Next steps</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.noLabel">
       <source xml:lang="en">No</source>
@@ -715,14 +727,14 @@
     <trans-unit id="command.runAppHost">
       <source xml:lang="en">Run AppHost</source>
     </trans-unit>
+    <trans-unit id="walkthrough.getStarted.runApp.description">
+      <source xml:lang="en">Run or debug your AppHost and let Aspire start every resource in the right order.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostRunPipelineStepActionLabel">
       <source xml:lang="en">Run pipeline step</source>
     </trans-unit>
     <trans-unit id="command.runPipelineStepAppHost">
       <source xml:lang="en">Run pipeline step</source>
-    </trans-unit>
-    <trans-unit id="walkthrough.getStarted.runApp.title">
-      <source xml:lang="en">Run your app</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandArgumentsTitle">
       <source xml:lang="en">Run {0}</source>
@@ -754,14 +766,14 @@
     <trans-unit id="aspire-vscode.strings.rustDisplayName">
       <source xml:lang="en">Rust: {0}</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.createProject.description">
-      <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
-    </trans-unit>
     <trans-unit id="views.appHosts.loading">
       <source xml:lang="en">Searching for AppHosts...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.openCliInstallInstructions">
       <source xml:lang="en">See CLI installation instructions</source>
+    </trans-unit>
+    <trans-unit id="walkthrough.getStarted.dashboard.title">
+      <source xml:lang="en">See the whole system</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectCommandPlaceholder">
       <source xml:lang="en">Select a command to execute</source>
@@ -853,9 +865,6 @@
     <trans-unit id="aspire-vscode.strings.appHostLifecycleStartConfirmationMessage">
       <source xml:lang="en">Start the Aspire AppHost {0} in {1} mode?</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.runApp.description">
-      <source xml:lang="en">Start your Aspire app to launch all services. The dashboard stays available from the Aspire panel when you need it.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostLifecycleStartInvocationMessage">
       <source xml:lang="en">Starting Aspire AppHost {0}...</source>
     </trans-unit>
@@ -898,17 +907,11 @@
     <trans-unit id="aspire-vscode.strings.resourceCommandCliNotInstalled">
       <source xml:lang="en">The Aspire CLI could not be started: {0}</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.installCli.description">
-      <source xml:lang="en">The Aspire CLI creates, runs, and manages your applications. Choose a package manager to install it — or open the guide for every option, including the install script.&#10;&#10;[Install the Aspire CLI](command:aspire-vscode.installCli)</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardUrlUnsupported">
       <source xml:lang="en">The Aspire Dashboard URL must use http or https.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchBehaviorChanged">
       <source xml:lang="en">The Aspire Dashboard does not open automatically. Open it from the Aspire panel anytime, or configure a launch behavior.</source>
-    </trans-unit>
-    <trans-unit id="walkthrough.getStarted.dashboard.description">
-      <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustLaunchConfigurationMissingExecutable">
       <source xml:lang="en">The Aspire app host did not report which executable the Rust app in {0} produces, so there is nothing to debug.</source>
@@ -1054,9 +1057,6 @@
     <trans-unit id="aspire-vscode.strings.watchProject">
       <source xml:lang="en">Watch {0} ({1})</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.welcome.title">
-      <source xml:lang="en">Welcome to Aspire</source>
-    </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.isolated.description">
       <source xml:lang="en">When true, start with randomized ports and isolated user secrets. When false, do not isolate. When omitted, linked git worktrees start isolated automatically.</source>
     </trans-unit>
@@ -1090,8 +1090,8 @@
     <trans-unit id="aspire-vscode.strings.yes">
       <source xml:lang="en">Yes</source>
     </trans-unit>
-    <trans-unit id="walkthrough.getStarted.nextSteps.description">
-      <source xml:lang="en">You&apos;re all set! Add integrations for databases, messaging, and cloud services, or deploy your app to production.&#10;&#10;[Add an integration](command:aspire-vscode.add)&#10;&#10;[Open Aspire docs](https://aspire.dev/docs/)</source>
+    <trans-unit id="walkthrough.getStarted.welcome.title">
+      <source xml:lang="en">Your whole app, one F5 away</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCommandOutputTruncated">
       <source xml:lang="en">[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]</source>

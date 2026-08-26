@@ -10,6 +10,10 @@ on:
       extensionVersionOverride:
         required: false
         type: string
+      extensionReleaseOnly:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -18,6 +22,7 @@ permissions:
 jobs:
   setup_for_tests:
     name: Setup for tests
+    if: ${{ !inputs.extensionReleaseOnly }}
     runs-on: ubuntu-latest
     # This job checks out and runs PR-authored code (SelectTests, the test build), so it is kept at
     # contents:read with no pull-requests:write. The selection comment is posted from the
@@ -252,12 +257,14 @@ jobs:
 
   build_packages:
     name: Build packages
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -265,6 +272,7 @@ jobs:
 
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -276,6 +284,7 @@ jobs:
   # without waiting for the slower Windows/macOS builds.
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -283,6 +292,7 @@ jobs:
 
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -290,6 +300,7 @@ jobs:
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -297,6 +308,7 @@ jobs:
 
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
+    if: ${{ !inputs.extensionReleaseOnly }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -575,8 +587,9 @@ jobs:
     needs: [setup_for_tests]
     # Also gated on run_extension_e2e (not just run_extension_unit): this job packages and uploads
     # the aspire-extension VSIX that extension_e2e_tests installs, so skipping it would leave the
-    # shards with nothing to install.
-    if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    # shards with nothing to install. !cancelled() lets release-only calls run after setup_for_tests
+    # is intentionally skipped.
+    if: ${{ !cancelled() && (inputs.extensionReleaseOnly || needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true') }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -647,16 +660,17 @@ jobs:
       # The VSIX steps from here down run even when 'Run tests' failed. extension_e2e_tests
       # installs the artifact this job uploads but is deliberately not gated on the unit-test
       # result, so the packaging has to happen regardless or that decoupling buys nothing.
+      # Release-only calls do not have an E2E consumer, so they stop after the unit tests.
       - name: Override extension version for PR builds
-        if: ${{ !cancelled() && inputs.extensionVersionOverride != '' }}
+        if: ${{ !inputs.extensionReleaseOnly && !cancelled() && inputs.extensionVersionOverride != '' }}
         run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
       - name: Package VSIX
-        if: ${{ !cancelled() }}
+        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
         env:
           ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
       - name: Assert E2E VSIX contains bridge
-        if: ${{ !cancelled() }}
+        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
         run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
       # Packaged separately (not reusing out/aspire-extension.vsix) because the step above already
       # proved that VSIX contains the bridge on purpose; asserting Absent against it would be
@@ -665,13 +679,13 @@ jobs:
       # GitHub Actions step `env:` blocks don't leak into later steps, so this reproduces exactly
       # what Extension.proj's shipping build packages, with no ability to inherit the opt-in above.
       - name: Package production VSIX
-        if: ${{ !cancelled() }}
+        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
         run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
       - name: Assert production VSIX excludes bridge
-        if: ${{ !cancelled() }}
+        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
         run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
       - name: Upload VSIX
-        if: ${{ !cancelled() }}
+        if: ${{ !inputs.extensionReleaseOnly && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: aspire-extension
@@ -802,39 +816,44 @@ jobs:
     ]
     steps:
       - name: Checkout code
+        if: ${{ !inputs.extensionReleaseOnly }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create test results directory
+        if: ${{ !inputs.extensionReleaseOnly }}
         shell: bash
         run: mkdir -p "${{ github.workspace }}/testresults"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-ubuntu-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/ubuntu-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-windows-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/windows-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: ${{ !inputs.extensionReleaseOnly }}
         with:
           pattern: logs-*-macos-latest
           merge-multiple: true
           path: testresults/macos-latest
 
       - name: Upload test results
-        if: always()
+        if: ${{ always() && !inputs.extensionReleaseOnly }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
 
       - name: Generate test results summary
-        if: always()
+        if: ${{ always() && !inputs.extensionReleaseOnly }}
         shell: bash
         run: |
           ${{ github.workspace }}/dotnet.sh \
@@ -845,7 +864,7 @@ jobs:
             --combined
 
       - name: Generate CI timeline
-        if: always()
+        if: ${{ always() && !inputs.extensionReleaseOnly }}
         continue-on-error: true
         shell: bash
         env:
@@ -875,12 +894,17 @@ jobs:
         #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
+        # Release-only calls intentionally skip every dependency except extension_tests_win, which
+        # must succeed. Normal calls retain the existing unexpected-skip checks below.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
-               (github.event_name == 'pull_request' &&
+               (inputs.extensionReleaseOnly &&
+                needs.extension_tests_win.result != 'success') ||
+               (!inputs.extensionReleaseOnly &&
+                ((github.event_name == 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
                   needs.extension_e2e_tests.result == 'skipped') ||
@@ -930,7 +954,7 @@ jobs:
                  (github.ref == 'refs/heads/main' &&
                   (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true'))) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                  needs.tests_requires_nugets_macos.result == 'skipped')))) }}
+                  needs.tests_requires_nugets_macos.result == 'skipped')))))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

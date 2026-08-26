@@ -109,8 +109,7 @@
                                             Duration="PageViewModel.SelectedDuration.Id"
                                             ActiveView="@(PageViewModel.SelectedViewKind ?? Metrics.MetricViewKind.Graph)"
                                             OnViewChangedAsync="@OnViewChangedAsync"
-                                            Resources="@_resources"
-                                            PauseText="@PauseText" />
+                                            Resources="@_resources" />
                                     }
                                     else if (PageViewModel.SelectedMeter != null)
                                     {
@@ -174,5 +173,11 @@
                 }
             </div>
         </MainSection>
+        <FooterSection>
+            @if (PauseText is not null)
+            {
+                <PauseWarning PauseText="@PauseText" />
+            }
+        </FooterSection>
     </AspirePageContentLayout>
 </div>

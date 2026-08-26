@@ -226,6 +226,95 @@ public class DefaultAzurePrincipalProviderTests
         Assert.Equal("primary@example.com", principal.Name);
     }
 
+    [Fact]
+    public async Task GetPrincipalAsync_UsesAppDisplayNameForAppOnlyTokens()
+    {
+        // App-only tokens carry neither `upn` nor `email`, so before this fallback existed
+        // `principalName` was written as an empty string. `app_displayname` is the display name of
+        // the app registration, which is the name Entra reports for its service principal and the
+        // value Azure Database for PostgreSQL requires on
+        // Microsoft.DBforPostgreSQL/flexibleServers/administrators.
+        // See https://github.com/microsoft/aspire/issues/19487.
+        var payloadJson = """
+            {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"app","app_displayname":"aspire-deployment-tests"}
+            """;
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("ServicePrincipal", principal.Type);
+        Assert.Equal("aspire-deployment-tests", principal.Name);
+    }
+
+    [Theory]
+    // A user-delegated token from `az login`: `app_displayname` names the *client application*, not
+    // the signed-in identity, so the `upn` must win.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"user","upn":"real@example.com","app_displayname":"Microsoft Azure CLI"}
+        """, "real@example.com")]
+    // Same client-application claim, but with no `upn`/`email` to fall back to. Using
+    // "Microsoft Azure CLI" as the principal name here would be badly wrong, so the object id is
+    // used instead.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"user","app_displayname":"Microsoft Azure CLI"}
+        """, "11111111-2222-3333-4444-555555555555")]
+    public async Task GetPrincipalAsync_IgnoresAppDisplayNameForUserTokens(string payloadJson, string expectedName)
+    {
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal(expectedName, principal.Name);
+    }
+
+    [Theory]
+    // App-only token without the optional `app_displayname` claim. Entra documents that claim as one
+    // callers must not depend on, so this is the shape the fallback has to cover.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"app"}
+        """)]
+    // A token carrying no name claim of any kind.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555"}
+        """)]
+    // Structurally unexpected claim values are treated as "not supplied" rather than being coerced,
+    // so they must land on the same fallback instead of producing an empty name.
+    [InlineData("""
+        {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"app","upn":"","email":"","app_displayname":42}
+        """)]
+    public async Task GetPrincipalAsync_FallsBackToObjectIdWhenNoNameClaimIsUsable(string payloadJson)
+    {
+        // An empty `principalName` is not benign: Azure SQL's principal reconciliation script runs
+        // `CREATE USER QUOTENAME(@name)`, and QUOTENAME('') produces the invalid identifier `[]`.
+        // The object id is the only claim guaranteed to be present, so it is what makes the result
+        // non-empty in every case.
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("11111111-2222-3333-4444-555555555555", principal.Name);
+    }
+
+    [Fact]
+    public async Task GetPrincipalAsync_IgnoresAppDisplayNameNestedInsideOtherClaims()
+    {
+        // Same structural guarantee the other nested-claim tests assert, extended to the name
+        // fallback: a display name buried inside another claim's value is not a claim, so the
+        // object id fallback must still apply.
+        var payloadJson = """
+            {"oid":"11111111-2222-3333-4444-555555555555","idtyp":"app","act":{"app_displayname":"nested-app","upn":"nested@example.com"}}
+            """;
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("11111111-2222-3333-4444-555555555555", principal.Name);
+    }
+
     // Produces a JWT-shaped string ("header.payload.signature") with the requested claims.
     // All three segments use base64url encoding (RFC 7515 §3) so the helper matches the wire
     // format real Azure AD tokens use, even though the provider currently only decodes the

@@ -98,9 +98,9 @@ public static class FilterHelpers
         FieldTelemetryFilter? entry,
         DashboardDialogService dialogService,
         EventCallback<DialogResult> onDialogResult,
-        List<string> propertyKeys,
+        Func<CancellationToken, Task<List<string>>> getPropertyKeysAsync,
         List<string> knownKeys,
-        Func<string, Dictionary<string, int>> getFieldValues,
+        Func<string, CancellationToken, Task<Dictionary<string, int>>> getFieldValuesAsync,
         IStringLocalizer<StructuredFiltering> filterLoc)
     {
         var title = entry is not null ? filterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : filterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
@@ -116,9 +116,9 @@ public static class FilterHelpers
         var data = new FilterDialogViewModel
         {
             Filter = entry,
-            PropertyKeys = propertyKeys,
+            GetPropertyKeysAsync = getPropertyKeysAsync,
             KnownKeys = knownKeys,
-            GetFieldValues = getFieldValues
+            GetFieldValuesAsync = getFieldValuesAsync
         };
         await dialogService.ShowPanelAsync<FilterDialog>(data, parameters).ConfigureAwait(false);
     }

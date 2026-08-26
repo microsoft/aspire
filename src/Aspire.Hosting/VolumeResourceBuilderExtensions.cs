@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -83,75 +82,36 @@ public static class VolumeResourceBuilderExtensions
 
         builder.WithAnnotation(new ContainerMountAnnotation(name, target, ContainerMountType.Volume, isReadOnly));
 
-        if (name is not null && getRunModeHostPath is not null)
+        // Restate the binding declaratively. The env callback below captures env in a closure, so a
+        // compute environment inspecting the model afterwards cannot otherwise tell that this mount
+        // resolves a local path in run mode.
+        VolumeMountBindingAnnotation? binding = null;
+
+        if (name is not null && (env is not null || getRunModeHostPath is not null))
         {
-            AddRunModePathResolver(builder, name, getRunModeHostPath);
+            binding = new VolumeMountBindingAnnotation(name)
+            {
+                EnvironmentVariableName = env,
+                MountPath = target,
+                RunModeHostPathResolver = getRunModeHostPath
+            };
+
+            builder.WithAnnotation(binding);
         }
 
         if (env is not null)
         {
-            if (name is not null)
-            {
-                // Restate the env binding declaratively. The callback below captures env in a closure,
-                // so a compute environment inspecting the model afterwards cannot otherwise tell that
-                // this mount resolves a local path in run mode.
-                builder.WithAnnotation(new VolumeEnvironmentVariableAnnotation(name, env));
-            }
-
             builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
             {
-                context.EnvironmentVariables[env] = GetEffectiveVolumePath(context, name, target, env);
+                context.EnvironmentVariables[env] = binding is not null
+                    ? binding.ResolvePath(context)
+                    : context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource
+                        ? target
+                        : throw new InvalidOperationException(
+                            $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
             }));
         }
 
         return builder;
-    }
-
-    internal static IResourceBuilder<T> AddRunModePathResolver<T>(
-        IResourceBuilder<T> builder,
-        string volumeName,
-        Func<EnvironmentCallbackContext, string> resolver)
-        where T : IComputeResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(volumeName);
-        ArgumentNullException.ThrowIfNull(resolver);
-
-        return builder.WithAnnotation(new VolumeMountPathResolverAnnotation(volumeName, resolver));
-    }
-
-    private static string GetEffectiveVolumePath(
-        EnvironmentCallbackContext context,
-        string? name,
-        string target,
-        string env)
-    {
-        if (context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource)
-        {
-            return target;
-        }
-
-        if (name is null)
-        {
-            throw new InvalidOperationException(
-                $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
-        }
-
-        var resolver = context.Resource.Annotations
-            .OfType<VolumeMountPathResolverAnnotation>()
-            .LastOrDefault(annotation => string.Equals(annotation.VolumeName, name, StringComparison.Ordinal))
-            ?.Resolver;
-
-        if (resolver is not null)
-        {
-            return resolver(context);
-        }
-
-        // Containers already returned above, so everything remaining runs as a host process and needs
-        // a local directory. Projects and executables are the in-box cases, but the public overload
-        // accepts any IComputeResource, so custom compute resources resolve here too. Throwing instead
-        // would let a call that compiles cleanly fail much later during environment evaluation.
-        var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
-        return VolumeMountPathResolver.GetOrCreateLocalPath(store, context.Resource, name);
     }
 }

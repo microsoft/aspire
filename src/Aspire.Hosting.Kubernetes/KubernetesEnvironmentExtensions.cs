@@ -177,8 +177,10 @@ public static class KubernetesEnvironmentExtensions
         // this binding resolve locally. LastOrDefault mirrors the resolver lookup, where the last
         // matching mount wins.
         return resource.Annotations
-            .OfType<VolumeEnvironmentVariableAnnotation>()
-            .LastOrDefault(item => string.Equals(item.VolumeName, annotation.Volume.Name, StringComparison.Ordinal))
+            .OfType<VolumeMountBindingAnnotation>()
+            .LastOrDefault(item =>
+                item.EnvironmentVariableName is not null &&
+                string.Equals(item.VolumeName, annotation.Volume.Name, StringComparison.Ordinal))
             ?.EnvironmentVariableName;
     }
 

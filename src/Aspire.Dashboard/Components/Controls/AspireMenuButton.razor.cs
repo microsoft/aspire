@@ -24,6 +24,7 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     private Icon? _icon;
     private MenuButtonItem[] _items = [];
     private bool _disabled;
+    private bool _hasActionableItems = true;
     private Func<IList<MenuButtonItem>>? _renderedItemsProvider;
 
     [Parameter]
@@ -31,6 +32,15 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
 
     [Parameter]
     public Icon? IconStart { get; set; }
+
+    [Parameter]
+    public string? IconStartClass { get; set; }
+
+    [Parameter]
+    public Color? IconStartColor { get; set; }
+
+    [Parameter]
+    public string? IconStartCustomColor { get; set; }
 
     [Parameter]
     public Icon? Icon { get; set; }
@@ -50,6 +60,9 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     [Parameter]
     public required Func<IList<MenuButtonItem>> ItemsProvider { get; set; }
 
+    // Exposed only for tests to inspect the rendered menu items.
+    internal IReadOnlyList<MenuButtonItem> Items => _items;
+
     [Parameter]
     public Appearance? ButtonAppearance { get; set; }
 
@@ -61,6 +74,15 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
 
     [Parameter]
     public bool HideIcon { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the button is unconditionally disabled.
+    /// </summary>
+    /// <remarks>
+    /// This is independent of the automatic disabling that happens when the menu has no actionable items.
+    /// </remarks>
+    [Parameter]
+    public bool Disabled { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
@@ -81,7 +103,10 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
         if (!ReferenceEquals(_renderedItemsProvider, ItemsProvider))
         {
             _renderedItemsProvider = ItemsProvider;
-            _disabled = false;
+
+            // The provider hasn't run for this delegate yet, so the menu contents are unknown.
+            // Assume it has content so only Disabled can disable the button before the first open.
+            _hasActionableItems = true;
         }
 
         if (_visible || _openWhenMenuRenderCompletes)
@@ -92,6 +117,10 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
             {
                 OnMenuOpenChanged(false);
             }
+        }
+        else
+        {
+            UpdateDisabled();
         }
     }
 
@@ -136,7 +165,13 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     private void RefreshItems()
     {
         _items = ItemsProvider().ToArray();
-        _disabled = !_items.Any(i => !i.IsDivider);
+        _hasActionableItems = _items.Any(i => !i.IsDivider);
+        UpdateDisabled();
+    }
+
+    private void UpdateDisabled()
+    {
+        _disabled = Disabled || !_hasActionableItems;
     }
 
     private async Task OnMenuRenderComplete()
