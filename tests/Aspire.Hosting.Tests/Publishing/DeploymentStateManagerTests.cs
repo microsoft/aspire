@@ -645,6 +645,36 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ConcurrentNestedAdditionsToNewObjectAreMerged()
+    {
+        var sha = Guid.NewGuid().ToString("N");
+        var firstStateManager = CreateFileDeploymentStateManager(sha);
+
+        try
+        {
+            var secondStateManager = CreateFileDeploymentStateManager(sha);
+            var firstSection = await firstStateManager.AcquireSectionAsync("Settings");
+            var secondSection = await secondStateManager.AcquireSectionAsync("Settings");
+            firstSection.Data["Features"] = new JsonObject { ["A"] = true };
+            secondSection.Data["Features"] = new JsonObject { ["B"] = true };
+
+            await firstStateManager.SaveSectionAsync(firstSection);
+            await secondStateManager.SaveSectionAsync(secondSection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(sha);
+            var restartedSection = await restartedStateManager.AcquireSectionAsync("Settings");
+            var features = Assert.IsType<JsonObject>(restartedSection.Data["Features"]);
+            Assert.Equal(["A", "B"], features.Select(static pair => pair.Key));
+            Assert.True(features["A"]?.GetValue<bool>());
+            Assert.True(features["B"]?.GetValue<bool>());
+        }
+        finally
+        {
+            await firstStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
     public async Task SourceAppHostMigrationPersistsOnlyUpdatedSections()
     {
         var legacySha = Guid.NewGuid().ToString("N");

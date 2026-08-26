@@ -520,10 +520,10 @@ internal sealed partial class FileDeploymentStateManager(
                 return (latestExists, latestValue?.DeepClone());
             }
 
-            if (originalValue is JsonObject originalObject &&
-                savedValue is JsonObject savedObject)
+            if (savedValue is JsonObject savedObject &&
+                (originalValue is JsonObject || !originalExists))
             {
-                return (true, ApplyChanges(latestValue, originalObject, savedObject));
+                return (true, ApplyChanges(latestValue, originalValue as JsonObject ?? [], savedObject));
             }
 
             return savedExists
