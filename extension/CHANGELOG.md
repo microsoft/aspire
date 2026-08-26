@@ -2,8 +2,15 @@
 
 ## v1.20.0
 
-<!-- aspire-ext-changelog from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->
+
+### Fixes
+
+- Prevent the Hot Reload advisory notification from repeatedly reappearing during a debug session ([#19672](https://github.com/microsoft/aspire/pull/19672)).
+
+### Documentation
+
+- Rewrite the extension README and walkthrough with clearer setup and getting-started guidance ([#19632](https://github.com/microsoft/aspire/pull/19632)).
 
 ## v1.19.0
 
