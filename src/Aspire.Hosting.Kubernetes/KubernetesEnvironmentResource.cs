@@ -29,7 +29,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// Kubernetes cluster.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource
+public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
     private const int HttpRouteHostnameLimit = 16;
     private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";

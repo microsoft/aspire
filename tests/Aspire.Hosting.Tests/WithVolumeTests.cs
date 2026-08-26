@@ -243,7 +243,99 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
         Assert.Throws<ArgumentException>(() => CoreExports.WithExecutableVolumeForPolyglot(executable, target, name, env));
     }
 
+    [Fact]
+    public async Task WithVolumeEnvironmentThrowsWhenComputeEnvironmentCannotMountVolumes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddResource(new MountIncapableComputeEnvironmentResource("env"));
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithVolume("data", "/srv/data", env: "DATA_PATH")
+            .WithComputeEnvironment(environment);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                project.Resource,
+                DistributedApplicationOperation.Publish,
+                app.Services));
+
+        Assert.Contains("'project'", exception.Message);
+        Assert.Contains("volume 'data'", exception.Message);
+        Assert.Contains("'DATA_PATH'", exception.Message);
+        Assert.Contains("'env'", exception.Message);
+    }
+
+    [Fact]
+    public async Task WithVolumeEnvironmentThrowsForAnonymousVolumeWhenComputeEnvironmentCannotMountVolumes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddResource(new MountIncapableComputeEnvironmentResource("env"));
+        var container = builder.AddContainer("container", "image")
+            .WithComputeEnvironment(environment);
+
+        // No public or ATS overload pairs an anonymous volume with an environment variable, so reach
+        // the guard through the shared core the way a future internal caller would.
+        VolumeResourceBuilderExtensions.WithVolumeCore(container, name: null, "/srv/data", isReadOnly: false, env: "DATA_PATH");
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                container.Resource,
+                DistributedApplicationOperation.Publish,
+                app.Services));
+
+        Assert.Contains("an anonymous volume", exception.Message);
+    }
+
+    [Fact]
+    public async Task WithVolumeEnvironmentResolvesWhenComputeEnvironmentSupportsVolumeMounts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var computeEnvironment = builder.AddResource(new MountCapableComputeEnvironmentResource("env"));
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithVolume("data", "/srv/data", env: "DATA_PATH")
+            .WithComputeEnvironment(computeEnvironment);
+
+        using var app = builder.Build();
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            DistributedApplicationOperation.Publish,
+            app.Services);
+
+        Assert.Equal("/srv/data", environment["DATA_PATH"]);
+    }
+
+    [Fact]
+    public async Task WithVolumeEnvironmentResolvesWhenComputeEnvironmentIsUnknown()
+    {
+        // No compute environment is bound, so the target is ambiguous rather than known-unsupported.
+        // Publishing must not be blocked on a guess.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithVolume("data", "/srv/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            DistributedApplicationOperation.Publish,
+            app.Services);
+
+        Assert.Equal("/srv/data", environment["DATA_PATH"]);
+    }
+
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment
+    {
+    }
+
+    private sealed class MountCapableComputeEnvironmentResource(string name)
+        : Resource(name), IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
+    {
+    }
+
+    private sealed class MountIncapableComputeEnvironmentResource(string name)
+        : Resource(name), IComputeEnvironmentResource
     {
     }
 }

@@ -103,12 +103,27 @@ public static class VolumeResourceBuilderExtensions
         {
             builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
             {
-                context.EnvironmentVariables[env] = binding is not null
-                    ? binding.ResolvePath(context)
-                    : context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource
-                        ? target
-                        : throw new InvalidOperationException(
-                            $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
+                if (binding is not null)
+                {
+                    context.EnvironmentVariables[env] = binding.ResolvePath(context);
+                    return;
+                }
+
+                // Anonymous volumes have no name to scope a local directory by, so only the deployed
+                // mount path and a container's own mount are resolvable.
+                if (context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource)
+                {
+                    if (context.ExecutionContext.IsPublishMode)
+                    {
+                        VolumeMountBindingAnnotation.ThrowIfEnvironmentCannotMount(context, volumeName: null, env);
+                    }
+
+                    context.EnvironmentVariables[env] = target;
+                    return;
+                }
+
+                throw new InvalidOperationException(
+                    $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
             }));
         }
 

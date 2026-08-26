@@ -52,7 +52,7 @@ const api = await builder.addNodeApp("api", "../api", "server.js");
 await api.withVolume("/data", "data", "DATA_PATH");
 ```
 
-Projects and executables receive a workload-scoped Aspire store directory in run mode. The directory is reused across AppHost runs regardless of whether the process has a session or persistent lifetime. When published, the volume uses the Kubernetes environment's `DefaultStorageType` and `DATA_PATH` contains `/data`.
+Projects and executables receive a workload-scoped Aspire store directory in run mode. The directory is reused across AppHost runs regardless of whether the process has a session or persistent lifetime. When published, the volume uses the Kubernetes environment's `DefaultStorageType`, which is `emptyDir` — storage lives for the lifetime of the pod and is lost when the pod restarts or is rescheduled. `DATA_PATH` contains `/data`. For storage that outlives the pod, use a [persistent volume](#persistent-volumes) instead.
 
 ### Persistent volumes
 

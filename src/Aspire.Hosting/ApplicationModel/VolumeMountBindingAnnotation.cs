@@ -78,8 +78,15 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
 
         if (context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource)
         {
-            return MountPath ?? throw new InvalidOperationException(
+            var mountPath = MountPath ?? throw new InvalidOperationException(
                 $"Volume '{VolumeName}' on resource '{context.Resource.Name}' does not declare a mount path.");
+
+            if (context.ExecutionContext.IsPublishMode)
+            {
+                ThrowIfEnvironmentCannotMount(context, VolumeName, EnvironmentVariableName);
+            }
+
+            return mountPath;
         }
 
         // The resolver can live on a different annotation than the one declaring the mount. The name-match
@@ -103,6 +110,35 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
         // would let a call that compiles cleanly fail much later during environment evaluation.
         var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
         return VolumeMountPathResolver.GetOrCreateLocalPath(store, context.Resource, VolumeName);
+    }
+
+    /// <summary>
+    /// Throws when the resource is published to a compute environment that cannot back the volume with
+    /// real storage.
+    /// </summary>
+    internal static void ThrowIfEnvironmentCannotMount(EnvironmentCallbackContext context, string? volumeName, string? environmentVariableName)
+    {
+        // Only an environment that consumes ContainerMountAnnotation can back the path handed to the
+        // workload. When the environment is known and does not, the variable resolves to ordinary
+        // container storage: writes succeed and are then lost on restart. Fail at publish time instead,
+        // because nothing downstream surfaces the problem.
+        //
+        // A null environment means the model has no compute environment, or several with no explicit
+        // binding. Those are ambiguous rather than known-unsupported, so stay quiet rather than block a
+        // publish that may well be fine.
+        if (context.Resource.GetComputeEnvironment() is not { } environment ||
+            environment is IComputeEnvironmentWithVolumeMounts)
+        {
+            return;
+        }
+
+        var volume = volumeName is null ? "an anonymous volume" : $"volume '{volumeName}'";
+
+        throw new InvalidOperationException(
+            $"Resource '{context.Resource.Name}' binds {volume} to environment variable '{environmentVariableName}', but " +
+            $"compute environment '{environment.Name}' does not support volume mounts. The variable would point at a path " +
+            $"that is not backed by storage, so anything written there is lost when the workload restarts. Remove the " +
+            $"environment variable binding, or target a compute environment that supports volume mounts.");
     }
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
