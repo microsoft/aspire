@@ -142,6 +142,86 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteAsync_OverlappingDeploymentConcurrencyGroupsUseStableAcquisitionOrder()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var pipeline = new DistributedApplicationPipeline();
+        var groupA = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var groupB = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var holderAStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holderBStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waitersMayQueue = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHolders = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completedWaiters = 0;
+
+        AddHolder("holder-a", groupA, holderAStarted);
+        AddHolder("holder-b", groupB, holderBStarted);
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "holders-ready",
+            Action = async _ =>
+            {
+                await Task.WhenAll(holderAStarted.Task, holderBStarted.Task).ConfigureAwait(false);
+                waitersMayQueue.TrySetResult();
+            }
+        });
+
+        AddWaiter("waiter-ab", groupA, groupB);
+        AddWaiter("waiter-ba", groupB, groupA);
+
+        var context = CreateDeployingContext(builder.Build());
+        var executionTask = pipeline.ExecuteAsync(context);
+
+        await waitersMayQueue.Task.DefaultTimeout();
+        // Give both waiters time to block on their first group before releasing the holders.
+        // Without the stable global order, each waiter acquires a different group and deadlocks on the other.
+        await Task.Delay(100);
+        releaseHolders.TrySetResult();
+        await executionTask.DefaultTimeout();
+
+        Assert.Equal(2, completedWaiters);
+
+        void AddHolder(
+            string name,
+            DeploymentConcurrencyGroup group,
+            TaskCompletionSource started)
+        {
+            var step = new PipelineStep
+            {
+                Name = name,
+                Action = async _ =>
+                {
+                    started.TrySetResult();
+                    await releaseHolders.Task.ConfigureAwait(false);
+                }
+            };
+            step.DeploymentConcurrencyGroups.Add(group);
+            pipeline.AddStep(step);
+        }
+
+        void AddWaiter(
+            string name,
+            DeploymentConcurrencyGroup firstGroup,
+            DeploymentConcurrencyGroup secondGroup)
+        {
+            var step = new PipelineStep
+            {
+                Name = name,
+                DependsOnSteps = ["holders-ready"],
+                Action = _ =>
+                {
+                    Interlocked.Increment(ref completedWaiters);
+                    return Task.CompletedTask;
+                }
+            };
+            step.DeploymentConcurrencyGroups.Add(firstGroup);
+            step.DeploymentConcurrencyGroups.Add(secondGroup);
+            pipeline.AddStep(step);
+        }
+    }
+
+    [Fact]
     public async Task ExecuteAsync_FailedConcurrencyGroupMemberDoesNotSuppressIndependentMember()
     {
         using var builder = CreatePipelineTestBuilder();
