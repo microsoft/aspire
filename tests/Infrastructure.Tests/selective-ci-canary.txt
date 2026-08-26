@@ -1,0 +1,2 @@
+Temporary marker used to validate the enforced selective .NET test matrix.
+This pull request is a disposable canary and must not be merged.
