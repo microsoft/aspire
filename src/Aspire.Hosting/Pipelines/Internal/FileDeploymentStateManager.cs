@@ -64,7 +64,7 @@ internal sealed partial class FileDeploymentStateManager(
     /// <inheritdoc/>
     protected override string? GetStatePath()
     {
-        var currentStatePath = GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+        var currentStatePath = GetStatePath(configuration, configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
         if (currentStatePath is null ||
             File.Exists(currentStatePath) ||
             File.Exists(GetMigrationStatePath(currentStatePath)))
@@ -72,15 +72,15 @@ internal sealed partial class FileDeploymentStateManager(
             return currentStatePath;
         }
 
-        var legacyStatePath = GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+        var legacyStatePath = GetStatePath(configuration, configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
         return legacyStatePath is not null && File.Exists(legacyStatePath)
             ? legacyStatePath
             : currentStatePath;
     }
 
-    private string? GetCanonicalStatePath() => GetStatePath(configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+    private string? GetCanonicalStatePath() => GetStatePath(configuration, configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
 
-    private string? GetLegacyStatePath() => GetStatePath(configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+    private string? GetLegacyStatePath() => GetStatePath(configuration, configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
 
     internal static string GetMigrationStatePath(string canonicalStatePath) =>
         $"{canonicalStatePath}.migration";
@@ -166,7 +166,7 @@ internal sealed partial class FileDeploymentStateManager(
         return effectiveState;
     }
 
-    private string? GetStatePath(string? appHostSha, string environmentName)
+    internal static string? GetStatePath(IConfiguration configuration, string? appHostSha, string environmentName)
     {
         if (string.IsNullOrEmpty(appHostSha))
         {
@@ -295,7 +295,7 @@ internal sealed partial class FileDeploymentStateManager(
                     _currentState = await LoadStateFileAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false);
                     await LoadMigrationStateAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false);
                     var sectionData = TryGetNestedPropertyValue(state, sectionName) as JsonObject;
-                    var legacySectionData = TryGetNestedPropertyValue(GetLegacyFallbackState(), sectionName) as JsonObject;
+                    var legacySectionData = TryGetNestedPropertyValue(GetLegacyFallbackState(), sectionName);
                     var latestEffectiveState = MergeState(GetLegacyFallbackState(), _currentState);
                     ApplyClaimedSections(latestEffectiveState, _currentState, _claimedSectionNames);
                     var latestSectionData = TryGetNestedPropertyValue(latestEffectiveState, sectionName);
@@ -303,7 +303,7 @@ internal sealed partial class FileDeploymentStateManager(
                     if (TryGetNestedPropertyValue(_legacyStateSnapshot, sectionName) is null &&
                         legacySectionData is not null)
                     {
-                        SetNestedPropertyValue(_legacyStateSnapshot, sectionName, legacySectionData.DeepClone().AsObject());
+                        SetNestedNodeValue(_legacyStateSnapshot, sectionName, legacySectionData.DeepClone(), valueExists: true);
                     }
                     SetNestedPropertyValue(_currentState, sectionName, null);
                     _claimedSectionNames.RemoveWhere(name =>

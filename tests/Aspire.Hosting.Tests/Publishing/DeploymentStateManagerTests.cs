@@ -551,6 +551,35 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task SourceAppHostMigrationPersistsScalarValueDeletion()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+
+        try
+        {
+            var legacyStatePath = legacyStateManager.StateFilePath!;
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyStatePath)!);
+            await File.WriteAllTextAsync(legacyStatePath, """{"Parameters:secret":"legacy"}""");
+
+            var parameterSection = await migratingStateManager.AcquireSectionAsync("Parameters:secret");
+            Assert.Equal("legacy", parameterSection.Data[""]?.GetValue<string>());
+
+            await migratingStateManager.DeleteSectionAsync(parameterSection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+            Assert.Empty((await restartedStateManager.AcquireSectionAsync("Parameters:secret")).Data);
+        }
+        finally
+        {
+            await migratingStateManager.ClearAllStateAsync();
+            await legacyStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
     public async Task SourceAppHostMigrationPersistsOnlyUpdatedSections()
     {
         var legacySha = Guid.NewGuid().ToString("N");
