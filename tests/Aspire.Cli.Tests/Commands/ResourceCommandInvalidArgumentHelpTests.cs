@@ -87,6 +87,79 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
         Assert.Empty(output.ToString());
     }
 
+    [Fact]
+    public async Task ResourceCommand_HostingUnknownArgumentShowsCommandSpecificHelp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringWriter();
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Unknown argument '--unknown value' for command 'configure'."
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand("configure", "Configures the browser."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --unknown value""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Contains("Unknown argument '--unknown value' for command 'configure'.", Assert.Single(interactionService.DisplayedErrors));
+
+        var helpOutput = output.ToString();
+        Assert.Contains("Configures the browser.", helpOutput);
+        Assert.Contains("Usage:", helpOutput);
+        Assert.Contains("aspire resource web-browser-automation configure [options] [[--] <command-options>...]", helpOutput);
+        Assert.Contains("Options:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_OrdinaryExecutionFailureDoesNotShowCommandHelp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringWriter();
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command execution failed."
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand("configure", "Configures the browser."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Contains("Command execution failed.", Assert.Single(interactionService.DisplayedErrors));
+        Assert.Empty(output.ToString());
+    }
+
     private ServiceProvider CreateServiceProvider(
         TemporaryWorkspace workspace,
         TestAppHostAuxiliaryBackchannel backchannel,

@@ -179,14 +179,38 @@ internal sealed class ResourceCommand : BaseCommand
                 cancellationToken));
         }
 
-        return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteGenericCommandAsync(
+        var genericCommandResult = await ResourceCommandHelper.ExecuteGenericCommandWithResponseAsync(
             connection,
             InteractionService,
             _logger,
             resourceName,
             commandName,
             commandArguments,
-            cancellationToken));
+            cancellationToken).ConfigureAwait(false);
+
+        if (command is not null && IsHostingUnknownArgumentFailure(genericCommandResult.Response, commandName))
+        {
+            await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
+            ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
+        }
+
+        return CommandResult.FromExitCode(genericCommandResult.ExitCode);
+    }
+
+    private static bool IsHostingUnknownArgumentFailure(ExecuteResourceCommandResponse response, string commandName)
+    {
+#pragma warning disable CS0618 // Type or member is obsolete
+        var message = response.Message ?? response.ErrorMessage;
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        if (response.Success || response.Canceled || string.IsNullOrEmpty(message))
+        {
+            return false;
+        }
+
+        return (message.StartsWith("Unknown argument '", StringComparison.Ordinal) &&
+                message.EndsWith($" for command '{commandName}'.", StringComparison.Ordinal)) ||
+            message.StartsWith($"Unknown arguments for command '{commandName}':", StringComparison.Ordinal);
     }
 
     private static async Task<CommandResult> LoadCommandArgumentsAsync(

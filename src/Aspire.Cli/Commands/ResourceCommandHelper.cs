@@ -69,6 +69,27 @@ internal static class ResourceCommandHelper
         JsonNode? arguments,
         CancellationToken cancellationToken)
     {
+        var result = await ExecuteGenericCommandWithResponseAsync(
+            connection,
+            interactionService,
+            logger,
+            resourceName,
+            commandName,
+            arguments,
+            cancellationToken).ConfigureAwait(false);
+
+        return result.ExitCode;
+    }
+
+    internal static async Task<(int ExitCode, ExecuteResourceCommandResponse Response)> ExecuteGenericCommandWithResponseAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IInteractionService interactionService,
+        ILogger logger,
+        string resourceName,
+        string commandName,
+        JsonNode? arguments,
+        CancellationToken cancellationToken)
+    {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
 
         var response = await interactionService.ShowStatusAsync(
@@ -90,7 +111,7 @@ internal static class ResourceCommandHelper
         else if (response.Canceled)
         {
             interactionService.DisplayMessage(KnownEmojis.Warning, $"Command '{commandName}' on '{resourceName}' was canceled.");
-            return CliExitCodes.FailedToExecuteResourceCommand;
+            return (CliExitCodes.FailedToExecuteResourceCommand, response);
         }
         else
         {
@@ -114,7 +135,7 @@ internal static class ResourceCommandHelper
             DisplayCommandResult(interactionService, response.Value);
         }
 
-        return response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand;
+        return (response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand, response);
     }
 
     private static int HandleResponse(
