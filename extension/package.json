@@ -1020,6 +1020,12 @@
           "description": "%configuration.aspire.enableAspireDcpDebugLogging%",
           "scope": "window"
         },
+        "aspire.enableHotReloadNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.aspire.enableHotReloadNotification%",
+          "scope": "window"
+        },
         "aspire.enableAspireDashboardAutoLaunch": {
           "type": "string",
           "enum": [

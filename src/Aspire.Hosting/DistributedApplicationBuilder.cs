@@ -1025,24 +1025,21 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
         var deploymentStatePath = GetDeploymentStatePath(appHostSha, environment);
-        if (!File.Exists(deploymentStatePath) &&
-            !string.IsNullOrEmpty(legacyAppHostSha))
-        {
-            var legacyDeploymentStatePath = GetDeploymentStatePath(legacyAppHostSha, environment);
-            if (File.Exists(legacyDeploymentStatePath))
-            {
-                deploymentStatePath = legacyDeploymentStatePath;
-            }
-        }
-
-        if (!File.Exists(deploymentStatePath))
-        {
-            return;
-        }
+        var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
+            ? null
+            : GetDeploymentStatePath(legacyAppHostSha, environment);
 
         try
         {
-            _innerBuilder.Configuration.AddJsonFile(deploymentStatePath, optional: true, reloadOnChange: false);
+            var effectiveState = FileDeploymentStateManager.LoadEffectiveStateAsync(
+                deploymentStatePath,
+                legacyDeploymentStatePath).GetAwaiter().GetResult();
+            if (effectiveState.Count > 0)
+            {
+                var flattenedState = JsonFlattener.FlattenJsonObject(effectiveState);
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(flattenedState.ToJsonString()));
+                _innerBuilder.Configuration.AddJsonStream(stream);
+            }
         }
         catch { }
     }

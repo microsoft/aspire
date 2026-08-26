@@ -52,8 +52,13 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     /// </summary>
     /// <param name="state">The state to save.</param>
     /// <param name="sectionName">The section being saved, or <see langword="null"/> when saving the complete state.</param>
+    /// <param name="originalSectionData">The section data captured when it was acquired.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    protected abstract Task SaveStateToStorageAsync(JsonObject state, string? sectionName, CancellationToken cancellationToken);
+    protected abstract Task SaveStateToStorageAsync(
+        JsonObject state,
+        string? sectionName,
+        JsonObject? originalSectionData,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets the stored value for a deployment state section.
@@ -76,24 +81,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
                 return _state;
             }
 
-            var jsonDocumentOptions = new JsonDocumentOptions
-            {
-                CommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true,
-            };
-
-            var statePath = GetStatePath();
-
-            if (statePath is not null && File.Exists(statePath))
-            {
-                var fileContent = await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false);
-                var flattenedState = JsonNode.Parse(fileContent, documentOptions: jsonDocumentOptions)!.AsObject();
-                _state = JsonFlattener.UnflattenJsonObject(flattenedState);
-            }
-            else
-            {
-                _state = [];
-            }
+            _state = await LoadStateFromStorageAsync(cancellationToken).ConfigureAwait(false);
 
             _isStateLoaded = true;
             return _state;
@@ -104,13 +92,40 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         }
     }
 
+    /// <summary>
+    /// Loads deployment state from the backing storage.
+    /// </summary>
+    protected virtual Task<JsonObject> LoadStateFromStorageAsync(CancellationToken cancellationToken = default) =>
+        LoadStateFileAsync(GetStatePath(), cancellationToken);
+
+    /// <summary>
+    /// Loads and expands a flattened deployment state file.
+    /// </summary>
+    protected static async Task<JsonObject> LoadStateFileAsync(string? statePath, CancellationToken cancellationToken)
+    {
+        if (statePath is null || !File.Exists(statePath))
+        {
+            return [];
+        }
+
+        var jsonDocumentOptions = new JsonDocumentOptions
+        {
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        };
+
+        var fileContent = await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false);
+        var flattenedState = JsonNode.Parse(fileContent, documentOptions: jsonDocumentOptions)!.AsObject();
+        return JsonFlattener.UnflattenJsonObject(flattenedState);
+    }
+
     /// <inheritdoc/>
     public async Task SaveStateAsync(JsonObject state, CancellationToken cancellationToken = default)
     {
         await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await SaveStateToStorageAsync(state, sectionName: null, cancellationToken).ConfigureAwait(false);
+            await SaveStateToStorageAsync(state, sectionName: null, originalSectionData: null, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -217,7 +232,8 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         {
             // Store a deep clone to ensure immutability
             SetNestedPropertyValue(_state, section.SectionName, section.Data.DeepClone().AsObject());
-            await SaveStateToStorageAsync(_state, section.SectionName, cancellationToken).ConfigureAwait(false);
+            await SaveStateToStorageAsync(_state, section.SectionName, section.OriginalData, cancellationToken).ConfigureAwait(false);
+            section.OriginalData = section.Data.DeepClone().AsObject();
         }
         finally
         {
@@ -237,7 +253,8 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         {
             // Remove the section from the state by passing null
             SetNestedPropertyValue(_state, section.SectionName, null);
-            await SaveStateToStorageAsync(_state, section.SectionName, cancellationToken).ConfigureAwait(false);
+            await SaveStateToStorageAsync(_state, section.SectionName, section.OriginalData, cancellationToken).ConfigureAwait(false);
+            section.OriginalData = [];
         }
         finally
         {
@@ -315,17 +332,13 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     }
 
     /// <inheritdoc/>
-    public async Task ClearAllStateAsync(CancellationToken cancellationToken = default)
+    public virtual async Task ClearAllStateAsync(CancellationToken cancellationToken = default)
     {
-        if (StateFilePath is string stateFilePath && File.Exists(stateFilePath))
-        {
-            File.Delete(stateFilePath);
-            logger.LogInformation("Deployment state cleared: {Path}", stateFilePath);
-        }
-
         await _stateLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await ClearStateStorageAsync(cancellationToken).ConfigureAwait(false);
+
             lock (_sectionsLock)
             {
                 _sections.Clear();
@@ -337,5 +350,19 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
         {
             _stateLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Clears deployment state from the backing storage.
+    /// </summary>
+    protected virtual Task ClearStateStorageAsync(CancellationToken cancellationToken)
+    {
+        if (StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+        {
+            File.Delete(stateFilePath);
+            logger.LogInformation("Deployment state cleared: {Path}", stateFilePath);
+        }
+
+        return Task.CompletedTask;
     }
 }
