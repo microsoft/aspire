@@ -65,6 +65,15 @@ public class PipelineStep
 
     internal List<DeploymentConcurrencyGroup> DeploymentConcurrencyGroups { get; init; } = [];
 
+    // Keep model-derived memberships separate so repeated resolution can rebuild them without
+    // removing groups supplied directly by first-party step factories.
+    internal List<DeploymentConcurrencyGroup> ResolvedDeploymentConcurrencyGroups { get; } = [];
+
+    internal IEnumerable<DeploymentConcurrencyGroup> GetDeploymentConcurrencyGroups()
+    {
+        return DeploymentConcurrencyGroups.Concat(ResolvedDeploymentConcurrencyGroups);
+    }
+
     /// <summary>
     /// Adds a dependency on another step.
     /// </summary>
@@ -121,10 +130,11 @@ public class PipelineStep
     /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, <see cref="Tags"/>, and
     /// <see cref="DeploymentConcurrencyGroups"/> and final action lists. Used by
     /// <see cref="DistributedApplicationPipeline"/> when isolating step-graph mutations
-    /// when isolating step-graph mutations during resolution or a phase such as BeforeStart.
+    /// during resolution or a phase such as BeforeStart.
     /// </summary>
     internal PipelineStep Clone()
     {
+        // Resolved deployment groups are model-derived and must be rebuilt for the clone's resolution.
         var clone = new PipelineStep
         {
             Name = Name,
