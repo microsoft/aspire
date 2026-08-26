@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,6 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 internal static class CommandResources
 {
+    // AppHost project references identify orchestrated projects without exposing their runtime assemblies.
+    // Keep these command defaults aligned with LargeTelemetryGenerator in Stress.ApiService.
+    private const int DefaultTraceCount = 50_000;
+    private const int DefaultSpansPerTrace = 6;
+    private const int DefaultLargeTraceSpanCount = 50_000;
+    private const int DefaultStructuredLogCount = 100_000;
+    private const int DefaultConsoleLogCount = 100_000;
+    private const int DefaultMetricDurationHours = 24;
+    private const int DefaultMetricDimensionCount = 5;
+
     private static string NodeExecutablePath { get; } = Environment.GetEnvironmentVariable("NODE") ?? "node";
     private static string DotnetExecutablePath { get; } = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
 
@@ -889,13 +901,9 @@ internal static class CommandResources
             });
 
         serviceBuilder.WithHttpCommand("/write-console", "Write to console", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
-        serviceBuilder.WithHttpCommand("/write-console-large", "Write to console large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/increment-counter", "Increment counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/big-trace", "Big trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
-        serviceBuilder.WithHttpCommand("/trace-limit", "Trace limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/log-message", "Log message", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
-        serviceBuilder.WithHttpCommand("/log-message-limit", "Log message limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
-        serviceBuilder.WithHttpCommand("/log-message-limit-large", "Log message limit large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/http-command-auto-result", "HTTP command auto result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Auto, Description = "Run an HTTP command and infer the result format from the response content type" });
         serviceBuilder.WithHttpCommand("/http-command-json-result", "HTTP command JSON result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Json, Description = "Run an HTTP command and flow the JSON response back to the caller" });
         serviceBuilder.WithHttpCommand("/http-command-text-result", "HTTP command text result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Text, Description = "Run an HTTP command and flow the plain-text response back to the caller" });
@@ -908,7 +916,175 @@ internal static class CommandResources
         serviceBuilder.WithHttpCommand("/genai-trace-display-error", "Gen AI trace display error", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-evaluations", "Gen AI evaluations", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/log-formatting", "Log formatting", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
-        serviceBuilder.WithHttpCommand("/big-nested-trace", "Big nested trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+
+        var largeTelemetryCommands = builder.AddHttpCommandGroup("large-telemetry-commands", serviceBuilder.Resource);
+        largeTelemetryCommands.WithHttpCommand(
+            "/write-console-large",
+            "Write to console large",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        largeTelemetryCommands.WithHttpCommand(
+            "/trace-limit",
+            "Trace limit",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        largeTelemetryCommands.WithHttpCommand(
+            "/log-message-limit",
+            "Log message limit",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        largeTelemetryCommands.WithHttpCommand(
+            "/log-message-limit-large",
+            "Log message limit large",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        largeTelemetryCommands.WithHttpCommand(
+            "/big-nested-trace",
+            "Big nested trace",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        largeTelemetryCommands.WithHttpCommand(
+            "/large-telemetry",
+            "Generate large telemetry data",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+        {
+            Method = HttpMethod.Post,
+            HttpClientName = "large-telemetry",
+            IconName = "DatabaseLightning",
+            ConfirmationMessage = "Generate a large telemetry workload. This operation can take several minutes and consume significant disk space.",
+            ValidateArguments = context =>
+            {
+                var options = ReadLargeTelemetryGenerationOptions(context.Inputs);
+                if (!options.GenerateTraces && !options.GenerateLargeTrace && !options.GenerateStructuredLogs && !options.GenerateConsoleLogs && !options.GenerateMetrics)
+                {
+                    context.AddValidationError("generateTraces", "At least one telemetry kind must be enabled.");
+                }
+
+                AddPositiveCountValidation(context, options.GenerateTraces, "traceCount");
+                AddPositiveCountValidation(context, options.GenerateTraces, "spansPerTrace");
+                AddPositiveCountValidation(context, options.GenerateLargeTrace, "largeTraceSpanCount");
+                AddPositiveCountValidation(context, options.GenerateStructuredLogs, "structuredLogCount");
+                AddPositiveCountValidation(context, options.GenerateConsoleLogs, "consoleLogCount");
+                AddPositiveCountValidation(context, options.GenerateMetrics, "metricDurationHours");
+                AddPositiveCountValidation(context, options.GenerateMetrics, "metricDimensionCount");
+                return Task.CompletedTask;
+            },
+            PrepareRequest = context =>
+            {
+                context.Request.Content = JsonContent.Create(ReadLargeTelemetryGenerationOptions(context.Arguments));
+                return Task.CompletedTask;
+            },
+            Arguments =
+            [
+                new InteractionInput
+                {
+                    Name = "generateTraces",
+                    Label = "Generate traces",
+                    Description = "Generate many traces with a configurable number of spans.",
+                    InputType = InputType.Boolean,
+                    Required = true,
+                    Value = "true"
+                },
+                new InteractionInput
+                {
+                    Name = "traceCount",
+                    Label = "Trace count",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultTraceCount.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateTraces")
+                },
+                new InteractionInput
+                {
+                    Name = "spansPerTrace",
+                    Label = "Spans per trace",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultSpansPerTrace.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateTraces")
+                },
+                new InteractionInput
+                {
+                    Name = "generateLargeTrace",
+                    Label = "Generate large trace",
+                    Description = "Generate one trace containing many spans.",
+                    InputType = InputType.Boolean,
+                    Required = true,
+                    Value = "true"
+                },
+                new InteractionInput
+                {
+                    Name = "largeTraceSpanCount",
+                    Label = "Large trace span count",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultLargeTraceSpanCount.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateLargeTrace")
+                },
+                new InteractionInput
+                {
+                    Name = "generateStructuredLogs",
+                    Label = "Generate structured logs",
+                    InputType = InputType.Boolean,
+                    Required = true,
+                    Value = "true"
+                },
+                new InteractionInput
+                {
+                    Name = "structuredLogCount",
+                    Label = "Structured log count",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultStructuredLogCount.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateStructuredLogs")
+                },
+                new InteractionInput
+                {
+                    Name = "generateConsoleLogs",
+                    Label = "Generate console logs",
+                    InputType = InputType.Boolean,
+                    Required = true,
+                    Value = "true"
+                },
+                new InteractionInput
+                {
+                    Name = "consoleLogCount",
+                    Label = "Console log count",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultConsoleLogCount.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateConsoleLogs")
+                },
+                new InteractionInput
+                {
+                    Name = "generateMetrics",
+                    Label = "Generate metrics",
+                    Description = "Generate counter and histogram data points.",
+                    InputType = InputType.Boolean,
+                    Required = true,
+                    Value = "true"
+                },
+                new InteractionInput
+                {
+                    Name = "metricDurationHours",
+                    Label = "Metric duration (hours)",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultMetricDurationHours.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateMetrics")
+                },
+                new InteractionInput
+                {
+                    Name = "metricDimensionCount",
+                    Label = "Metric dimension count",
+                    InputType = InputType.Number,
+                    Required = true,
+                    Value = DefaultMetricDimensionCount.ToString(CultureInfo.InvariantCulture),
+                    DynamicLoading = CreateEnabledWhenTrue("generateMetrics")
+                }
+            ]
+        });
     }
 
     private static void AddTelemetryCommands(IDistributedApplicationBuilder builder, IResourceBuilder<ProjectResource> telemetryBuilder)
@@ -1083,6 +1259,46 @@ internal static class CommandResources
         };
     }
 
+    private static LargeTelemetryCommandOptions ReadLargeTelemetryGenerationOptions(InteractionInputCollection arguments)
+    {
+        return new LargeTelemetryCommandOptions
+        {
+            GenerateTraces = arguments.GetBoolean("generateTraces"),
+            TraceCount = arguments.GetInt32("traceCount"),
+            SpansPerTrace = arguments.GetInt32("spansPerTrace"),
+            GenerateLargeTrace = arguments.GetBoolean("generateLargeTrace"),
+            LargeTraceSpanCount = arguments.GetInt32("largeTraceSpanCount"),
+            GenerateStructuredLogs = arguments.GetBoolean("generateStructuredLogs"),
+            StructuredLogCount = arguments.GetInt32("structuredLogCount"),
+            GenerateConsoleLogs = arguments.GetBoolean("generateConsoleLogs"),
+            ConsoleLogCount = arguments.GetInt32("consoleLogCount"),
+            GenerateMetrics = arguments.GetBoolean("generateMetrics"),
+            MetricDurationHours = arguments.GetInt32("metricDurationHours"),
+            MetricDimensionCount = arguments.GetInt32("metricDimensionCount")
+        };
+    }
+
+    private static void AddPositiveCountValidation(InputsDialogValidationContext context, bool enabled, string inputName)
+    {
+        if (enabled && context.Inputs.GetInt32(inputName) <= 0)
+        {
+            context.AddValidationError(inputName, "The value must be positive when this telemetry kind is enabled.");
+        }
+    }
+
+    private static InputLoadOptions CreateEnabledWhenTrue(string inputName)
+    {
+        return new InputLoadOptions
+        {
+            DependsOnInputs = [inputName],
+            LoadCallback = context =>
+            {
+                context.Input.Disabled = !bool.TryParse(context.AllInputs.GetString(inputName), out var enabled) || !enabled;
+                return Task.CompletedTask;
+            }
+        };
+    }
+
     private static IReadOnlyList<InteractionInput> CreateArgumentStressInputs(int fieldCount)
     {
         var inputs = new List<InteractionInput>
@@ -1223,6 +1439,22 @@ internal static class CommandResources
         public int TimeoutSeconds { get; set; } = 30;
 
         public bool RequireHealthy { get; set; } = true;
+    }
+
+    private sealed class LargeTelemetryCommandOptions
+    {
+        public bool GenerateTraces { get; init; }
+        public int TraceCount { get; init; }
+        public int SpansPerTrace { get; init; }
+        public bool GenerateLargeTrace { get; init; }
+        public int LargeTraceSpanCount { get; init; }
+        public bool GenerateStructuredLogs { get; init; }
+        public int StructuredLogCount { get; init; }
+        public bool GenerateConsoleLogs { get; init; }
+        public int ConsoleLogCount { get; init; }
+        public bool GenerateMetrics { get; init; }
+        public int MetricDurationHours { get; init; }
+        public int MetricDimensionCount { get; init; }
     }
 }
 

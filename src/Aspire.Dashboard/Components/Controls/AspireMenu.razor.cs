@@ -36,6 +36,12 @@ public partial class AspireMenu : FluentComponentBase
     [Parameter]
     public EventCallback OnRenderComplete { get; set; }
 
+    /// <summary>
+    /// Raised after a menu item's secondary action completes so the owner can regenerate the menu items.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnSecondaryActionComplete { get; set; }
+
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
 
@@ -154,6 +160,28 @@ public partial class AspireMenu : FluentComponentBase
         if (item.OnClick is { } onClick)
         {
             await onClick();
+        }
+    }
+
+    private async Task HandleSecondaryActionClicked(MenuButtonItem item)
+    {
+        if (item.OnSecondaryActionClick is { } onSecondaryActionClick)
+        {
+            await onSecondaryActionClick();
+        }
+
+        if (OnSecondaryActionComplete.HasDelegate)
+        {
+            await OnSecondaryActionComplete.InvokeAsync();
+        }
+        else
+        {
+            StateHasChanged();
+
+            if (_menu is { Id: not null } menu)
+            {
+                await MenuService.RefreshMenuAsync(menu.Id, isOpen: true);
+            }
         }
     }
 

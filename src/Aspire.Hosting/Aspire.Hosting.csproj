@@ -20,6 +20,7 @@
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />
     <Compile Include="$(SharedDir)CompareHelpers.cs" Link="Utils\CompareHelpers.cs" />
     <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="CustomResourceSnapshotExtensions.cs" />
+    <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Dashboard\KnownProperties.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Dashboard\KnownResourceTypes.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Dashboard\KnownRelationshipTypes.cs" />
@@ -75,7 +76,6 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Polly.Core" />
-    <PackageReference Include="JsonPatch.Net" />
     <PackageReference Include="AspNetCore.HealthChecks.Uris" />
     <PackageReference Include="Semver" />
     <PackageReference Include="System.IO.Hashing" />
@@ -142,12 +142,7 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Rust.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.DotnetTool.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
-    <InternalsVisibleTo Include="Aspire.TestUtilities" />
-    <InternalsVisibleTo Include="Aspire.Cli.Tests" />
-    <InternalsVisibleTo Include="Aspire.Hosting.Kubernetes" />
-    <InternalsVisibleTo Include="Aspire.Hosting.Radius" />
     <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Foundry.Tests" />

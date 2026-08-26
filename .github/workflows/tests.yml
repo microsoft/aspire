@@ -328,6 +328,7 @@ jobs:
     uses: ./.github/workflows/prepare-installer-artifacts.yml
     needs: [
       setup_for_tests,
+      build_packages,
       build_cli_archive_windows,
       build_cli_archive_windows_arm64,
     ]
@@ -340,6 +341,7 @@ jobs:
     uses: ./.github/workflows/prepare-installer-artifacts.yml
     needs: [
       setup_for_tests,
+      build_packages,
       build_cli_archive_macos,
       build_cli_archive_macos_x64,
     ]

@@ -7,11 +7,14 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.ServiceClient;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
+using Aspire.Tests.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -144,26 +147,90 @@ internal static class FluentUISetupHelpers
         comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
+    public static async Task ConfigureTelemetryRepository(
+        TestContext context,
+        bool readOnly,
+        Func<ITelemetryRepositoryWriter, Task> seed)
+    {
+        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+
+        var databasePath = Path.Combine(context.Services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+        var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
+        var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
+        var outgoingPeerResolvers = context.Services.GetServices<IOutgoingPeerResolver>();
+
+        using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
+        await database.InitializeSchemaAsync(CancellationToken.None);
+        using var writer = new SqliteTelemetryRepository(
+            database,
+            loggerFactory,
+            options,
+            new PauseManager(),
+            context.Services.GetRequiredService<TimeProvider>(),
+            outgoingPeerResolvers);
+        await seed(writer);
+    }
+
     public static void AddCommonDashboardServices(
         TestContext context,
         ILocalStorage? localStorage = null,
         ISessionStorage? sessionStorage = null,
         ThemeManager? themeManager = null,
         IMessageService? messageService = null,
-        BrowserTimeProvider? browserTimeProvider = null)
+        BrowserTimeProvider? browserTimeProvider = null,
+        IDashboardRunStore? dashboardRunStore = null)
     {
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
-        context.Services.AddSingleton<TelemetryRepository>();
+        context.Services.AddSingleton(TimeProvider.System);
+        context.Services.AddSingleton(_ => TemporaryWorkspace.Create(
+            global::Xunit.TestContext.Current.TestOutputHelper ?? throw new InvalidOperationException("An active test output helper is required.")));
+        context.Services.AddSingleton(services =>
+        {
+            var databasePath = Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+            var configuration = services.GetService<TelemetryRepositoryConfiguration>();
+            var database = new DashboardSqliteDatabase(databasePath, readOnly: configuration?.ReadOnly == true, pooling: false);
+            if (!database.IsReadOnly)
+            {
+                database.InitializeSchemaAsync(CancellationToken.None).GetAwaiter().GetResult();
+            }
+            return database;
+        });
+        context.Services.AddSingleton<SqliteTelemetryRepository>(services =>
+        {
+            var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+            var options = services.GetRequiredService<IOptions<DashboardOptions>>();
+            var pauseManager = services.GetRequiredService<PauseManager>();
+            var outgoingPeerResolvers = services.GetServices<IOutgoingPeerResolver>();
+
+            return new SqliteTelemetryRepository(
+                services.GetRequiredService<DashboardSqliteDatabase>(),
+                loggerFactory,
+                options,
+                pauseManager,
+                services.GetRequiredService<TimeProvider>(),
+                outgoingPeerResolvers);
+        });
+        context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());
+        context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<PauseManager>();
         context.Services.AddSingleton<IDialogService, DialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
+        context.Services.AddSingleton<IDashboardRunStore>(services => dashboardRunStore ?? new TestDashboardRunStore(
+            databasePath: Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db")));
+        context.Services.AddSingleton<IDashboardRunSelection, TestDashboardRunSelection>();
+        context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
+        context.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
+        context.Services.AddSingleton<IRepositoryFactory, TestRepositoryFactory>();
+        context.Services.AddSingleton<DashboardDataSourcePool>();
+        context.Services.AddScoped<DashboardDataSource>();
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
         context.Services.AddSingleton<IMessageService>(messageService ?? new MessageService());
         context.Services.AddSingleton<DashboardTelemetryService>();
+        context.Services.AddSingleton<DashboardActivitySource>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
@@ -180,22 +247,118 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
     }
 
+    internal sealed class TestDashboardRunStore(
+        IEnumerable<DashboardRunDescriptor>? runs = null,
+        bool supportsRunSelection = true,
+        string? databasePath = null) : IDashboardRunStore
+    {
+        private readonly IReadOnlyList<DashboardRunDescriptor> _runs = (runs ??
+            [
+                new(
+                RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: databasePath ?? string.Empty,
+                IsCurrent: true)
+            ]).ToArray();
+
+        public int GetRunsCallCount { get; private set; }
+
+        public Action<DashboardRunDescriptor, bool>? OnSetRunPinned { get; set; }
+
+        public IReadOnlyList<DashboardRunDescriptor> GetRuns()
+        {
+            GetRunsCallCount++;
+            return _runs;
+        }
+
+        public DashboardRunDescriptor GetCurrentRun() => _runs.Single(run => run.IsCurrent);
+
+        public DashboardRunDescriptor? GetRunById(string runId) =>
+            _runs.SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+
+        public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
+        {
+            OnSetRunPinned?.Invoke(run, isPinned);
+            _runs.Single(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal)).IsPinned = isPinned;
+        }
+
+        public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;
+
+        public void PublishRun()
+        {
+        }
+
+        public void PruneExpiredRuns()
+        {
+        }
+
+        public bool SupportsRunSelection => supportsRunSelection;
+    }
+
+    internal sealed class TestDashboardRunSelection(IDashboardRunStore runStore) : IDashboardRunSelection
+    {
+        public DashboardRunDescriptor SelectedRun { get; private set; } = runStore.GetCurrentRun();
+
+        public string? SelectedRunId { get; private set; }
+
+        public Action<string?>? OnSelectRun { get; set; }
+
+        public void SelectRun(string? runId)
+        {
+            OnSelectRun?.Invoke(runId);
+            SelectedRun = runId is not null ? runStore.GetRunById(runId) ?? runStore.GetCurrentRun() : runStore.GetCurrentRun();
+            SelectedRunId = SelectedRun.IsCurrent ? null : SelectedRun.RunId;
+        }
+    }
+
+    private sealed class TestRepositoryFactory(
+        ITelemetryRepository telemetryRepository,
+        IDashboardClient dashboardClient) : IRepositoryFactory
+    {
+        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
+        public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => dashboardClient;
+    }
+
     public static void SetupFluentUIComponents(TestContext context, bool setupAspireMenuButtonModule = true)
     {
         context.Services.AddFluentUIComponents();
 
         if (setupAspireMenuButtonModule)
         {
-            var menuButtonModule = context.JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
-            menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
-            menuButtonModule.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
-            menuButtonModule.SetupVoid("cancelFluentMenuInitialization", _ => true).SetVoidResult();
+            SetupAspireMenuButtonModule(context);
         }
 
         // Setting a provider ID on menu service is required to simulate <FluentMenuProvider> on the page.
         // This makes FluentMenu render without error.
-        var menuService = context.Services.GetRequiredService<IMenuService>();
-        menuService.ProviderId = "Test";
+        SetupMenuService(context);
+    }
+
+    /// <summary>
+    /// Registers the FluentUI menu service and simulates a <c>FluentMenuProvider</c> being present on the page.
+    /// Tests that configure FluentUI piecemeal (rather than calling <see cref="SetupFluentUIComponents"/>) still
+    /// need this because <see cref="AspireMenu"/> injects <see cref="IMenuService"/>.
+    /// </summary>
+    public static void SetupMenuService(TestContext context)
+    {
+        // Register a pre-configured instance rather than resolving one from the provider. Resolving here would
+        // seal bUnit's service collection, and callers add more services after this setup runs.
+        context.Services.AddSingleton<IMenuService>(new MenuService { ProviderId = "Test" });
+    }
+
+    /// <summary>
+    /// Registers the JS module <see cref="AspireMenuButton"/> imports when its menu is first opened.
+    /// Tests that click a menu button need this even when they configure FluentUI piecemeal.
+    /// </summary>
+    public static void SetupAspireMenuButtonModule(TestContext context)
+    {
+        var menuButtonModule = context.JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
+        menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
+        menuButtonModule.SetupVoid("waitForFluentMenuInitialization", _ => true).SetVoidResult();
+        menuButtonModule.SetupVoid("cancelFluentMenuInitialization", _ => true).SetVoidResult();
     }
 
     public static void SetupDialogInfrastructure(
@@ -216,4 +379,6 @@ internal static class FluentUISetupHelpers
             builder.CloseComponent();
         });
     }
+
+    private sealed record TelemetryRepositoryConfiguration(bool ReadOnly);
 }

@@ -603,7 +603,7 @@ The top-level arrays are:
 
 | Field | Description |
 | ----- | ----------- |
-| `packages` | Packages or projects scanned for capabilities. |
+| `packages` | Packages or projects scanned for capabilities. `version` is the version that was **requested**, not the one NuGet resolved: package restore uses a minimum-version reference, so the assembly actually scanned may be newer. Use `aspire sdk export` when the version label has to be exact. Project references are omitted because they have no version. |
 | `capabilities` | Builder methods and other callable capabilities. |
 | `handleTypes` | Resource or builder handle types. |
 | `dtoTypes` | DTO types used by capabilities. |
@@ -612,3 +612,9 @@ The top-level arrays are:
 | `diagnostics` | Errors, warnings, and informational diagnostics from capability discovery. |
 
 `aspire sdk dump --format ci` emits a stable text format intended for diffs rather than JSON parsing.
+
+### `aspire sdk export`
+
+`aspire sdk export --package Name@Version --language typescript` restores the exact integration package version and writes one canonical JSON document to standard output. `Aspire.Hosting` can only be exported at the CLI's SDK version. The selected language's code-generation package cannot be exported because it supplies the generator instead of an integration API surface. Omit `--package` to export `Aspire.Hosting` at the running CLI's SDK version. Diagnostics are written to standard error.
+
+The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.

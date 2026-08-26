@@ -27,7 +27,7 @@ public sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
     /// The https endpoint that was added as a default. It is excluded from the port and Kestrel
     /// override environment because the target (e.g. a container) likely won't listen on https.
     /// </summary>
-    internal EndpointAnnotation? DefaultHttpsEndpoint { get; set; }
+    public EndpointAnnotation? DefaultHttpsEndpoint { get; internal set; }
 
     /// <summary>
     /// Whether any endpoints originated from Kestrel configuration.

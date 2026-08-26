@@ -626,13 +626,6 @@ internal sealed class RunCommand : BaseCommand
             Telemetry.RecordError(ex.Message, ex);
             return CommandResult.FromExitCode(InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability));
         }
-        catch (CertificateServiceException ex)
-        {
-            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "certificate_trust_failed");
-            var errorMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message);
-            Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, errorMessage);
-        }
         catch (FailedToConnectBackchannelConnection ex)
         {
             // The AppHost process exited before the backchannel could connect. This is an

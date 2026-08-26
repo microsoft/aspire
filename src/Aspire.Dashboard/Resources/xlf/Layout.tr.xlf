@@ -2,6 +2,31 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../Layout.resx">
     <body>
+      <trans-unit id="DashboardRunSelectAccessibleLabel">
+        <source>Select run: {0}</source>
+        <target state="new">Select run: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectCurrent">
+        <source>Live run</source>
+        <target state="new">Live run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectPin">
+        <source>Pin run</source>
+        <target state="new">Pin run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectTitle">
+        <source>Select dashboard run</source>
+        <target state="new">Select dashboard run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectUnpin">
+        <source>Unpin run</source>
+        <target state="new">Unpin run</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutAspire">
         <source>Aspire</source>
         <target state="translated">Aspire</target>
