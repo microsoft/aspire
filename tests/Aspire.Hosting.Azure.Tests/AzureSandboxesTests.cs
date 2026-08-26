@@ -378,6 +378,118 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public void ConnectorConnectionCannotBecomeExistingAfterTriggerRegistered()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+        connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http"));
+
+        var exception = Assert.Throws<InvalidOperationException>(connection.AsExisting);
+
+        Assert.Equal(
+            "Connector connection 'office365' configures access policies or triggers and cannot be marked as existing.",
+            exception.Message);
+        Assert.False(connection.Resource.IsExisting);
+    }
+
+    [Fact]
+    public void ConnectorConnectionCannotBecomeExistingAfterAccessPolicyRegistered()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365")
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+
+        var exception = Assert.Throws<InvalidOperationException>(connection.AsExisting);
+
+        Assert.Equal(
+            "Connector connection 'office365' configures access policies or triggers and cannot be marked as existing.",
+            exception.Message);
+        Assert.False(connection.Resource.IsExisting);
+    }
+
+    [Fact]
+    public void ExistingConnectorConnectionRejectsExplicitAccessPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365")
+            .AsExisting();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => connection.WithAccessPolicy(
+            "reader",
+            new AzureConnectorGatewayAccessPolicyOptions
+            {
+                ObjectId = "11111111-1111-1111-1111-111111111111",
+                TenantId = "22222222-2222-2222-2222-222222222222"
+            }));
+
+        Assert.Equal(
+            "Existing connector connection 'office365' is read-only and cannot create an access policy.",
+            exception.Message);
+        Assert.Empty(connection.Resource.AccessPolicies);
+    }
+
+    [Fact]
+    public void ConnectorAccessPolicyResourceNamesIncludeParentConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var office365 = gateway.AddConnection("office365", "office365")
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+        var sharepoint = gateway.AddConnection("sharepoint", "sharepointonline")
+            .WithAccessPolicy(
+                "reader",
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    ObjectId = "33333333-3333-3333-3333-333333333333",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+        var compoundParentName = gateway.AddConnection("ab-c", "office365")
+            .WithAccessPolicy(
+                "de",
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    ObjectId = "44444444-4444-4444-4444-444444444444",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+        var compoundPolicyName = gateway.AddConnection("ab", "sharepointonline")
+            .WithAccessPolicy(
+                "c-de",
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    ObjectId = "55555555-5555-5555-5555-555555555555",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+
+        Assert.Equal("9-office365-policy-reader", Assert.Single(office365.Resource.AccessPolicies).Name);
+        Assert.Equal("10-sharepoint-policy-reader", Assert.Single(sharepoint.Resource.AccessPolicies).Name);
+        Assert.NotEqual(
+            Assert.Single(compoundParentName.Resource.AccessPolicies).Name,
+            Assert.Single(compoundPolicyName.Resource.AccessPolicies).Name);
+    }
+
+    [Fact]
     public void ConnectorTriggerRejectsReservedAccessPolicyCollision()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -966,6 +1078,10 @@ public class AzureSandboxesTests
     [Fact]
     public void SandboxSecurityChangesDisablePreviousGenerationRetention()
     {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var gateway = builder.AddAzureConnectorGateway("gateway").Resource;
+        gateway.Outputs["principalId"] = "11111111-1111-1111-1111-111111111111";
+        gateway.Outputs["tenantId"] = "22222222-2222-2222-2222-222222222222";
         var endpoints = new[]
         {
             new AzureSandboxContainerDeployment.SandboxEndpoint(
@@ -1027,6 +1143,28 @@ public class AzureSandboxesTests
             identitySettings,
             egressPolicy);
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, anonymousFingerprint));
+
+        var connectorAuthorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
+        [
+            endpoints[0] with { AuthorizedConnectorGateways = [gateway] }
+        ],
+            identitySettings,
+            egressPolicy);
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, connectorAuthorizedFingerprint));
+        previousState.Data["EndpointSecurityFingerprint"] = connectorAuthorizedFingerprint;
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+
+        gateway.Outputs["principalId"] = "33333333-3333-3333-3333-333333333333";
+        var updatedConnectorIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
+        [
+            endpoints[0] with { AuthorizedConnectorGateways = [gateway] }
+        ],
+            identitySettings,
+            egressPolicy);
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedConnectorIdentityFingerprint));
+        previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
 
         var updatedIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             imageReference,

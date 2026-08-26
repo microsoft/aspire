@@ -21,7 +21,7 @@ resource sharepoint 'Microsoft.Web/connectorGateways/connections@2026-05-01-prev
   parent: gateway
 }
 
-resource sharepoint_gateway_acl 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
+resource _10_sharepoint_trigger_policy 'Microsoft.Web/connectorGateways/connections/accessPolicies@2026-05-01-preview' = {
   name: 'gateway-acl'
   location: resourceGroup().location
   properties: {

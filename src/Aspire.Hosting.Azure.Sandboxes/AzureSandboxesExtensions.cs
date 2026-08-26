@@ -268,6 +268,12 @@ public static class AzureSandboxesExtensions
             throw new InvalidOperationException(
                 $"Connector connection '{builder.Resource.Name}' configures a display name and cannot be marked as existing.");
         }
+        if (builder.Resource.AccessPolicies.Count > 0 ||
+            builder.Resource.Parent.TriggerConfigs.Any(trigger => ReferenceEquals(trigger.Parent, builder.Resource)))
+        {
+            throw new InvalidOperationException(
+                $"Connector connection '{builder.Resource.Name}' configures access policies or triggers and cannot be marked as existing.");
+        }
 
         builder.Resource.IsExisting = true;
         return builder;
@@ -297,6 +303,11 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.ObjectId);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.TenantId);
+        if (builder.Resource.IsExisting)
+        {
+            throw new InvalidOperationException(
+                $"Existing connector connection '{builder.Resource.Name}' is read-only and cannot create an access policy.");
+        }
 
         var policyName = options.PolicyName ?? name;
         ValidateConnectorResourceName(policyName, nameof(options));
@@ -308,7 +319,7 @@ public static class AzureSandboxesExtensions
         }
 
         builder.Resource.AccessPolicies.Add(new AzureConnectorGatewayConnectionAccessPolicyResource(
-            name,
+            GetAccessPolicyResourceName(builder.Resource, name),
             policyName,
             builder.Resource,
             options.ObjectId,
@@ -340,6 +351,11 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(identity);
+        if (builder.Resource.IsExisting)
+        {
+            throw new InvalidOperationException(
+                $"Existing connector connection '{builder.Resource.Name}' is read-only and cannot create an access policy.");
+        }
 
         policyName ??= name;
         ValidateConnectorResourceName(policyName, nameof(policyName));
@@ -352,7 +368,7 @@ public static class AzureSandboxesExtensions
 
         builder.Resource.AccessPolicies.Add(
             AzureConnectorGatewayConnectionAccessPolicyResource.CreateUserAssignedIdentityPolicy(
-                name,
+                GetAccessPolicyResourceName(builder.Resource, name),
                 policyName,
                 builder.Resource,
                 identity.Resource));
@@ -827,10 +843,13 @@ public static class AzureSandboxesExtensions
         // https://github.com/Azure/Connectors/blob/main/plugin/skills/aca-sandboxes/references/trigger-setup.md
         connection.AccessPolicies.Add(
             AzureConnectorGatewayConnectionAccessPolicyResource.CreateGatewayManagedIdentityPolicy(
-                $"{connection.Name}-gateway-acl",
+                $"{connection.Name.Length}-{connection.Name}-trigger-policy",
                 accessPolicyName,
                 connection));
     }
+
+    private static string GetAccessPolicyResourceName(AzureConnectorGatewayConnectionResource connection, string name)
+        => $"{connection.Name.Length}-{connection.Name}-policy-{name}";
 
     private static void ValidateTriggerParameters(AzureConnectorGatewayTriggerParameter[]? parameters)
     {

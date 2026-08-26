@@ -1809,7 +1809,21 @@ internal static class AzureSandboxContainerDeployment
                         ["TargetPort"] = endpoint.TargetPort,
                         ["Protocol"] = endpoint.Protocol,
                         ["IsExternal"] = endpoint.IsExternal,
-                        ["Anonymous"] = endpoint.Anonymous
+                        ["Anonymous"] = endpoint.Anonymous,
+                        ["AuthorizedConnectorGatewayObjectIds"] = new JsonArray(
+                            endpoint.AuthorizedConnectorGateways
+                                .Select(static gateway => GetRequiredOutput(gateway, "principalId"))
+                                .Distinct(StringComparer.Ordinal)
+                                .OrderBy(static objectId => objectId, StringComparer.Ordinal)
+                                .Select(static objectId => (JsonNode)objectId)
+                                .ToArray()),
+                        ["AuthorizedConnectorGatewayTenantIds"] = new JsonArray(
+                            endpoint.AuthorizedConnectorGateways
+                                .Select(static gateway => GetRequiredOutput(gateway, "tenantId"))
+                                .Distinct(StringComparer.Ordinal)
+                                .OrderBy(static tenantId => tenantId, StringComparer.Ordinal)
+                                .Select(static tenantId => (JsonNode)tenantId)
+                                .ToArray())
                     })
                     .ToArray()),
             ["IdentitySettings"] = new JsonArray(
