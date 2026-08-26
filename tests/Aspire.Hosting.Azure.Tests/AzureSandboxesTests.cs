@@ -1156,9 +1156,9 @@ public class AzureSandboxesTests
         ],
             identitySettings,
             egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, connectorAuthorizedFingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, connectorAuthorizedFingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["EndpointSecurityFingerprint"] = connectorAuthorizedFingerprint;
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
 
         gateway.Outputs["principalId"] = "33333333-3333-3333-3333-333333333333";
         var updatedConnectorIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
@@ -1168,7 +1168,7 @@ public class AzureSandboxesTests
         ],
             identitySettings,
             egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedConnectorIdentityFingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedConnectorIdentityFingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
 
         var updatedIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
