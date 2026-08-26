@@ -109,14 +109,15 @@ public class Wired_NewUpAndTestSupportProjectTemplatesTests(ITestOutputHelper te
 public class Standalone_NewUpAndBuildSupportProjectTemplatesTests(ITestOutputHelper testOutput) : NewUpAndBuildSupportProjectTemplatesBase(testOutput)
 {
     [Theory]
-    [InlineData("aspire-mstest")]
-    [InlineData("aspire-nunit")]
-    [InlineData("aspire-xunit")]
-    public Task CanNewAndBuildWithoutAppHostReference(string templateName)
+    [InlineData("aspire-mstest", "")]
+    [InlineData("aspire-nunit", "")]
+    [InlineData("aspire-xunit", "")]
+    [InlineData("aspire-xunit", "--xunit-version v3mtp")]
+    public Task CanNewAndBuildWithoutAppHostReference(string templateName, string extraTestCreationArgs)
     {
         return CanNewAndBuildActual(
             templateName,
-            "",
+            extraTestCreationArgs,
             TestSdk.Net10,
             TestTargetFramework.Net10,
             error: null,
