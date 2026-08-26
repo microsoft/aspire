@@ -978,7 +978,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             mappedParameters.Add(new MappedParameter(parameter, parameterType));
         }
 
-        mappedMethod = new MappedMethod(method, returnType, mappedParameters, GetMethodSignature(method));
+        mappedMethod = new MappedMethod(
+            method,
+            returnType,
+            AllocateGeneratedParameterNames(mappedParameters),
+            GetMethodSignature(method));
         failureReason = string.Empty;
         return true;
     }
@@ -1007,7 +1011,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             method,
             "        ",
             parameters: [.. mappedMethod.Parameters.Select(static parameter =>
-                new DocumentationParameter(parameter.Parameter.Name, GetParameterName(parameter.Parameter)))],
+                new DocumentationParameter(parameter.Parameter.Name, parameter.GeneratedName))],
             includeReturns: !method.ReturnsVoid))
         {
             AppendDocumentationSummary(
@@ -1050,7 +1054,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             }
 
             var mappedParameter = mappedMethod.Parameters[index];
-            AppendMappedToUnderlying(invocation, "@" + GetParameterName(mappedParameter.Parameter), mappedParameter.Type);
+            AppendMappedToUnderlying(invocation, "@" + mappedParameter.GeneratedName, mappedParameter.Type);
         }
         invocation.Append(')');
 
@@ -1092,7 +1096,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         MappedMethod mappedMethod)
     {
         var usedNames = new HashSet<string>(
-            mappedMethod.Parameters.Select(static parameter => GetParameterName(parameter.Parameter)),
+            mappedMethod.Parameters.Select(static parameter => parameter.GeneratedName),
             StringComparer.Ordinal);
         var underlyingValueName = GetUniqueGeneratedLocalName(usedNames, "__underlyingValue");
         var mappedValueName = GetUniqueGeneratedLocalName(usedNames, "__mappedValue");
@@ -1516,7 +1520,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             constructor.Constructor,
             "        ",
             parameters: [.. constructor.Parameters.Select(static parameter =>
-                new DocumentationParameter(parameter.Parameter.Name, GetParameterName(parameter.Parameter)))]);
+                new DocumentationParameter(parameter.Parameter.Name, parameter.GeneratedName))]);
         if (!hasSourceDocumentation)
         {
             AppendGeneratedFactoryDocumentation(source, type, constructor.Parameters, isProvisionableResource);
@@ -1546,13 +1550,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             var parameter = constructor.Parameters[index];
             if (IsNullableFactoryProxyParameter(parameter))
             {
-                var parameterName = GetParameterName(parameter.Parameter);
-                source.Append('@').Append(parameterName)
-                    .Append(" is null ? null : @").Append(parameterName).Append(".Inner");
+                source.Append('@').Append(parameter.GeneratedName)
+                    .Append(" is null ? null : @").Append(parameter.GeneratedName).Append(".Inner");
             }
             else
             {
-                AppendMappedToUnderlying(source, "@" + GetParameterName(parameter.Parameter), parameter.Type);
+                AppendMappedToUnderlying(source, "@" + parameter.GeneratedName, parameter.Type);
             }
         }
         source.AppendLine(");");
@@ -1648,7 +1651,9 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
             if (canMap)
             {
-                constructors.Add(new SelectedConstructor(constructor, mappedParameters));
+                constructors.Add(new SelectedConstructor(
+                    constructor,
+                    AllocateGeneratedParameterNames(mappedParameters)));
             }
         }
 
@@ -1703,7 +1708,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         {
             source.Append('?');
         }
-        source.Append(" @").Append(GetParameterName(mappedParameter.Parameter));
+        source.Append(" @").Append(mappedParameter.GeneratedName);
         if (includeDefaultValue &&
             mappedParameter.Parameter.HasExplicitDefaultValue &&
             TryRenderDefaultValue(mappedParameter.Parameter, out var defaultValue))
@@ -1713,9 +1718,30 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     }
 
-    private static string GetParameterName(IParameterSymbol parameter)
+    private static List<MappedParameter> AllocateGeneratedParameterNames(List<MappedParameter> parameters)
     {
-        return parameter.Name == "arguments" ? "args" : parameter.Name;
+        var usedNames = new HashSet<string>(
+            parameters
+                .Where(static parameter => parameter.Parameter.Name != "arguments")
+                .Select(static parameter => parameter.Parameter.Name),
+            StringComparer.Ordinal);
+        var mappedParameters = new List<MappedParameter>(parameters.Count);
+
+        foreach (var parameter in parameters)
+        {
+            var generatedName = parameter.Parameter.Name;
+            if (generatedName == "arguments")
+            {
+                // TypeScript AppHosts are ES modules, where strict mode forbids "arguments" as a
+                // parameter name. Reserve the SDK's other parameter names first so translating it
+                // to "args" cannot collide with an existing "args" parameter in the same signature.
+                generatedName = GetUniqueGeneratedLocalName(usedNames, "args");
+            }
+
+            mappedParameters.Add(new MappedParameter(parameter.Parameter, parameter.Type, generatedName));
+        }
+
+        return mappedParameters;
     }
 
     private static bool IsNullableFactoryProxyParameter(MappedParameter parameter)
@@ -1931,7 +1957,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             "        ",
             new XElement(
                 "param",
-                new XAttribute("name", GetParameterName(parameter.Parameter)),
+                new XAttribute("name", parameter.GeneratedName),
                 $"The {parameter.Parameter.Name} value."),
             parameterNames: null);
     }
@@ -2584,14 +2610,22 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     private readonly struct MappedParameter
     {
         public MappedParameter(IParameterSymbol parameter, MappedType type)
+            : this(parameter, type, parameter.Name)
+        {
+        }
+
+        public MappedParameter(IParameterSymbol parameter, MappedType type, string generatedName)
         {
             Parameter = parameter;
             Type = type;
+            GeneratedName = generatedName;
         }
 
         public IParameterSymbol Parameter { get; }
 
         public MappedType Type { get; }
+
+        public string GeneratedName { get; }
     }
 
     private readonly struct DocumentationParameter

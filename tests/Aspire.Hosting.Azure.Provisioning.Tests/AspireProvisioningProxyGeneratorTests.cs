@@ -193,6 +193,64 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
+    public void ArgumentsParameterRenamingAvoidsSignatureCollisions()
+    {
+        var result = ProvisioningGeneratorTest.Run(ParameterNameCollisionSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var factory = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
+        Assert.NotNull(factory);
+        var createModel = Assert.Single(factory.GetMembers("CreateParameterNameCollisionModel").OfType<IMethodSymbol>());
+        Assert.Equal(
+            ["infrastructure", "args_", "args"],
+            createModel.Parameters.Select(static parameter => parameter.Name));
+        AssertDocumentationContains(
+            createModel,
+            "<paramref name=\"args_\"",
+            "<paramref name=\"args\"",
+            "<param name=\"args_\"",
+            "<param name=\"args\"");
+        var factorySyntax = Assert.IsType<MethodDeclarationSyntax>(createModel.DeclaringSyntaxReferences.Single().GetSyntax());
+        var factorySemanticModel = result.Compilation.GetSemanticModel(factorySyntax.SyntaxTree);
+        var objectCreation = Assert.Single(
+            factorySyntax.DescendantNodes()
+                .OfType<ObjectCreationExpressionSyntax>()
+                .Select(syntax => factorySemanticModel.GetOperation(syntax))
+                .OfType<IObjectCreationOperation>(),
+            operation => operation.Constructor?.ContainingType.Name == "ParameterNameCollisionModel");
+        Assert.Collection(
+            objectCreation.Arguments,
+            argument => Assert.Equal("args_", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name),
+            argument => Assert.Equal("args", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name));
+
+        var proxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.ParameterNameCollisionModelProxy");
+        Assert.NotNull(proxy);
+        var combine = Assert.Single(proxy.GetMembers("Combine").OfType<IMethodSymbol>());
+        Assert.Equal(
+            ["args_", "args"],
+            combine.Parameters.Select(static parameter => parameter.Name));
+        AssertDocumentationContains(
+            combine,
+            "<paramref name=\"args_\"",
+            "<paramref name=\"args\"",
+            "<param name=\"args_\"",
+            "<param name=\"args\"");
+
+        var methodSyntax = Assert.IsType<MethodDeclarationSyntax>(combine.DeclaringSyntaxReferences.Single().GetSyntax());
+        var semanticModel = result.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
+        var invocation = Assert.Single(methodSyntax.DescendantNodes().OfType<InvocationExpressionSyntax>());
+        var operation = Assert.IsAssignableFrom<IInvocationOperation>(semanticModel.GetOperation(invocation));
+        Assert.Collection(
+            operation.Arguments,
+            argument => Assert.Equal("args_", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name),
+            argument => Assert.Equal("args", Assert.IsAssignableFrom<IParameterReferenceOperation>(argument.Value).Parameter.Name));
+    }
+
+    [Fact]
     public void NullableProxyReturningMethodsInvokeUnderlyingMethodOnce()
     {
         var result = ProvisioningGeneratorTest.Run(NullableProxyReturningMethodSource);
@@ -351,6 +409,8 @@ public class AspireProvisioningProxyGeneratorTests
 
     private const string NullableProxyConstructorSource = NullableProxyConstructorAttributes + CommonSource + NullableProxyConstructorTypes;
 
+    private const string ParameterNameCollisionSource = ParameterNameCollisionAttributes + CommonSource + ParameterNameCollisionTypes;
+
     private const string NullableProxyReturningMethodSource = NullableProxyReturningMethodAttributes + CommonSource + NullableProxyReturningMethodTypes;
 
     private const string NamespaceSanitizationSource = NamespaceSanitizationAttributes + CommonSource + NamespaceSanitizationTypes;
@@ -480,6 +540,34 @@ public class AspireProvisioningProxyGeneratorTests
             typeof(Test.Provisioning.ChildModel),
             IsInfrastructureRoot = false)]
 
+        """;
+
+    private const string ParameterNameCollisionAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.ParameterNameCollisionModel),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string ParameterNameCollisionTypes = """
+        namespace Test.Provisioning
+        {
+            public sealed class ParameterNameCollisionModel
+            {
+                /// <summary>Creates a model from <paramref name="arguments"/> and <paramref name="args"/>.</summary>
+                /// <param name="arguments">The first value.</param>
+                /// <param name="args">The second value.</param>
+                public ParameterNameCollisionModel(string arguments, string args)
+                {
+                }
+
+                /// <summary>Combines <paramref name="arguments"/> and <paramref name="args"/>.</summary>
+                /// <param name="arguments">The first value.</param>
+                /// <param name="args">The second value.</param>
+                /// <returns>The combined value.</returns>
+                public string Combine(string arguments, string args) => arguments + args;
+            }
+        }
         """;
 
     private const string NullableProxyReturningMethodTypes = """
