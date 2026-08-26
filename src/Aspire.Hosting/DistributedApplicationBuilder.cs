@@ -287,11 +287,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _executionContextOptions = BuildExecutionContextOptions();
         ExecutionContext = new DistributedApplicationExecutionContext(_executionContextOptions);
 
-        // Compute both PathSha and ProjectNameSha to support different use cases:
-        // - PathSha: For disambiguating projects with the same name in different locations (deployment state)
+        // Compute path, deployment-state, and project-name identities for different use cases:
+        // - PathSha: Historical directory identity used by persistent run-mode resources.
+        // - DeploymentStatePathSha: Source-file-specific identity used by deployment state.
         // - ProjectNameSha: For stable naming across deployments regardless of path (Azure Functions, Azure environments)
         string appHostPathSha;
-        string? legacyAppHostPathSha = null;
+        string deploymentStatePathSha;
+        string? legacyDeploymentStatePathSha = null;
         string appHostProjectNameSha;
         string appHostSha; // Legacy value, computed based on mode
 
@@ -301,13 +303,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // For backward compatibility with tests
             appHostPathSha = configuredAppHostSha;
+            deploymentStatePathSha = configuredAppHostSha;
             appHostProjectNameSha = configuredAppHostSha;
             appHostSha = configuredAppHostSha;
         }
         else
         {
-            var legacyAppHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
-            legacyAppHostPathSha = Convert.ToHexString(legacyAppHostPathShaBytes);
+            var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
+            appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
 
             // Source-file and polyglot AppHosts can share a host process and project directory,
             // so use the actual source file to keep their deployment state isolated.
@@ -319,11 +322,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
                 ? appHostIdentityPath
                 : appHostIdentityPath.ToLowerInvariant();
-            var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppHostIdentityPath));
-            appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
-            if (string.Equals(appHostPathSha, legacyAppHostPathSha, StringComparison.Ordinal))
+            var deploymentStatePathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppHostIdentityPath));
+            deploymentStatePathSha = Convert.ToHexString(deploymentStatePathShaBytes);
+            if (!string.Equals(deploymentStatePathSha, appHostPathSha, StringComparison.Ordinal))
             {
-                legacyAppHostPathSha = null;
+                legacyDeploymentStatePathSha = appHostPathSha;
             }
 
             // Compute ProjectNameSha
@@ -339,20 +342,17 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             }
             else
             {
-                // AppHost:Sha256 is consumed by persistent run-mode resources such as volumes,
-                // browser profiles, dev tunnels, and Compose projects. Keep its historical
-                // directory-based identity stable while AppHost:PathSha256 provides the
-                // source-file-specific deployment identity.
-                appHostSha = legacyAppHostPathSha ?? appHostPathSha;
+                appHostSha = appHostPathSha;
             }
         }
 
         _innerBuilder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // PathSha for deployment state (path-based disambiguation)
+            // Historical path identity used by persistent run-mode resources.
             ["AppHost:PathSha256"] = appHostPathSha,
-            // Previous path identity used to migrate source-file deployment state.
-            ["AppHost:LegacyPathSha256"] = legacyAppHostPathSha,
+            // Source-file-specific deployment identity and its migration fallback.
+            ["AppHost:DeploymentStatePathSha256"] = deploymentStatePathSha,
+            ["AppHost:LegacyDeploymentStatePathSha256"] = legacyDeploymentStatePathSha,
             // ProjectNameSha for Azure Functions and Azure environments (stable naming)
             ["AppHost:ProjectNameSha256"] = appHostProjectNameSha,
             // Legacy Sha256 for backward compatibility (mode-dependent)
@@ -363,7 +363,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // This must happen before command line args are added so they can override saved state
         if (ExecutionContext.IsPublishMode)
         {
-            LoadDeploymentState(appHostPathSha, legacyAppHostPathSha);
+            LoadDeploymentState(deploymentStatePathSha, legacyDeploymentStatePathSha);
         }
 
         // Core things
