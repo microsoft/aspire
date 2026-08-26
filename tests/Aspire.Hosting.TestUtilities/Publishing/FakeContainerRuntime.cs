@@ -124,11 +124,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         }
 
         var config = new ContainerImageConfig([], [], workingDirectory: null);
-        return Task.FromResult(new ContainerImageConfigInspectionResult(
-            ContainerImageInspectionStatus.Succeeded,
-            "{}",
-            errorMessage: null,
-            () => config));
+        return Task.FromResult(ContainerImageConfigInspectionResult.Success(config, "{}"));
     }
 
     public Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
@@ -153,22 +149,10 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
                 InspectedImageDigest,
                 InspectedImageOperatingSystem,
                 InspectedImageArchitecture);
-            return Task.FromResult(new ContainerImageManifestInspectionResult(
-                ContainerImageInspectionStatus.Succeeded,
-                rawJson: null,
-                errorMessage: null,
-                (operatingSystem, architecture) =>
-                    string.Equals(operatingSystem, manifest.OperatingSystem, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(architecture, manifest.Architecture, StringComparison.OrdinalIgnoreCase)
-                        ? manifest
-                        : null));
+            return Task.FromResult(ContainerImageManifestInspectionResult.Success([manifest]));
         }
 
-        return Task.FromResult(new ContainerImageManifestInspectionResult(
-            ContainerImageInspectionStatus.Succeeded,
-            "{}",
-            errorMessage: null,
-            manifestAccessor: null));
+        return Task.FromResult(ContainerImageManifestInspectionResult.Success([], "{}"));
     }
 
     public Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)

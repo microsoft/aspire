@@ -1074,6 +1074,14 @@ internal sealed class TestTokenCredentialProvider : ITokenCredentialProvider
     public TokenCredential TokenCredential => new TestTokenCredential();
 }
 
+internal sealed class TestHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name)
+    {
+        return new HttpClient(handler, disposeHandler: false);
+    }
+}
+
 /// <summary>
 /// Mock implementation of IProcessRunner for testing that captures executed commands.
 /// </summary>

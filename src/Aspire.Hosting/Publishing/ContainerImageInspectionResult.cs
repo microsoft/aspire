@@ -33,11 +33,20 @@ public enum ContainerImageInspectionStatus
 [Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ContainerImageConfig
 {
-    internal ContainerImageConfig(
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ContainerImageConfig"/> class.
+    /// </summary>
+    /// <param name="entrypoint">The image entrypoint.</param>
+    /// <param name="command">The default image command.</param>
+    /// <param name="workingDirectory">The image working directory.</param>
+    public ContainerImageConfig(
         IReadOnlyList<string> entrypoint,
         IReadOnlyList<string> command,
         string? workingDirectory)
     {
+        ArgumentNullException.ThrowIfNull(entrypoint);
+        ArgumentNullException.ThrowIfNull(command);
+
         Entrypoint = entrypoint;
         Command = command;
         WorkingDirectory = workingDirectory;
@@ -108,7 +117,44 @@ public sealed class ContainerImageConfigInspectionResult
         return config is not null;
     }
 
-    internal static ContainerImageConfigInspectionResult Unsupported { get; } = new(
+    /// <summary>
+    /// Creates a successful image configuration inspection result.
+    /// </summary>
+    /// <param name="config">The inspected image configuration.</param>
+    /// <param name="rawJson">The runtime-native JSON returned by the inspection command, when available.</param>
+    /// <returns>A successful image configuration inspection result.</returns>
+    public static ContainerImageConfigInspectionResult Success(ContainerImageConfig config, string? rawJson = null)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        return new(
+            ContainerImageInspectionStatus.Succeeded,
+            rawJson,
+            errorMessage: null,
+            () => config);
+    }
+
+    /// <summary>
+    /// Creates a failed image configuration inspection result.
+    /// </summary>
+    /// <param name="errorMessage">The failure description.</param>
+    /// <param name="rawJson">The runtime-native JSON returned by the inspection command, when available.</param>
+    /// <returns>A failed image configuration inspection result.</returns>
+    public static ContainerImageConfigInspectionResult Failure(string errorMessage, string? rawJson = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
+
+        return new(
+            ContainerImageInspectionStatus.Failed,
+            rawJson,
+            errorMessage,
+            configAccessor: null);
+    }
+
+    /// <summary>
+    /// Gets an image configuration inspection result for a runtime that does not support inspection.
+    /// </summary>
+    public static ContainerImageConfigInspectionResult Unsupported { get; } = new(
         ContainerImageInspectionStatus.Unsupported,
         rawJson: null,
         errorMessage: null,
@@ -121,8 +167,18 @@ public sealed class ContainerImageConfigInspectionResult
 [Experimental("ASPIRECONTAINERRUNTIME001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ContainerImageManifest
 {
-    internal ContainerImageManifest(string digest, string operatingSystem, string architecture)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ContainerImageManifest"/> class.
+    /// </summary>
+    /// <param name="digest">The immutable manifest digest.</param>
+    /// <param name="operatingSystem">The target operating system.</param>
+    /// <param name="architecture">The target architecture.</param>
+    public ContainerImageManifest(string digest, string operatingSystem, string architecture)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(digest);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operatingSystem);
+        ArgumentException.ThrowIfNullOrWhiteSpace(architecture);
+
         Digest = digest;
         OperatingSystem = operatingSystem;
         Architecture = architecture;
@@ -201,7 +257,49 @@ public sealed class ContainerImageManifestInspectionResult
         return manifest is not null;
     }
 
-    internal static ContainerImageManifestInspectionResult Unsupported { get; } = new(
+    /// <summary>
+    /// Creates a successful image manifest inspection result.
+    /// </summary>
+    /// <param name="manifests">The inspected platform-specific image manifests.</param>
+    /// <param name="rawJson">The runtime-native JSON returned by the inspection command, when available.</param>
+    /// <returns>A successful image manifest inspection result.</returns>
+    public static ContainerImageManifestInspectionResult Success(
+        IReadOnlyList<ContainerImageManifest> manifests,
+        string? rawJson = null)
+    {
+        ArgumentNullException.ThrowIfNull(manifests);
+
+        var manifestSnapshot = manifests.ToArray();
+        return new(
+            ContainerImageInspectionStatus.Succeeded,
+            rawJson,
+            errorMessage: null,
+            (operatingSystem, architecture) => manifestSnapshot.FirstOrDefault(manifest =>
+                string.Equals(manifest.OperatingSystem, operatingSystem, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(manifest.Architecture, architecture, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    /// <summary>
+    /// Creates a failed image manifest inspection result.
+    /// </summary>
+    /// <param name="errorMessage">The failure description.</param>
+    /// <param name="rawJson">The runtime-native JSON returned by the inspection command, when available.</param>
+    /// <returns>A failed image manifest inspection result.</returns>
+    public static ContainerImageManifestInspectionResult Failure(string errorMessage, string? rawJson = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(errorMessage);
+
+        return new(
+            ContainerImageInspectionStatus.Failed,
+            rawJson,
+            errorMessage,
+            manifestAccessor: null);
+    }
+
+    /// <summary>
+    /// Gets an image manifest inspection result for a runtime that does not support inspection.
+    /// </summary>
+    public static ContainerImageManifestInspectionResult Unsupported { get; } = new(
         ContainerImageInspectionStatus.Unsupported,
         rawJson: null,
         errorMessage: null,

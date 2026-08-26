@@ -124,6 +124,37 @@ public class ContainerRuntimeBaseTests
     }
 
     [Fact]
+    public void ContainerRuntimeImplementationsCanCreateInspectionResults()
+    {
+        var config = new ContainerImageConfig(["dotnet"], ["app.dll"], "/app");
+        var configResult = ContainerImageConfigInspectionResult.Success(config, """{"config":true}""");
+        var configFailure = ContainerImageConfigInspectionResult.Failure("config failed", """{"error":true}""");
+        var manifest = new ContainerImageManifest("sha256:digest", "linux", "amd64");
+        var manifestResult = ContainerImageManifestInspectionResult.Success([manifest], """{"manifest":true}""");
+        var manifestFailure = ContainerImageManifestInspectionResult.Failure("manifest failed", """{"error":true}""");
+
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, configResult.Status);
+        Assert.True(configResult.TryGetConfig(out var inspectedConfig));
+        Assert.Same(config, inspectedConfig);
+        Assert.Equal("""{"config":true}""", configResult.RawJson);
+        Assert.Equal(ContainerImageInspectionStatus.Failed, configFailure.Status);
+        Assert.Equal("config failed", configFailure.ErrorMessage);
+        Assert.Equal("""{"error":true}""", configFailure.RawJson);
+        Assert.False(configFailure.TryGetConfig(out _));
+        Assert.Equal(ContainerImageInspectionStatus.Unsupported, ContainerImageConfigInspectionResult.Unsupported.Status);
+
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, manifestResult.Status);
+        Assert.True(manifestResult.TryGetManifest("LINUX", "AMD64", out var inspectedManifest));
+        Assert.Same(manifest, inspectedManifest);
+        Assert.Equal("""{"manifest":true}""", manifestResult.RawJson);
+        Assert.Equal(ContainerImageInspectionStatus.Failed, manifestFailure.Status);
+        Assert.Equal("manifest failed", manifestFailure.ErrorMessage);
+        Assert.Equal("""{"error":true}""", manifestFailure.RawJson);
+        Assert.False(manifestFailure.TryGetManifest("linux", "amd64", out _));
+        Assert.Equal(ContainerImageInspectionStatus.Unsupported, ContainerImageManifestInspectionResult.Unsupported.Status);
+    }
+
+    [Fact]
     public async Task PodmanInspectsRemoteImageManifestsUsingRegistryTransport()
     {
         var processRunner = new CapturingProcessRunner();
