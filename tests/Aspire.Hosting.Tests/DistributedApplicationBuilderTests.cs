@@ -461,6 +461,7 @@ public class DistributedApplicationBuilderTests
             "deployments",
             legacySha);
         var legacyStatePath = Path.Combine(legacyDirectory, $"{environment}.json");
+        string? canonicalDirectory = null;
 
         try
         {
@@ -476,6 +477,11 @@ public class DistributedApplicationBuilderTests
             };
 
             var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+            canonicalDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".aspire",
+                "deployments",
+                builder.Configuration["AppHost:DeploymentStatePathSha256"]!);
 
             Assert.True(builder.ExecutionContext.IsPublishMode);
             Assert.Equal(legacySha, builder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
@@ -490,6 +496,12 @@ public class DistributedApplicationBuilderTests
             if (Directory.Exists(legacyDirectory) && !Directory.EnumerateFileSystemEntries(legacyDirectory).Any())
             {
                 Directory.Delete(legacyDirectory);
+            }
+            if (canonicalDirectory is not null &&
+                Directory.Exists(canonicalDirectory) &&
+                !Directory.EnumerateFileSystemEntries(canonicalDirectory).Any())
+            {
+                Directory.Delete(canonicalDirectory);
             }
             projectDirectory.Delete(recursive: true);
         }

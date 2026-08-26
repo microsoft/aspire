@@ -667,6 +667,39 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ConcurrentScalarAndObjectChangesDoNotCreateHybridState()
+    {
+        var sha = Guid.NewGuid().ToString("N");
+        var initialStateManager = CreateFileDeploymentStateManager(sha);
+
+        try
+        {
+            var initialSection = await initialStateManager.AcquireSectionAsync("Settings");
+            initialSection.Data["Leaf"] = "initial";
+            await initialStateManager.SaveSectionAsync(initialSection);
+
+            var staleObjectManager = CreateFileDeploymentStateManager(sha);
+            var scalarManager = CreateFileDeploymentStateManager(sha);
+            var staleObjectSection = await staleObjectManager.AcquireSectionAsync("Settings");
+            var scalarSection = await scalarManager.AcquireSectionAsync("Settings");
+            staleObjectSection.Data["Leaf"] = "updated";
+            scalarSection.SetValue("scalar");
+
+            await scalarManager.SaveSectionAsync(scalarSection);
+            await staleObjectManager.SaveSectionAsync(staleObjectSection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(sha);
+            var restartedSection = await restartedStateManager.AcquireSectionAsync("Settings");
+            Assert.Equal("updated", restartedSection.Data["Leaf"]?.GetValue<string>());
+            Assert.False(restartedSection.Data.ContainsKey(string.Empty));
+        }
+        finally
+        {
+            await initialStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentNestedAdditionsToNewObjectAreMerged()
     {
         var sha = Guid.NewGuid().ToString("N");
@@ -971,6 +1004,38 @@ public class DeploymentStateManagerTests : IDisposable
         var preservedLegacyStateManager = CreateFileDeploymentStateManager(legacySha);
         var preservedLegacySection = await preservedLegacyStateManager.AcquireSectionAsync("Azure");
         Assert.Equal("sub", preservedLegacySection.Data["SubscriptionId"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task MalformedLegacyStateDoesNotHideCanonicalState()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var currentStateManager = CreateFileDeploymentStateManager(currentSha);
+        var currentSection = await currentStateManager.AcquireSectionAsync("Azure");
+        currentSection.Data["SubscriptionId"] = "current-sub";
+        await currentStateManager.SaveSectionAsync(currentSection);
+
+        var legacyStatePath = Path.Combine(
+            _aspireHome.FullName,
+            "deployments",
+            legacySha,
+            "development.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyStatePath)!);
+        await File.WriteAllTextAsync(legacyStatePath, "{ malformed");
+
+        var asyncEffectiveState = await FileDeploymentStateManager.LoadEffectiveStateAsync(
+            currentStateManager.StateFilePath!,
+            legacyStatePath);
+        var syncEffectiveState = FileDeploymentStateManager.LoadEffectiveState(
+            currentStateManager.StateFilePath!,
+            legacyStatePath);
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+        var migratedSection = await migratingStateManager.AcquireSectionAsync("Azure");
+
+        Assert.Equal("current-sub", asyncEffectiveState["Azure"]?["SubscriptionId"]?.GetValue<string>());
+        Assert.Equal("current-sub", syncEffectiveState["Azure"]?["SubscriptionId"]?.GetValue<string>());
+        Assert.Equal("current-sub", migratedSection.Data["SubscriptionId"]?.GetValue<string>());
     }
 
     [Fact]

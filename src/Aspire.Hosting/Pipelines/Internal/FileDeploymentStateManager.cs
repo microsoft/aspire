@@ -118,9 +118,17 @@ internal sealed partial class FileDeploymentStateManager(
         JsonObject legacyState = [];
         if (!string.IsNullOrEmpty(legacyStatePath))
         {
-            using (await AcquireStateLockAsync(legacyStatePath, cancellationToken).ConfigureAwait(false))
+            try
             {
-                legacyState = await LoadStateFileAsync(legacyStatePath, cancellationToken).ConfigureAwait(false);
+                using (await AcquireStateLockAsync(legacyStatePath, cancellationToken).ConfigureAwait(false))
+                {
+                    legacyState = await LoadStateFileAsync(legacyStatePath, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (IsUnavailableLegacyState(ex))
+            {
+                // Legacy state is optional fallback data. A malformed or unreadable shared file
+                // must not hide usable canonical state.
             }
         }
 
@@ -157,9 +165,17 @@ internal sealed partial class FileDeploymentStateManager(
         JsonObject legacyState = [];
         if (!string.IsNullOrEmpty(legacyStatePath))
         {
-            using (AcquireStateLock(legacyStatePath))
+            try
             {
-                legacyState = LoadStateFile(legacyStatePath);
+                using (AcquireStateLock(legacyStatePath))
+                {
+                    legacyState = LoadStateFile(legacyStatePath);
+                }
+            }
+            catch (Exception ex) when (IsUnavailableLegacyState(ex))
+            {
+                // Legacy state is optional fallback data. A malformed or unreadable shared file
+                // must not hide usable canonical state.
             }
         }
 
@@ -221,9 +237,16 @@ internal sealed partial class FileDeploymentStateManager(
             legacyStatePath is not null &&
             !string.Equals(currentStatePath, legacyStatePath, StringComparison.Ordinal))
         {
-            using (await AcquireStateLockAsync(legacyStatePath, cancellationToken).ConfigureAwait(false))
+            try
             {
-                _legacyState = await LoadStateFileAsync(legacyStatePath, cancellationToken).ConfigureAwait(false);
+                using (await AcquireStateLockAsync(legacyStatePath, cancellationToken).ConfigureAwait(false))
+                {
+                    _legacyState = await LoadStateFileAsync(legacyStatePath, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (IsUnavailableLegacyState(ex))
+            {
+                _legacyState = [];
             }
         }
 
@@ -509,7 +532,10 @@ internal sealed partial class FileDeploymentStateManager(
     private static JsonNode? ApplyChanges(JsonNode? latestValue, JsonNode? originalValue, JsonNode? savedValue)
     {
         if (originalValue is JsonObject originalObject &&
-            savedValue is JsonObject savedObject)
+            savedValue is JsonObject savedObject &&
+            !IsScalarSectionData(originalObject) &&
+            !IsScalarSectionData(savedObject) &&
+            (latestValue is not JsonObject latestObject || !IsScalarSectionData(latestObject)))
         {
             var result = latestValue?.DeepClone() as JsonObject ?? [];
             foreach (var propertyName in originalObject.Select(static pair => pair.Key)
@@ -556,7 +582,10 @@ internal sealed partial class FileDeploymentStateManager(
             }
 
             if (savedValue is JsonObject savedObject &&
-                (originalValue is JsonObject || !originalExists))
+                (originalValue is JsonObject || !originalExists) &&
+                !IsScalarSectionData(savedObject) &&
+                (originalValue is not JsonObject originalObject || !IsScalarSectionData(originalObject)) &&
+                (latestValue is not JsonObject latestObject || !IsScalarSectionData(latestObject)))
             {
                 return (true, ApplyChanges(latestValue, originalValue as JsonObject ?? [], savedObject));
             }
@@ -566,6 +595,11 @@ internal sealed partial class FileDeploymentStateManager(
                 : (false, null);
         }
     }
+
+    private static bool IsScalarSectionData(JsonObject value) => value.ContainsKey(string.Empty);
+
+    private static bool IsUnavailableLegacyState(Exception exception) =>
+        exception is JsonException or InvalidOperationException or InvalidDataException or IOException or UnauthorizedAccessException;
 
     private static void ApplyClaimedSections(
         JsonObject effectiveState,
