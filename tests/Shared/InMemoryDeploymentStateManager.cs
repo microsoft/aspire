@@ -34,9 +34,6 @@ internal sealed class InMemoryDeploymentStateManager : IDeploymentStateManager
         return Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
     }
 
-    public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
-        => AcquireSectionAsync(sectionName, cancellationToken);
-
     public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
     {
         _sections[section.SectionName] = section.Data;
