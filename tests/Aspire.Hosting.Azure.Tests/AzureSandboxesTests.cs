@@ -170,7 +170,9 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
-        Assert.Contains("existing Azure sandbox group", exception.Message);
+        Assert.Equal(
+            "Compute resource 'worker' uses managed identity 'workload-identity', but workload identities are not supported when publishing to existing Azure sandbox group 'sandboxes'.",
+            exception.InnerException?.Message);
     }
 
     [Fact]

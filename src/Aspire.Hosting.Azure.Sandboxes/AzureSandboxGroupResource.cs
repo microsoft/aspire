@@ -190,7 +190,7 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                 if (this.IsExisting())
                 {
                     throw new InvalidOperationException(
-                        $"Compute resource '{resource.Name}' uses managed identity '{userAssignedIdentity.Name}', but existing Azure sandbox group '{Name}' is read-only. Attach the identity to the existing sandbox group outside Aspire before deploying.");
+                        $"Compute resource '{resource.Name}' uses managed identity '{userAssignedIdentity.Name}', but workload identities are not supported when publishing to existing Azure sandbox group '{Name}'.");
                 }
 
                 AddUserAssignedIdentity(userAssignedIdentity);
