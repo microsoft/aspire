@@ -440,29 +440,78 @@ public class DeploymentStateManagerTests : IDisposable
         var legacySha = Guid.NewGuid().ToString("N");
         var currentSha = Guid.NewGuid().ToString("N");
         var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
-        var legacySection = await legacyStateManager.AcquireSectionAsync("Migration");
-        legacySection.Data["legacy"] = true;
-        await legacyStateManager.SaveSectionAsync(legacySection);
-        var legacyPath = legacyStateManager.StateFilePath;
-
         var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
-        var migratedSection = await migratingStateManager.AcquireSectionAsync("Migration");
-        Assert.True(migratedSection.Data["legacy"]?.GetValue<bool>());
+        try
+        {
+            var legacySection = await legacyStateManager.AcquireSectionAsync("Migration");
+            legacySection.Data["legacy"] = true;
+            await legacyStateManager.SaveSectionAsync(legacySection);
+            var legacyPath = legacyStateManager.StateFilePath;
 
-        migratedSection.Data["current"] = true;
-        await migratingStateManager.SaveSectionAsync(migratedSection);
+            var migratedSection = await migratingStateManager.AcquireSectionAsync("Migration");
+            Assert.True(migratedSection.Data["legacy"]?.GetValue<bool>());
 
-        var currentPath = migratingStateManager.StateFilePath;
-        Assert.NotEqual(legacyPath, currentPath);
-        Assert.True(File.Exists(currentPath));
-        Assert.True(File.Exists(legacyPath));
+            migratedSection.Data["current"] = true;
+            await migratingStateManager.SaveSectionAsync(migratedSection);
 
-        var currentStateManager = CreateFileDeploymentStateManager(currentSha);
-        var currentSection = await currentStateManager.AcquireSectionAsync("Migration");
-        Assert.True(currentSection.Data["legacy"]?.GetValue<bool>());
-        Assert.True(currentSection.Data["current"]?.GetValue<bool>());
-        await migratingStateManager.ClearAllStateAsync();
-        await legacyStateManager.ClearAllStateAsync();
+            var currentPath = migratingStateManager.StateFilePath;
+            Assert.NotEqual(legacyPath, currentPath);
+            Assert.True(File.Exists(currentPath));
+            Assert.True(File.Exists(legacyPath));
+
+            var currentStateManager = CreateFileDeploymentStateManager(currentSha);
+            var currentSection = await currentStateManager.AcquireSectionAsync("Migration");
+            Assert.True(currentSection.Data["legacy"]?.GetValue<bool>());
+            Assert.True(currentSection.Data["current"]?.GetValue<bool>());
+        }
+        finally
+        {
+            await migratingStateManager.ClearAllStateAsync();
+            await legacyStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
+    public async Task FullStateSaveReplacesLegacyMigrationMetadata()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+        try
+        {
+            var legacySection = await legacyStateManager.AcquireSectionAsync("Legacy");
+            legacySection.Data["Value"] = "legacy";
+            await legacyStateManager.SaveSectionAsync(legacySection);
+
+            var migratedSection = await migratingStateManager.AcquireSectionAsync("Legacy");
+            migratedSection.Data["Claimed"] = true;
+            await migratingStateManager.SaveSectionAsync(migratedSection);
+
+            await migratingStateManager.SaveStateAsync(new JsonObject
+            {
+                ["Replacement"] = new JsonObject
+                {
+                    ["Value"] = "current"
+                }
+            });
+
+            var sameManagerLegacySection = await migratingStateManager.AcquireSectionAsync("Legacy");
+            sameManagerLegacySection.Data["Value"] = "legacy";
+            await migratingStateManager.SaveSectionAsync(sameManagerLegacySection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+            var legacyAfterRestart = await restartedStateManager.AcquireSectionAsync("Legacy");
+            var replacementAfterRestart = await restartedStateManager.AcquireSectionAsync("Replacement");
+
+            Assert.Equal("legacy", legacyAfterRestart.Data["Value"]?.GetValue<string>());
+            Assert.Equal("current", replacementAfterRestart.Data["Value"]?.GetValue<string>());
+        }
+        finally
+        {
+            await migratingStateManager.ClearAllStateAsync();
+            await legacyStateManager.ClearAllStateAsync();
+        }
     }
 
     [Fact]

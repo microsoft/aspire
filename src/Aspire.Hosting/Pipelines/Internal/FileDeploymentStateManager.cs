@@ -127,6 +127,45 @@ internal sealed partial class FileDeploymentStateManager(
         return effectiveState;
     }
 
+    internal static JsonObject LoadEffectiveState(string canonicalStatePath, string? legacyStatePath)
+    {
+        JsonObject currentState;
+        MigrationState migrationState;
+        using (FileLock.Acquire($"{canonicalStatePath}.lock", TimeSpan.FromMinutes(5)))
+        {
+            currentState = LoadStateFile(canonicalStatePath);
+            try
+            {
+                migrationState = LoadMigrationStateFile(canonicalStatePath);
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or InvalidDataException)
+            {
+                return currentState;
+            }
+        }
+
+        var (legacyFallbackDisabled, legacyStateSnapshot, claimedSectionNames, authoritativeCurrentState) = migrationState;
+        currentState = authoritativeCurrentState ?? currentState;
+        if (legacyFallbackDisabled)
+        {
+            return currentState;
+        }
+
+        JsonObject legacyState = [];
+        if (!string.IsNullOrEmpty(legacyStatePath))
+        {
+            using (FileLock.Acquire($"{legacyStatePath}.lock", TimeSpan.FromMinutes(5)))
+            {
+                legacyState = LoadStateFile(legacyStatePath);
+            }
+        }
+
+        var effectiveState = MergeState(MergeState(legacyStateSnapshot, legacyState), currentState);
+        ApplyClaimedSections(effectiveState, currentState, claimedSectionNames);
+
+        return effectiveState;
+    }
+
     private string? GetStatePath(string? appHostSha, string environmentName)
     {
         if (string.IsNullOrEmpty(appHostSha))
@@ -244,6 +283,10 @@ internal sealed partial class FileDeploymentStateManager(
                 if (sectionName is null)
                 {
                     _currentState = state.DeepClone().AsObject();
+                    _legacyState = [];
+                    _legacyStateSnapshot = [];
+                    _claimedSectionNames.Clear();
+                    _legacyFallbackDisabled = true;
                 }
                 else
                 {
@@ -331,7 +374,8 @@ internal sealed partial class FileDeploymentStateManager(
         }
     }
 
-    private JsonObject GetLegacyFallbackState() => MergeState(_legacyStateSnapshot, _legacyState);
+    private JsonObject GetLegacyFallbackState() =>
+        _legacyFallbackDisabled ? [] : MergeState(_legacyStateSnapshot, _legacyState);
 
     private static async Task WriteStateAsync(string statePath, JsonObject state, CancellationToken cancellationToken)
     {
@@ -569,6 +613,19 @@ internal sealed partial class FileDeploymentStateManager(
         }
 
         var migrationState = await LoadStateFileAsync(migrationStatePath, cancellationToken).ConfigureAwait(false);
+        return ParseMigrationState(migrationState);
+    }
+
+    private static MigrationState LoadMigrationStateFile(string canonicalStatePath)
+    {
+        var migrationStatePath = GetMigrationStatePath(canonicalStatePath);
+        return File.Exists(migrationStatePath)
+            ? ParseMigrationState(LoadStateFile(migrationStatePath))
+            : new(false, [], [], null);
+    }
+
+    private static MigrationState ParseMigrationState(JsonObject migrationState)
+    {
         var legacyFallbackDisabled = migrationState[LegacyFallbackDisabledProperty]?.GetValue<bool>() ?? false;
         var legacyStateSnapshot = migrationState[LegacyStateProperty] switch
         {

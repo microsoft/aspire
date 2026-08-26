@@ -103,7 +103,26 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
     /// </summary>
     protected static async Task<JsonObject> LoadStateFileAsync(string? statePath, CancellationToken cancellationToken)
     {
-        if (statePath is null || !File.Exists(statePath))
+        var fileContent = statePath is not null && File.Exists(statePath)
+            ? await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false)
+            : null;
+        return ParseStateFile(fileContent);
+    }
+
+    /// <summary>
+    /// Loads and expands a flattened deployment state file synchronously.
+    /// </summary>
+    protected static JsonObject LoadStateFile(string? statePath)
+    {
+        var fileContent = statePath is not null && File.Exists(statePath)
+            ? File.ReadAllText(statePath)
+            : null;
+        return ParseStateFile(fileContent);
+    }
+
+    private static JsonObject ParseStateFile(string? fileContent)
+    {
+        if (fileContent is null)
         {
             return [];
         }
@@ -114,8 +133,11 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
             AllowTrailingCommas = true,
         };
 
-        var fileContent = await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false);
-        var flattenedState = JsonNode.Parse(fileContent, documentOptions: jsonDocumentOptions)!.AsObject();
+        if (JsonNode.Parse(fileContent, documentOptions: jsonDocumentOptions) is not JsonObject flattenedState)
+        {
+            throw new InvalidDataException("Deployment state must contain a JSON object.");
+        }
+
         return JsonFlattener.UnflattenJsonObject(flattenedState);
     }
 

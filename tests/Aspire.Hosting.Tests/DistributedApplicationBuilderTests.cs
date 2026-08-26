@@ -662,6 +662,54 @@ public class DistributedApplicationBuilderTests
         }
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("""{"Key":"one","key":"two"}""")]
+    public void PolyglotAppHostIgnoresInvalidDeploymentConfiguration(string deploymentState)
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");
+        const string projectName = "Aspire.Hosting.RemoteHost";
+        const string environment = "production";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory.FullName,
+            ProjectName = projectName,
+            AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+            Args = ["--publisher", "manifest"]
+        };
+        var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+        var currentSha = probeBuilder.Configuration["AppHost:PathSha256"]!;
+        var currentDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments",
+            currentSha);
+        var currentStatePath = Path.Combine(currentDirectory, $"{environment}.json");
+
+        try
+        {
+            Directory.CreateDirectory(currentDirectory);
+            File.WriteAllText(currentStatePath, deploymentState);
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.Null(builder.Configuration["MigratedValue"]);
+        }
+        finally
+        {
+            if (File.Exists(currentStatePath))
+            {
+                File.Delete(currentStatePath);
+            }
+            if (Directory.Exists(currentDirectory) && !Directory.EnumerateFileSystemEntries(currentDirectory).Any())
+            {
+                Directory.Delete(currentDirectory);
+            }
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void LegacyShaUsesProjectNameShaInPublishMode()
     {
