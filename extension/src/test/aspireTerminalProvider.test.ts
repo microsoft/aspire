@@ -560,9 +560,9 @@ suite('AspireTerminalProvider tests', () => {
                     });
 
                 assert.strictEqual(executedCommand,
-                    '$__aspirePreviousEnvironment0 = $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES; ' +
+                    '& { $__aspirePreviousEnvironment0 = $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES; ' +
                     'try { $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES = "true"; & "aspire" new aspire-test } ' +
-                    'finally { $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES = $__aspirePreviousEnvironment0 }');
+                    'finally { $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES = $__aspirePreviousEnvironment0 } }');
             }
             finally {
                 getAspireTerminalStub.restore();

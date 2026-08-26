@@ -591,7 +591,7 @@ function scopeCommandEnvironment(
 
     // The Aspire terminal is reused. Restore inherited values even when the CLI fails or is
     // interrupted so this one-command override cannot affect later commands in the terminal.
-    return `${previousValues}; try { ${setValues}; ${command} } finally { ${restoreValues} }`;
+    return `& { ${previousValues}; try { ${setValues}; ${command} } finally { ${restoreValues} } }`;
 }
 
 function areResolvedCliPathsEqual(left: string | undefined, right: string): boolean {
