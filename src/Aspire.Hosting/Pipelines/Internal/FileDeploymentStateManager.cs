@@ -95,7 +95,7 @@ internal sealed partial class FileDeploymentStateManager(
     {
         JsonObject currentState;
         MigrationState migrationState;
-        using (await FileLock.AcquireAsync($"{canonicalStatePath}.lock", cancellationToken).ConfigureAwait(false))
+        using (await AcquireStateLockAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false))
         {
             currentState = await LoadStateFileAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false);
             try
@@ -118,7 +118,7 @@ internal sealed partial class FileDeploymentStateManager(
         JsonObject legacyState = [];
         if (!string.IsNullOrEmpty(legacyStatePath))
         {
-            using (await FileLock.AcquireAsync($"{legacyStatePath}.lock", cancellationToken).ConfigureAwait(false))
+            using (await AcquireStateLockAsync(legacyStatePath, cancellationToken).ConfigureAwait(false))
             {
                 legacyState = await LoadStateFileAsync(legacyStatePath, cancellationToken).ConfigureAwait(false);
             }
@@ -134,7 +134,7 @@ internal sealed partial class FileDeploymentStateManager(
     {
         JsonObject currentState;
         MigrationState migrationState;
-        using (FileLock.Acquire($"{canonicalStatePath}.lock", TimeSpan.FromMinutes(5)))
+        using (AcquireStateLock(canonicalStatePath))
         {
             currentState = LoadStateFile(canonicalStatePath);
             try
@@ -157,7 +157,7 @@ internal sealed partial class FileDeploymentStateManager(
         JsonObject legacyState = [];
         if (!string.IsNullOrEmpty(legacyStatePath))
         {
-            using (FileLock.Acquire($"{legacyStatePath}.lock", TimeSpan.FromMinutes(5)))
+            using (AcquireStateLock(legacyStatePath))
             {
                 legacyState = LoadStateFile(legacyStatePath);
             }
@@ -210,7 +210,7 @@ internal sealed partial class FileDeploymentStateManager(
 
         if (currentStatePath is not null)
         {
-            using (await FileLock.AcquireAsync($"{currentStatePath}.lock", cancellationToken).ConfigureAwait(false))
+            using (await AcquireStateLockAsync(currentStatePath, cancellationToken).ConfigureAwait(false))
             {
                 _currentState = await LoadStateFileAsync(currentStatePath, cancellationToken).ConfigureAwait(false);
                 await LoadMigrationStateAsync(currentStatePath, cancellationToken).ConfigureAwait(false);
@@ -221,7 +221,7 @@ internal sealed partial class FileDeploymentStateManager(
             legacyStatePath is not null &&
             !string.Equals(currentStatePath, legacyStatePath, StringComparison.Ordinal))
         {
-            using (await FileLock.AcquireAsync($"{legacyStatePath}.lock", cancellationToken).ConfigureAwait(false))
+            using (await AcquireStateLockAsync(legacyStatePath, cancellationToken).ConfigureAwait(false))
             {
                 _legacyState = await LoadStateFileAsync(legacyStatePath, cancellationToken).ConfigureAwait(false);
             }
@@ -288,7 +288,7 @@ internal sealed partial class FileDeploymentStateManager(
                 return;
             }
 
-            using (await FileLock.AcquireAsync($"{deploymentStatePath}.lock", cancellationToken).ConfigureAwait(false))
+            using (await AcquireStateLockAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false))
             {
                 if (sectionName is null)
                 {
@@ -351,21 +351,36 @@ internal sealed partial class FileDeploymentStateManager(
     /// <inheritdoc/>
     protected override async Task ClearStateStorageAsync(CancellationToken cancellationToken)
     {
-        _currentState = [];
-        _legacyState = [];
-        _legacyStateSnapshot = [];
-        _claimedSectionNames.Clear();
-        _legacyFallbackDisabled = true;
-
         var currentStatePath = GetCanonicalStatePath();
         if (currentStatePath is null)
         {
+            _currentState = [];
+            _legacyState = [];
+            _legacyStateSnapshot = [];
+            _claimedSectionNames.Clear();
+            _legacyFallbackDisabled = true;
             return;
         }
 
-        using (await FileLock.AcquireAsync($"{currentStatePath}.lock", cancellationToken).ConfigureAwait(false))
+        using (await AcquireStateLockAsync(currentStatePath, cancellationToken).ConfigureAwait(false))
         {
-            await SaveMigrationStateAsync(currentStatePath, cancellationToken).ConfigureAwait(false);
+            await SaveMigrationStateAsync(
+                currentStatePath,
+                currentState: [],
+                legacyStateSnapshot: [],
+                claimedSectionNames: [],
+                legacyFallbackDisabled: true,
+                cancellationToken).ConfigureAwait(false);
+
+            // Publish the cleared in-memory view only after the sidecar durably makes empty current
+            // state authoritative. If deleting the superseded state file then fails, readers still
+            // observe the committed empty sidecar state.
+            _currentState = [];
+            _legacyState = [];
+            _legacyStateSnapshot = [];
+            _claimedSectionNames.Clear();
+            _legacyFallbackDisabled = true;
+
             if (File.Exists(currentStatePath))
             {
                 File.Delete(currentStatePath);
@@ -420,6 +435,26 @@ internal sealed partial class FileDeploymentStateManager(
         {
             File.Delete(temporaryStatePath);
         }
+    }
+
+    private static FileLock AcquireStateLock(string statePath)
+    {
+        EnsureStateDirectoryPermissions(statePath);
+        return FileLock.Acquire($"{statePath}.lock", TimeSpan.FromMinutes(5));
+    }
+
+    private static async Task<FileLock> AcquireStateLockAsync(
+        string statePath,
+        CancellationToken cancellationToken)
+    {
+        EnsureStateDirectoryPermissions(statePath);
+        return await FileLock.AcquireAsync($"{statePath}.lock", cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void EnsureStateDirectoryPermissions(string statePath)
+    {
+        var stateDirectory = Path.GetDirectoryName(statePath)!;
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(stateDirectory);
     }
 
     private static void ApplyStateDelta(
@@ -695,15 +730,30 @@ internal sealed partial class FileDeploymentStateManager(
         return [.. claimedSectionNames.Select(static sectionName => sectionName!)];
     }
 
-    private Task SaveMigrationStateAsync(string canonicalStatePath, CancellationToken cancellationToken)
+    private Task SaveMigrationStateAsync(string canonicalStatePath, CancellationToken cancellationToken) =>
+        SaveMigrationStateAsync(
+            canonicalStatePath,
+            _currentState,
+            _legacyStateSnapshot,
+            _claimedSectionNames,
+            _legacyFallbackDisabled,
+            cancellationToken);
+
+    private static Task SaveMigrationStateAsync(
+        string canonicalStatePath,
+        JsonObject currentState,
+        JsonObject legacyStateSnapshot,
+        IEnumerable<string> claimedSectionNames,
+        bool legacyFallbackDisabled,
+        CancellationToken cancellationToken)
     {
         var migrationState = new JsonObject
         {
             [ClaimedSectionsProperty] = JsonSerializer.Serialize(
-                _claimedSectionNames.Order(StringComparer.Ordinal)),
-            [CurrentStateProperty] = _currentState.ToJsonString(),
-            [LegacyStateProperty] = _legacyStateSnapshot.DeepClone(),
-            [LegacyFallbackDisabledProperty] = _legacyFallbackDisabled
+                claimedSectionNames.Order(StringComparer.Ordinal)),
+            [CurrentStateProperty] = currentState.ToJsonString(),
+            [LegacyStateProperty] = legacyStateSnapshot.DeepClone(),
+            [LegacyFallbackDisabledProperty] = legacyFallbackDisabled
         };
 
         return WriteStateAsync(GetMigrationStatePath(canonicalStatePath), migrationState, cancellationToken);

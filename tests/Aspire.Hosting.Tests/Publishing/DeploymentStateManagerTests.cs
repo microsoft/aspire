@@ -403,6 +403,28 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadStateAsync_CreatesDirectory_WithUserOnlyPermissions()
+    {
+        var statePath = Path.Combine(
+            _aspireHome.FullName,
+            "deployments",
+            Guid.NewGuid().ToString("N"),
+            "development.json");
+
+        await FileDeploymentStateManager.LoadEffectiveStateAsync(statePath, legacyStatePath: null);
+
+        var stateDirectory = Path.GetDirectoryName(statePath);
+        Assert.NotNull(stateDirectory);
+        Assert.True(Directory.Exists(stateDirectory));
+        if (!OperatingSystem.IsWindows())
+        {
+            var mode = File.GetUnixFileMode(stateDirectory);
+            var expectedMode = UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead;
+            Assert.Equal(expectedMode, mode);
+        }
+    }
+
+    [Fact]
     public void GetStatePath_UsesConfiguredAspireHome()
     {
         var sha = Guid.NewGuid().ToString("N");
@@ -949,6 +971,24 @@ public class DeploymentStateManagerTests : IDisposable
         var preservedLegacyStateManager = CreateFileDeploymentStateManager(legacySha);
         var preservedLegacySection = await preservedLegacyStateManager.AcquireSectionAsync("Azure");
         Assert.Equal("sub", preservedLegacySection.Data["SubscriptionId"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CanceledClearPreservesCurrentState()
+    {
+        var stateManager = CreateFileDeploymentStateManager();
+        var section = await stateManager.AcquireSectionAsync("Azure");
+        section.Data["SubscriptionId"] = "sub";
+        await stateManager.SaveSectionAsync(section);
+
+        using var cancellationSource = new CancellationTokenSource();
+        await cancellationSource.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => stateManager.ClearAllStateAsync(cancellationSource.Token));
+
+        var currentSection = await stateManager.AcquireCurrentSectionAsync("Azure");
+        Assert.Equal("sub", currentSection.Data["SubscriptionId"]?.GetValue<string>());
     }
 
     [Fact]
