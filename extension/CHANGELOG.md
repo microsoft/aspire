@@ -2,8 +2,15 @@
 
 ## v1.20.0
 
-<!-- aspire-ext-changelog from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=b582f8071ea2c1e9cbe7fe21d9b5479d005cd753 base=1.19.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=b582f8071ea2c1e9cbe7fe21d9b5479d005cd753 base=1.19.0 -->
+
+### Fixes
+
+- Stop the C# Dev Kit Hot Reload advisory from reappearing after every extension-host reload, and add an `aspire.enableHotReloadNotification` setting to disable it entirely ([#19544](https://github.com/microsoft/aspire/issues/19544), [#19672](https://github.com/microsoft/aspire/pull/19672)).
+
+### Other
+
+- Rewrite the extension README and walkthrough around the current inner development loop: open or create an Aspire project, choose an AppHost, run it, and use the Aspire view and dashboard ([#19632](https://github.com/microsoft/aspire/pull/19632)).
 
 ## v1.19.0
 
