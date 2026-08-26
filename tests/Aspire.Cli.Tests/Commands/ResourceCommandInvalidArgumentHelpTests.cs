@@ -191,7 +191,7 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
         Assert.Contains("Unknown argument '--unknown value' for command 'configure'.", Assert.Single(interactionService.DisplayedErrors));
 
@@ -230,7 +230,7 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
         Assert.Contains("Unknown argument '--unknown value' for command 'start'.", Assert.Single(interactionService.DisplayedErrors));
 
