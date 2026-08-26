@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
+    <!-- Remove when Azure.Provisioning.Storage 1.2.0 ships stable. -->
+    <NoWarn Condition="'$(StabilizePackageVersion)' == 'true'">$(NoWarn);NU5104</NoWarn>
     <PackageTags>aspire integration hosting azure storage blob files queue table cloud</PackageTags>
     <Description>Azure Storage resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureStorageContainer_256x.png</PackageIconFullPath>

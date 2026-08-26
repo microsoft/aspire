@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
+    <!-- Transitive through Aspire.Hosting.Azure.Storage; remove when Azure.Provisioning.Storage 1.2.0 ships stable. -->
+    <NoWarn Condition="'$(StabilizePackageVersion)' == 'true'">$(NoWarn);NU5104</NoWarn>
     <!-- Disable package validation as this package hasn't shipped stable yet. -->
     <EnablePackageValidation>false</EnablePackageValidation>
     <PackageTags>aspire integration hosting azure functions serverless cloud</PackageTags>

@@ -113,7 +113,7 @@ void main() throws Exception {
         aksVolume.withCapacity("20Gi");
         var aksStorage = builder.addAzureStorage("aks-storage");
         var aksFiles = aksStorage.addFiles("aks-files");
-        var aksShare = aksFiles.addFileShare("aks-share", new AddFileShareOptions().fileShareName("shared"));
+        var aksShare = aksFiles.addFileShare("aks-share", "shared");
         var aksFilesVolume = aks.addPersistentVolume("aks-files-volume");
         aksFilesVolume.withAzureFileShare(aksShare);
         var pipeline = builder.pipeline();
