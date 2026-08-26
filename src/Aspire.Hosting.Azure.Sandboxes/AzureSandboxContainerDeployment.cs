@@ -258,6 +258,9 @@ internal static class AzureSandboxContainerDeployment
         try
         {
             var imageReference = await ResolveContainerImageAsync(context, resource).ConfigureAwait(false);
+            // Capture presence before command callbacks run because callbacks can mutate annotations.
+            // The deployed command may still contain their resolved values after such mutation.
+            var hasModeledCommandConfiguration = HasModeledCommandConfiguration(targetResource);
             var imageMetadata = await ResolveContainerImageMetadataAsync(context, targetResource, imageReference).ConfigureAwait(false);
             var diskImageReference = await ResolveContainerImageReferenceForDiskImageAsync(context, imageReference).ConfigureAwait(false);
             var diskImageName = CreateSandboxResourceName(targetResource.Name, deployId);
@@ -355,7 +358,8 @@ internal static class AzureSandboxContainerDeployment
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
                 endpointSecurityFingerprint,
-                resolvedEnvironmentVariables.Count > 0);
+                resolvedEnvironmentVariables.Count > 0,
+                hasModeledCommandConfiguration);
             var pendingSecurityCleanup = previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true;
             securityConfigurationChanged |= pendingSecurityCleanup;
 
@@ -375,6 +379,7 @@ internal static class AzureSandboxContainerDeployment
             stateSection.Data["Ports"] = portStates;
             stateSection.Data["EndpointSecurityFingerprint"] = endpointSecurityFingerprint;
             stateSection.Data["HasRuntimeEnvironmentConfiguration"] = resolvedEnvironmentVariables.Count > 0;
+            stateSection.Data["HasRuntimeCommandConfiguration"] = hasModeledCommandConfiguration;
             stateSection.Data["PendingSecurityCleanup"] = securityConfigurationChanged;
             await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
             deploymentCommitted = true;
@@ -1035,6 +1040,10 @@ internal static class AzureSandboxContainerDeployment
 
         return (entrypoint, command);
     }
+
+    internal static bool HasModeledCommandConfiguration(IResource resource) =>
+        resource is ContainerResource { Entrypoint: { Length: > 0 } } ||
+        resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var callbacks) && callbacks.Any();
 
     private static async Task<ContainerImageMetadata> InspectLocalContainerImageAsync(PipelineStepContext context, string imageReference)
     {
@@ -1898,18 +1907,21 @@ internal static class AzureSandboxContainerDeployment
     internal static bool HasSecurityRelevantEndpointChange(
         DeploymentStateSection previousStateSection,
         string currentFingerprint,
-        bool hasRuntimeEnvironmentConfiguration)
+        bool hasRuntimeEnvironmentConfiguration,
+        bool hasRuntimeCommandConfiguration = false)
     {
         if (!HasRemoteDeploymentState(previousStateSection))
         {
             return false;
         }
 
-        // Resolved environment values can contain secrets, so never persist a comparable value-derived
-        // fingerprint. Conservatively remove the previous generation whenever runtime configuration is
-        // present, and once more when it is removed from a deployment that previously had it.
+        // Resolved environment and command values can contain secrets, so never persist comparable
+        // value-derived fingerprints. Conservatively remove the previous generation whenever either
+        // runtime configuration is present, and once more when one is removed after a prior deployment.
         if (hasRuntimeEnvironmentConfiguration ||
-            previousStateSection.Data["HasRuntimeEnvironmentConfiguration"]?.GetValue<bool>() == true)
+            previousStateSection.Data["HasRuntimeEnvironmentConfiguration"]?.GetValue<bool>() == true ||
+            hasRuntimeCommandConfiguration ||
+            previousStateSection.Data["HasRuntimeCommandConfiguration"]?.GetValue<bool>() == true)
         {
             return true;
         }
