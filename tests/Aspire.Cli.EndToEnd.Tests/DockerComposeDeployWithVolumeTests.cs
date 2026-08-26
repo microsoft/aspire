@@ -114,11 +114,19 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
         // backed by a named volume rather than a bind mount, which is what makes the storage
         // outlive the container.
         output.WriteLine("Verify: compose file projects DATA_PATH and a named volume");
+        // The grep chain alone sets the exit status. An `|| echo ...BAD` fallback would swallow a
+        // failed grep behind a zero exit, so WaitForSuccessPromptAsync (which reads the prompt's
+        // OK/ERR marker) would pass on a broken compose file.
+        //
+        // The sentinel is split so only the shell can assemble it: the typed line reads
+        // COMPOSE_SHAPE$(echo _OK) while the executed echo emits COMPOSE_SHAPE_OK. Otherwise
+        // WaitUntilTextAsync matches the echoed command still on screen and passes regardless of
+        // the greps. Same idiom as KubernetesDeployWithPersistentVolumeTests.
         await auto.TypeAsync(
             $"grep -q 'DATA_PATH: \"{MountPath}\"' deploy-output/docker-compose.yaml && " +
             $"grep -q 'source: \"{VolumeName}\"' deploy-output/docker-compose.yaml && " +
             $"grep -q 'type: \"volume\"' deploy-output/docker-compose.yaml && " +
-            "echo COMPOSE_SHAPE_OK || echo COMPOSE_SHAPE_BAD");
+            "echo \"COMPOSE_SHAPE$(echo _OK)\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("COMPOSE_SHAPE_OK", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -128,17 +136,22 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
         // so match on a substring rather than the literal declared name. Retried because the
         // service can still be starting immediately after deploy reports success.
         output.WriteLine("Verify: running container has DATA_PATH and the named volume mounted there");
+        // `found` is what makes the exit status meaningful: an exhausted loop would otherwise end
+        // on `sleep 3` and report success. The trailing `test` turns "never matched" into a
+        // non-zero exit, and the split sentinel keeps WaitUntilTextAsync from matching the typed
+        // command line rather than real output.
         await auto.TypeAsync(
-            "for i in $(seq 1 20); do " +
+            "found=0; for i in $(seq 1 20); do " +
             "id=$(docker ps --filter 'name=server' --format '{{.ID}}' | head -1); " +
             "if [ -n \"$id\" ]; then " +
             "envval=$(docker exec $id printenv DATA_PATH 2>/dev/null); " +
             "mounts=$(docker inspect -f '{{range .Mounts}}{{.Type}}|{{.Name}}|{{.Destination}} {{end}}' $id 2>/dev/null); " +
             "echo \"DATA_PATH=[$envval] MOUNTS=[$mounts]\"; " +
             $"if [ \"$envval\" = \"{MountPath}\" ] && echo \"$mounts\" | grep -q 'volume|.*{VolumeName}|{MountPath}'; " +
-            "then echo RUNTIME_OK; break; fi; " +
+            "then found=1; echo \"RUNTIME$(echo _OK)\"; break; fi; " +
             "fi; " +
-            "echo \"Attempt $i: waiting for server container...\"; sleep 3; done");
+            "echo \"Attempt $i: waiting for server container...\"; sleep 3; done; " +
+            "test \"$found\" = 1");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("RUNTIME_OK", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
