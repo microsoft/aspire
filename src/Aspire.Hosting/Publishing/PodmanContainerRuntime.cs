@@ -312,21 +312,47 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         }
     }
 
-    public override async Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    public override async Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
         var remoteImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
             ? imageName
             : $"docker://{imageName}";
 
-        var manifest = await ExecuteContainerCommandForOutputAsync(
-            ["manifest", "inspect", remoteImageName],
-            "inspect image manifest",
-            imageName,
-            cancellationToken).ConfigureAwait(false);
+        string manifest;
+        try
+        {
+            manifest = await ExecuteContainerCommandForOutputAsync(
+                ["manifest", "inspect", remoteImageName],
+                "inspect image manifest",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        if (!IsJsonObjectOrArray(manifest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                manifest,
+                $"Podman returned an invalid image manifest for '{imageName}'.",
+                manifestAccessor: null);
+        }
+
         if (!IsPlainSingleImageManifest(manifest))
         {
-            return manifest;
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Succeeded,
+                manifest,
+                errorMessage: null,
+                (operatingSystem, architecture) => FindManifest(manifest, operatingSystem, architecture));
         }
 
         // Podman returns a plain OCI/Docker manifest for a single-architecture tag:
@@ -336,16 +362,29 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         var localImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
             ? imageName["docker://".Length..]
             : imageName;
-        await ExecuteContainerCommandForOutputAsync(
-            ["pull", remoteImageName],
-            "pull image for metadata inspection",
-            imageName,
-            cancellationToken).ConfigureAwait(false);
-        var imageMetadata = await ExecuteContainerCommandForOutputAsync(
-            ["image", "inspect", "--format", """{"Digest":{{json .Digest}},"Os":{{json .Os}},"Architecture":{{json .Architecture}}}""", localImageName],
-            "inspect image metadata",
-            imageName,
-            cancellationToken).ConfigureAwait(false);
+        string imageMetadata;
+        try
+        {
+            await ExecuteContainerCommandForOutputAsync(
+                ["pull", remoteImageName],
+                "pull image for metadata inspection",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+            imageMetadata = await ExecuteContainerCommandForOutputAsync(
+                ["image", "inspect", "--format", """{"Digest":{{json .Digest}},"Os":{{json .Os}},"Architecture":{{json .Architecture}}}""", localImageName],
+                "inspect image metadata",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                manifest,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
         string? digest;
         string? os;
         string? architecture;
@@ -359,33 +398,43 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException($"Podman returned invalid image metadata for '{imageName}'.", ex);
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
+                manifestAccessor: null);
         }
 
         if (string.IsNullOrWhiteSpace(digest) ||
             !digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ||
             digest.Length == "sha256:".Length)
         {
-            throw new InvalidOperationException($"Podman did not return an immutable digest for image '{imageName}'.");
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman did not return an immutable digest for image '{imageName}'.",
+                manifestAccessor: null);
         }
 
         if (string.IsNullOrWhiteSpace(os) || string.IsNullOrWhiteSpace(architecture))
         {
-            throw new InvalidOperationException($"Podman did not return platform metadata for image '{imageName}'.");
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman did not return platform metadata for image '{imageName}'.",
+                manifestAccessor: null);
         }
 
-        return JsonSerializer.Serialize(new
-        {
-            Descriptor = new
-            {
-                digest,
-                platform = new
-                {
-                    os,
-                    architecture
-                }
-            }
-        });
+        var inspectedManifest = new ContainerImageManifest(digest, os, architecture);
+        return new ContainerImageManifestInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            imageMetadata,
+            errorMessage: null,
+            (requestedOperatingSystem, requestedArchitecture) =>
+                string.Equals(requestedOperatingSystem, inspectedManifest.OperatingSystem, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(requestedArchitecture, inspectedManifest.Architecture, StringComparison.OrdinalIgnoreCase)
+                    ? inspectedManifest
+                    : null);
     }
 
     private static bool IsPlainSingleImageManifest(string manifest)

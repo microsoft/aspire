@@ -14,7 +14,6 @@ using System.IO.Hashing;
 using System.Net;
 using System.Runtime.ExceptionServices;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -868,118 +867,41 @@ internal static class AzureSandboxContainerDeployment
 
     private static async Task<string> ResolveContainerImageReferenceForDiskImageAsync(PipelineStepContext context, string imageReference)
     {
-        var inspector = await ResolveContainerImageInspectorAsync(context).ConfigureAwait(false);
+        var runtime = await ResolveContainerRuntimeAsync(context).ConfigureAwait(false);
         return await ResolveContainerImageReferenceForDiskImageAsync(
-            inspector,
+            runtime,
             imageReference,
             context.CancellationToken).ConfigureAwait(false);
     }
 
     internal static async Task<string> ResolveContainerImageReferenceForDiskImageAsync(
-        IContainerImageInspector inspector,
+        IContainerRuntime runtime,
         string imageReference,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(inspector);
+        ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(imageReference);
 
-        var manifest = await inspector.InspectImageManifestAsync(imageReference, cancellationToken).ConfigureAwait(false);
-        return ResolveLinuxAmd64ManifestReference(manifest, imageReference);
-    }
-
-    internal static string ResolveLinuxAmd64ManifestReference(string manifestJson, string imageReference)
-    {
-        JsonNode? manifest;
-        try
+        var result = await runtime.InspectImageManifestAsync(imageReference, cancellationToken).ConfigureAwait(false);
+        if (result.Status == ContainerImageInspectionStatus.Unsupported)
         {
-            manifest = JsonNode.Parse(manifestJson);
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException($"Container runtime returned invalid image manifest for '{imageReference}'.", ex);
+            throw new NotSupportedException(
+                $"Container runtime '{runtime.Name}' does not support image manifest inspection, which is required for Azure sandbox deployment.");
         }
 
-        if (manifest is JsonArray verboseManifests)
+        if (result.Status == ContainerImageInspectionStatus.Failed)
         {
-            foreach (var item in verboseManifests.OfType<JsonObject>())
-            {
-                if (item["Descriptor"] is not JsonObject descriptor ||
-                    descriptor["platform"] is not JsonObject platform ||
-                    !string.Equals(platform["os"]?.GetValue<string>(), "linux", StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(platform["architecture"]?.GetValue<string>(), "amd64", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (descriptor["digest"]?.GetValue<string>() is { Length: > 0 } digest)
-                {
-                    return CreateDigestImageReference(imageReference, digest);
-                }
-            }
-
-            throw new InvalidOperationException($"Container image '{imageReference}' does not contain a linux/amd64 manifest with an immutable digest.");
+            throw new InvalidOperationException(
+                result.ErrorMessage ?? $"Container runtime failed to inspect image manifest '{imageReference}'.");
         }
 
-        if (manifest is not JsonObject manifestObject)
+        if (!result.TryGetManifest("linux", "amd64", out var manifest))
         {
-            throw new InvalidOperationException($"Container runtime returned an unsupported image manifest for '{imageReference}'.");
+            throw new InvalidOperationException(
+                $"Container image '{imageReference}' does not contain a linux/amd64 manifest with an immutable digest.");
         }
 
-        if (manifestObject["manifests"] is not JsonArray manifests)
-        {
-            var descriptor = manifestObject["Descriptor"] as JsonObject ??
-                manifestObject["descriptor"] as JsonObject;
-            var platform = descriptor?["platform"] as JsonObject ??
-                manifestObject["platform"] as JsonObject;
-            if (platform is not null)
-            {
-                ValidateLinuxAmd64Platform(platform, imageReference);
-            }
-            else if (imageReference.Contains('@', StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    $"Container image '{imageReference}' is digest-pinned, but its linux/amd64 platform could not be verified.");
-            }
-
-            var digest = manifestObject["Descriptor"]?["digest"]?.GetValue<string>() ??
-                manifestObject["descriptor"]?["digest"]?.GetValue<string>() ??
-                manifestObject["digest"]?.GetValue<string>();
-            return !string.IsNullOrWhiteSpace(digest)
-                ? CreateDigestImageReference(imageReference, digest)
-                : throw new InvalidOperationException($"Container image '{imageReference}' is mutable and its immutable digest could not be resolved.");
-        }
-
-        // `docker manifest inspect` returns image indexes as:
-        //   { "manifests": [
-        //     { "digest": "sha256:...", "platform": { "os": "linux", "architecture": "amd64" } },
-        //     { "digest": "sha256:...", "platform": { "os": "unknown", "architecture": "unknown" } }
-        //   ] }
-        // The unknown/unknown entry is a provenance attestation. ADC disk-image conversion currently
-        // accepts the tag but can boot a sandbox without a usable root filesystem, so pass the concrete
-        // linux/amd64 manifest digest instead of the index tag.
-        foreach (var item in manifests)
-        {
-            if (item is not JsonObject descriptor ||
-                descriptor["platform"] is not JsonObject platform)
-            {
-                continue;
-            }
-
-            var os = platform["os"]?.GetValue<string>();
-            var architecture = platform["architecture"]?.GetValue<string>();
-            if (!string.Equals(os, "linux", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(architecture, "amd64", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (descriptor["digest"]?.GetValue<string>() is { Length: > 0 } digest)
-            {
-                return CreateDigestImageReference(imageReference, digest);
-            }
-        }
-
-        throw new InvalidOperationException($"Container image '{imageReference}' is an image index but does not contain a linux/amd64 manifest.");
+        return CreateDigestImageReference(imageReference, manifest.Digest);
     }
 
     private static string CreateDigestImageReference(string imageReference, string digest)
@@ -995,18 +917,6 @@ internal static class AzureSandboxContainerDeployment
         var repository = lastColon > lastSlash ? imageReference[..lastColon] : imageReference;
 
         return $"{repository}@{digest}";
-    }
-
-    private static void ValidateLinuxAmd64Platform(JsonObject platform, string imageReference)
-    {
-        var os = platform["os"]?.GetValue<string>();
-        var architecture = platform["architecture"]?.GetValue<string>();
-        if (!string.Equals(os, "linux", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(architecture, "amd64", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"Container image '{imageReference}' targets '{os ?? "unknown"}/{architecture ?? "unknown"}', but Azure sandbox disk images require linux/amd64.");
-        }
     }
 
     private static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
@@ -1058,60 +968,35 @@ internal static class AzureSandboxContainerDeployment
 
     private static async Task<ContainerImageMetadata> InspectLocalContainerImageAsync(PipelineStepContext context, string imageReference)
     {
-        var inspector = await ResolveContainerImageInspectorAsync(context).ConfigureAwait(false);
-        var output = await inspector.InspectImageConfigAsync(imageReference, context.CancellationToken).ConfigureAwait(false);
-
-        return ParseContainerImageMetadata(output, imageReference);
-    }
-
-    private static async Task<IContainerImageInspector> ResolveContainerImageInspectorAsync(PipelineStepContext context)
-    {
-        var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
-        return runtime as IContainerImageInspector
-            ?? throw new NotSupportedException($"Container runtime '{runtime.Name}' does not support image inspection, which is required for Azure sandbox deployment.");
-    }
-
-    internal static ContainerImageMetadata ParseContainerImageMetadata(string output, string imageReference)
-    {
-        JsonNode? config;
-        try
+        var runtime = await ResolveContainerRuntimeAsync(context).ConfigureAwait(false);
+        var result = await runtime.InspectImageConfigAsync(imageReference, context.CancellationToken).ConfigureAwait(false);
+        if (result.Status == ContainerImageInspectionStatus.Unsupported)
         {
-            config = JsonNode.Parse(output);
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException($"Container runtime returned invalid image metadata for '{imageReference}'.", ex);
+            throw new NotSupportedException(
+                $"Container runtime '{runtime.Name}' does not support image configuration inspection, which is required for Azure sandbox deployment.");
         }
 
-        if (config is not JsonObject configObject)
+        if (result.Status == ContainerImageInspectionStatus.Failed)
         {
-            throw new InvalidOperationException($"Container runtime did not return image metadata for '{imageReference}'.");
+            throw new InvalidOperationException(
+                result.ErrorMessage ?? $"Container runtime failed to inspect image configuration '{imageReference}'.");
+        }
+
+        if (!result.TryGetConfig(out var config))
+        {
+            throw new InvalidOperationException($"Container runtime did not return image configuration for '{imageReference}'.");
         }
 
         return new ContainerImageMetadata(
-            ReadCommandParts(configObject["Entrypoint"]).ToArray(),
-            ReadCommandParts(configObject["Cmd"]).ToArray(),
+            config.Entrypoint,
+            config.Command,
             new Dictionary<string, string>(StringComparer.Ordinal),
-            configObject["WorkingDir"]?.GetValue<string>());
+            config.WorkingDirectory);
     }
 
-    private static IEnumerable<string> ReadCommandParts(JsonNode? node)
+    private static Task<IContainerRuntime> ResolveContainerRuntimeAsync(PipelineStepContext context)
     {
-        switch (node)
-        {
-            case JsonArray array:
-                foreach (var item in array)
-                {
-                    if (item?.GetValue<string>() is { } value)
-                    {
-                        yield return value;
-                    }
-                }
-                break;
-            case JsonValue value when value.GetValue<string>() is { } command:
-                yield return command;
-                break;
-        }
+        return context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken);
     }
 
     private static async Task<IReadOnlyDictionary<string, string>> ResolveEnvironmentVariablesAsync(PipelineStepContext context, IResource resource)
