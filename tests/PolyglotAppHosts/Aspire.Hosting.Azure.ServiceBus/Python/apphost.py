@@ -1,10 +1,10 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import AzureResourceInfrastructure, create_builder
 
 
-def configure_provisioning(infrastructure):
+def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
     namespace = infrastructure.get_service_bus_namespace()
     namespace.tags.set("provisioning-proxy", "python")
 

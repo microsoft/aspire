@@ -7,7 +7,7 @@ void main() throws Exception {
         cosmos.configureInfrastructure((infrastructure) -> {
             var account = infrastructure.getCosmosDBAccount();
             account.tags().set("provisioning-proxy", "java");
-            var bypassResourceId = infrastructure.createResourceIdentifier(
+            var bypassResourceId = infrastructure.createCosmosDBResourceIdentifier(
                 "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass");
             account.networkAclBypassResourceIds().add(bypassResourceId);
         });

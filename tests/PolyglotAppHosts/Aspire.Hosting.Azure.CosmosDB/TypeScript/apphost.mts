@@ -8,7 +8,7 @@ await cosmos.configureInfrastructure(async infrastructure => {
     const account = await infrastructure.getCosmosDBAccount();
     const tags = await account.tags.get();
     await tags.set("provisioning-proxy", "typescript");
-    const bypassResourceId = await infrastructure.createResourceIdentifier(
+    const bypassResourceId = await infrastructure.createCosmosDBResourceIdentifier(
         "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass",
     );
     await account.networkAclBypassResourceIds.get().add(bypassResourceId);

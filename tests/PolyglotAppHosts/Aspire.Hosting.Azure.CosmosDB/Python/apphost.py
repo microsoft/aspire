@@ -7,7 +7,7 @@ from aspire_app import AzureResourceInfrastructure, create_builder
 def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
     account = infrastructure.get_cosmos_db_account()
     account.tags.set("provisioning-proxy", "python")
-    bypass_resource_id = infrastructure.create_resource_identifier(
+    bypass_resource_id = infrastructure.create_cosmos_db_resource_identifier(
         "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass"
     )
     account.network_acl_bypass_resource_ids.add(bypass_resource_id)
