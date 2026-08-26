@@ -4849,7 +4849,11 @@ internal sealed class RadiusInfrastructureBuilder
                 // BicepDictionary wraps each entry; a callback can leave a hole by assigning null.
                 if (entry?.Value is not { } envVar)
                 {
-                    continue;
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback left environment variable '{key}' on container " +
+                        $"'{container.ContainerMapKey}' with neither a 'value' nor a 'valueFrom.secretKeyRef'. The " +
+                        $"variable would be dropped from the deployed container. Assign either Value or the " +
+                        $"SecretName/SecretKey pair. Diagnostic: ASPIRERADIUS087.");
                 }
 
                 var hasValue = RenderBicepValue(envVar.Value) is not null;
