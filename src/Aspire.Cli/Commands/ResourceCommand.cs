@@ -221,6 +221,7 @@ internal sealed class ResourceCommand : BaseCommand
         {
             await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
+            return CommandResult.FromExitCode(CliExitCodes.InvalidCommand);
         }
 
         return CommandResult.FromExitCode(commandResult.ExitCode);
