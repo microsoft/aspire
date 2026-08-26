@@ -1,0 +1,2 @@
+Temporary marker used to validate an enforced job-only selection with no .NET tests.
+This pull request is a disposable canary and must not be merged.
