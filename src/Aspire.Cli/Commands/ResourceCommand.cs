@@ -163,10 +163,12 @@ internal sealed class ResourceCommand : BaseCommand
             return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
         }
 
+        (int ExitCode, ExecuteResourceCommandResponse Response) commandResult;
+
         // Use display metadata for well-known command names.
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
-            return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(
+            commandResult = await ResourceCommandHelper.ExecuteResourceCommandWithResponseAsync(
                 connection,
                 InteractionService,
                 _logger,
@@ -176,25 +178,27 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
                 commandArguments,
-                cancellationToken));
+                cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            commandResult = await ResourceCommandHelper.ExecuteGenericCommandWithResponseAsync(
+                connection,
+                InteractionService,
+                _logger,
+                resourceName,
+                commandName,
+                commandArguments,
+                cancellationToken).ConfigureAwait(false);
         }
 
-        var genericCommandResult = await ResourceCommandHelper.ExecuteGenericCommandWithResponseAsync(
-            connection,
-            InteractionService,
-            _logger,
-            resourceName,
-            commandName,
-            commandArguments,
-            cancellationToken).ConfigureAwait(false);
-
-        if (command is not null && IsHostingUnknownArgumentFailure(genericCommandResult.Response, commandName))
+        if (command is not null && IsHostingUnknownArgumentFailure(commandResult.Response, commandName))
         {
             await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
         }
 
-        return CommandResult.FromExitCode(genericCommandResult.ExitCode);
+        return CommandResult.FromExitCode(commandResult.ExitCode);
     }
 
     private static bool IsHostingUnknownArgumentFailure(ExecuteResourceCommandResponse response, string commandName)

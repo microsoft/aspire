@@ -40,6 +40,33 @@ internal static class ResourceCommandHelper
         JsonNode? arguments,
         CancellationToken cancellationToken)
     {
+        var result = await ExecuteResourceCommandWithResponseAsync(
+            connection,
+            interactionService,
+            logger,
+            resourceName,
+            commandName,
+            progressVerb,
+            baseVerb,
+            pastTenseVerb,
+            arguments,
+            cancellationToken).ConfigureAwait(false);
+
+        return result.ExitCode;
+    }
+
+    internal static async Task<(int ExitCode, ExecuteResourceCommandResponse Response)> ExecuteResourceCommandWithResponseAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IInteractionService interactionService,
+        ILogger logger,
+        string resourceName,
+        string commandName,
+        string progressVerb,
+        string baseVerb,
+        string pastTenseVerb,
+        JsonNode? arguments,
+        CancellationToken cancellationToken)
+    {
         logger.LogDebug("{Verb} resource '{ResourceName}'", progressVerb, resourceName);
 
         var response = await interactionService.ShowStatusAsync(
@@ -54,7 +81,7 @@ internal static class ResourceCommandHelper
                 },
                 cancellationToken));
 
-        return HandleResponse(response, interactionService, resourceName, commandName, progressVerb, baseVerb, pastTenseVerb);
+        return (HandleResponse(response, interactionService, resourceName, commandName, progressVerb, baseVerb, pastTenseVerb), response);
     }
 
     /// <summary>
