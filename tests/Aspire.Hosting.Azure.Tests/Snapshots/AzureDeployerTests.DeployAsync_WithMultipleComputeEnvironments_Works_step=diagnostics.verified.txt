@@ -248,7 +248,7 @@ Step: provision-cache-containerapp
 
 Step: provision-python-app-containerapp
     Description: Provisions the Azure Bicep resource python-app-containerapp using Azure infrastructure.
-    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env, ✓ provision-cache-containerapp, ✓ push-python-app
+    Dependencies: ✓ create-provisioning-context, ✓ provision-aca-env, ✓ push-python-app
     Resource: python-app-containerapp (AzureContainerAppResource)
     Tags: provision-infra
 
