@@ -55,6 +55,48 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
     }
 
     [Fact]
+    public async Task ResourceCommand_ExtensionErrorIsFlushedBeforeHelpIsWritten()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        "Configures the browser.",
+                        CreateArgument("message", description: "Message to send.", required: true)))
+            ]
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        TestExtensionInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => interactionService = new TestExtensionInteractionService(sp);
+        });
+        await using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --unknown value""");
+        var output = new FlushAssertingTextWriter(() => interactionService?.FlushAsyncCalled is true);
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.NotNull(interactionService);
+        Assert.True(interactionService.FlushAsyncCalled);
+        Assert.True(output.AssertedFlushBeforeWrite);
+        Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
+    }
+
+    [Fact]
     public async Task ResourceCommand_LoadArgumentsInvalidInputDoesNotWriteHumanHelp()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -124,6 +166,44 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
         Assert.Contains("Usage:", helpOutput);
         Assert.Contains("aspire resource web-browser-automation configure [options] [[--] <command-options>...]", helpOutput);
         Assert.Contains("Options:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HostingUnknownArgumentForWellKnownCommandShowsCommandSpecificHelp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringWriter();
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Unknown argument '--unknown value' for command 'start'."
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand("start", "Starts the resource."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation start --unknown value""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Contains("Unknown argument '--unknown value' for command 'start'.", Assert.Single(interactionService.DisplayedErrors));
+
+        var helpOutput = output.ToString();
+        Assert.Contains("Starts the resource.", helpOutput);
+        Assert.Contains("Usage:", helpOutput);
+        Assert.Contains("aspire resource web-browser-automation start [options] [[--] <command-options>...]", helpOutput);
     }
 
     [Fact]
@@ -209,5 +289,17 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
             InputType = "Text",
             Required = required
         };
+    }
+
+    private sealed class FlushAssertingTextWriter(Func<bool> isFlushed) : StringWriter
+    {
+        public bool AssertedFlushBeforeWrite { get; private set; }
+
+        public override void WriteLine(string? value)
+        {
+            Assert.True(isFlushed(), "Extension interactions must be flushed before command help is written.");
+            AssertedFlushBeforeWrite = true;
+            base.WriteLine(value);
+        }
     }
 }
