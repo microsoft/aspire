@@ -606,6 +606,14 @@ public static class AzureKubernetesEnvironmentExtensions
             };
         }
 
+        if (aksResource.AzureFileStorageAccounts.Count > 0)
+        {
+            aks.StorageProfile = new ManagedClusterStorageProfile
+            {
+                IsFileCsiDriverEnabled = true
+            };
+        }
+
         // Private cluster
         if (aksResource.IsPrivateCluster)
         {

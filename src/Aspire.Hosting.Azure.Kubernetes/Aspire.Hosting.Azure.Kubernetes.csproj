@@ -22,10 +22,12 @@
     <PackageReference Include="Azure.Provisioning.ContainerService" />
     <PackageReference Include="Azure.Provisioning.Network" />
     <PackageReference Include="Azure.Provisioning.OperationalInsights" />
+    <PackageReference Include="Azure.Provisioning.Storage" />
     <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.OperationalInsights\Aspire.Hosting.Azure.OperationalInsights.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Storage\Aspire.Hosting.Azure.Storage.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Kubernetes\Aspire.Hosting.Kubernetes.csproj" />
   </ItemGroup>
 

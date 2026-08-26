@@ -1,0 +1,6 @@
+﻿parameters: {}
+secrets: {}
+config:
+  data:
+    storage_outputs_resourceGroupName: ""
+    storage_outputs_name: ""

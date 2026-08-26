@@ -65,6 +65,44 @@ await myService.withKubernetesPersistentVolumeMount(data, "/data");
 
 When no storage class is specified, the generated claim uses the cluster's default storage class. A standard AKS cluster dynamically provisions an Azure managed disk. To request Premium SSD storage explicitly, call `WithStorageClass("managed-csi-premium")` in C# or `withStorageClass("managed-csi-premium")` in TypeScript.
 
+#### Azure file shares
+
+Use a statically provisioned Azure file share for shared, persistent storage. This
+uses the AKS kubelet managed identity and does not create a Kubernetes Secret or
+use a storage account key.
+
+**C#**
+
+```csharp
+var files = builder.AddAzureStorage("storage").AddFiles("files");
+var share = files.AddFileShare("media-share", "media");
+
+var media = aks.AddPersistentVolume("media-volume")
+    .WithAzureFileShare(share)
+    .WithCapacity("100Gi");
+
+myService.WithPersistentVolume(media, "/srv/media");
+```
+
+**TypeScript**
+
+```typescript
+const storage = await builder.addAzureStorage("storage");
+const files = await storage.addFiles("files");
+const share = await files.addFileShare("media-share", { fileShareName: "media" });
+
+const media = await aks.addPersistentVolume("media-volume");
+await media.withAzureFileShare(share);
+await media.withCapacity("100Gi");
+
+await myService.withKubernetesPersistentVolumeMount(media, "/srv/media");
+```
+
+Managed identity mounts require AKS 1.34 or later on Linux nodes. Storage accounts
+created by Aspire enable SMB OAuth and disable shared key authentication. Existing
+storage accounts and file shares are not modified and must already meet those
+authentication requirements.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

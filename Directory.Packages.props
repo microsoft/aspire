@@ -62,7 +62,7 @@
     <PackageVersion Include="Azure.Provisioning.ServiceBus" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.SignalR" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.Sql" Version="1.1.0" />
-    <PackageVersion Include="Azure.Provisioning.Storage" Version="1.1.2" />
+    <PackageVersion Include="Azure.Provisioning.Storage" Version="1.2.0-beta.1" />
     <PackageVersion Include="Azure.Provisioning.WebPubSub" Version="1.1.0" />
     <PackageVersion Include="Azure.ResourceManager.Authorization" Version="1.1.6" />
     <PackageVersion Include="Azure.ResourceManager.KeyVault" Version="1.4.0" />

@@ -221,6 +221,11 @@ const aks = await builder.addAzureKubernetesEnvironment("aks");
 await aks.addNodePool("system", { vmSize: AksNodeVmSizes.StandardDSv5.StandardD2sV5 });
 const aksVolume = await aks.addPersistentVolume("aks-data");
 await aksVolume.withCapacity("20Gi");
+const aksStorage = await builder.addAzureStorage("aks-storage");
+const aksFiles = await aksStorage.addFiles("aks-files");
+const aksShare = await aksFiles.addFileShare("aks-share", { fileShareName: "shared" });
+const aksFilesVolume = await aks.addPersistentVolume("aks-files-volume");
+await aksFilesVolume.withAzureFileShare(aksShare);
 
 // ===================================================================
 // Application pipeline on builder

@@ -14,16 +14,16 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(60);
 
     [Fact]
-    public async Task DeployAksPersistentVolumeSurvivesRedeploy()
+    public async Task DeployAksPersistentVolumesSurviveRedeploy()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
 
-        await DeployAksPersistentVolumeSurvivesRedeployCore(linkedCts.Token);
+        await DeployAksPersistentVolumesSurviveRedeployCore(linkedCts.Token);
     }
 
-    private async Task DeployAksPersistentVolumeSurvivesRedeployCore(CancellationToken cancellationToken)
+    private async Task DeployAksPersistentVolumesSurviveRedeployCore(CancellationToken cancellationToken)
     {
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
         if (string.IsNullOrEmpty(subscriptionId))
@@ -96,6 +96,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             // before setting the value consumed by the deployment pipeline.
             await auto.TypeAsync(
                 $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
+                $"export AZURE__SUBSCRIPTIONID={subscriptionId} && " +
                 $"export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
@@ -118,15 +119,17 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromMinutes(2));
 
-            await WaitForStatefulSetAndManagedDiskAsync(auto, counter);
+            await WaitForStatefulSetAndVolumesAsync(auto, counter);
+            await VerifyAzureFilesManagedIdentityAsync(auto, counter, resourceGroupName);
 
             await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 2000);
 
             await auto.RunCommandAsync(
                 "PVC_UID_BEFORE=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
+                "SHARED_PVC_UID_BEFORE=$(kubectl get persistentvolumeclaim shared-volume --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "POD_UID_BEFORE=$(kubectl get pod apiservice-statefulset-0 --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
-                "test -n \"$PVC_UID_BEFORE\" && test -n \"$POD_UID_BEFORE\" && " +
-                "echo \"First PVC UID: $PVC_UID_BEFORE\" && echo \"First pod UID: $POD_UID_BEFORE\"",
+                "test -n \"$PVC_UID_BEFORE\" && test -n \"$SHARED_PVC_UID_BEFORE\" && test -n \"$POD_UID_BEFORE\" && " +
+                "echo \"First PVC UIDs: disk=$PVC_UID_BEFORE files=$SHARED_PVC_UID_BEFORE\" && echo \"First pod UID: $POD_UID_BEFORE\"",
                 counter);
 
             var apiPort = GetAvailablePort();
@@ -137,6 +140,12 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 apiPort,
                 "?action=write",
                 "PASSED: wrote aks-pv-marker-42 revision first");
+            await VerifyApiResponseAsync(
+                auto,
+                counter,
+                apiPort,
+                "?action=write-shared",
+                "PASSED: wrote aks-files-marker-42 revision first");
             await StopPortForwardAsync(auto, counter);
 
             UpdateDeploymentRevision(appHostPath);
@@ -154,10 +163,12 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 3000);
             await auto.RunCommandAsync(
                 "PVC_UID_AFTER=$(kubectl get persistentvolumeclaim data --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
+                "SHARED_PVC_UID_AFTER=$(kubectl get persistentvolumeclaim shared-volume --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "POD_UID_AFTER=$(kubectl get pod apiservice-statefulset-0 --namespace \"$NS\" -o jsonpath='{.metadata.uid}') && " +
                 "test \"$PVC_UID_AFTER\" = \"$PVC_UID_BEFORE\" && " +
+                "test \"$SHARED_PVC_UID_AFTER\" = \"$SHARED_PVC_UID_BEFORE\" && " +
                 "test \"$POD_UID_AFTER\" != \"$POD_UID_BEFORE\" && " +
-                "echo \"Redeploy reused PVC $PVC_UID_AFTER and replaced pod $POD_UID_BEFORE with $POD_UID_AFTER\"",
+                "echo \"Redeploy reused PVCs $PVC_UID_AFTER and $SHARED_PVC_UID_AFTER, and replaced pod $POD_UID_BEFORE with $POD_UID_AFTER\"",
                 counter);
 
             apiPort = GetAvailablePort();
@@ -168,6 +179,12 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 apiPort,
                 "?action=read",
                 "PASSED: read aks-pv-marker-42 revision second");
+            await VerifyApiResponseAsync(
+                auto,
+                counter,
+                apiPort,
+                "?action=read-shared",
+                "PASSED: read aks-files-marker-42 revision second");
             await VerifyApiResponseAsync(
                 auto,
                 counter,
@@ -184,7 +201,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
 
             var duration = DateTime.UtcNow - startTime;
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployAksPersistentVolumeSurvivesRedeploy),
+                nameof(DeployAksPersistentVolumesSurviveRedeploy),
                 resourceGroupName,
                 deploymentUrls,
                 duration);
@@ -194,7 +211,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             var duration = DateTime.UtcNow - startTime;
             output.WriteLine($"Test failed after {duration}: {ex.Message}");
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployAksPersistentVolumeSurvivesRedeploy),
+                nameof(DeployAksPersistentVolumesSurviveRedeploy),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
@@ -229,6 +246,12 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             // which dynamically provisions an Azure Managed Disk.
             var data = aks.AddPersistentVolume("data")
                 .WithCapacity("1Gi");
+
+            var files = builder.AddAzureStorage("storage").AddFiles("files");
+            var share = files.AddFileShare("shared-files-share", "shared-files");
+            var sharedData = aks.AddPersistentVolume("shared-volume")
+                .WithAzureFileShare(share)
+                .WithCapacity("5Gi");
             """,
             appHostPath);
 
@@ -238,6 +261,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             """
             builder.AddProject<Projects.AksPersistentVolume_ApiService>("apiservice")
                 .WithPersistentVolume(data, "/srv/data")
+                .WithPersistentVolume(sharedData, "/srv/shared")
                 .WithEnvironment("DEPLOYMENT_REVISION", "first")
             """,
             appHostPath);
@@ -279,6 +303,8 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             const string markerPath = "/srv/data/marker.txt";
             const string newMarkerPath = "/srv/data/new-marker.txt";
             const string markerToken = "aks-pv-marker-42";
+            const string sharedMarkerPath = "/srv/shared/marker.txt";
+            const string sharedMarkerToken = "aks-files-marker-42";
             var deploymentRevision = app.Configuration["DEPLOYMENT_REVISION"]
                 ?? throw new InvalidOperationException("DEPLOYMENT_REVISION is not configured.");
 
@@ -313,7 +339,30 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                     return Results.Ok($"PASSED: wrote new {markerToken} revision {deploymentRevision}");
                 }
 
-                return Results.BadRequest("FAILED: action must be write, read, or write-new");
+                if (action == "write-shared")
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(sharedMarkerPath)!);
+                    await File.WriteAllTextAsync(sharedMarkerPath, sharedMarkerToken);
+                    return Results.Ok($"PASSED: wrote {sharedMarkerToken} revision {deploymentRevision}");
+                }
+
+                if (action == "read-shared")
+                {
+                    if (!File.Exists(sharedMarkerPath))
+                    {
+                        return Results.NotFound("FAILED: shared marker file was not found");
+                    }
+
+                    var persistedValue = await File.ReadAllTextAsync(sharedMarkerPath);
+                    if (persistedValue != sharedMarkerToken)
+                    {
+                        return Results.Problem($"FAILED: expected {sharedMarkerToken}, got {persistedValue}");
+                    }
+
+                    return Results.Ok($"PASSED: read {persistedValue} revision {deploymentRevision}");
+                }
+
+                return Results.BadRequest("FAILED: action must be write, read, write-new, write-shared, or read-shared");
             });
 
             app.MapDefaultEndpoints();
@@ -321,7 +370,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             """);
     }
 
-    private static async Task WaitForStatefulSetAndManagedDiskAsync(
+    private static async Task WaitForStatefulSetAndVolumesAsync(
         Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
@@ -341,9 +390,50 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             counter,
             TimeSpan.FromMinutes(6));
         await auto.RunCommandAsync(
+            "phase=''; for i in $(seq 1 60); do " +
+            "phase=$(kubectl get persistentvolumeclaim shared-volume --namespace \"$NS\" -o jsonpath='{.status.phase}' 2>/dev/null || true); " +
+            "if [ \"$phase\" = \"Bound\" ]; then break; fi; sleep 5; done; " +
+            "test \"$phase\" = \"Bound\" && " +
+            "PV_NAME=$(kubectl get persistentvolumeclaim shared-volume --namespace \"$NS\" -o jsonpath='{.spec.volumeName}') && " +
+            "test \"$PV_NAME\" = \"shared-volume-pv\" && " +
+            "test \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.driver}')\" = \"file.csi.azure.com\" && " +
+            "test \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.volumeAttributes.mountWithManagedIdentity}')\" = \"true\" && " +
+            "test -z \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.nodeStageSecretRef.name}')\" && " +
+            "echo \"PVC shared-volume is Bound to managed-identity Azure Files PV $PV_NAME\"",
+            counter,
+            TimeSpan.FromMinutes(6));
+        await auto.RunCommandAsync(
             "kubectl wait --for=condition=Ready pod/apiservice-statefulset-0 --namespace \"$NS\" --timeout=5m",
             counter,
             TimeSpan.FromMinutes(6));
+    }
+
+    private static async Task VerifyAzureFilesManagedIdentityAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string resourceGroupName)
+    {
+        await auto.RunCommandAsync(
+            $"STORAGE_ACCOUNT=$(az storage account list --resource-group {resourceGroupName} " +
+            "--query '[0].name' --output tsv) && " +
+            "test -n \"$STORAGE_ACCOUNT\" && " +
+            $"SMB_OAUTH=$(az storage account show --resource-group {resourceGroupName} --name \"$STORAGE_ACCOUNT\" " +
+            "--query 'azureFilesIdentityBasedAuthentication.smbOAuthSettings.isSmbOAuthEnabled' --output tsv) && " +
+            $"SHARED_KEY=$(az storage account show --resource-group {resourceGroupName} --name \"$STORAGE_ACCOUNT\" " +
+            "--query 'allowSharedKeyAccess' --output tsv) && " +
+            "test \"$SMB_OAUTH\" = \"true\" && test \"$SHARED_KEY\" = \"false\" && " +
+            "KUBELET_OBJECT_ID=$(az aks show --resource-group " + resourceGroupName + " --name \"$AKS_NAME\" " +
+            "--query 'identityProfile.kubeletidentity.objectId' --output tsv) && " +
+            $"STORAGE_ID=$(az storage account show --resource-group {resourceGroupName} --name \"$STORAGE_ACCOUNT\" --query id --output tsv) && " +
+            "ROLE_COUNT=$(az role assignment list --assignee-object-id \"$KUBELET_OBJECT_ID\" --scope \"$STORAGE_ID\" " +
+            "--query \"[?roleDefinitionName=='Storage File Data SMB MI Admin'] | length(@)\" --output tsv) && " +
+            "test \"$ROLE_COUNT\" = \"1\" && " +
+            "MOUNT_LINE=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- " +
+            "sh -c \"grep ' /srv/shared cifs ' /proc/mounts\") && " +
+            "printf '%s' \"$MOUNT_LINE\" | grep --fixed-strings --quiet 'sec=krb5' && " +
+            "echo \"Azure Files uses SMB OAuth with shared keys disabled; kubelet role and Kerberos mount verified\"",
+            counter,
+            TimeSpan.FromMinutes(5));
     }
 
     private static async Task VerifyFileSystemGroupAsync(
@@ -397,7 +487,8 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
         int port)
     {
         await auto.RunCommandAsync(
-            $"kubectl port-forward service/apiservice-service {port}:8080 --namespace \"$NS\" >/tmp/aks-pv-port-forward.log 2>&1 & PORT_FORWARD_PID=$!; " +
+            $"kubectl port-forward service/apiservice-service {port}:8080 --namespace \"$NS\" >/tmp/aks-pv-port-forward.log 2>&1 & " +
+            "PORT_FORWARD_PID=$(jobs -pr | tail -n 1); " +
             "test -n \"$PORT_FORWARD_PID\"",
             counter);
     }

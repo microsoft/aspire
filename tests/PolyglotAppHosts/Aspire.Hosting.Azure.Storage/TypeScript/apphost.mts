@@ -22,5 +22,7 @@ await storage.addTables("tables");
 await storage.addQueues("queues");
 await storage.addQueue("orders");
 await storage.addBlobContainer("images");
+const files = await storage.addFiles("files");
+await files.addFileShare("media");
 
 await builder.build().run();

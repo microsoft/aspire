@@ -166,6 +166,11 @@ public partial class AzureKubernetesEnvironmentResource :
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
 
     /// <summary>
+    /// Gets the Azure Storage accounts that back static Azure Files persistent volumes.
+    /// </summary>
+    internal Dictionary<string, AzureStorageResource> AzureFileStorageAccounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets the load balancer resources registered against this AKS environment via
     /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>. Used by
     /// the Bicep emission to synthesize per-LB role assignments granting the

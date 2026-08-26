@@ -20,5 +20,7 @@ void main() throws Exception {
         storage.addQueues("queues");
         storage.addQueue("orders");
         storage.addBlobContainer("images");
+        var files = storage.addFiles("files");
+        files.addFileShare("media");
         builder.build().run();
     }

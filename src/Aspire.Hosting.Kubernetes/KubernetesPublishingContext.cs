@@ -136,12 +136,15 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
-        // Write first-class persistent volume resources as standalone PVC templates.
+        // Write first-class persistent volume resources as standalone PV/PVC templates.
         foreach (var volumeResource in resources.OfType<KubernetesPersistentVolumeResource>())
         {
             if (volumeResource.Parent == environment && volumeResource.GeneratedClaim is { } generatedClaim)
             {
-                await WriteKubernetesTemplatesForResource(volumeResource, [generatedClaim]).ConfigureAwait(false);
+                var generatedResources = volumeResource.GeneratedVolume is { } generatedVolume
+                    ? new BaseKubernetesResource[] { generatedVolume, generatedClaim }
+                    : [generatedClaim];
+                await WriteKubernetesTemplatesForResource(volumeResource, generatedResources).ConfigureAwait(false);
             }
         }
 
@@ -167,20 +170,30 @@ internal sealed class KubernetesPublishingContext(
     {
         foreach (var captured in environment.CapturedHelmValues)
         {
-            if (!_helmValues.TryGetValue(captured.Section, out var section))
-            {
-                continue;
-            }
-
-            if (!section.TryGetValue(captured.ResourceKey, out var resourceObj) ||
-                resourceObj is not Dictionary<string, object> resourceSection)
-            {
-                resourceSection = new Dictionary<string, object>();
-                section[captured.ResourceKey] = resourceSection;
-            }
-
-            resourceSection.TryAdd(captured.ValueKey, string.Empty);
+            EnsureCapturedHelmValuePlaceholder(captured.Section, captured.ResourceKey, captured.ValueKey);
         }
+
+        foreach (var captured in environment.CapturedHelmValueProviders)
+        {
+            EnsureCapturedHelmValuePlaceholder(captured.Section, captured.ResourceKey, captured.ValueKey);
+        }
+    }
+
+    private void EnsureCapturedHelmValuePlaceholder(string sectionName, string resourceKey, string valueKey)
+    {
+        if (!_helmValues.TryGetValue(sectionName, out var section))
+        {
+            return;
+        }
+
+        if (!section.TryGetValue(resourceKey, out var resourceObj) ||
+            resourceObj is not Dictionary<string, object> resourceSection)
+        {
+            resourceSection = new Dictionary<string, object>();
+            section[resourceKey] = resourceSection;
+        }
+
+        resourceSection.TryAdd(valueKey, string.Empty);
     }
 
     private async Task AppendResourceContextToHelmValuesAsync(IResource resource, KubernetesResource resourceContext)
