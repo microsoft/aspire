@@ -91,11 +91,10 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
-    public async Task ExecuteAsync_DeploymentConcurrencyGroupPreventsConcurrentSteps()
+    public async Task ExecuteAsync_EqualDeploymentConcurrencyGroupNamesPreventConcurrentSteps()
     {
         using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
-        var group = new DeploymentConcurrencyGroup();
         var releaseSteps = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstStepEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var activeSteps = 0;
@@ -124,7 +123,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
                     Interlocked.Decrement(ref activeSteps);
                 }
             };
-            step.DeploymentConcurrencyGroups.Add(group);
+            step.DeploymentConcurrencyGroups.Add(new DeploymentConcurrencyGroup("shared"));
             pipeline.AddStep(step);
         }
 
@@ -146,8 +145,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
-        var groupA = new DeploymentConcurrencyGroup();
-        var groupB = new DeploymentConcurrencyGroup();
+        var groupA = new DeploymentConcurrencyGroup("group-a");
+        var groupB = new DeploymentConcurrencyGroup("group-b");
         var holderAStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var holderBStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var waitersMayQueue = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -226,7 +225,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     {
         using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
         var failingStepStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var independentStepExecuted = false;
         var failingStep = new PipelineStep
@@ -269,7 +268,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public void FilterStepsForExecution_DoesNotAddConcurrencyDependencies()
     {
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
         var step1 = new PipelineStep { Name = "step1", Action = _ => Task.CompletedTask };
         step1.DeploymentConcurrencyGroups.Add(group);
         var step2 = new PipelineStep { Name = "step2", Action = _ => Task.CompletedTask };
@@ -296,7 +295,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ResolveStepsAsync_WithReplacedDeploymentTarget_AssignsConcurrencyGroup(bool hasProvisionStep)
     {
         using var builder = CreatePipelineTestBuilder();
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
         var deploymentTarget = new CustomResource("target");
         var replacementTarget = new CustomResource("target");
         var deploymentTargetAnnotation = new DeploymentTargetAnnotation(deploymentTarget);
@@ -333,7 +332,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ResolveStepsAsync_WithMultipleMatchingDeploymentSteps_AssignsGroupToEveryStep(bool hasProvisionSteps)
     {
         using var builder = CreatePipelineTestBuilder();
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
         var target = new CustomResource("target");
         target.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(group));
 
@@ -372,8 +371,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ResolveStepsAsync_WithAnnotatedNonComputeResource_AssignsAllConcurrencyGroups()
     {
         using var builder = CreatePipelineTestBuilder();
-        var firstGroup = new DeploymentConcurrencyGroup();
-        var secondGroup = new DeploymentConcurrencyGroup();
+        var firstGroup = new DeploymentConcurrencyGroup("first");
+        var secondGroup = new DeploymentConcurrencyGroup("second");
         var resource = builder.AddResource(new CustomResource("artifact-source")).Resource;
         resource.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(firstGroup));
         resource.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(secondGroup));
@@ -402,8 +401,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ResolveStepsAsync_WithReusedFactoryStep_RebuildsConcurrencyGroups()
     {
         using var builder = CreatePipelineTestBuilder();
-        var firstGroup = new DeploymentConcurrencyGroup();
-        var secondGroup = new DeploymentConcurrencyGroup();
+        var firstGroup = new DeploymentConcurrencyGroup("first");
+        var secondGroup = new DeploymentConcurrencyGroup("second");
         var firstGroupAnnotation = new DeploymentConcurrencyGroupAnnotation(firstGroup);
         var resource = new CustomResource("artifact-source");
         resource.Annotations.Add(firstGroupAnnotation);
@@ -470,7 +469,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = CreatePipelineTestBuilder(
             step: WellKnownPipelineSteps.Diagnostics,
             activityReporter: reporter);
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
 
         AddDeploymentTarget("app1", "target1");
         AddDeploymentTarget("app2", "target2");
@@ -527,7 +526,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WithTargetedConcurrencyGroupMember_DoesNotExecutePeer()
     {
         using var builder = CreatePipelineTestBuilder(step: "provision-target2");
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
         var executedSteps = new List<string>();
 
         AddComputeResource("app1", "target1");

@@ -47,7 +47,7 @@ public class AppHostRpcTargetPipelineTests
 
     private static void AddGroupedDeploymentTargets(IDistributedApplicationBuilder builder)
     {
-        var group = new DeploymentConcurrencyGroup();
+        var group = new DeploymentConcurrencyGroup("shared");
         AddDeploymentTarget("app1", "target1");
         AddDeploymentTarget("app2", "target2");
 
