@@ -22,9 +22,12 @@ internal enum ProvisioningValueType
 [AspireExport]
 internal sealed class ProvisioningParameterProxy
 {
-    internal ProvisioningParameterProxy(ProvisioningParameter value)
+    private readonly Type _valueType;
+
+    internal ProvisioningParameterProxy(ProvisioningParameter value, Type valueType)
     {
         Inner = value;
+        _valueType = valueType;
     }
 
     internal ProvisioningParameter Inner { get; }
@@ -33,7 +36,7 @@ internal sealed class ProvisioningParameterProxy
     internal BicepValueProxy Value
     {
         get => BicepValueProxy.Create(Inner.Value);
-        set => value.AssignTo(Inner.Value);
+        set => value.AssignTo(Inner.Value, _valueType);
     }
 
     [AspireExport]
@@ -47,9 +50,12 @@ internal sealed class ProvisioningParameterProxy
 [AspireExport]
 internal sealed class ProvisioningOutputProxy
 {
-    internal ProvisioningOutputProxy(ProvisioningOutput value)
+    private readonly Type _valueType;
+
+    internal ProvisioningOutputProxy(ProvisioningOutput value, Type valueType)
     {
         Inner = value;
+        _valueType = valueType;
     }
 
     internal ProvisioningOutput Inner { get; }
@@ -58,16 +64,19 @@ internal sealed class ProvisioningOutputProxy
     internal BicepValueProxy Value
     {
         get => BicepValueProxy.Create(Inner.Value);
-        set => value.AssignTo(Inner.Value);
+        set => value.AssignTo(Inner.Value, _valueType);
     }
 }
 
 [AspireExport]
 internal sealed class ProvisioningVariableProxy
 {
-    internal ProvisioningVariableProxy(ProvisioningVariable value)
+    private readonly Type _valueType;
+
+    internal ProvisioningVariableProxy(ProvisioningVariable value, Type valueType)
     {
         Inner = value;
+        _valueType = valueType;
     }
 
     internal ProvisioningVariable Inner { get; }
@@ -76,7 +85,7 @@ internal sealed class ProvisioningVariableProxy
     internal BicepValueProxy Value
     {
         get => BicepValueProxy.Create(Inner.Value);
-        set => value.AssignTo(Inner.Value);
+        set => value.AssignTo(Inner.Value, _valueType);
     }
 }
 
@@ -92,12 +101,13 @@ internal static class ProvisioningDeclarationExtensions
         ArgumentNullException.ThrowIfNull(infrastructure);
         ArgumentException.ThrowIfNullOrEmpty(bicepIdentifier);
 
-        var parameter = new ProvisioningParameter(bicepIdentifier, GetSystemType(type))
+        var valueType = GetSystemType(type);
+        var parameter = new ProvisioningParameter(bicepIdentifier, valueType)
         {
             IsSecure = isSecure
         };
         infrastructure.Add(parameter);
-        return new(parameter);
+        return new(parameter, valueType);
     }
 
     [AspireExport]
@@ -109,9 +119,10 @@ internal static class ProvisioningDeclarationExtensions
         ArgumentNullException.ThrowIfNull(infrastructure);
         ArgumentException.ThrowIfNullOrEmpty(bicepIdentifier);
 
-        var output = new ProvisioningOutput(bicepIdentifier, GetSystemType(type));
+        var valueType = GetSystemType(type);
+        var output = new ProvisioningOutput(bicepIdentifier, valueType);
         infrastructure.Add(output);
-        return new(output);
+        return new(output, valueType);
     }
 
     [AspireExport]
@@ -123,9 +134,10 @@ internal static class ProvisioningDeclarationExtensions
         ArgumentNullException.ThrowIfNull(infrastructure);
         ArgumentException.ThrowIfNullOrEmpty(bicepIdentifier);
 
-        var variable = new ProvisioningVariable(bicepIdentifier, GetSystemType(type));
+        var valueType = GetSystemType(type);
+        var variable = new ProvisioningVariable(bicepIdentifier, valueType);
         infrastructure.Add(variable);
-        return new(variable);
+        return new(variable, valueType);
     }
 
     private static Type GetSystemType(ProvisioningValueType type)

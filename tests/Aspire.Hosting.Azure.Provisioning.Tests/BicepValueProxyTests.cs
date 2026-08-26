@@ -145,6 +145,25 @@ public class BicepValueProxyTests
     }
 
     [Fact]
+    public void DeclarationProxiesValidateConfiguredLiteralType()
+    {
+        var infrastructure = CreateInfrastructure();
+        var parameter = infrastructure.AddBicepParameter("parameter", ProvisioningValueType.Integer);
+        var output = infrastructure.AddBicepOutput("output", ProvisioningValueType.Integer);
+        var variable = infrastructure.AddBicepVariable("variable", ProvisioningValueType.Integer);
+
+        AssertDeclarationTypeValidation(
+            value => parameter.Value = value,
+            () => parameter.Inner.Value);
+        AssertDeclarationTypeValidation(
+            value => output.Value = value,
+            () => output.Inner.Value);
+        AssertDeclarationTypeValidation(
+            value => variable.Value = value,
+            () => variable.Inner.Value);
+    }
+
+    [Fact]
     public void InterpolatedValuePreservesExpressionAndSecurity()
     {
         var secureValue = BicepValueProxy.Create(
@@ -209,5 +228,21 @@ public class BicepValueProxyTests
         Assert.NotNull(constructor);
 
         return (AzureResourceInfrastructure)constructor.Invoke([new AzureProvisioningResource("test", _ => { }), "test"]);
+    }
+
+    private static void AssertDeclarationTypeValidation(
+        Action<BicepValueProxy> assign,
+        Func<IBicepValue> getAssignedValue)
+    {
+        assign(BicepValueProxy.Create(new BicepValue<int>(42)));
+        Assert.Equal(42, getAssignedValue().LiteralValue);
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => assign(BicepValueProxy.Create(new BicepValue<string>("text"))));
+
+        Assert.Equal(
+            "A literal of type String cannot be assigned to a BicepValue<Int32>.",
+            exception.Message);
+        Assert.Equal(42, getAssignedValue().LiteralValue);
     }
 }

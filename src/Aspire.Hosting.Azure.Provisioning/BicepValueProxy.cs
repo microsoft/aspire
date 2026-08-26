@@ -97,6 +97,15 @@ public sealed class BicepValueProxy
         ((IBicepValue)target).Assign(GetAssignableValue());
     }
 
+    internal void AssignTo(BicepValue<object> target, Type literalType)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(literalType);
+
+        EnsureLiteralType(literalType);
+        AssignTo(target);
+    }
+
     /// <summary>
     /// Converts a literal or proxy value to the requested Azure Provisioning value type.
     /// </summary>
@@ -145,12 +154,16 @@ public sealed class BicepValueProxy
 
     private void EnsureLiteralType<T>()
     {
+        EnsureLiteralType(typeof(T));
+    }
+
+    private void EnsureLiteralType(Type targetType)
+    {
         if (_value.Kind != BicepValueKind.Literal)
         {
             return;
         }
 
-        var targetType = typeof(T);
         if (targetType.IsAssignableFrom(_valueType))
         {
             return;
