@@ -378,6 +378,36 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public void ConnectorTriggerRejectsReservedAccessPolicyCollision()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365")
+            .WithAccessPolicy(
+                "custom-access",
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    PolicyName = "gateway-acl",
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
+
+        Assert.Equal(
+            "Access policy name 'gateway-acl' is reserved for connector triggers on connector connection 'office365'.",
+            exception.Message);
+        Assert.False(Assert.Single(connection.Resource.AccessPolicies).UsesGatewayManagedIdentity);
+        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
+        Assert.Empty(connection.Resource.Parent.TriggerConfigs);
+    }
+
+    [Fact]
     public async Task AddAzureSandboxResourcesGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -516,7 +516,8 @@ public static class AzureSandboxesExtensions
     /// <param name="options">The optional trigger configuration.</param>
     /// <returns>A resource builder for the trigger configuration.</returns>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when the connection is existing, the callback endpoint is not external, or the physical trigger name is already registered.
+    /// Thrown when the connection is existing, the callback endpoint is not external, the physical trigger name is already registered,
+    /// or the reserved trigger access policy name is already in use.
     /// </exception>
     /// <remarks>
     /// The trigger is provisioned after the sandbox endpoint exists. The integration grants the
@@ -808,11 +809,17 @@ public static class AzureSandboxesExtensions
     private static void EnsureGatewayAccessPolicy(AzureConnectorGatewayConnectionResource connection)
     {
         const string accessPolicyName = "gateway-acl";
-        if (connection.AccessPolicies.Any(policy =>
-            string.Equals(policy.PolicyName, accessPolicyName, StringComparison.OrdinalIgnoreCase) &&
-            policy.UsesGatewayManagedIdentity))
+        var existingPolicy = connection.AccessPolicies.FirstOrDefault(policy =>
+            string.Equals(policy.PolicyName, accessPolicyName, StringComparison.OrdinalIgnoreCase));
+        if (existingPolicy?.UsesGatewayManagedIdentity == true)
         {
             return;
+        }
+
+        if (existingPolicy is not null)
+        {
+            throw new InvalidOperationException(
+                $"Access policy name '{accessPolicyName}' is reserved for connector triggers on connector connection '{connection.Name}'.");
         }
 
         // Connector event subscriptions run as the Connector Namespace system-assigned identity.
