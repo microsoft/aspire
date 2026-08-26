@@ -58,7 +58,12 @@ internal static class PathNormalizer
         var segments = path[root.Length..].Split(
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
-        var current = root;
+        // Windows APIs preserve the caller's drive-letter casing even while directory enumeration
+        // recovers every later component. Normalize the drive root so c:\foo and C:\foo produce
+        // the same canonical path and callers receive the conventional on-disk form.
+        var current = OperatingSystem.IsWindows() && root.Length >= 2 && root[1] == ':'
+            ? $"{char.ToUpperInvariant(root[0])}{root[1..]}"
+            : root;
         foreach (var segment in segments)
         {
             var candidate = Path.Combine(current, segment);
