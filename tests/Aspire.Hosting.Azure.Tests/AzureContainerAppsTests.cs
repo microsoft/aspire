@@ -3418,6 +3418,43 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AliasUsingProvisionedEnvironmentNameOutputSharesConcurrencyGroup()
+    {
+        const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        const string resourceGroup = "shared-rg";
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
+        builder.Configuration["Azure:ResourceGroup"] = resourceGroup;
+        builder.Configuration["Azure:Location"] = "eastus";
+
+        var provisioned = builder.AddAzureContainerAppEnvironment("provisioned");
+        var alias = builder.AddAzureContainerAppEnvironment("alias");
+        alias.Resource.Annotations.Add(new ExistingAzureResourceAnnotation(
+            provisioned.Resource.NameOutputReference));
+        var otherScope = builder.AddAzureContainerAppEnvironment("other-scope");
+        otherScope.Resource.Annotations.Add(new ExistingAzureResourceAnnotation(
+            provisioned.Resource.NameOutputReference,
+            "other-rg",
+            subscriptionId));
+
+        builder.AddContainer("api", "myimage").WithComputeEnvironment(provisioned);
+        builder.AddContainer("worker", "myimage").WithComputeEnvironment(alias);
+        builder.AddContainer("other-worker", "myimage").WithComputeEnvironment(otherScope);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
+        var otherWorkerGroup = GetDeploymentConcurrencyGroup(model, "other-worker");
+
+        Assert.Same(apiGroup, workerGroup);
+        Assert.NotSame(apiGroup, otherWorkerGroup);
+    }
+
+    [Fact]
     public async Task SingleContainerAppDeploymentTargetHasNoContainerAppReference()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

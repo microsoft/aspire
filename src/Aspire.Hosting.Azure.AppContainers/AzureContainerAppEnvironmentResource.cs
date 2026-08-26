@@ -28,6 +28,7 @@ public class AzureContainerAppEnvironmentResource :
     AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    private static readonly ResourceNameComparer s_resourceNameComparer = new();
     private readonly DeploymentConcurrencyGroup _deploymentConcurrencyGroup;
 
     /// <inheritdoc />
@@ -257,11 +258,6 @@ public class AzureContainerAppEnvironmentResource :
         IServiceProvider services,
         CancellationToken cancellationToken)
     {
-        if (!this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingResource))
-        {
-            return _deploymentConcurrencyGroup;
-        }
-
         var configuration = services.GetRequiredService<IConfiguration>();
         var currentSubscription = configuration["Azure:SubscriptionId"];
         var currentLocation = configuration["Azure:Location"];
@@ -280,9 +276,10 @@ public class AzureContainerAppEnvironmentResource :
             currentResourceGroup = await ResolveParameterValueAsync(azureEnvironment.ResourceGroupName, cancellationToken).ConfigureAwait(false);
         }
 
-        var existingEnvironments = new List<(
+        var environments = new List<(
             AzureContainerAppEnvironmentResource Environment,
-            (object? Name, object? Subscription, object? ResourceGroup) Identity)>();
+            (object? Name, object? Subscription, object? ResourceGroup) Identity,
+            bool IsExisting)>();
         foreach (var environment in model.Resources.OfType<AzureContainerAppEnvironmentResource>())
         {
             if (environment.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var resource))
@@ -292,41 +289,82 @@ public class AzureContainerAppEnvironmentResource :
                     currentSubscription,
                     currentResourceGroup,
                     cancellationToken).ConfigureAwait(false);
-                existingEnvironments.Add((environment, identity));
+                environments.Add((environment, identity, IsExisting: true));
+            }
+            else
+            {
+                environments.Add((
+                    environment,
+                    (environment.NameOutputReference, currentSubscription, currentResourceGroup),
+                    IsExisting: false));
             }
         }
 
         // The current deployment scope and parameter values can remain unresolved while deployment
         // targets are materialized. Treat only those unresolved parts as potentially matching explicit
-        // values. Because that relationship is not transitive, walk the connected component before
-        // choosing a canonical owner so model ordering cannot split potentially identical aliases.
+        // values. Existing environments can also reference a provisioned environment's name output,
+        // so include both kinds in the connected component before choosing a canonical owner.
         var possibleAliases = new HashSet<AzureContainerAppEnvironmentResource>(ReferenceEqualityComparer.Instance)
         {
             this
         };
-        var pendingAliases = new Queue<(object? Name, object? Subscription, object? ResourceGroup)>();
-        pendingAliases.Enqueue(existingEnvironments
-            .Single(candidate => ReferenceEquals(candidate.Environment, this))
-            .Identity);
+        var pendingAliases = new Queue<(
+            (object? Name, object? Subscription, object? ResourceGroup) Identity,
+            bool IsExisting)>();
+        var currentEnvironment = environments
+            .Single(candidate => ReferenceEquals(candidate.Environment, this));
+        pendingAliases.Enqueue((currentEnvironment.Identity, currentEnvironment.IsExisting));
 
         while (pendingAliases.TryDequeue(out var alias))
         {
-            foreach (var candidate in existingEnvironments)
+            foreach (var candidate in environments)
             {
                 if (!possibleAliases.Contains(candidate.Environment) &&
-                    ExistingResourceIdentityMayMatch(alias, candidate.Identity))
+                    EnvironmentIdentityMayMatch(
+                        alias.Identity,
+                        alias.IsExisting,
+                        candidate.Identity,
+                        candidate.IsExisting))
                 {
                     possibleAliases.Add(candidate.Environment);
-                    pendingAliases.Enqueue(candidate.Identity);
+                    pendingAliases.Enqueue((candidate.Identity, candidate.IsExisting));
                 }
             }
         }
 
-        var canonicalEnvironment = existingEnvironments
+        var canonicalEnvironment = environments
             .First(candidate => possibleAliases.Contains(candidate.Environment))
             .Environment;
 
         return canonicalEnvironment._deploymentConcurrencyGroup;
+    }
+
+    private static bool EnvironmentIdentityMayMatch(
+        (object? Name, object? Subscription, object? ResourceGroup) left,
+        bool leftIsExisting,
+        (object? Name, object? Subscription, object? ResourceGroup) right,
+        bool rightIsExisting)
+    {
+        if (leftIsExisting && rightIsExisting)
+        {
+            return ExistingResourceIdentityMayMatch(left, right);
+        }
+
+        if (leftIsExisting == rightIsExisting)
+        {
+            return false;
+        }
+
+        var existing = leftIsExisting ? left : right;
+        var provisioned = leftIsExisting ? right : left;
+
+        // Resource transformations can replace the output owner while preserving its logical identity.
+        return ExistingResourceIdentityPartMayMatch(existing.Subscription, provisioned.Subscription) &&
+               ExistingResourceIdentityPartMayMatch(existing.ResourceGroup, provisioned.ResourceGroup) &&
+               existing.Name is BicepOutputReference existingName &&
+               provisioned.Name is BicepOutputReference provisionedName &&
+               string.Equals(existingName.Name, provisionedName.Name, StringComparison.Ordinal) &&
+               s_resourceNameComparer.Equals(existingName.Resource, provisionedName.Resource);
     }
 
     private static async ValueTask<(object? Name, object? Subscription, object? ResourceGroup)> ResolveExistingResourceIdentityAsync(

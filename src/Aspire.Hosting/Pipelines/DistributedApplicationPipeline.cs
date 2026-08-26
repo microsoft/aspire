@@ -1399,7 +1399,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         sb.AppendLine();
         sb.AppendLine("EXECUTION SIMULATION (\"What If\" Analysis):");
         sb.AppendLine("Shows what steps would run for each possible target step and in what order.");
-        sb.AppendLine("Steps at the same level can run concurrently.");
+        sb.AppendLine("Steps at the same level have no dependency ordering, but deployment concurrency groups may still limit concurrent execution.");
         sb.AppendLine("─────────────────────────────────────────────────────────────────────────────");
 
         // Show execution simulation for each step as a potential target
