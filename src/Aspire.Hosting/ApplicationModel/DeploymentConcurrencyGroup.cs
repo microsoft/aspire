@@ -6,14 +6,14 @@ using System.Diagnostics.CodeAnalysis;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Defines a group of deployment targets that share a concurrency limit.
+/// Defines a group of resource deployment operations that share a concurrency limit.
 /// </summary>
 /// <remarks>
-/// Share the same group instance across the <see cref="DeploymentTargetAnnotation"/> values whose
-/// deployment operations consume the same limited capacity. A deployment target can participate in
-/// multiple groups, and publishers should enforce every applicable group. Group membership is determined
-/// by reference identity. Publishers lower group membership into their native scheduling dependencies
-/// before serializing deployment artifacts, so group identity does not become an artifact-level contract.
+/// Share the same group instance across the <see cref="DeploymentConcurrencyGroupAnnotation"/> values
+/// whose deployment operations consume the same limited capacity. A resource can participate in multiple
+/// groups, and publishers should enforce every applicable group. Group membership is determined by
+/// reference identity. Publishers lower group membership into their native scheduling dependencies before
+/// serializing deployment artifacts, so group identity does not become an artifact-level contract.
 /// </remarks>
 [Experimental("ASPIRECOMPUTE004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DeploymentConcurrencyGroup

@@ -55,7 +55,7 @@ public class AppHostRpcTargetPipelineTests
         {
             var target = new ContainerResource(targetName);
             var deploymentTarget = new DeploymentTargetAnnotation(target);
-            deploymentTarget.DeploymentConcurrencyGroups.Add(group);
+            target.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(group));
 
             var resource = builder.AddContainer(resourceName, "myimage").Resource;
             resource.Annotations.Add(deploymentTarget);

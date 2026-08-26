@@ -25,4 +25,23 @@ public class DeploymentConcurrencyGroupTests
 
         Assert.Equal(nameof(maxConcurrentDeployments), exception.ParamName);
     }
+
+    [Fact]
+    public void AnnotationConstructorInitializesGroup()
+    {
+        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
+
+        var annotation = new DeploymentConcurrencyGroupAnnotation(group);
+
+        Assert.Same(group, annotation.Group);
+    }
+
+    [Fact]
+    public void AnnotationConstructorRejectsNullGroup()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => new DeploymentConcurrencyGroupAnnotation(null!));
+
+        Assert.Equal("group", exception.ParamName);
+    }
 }
