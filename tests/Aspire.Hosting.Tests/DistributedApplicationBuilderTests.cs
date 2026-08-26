@@ -123,6 +123,12 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
               "Validation": {
                 "BaseOnly": "base",
                 "Override": "base"
+              },
+              "Logging": {
+                "LogLevel": {
+                  "Microsoft.AspNetCore": "Debug",
+                  "Aspire.Hosting.Dcp": "Trace"
+                }
               }
             }
             """);
@@ -146,6 +152,25 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
         Assert.Equal(projectDirectory, appBuilder.Environment.ContentRootPath);
         Assert.Equal("base", appBuilder.Configuration["Validation:BaseOnly"]);
         Assert.Equal("environment", appBuilder.Configuration["Validation:Override"]);
+        Assert.Equal("Debug", appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Equal("Trace", appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
+    }
+
+    [Fact]
+    public void PolyglotBuilderPreservesManagedLoggingDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+
+        Assert.Equal("Information", appBuilder.Configuration["Logging:LogLevel:Default"]);
+        Assert.Equal("Warning", appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Equal("Warning", appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
     }
 
     [Fact]
