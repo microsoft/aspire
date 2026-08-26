@@ -3325,6 +3325,47 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AliasesUseAzureEnvironmentResourceGroupOverrideForImplicitScope()
+    {
+        const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        const string configuredResourceGroup = "configured-rg";
+        const string selectedResourceGroup = "selected-rg";
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
+        builder.Configuration["Azure:ResourceGroup"] = configuredResourceGroup;
+        builder.Configuration["Azure:Location"] = "eastus";
+
+        var resourceGroup = builder.AddParameter("selectedResourceGroup", selectedResourceGroup);
+#pragma warning disable ASPIREAZURE001 // Azure environment APIs are experimental.
+        builder.AddAzureEnvironment()
+            .WithResourceGroup(resourceGroup);
+#pragma warning restore ASPIREAZURE001
+
+        var implicitScope = builder.AddAzureContainerAppEnvironment("implicit")
+            .PublishAsExisting("shared-env", resourceGroup: null);
+        var selectedScope = builder.AddAzureContainerAppEnvironment("selected")
+            .PublishAsExistingInResourceGroup("shared-env", selectedResourceGroup, subscriptionId);
+        var configuredScope = builder.AddAzureContainerAppEnvironment("configured")
+            .PublishAsExistingInResourceGroup("shared-env", configuredResourceGroup, subscriptionId);
+
+        builder.AddContainer("api", "myimage").WithComputeEnvironment(implicitScope);
+        builder.AddContainer("worker", "myimage").WithComputeEnvironment(selectedScope);
+        builder.AddContainer("configured-worker", "myimage").WithComputeEnvironment(configuredScope);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
+        var configuredWorkerGroup = GetDeploymentConcurrencyGroup(model, "configured-worker");
+
+        Assert.Same(apiGroup, workerGroup);
+        Assert.NotSame(apiGroup, configuredWorkerGroup);
+    }
+
+    [Fact]
     public async Task AliasesWithMutableImplicitResourceGroupShareConcurrencyGroup()
     {
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";

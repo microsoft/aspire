@@ -260,6 +260,7 @@ public class AzureContainerAppEnvironmentResource :
         var configuration = services.GetRequiredService<IConfiguration>();
         var currentSubscription = configuration["Azure:SubscriptionId"];
         var currentLocation = configuration["Azure:Location"];
+        var azureEnvironment = model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault();
 
         // Publish mode prompts for both location and resource group when location is unset,
         // overwriting any configured resource group after deployment targets are prepared.
@@ -268,11 +269,19 @@ public class AzureContainerAppEnvironmentResource :
             ? null
             : configuration["Azure:ResourceGroup"];
 
-        if (currentLocation is not null &&
-            currentResourceGroup is null &&
-            model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } azureEnvironment)
+        if (currentLocation is not null && azureEnvironment is not null)
         {
-            currentResourceGroup = await ResolveParameterValueAsync(azureEnvironment.ResourceGroupName, cancellationToken).ConfigureAwait(false);
+            var environmentResourceGroup = await ResolveParameterValueAsync(
+                azureEnvironment.ResourceGroupName,
+                cancellationToken).ConfigureAwait(false);
+
+            // WithResourceGroup replaces the default, unmodeled parameter with a resource in the
+            // application model. Preserve an unresolved explicit override instead of falling back
+            // to ambient configuration that publish will not use.
+            if (environmentResourceGroup is not null || model.Resources.Contains(azureEnvironment.ResourceGroupName))
+            {
+                currentResourceGroup = environmentResourceGroup;
+            }
         }
 
         var environments = new List<(
