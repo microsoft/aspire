@@ -127,6 +127,32 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
+    public void UngeneratedIntermediateBaseMembersAreEmittedOnDerivedProxy()
+    {
+        var result = ProvisioningGeneratorTest.Run(UngeneratedIntermediateBaseSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var baseProxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.BaseModelProxy");
+        Assert.NotNull(baseProxy);
+
+        var derivedProxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.DerivedModelProxy");
+        Assert.NotNull(derivedProxy);
+        Assert.Equal(baseProxy, derivedProxy.BaseType);
+        Assert.Null(result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.MiddleModelProxy"));
+        Assert.Equal(
+            ["DerivedProperty", "MiddleProperty"],
+            GetExportedMembers<IPropertySymbol>(derivedProxy));
+        Assert.Equal(
+            ["DerivedMethod", "MiddleMethod"],
+            GetExportedMembers<IMethodSymbol>(derivedProxy));
+    }
+
+    [Fact]
     public void SharedCoreTypesAreGeneratedIntoEachProxyPackage()
     {
         var result = ProvisioningGeneratorTest.Run(
@@ -565,6 +591,9 @@ public class AspireProvisioningProxyGeneratorTests
 
     private const string InheritedCollisionSource = InheritedCollisionAttributes + CommonSource + InheritedCollisionTypes;
 
+    private const string UngeneratedIntermediateBaseSource =
+        UngeneratedIntermediateBaseAttributes + CommonSource + UngeneratedIntermediateBaseTypes;
+
     private const string SharedProvisioningSource = """
         [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
             typeof(Test.Provisioning.ServiceResource),
@@ -619,6 +648,48 @@ public class AspireProvisioningProxyGeneratorTests
             public sealed class DerivedModel : BaseModel
             {
                 public void Collide(Azure.Provisioning.BicepValue<int> value)
+                {
+                }
+            }
+        }
+        """;
+
+    private const string UngeneratedIntermediateBaseAttributes = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.BaseModel),
+            IsInfrastructureRoot = false)]
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.DerivedModel),
+            IsInfrastructureRoot = false)]
+
+        """;
+
+    private const string UngeneratedIntermediateBaseTypes = """
+        namespace Test.Provisioning
+        {
+            public class BaseModel
+            {
+                public string BaseProperty { get; set; } = string.Empty;
+
+                public void BaseMethod(string value)
+                {
+                }
+            }
+
+            public class MiddleModel : BaseModel
+            {
+                public string MiddleProperty { get; set; } = string.Empty;
+
+                public void MiddleMethod(string value)
+                {
+                }
+            }
+
+            public sealed class DerivedModel : MiddleModel
+            {
+                public string DerivedProperty { get; set; } = string.Empty;
+
+                public void DerivedMethod(string value)
                 {
                 }
             }

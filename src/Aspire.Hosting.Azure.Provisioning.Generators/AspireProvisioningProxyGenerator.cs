@@ -640,7 +640,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             GenerateAddToMethod(source, proxyName);
         }
 
-        foreach (var property in GetExportableProperties(type, includeInherited: proxyBaseType is null))
+        foreach (var property in GetExportableProperties(
+            type,
+            includeInherited: true,
+            stopBeforeType: proxyBaseType))
         {
             if (IsExcluded(property, excludedMemberNames))
             {
@@ -695,7 +698,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 proxyNames,
                 collectionNames,
                 excludedMemberNames),
-            includeInherited: proxyBaseType is null);
+            includeInherited: true,
+            stopBeforeType: proxyBaseType);
         foreach (var methodGroup in mappedMethods.GroupBy(static method => method.Method.Name, StringComparer.Ordinal))
         {
             var overloads = methodGroup.OrderBy(static method => method.Signature, StringComparer.Ordinal).ToList();
@@ -849,11 +853,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         Dictionary<INamedTypeSymbol, string> collectionNames,
         HashSet<string> excludedMemberNames,
         HashSet<string> projectedSignatures,
-        bool includeInherited)
+        bool includeInherited,
+        INamedTypeSymbol? stopBeforeType)
     {
         var mappedMethods = new List<MappedMethod>();
 
-        foreach (var method in GetExportableMethods(type, includeInherited).OrderBy(GetMethodSignature, StringComparer.Ordinal))
+        foreach (var method in GetExportableMethods(type, includeInherited, stopBeforeType).OrderBy(GetMethodSignature, StringComparer.Ordinal))
         {
             if (IsExcluded(method, excludedMemberNames))
             {
@@ -2073,11 +2078,13 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static IEnumerable<IPropertySymbol> GetExportableProperties(
         INamedTypeSymbol type,
-        bool includeInherited = true)
+        bool includeInherited = true,
+        INamedTypeSymbol? stopBeforeType = null)
     {
         var seenPropertyNames = new HashSet<string>(StringComparer.Ordinal);
         for (INamedTypeSymbol? current = type;
             current is not null &&
+            !SymbolEqualityComparer.Default.Equals(current, stopBeforeType) &&
             current.SpecialType is not SpecialType.System_Object and not SpecialType.System_ValueType;
             current = includeInherited ? current.BaseType : null)
         {
@@ -2101,11 +2108,13 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
     private static IEnumerable<IMethodSymbol> GetExportableMethods(
         INamedTypeSymbol type,
-        bool includeInherited = true)
+        bool includeInherited = true,
+        INamedTypeSymbol? stopBeforeType = null)
     {
         var seenSignatures = new HashSet<string>(StringComparer.Ordinal);
         for (INamedTypeSymbol? current = type;
             current is not null &&
+            !SymbolEqualityComparer.Default.Equals(current, stopBeforeType) &&
             current.SpecialType is not SpecialType.System_Object and not SpecialType.System_ValueType;
             current = includeInherited ? current.BaseType : null)
         {
