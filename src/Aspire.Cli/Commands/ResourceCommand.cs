@@ -141,7 +141,11 @@ internal sealed class ResourceCommand : BaseCommand
 
         var connection = result.Connection!;
         var command = await GetCommandMetadataAsync(connection, resourceName, commandName, includeHidden, cancellationToken).ConfigureAwait(false);
-        var commandArgumentsResult = CreateCommandArguments(command, capturedArguments, loadArguments ? CommandArgumentParseMode.LoadArguments : CommandArgumentParseMode.Execute);
+        var commandArgumentsResult = CreateCommandArguments(
+            command,
+            capturedArguments,
+            loadArguments ? CommandArgumentParseMode.LoadArguments : CommandArgumentParseMode.Execute,
+            argumentMetadataAuthoritative: connection.SupportsV3);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
             if (!loadArguments && command is not null)
@@ -192,7 +196,7 @@ internal sealed class ResourceCommand : BaseCommand
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (command is not null && IsHostingUnknownArgumentFailure(commandResult.Response, commandName))
+        if (command is not null && IsLegacyHostingUnknownArgumentFailure(connection, commandResult.Response, commandName))
         {
             await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
@@ -201,13 +205,21 @@ internal sealed class ResourceCommand : BaseCommand
         return CommandResult.FromExitCode(commandResult.ExitCode);
     }
 
-    private static bool IsHostingUnknownArgumentFailure(ExecuteResourceCommandResponse response, string commandName)
+    private static bool IsLegacyHostingUnknownArgumentFailure(IAppHostAuxiliaryBackchannel connection, ExecuteResourceCommandResponse response, string commandName)
     {
+        // V3 resource snapshots carry command argument metadata, so current AppHosts never need to
+        // infer argument-parse failures from human-readable callback messages. The text fallback is
+        // retained only for older AppHosts that may not expose command argument metadata.
+        if (connection.SupportsV3 || response.Success || response.Canceled)
+        {
+            return false;
+        }
+
 #pragma warning disable CS0618 // Type or member is obsolete
         var message = response.Message ?? response.ErrorMessage;
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        if (response.Success || response.Canceled || string.IsNullOrEmpty(message))
+        if (string.IsNullOrEmpty(message))
         {
             return false;
         }
@@ -288,7 +300,11 @@ internal sealed class ResourceCommand : BaseCommand
             .ToArray();
     }
 
-    private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommand? command, string[] capturedArguments, CommandArgumentParseMode parseMode)
+    private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(
+        ResourceSnapshotCommand? command,
+        string[] capturedArguments,
+        CommandArgumentParseMode parseMode,
+        bool argumentMetadataAuthoritative)
     {
         capturedArguments = RemoveDelimiter(capturedArguments);
 
@@ -304,8 +320,18 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (command?.ArgumentInputs is not { Length: > 0 } argumentInputs)
         {
-            // Without command metadata there are no options to give System.CommandLine, so do not infer any values.
-            // Forward tokens as unknown names and let hosting-side validation reject them.
+            if (command is not null && argumentMetadataAuthoritative)
+            {
+                // Current AppHosts expose command argument metadata in V3 resource snapshots. When
+                // such a command declares no inputs, every remaining token is invalid and can be
+                // rejected locally without invoking a callback whose failure text could mimic a
+                // hosting parser diagnostic.
+                return CreateCommandArguments([], capturedArguments, parseMode);
+            }
+
+            // Older AppHosts may not expose command metadata. Forward tokens as unknown names and
+            // let hosting-side validation reject them; the legacy response-message fallback below
+            // remains scoped to those pre-V3 peers.
             return (CreateUnknownArguments(capturedArguments), null);
         }
 
