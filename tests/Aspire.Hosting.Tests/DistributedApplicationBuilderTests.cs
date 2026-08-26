@@ -604,6 +604,8 @@ public class DistributedApplicationBuilderTests
     [InlineData("[]")]
     [InlineData("""{"LegacyFallbackDisabled":"invalid"}""")]
     [InlineData("""{"LegacyState":"invalid"}""")]
+    [InlineData("""{"ClaimedSections":"null"}""")]
+    [InlineData("""{"ClaimedSections":"[null]"}""")]
     public void PolyglotAppHostIgnoresLegacyDeploymentConfigurationWhenMigrationStateIsMalformed(string migrationState)
     {
         var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");

@@ -289,7 +289,10 @@ internal sealed partial class FileDeploymentStateManager(
             {
                 if (sectionName is null)
                 {
-                    _currentState = state.DeepClone().AsObject();
+                    // Normalize through the same persisted representation used by WriteStateAsync
+                    // so backward-compatible flattened input and nested input have identical
+                    // authoritative sidecar state.
+                    _currentState = JsonFlattener.UnflattenJsonObject(JsonFlattener.FlattenJsonObject(state));
                     _legacyState = [];
                     _legacyStateSnapshot = [];
                     _claimedSectionNames.Clear();
@@ -305,7 +308,8 @@ internal sealed partial class FileDeploymentStateManager(
                     var legacySectionData = TryGetNestedPropertyValue(GetLegacyFallbackState(), sectionName);
                     var latestEffectiveState = MergeState(GetLegacyFallbackState(), _currentState);
                     ApplyClaimedSections(latestEffectiveState, _currentState, _claimedSectionNames);
-                    var latestSectionData = TryGetNestedPropertyValue(latestEffectiveState, sectionName);
+                    var latestSectionData = NormalizeSectionData(
+                        TryGetNestedPropertyValue(latestEffectiveState, sectionName));
                     var desiredSectionData = ApplyChanges(latestSectionData, originalSectionData, sectionData) as JsonObject;
                     if (TryGetNestedPropertyValue(_legacyStateSnapshot, sectionName) is null &&
                         legacySectionData is not null)
@@ -331,6 +335,15 @@ internal sealed partial class FileDeploymentStateManager(
             throw;
         }
     }
+
+    private static JsonObject? NormalizeSectionData(JsonNode? sectionData) =>
+        sectionData switch
+        {
+            JsonObject sectionObject => sectionObject,
+            JsonValue sectionValue when sectionValue.GetValueKind() == JsonValueKind.String =>
+                new JsonObject { [""] = sectionValue.DeepClone() },
+            _ => null
+        };
 
     /// <inheritdoc/>
     protected override async Task ClearStateStorageAsync(CancellationToken cancellationToken)
@@ -651,8 +664,7 @@ internal sealed partial class FileDeploymentStateManager(
         var claimedSectionNames = migrationState[ClaimedSectionsProperty] switch
         {
             null => [],
-            JsonValue claimedSectionsValue => JsonSerializer.Deserialize<string[]>(
-                claimedSectionsValue.GetValue<string>()) ?? [],
+            JsonValue claimedSectionsValue => ParseClaimedSectionNames(claimedSectionsValue),
             _ => throw new InvalidDataException($"'{ClaimedSectionsProperty}' must be a JSON string.")
         };
         var currentState = migrationState[CurrentStateProperty] switch
@@ -664,6 +676,20 @@ internal sealed partial class FileDeploymentStateManager(
         };
 
         return new(legacyFallbackDisabled, legacyStateSnapshot, claimedSectionNames, currentState);
+    }
+
+    private static string[] ParseClaimedSectionNames(JsonValue claimedSectionsValue)
+    {
+        var claimedSectionNames = JsonSerializer.Deserialize<string?[]>(
+            claimedSectionsValue.GetValue<string>());
+        if (claimedSectionNames is null ||
+            claimedSectionNames.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new InvalidDataException(
+                $"'{ClaimedSectionsProperty}' must contain a JSON array of non-empty strings.");
+        }
+
+        return [.. claimedSectionNames.Select(static sectionName => sectionName!)];
     }
 
     private Task SaveMigrationStateAsync(string canonicalStatePath, CancellationToken cancellationToken)
