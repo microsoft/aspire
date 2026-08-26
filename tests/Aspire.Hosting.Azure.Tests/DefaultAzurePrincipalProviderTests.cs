@@ -3,6 +3,7 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Azure.Core;
 
@@ -139,6 +140,26 @@ public class DefaultAzurePrincipalProviderTests
         var principal = await provider.GetPrincipalAsync();
 
         Assert.Equal("User", principal.Type);
+    }
+
+    [Theory]
+    [InlineData("preferred_username", "preferred@example.com")]
+    [InlineData("unique_name", "unique@example.com")]
+    public async Task GetPrincipalAsync_DetectsUserFromOptionalUserNameClaims(string claimName, string claimValue)
+    {
+        var payload = new JsonObject
+        {
+            ["oid"] = "11111111-2222-3333-4444-555555555555",
+            [claimName] = claimValue
+        };
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(
+            CreateTokenFromPayload(payload.ToJsonString()));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("User", principal.Type);
+        Assert.Equal(claimValue, principal.Name);
     }
 
     [Fact]

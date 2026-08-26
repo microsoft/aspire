@@ -90,7 +90,9 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
             var hasDelegatedScopes = GetRootString(root, "scp") is { Length: > 0 };
             var hasUserName =
                 GetRootString(root, "upn") is { Length: > 0 } ||
-                GetRootString(root, "email") is { Length: > 0 };
+                GetRootString(root, "email") is { Length: > 0 } ||
+                GetRootString(root, "preferred_username") is { Length: > 0 } ||
+                GetRootString(root, "unique_name") is { Length: > 0 };
             var isAppOnly =
                 string.Equals(identityType, IdTypApp, StringComparison.OrdinalIgnoreCase) ||
                 (identityType is null && !hasDelegatedScopes && !hasUserName);
@@ -138,6 +140,16 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
         if (GetRootString(root, "email") is { Length: > 0 } email)
         {
             return email;
+        }
+
+        if (GetRootString(root, "preferred_username") is { Length: > 0 } preferredUserName)
+        {
+            return preferredUserName;
+        }
+
+        if (GetRootString(root, "unique_name") is { Length: > 0 } uniqueName)
+        {
+            return uniqueName;
         }
 
         if (isAppOnly && GetRootString(root, "app_displayname") is { Length: > 0 } appDisplayName)
