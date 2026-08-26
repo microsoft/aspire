@@ -387,6 +387,43 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ResolveStepsAsync_WithReusedFactoryStep_RebuildsConcurrencyGroups()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var firstGroup = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var secondGroup = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var firstGroupAnnotation = new DeploymentConcurrencyGroupAnnotation(firstGroup);
+        var resource = new CustomResource("artifact-source");
+        resource.Annotations.Add(firstGroupAnnotation);
+
+        var reusedStep = new PipelineStep
+        {
+            Name = "download-artifact",
+            Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
+            Action = _ => Task.CompletedTask
+        };
+        builder.AddResource(resource)
+            .WithPipelineStepFactory(_ => reusedStep);
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        var firstResolution = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+        var firstStep = Assert.Single(firstResolution, step => step.Name == "download-artifact");
+        Assert.Same(firstGroup, Assert.Single(firstStep.DeploymentConcurrencyGroups));
+
+        resource.Annotations.Remove(firstGroupAnnotation);
+        resource.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(secondGroup));
+
+        var secondResolution = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+        var secondStep = Assert.Single(secondResolution, step => step.Name == "download-artifact");
+        Assert.Same(secondGroup, Assert.Single(secondStep.DeploymentConcurrencyGroups));
+        Assert.Empty(reusedStep.DeploymentConcurrencyGroups);
+        Assert.Null(reusedStep.Resource);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_DiagnosticsDoesNotRepresentConcurrencyGroupsAsDependencies()
     {
         var reporter = new TestPipelineActivityReporter(testOutputHelper);
@@ -452,7 +489,6 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = CreatePipelineTestBuilder(step: "provision-target2");
         var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
         var executedSteps = new List<string>();
-        var deploymentSteps = new List<PipelineStep>();
 
         AddComputeResource("app1", "target1");
         AddComputeResource("app2", "target2");
@@ -461,15 +497,17 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var pipeline = new DistributedApplicationPipeline();
         var context = CreateDeployingContext(app);
 
+        var resolvedSteps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+        Assert.All(
+            resolvedSteps.Where(step => step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure)),
+            step => Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups)));
+        Assert.All(
+            resolvedSteps.Where(step => step.Tags.Contains(WellKnownPipelineTags.DeployCompute)),
+            step => Assert.Empty(step.DeploymentConcurrencyGroups));
+
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
         Assert.Equal(["provision-target2"], executedSteps);
-        Assert.All(
-            deploymentSteps.Where(step => step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure)),
-            step => Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups)));
-        Assert.All(
-            deploymentSteps.Where(step => step.Tags.Contains(WellKnownPipelineTags.DeployCompute)),
-            step => Assert.Empty(step.DeploymentConcurrencyGroups));
 
         void AddComputeResource(string resourceName, string targetName)
         {
@@ -492,7 +530,6 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
                         return Task.CompletedTask;
                     }
                 };
-                deploymentSteps.Add(step);
                 return step;
             }));
             resource.Annotations.Add(new PipelineStepAnnotation(_ =>
@@ -504,7 +541,6 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
                     Tags = [WellKnownPipelineTags.DeployCompute],
                     Action = _ => Task.CompletedTask
                 };
-                deploymentSteps.Add(step);
                 return step;
             }));
         }

@@ -624,7 +624,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
     {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
+        var allSteps = _steps
+            .Select(step => step.Clone())
+            .Concat(annotationSteps)
+            .ToList();
 
         // Execute configuration callbacks even if there are no steps
         // This allows callbacks to run validation or other logic
@@ -819,8 +822,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
                 foreach (var step in annotationSteps)
                 {
-                    steps.Add(step);
-                    step.Resource ??= resource;
+                    var resolvedStep = step.Clone();
+                    resolvedStep.Resource ??= resource;
+                    steps.Add(resolvedStep);
                 }
             }
         }

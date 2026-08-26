@@ -116,7 +116,7 @@ public class PipelineStep
     /// Creates a shallow clone of this step with fresh copies of its
     /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, <see cref="Tags"/>, and
     /// <see cref="DeploymentConcurrencyGroups"/> lists. Used by <see cref="DistributedApplicationPipeline"/>
-    /// when isolating step-graph mutations during a phase such as BeforeStart.
+    /// when isolating step-graph mutations during resolution or a phase such as BeforeStart.
     /// </summary>
     internal PipelineStep Clone()
     {
