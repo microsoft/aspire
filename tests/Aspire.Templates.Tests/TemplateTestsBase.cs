@@ -14,6 +14,9 @@ namespace Aspire.Templates.Tests;
 
 public partial class TemplateTestsBase
 {
+    [GeneratedRegex(@"^\s*//")]
+    private static partial Regex CommentLineRegex();
+
     // Regex is from src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets - _GeneratedClassNameFixupRegex
     [GeneratedRegex(@"(((?<=\.)|^)(?=\d)|\W)")]
     private static partial Regex GeneratedClassNameFixupRegex();
@@ -84,6 +87,20 @@ public partial class TemplateTestsBase
         if (!withAppHostReference)
         {
             Assert.Empty(projectReferences);
+
+            // Standalone templates intentionally emit the sample as comments. Add the same reference users
+            // are instructed to add, then uncomment the sample so the caller's build verifies that guidance.
+            testProject.Root!.Add(
+                new XElement("ItemGroup",
+                    new XElement("ProjectReference",
+                        new XAttribute("Include", EscapeMSBuildItemValue(relativeAppHostProjectPath)))));
+            testProject.Save(testProjectPath);
+
+            UncommentInstructionalSample(
+                Path.Combine(testProjectDir, "IntegrationTest1.cs"),
+                testTemplateName,
+                appHostProjectName);
+
             return testProjectDir;
         }
 
@@ -96,6 +113,41 @@ public partial class TemplateTestsBase
         Assert.Contains($"DistributedApplicationTestingBuilder.CreateAsync<Projects.{appHostProjectType}>", testSource);
 
         return testProjectDir;
+    }
+
+    private static void UncommentInstructionalSample(string testSourcePath, string testTemplateName, string appHostProjectName)
+    {
+        var marker = testTemplateName switch
+        {
+            "aspire-nunit" => "// [Test]",
+            "aspire-mstest" => "// [TestMethod]",
+            "aspire-xunit" => "// [Fact]",
+            _ => throw new NotImplementedException($"Unknown test template: {testTemplateName}")
+        };
+
+        var source = new StringBuilder();
+        var inTest = false;
+        foreach (var line in File.ReadAllLines(testSourcePath))
+        {
+            if (!inTest && line.Contains(marker, StringComparison.Ordinal))
+            {
+                inTest = true;
+            }
+
+            if (inTest && CommentLineRegex().IsMatch(line))
+            {
+                source.AppendLine(CommentLineRegex().Replace(line, "    "));
+                continue;
+            }
+
+            source.AppendLine(line);
+        }
+
+        Assert.True(inTest, $"Expected instructional sample marker '{marker}' in {testSourcePath}");
+
+        var appHostProjectType = GeneratedClassNameFixupRegex().Replace(appHostProjectName, "_");
+        source.Replace("Projects.MyAspireApp_AppHost", $"Projects.{appHostProjectType}");
+        File.WriteAllText(testSourcePath, source.ToString());
     }
 
     private static string UnescapeMSBuildItemValue(string value)
