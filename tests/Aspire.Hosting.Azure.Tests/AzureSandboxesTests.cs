@@ -772,6 +772,7 @@ public class AzureSandboxesTests
     public async Task AzureDevComputeClientRetriesForbiddenResponses()
     {
         var attempts = 0;
+        var credential = new RecordingTokenCredential();
         var handler = new RecordingHandler(_ =>
         {
             attempts++;
@@ -789,7 +790,7 @@ public class AzureSandboxesTests
                 }
                 """));
         });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
+        var client = new AzureDevComputeClient(new HttpClient(handler), credential, NullLogger.Instance, TimeSpan.Zero);
 
         var diskImage = await client.GetDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -798,6 +799,7 @@ public class AzureSandboxesTests
 
         Assert.Equal("disk-1", diskImage.Id);
         Assert.Equal(2, attempts);
+        Assert.Equal(2, credential.RequestCount);
     }
 
     [Fact]
@@ -820,7 +822,7 @@ public class AzureSandboxesTests
             "disk-1",
             CancellationToken.None));
 
-        Assert.Equal(3, attempts);
+        Assert.Equal(21, attempts);
         Assert.Contains("Container Apps SandboxGroup Data Owner", exception.Message);
     }
 
@@ -2229,16 +2231,19 @@ public class AzureSandboxesTests
     private sealed class RecordingTokenCredential : TokenCredential
     {
         public string[] Scopes { get; private set; } = [];
+        public int RequestCount { get; private set; }
 
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             Scopes = [.. requestContext.Scopes];
+            RequestCount++;
             return new AccessToken("test-token", DateTimeOffset.UtcNow.AddHours(1));
         }
 
         public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             Scopes = [.. requestContext.Scopes];
+            RequestCount++;
             return ValueTask.FromResult(new AccessToken("test-token", DateTimeOffset.UtcNow.AddHours(1)));
         }
     }

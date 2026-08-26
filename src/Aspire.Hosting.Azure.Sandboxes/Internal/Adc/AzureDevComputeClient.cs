@@ -43,11 +43,12 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
 
     private const string ApiVersion = "2026-02-01-preview";
     private const int MaxRetryCount = 6;
-    private const int MaxForbiddenRetryCount = 2;
+    private const int MaxForbiddenRetryCount = 20;
     private const int PageSize = 100;
     private static readonly TimeSpan s_defaultRetryDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_defaultForbiddenRetryDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan s_maxForbiddenRetryDelay = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan s_maxForbiddenRetryDelay = TimeSpan.FromSeconds(30);
     private static readonly string[] s_authorizationScopes = [AuthorizationScope];
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -240,12 +241,15 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
                     return response;
                 }
 
-                var forbiddenRetryDelay = ClampRetryDelay(
-                    GetRetryDelay(response, retryDelay ?? s_defaultRetryDelay, DateTimeOffset.UtcNow),
-                    s_maxForbiddenRetryDelay);
+                var forbiddenRetryDelay = retryDelay is { } configuredRetryDelay
+                    ? ClampRetryDelay(configuredRetryDelay, s_maxForbiddenRetryDelay)
+                    : ClampRetryDelay(
+                        GetRetryDelay(response, s_defaultForbiddenRetryDelay, DateTimeOffset.UtcNow),
+                        s_maxForbiddenRetryDelay);
+                _accessToken = default;
                 response.Dispose();
                 logger.LogWarning(
-                    "ADC request {Method} {Path} returned HTTP 403. Waiting briefly for the Container Apps SandboxGroup Data Owner role assignment to propagate (retry {RetryAttempt} of {MaxRetryAttempts}). If this persists, verify the role assignment on the sandbox group.",
+                    "ADC request {Method} {Path} returned HTTP 403. Refreshing the access token and waiting for the Container Apps SandboxGroup Data Owner role assignment to propagate (retry {RetryAttempt} of {MaxRetryAttempts}). If this persists, verify the role assignment on the sandbox group.",
                     method.Method,
                     path,
                     attempt + 1,

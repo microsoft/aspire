@@ -12,9 +12,9 @@ Use this integration to deploy container-backed Aspire compute resources to Azur
 
 The integration grants the deployment identity the **Container Apps SandboxGroup Data Owner** role on a sandbox group that it provisions. When using an existing sandbox group, grant that role to the deployment identity before deploying.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Azure Container Apps Sandboxes hosting integration:
+From your AppHost directory, add the `Aspire.Hosting.Azure.Sandboxes` integration with the Aspire CLI:
 
 ```bash
 aspire add Aspire.Hosting.Azure.Sandboxes
