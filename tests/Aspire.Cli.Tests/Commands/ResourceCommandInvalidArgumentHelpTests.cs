@@ -74,26 +74,60 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
 
+        var events = new List<string>();
         TestExtensionInteractionService? interactionService = null;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
-            options.InteractionServiceFactory = sp => interactionService = new TestExtensionInteractionService(sp);
+            options.InteractionServiceFactory = sp => interactionService = new TestExtensionInteractionService(sp)
+            {
+                DisplayErrorCallback = _ => events.Add("error"),
+                FlushAsyncCallback = _ =>
+                {
+                    events.Add("flush");
+                    return Task.CompletedTask;
+                }
+            };
         });
         await using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("""resource web-browser-automation configure --unknown value""");
-        var output = new FlushAssertingTextWriter(() => interactionService?.FlushAsyncCalled is true);
+        var output = new FirstWriteCallbackTextWriter(() => events.Add("help"));
 
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.NotNull(interactionService);
-        Assert.True(interactionService.FlushAsyncCalled);
-        Assert.True(output.AssertedFlushBeforeWrite);
+        Assert.Equal(["error", "flush", "help", "flush"], events);
+        Assert.Equal(2, interactionService.FlushAsyncCallCount);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
+    }
+
+    [Fact]
+    public async Task BaseCommand_TimedOutPreFlushIsNotRetriedByFinalFlush()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestExtensionInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => interactionService = new TestExtensionInteractionService(sp)
+            {
+                FlushAsyncCallback = cancellationToken => Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken)
+            };
+        });
+        await using var provider = services.BuildServiceProvider();
+
+        var command = new FlushTimeoutTestCommand(provider.GetRequiredService<CommonCommandServices>());
+        var result = command.Parse(string.Empty);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(interactionService);
+        Assert.Equal(1, interactionService.FlushAsyncCallCount);
     }
 
     [Fact]
@@ -291,15 +325,30 @@ public class ResourceCommandInvalidArgumentHelpTests(ITestOutputHelper outputHel
         };
     }
 
-    private sealed class FlushAssertingTextWriter(Func<bool> isFlushed) : StringWriter
+    private sealed class FirstWriteCallbackTextWriter(Action onFirstWrite) : StringWriter
     {
-        public bool AssertedFlushBeforeWrite { get; private set; }
+        private bool _hasWritten;
 
         public override void WriteLine(string? value)
         {
-            Assert.True(isFlushed(), "Extension interactions must be flushed before command help is written.");
-            AssertedFlushBeforeWrite = true;
+            if (!_hasWritten)
+            {
+                _hasWritten = true;
+                onFirstWrite();
+            }
+
             base.WriteLine(value);
+        }
+    }
+
+    private sealed class FlushTimeoutTestCommand(CommonCommandServices services) : BaseCommand("flush-timeout-test", "Tests extension flush timeout behavior.", services)
+    {
+        protected override TimeSpan ExtensionInteractionFlushTimeout => TimeSpan.FromMilliseconds(20);
+
+        protected override async Task<CommandResult> ExecuteAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
+            return CommandResult.Success();
         }
     }
 }
