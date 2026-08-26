@@ -516,7 +516,15 @@ internal sealed partial class FileDeploymentStateManager(
     {
         foreach (var sectionName in claimedSectionNames)
         {
-            if (!NestedPropertyExists(currentState, sectionName))
+            if (NestedPropertyExists(currentState, sectionName))
+            {
+                SetNestedNodeValue(
+                    effectiveState,
+                    sectionName,
+                    TryGetNestedPropertyValue(currentState, sectionName)?.DeepClone(),
+                    valueExists: true);
+            }
+            else
             {
                 SetNestedNodeValue(effectiveState, sectionName, value: null, valueExists: false);
             }
