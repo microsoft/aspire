@@ -14,6 +14,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
@@ -1031,9 +1032,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         try
         {
-            var effectiveState = FileDeploymentStateManager.LoadEffectiveStateAsync(
+            var effectiveState = FileDeploymentStateManager.LoadEffectiveState(
                 deploymentStatePath,
-                legacyDeploymentStatePath).GetAwaiter().GetResult();
+                legacyDeploymentStatePath);
             if (effectiveState.Count > 0)
             {
                 var flattenedState = JsonFlattener.FlattenJsonObject(effectiveState);
@@ -1041,7 +1042,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Configuration.AddJsonStream(stream);
             }
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
+        {
+            Debug.WriteLine($"Failed to load deployment state from '{deploymentStatePath}': {ex}");
+        }
     }
 
     private static string GetDeploymentStatePath(string appHostSha, string environment) =>
