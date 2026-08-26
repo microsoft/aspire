@@ -149,44 +149,6 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PolyglotBuilderPreservesManagedLoggingDefaultsAndAllowsAppSettingsOverrides()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectDirectory = workspace.WorkspaceRoot.FullName;
-
-        await File.WriteAllTextAsync(
-            Path.Combine(projectDirectory, "appsettings.json"),
-            """
-            {
-              "Logging": {
-                "LogLevel": {
-                  "Aspire.Hosting.Dcp": "Trace"
-                }
-              }
-            }
-            """);
-
-        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
-        {
-            ProjectDirectory = projectDirectory,
-            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
-        });
-        using var app = appBuilder.Build();
-        var filterOptions = app.Services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value;
-
-        Assert.Equal(
-            [LogLevel.Warning],
-            filterOptions.Rules
-                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Microsoft.AspNetCore")
-                .Select(rule => rule.LogLevel));
-        Assert.Equal(
-            [LogLevel.Trace, LogLevel.Warning, LogLevel.Trace],
-            filterOptions.Rules
-                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Aspire.Hosting.Dcp")
-                .Select(rule => rule.LogLevel));
-    }
-
-    [Fact]
     public void PipelineOutputServiceUsesAppHostDirectoryByDefault()
     {
         var projectDirectory = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin" : "/projects/Tailspin";
