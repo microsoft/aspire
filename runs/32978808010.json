@@ -1,0 +1,29 @@
+{
+  "run_id": 32978808010,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32978808010",
+  "analyzed_at": "2026-08-26T14:44:59Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19698,
+    "title": "Harden Markdown URL validation",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/markdown-url-validation",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19698"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 98214371063,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32978808010/job/98214371063",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic 'Process completed with exit code 1' on the Windows edge-cases VS Code extension E2E shard. Job logs were unavailable and no TRX test failures were extracted. The PR only modifies Aspire.Dashboard Markdown URL validation code (MarkdownHelpers.cs and its unit tests), which is unrelated to the VS Code extension codebase. This matches the well-known recurring flaky pattern 'vscode-e2e-windows-edge-cases-flaky' (26 prior occurrences).",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-edge-cases-flaky"]
+}

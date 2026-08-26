@@ -186,6 +186,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
       "pr_number": 19690,
       "observed_at": "2026-08-26T01:37:26Z"
+    },
+    {
+      "run_id": 32978808010,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32978808010",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "pr_number": 19698,
+      "observed_at": "2026-08-26T14:44:59Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"
