@@ -28,6 +28,7 @@ using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
@@ -317,7 +318,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             var isSourceFileAppHost = !string.IsNullOrEmpty(appHostFilePath) &&
                 !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase);
             var appHostIdentityPath = isSourceFileAppHost
-                ? Path.GetFullPath(appHostFilePath!)
+                ? PathNormalizer.ResolveToFilesystemPath(Path.GetFullPath(appHostFilePath!))
                 : AppHostPath;
             var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
                 ? appHostIdentityPath

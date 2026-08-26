@@ -405,35 +405,45 @@ public class DistributedApplicationBuilderTests
     [Fact]
     public void PolyglotAppHostPathIdentityPreservesFilesystemCaseSemantics()
     {
-        var lowerCaseOptions = new DistributedApplicationOptions
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-path-case-");
+        try
         {
-            ProjectDirectory = "/home/user/project",
-            ProjectName = "Aspire.Hosting.RemoteHost",
-            AppHostFilePath = "/home/user/project/apphost.ts",
-            Args = []
-        };
-        var upperCaseOptions = new DistributedApplicationOptions
-        {
-            ProjectDirectory = "/home/user/project",
-            ProjectName = "Aspire.Hosting.RemoteHost",
-            AppHostFilePath = "/home/user/project/AppHost.ts",
-            Args = []
-        };
+            var appHostPath = Path.Combine(projectDirectory.FullName, "apphost.ts");
+            File.WriteAllText(appHostPath, string.Empty);
+            var lowerCaseOptions = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = appHostPath,
+                Args = []
+            };
+            var upperCaseOptions = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = Path.Combine(projectDirectory.FullName, "AppHost.ts"),
+                Args = []
+            };
 
-        var lowerCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(lowerCaseOptions);
-        var upperCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(upperCaseOptions);
+            var lowerCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(lowerCaseOptions);
+            var upperCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(upperCaseOptions);
 
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Equal(
-                lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
-                upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
+            if (File.Exists(upperCaseOptions.AppHostFilePath))
+            {
+                Assert.Equal(
+                    lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
+                    upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
+            }
+            else
+            {
+                Assert.NotEqual(
+                    lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
+                    upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
+            }
         }
-        else
+        finally
         {
-            Assert.NotEqual(
-                lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
-                upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
+            projectDirectory.Delete(recursive: true);
         }
     }
 
