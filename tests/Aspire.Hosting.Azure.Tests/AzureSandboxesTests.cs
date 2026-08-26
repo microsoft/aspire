@@ -1118,21 +1118,21 @@ public class AzureSandboxesTests
             },
             version: 0);
 
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
 
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
-        Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
         var updatedImageFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             "example/image@sha256:second",
             endpoints,
             identitySettings,
             egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["EndpointSecurityFingerprint"] = "legacy-endpoint-only-fingerprint";
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         previousState.Data["PendingSecurityCleanup"] = true;
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["PendingSecurityCleanup"] = false;
 
         var anonymousFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
@@ -1142,7 +1142,12 @@ public class AzureSandboxesTests
         ],
             identitySettings,
             egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, anonymousFingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, anonymousFingerprint, hasRuntimeEnvironmentConfiguration: false));
+
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: true));
+        previousState.Data["HasRuntimeEnvironmentConfiguration"] = true;
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
+        previousState.Data["HasRuntimeEnvironmentConfiguration"] = false;
 
         var connectorAuthorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             imageReference,
@@ -1177,14 +1182,14 @@ public class AzureSandboxesTests
                 }
             ],
             egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedIdentityFingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedIdentityFingerprint, hasRuntimeEnvironmentConfiguration: false));
 
         var updatedEgressFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             imageReference,
             endpoints,
             identitySettings,
             AzureSandboxContainerDeployment.CreateEgressPolicy(["https://other.example.com/path"]));
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedEgressFingerprint));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedEgressFingerprint, hasRuntimeEnvironmentConfiguration: false));
     }
 
     [Fact]
