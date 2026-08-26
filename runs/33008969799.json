@@ -1,0 +1,29 @@
+{
+  "run_id": 33008969799,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33008969799",
+  "analyzed_at": "2026-08-26T20:40:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19718,
+    "title": "Fix Azure CLI auth in Aspire Team App",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-fix-team-app-azure-auth",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19718"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Browsers / Hosting.Browsers (windows-latest)",
+      "id": 98310487354,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33008969799/job/98310487354",
+      "classification": "flaky-test",
+      "reason": "Failure occurred in the 'Build test project' step with generic exit code 1 and no detailed job logs available. The PR only modifies .github/extensions/aspire-team-app/*.mjs files (JS/Node scripts unrelated to Aspire.Hosting or Aspire.Hosting.Browsers .NET code), so the failure cannot be caused by these PR changes. No TRX test failures were extracted, consistent with a build/infra-level flake rather than a genuine test regression.",
+      "failed_steps": ["Build test project"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["hosting-browsers-windows-build-test-project-unrelated"]
+}

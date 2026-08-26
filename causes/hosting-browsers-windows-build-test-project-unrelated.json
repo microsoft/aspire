@@ -1,0 +1,16 @@
+{
+  "id": "hosting-browsers-windows-build-test-project-unrelated",
+  "type": "flaky-test",
+  "title": "Hosting.Browsers (windows-latest) 'Build test project' step fails with generic exit code 1, unrelated to PR changes",
+  "error_pattern": "Process completed with exit code 1. (Build test project step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. PR only modifies .github/extensions/aspire-team-app/*.mjs files, unrelated to Hosting.Browsers .NET test project build.",
+  "occurrences": [
+    {
+      "run_id": 33008969799,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33008969799",
+      "job": "Tests / Hosting.Browsers / Hosting.Browsers (windows-latest)",
+      "pr_number": 19718,
+      "observed_at": "2026-08-26T20:40:16Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19725"
+}
