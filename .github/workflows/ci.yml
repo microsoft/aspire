@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - 'release/**'
+      # Temporary canary base used to validate selective test enforcement; delete after validation.
+      - ankj/selective-ci-canary-base
 
   push:
     branches:
