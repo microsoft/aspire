@@ -1025,7 +1025,7 @@ public class DeploymentStateManagerTests : IDisposable
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["AppHost:PathSha256"] = sha ?? Guid.NewGuid().ToString("N"),
-                ["AppHost:LegacyPathSha256"] = legacySha,
+                ["AppHost:LegacyDeploymentStatePathSha256"] = legacySha,
                 [KnownConfigNames.AspireHome] = _aspireHome.FullName
             })
             .Build();

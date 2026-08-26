@@ -309,20 +309,20 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
-    public void PathShaAndProjectNameShaBothAvailable()
+    public void AppHostIdentitiesAreAvailable()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
         var pathSha = appBuilder.Configuration["AppHost:PathSha256"];
+        var deploymentStatePathSha = appBuilder.Configuration["AppHost:DeploymentStatePathSha256"];
         var projectNameSha = appBuilder.Configuration["AppHost:ProjectNameSha256"];
         var legacySha = appBuilder.Configuration["AppHost:Sha256"];
 
-        // Verify all three SHA values are available
         Assert.NotNull(pathSha);
+        Assert.NotNull(deploymentStatePathSha);
         Assert.NotNull(projectNameSha);
         Assert.NotNull(legacySha);
 
-        // In run mode, legacy SHA should equal PathSha
         Assert.False(appBuilder.ExecutionContext.IsPublishMode);
         Assert.Equal(pathSha, legacySha);
     }
@@ -360,7 +360,7 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
-    public void PathShaDiffersForPolyglotAppHostFilesInSameDirectory()
+    public void DeploymentStatePathShaDiffersForPolyglotAppHostFilesInSameDirectory()
     {
         var options1 = new DistributedApplicationOptions
         {
@@ -381,21 +381,24 @@ public class DistributedApplicationBuilderTests
         var builder1 = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options1);
         var builder2 = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options2);
 
-        Assert.NotEqual(
+        Assert.Equal(
             builder1.Configuration["AppHost:PathSha256"],
             builder2.Configuration["AppHost:PathSha256"]);
+        Assert.NotEqual(
+            builder1.Configuration["AppHost:DeploymentStatePathSha256"],
+            builder2.Configuration["AppHost:DeploymentStatePathSha256"]);
         Assert.Equal(
-            builder1.Configuration["AppHost:LegacyPathSha256"],
-            builder2.Configuration["AppHost:LegacyPathSha256"]);
-        Assert.NotNull(builder1.Configuration["AppHost:LegacyPathSha256"]);
+            builder1.Configuration["AppHost:LegacyDeploymentStatePathSha256"],
+            builder2.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
+        Assert.NotNull(builder1.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
         Assert.Equal(
             builder1.Configuration["AppHost:ProjectNameSha256"],
             builder2.Configuration["AppHost:ProjectNameSha256"]);
         Assert.Equal(
-            builder1.Configuration["AppHost:LegacyPathSha256"],
-            builder1.Configuration["AppHost:Sha256"]);
-        Assert.NotEqual(
             builder1.Configuration["AppHost:PathSha256"],
+            builder1.Configuration["AppHost:Sha256"]);
+        Assert.Equal(
+            builder1.Configuration["AppHost:LegacyDeploymentStatePathSha256"],
             builder1.Configuration["AppHost:Sha256"]);
     }
 
@@ -423,14 +426,14 @@ public class DistributedApplicationBuilderTests
         if (OperatingSystem.IsWindows())
         {
             Assert.Equal(
-                lowerCaseBuilder.Configuration["AppHost:PathSha256"],
-                upperCaseBuilder.Configuration["AppHost:PathSha256"]);
+                lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
+                upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
         }
         else
         {
             Assert.NotEqual(
-                lowerCaseBuilder.Configuration["AppHost:PathSha256"],
-                upperCaseBuilder.Configuration["AppHost:PathSha256"]);
+                lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
+                upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
         }
     }
 
@@ -465,7 +468,7 @@ public class DistributedApplicationBuilderTests
             var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
 
             Assert.True(builder.ExecutionContext.IsPublishMode);
-            Assert.Equal(legacySha, builder.Configuration["AppHost:LegacyPathSha256"]);
+            Assert.Equal(legacySha, builder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
             Assert.Equal("loaded", builder.Configuration["MigratedValue"]);
         }
         finally
@@ -496,8 +499,8 @@ public class DistributedApplicationBuilderTests
             Args = ["--publisher", "manifest"]
         };
         var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
-        var currentSha = probeBuilder.Configuration["AppHost:PathSha256"]!;
-        var legacySha = probeBuilder.Configuration["AppHost:LegacyPathSha256"]!;
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var legacySha = probeBuilder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]!;
         var deploymentsDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".aspire",
@@ -555,8 +558,8 @@ public class DistributedApplicationBuilderTests
             Args = ["--publisher", "manifest"]
         };
         var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
-        var currentSha = probeBuilder.Configuration["AppHost:PathSha256"]!;
-        var legacySha = probeBuilder.Configuration["AppHost:LegacyPathSha256"]!;
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var legacySha = probeBuilder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]!;
         var deploymentsDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".aspire",
@@ -619,8 +622,8 @@ public class DistributedApplicationBuilderTests
             Args = ["--publisher", "manifest"]
         };
         var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
-        var currentSha = probeBuilder.Configuration["AppHost:PathSha256"]!;
-        var legacySha = probeBuilder.Configuration["AppHost:LegacyPathSha256"]!;
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var legacySha = probeBuilder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]!;
         var deploymentsDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".aspire",
@@ -681,7 +684,7 @@ public class DistributedApplicationBuilderTests
             Args = ["--publisher", "manifest"]
         };
         var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
-        var currentSha = probeBuilder.Configuration["AppHost:PathSha256"]!;
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
         var currentDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".aspire",

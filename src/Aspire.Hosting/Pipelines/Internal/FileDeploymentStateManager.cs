@@ -64,7 +64,7 @@ internal sealed partial class FileDeploymentStateManager(
     /// <inheritdoc/>
     protected override string? GetStatePath()
     {
-        var currentStatePath = GetStatePath(configuration, configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+        var currentStatePath = GetStatePath(configuration, GetDeploymentStatePathSha(configuration), hostEnvironment.EnvironmentName);
         if (currentStatePath is null ||
             File.Exists(currentStatePath) ||
             File.Exists(GetMigrationStatePath(currentStatePath)))
@@ -72,15 +72,18 @@ internal sealed partial class FileDeploymentStateManager(
             return currentStatePath;
         }
 
-        var legacyStatePath = GetStatePath(configuration, configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+        var legacyStatePath = GetStatePath(configuration, configuration["AppHost:LegacyDeploymentStatePathSha256"], hostEnvironment.EnvironmentName);
         return legacyStatePath is not null && File.Exists(legacyStatePath)
             ? legacyStatePath
             : currentStatePath;
     }
 
-    private string? GetCanonicalStatePath() => GetStatePath(configuration, configuration["AppHost:PathSha256"], hostEnvironment.EnvironmentName);
+    private string? GetCanonicalStatePath() => GetStatePath(configuration, GetDeploymentStatePathSha(configuration), hostEnvironment.EnvironmentName);
 
-    private string? GetLegacyStatePath() => GetStatePath(configuration, configuration["AppHost:LegacyPathSha256"], hostEnvironment.EnvironmentName);
+    private string? GetLegacyStatePath() => GetStatePath(configuration, configuration["AppHost:LegacyDeploymentStatePathSha256"], hostEnvironment.EnvironmentName);
+
+    private static string? GetDeploymentStatePathSha(IConfiguration configuration)
+        => configuration["AppHost:DeploymentStatePathSha256"] ?? configuration["AppHost:PathSha256"];
 
     internal static string GetMigrationStatePath(string canonicalStatePath) =>
         $"{canonicalStatePath}.migration";

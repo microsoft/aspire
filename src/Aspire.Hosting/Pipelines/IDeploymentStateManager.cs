@@ -28,6 +28,10 @@ public interface IDeploymentStateManager
     /// <summary>
     /// Acquires a specific section from the current deployment state without falling back to legacy state.
     /// </summary>
+    /// <remarks>
+    /// Implementations that support legacy-state fallback must override this member. The default is provided
+    /// for compatibility with state managers whose <see cref="AcquireSectionAsync"/> already reads only current state.
+    /// </remarks>
     /// <param name="sectionName">The name of the section to acquire (e.g., "Parameters", "Azure").</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A StateSection containing the current section data and version information.</returns>

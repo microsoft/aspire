@@ -965,8 +965,8 @@ public class AzureSandboxesTests
     {
         using var firstPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         using var secondPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        firstPolyglotBuilder.Configuration["AppHost:PathSha256"] = "POLYGLOT-APPHOST-PATH-ONE";
-        secondPolyglotBuilder.Configuration["AppHost:PathSha256"] = "POLYGLOT-APPHOST-PATH-TWO";
+        firstPolyglotBuilder.Configuration["AppHost:DeploymentStatePathSha256"] = "POLYGLOT-APPHOST-PATH-ONE";
+        secondPolyglotBuilder.Configuration["AppHost:DeploymentStatePathSha256"] = "POLYGLOT-APPHOST-PATH-TWO";
 
         var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
         var firstAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(firstPolyglotBuilder.Configuration);
@@ -1067,12 +1067,12 @@ public class AzureSandboxesTests
     public void SandboxStableOwnerRequiresCanonicalAppHostIdentity()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.Configuration["AppHost:PathSha256"] = null;
+        builder.Configuration["AppHost:DeploymentStatePathSha256"] = null;
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             AzureSandboxContainerDeployment.GetStableAppHostIdentity(builder.Configuration));
 
-        Assert.Contains("AppHost:PathSha256", exception.Message);
+        Assert.Contains("AppHost:DeploymentStatePathSha256", exception.Message);
     }
 
     [Fact]

@@ -1786,9 +1786,9 @@ internal static class AzureSandboxContainerDeployment
 
     internal static string GetStableAppHostIdentity(IConfiguration configuration)
     {
-        return configuration["AppHost:PathSha256"] is { Length: > 0 } appHostPathHash
-            ? appHostPathHash
-            : throw new InvalidOperationException("AppHost:PathSha256 is required to isolate Azure sandbox ownership between AppHosts.");
+        return configuration["AppHost:DeploymentStatePathSha256"] is { Length: > 0 } deploymentStatePathHash
+            ? deploymentStatePathHash
+            : throw new InvalidOperationException("AppHost:DeploymentStatePathSha256 is required to isolate Azure sandbox ownership between AppHosts.");
     }
 
     internal static string CreateDeploymentSecurityFingerprint(
