@@ -49,6 +49,8 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             counter,
             timeout: TimeSpan.FromMinutes(10));
 
+        await auto.ClearScreenAsync(counter);
+
         // Relaunch from the replaced path without specifying a channel. Seeing staging selected
         // proves the new process resolved the identity persisted in the install sidecar.
         await auto.TypeAsync("hash -r; aspire update --self --non-interactive --yes");
