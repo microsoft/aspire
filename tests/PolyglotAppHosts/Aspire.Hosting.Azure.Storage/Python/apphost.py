@@ -7,6 +7,8 @@ from aspire_app import AzureResourceInfrastructure, create_builder
 def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
     account = infrastructure.get_storage_account()
     account.tags.set("provisioning-proxy", "python")
+    immutability_policy = infrastructure.create_account_immutability_policy()
+    immutability_policy.immutability_period_since_creation_in_days = 30
 
 
 with create_builder() as builder:

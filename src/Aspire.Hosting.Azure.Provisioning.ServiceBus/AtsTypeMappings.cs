@@ -6,6 +6,7 @@ using Azure.Provisioning.ServiceBus;
 
 [assembly: GenerateAspireProvisioningProxy(
     typeof(ServiceBusNamespace),
+    IncludeContainingAssemblyTypes = true,
     ExcludedMemberNames = new[]
     {
         // BicepDictionary<object> cannot be projected because arbitrary CLR values have no type-safe ATS representation.

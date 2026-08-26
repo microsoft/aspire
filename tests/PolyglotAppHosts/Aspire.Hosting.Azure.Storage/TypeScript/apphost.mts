@@ -14,6 +14,8 @@ await storage.configureInfrastructure(async infrastructure => {
     const account = await infrastructure.getStorageAccount();
     const tags = await account.tags.get();
     await tags.set("provisioning-proxy", "typescript");
+    const immutabilityPolicy = await infrastructure.createAccountImmutabilityPolicy();
+    await immutabilityPolicy.immutabilityPeriodSinceCreationInDays.set(30);
 
     const bicep = infrastructure.bicep();
     const sku = await infrastructure.createStorageSku();

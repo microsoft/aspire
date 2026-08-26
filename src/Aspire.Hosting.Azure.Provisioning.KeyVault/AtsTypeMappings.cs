@@ -4,5 +4,5 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.KeyVault;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(KeyVaultService))]
+[assembly: GenerateAspireProvisioningProxy(typeof(KeyVaultService), IncludeContainingAssemblyTypes = true)]
 [assembly: GenerateAspireProvisioningProxy(typeof(KeyVaultSecret), IsInfrastructureRoot = false)]

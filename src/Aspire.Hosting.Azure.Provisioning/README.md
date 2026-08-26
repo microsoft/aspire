@@ -34,16 +34,18 @@ The factory supports literals, common Bicep functions, member and index access, 
 
 ## Creating a provisioning proxy integration
 
-Integration authors can create an opt-in package for another Azure Provisioning SDK without changing Aspire's general-purpose integration analyzer. Reference `Aspire.Hosting.Azure.Provisioning` for the shared runtime proxies and reference `Aspire.Hosting.Azure.Provisioning.Generators` as a private analyzer dependency. Select the Azure SDK roots that should be projected:
+Integration authors can create an opt-in package for another Azure Provisioning SDK without changing Aspire's general-purpose integration analyzer. Reference `Aspire.Hosting.Azure.Provisioning` for the shared runtime proxies and reference `Aspire.Hosting.Azure.Provisioning.Generators` as a private analyzer dependency. Select the Azure SDK assembly and the resource that represents the current Aspire infrastructure:
 
 ```csharp
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.KeyVault;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(KeyVaultService))]
+[assembly: GenerateAspireProvisioningProxy(
+    typeof(KeyVaultService),
+    IncludeContainingAssemblyTypes = true)]
 ```
 
-The generator follows the public Azure Provisioning types reachable from those roots while keeping the exported polyglot surface bounded to the selected SDK.
+The generator projects every compatible public class and read-only struct in the selected type's assembly while keeping the exported polyglot surface bounded to that SDK package. The selected resource receives the no-argument infrastructure lookup; other provisionable resources receive identifier-based lookup and creation methods.
 
 ## Additional documentation
 

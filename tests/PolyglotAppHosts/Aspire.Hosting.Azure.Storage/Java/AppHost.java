@@ -6,6 +6,8 @@ void main() throws Exception {
         storage.configureInfrastructure((infrastructure) -> {
             var account = infrastructure.getStorageAccount();
             account.tags().set("provisioning-proxy", "java");
+            var immutabilityPolicy = infrastructure.createAccountImmutabilityPolicy();
+            immutabilityPolicy.setImmutabilityPeriodSinceCreationInDays(30);
         });
         storage.runAsEmulator();
         storage.withStorageRoleAssignments(storage, new AzureStorageRole[] { AzureStorageRole.STORAGE_BLOB_DATA_CONTRIBUTOR, AzureStorageRole.STORAGE_QUEUE_DATA_CONTRIBUTOR });

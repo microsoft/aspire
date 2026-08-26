@@ -4,4 +4,4 @@
 using Aspire.Hosting.Azure.Provisioning;
 using Azure.Provisioning.Search;
 
-[assembly: GenerateAspireProvisioningProxy(typeof(SearchService))]
+[assembly: GenerateAspireProvisioningProxy(typeof(SearchService), IncludeContainingAssemblyTypes = true)]

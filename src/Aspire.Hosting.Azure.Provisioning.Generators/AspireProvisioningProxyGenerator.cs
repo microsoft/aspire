@@ -97,6 +97,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
                             public bool IsInfrastructureRoot { get; set; } = true;
 
+                            public bool IncludeContainingAssemblyTypes { get; set; }
+
                             public string[] ExcludedMemberNames { get; set; } = global::System.Array.Empty<string>();
                         }
                     }
@@ -127,6 +129,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 attribute.ConstructorArguments[0] is { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol type })
             {
                 var isInfrastructureRoot = true;
+                var includeContainingAssemblyTypes = false;
                 var excludedMembers = ImmutableArray.CreateBuilder<string>();
                 foreach (var namedArgument in attribute.NamedArguments)
                 {
@@ -134,6 +137,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                         namedArgument.Value.Value is bool value)
                     {
                         isInfrastructureRoot = value;
+                    }
+
+                    if (namedArgument.Key == "IncludeContainingAssemblyTypes" &&
+                        namedArgument.Value.Value is bool includeAssemblyTypes)
+                    {
+                        includeContainingAssemblyTypes = includeAssemblyTypes;
                     }
 
                     if (namedArgument.Key == "ExcludedMemberNames" &&
@@ -149,7 +158,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                     }
                 }
 
-                roots.Add(new ProxyRoot(type, isInfrastructureRoot, excludedMembers.ToImmutable()));
+                roots.Add(new ProxyRoot(
+                    type,
+                    isInfrastructureRoot,
+                    includeContainingAssemblyTypes,
+                    excludedMembers.ToImmutable()));
             }
         }
 
@@ -166,17 +179,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             return;
         }
 
-        var normalizedRoots = roots
-            .GroupBy(static root => root.Type, SymbolEqualityComparer.Default)
-            .Select(static group => new ProxyRoot(
-                (INamedTypeSymbol)group.Key,
-                group.Any(static root => root.IsInfrastructureRoot),
-                group.SelectMany(static root => root.ExcludedMemberNames)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToImmutableArray()))
-            .ToImmutableArray();
+        var normalizedRoots = NormalizeRoots(roots);
+        var expandedRoots = ExpandContainingAssemblyTypes(normalizedRoots);
         var validRoots = ImmutableArray.CreateBuilder<ProxyRoot>();
-        foreach (var root in normalizedRoots)
+        foreach (var root in expandedRoots)
         {
             if (CanGenerateProxy(root.Type))
             {
@@ -247,6 +253,86 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         source.AppendLine("}");
         context.AddSource("AspireProvisioningProxies.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+    }
+
+    private static ImmutableArray<ProxyRoot> NormalizeRoots(IEnumerable<ProxyRoot> roots)
+    {
+        return roots
+            .GroupBy(static root => root.Type, SymbolEqualityComparer.Default)
+            .Select(static group => new ProxyRoot(
+                (INamedTypeSymbol)group.Key,
+                group.Any(static root => root.IsInfrastructureRoot),
+                group.Any(static root => root.IncludeContainingAssemblyTypes),
+                group.SelectMany(static root => root.ExcludedMemberNames)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToImmutableArray()))
+            .ToImmutableArray();
+    }
+
+    private static ImmutableArray<ProxyRoot> ExpandContainingAssemblyTypes(ImmutableArray<ProxyRoot> roots)
+    {
+        var expandedRoots = roots.ToBuilder();
+        var expandedAssemblies = new HashSet<IAssemblySymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var root in roots)
+        {
+            if (!root.IncludeContainingAssemblyTypes ||
+                !expandedAssemblies.Add(root.Type.ContainingAssembly))
+            {
+                continue;
+            }
+
+            foreach (var type in EnumeratePublicProxyTypes(root.Type.ContainingAssembly.GlobalNamespace))
+            {
+                expandedRoots.Add(new ProxyRoot(
+                    type,
+                    isInfrastructureRoot: false,
+                    includeContainingAssemblyTypes: false,
+                    ImmutableArray<string>.Empty));
+            }
+        }
+
+        return NormalizeRoots(expandedRoots);
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumeratePublicProxyTypes(INamespaceSymbol namespaceSymbol)
+    {
+        foreach (var type in namespaceSymbol.GetTypeMembers())
+        {
+            foreach (var publicType in EnumeratePublicProxyTypes(type))
+            {
+                yield return publicType;
+            }
+        }
+
+        foreach (var childNamespace in namespaceSymbol.GetNamespaceMembers())
+        {
+            foreach (var publicType in EnumeratePublicProxyTypes(childNamespace))
+            {
+                yield return publicType;
+            }
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumeratePublicProxyTypes(INamedTypeSymbol type)
+    {
+        if (type.DeclaredAccessibility != Accessibility.Public)
+        {
+            yield break;
+        }
+
+        if (CanGenerateProxy(type) && !IsMutableStruct(type))
+        {
+            yield return type;
+        }
+
+        foreach (var nestedType in type.GetTypeMembers())
+        {
+            foreach (var publicType in EnumeratePublicProxyTypes(nestedType))
+            {
+                yield return publicType;
+            }
+        }
     }
 
     private static string GetGeneratedNamespace(string? assemblyName)
@@ -2648,16 +2734,20 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         public ProxyRoot(
             INamedTypeSymbol type,
             bool isInfrastructureRoot,
+            bool includeContainingAssemblyTypes,
             ImmutableArray<string> excludedMemberNames)
         {
             Type = type;
             IsInfrastructureRoot = isInfrastructureRoot;
+            IncludeContainingAssemblyTypes = includeContainingAssemblyTypes;
             ExcludedMemberNames = excludedMemberNames;
         }
 
         public INamedTypeSymbol Type { get; }
 
         public bool IsInfrastructureRoot { get; }
+
+        public bool IncludeContainingAssemblyTypes { get; }
 
         public ImmutableArray<string> ExcludedMemberNames { get; }
     }
