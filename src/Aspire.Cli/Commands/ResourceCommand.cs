@@ -163,7 +163,7 @@ internal sealed class ResourceCommand : BaseCommand
             return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
         }
 
-        if (command is not null && commandArgumentsResult.RequiresHostingValidation)
+        if (connection.SupportsV3 && command is not null && commandArgumentsResult.RequiresHostingValidation)
         {
             var validationResponse = await ValidateHostingCommandArgumentsAsync(
                 connection,
@@ -214,6 +214,15 @@ internal sealed class ResourceCommand : BaseCommand
                 cancellationToken).ConfigureAwait(false);
         }
 
+        if (!connection.SupportsV3 &&
+            command is not null &&
+            commandArgumentsResult.RequiresHostingValidation &&
+            IsHostingUnknownArgumentValidationFailure(commandResult.Response, commandName))
+        {
+            await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
+            ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
+        }
+
         return CommandResult.FromExitCode(commandResult.ExitCode);
     }
 
@@ -239,9 +248,6 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static bool IsHostingUnknownArgumentValidationFailure(ExecuteResourceCommandResponse response, string commandName)
     {
-        // This response comes from a ValidateOnly request, so resource command callbacks have not
-        // executed and cannot spoof the parser diagnostic. Keep the legacy text recognition scoped
-        // to this validation-only path instead of classifying arbitrary execution failures by text.
         if (response.Success || response.Canceled)
         {
             return false;
@@ -256,6 +262,13 @@ internal sealed class ResourceCommand : BaseCommand
             return false;
         }
 
+        var resolvedCommandName = s_legacyCommandNameMap.GetValueOrDefault(commandName, commandName);
+        return MatchesUnknownArgumentMessage(message, commandName) ||
+            (!string.Equals(resolvedCommandName, commandName, StringComparison.Ordinal) && MatchesUnknownArgumentMessage(message, resolvedCommandName));
+    }
+
+    private static bool MatchesUnknownArgumentMessage(string message, string commandName)
+    {
         return (message.StartsWith("Unknown argument '", StringComparison.Ordinal) &&
                 message.EndsWith($" for command '{commandName}'.", StringComparison.Ordinal)) ||
             message.StartsWith($"Unknown arguments for command '{commandName}':", StringComparison.Ordinal);
@@ -350,8 +363,8 @@ internal sealed class ResourceCommand : BaseCommand
         if (command?.ArgumentInputs is not { Length: > 0 } argumentInputs)
         {
             // Without command metadata there are no options to give System.CommandLine. Preserve the
-            // raw tokens and ask the AppHost to validate them explicitly before command execution;
-            // this distinguishes hosting argument rejection from arbitrary callback failure text.
+            // raw tokens and ask a capable AppHost to validate them before command execution. Older
+            // AppHosts stay on the single-execution compatibility path so they cannot execute twice.
             return (CreateUnknownArguments(capturedArguments), null, command is not null);
         }
 
