@@ -1,0 +1,29 @@
+{
+  "run_id": 32917733900,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32917733900",
+  "analyzed_at": "2026-08-26T01:37:26Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19690,
+    "title": "test: Quarantine flaky CI tests",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "radical-quarantine-flaky-ci-tests",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19690"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 98027063417,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32917733900/job/98027063417",
+      "classification": "flaky-test",
+      "reason": "Job fails with generic exit code 1 and unavailable job logs, matching a known recurring flaky pattern for this exact shard (vscode-e2e-windows-edge-cases-flaky, 25 prior occurrences). PR only modifies test attribute annotations (adding QuarantinedTest attributes) in Aspire.Acquisition/Cli/Hosting test files, unrelated to the VS Code extension codebase.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-windows-edge-cases-flaky"]
+}

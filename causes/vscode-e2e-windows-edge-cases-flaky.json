@@ -179,6 +179,13 @@
       "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
       "pr_number": 19677,
       "observed_at": "2026-08-26T00:03:04Z"
+    },
+    {
+      "run_id": 32917733900,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32917733900",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "pr_number": 19690,
+      "observed_at": "2026-08-26T01:37:26Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19547"
