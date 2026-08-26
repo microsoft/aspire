@@ -32,6 +32,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
       "pr_number": 19705,
       "observed_at": "2026-08-26T18:41:34Z"
+    },
+    {
+      "run_id": 32999137654,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32999137654",
+      "job": "Tests / Azure.Npgsql / Azure.Npgsql (windows-latest)",
+      "pr_number": 19716,
+      "observed_at": "2026-08-26T19:09:26Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19639"

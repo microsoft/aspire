@@ -1,0 +1,38 @@
+{
+  "run_id": 32999137654,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32999137654",
+  "analyzed_at": "2026-08-26T19:09:26Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19716,
+    "title": "Change cron schedule to run weekly instead of daily",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/foundry-models",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19716"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Azure.Npgsql / Azure.Npgsql (windows-latest)",
+      "id": 98282148357,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32999137654/job/98282148357",
+      "classification": "transient-infra",
+      "reason": "Process failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) in post-test steps (hang dump check, upload logs/results, generate summary). This is a known transient Windows runner process-initialization failure unrelated to the PR, which only changes a workflow cron schedule (.github/workflows/update-ai-foundry-models.yml).",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 98285340805,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32999137654/job/98285340805",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure in 'Run extension E2E tests' step, matching the known flaky pattern for the VS Code extension E2E (Linux, azure-functions) shard. No TRX test failures extracted and job logs unavailable. PR only changes a workflow cron schedule, unrelated to the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142", "vscode-e2e-linux-azure-functions-flaky"]
+}
