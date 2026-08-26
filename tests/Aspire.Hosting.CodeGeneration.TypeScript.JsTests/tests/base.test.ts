@@ -5,6 +5,8 @@ import {
     ResourceBuilderBase,
     AspireList,
     AspireDict,
+    createFluentPromiseClass,
+    type FluentPromiseTransitions,
     Handle,
     AspireClient,
 } from '@aspire/base';
@@ -30,12 +32,104 @@ function createMockClient(responses?: Map<string, unknown>): MockClient {
             return responses?.get(capabilityId);
         }),
     });
+    Object.defineProperty(client, 'trackPromise', { value: vi.fn() });
     return client as MockClient;
 }
 
 function makeHandle(id: string, type: string): Handle {
     return new Handle({ $handle: id, $type: type });
 }
+
+// ============================================================================
+// FluentPromise
+// ============================================================================
+
+describe('FluentPromise', () => {
+    interface TestResource {
+        withValue(value: string): TestResourcePromise;
+        name(): Promise<string>;
+        toString(): Promise<string>;
+    }
+
+    interface TestResourcePromise extends PromiseLike<TestResource> {
+        withValue(value: string): TestResourcePromise;
+        name(): Promise<string>;
+        toString(): Promise<string>;
+    }
+
+    const TestResourcePromiseImpl = createFluentPromiseClass<TestResource, TestResourcePromise>((): FluentPromiseTransitions => ({
+        withValue: () => TestResourcePromiseImpl,
+        name: null,
+        toString: null,
+    }));
+
+    it('forwards fluent and plain promise methods through one shared implementation', async () => {
+        const values: string[] = [];
+        const client = createMockClient();
+        const resource: TestResource = {
+            withValue(value: string): TestResourcePromise {
+                values.push(value);
+                return new TestResourcePromiseImpl(Promise.resolve(this), client);
+            },
+            async name(): Promise<string> {
+                return values.join(',');
+            },
+            async toString(): Promise<string> {
+                return `resource:${values.length}`;
+            },
+        };
+
+        const promise = new TestResourcePromiseImpl(Promise.resolve(resource), client);
+        const chained = promise.withValue('one').withValue('two');
+        const namePromise = chained.name();
+
+        expect((promise as unknown as { catch?: unknown }).catch).toBeUndefined();
+        expect(namePromise).toBeInstanceOf(Promise);
+        await expect(namePromise).resolves.toBe('one,two');
+        await expect(chained.toString()).resolves.toBe('resource:2');
+        expect(values).toEqual(['one', 'two']);
+    });
+
+    it('forwards members whose names have object-literal semantics', async () => {
+        const client = createMockClient();
+        const SpecialPromiseImpl = createFluentPromiseClass<object, PromiseLike<object>>(() => ({
+            ['__proto__']: null,
+        }));
+        const resource = {
+            async ['__proto__'](): Promise<string> {
+                return 'remote-prototype';
+            },
+        };
+        const promise = new SpecialPromiseImpl(Promise.resolve(resource), client);
+
+        const result = (promise as unknown as { __proto__(): Promise<string> }).__proto__();
+
+        await expect(result).resolves.toBe('remote-prototype');
+    });
+
+    it('preserves transition-specific promise tracking behavior', async () => {
+        const client = createMockClient();
+        const UntrackedPromiseImpl = createFluentPromiseClass<TestResource, TestResourcePromise>(() => ({
+            withValue: [() => TestResourcePromiseImpl, false] as const,
+        }));
+        const resource: TestResource = {
+            withValue(): TestResourcePromise {
+                return new TestResourcePromiseImpl(Promise.resolve(this), client, false);
+            },
+            async name(): Promise<string> {
+                return 'resource';
+            },
+            async toString(): Promise<string> {
+                return 'resource';
+            },
+        };
+
+        const promise = new UntrackedPromiseImpl(Promise.resolve(resource), client, false);
+        await promise.withValue('value');
+
+        expect(client.trackPromise).not.toHaveBeenCalled();
+    });
+});
 
 // ============================================================================
 // ReferenceExpression
