@@ -246,11 +246,18 @@ internal sealed partial class FileDeploymentStateManager(
         var mergedSection = base.GetSectionState(state, sectionName, includeLegacyState)?.DeepClone();
         foreach (var claimedSectionName in _claimedSectionNames.Where(name => name.StartsWith($"{sectionName}:", StringComparison.Ordinal)))
         {
-            if (!NestedPropertyExists(_currentState, claimedSectionName) &&
-                mergedSection is JsonObject mergedObject)
+            if (mergedSection is not JsonObject mergedObject)
             {
-                SetNestedPropertyValue(mergedObject, claimedSectionName[(sectionName.Length + 1)..], null);
+                continue;
             }
+
+            var relativeSectionName = claimedSectionName[(sectionName.Length + 1)..];
+            var currentValueExists = NestedPropertyExists(_currentState, claimedSectionName);
+            SetNestedNodeValue(
+                mergedObject,
+                relativeSectionName,
+                currentValueExists ? TryGetNestedPropertyValue(_currentState, claimedSectionName)?.DeepClone() : null,
+                currentValueExists);
         }
 
         return mergedSection;

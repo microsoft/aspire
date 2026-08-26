@@ -204,6 +204,7 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
             if (value != null)
             {
                 section.SetValue(value);
+                section.OriginalData = section.Data.DeepClone().AsObject();
             }
 
             return section;

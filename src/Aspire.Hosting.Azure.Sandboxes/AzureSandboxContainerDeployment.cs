@@ -283,13 +283,14 @@ internal static class AzureSandboxContainerDeployment
                 environmentVariables[key] = value;
             }
             AddManagedIdentityEnvironmentVariables(targetResource, environmentVariables);
+            var identitySettings = ResolveIdentitySettings(targetResource);
             var egressPolicy = CreateEgressPolicy(environmentVariables.Values);
 
             var createTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (createTask.ConfigureAwait(false))
             {
                 var sandbox = await CreateWithResponseLossCleanupAsync(
-                    () => CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, egressPolicy, ownerId, deployId),
+                    () => CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, identitySettings, egressPolicy, ownerId, deployId),
                     context,
                     client,
                     dataPlaneScope,
@@ -344,7 +345,11 @@ internal static class AzureSandboxContainerDeployment
                 }
             }
 
-            var endpointSecurityFingerprint = CreateDeploymentSecurityFingerprint(diskImageReference, endpoints);
+            var endpointSecurityFingerprint = CreateDeploymentSecurityFingerprint(
+                diskImageReference,
+                endpoints,
+                identitySettings,
+                egressPolicy);
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
                 endpointSecurityFingerprint);
@@ -701,6 +706,7 @@ internal static class AzureSandboxContainerDeployment
         string diskImageId,
         IReadOnlyDictionary<string, string> environmentVariables,
         ContainerImageMetadata imageMetadata,
+        List<AzureDevComputeIdentitySetting>? identitySettings,
         AzureDevComputeSandboxEgressPolicy egressPolicy,
         string ownerId,
         string deployId)
@@ -711,7 +717,7 @@ internal static class AzureSandboxContainerDeployment
             {
                 Labels = CreateLabels(resource, ownerId, deployId),
                 Environment = environmentVariables.Count > 0 ? environmentVariables : null,
-                IdentitySettings = ResolveIdentitySettings(resource.TargetResource),
+                IdentitySettings = identitySettings,
                 SkipEgressProxy = false,
                 EgressPolicy = egressPolicy,
                 Entrypoint = imageMetadata.Entrypoint.Count > 0 ? [.. imageMetadata.Entrypoint] : null,
@@ -1479,12 +1485,16 @@ internal static class AzureSandboxContainerDeployment
         string ownerId,
         string resourceName,
         string deployId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool pollUntilCancellation = false,
+        TimeSpan? pollInterval = null)
     {
         var labelSelector = CreateLabelSelector(ownerId, resourceName, deployId);
         var consecutiveEmptyResults = 0;
+        var delay = pollInterval ?? TimeSpan.FromSeconds(1);
 
-        while (!cancellationToken.IsCancellationRequested && consecutiveEmptyResults < 3)
+        while (!cancellationToken.IsCancellationRequested &&
+            (pollUntilCancellation || consecutiveEmptyResults < 3))
         {
             var foundDeployment = false;
 
@@ -1532,9 +1542,17 @@ internal static class AzureSandboxContainerDeployment
             }
 
             consecutiveEmptyResults = foundDeployment ? 0 : consecutiveEmptyResults + 1;
-            if (consecutiveEmptyResults < 3)
+            if (!cancellationToken.IsCancellationRequested &&
+                (pollUntilCancellation || consecutiveEmptyResults < 3))
             {
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
     }
@@ -1546,15 +1564,21 @@ internal static class AzureSandboxContainerDeployment
         AzureDevComputeResourceScope scope,
         string ownerId,
         string resourceName,
-        string deployId)
+        string deployId,
+        TimeSpan? responseLossReconciliationTimeout = null,
+        TimeSpan? pollInterval = null)
     {
         try
         {
             return await createResource().ConfigureAwait(false);
         }
-        catch
+        catch (Exception createException)
         {
-            using var cleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var responseMayHaveBeenLost = createException is HttpRequestException or OperationCanceledException;
+            var cleanupTimeout = responseMayHaveBeenLost && responseLossReconciliationTimeout is { } configuredTimeout
+                ? configuredTimeout
+                : TimeSpan.FromMinutes(2);
+            using var cleanupCts = new CancellationTokenSource(cleanupTimeout);
             try
             {
                 await CleanupFailedDeploymentAsync(
@@ -1564,7 +1588,9 @@ internal static class AzureSandboxContainerDeployment
                     ownerId,
                     resourceName,
                     deployId,
-                    cleanupCts.Token).ConfigureAwait(false);
+                    cleanupCts.Token,
+                    pollUntilCancellation: responseMayHaveBeenLost,
+                    pollInterval).ConfigureAwait(false);
             }
             catch (Exception cleanupException)
             {
@@ -1761,18 +1787,54 @@ internal static class AzureSandboxContainerDeployment
 
     internal static string CreateDeploymentSecurityFingerprint(
         string immutableImageReference,
-        IReadOnlyList<SandboxEndpoint> endpoints)
+        IReadOnlyList<SandboxEndpoint> endpoints,
+        IReadOnlyList<AzureDevComputeIdentitySetting>? identitySettings,
+        AzureDevComputeSandboxEgressPolicy egressPolicy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(immutableImageReference);
+        ArgumentNullException.ThrowIfNull(egressPolicy);
 
-        var endpointFingerprint = string.Join(
-            "|",
-            endpoints
-                .OrderBy(static endpoint => endpoint.Name, StringComparer.Ordinal)
-                .Select(static endpoint =>
-                    $"{endpoint.Name}:{endpoint.TargetPort}:{endpoint.Protocol}:{endpoint.IsExternal}:{endpoint.Anonymous}"));
-
-        return $"{immutableImageReference}|{endpointFingerprint}";
+        return new JsonObject
+        {
+            ["ImageReference"] = immutableImageReference,
+            ["Endpoints"] = new JsonArray(
+                endpoints
+                    .OrderBy(static endpoint => endpoint.Name, StringComparer.Ordinal)
+                    .Select(static endpoint => (JsonNode)new JsonObject
+                    {
+                        ["Name"] = endpoint.Name,
+                        ["TargetPort"] = endpoint.TargetPort,
+                        ["Protocol"] = endpoint.Protocol,
+                        ["IsExternal"] = endpoint.IsExternal,
+                        ["Anonymous"] = endpoint.Anonymous
+                    })
+                    .ToArray()),
+            ["IdentitySettings"] = new JsonArray(
+                (identitySettings ?? [])
+                    .OrderBy(static identity => identity.Identity, StringComparer.Ordinal)
+                    .ThenBy(static identity => identity.Lifecycle, StringComparer.Ordinal)
+                    .Select(static identity => (JsonNode)new JsonObject
+                    {
+                        ["Identity"] = identity.Identity,
+                        ["Lifecycle"] = identity.Lifecycle
+                    })
+                    .ToArray()),
+            ["EgressPolicy"] = new JsonObject
+            {
+                ["DefaultAction"] = egressPolicy.DefaultAction,
+                ["TrafficInspection"] = egressPolicy.TrafficInspection,
+                ["HostRules"] = new JsonArray(
+                    egressPolicy.HostRules
+                        .OrderBy(static rule => rule.Pattern, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(static rule => rule.Action, StringComparer.Ordinal)
+                        .Select(static rule => (JsonNode)new JsonObject
+                        {
+                            ["Action"] = rule.Action,
+                            ["Pattern"] = rule.Pattern
+                        })
+                        .ToArray())
+            }
+        }.ToJsonString();
     }
 
     internal static bool HasSecurityRelevantEndpointChange(

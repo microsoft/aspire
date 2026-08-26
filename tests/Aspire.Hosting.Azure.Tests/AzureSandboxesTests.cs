@@ -978,7 +978,21 @@ public class AzureSandboxesTests
                 AuthorizedConnectorGateways: [])
         };
         const string imageReference = "example/image@sha256:first";
-        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(imageReference, endpoints);
+        var identitySettings = new[]
+        {
+            new AzureDevComputeIdentitySetting
+            {
+                Identity = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/app",
+                Lifecycle = "All"
+            }
+        };
+        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(
+            ["https://api.example.com/path"]);
+        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
+            endpoints,
+            identitySettings,
+            egressPolicy);
         var previousState = new DeploymentStateSection(
             "Azure:Sandboxes:frontend-sandbox-container",
             new JsonObject
@@ -994,9 +1008,11 @@ public class AzureSandboxesTests
         Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         var updatedImageFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             "example/image@sha256:second",
-            endpoints);
+            endpoints,
+            identitySettings,
+            egressPolicy);
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
-        previousState.Data["EndpointSecurityFingerprint"] = fingerprint[(imageReference.Length + 1)..];
+        previousState.Data["EndpointSecurityFingerprint"] = "legacy-endpoint-only-fingerprint";
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         previousState.Data["PendingSecurityCleanup"] = true;
@@ -1007,8 +1023,30 @@ public class AzureSandboxesTests
             imageReference,
         [
             endpoints[0] with { Anonymous = true }
-        ]);
+        ],
+            identitySettings,
+            egressPolicy);
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, anonymousFingerprint));
+
+        var updatedIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
+            endpoints,
+            [
+                new AzureDevComputeIdentitySetting
+                {
+                    Identity = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/replacement",
+                    Lifecycle = "All"
+                }
+            ],
+            egressPolicy);
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedIdentityFingerprint));
+
+        var updatedEgressFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
+            endpoints,
+            identitySettings,
+            AzureSandboxContainerDeployment.CreateEgressPolicy(["https://other.example.com/path"]));
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedEgressFingerprint));
     }
 
     [Fact]
@@ -1116,6 +1154,15 @@ public class AzureSandboxesTests
     public async Task SandboxCreateResponseLossReconcilesLabeledResources()
     {
         var client = await RunCreateResponseLossAsync(includeSandbox: true);
+
+        Assert.True(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
+    }
+
+    [Fact]
+    public async Task SandboxCreateResponseLossWaitsForDelayedResourceVisibility()
+    {
+        var client = await RunCreateResponseLossAsync(includeSandbox: true, emptyPollsBeforeVisible: 4);
 
         Assert.True(client.DeleteSandboxCalled);
         Assert.True(client.DeleteDiskImageCalled);
@@ -2408,7 +2455,9 @@ public class AzureSandboxesTests
         return results;
     }
 
-    private static async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(bool includeSandbox)
+    private static async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(
+        bool includeSandbox,
+        int emptyPollsBeforeVisible = 0)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         using var app = builder.Build();
@@ -2426,7 +2475,7 @@ public class AzureSandboxesTests
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
         };
-        var client = new ResponseLossCleanupClient(includeSandbox);
+        var client = new ResponseLossCleanupClient(includeSandbox, emptyPollsBeforeVisible);
 
         var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
             AzureSandboxContainerDeployment.CreateWithResponseLossCleanupAsync(
@@ -2436,7 +2485,9 @@ public class AzureSandboxesTests
                 new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
                 "owner",
                 "frontend-sandbox-container",
-                "deploy"));
+                "deploy",
+                responseLossReconciliationTimeout: TimeSpan.FromMilliseconds(100),
+                pollInterval: TimeSpan.FromMilliseconds(1)));
 
         Assert.Equal("create response lost", exception.Message);
         Assert.Equal(
@@ -2515,11 +2566,14 @@ public class AzureSandboxesTests
         public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class ResponseLossCleanupClient(bool includeSandbox) : IAzureDevComputeClient
+    private sealed class ResponseLossCleanupClient(
+        bool includeSandbox,
+        int emptyPollsBeforeVisible) : IAzureDevComputeClient
     {
         private bool _resourceCreated;
         private bool _sandboxDeleted;
         private bool _diskImageDeleted;
+        private int _listAttempts;
 
         private static readonly Dictionary<string, string> s_labels = new()
         {
@@ -2546,7 +2600,12 @@ public class AzureSandboxesTests
         {
             LabelSelector = labels;
             CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
-            return Task.FromResult(_resourceCreated && includeSandbox && !_sandboxDeleted
+            _listAttempts++;
+            return Task.FromResult(
+                _resourceCreated &&
+                _listAttempts > emptyPollsBeforeVisible &&
+                includeSandbox &&
+                !_sandboxDeleted
                 ? new List<AzureDevComputeSandbox>
                 {
                     new()
@@ -2565,7 +2624,10 @@ public class AzureSandboxesTests
         {
             Assert.Equal(LabelSelector, labels);
             CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
-            return Task.FromResult(_resourceCreated && !_diskImageDeleted
+            return Task.FromResult(
+                _resourceCreated &&
+                _listAttempts > emptyPollsBeforeVisible &&
+                !_diskImageDeleted
                 ? new List<AzureDevComputeDiskImage>
                 {
                     new()
