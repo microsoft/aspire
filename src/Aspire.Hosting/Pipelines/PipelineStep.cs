@@ -61,8 +61,8 @@ public class PipelineStep
 
     internal List<DeploymentConcurrencyGroup> DeploymentConcurrencyGroups { get; init; } = [];
 
-    // Keep model-derived memberships separate so repeated resolution can rebuild them without
-    // removing groups supplied directly by first-party step factories.
+    // Keep groups configured directly on the step separate from groups derived from model annotations,
+    // so repeated resolution can rebuild only the derived memberships.
     internal List<DeploymentConcurrencyGroup> ResolvedDeploymentConcurrencyGroups { get; } = [];
 
     internal IEnumerable<DeploymentConcurrencyGroup> GetDeploymentConcurrencyGroups()
