@@ -27,15 +27,17 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Func<string, Func<string, ValidationResult>?, bool, bool, PromptBinding<string?>?, CancellationToken, Task<string>>? PromptForStringCallback { get; set; }
     public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
     public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
+    public Func<CancellationToken, Task>? FlushAsyncCallback { get; set; }
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
-    public bool FlushAsyncCalled { get; private set; }
+    public int FlushAsyncCallCount { get; private set; }
+    public bool FlushAsyncCalled => FlushAsyncCallCount > 0;
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
 
     public Task FlushAsync(CancellationToken cancellationToken = default)
     {
-        FlushAsyncCalled = true;
-        return Task.CompletedTask;
+        FlushAsyncCallCount++;
+        return FlushAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
