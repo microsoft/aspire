@@ -1343,6 +1343,7 @@ public class Program
         {
             builder.Services.AddSingleton<IExtensionRpcTarget, ExtensionRpcTarget>();
             builder.Services.AddSingleton<IExtensionBackchannel, ExtensionBackchannel>();
+            builder.Services.AddSingleton<IVsCodeMicrosoftAccountProvider>(provider => provider.GetRequiredService<IExtensionBackchannel>());
 
             var extensionPromptEnabled = builder.Configuration[KnownConfigNames.ExtensionPromptEnabled] is "true";
             builder.Services.AddSingleton<IInteractionService>(provider =>
@@ -1363,6 +1364,7 @@ public class Program
         }
         else
         {
+            builder.Services.AddSingleton<IVsCodeMicrosoftAccountProvider, NullVsCodeMicrosoftAccountProvider>();
             builder.Services.AddSingleton<IInteractionService>(provider =>
             {
                 var consoleEnvironment = provider.GetRequiredService<ConsoleEnvironment>();

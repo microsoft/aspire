@@ -37,6 +37,7 @@ import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
+import { MicrosoftAccountProvider } from './utils/microsoftAccountProvider';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -51,6 +52,8 @@ export async function activate(context: vscode.ExtensionContext) {
     workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
   });
 
+  const microsoftAccountProvider = new MicrosoftAccountProvider();
+  context.subscriptions.push(microsoftAccountProvider);
   const terminalProvider = new AspireTerminalProvider(context.subscriptions, undefined, cliPathResolver);
   const testRunSessionManager = new TestRunSessionManager();
 
@@ -77,7 +80,8 @@ export async function activate(context: vscode.ExtensionContext) {
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
       const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId), context.globalState);
       return client;
-    }
+    },
+    () => microsoftAccountProvider.getAliasAsync(),
   );
 
   // Declared up front so DCP-server hooks can reference it through a closure;

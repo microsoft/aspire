@@ -36,7 +36,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CorpMicrosoftDomainSuffix = ".corp.microsoft.com";
     private const string CacheSubdirectoryName = "internal-microsoft";
     private const string CacheFileName = "detector.json";
-    private const int CacheVersion = 2;
+    private const string VsCodeMicrosoftTenantProbeName = "VS Code Microsoft tenant";
+    private const int CacheVersion = 3;
     private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
@@ -55,10 +56,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly TimeSpan _gitHubHttpTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
-    private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
+    private readonly IVsCodeMicrosoftAccountProvider _vsCodeMicrosoftAccountProvider;
+    private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? _probeStages;
     private readonly TimeSpan _probeStageTimeout;
 
-    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory)
+    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory, IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider)
         : this(
             executionContext,
             environment,
@@ -66,6 +68,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             timeProvider,
             logger,
             processExecutionFactory,
+            vsCodeMicrosoftAccountProvider,
             probeStages: null)
     {
     }
@@ -77,6 +80,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         TimeProvider timeProvider,
         ILogger<InternalMicrosoftDetector> logger,
         IProcessExecutionFactory processExecutionFactory,
+        IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
         TimeSpan? gitHubCandidateTimeout = null,
@@ -92,8 +96,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _gitHubHttpTimeout = gitHubHttpTimeout ?? s_gitHubHttpTimeout;
         _timeProvider = timeProvider;
         _logger = logger;
+        _vsCodeMicrosoftAccountProvider = vsCodeMicrosoftAccountProvider;
         _probeStageTimeout = probeStageTimeout ?? s_probeStageTimeout;
-        _probeStages = probeStages ?? CreateDefaultProbeStages();
+        _probeStages = probeStages;
     }
 
     public async Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
@@ -101,7 +106,28 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            var cached = await TryReadCacheAsync(cancellationToken).ConfigureAwait(false);
+            var vsCodeMicrosoftAccount = VsCodeMicrosoftAccountState.Unavailable;
+            using var vsCodeQueryTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            vsCodeQueryTimeout.CancelAfter(_probeStageTimeout);
+            try
+            {
+                var queryTask = _vsCodeMicrosoftAccountProvider.GetInternalMicrosoftAccountAsync(vsCodeQueryTimeout.Token);
+                vsCodeMicrosoftAccount = await queryTask.WaitAsync(_probeStageTimeout, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogDebug(ex, "Timed out querying the Aspire VS Code extension for a Microsoft account.");
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogDebug(ex, "Timed out querying the Aspire VS Code extension for a Microsoft account.");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Failed to query the Aspire VS Code extension for a Microsoft account.");
+            }
+
+            var cached = await TryReadCacheAsync(vsCodeMicrosoftAccount, cancellationToken).ConfigureAwait(false);
             if (cached.Entry is not null && cached.CacheStatus == InternalMicrosoftDetectorCacheStatus.Hit)
             {
                 stopwatch.Stop();
@@ -116,7 +142,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     []);
             }
 
-            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, cancellationToken).ConfigureAwait(false);
+            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, vsCodeMicrosoftAccount, cancellationToken).ConfigureAwait(false);
             if (result.Outcome is InternalMicrosoftDetectorOutcome.Detected or InternalMicrosoftDetectorOutcome.NotDetected)
             {
                 await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
@@ -147,11 +173,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages()
+    private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages(VsCodeMicrosoftAccountState vsCodeMicrosoftAccount)
     {
         // Probes are ordered by cost and signal quality. Local account stores and OS enrollment
         // state come from standard developer-machine tooling: Windows dsregcmd, Visual Studio
-        // IdentityService, VS Code global state, macOS Platform SSO, gh/Copilot CLI auth, and
+        // IdentityService, the Aspire VS Code extension, macOS Platform SSO, gh/Copilot CLI auth, and
         // GitHub's organization membership API.
         // See:
         // - https://learn.microsoft.com/entra/identity/devices/troubleshoot-device-dsregcmd
@@ -160,19 +186,20 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         // Fastest/strongest signal probes
         var stage1 = new List<InternalMicrosoftProbe>();
+        if (vsCodeMicrosoftAccount.IsAvailable)
+        {
+            // The Aspire VS Code extension uses VS Code's supported authentication API and returns
+            // only the normalized alias over its authenticated backchannel.
+            stage1.Add(new(
+                VsCodeMicrosoftTenantProbeName,
+                cancellationToken => GetVsCodeMicrosoftAccountResultAsync(vsCodeMicrosoftAccount, cancellationToken)));
+        }
         if (_environment.IsMacOS())
         {
             // Use the platform SSO service on MacOS as the strongest signal (indicates machine is enrolled in
             // Microsoft Intune and user has a Microsoft account in the Microsoft tenant configured in their keychain)
             stage1.Add(new("Mac Platform SSO", CheckMacPlatformSsoAsync));
         }
-
-        // Probes that may require file I/O or process execution, but can still complete relatively quickly
-        var stage2 = new List<InternalMicrosoftProbe>
-        {
-            // Is the user signed into VS Code with a Microsoft account that belongs to the Microsoft tenant?
-            new("VS Code Microsoft tenant", CheckVsCodeMicrosoftTenantAsync)
-        };
 
         // Probes that may involve more extensive process execution/network calls or are a weaker signal, run last
         // to avoid delaying detection when faster/better quality signals are available. CI environments can expose
@@ -228,14 +255,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             stage3.Add(new("WSL Windows gh.exe GitHub org membership", CheckWslWindowsGhCliAsync));
         }
 
-        return [stage1, stage2, stage3];
+        return [stage1, stage3];
     }
 
-    private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(string cacheStatus, Stopwatch stopwatch, CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(string cacheStatus, Stopwatch stopwatch, VsCodeMicrosoftAccountState vsCodeMicrosoftAccount, CancellationToken cancellationToken)
     {
         var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
         var timedOut = false;
-        foreach (var stage in _probeStages)
+        var probeStages = _probeStages ?? CreateDefaultProbeStages(vsCodeMicrosoftAccount);
+        foreach (var stage in probeStages)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -309,7 +337,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             {
                 completedResults.Add(task.Result);
                 var diagnostic = task.Result.Diagnostic;
-                diagnostics.Add(task.Result.CompletionTimestamp > stageDeadlineTimestamp
+                var deadlineTriggeredCancellation = timedOut && diagnostic.Outcome == InternalMicrosoftProbeOutcome.Cancelled;
+                diagnostics.Add(deadlineTriggeredCancellation || task.Result.CompletionTimestamp > stageDeadlineTimestamp
                     ? diagnostic with { Outcome = InternalMicrosoftProbeOutcome.TimedOut }
                     : diagnostic);
             }
@@ -438,7 +467,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private async Task<InternalMicrosoftCacheReadResult> TryReadCacheAsync(CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftCacheReadResult> TryReadCacheAsync(VsCodeMicrosoftAccountState vsCodeMicrosoftAccount, CancellationToken cancellationToken)
     {
         if (!File.Exists(_cacheFilePath))
         {
@@ -458,9 +487,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             if (entry.Version == 0)
             {
                 // Legacy entries do not record whether the probe set ran in CI mode. A positive
-                // signal remains useful across modes, but reusing an ambiguous negative could hide
-                // the GitHub probes that are intentionally skipped only in CI.
-                if (!entry.IsInternalMicrosoft)
+                // signal remains useful across modes, except for VS Code entries produced by the
+                // removed native store parser. Reusing an ambiguous negative could also hide the
+                // GitHub probes that are intentionally skipped only in CI.
+                if (!entry.IsInternalMicrosoft ||
+                    entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true)
                 {
                     return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
                 }
@@ -471,6 +502,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
 
             entry = NormalizeCacheEntry(entry);
+            var normalizedVsCodeAlias = NormalizeAlias(vsCodeMicrosoftAccount.Alias);
+            var isVsCodeCacheEntry = entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true;
+            if (vsCodeMicrosoftAccount.IsAvailable &&
+                ((!entry.IsInternalMicrosoft && normalizedVsCodeAlias is not null) ||
+                 (isVsCodeCacheEntry &&
+                    (normalizedVsCodeAlias is null ||
+                     !string.Equals(entry.Alias, normalizedVsCodeAlias, StringComparison.Ordinal)))))
+            {
+                return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
+            }
+
             var hasRequiredSource = !entry.IsInternalMicrosoft || !string.IsNullOrEmpty(entry.Source);
             var isFresh = hasRequiredSource && _timeProvider.GetUtcNow() - entry.LastRunUtc < s_cacheRefreshInterval;
             return isFresh
@@ -491,15 +533,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         var alias = NormalizeAlias(entry.Alias);
         var domain = NormalizeAdDomainName(entry.Domain);
-
-        if (entry.Version == 0 && entry.Source?.Contains("VS Code", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            // Legacy VS Code cache entries may have been produced from raw SQLite bytes where adjacent
-            // key/value payloads formed a synthetic email address. Keep the coarse detection result but
-            // discard the identity fields because their record boundaries cannot be reconstructed.
-            alias = null;
-            domain = null;
-        }
 
         return entry with
         {
@@ -652,34 +685,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    internal async Task<InternalMicrosoftProbeResult> CheckVsCodeMicrosoftTenantAsync(CancellationToken cancellationToken)
+    internal async Task<InternalMicrosoftProbeResult> CheckVsCodeMicrosoftAccountAsync(CancellationToken cancellationToken)
     {
-        foreach (var stateDatabasePath in GetVsCodeStateDatabasePaths())
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+        var account = await _vsCodeMicrosoftAccountProvider.GetInternalMicrosoftAccountAsync(cancellationToken).ConfigureAwait(false);
+        return await GetVsCodeMicrosoftAccountResultAsync(account, cancellationToken).ConfigureAwait(false);
+    }
 
-            if (!File.Exists(stateDatabasePath))
-            {
-                continue;
-            }
-
-            var bytes = await FileSystemHelper.TryReadAllBytesAsync(stateDatabasePath, cancellationToken).ConfigureAwait(false);
-            if (bytes.Length == 0)
-            {
-                continue;
-            }
-
-            foreach (var value in ExtractSqliteRecordTextValues(bytes, cancellationToken))
-            {
-                var result = DetectMicrosoftTenant(value, cancellationToken);
-                if (result.IsInternalMicrosoft)
-                {
-                    return result;
-                }
-            }
-        }
-
-        return InternalMicrosoftProbeResult.NotDetected;
+    private static Task<InternalMicrosoftProbeResult> GetVsCodeMicrosoftAccountResultAsync(VsCodeMicrosoftAccountState account, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(account is { IsAvailable: true, Alias: { } alias }
+            ? Detected(alias)
+            : InternalMicrosoftProbeResult.NotDetected);
     }
 
     internal async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
@@ -1069,6 +1086,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return InternalMicrosoftProbeResult.NotDetected;
     }
 
+    internal static InternalMicrosoftProbeResult DetectMicrosoftTenantForTesting(string text, CancellationToken cancellationToken)
+        => DetectMicrosoftTenant(text, cancellationToken);
+
     private static IEnumerable<TenantAliasEvidence> ExtractTenantAliasEvidenceFromJwtPayloads(string text, CancellationToken cancellationToken)
     {
         // Account stores often embed JWTs. Decode only the payload segment:
@@ -1261,62 +1281,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 yield return path;
             }
         }
-    }
-
-    private IEnumerable<string> GetVsCodeStateDatabasePaths()
-    {
-        var home = _executionContext.HomeDirectory.FullName;
-
-        if (_environment.IsWindows())
-        {
-            var appData = GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData, "APPDATA");
-            if (string.IsNullOrWhiteSpace(appData))
-            {
-                yield break;
-            }
-
-            foreach (var product in GetVsCodeProductNames())
-            {
-                yield return Path.Combine(appData, product, "User", "globalStorage", "state.vscdb");
-            }
-
-            yield break;
-        }
-
-        if (_environment.IsMacOS())
-        {
-            if (string.IsNullOrWhiteSpace(home))
-            {
-                yield break;
-            }
-
-            foreach (var product in GetVsCodeProductNames())
-            {
-                yield return Path.Combine(home, "Library", "Application Support", product, "User", "globalStorage", "state.vscdb");
-            }
-
-            yield break;
-        }
-
-        var xdgConfigHome = _environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
-        var configHome = string.IsNullOrWhiteSpace(xdgConfigHome) ? Path.Combine(home, ".config") : xdgConfigHome;
-        foreach (var product in GetVsCodeProductNames())
-        {
-            yield return Path.Combine(configHome, product, "User", "globalStorage", "state.vscdb");
-        }
-
-        if (IsWsl())
-        {
-            yield return Path.Combine(home, ".vscode-server", "data", "User", "globalStorage", "state.vscdb");
-            yield return Path.Combine(home, ".vscode-server-insiders", "data", "User", "globalStorage", "state.vscdb");
-        }
-    }
-
-    internal IReadOnlyList<string> GetVsCodeStateDatabasePathsForTesting() => [.. GetVsCodeStateDatabasePaths()];
-
-    private static string[] GetVsCodeProductNames()
-    {
-        return ["Code", "Code - Insiders", "VSCodium"];
     }
 
     private bool IsWsl()
@@ -1532,285 +1496,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return normalized.All(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-')
             ? normalized.ToLowerInvariant()
             : null;
-    }
-
-    private static IEnumerable<string> ExtractSqliteRecordTextValues(byte[] bytes, CancellationToken cancellationToken)
-    {
-        // VS Code's state.vscdb is a SQLite database. Read text values from leaf table records so
-        // adjacent key/value payload bytes (for example "extension-microsoft" + "user@microsoft.com")
-        // are never treated as one string.
-        if (bytes.Length < 100 || !bytes.AsSpan(0, 16).SequenceEqual("SQLite format 3\0"u8))
-        {
-            yield break;
-        }
-
-        var pageSize = ReadUInt16BigEndian(bytes, 16);
-        if (pageSize == 1)
-        {
-            pageSize = 65536;
-        }
-
-        if (pageSize is < 512 or > 65536 ||
-            (pageSize & (pageSize - 1)) != 0 ||
-            bytes.Length % pageSize != 0 ||
-            !TryGetSqliteFreelistPages(bytes, pageSize, out var freelistPages))
-        {
-            yield break;
-        }
-
-        var usablePageSize = pageSize - bytes[20];
-        // Table-leaf cells store at most U - 35 payload bytes locally. A larger declared payload
-        // always has an overflow-page pointer, even when its apparent end falls within this page.
-        // See https://www.sqlite.org/fileformat2.html#cell_payload_overflow_pages.
-        var maximumLocalPayloadLength = usablePageSize - 35;
-
-        for (var pageOffset = 0; pageOffset <= bytes.Length - pageSize; pageOffset += pageSize)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var pageNumber = (pageOffset / pageSize) + 1;
-            if (freelistPages.Contains(pageNumber))
-            {
-                continue;
-            }
-
-            var pageEnd = pageOffset + usablePageSize;
-            var headerOffset = pageOffset == 0 ? 100 : pageOffset;
-            if (headerOffset + 8 > pageEnd || bytes[headerOffset] != 0x0D)
-            {
-                continue;
-            }
-
-            var cellCount = ReadUInt16BigEndian(bytes, headerOffset + 3);
-            var cellPointerArrayOffset = headerOffset + 8;
-            var cellPointerArrayEnd = cellPointerArrayOffset + (cellCount * 2);
-            if (cellPointerArrayEnd > pageEnd)
-            {
-                continue;
-            }
-
-            var cellContentOffsetInPage = ReadUInt16BigEndian(bytes, headerOffset + 5);
-            if (cellContentOffsetInPage == 0 && pageSize == 65536)
-            {
-                cellContentOffsetInPage = 65536;
-            }
-
-            var minimumCellOffsetInPage = Math.Max(cellPointerArrayEnd - pageOffset, cellContentOffsetInPage);
-            if (minimumCellOffsetInPage <= 0 || minimumCellOffsetInPage > usablePageSize)
-            {
-                continue;
-            }
-
-            for (var index = 0; index < cellCount; index++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var pointerOffset = cellPointerArrayOffset + (index * 2);
-                var cellOffsetInPage = ReadUInt16BigEndian(bytes, pointerOffset);
-                if (cellOffsetInPage < minimumCellOffsetInPage || cellOffsetInPage >= usablePageSize)
-                {
-                    continue;
-                }
-
-                var cellOffset = pageOffset + cellOffsetInPage;
-                foreach (var value in ExtractSqliteLeafTableCellTextValues(bytes, cellOffset, pageEnd, maximumLocalPayloadLength))
-                {
-                    yield return value;
-                }
-            }
-        }
-    }
-
-    private static bool TryGetSqliteFreelistPages(byte[] bytes, int pageSize, out HashSet<int> freelistPages)
-    {
-        // SQLite records the freelist in the database header and trunk pages:
-        //   header[32..36] = first trunk page number (big-endian)
-        //   header[36..40] = total number of trunk and leaf pages
-        //   trunk[0..4]    = next trunk page number
-        //   trunk[4..8]    = leaf pointer count, followed by 4-byte leaf page numbers
-        // Deleted table rows can remain in free leaf pages, so scanning physical pages without
-        // excluding this chain can report identities that have already been removed from VS Code.
-        freelistPages = [];
-        var pageCount = bytes.Length / pageSize;
-        var firstTrunkPage = ReadUInt32BigEndian(bytes, 32);
-        var declaredFreelistPageCount = ReadUInt32BigEndian(bytes, 36);
-        if (declaredFreelistPageCount == 0)
-        {
-            return firstTrunkPage == 0;
-        }
-
-        if (declaredFreelistPageCount > pageCount ||
-            firstTrunkPage is 0 || firstTrunkPage > pageCount)
-        {
-            return false;
-        }
-
-        var reservedBytes = bytes[20];
-        var usablePageSize = pageSize - reservedBytes;
-        if (usablePageSize < 8)
-        {
-            return false;
-        }
-
-        var trunkPage = firstTrunkPage;
-        while (trunkPage != 0)
-        {
-            if (trunkPage > pageCount || !freelistPages.Add((int)trunkPage))
-            {
-                return false;
-            }
-
-            var trunkOffset = ((int)trunkPage - 1) * pageSize;
-            var nextTrunkPage = ReadUInt32BigEndian(bytes, trunkOffset);
-            var leafCount = ReadUInt32BigEndian(bytes, trunkOffset + 4);
-            if (leafCount > (usablePageSize - 8) / 4)
-            {
-                return false;
-            }
-
-            for (var index = 0; index < leafCount; index++)
-            {
-                var leafPage = ReadUInt32BigEndian(bytes, trunkOffset + 8 + (index * 4));
-                if (leafPage is 0 || leafPage > pageCount || !freelistPages.Add((int)leafPage))
-                {
-                    return false;
-                }
-            }
-
-            if (freelistPages.Count > declaredFreelistPageCount)
-            {
-                return false;
-            }
-
-            trunkPage = nextTrunkPage;
-        }
-
-        return freelistPages.Count == declaredFreelistPageCount;
-    }
-
-    internal static IReadOnlyList<string> ExtractSqliteRecordTextValuesForTesting(byte[] bytes, CancellationToken cancellationToken)
-        => [.. ExtractSqliteRecordTextValues(bytes, cancellationToken)];
-
-    private static IEnumerable<string> ExtractSqliteLeafTableCellTextValues(byte[] bytes, int cellOffset, int pageEnd, int maximumLocalPayloadLength)
-    {
-        if (!TryReadSqliteVarint(bytes, cellOffset, pageEnd, out var payloadLength, out var payloadLengthBytes) ||
-            !TryReadSqliteVarint(bytes, cellOffset + payloadLengthBytes, pageEnd, out _, out var rowIdBytes))
-        {
-            yield break;
-        }
-
-        var payloadOffset = cellOffset + payloadLengthBytes + rowIdBytes;
-        if (payloadLength <= 0 || payloadLength > maximumLocalPayloadLength)
-        {
-            yield break;
-        }
-
-        var payloadEnd = (long)payloadOffset + payloadLength;
-        if (payloadOffset < cellOffset || payloadEnd > pageEnd)
-        {
-            // The detector only reads complete page-local records. Reject corrupt cell bounds instead
-            // of decoding reserved bytes or adjacent page content as part of a logical value.
-            yield break;
-        }
-
-        if (!TryReadSqliteVarint(bytes, payloadOffset, (int)payloadEnd, out var headerLength, out var headerLengthBytes) ||
-            headerLength <= headerLengthBytes ||
-            headerLength > payloadLength)
-        {
-            yield break;
-        }
-
-        var serialTypeOffset = payloadOffset + headerLengthBytes;
-        var headerEnd = payloadOffset + (int)headerLength;
-        var valueOffset = headerEnd;
-        while (serialTypeOffset < headerEnd)
-        {
-            if (!TryReadSqliteVarint(bytes, serialTypeOffset, headerEnd, out var serialType, out var serialTypeBytes))
-            {
-                yield break;
-            }
-
-            serialTypeOffset += serialTypeBytes;
-            var valueLength = GetSqliteSerialTypeLength(serialType);
-            if (valueLength < 0 || valueOffset + valueLength > payloadOffset + (int)payloadLength)
-            {
-                yield break;
-            }
-
-            if (serialType >= 13 && serialType % 2 == 1)
-            {
-                yield return Encoding.UTF8.GetString(bytes, valueOffset, valueLength);
-            }
-
-            valueOffset += valueLength;
-        }
-    }
-
-    private static int GetSqliteSerialTypeLength(long serialType)
-    {
-        return serialType switch
-        {
-            0 or 8 or 9 => 0,
-            1 => 1,
-            2 => 2,
-            3 => 3,
-            4 => 4,
-            5 => 6,
-            6 or 7 => 8,
-            >= 12 when (serialType - 12) / 2 <= int.MaxValue => (int)((serialType - 12) / 2),
-            _ => -1
-        };
-    }
-
-    private static bool TryReadSqliteVarint(byte[] bytes, int offset, int endOffset, out long value, out int bytesRead)
-    {
-        value = 0;
-        bytesRead = 0;
-        if (offset < 0 || offset >= endOffset || endOffset > bytes.Length)
-        {
-            return false;
-        }
-
-        for (var index = 0; index < 9; index++)
-        {
-            if (offset + index >= endOffset)
-            {
-                return false;
-            }
-
-            var current = bytes[offset + index];
-            bytesRead++;
-            if (index == 8)
-            {
-                value = (value << 8) | current;
-                return true;
-            }
-
-            value = (value << 7) | (uint)(current & 0x7F);
-            if ((current & 0x80) == 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static int ReadUInt16BigEndian(byte[] bytes, int offset)
-    {
-        return offset >= 0 && offset + 1 < bytes.Length
-            ? (bytes[offset] << 8) | bytes[offset + 1]
-            : 0;
-    }
-
-    private static uint ReadUInt32BigEndian(byte[] bytes, int offset)
-    {
-        return offset >= 0 && offset + 3 < bytes.Length
-            ? ((uint)bytes[offset] << 24) |
-              ((uint)bytes[offset + 1] << 16) |
-              ((uint)bytes[offset + 2] << 8) |
-              bytes[offset + 3]
-            : 0;
     }
 
     private static bool HasJsonStringProperty(JsonObject json, string propertyName, string expectedValue)

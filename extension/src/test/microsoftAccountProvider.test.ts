@@ -1,0 +1,124 @@
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+import { getInternalMicrosoftAlias, MicrosoftAccountProvider } from '../utils/microsoftAccountProvider';
+
+const microsoftTenantId = '72f988bf-86f1-41af-91ab-2d7cd011db47';
+
+suite('MicrosoftAccountProvider tests', () => {
+    test('selects a normalized alias from a Microsoft tenant account', () => {
+        const alias = getInternalMicrosoftAlias([
+            createAccount('external-user.external-tenant', 'external@example.com'),
+            createAccount(`internal-user.${microsoftTenantId.toUpperCase()}`, 'Current.Alias@microsoft.com'),
+        ]);
+
+        assert.strictEqual(alias, 'current.alias');
+    });
+
+    test('ignores malformed account identifiers and labels', () => {
+        const alias = getInternalMicrosoftAlias([
+            createAccount(microsoftTenantId, 'user@microsoft.com'),
+            createAccount(`internal-user.${microsoftTenantId}`, 'Display Name'),
+            createAccount(`internal-user.${microsoftTenantId}`, 'bad alias@microsoft.com'),
+        ]);
+
+        assert.strictEqual(alias, undefined);
+    });
+
+    test('refreshes when Microsoft authentication sessions change', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let accounts: vscode.AuthenticationSessionAccountInformation[] = [];
+        const provider = new MicrosoftAccountProvider({
+            getAccounts: async () => accounts,
+            onDidChangeSessions: sessionChanges.event,
+        });
+
+        try {
+            await provider.getAliasAsync();
+            assert.strictEqual(provider.alias, undefined);
+
+            accounts = [createAccount(`internal-user.${microsoftTenantId}`, 'User@microsoft.com')];
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+            await waitFor(() => provider.alias === 'user');
+
+            accounts = [];
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+            await waitFor(() => provider.alias === undefined);
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
+
+    test('preserves the last known alias when account enumeration fails transiently', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let shouldFail = false;
+        const warnings: string[] = [];
+        const provider = new MicrosoftAccountProvider({
+            getAccounts: async () => {
+                if (shouldFail) {
+                    throw new Error('Simulated authentication failure.');
+                }
+
+                return [createAccount(`internal-user.${microsoftTenantId}`, 'User@microsoft.com')];
+            },
+            onDidChangeSessions: sessionChanges.event,
+        }, warning => warnings.push(warning));
+
+        try {
+            assert.strictEqual(await provider.getAliasAsync(), 'user');
+
+            shouldFail = true;
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+
+            await assert.rejects(
+                () => provider.getAliasAsync(),
+                /VS Code Microsoft accounts are unavailable/);
+            assert.strictEqual(provider.alias, 'user');
+            assert.deepStrictEqual(warnings, ['Unable to query VS Code Microsoft accounts.']);
+
+            shouldFail = false;
+            assert.strictEqual(await provider.getAliasAsync(), 'user');
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
+
+    test('reports unavailable when the initial account enumeration fails', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        const provider = new MicrosoftAccountProvider({
+            getAccounts: async () => {
+                throw new Error('Simulated authentication failure.');
+            },
+            onDidChangeSessions: sessionChanges.event,
+        }, () => { });
+
+        try {
+            await assert.rejects(
+                () => provider.getAliasAsync(),
+                /VS Code Microsoft accounts are unavailable/);
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
+});
+
+function createAccount(id: string, label: string): vscode.AuthenticationSessionAccountInformation {
+    return { id, label };
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+    for (let attempt = 0; attempt < 20; attempt++) {
+        if (predicate()) {
+            return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    assert.fail('Timed out waiting for Microsoft account provider update.');
+}

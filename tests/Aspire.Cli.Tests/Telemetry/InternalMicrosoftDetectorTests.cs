@@ -58,6 +58,211 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_BypassesFreshNegativeCacheWhenVsCodeAliasAppears()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 3,
+              "isInternalMicrosoft": false,
+              "isCIEnvironment": false,
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var probeRan = false;
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("current VS Code account", _ =>
+            {
+                probeRan = true;
+                return Task.FromResult(new InternalMicrosoftProbeResult(true, "current.alias", null));
+            })]],
+            vsCodeMicrosoftAlias: "current.alias");
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(probeRan);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.Equal("current.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_RejectsFreshVsCodeCacheAfterSignOut()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 3,
+              "isInternalMicrosoft": true,
+              "isCIEnvironment": false,
+              "source": "VS Code Microsoft tenant",
+              "alias": "old.alias",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [],
+            vsCodeMicrosoftProviderAvailable: true);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenProviderIsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 3,
+              "isInternalMicrosoft": true,
+              "isCIEnvironment": false,
+              "source": "VS Code Microsoft tenant",
+              "alias": "cached.alias",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var detector = CreateDetector(cacheFilePath, now, []);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, result.CacheStatus);
+        Assert.Equal("cached.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenProviderFails()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 3,
+              "isInternalMicrosoft": true,
+              "isCIEnvironment": false,
+              "source": "VS Code Microsoft tenant",
+              "alias": "cached.alias",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var provider = new TestVsCodeMicrosoftAccountProvider
+        {
+            GetInternalMicrosoftAccountAsyncCallback = _ => throw new InvalidOperationException("Simulated provider failure.")
+        };
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [],
+            vsCodeMicrosoftAccountProvider: provider);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, result.CacheStatus);
+        Assert.Equal("cached.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_BoundsVsCodeAccountQueryAndContinuesOtherProbes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var queryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseQuery = new TaskCompletionSource<VsCodeMicrosoftAccountState>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new TestVsCodeMicrosoftAccountProvider
+        {
+            GetInternalMicrosoftAccountAsyncCallback = _ =>
+            {
+                queryStarted.TrySetResult();
+                return releaseQuery.Task;
+            }
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("fallback", _ =>
+                Task.FromResult(new InternalMicrosoftProbeResult(true, "fallback.alias", null)))]],
+            probeStageTimeout: TimeSpan.FromMilliseconds(50),
+            vsCodeMicrosoftAccountProvider: provider);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        await queryStarted.Task.DefaultTimeout();
+        releaseQuery.SetResult(VsCodeMicrosoftAccountState.Unavailable);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("fallback.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ContinuesOtherProbesWhenVsCodeProviderFails()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var provider = new TestVsCodeMicrosoftAccountProvider
+        {
+            GetInternalMicrosoftAccountAsyncCallback = _ => throw new NotSupportedException("Simulated older extension.")
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("fallback", _ =>
+                Task.FromResult(new InternalMicrosoftProbeResult(true, "fallback.alias", null)))]],
+            vsCodeMicrosoftAccountProvider: provider);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("fallback.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_RefreshesFreshVsCodeCacheWhenAliasChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
+        await File.WriteAllTextAsync(cacheFilePath, """
+            {
+              "version": 3,
+              "isInternalMicrosoft": true,
+              "isCIEnvironment": false,
+              "source": "VS Code Microsoft tenant",
+              "alias": "old.alias",
+              "lastRunUtc": "2026-06-16T11:00:00+00:00"
+            }
+            """);
+        var detector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("current VS Code account", _ =>
+                Task.FromResult(new InternalMicrosoftProbeResult(true, "new.alias", null)))]],
+            vsCodeMicrosoftAlias: "new.alias");
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.Equal("new.alias", result.Alias);
+    }
+
+    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_UsesFreshNegativeCache()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -66,7 +271,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 2,
+              "version": 3,
               "isInternalMicrosoft": false,
               "isCIEnvironment": false,
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
@@ -110,7 +315,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 2", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 3", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isCIEnvironment\": false", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
@@ -417,7 +622,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, ciResult.Outcome);
         var ciCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 2", ciCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 3", ciCache, StringComparison.Ordinal);
         Assert.Contains("\"isCIEnvironment\": true", ciCache, StringComparison.Ordinal);
 
         var localProbeRan = false;
@@ -464,7 +669,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_DropsLegacyVsCodeCachedAlias()
+    public async Task IsInternalMicrosoftMachineAsync_RejectsLegacyVsCodeCacheEntry()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
@@ -483,7 +688,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result.IsInternalMicrosoft);
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
         Assert.Null(result.Alias);
         Assert.Null(result.Domain);
     }
@@ -749,237 +955,78 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task CheckVsCodeMicrosoftTenantAsync_ReadsOnlyLogicalSqliteTextValues()
+    public async Task CheckVsCodeMicrosoftAccountAsync_UsesExtensionProvidedAlias()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appData = Path.Combine(workspace.Path, "appdata");
-        var stateDatabasePath = Path.Combine(appData, "Code", "User", "globalStorage", "state.vscdb");
-        Directory.CreateDirectory(Path.GetDirectoryName(stateDatabasePath)!);
-        await File.WriteAllBytesAsync(stateDatabasePath, CreateSqliteDatabase(
-            "ms-dotnettools.csdevkit-microsoft",
-            $"USER@MICROSOFT.COM {CreateJwt(MicrosoftTenantIdForTests, "user@microsoft.com")}"));
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
             probeStages: [],
-            environmentVariables: new Dictionary<string, string?>
-            {
-                ["APPDATA"] = appData
-            },
-            environment: TestEnvironment.CreateWindows(new Dictionary<string, string?>
-            {
-                ["APPDATA"] = appData
-            }));
+            vsCodeMicrosoftAlias: "current.alias");
 
-        var result = await detector.CheckVsCodeMicrosoftTenantAsync(CancellationToken.None);
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("user", result.Alias);
-    }
-
-    [Fact]
-    public async Task CheckVsCodeMicrosoftTenantAsync_RejectsStorageKeyAdjacencyWithoutTenantEvidence()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appData = Path.Combine(workspace.Path, "appdata");
-        var stateDatabasePath = Path.Combine(appData, "Code", "User", "globalStorage", "state.vscdb");
-        Directory.CreateDirectory(Path.GetDirectoryName(stateDatabasePath)!);
-        await File.WriteAllBytesAsync(stateDatabasePath, CreateSqliteDatabase("ms-dotnettools.csdevkit-microsoft", "user@microsoft.com"));
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            environment: TestEnvironment.CreateWindows(new Dictionary<string, string?>
-            {
-                ["APPDATA"] = appData
-            }));
-
-        var result = await detector.CheckVsCodeMicrosoftTenantAsync(CancellationToken.None);
-
-        Assert.False(result.IsInternalMicrosoft);
-    }
-
-    [Fact]
-    public async Task CheckVsCodeMicrosoftTenantAsync_UsesCurrentTenantBoundValueWhenStaleAccountExists()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appData = Path.Combine(workspace.Path, "appdata");
-        var stateDatabasePath = Path.Combine(appData, "Code", "User", "globalStorage", "state.vscdb");
-        Directory.CreateDirectory(Path.GetDirectoryName(stateDatabasePath)!);
-        await File.WriteAllBytesAsync(stateDatabasePath, CreateSqliteDatabase(
-            "old.alias@microsoft.com",
-            $"Current.Alias@microsoft.com {CreateJwt(MicrosoftTenantIdForTests, "Current.Alias@microsoft.com")}"));
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            environment: TestEnvironment.CreateWindows(new Dictionary<string, string?>
-            {
-                ["APPDATA"] = appData
-            }));
-
-        var result = await detector.CheckVsCodeMicrosoftTenantAsync(CancellationToken.None);
+        var result = await detector.CheckVsCodeMicrosoftAccountAsync(CancellationToken.None);
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("current.alias", result.Alias);
     }
 
     [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_HandlesVarintsAndSerialTypes()
+    public async Task CheckVsCodeMicrosoftAccountAsync_ReturnsNotDetectedWithoutExtensionSignal()
     {
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(CreateSqliteDatabase(new string('a', 140)), CancellationToken.None);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: []);
 
-        var value = Assert.Single(values);
-        Assert.Equal(new string('a', 140), value);
+        var result = await detector.CheckVsCodeMicrosoftAccountAsync(CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
     }
 
     [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_FailsClosedForTruncatedPayload()
+    public async Task IsInternalMicrosoftMachineAsync_DefaultProbesUseAvailableVsCodeAccount()
     {
-        var database = CreateSqliteDatabase("user@microsoft.com");
-        var cellOffset = (database[108] << 8) | database[109];
-        database[cellOffset] = 0x7F;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: null,
+            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["CI"] = "true" }),
+            vsCodeMicrosoftAlias: "current.alias");
 
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
+        var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.Empty(values);
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("VS Code Microsoft tenant", result.Source);
+        Assert.Equal("current.alias", result.Alias);
     }
 
     [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_RejectsInvalidPageSize()
+    public async Task IsInternalMicrosoftMachineAsync_DefaultProbesOmitUnavailableVsCodeAccount()
     {
-        var database = CreateSqliteDatabase("user@microsoft.com");
-        database[16] = 0x03;
-        database[17] = 0x00;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: null,
+            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["CI"] = "true" }));
 
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
+        var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.Empty(values);
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Empty(result.ProbeDiagnostics);
     }
 
     [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_SkipsFreelistLeafPages()
+    public void DetectMicrosoftTenantForTesting_UsesTenantBoundJwtAlias()
     {
-        const int pageSize = 512;
-        var database = new byte[pageSize * 4];
-        Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(database, 0);
-        database[16] = 0x02;
-        database[17] = 0x00;
-        WriteUInt32BigEndian(database, 32, 2);
-        WriteUInt32BigEndian(database, 36, 2);
-
-        WriteUInt32BigEndian(database, pageSize + 4, 1);
-        WriteUInt32BigEndian(database, pageSize + 8, 3);
-        WriteSqliteLeafPage(database, pageSize * 2, 0, "deleted.user@microsoft.com");
-        WriteSqliteLeafPage(database, pageSize * 3, 0, "active.user@microsoft.com");
-
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
-
-        Assert.Equal(["active.user@microsoft.com"], values);
-    }
-
-    [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_SkipsOverflowPayloads()
-    {
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(CreateSqliteDatabaseWithOverflow(new string('a', 600)), CancellationToken.None);
-
-        Assert.Empty(values);
-    }
-
-    [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_SkipsOverflowPayloadsWhoseDeclaredEndFitsWithinPage()
-    {
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(
-            CreateSqliteDatabaseWithOverflow(new string('a', 480), placeCellAtStart: true),
+        var result = InternalMicrosoftDetector.DetectMicrosoftTenantForTesting(
+            CreateJwt(MicrosoftTenantIdForTests, "Current.Alias@microsoft.com"),
             CancellationToken.None);
 
-        Assert.Empty(values);
-    }
-
-    [Fact]
-    public void ExtractSqliteRecordTextValuesForTesting_RejectsCellPointerBeforeCellContentArea()
-    {
-        var database = CreateSqliteDatabase("user@microsoft.com");
-        var cellOffset = (database[108] << 8) | database[109];
-        var cellLength = database.Length - cellOffset;
-        const int corruptCellOffset = 110;
-        Array.Copy(database, cellOffset, database, corruptCellOffset, cellLength);
-        database[108] = 0;
-        database[109] = corruptCellOffset;
-
-        var values = InternalMicrosoftDetector.ExtractSqliteRecordTextValuesForTesting(database, CancellationToken.None);
-
-        Assert.Empty(values);
-    }
-
-    [Fact]
-    public void GetVsCodeStateDatabasePathsForTesting_ReturnsWindowsProductPaths()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appData = Path.Combine(workspace.Path, "appdata");
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            environment: TestEnvironment.CreateWindows(new Dictionary<string, string?>
-            {
-                ["APPDATA"] = appData
-            }));
-
-        Assert.Equal(
-            [
-                Path.Combine(appData, "Code", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(appData, "Code - Insiders", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(appData, "VSCodium", "User", "globalStorage", "state.vscdb")
-            ],
-            detector.GetVsCodeStateDatabasePathsForTesting());
-    }
-
-    [Fact]
-    public void GetVsCodeStateDatabasePathsForTesting_ReturnsLinuxAndWslPaths()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var home = new DirectoryInfo(Path.Combine(workspace.Path, "home"));
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?>
-            {
-                ["WSL_DISTRO_NAME"] = "Ubuntu"
-            }),
-            homeDirectory: home);
-
-        Assert.Equal(
-            [
-                Path.Combine(home.FullName, ".config", "Code", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(home.FullName, ".config", "Code - Insiders", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(home.FullName, ".config", "VSCodium", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(home.FullName, ".vscode-server", "data", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(home.FullName, ".vscode-server-insiders", "data", "User", "globalStorage", "state.vscdb")
-            ],
-            detector.GetVsCodeStateDatabasePathsForTesting());
-    }
-
-    [Fact]
-    public void GetVsCodeStateDatabasePathsForTesting_ReturnsMacOSProductPaths()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var home = new DirectoryInfo(Path.Combine(workspace.Path, "home"));
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            environment: TestEnvironment.CreateMacOS(),
-            homeDirectory: home);
-
-        Assert.Equal(
-            [
-                Path.Combine(home.FullName, "Library", "Application Support", "Code", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(home.FullName, "Library", "Application Support", "Code - Insiders", "User", "globalStorage", "state.vscdb"),
-                Path.Combine(home.FullName, "Library", "Application Support", "VSCodium", "User", "globalStorage", "state.vscdb")
-            ],
-            detector.GetVsCodeStateDatabasePathsForTesting());
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("current.alias", result.Alias);
     }
 
     [Fact]
@@ -1078,7 +1125,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     private static InternalMicrosoftDetector CreateDetector(
         string cacheFilePath,
         DateTimeOffset now,
-        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages,
+        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         TestProcessExecutionFactory? processFactory = null,
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
@@ -1086,7 +1133,10 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         TimeSpan? gitHubHttpTimeout = null,
         TimeSpan? probeStageTimeout = null,
         TestEnvironment? environment = null,
-        DirectoryInfo? homeDirectory = null)
+        DirectoryInfo? homeDirectory = null,
+        string? vsCodeMicrosoftAlias = null,
+        bool vsCodeMicrosoftProviderAvailable = false,
+        TestVsCodeMicrosoftAccountProvider? vsCodeMicrosoftAccountProvider = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
@@ -1099,6 +1149,9 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             new FixedTimeProvider(now),
             NullLogger<InternalMicrosoftDetector>.Instance,
             processFactory ?? new TestProcessExecutionFactory(),
+            vsCodeMicrosoftAccountProvider ?? new TestVsCodeMicrosoftAccountProvider(
+                isAvailable: vsCodeMicrosoftProviderAvailable || vsCodeMicrosoftAlias is not null,
+                alias: vsCodeMicrosoftAlias),
             probeStages,
             gitHubHttpMessageHandler,
             gitHubCandidateTimeout,
@@ -1127,129 +1180,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
     private static string Base64UrlEncode(byte[] bytes)
         => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-    private static byte[] CreateSqliteDatabase(params string[] values)
-    {
-        const int pageSize = 512;
-        var database = new byte[pageSize];
-        Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(database, 0);
-        database[16] = 0x02;
-        database[17] = 0x00;
-        WriteSqliteLeafPage(database, pageOffset: 0, headerOffsetInPage: 100, values);
-        return database;
-    }
-
-    private static void WriteSqliteLeafPage(byte[] database, int pageOffset, int headerOffsetInPage, params string[] values)
-    {
-        const int pageSize = 512;
-        var headerOffset = pageOffset + headerOffsetInPage;
-        database[headerOffset] = 0x0D;
-        database[headerOffset + 3] = 0x00;
-        database[headerOffset + 4] = 0x01;
-        var payload = CreateSqliteRecordPayload(values);
-        var cell = new List<byte>();
-        WriteSqliteVarint(cell, payload.Count);
-        WriteSqliteVarint(cell, 1);
-        cell.AddRange(payload);
-
-        var cellOffset = pageSize - cell.Count;
-        database[headerOffset + 5] = (byte)(cellOffset >> 8);
-        database[headerOffset + 6] = (byte)cellOffset;
-        database[headerOffset + 8] = (byte)(cellOffset >> 8);
-        database[headerOffset + 9] = (byte)cellOffset;
-        cell.CopyTo(database, pageOffset + cellOffset);
-    }
-
-    private static byte[] CreateSqliteDatabaseWithOverflow(string value, bool placeCellAtStart = false)
-    {
-        const int pageSize = 512;
-        const int usableSize = pageSize;
-        const int leafPageNumber = 2;
-        const int overflowPageNumber = 3;
-        var database = new byte[pageSize * overflowPageNumber];
-        Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(database, 0);
-        database[16] = 0x02;
-        database[17] = 0x00;
-
-        var payload = CreateSqliteRecordPayload([value]);
-        var minimumLocalPayload = (((usableSize - 12) * 32) / 255) - 23;
-        var maximumLocalPayload = usableSize - 35;
-        var localPayloadLength = minimumLocalPayload + ((payload.Count - minimumLocalPayload) % (usableSize - 4));
-        if (localPayloadLength > maximumLocalPayload)
-        {
-            localPayloadLength = minimumLocalPayload;
-        }
-
-        var cell = new List<byte>();
-        WriteSqliteVarint(cell, payload.Count);
-        WriteSqliteVarint(cell, 1);
-        cell.AddRange(payload.Take(localPayloadLength));
-        cell.Add(0);
-        cell.Add(0);
-        cell.Add(0);
-        cell.Add(overflowPageNumber);
-
-        var leafPageOffset = (leafPageNumber - 1) * pageSize;
-        database[leafPageOffset] = 0x0D;
-        database[leafPageOffset + 3] = 0;
-        database[leafPageOffset + 4] = 1;
-        var cellOffsetInPage = placeCellAtStart ? 10 : pageSize - cell.Count;
-        database[leafPageOffset + 5] = (byte)(cellOffsetInPage >> 8);
-        database[leafPageOffset + 6] = (byte)cellOffsetInPage;
-        database[leafPageOffset + 8] = (byte)(cellOffsetInPage >> 8);
-        database[leafPageOffset + 9] = (byte)cellOffsetInPage;
-        cell.CopyTo(database, leafPageOffset + cellOffsetInPage);
-
-        var overflowPageOffset = (overflowPageNumber - 1) * pageSize;
-        payload.Skip(localPayloadLength).ToArray().CopyTo(database, overflowPageOffset + 4);
-        return database;
-    }
-
-    private static List<byte> CreateSqliteRecordPayload(string[] values)
-    {
-        var serialTypes = new List<byte>();
-        var valueBytes = new List<byte>();
-        foreach (var value in values)
-        {
-            var bytes = Encoding.UTF8.GetBytes(value);
-            WriteSqliteVarint(serialTypes, 13 + (bytes.Length * 2));
-            valueBytes.AddRange(bytes);
-        }
-
-        var header = new List<byte>();
-        WriteSqliteVarint(header, 1 + serialTypes.Count);
-        header.AddRange(serialTypes);
-        header.AddRange(valueBytes);
-        return header;
-    }
-
-    private static void WriteSqliteVarint(List<byte> bytes, int value)
-    {
-        if (value < 0x80)
-        {
-            bytes.Add((byte)value);
-            return;
-        }
-
-        var stack = new Stack<byte>();
-        stack.Push((byte)(value & 0x7F));
-        value >>= 7;
-        while (value > 0)
-        {
-            stack.Push((byte)((value & 0x7F) | 0x80));
-            value >>= 7;
-        }
-
-        bytes.AddRange(stack);
-    }
-
-    private static void WriteUInt32BigEndian(byte[] bytes, int offset, uint value)
-    {
-        bytes[offset] = (byte)(value >> 24);
-        bytes[offset + 1] = (byte)(value >> 16);
-        bytes[offset + 2] = (byte)(value >> 8);
-        bytes[offset + 3] = (byte)value;
-    }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
