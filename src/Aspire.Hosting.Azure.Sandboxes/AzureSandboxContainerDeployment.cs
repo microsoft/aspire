@@ -1205,12 +1205,7 @@ internal static class AzureSandboxContainerDeployment
             AzureDevComputeResourceScope fallbackScope;
             try
             {
-                var azureState = await GetAzureStateAsync(deploymentStateManager, context.CancellationToken).ConfigureAwait(false);
-                fallbackScope = new AzureDevComputeResourceScope(
-                    azureState.SubscriptionId,
-                    azureState.ResourceGroup,
-                    GetRequiredOutput(resource.Parent, "name"),
-                    azureState.Location);
+                fallbackScope = CreateDataPlaneScope(resource.Parent);
             }
             catch (InvalidOperationException ex)
             {
@@ -2187,15 +2182,6 @@ internal static class AzureSandboxContainerDeployment
         {
             context.Logger.LogWarning(ex, "Failed to delete sandbox disk image '{DiskImageId}'.", diskImageId);
         }
-    }
-
-    private static async Task<AzureDeploymentState> GetAzureStateAsync(IDeploymentStateManager deploymentStateManager, CancellationToken cancellationToken)
-    {
-        var azureState = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
-        return new AzureDeploymentState(
-            GetRequiredStateValue(azureState, "SubscriptionId"),
-            GetRequiredStateValue(azureState, "ResourceGroup"),
-            GetRequiredStateValue(azureState, "Location"));
     }
 
     private static string GetRequiredStateValue(DeploymentStateSection section, string name)

@@ -1249,14 +1249,23 @@ public class AzureSandboxesTests
         azureState.Data["ResourceGroup"] = "rg";
         azureState.Data["Location"] = "westus3";
         await stateManager.SaveSectionAsync(azureState, TestContext.Current.CancellationToken);
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        Uri? requestUri = null;
+        var handler = new RecordingHandler(request =>
         {
-            Content = JsonContent.Create(new { message = "cleanup failed" })
-        }));
+            requestUri = request.RequestUri;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = JsonContent.Create(new { message = "cleanup failed" })
+            });
+        });
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
-        sandboxGroup.Resource.Outputs["name"] = "sandbox-group";
+        sandboxGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/providers/Microsoft.App/sandboxGroups/existing-group";
+        sandboxGroup.Resource.Outputs["location"] = "eastus2";
+        var existingScope = AzureSandboxContainerDeployment.CreateDataPlaneScope(sandboxGroup.Resource);
+        Assert.Equal("existing-rg", existingScope.ResourceGroupName);
+        Assert.Equal("existing-group", existingScope.SandboxGroupName);
         var targetResource = builder.AddContainer("frontend", "example/image").Resource;
         var sandboxResource = new AzureSandboxContainerResource(
             "frontend-sandbox-container",
@@ -1285,6 +1294,9 @@ public class AzureSandboxesTests
 
         Assert.Contains("ADC request", exception.Message);
         Assert.Contains("HTTP 400", exception.Message);
+        Assert.NotNull(requestUri);
+        Assert.Contains("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/", requestUri?.AbsolutePath);
+        Assert.Contains("/sandboxGroups/existing-group/", requestUri?.AbsolutePath);
     }
 
     [Fact]
