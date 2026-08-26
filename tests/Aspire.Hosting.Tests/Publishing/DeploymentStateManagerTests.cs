@@ -580,6 +580,37 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task UnchangedScalarSavePreservesConcurrentUpdate()
+    {
+        var sha = Guid.NewGuid().ToString("N");
+        var initialStateManager = CreateFileDeploymentStateManager(sha);
+
+        try
+        {
+            var initialSection = await initialStateManager.AcquireSectionAsync("Parameters:secret");
+            initialSection.SetValue("initial");
+            await initialStateManager.SaveSectionAsync(initialSection);
+
+            var staleStateManager = CreateFileDeploymentStateManager(sha);
+            var updatingStateManager = CreateFileDeploymentStateManager(sha);
+            var staleSection = await staleStateManager.AcquireSectionAsync("Parameters:secret");
+            var updatingSection = await updatingStateManager.AcquireSectionAsync("Parameters:secret");
+
+            updatingSection.SetValue("updated");
+            await updatingStateManager.SaveSectionAsync(updatingSection);
+            await staleStateManager.SaveSectionAsync(staleSection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(sha);
+            var restartedSection = await restartedStateManager.AcquireSectionAsync("Parameters:secret");
+            Assert.Equal("updated", restartedSection.Data[""]?.GetValue<string>());
+        }
+        finally
+        {
+            await initialStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
     public async Task SourceAppHostMigrationPersistsOnlyUpdatedSections()
     {
         var legacySha = Guid.NewGuid().ToString("N");
@@ -702,6 +733,54 @@ public class DeploymentStateManagerTests : IDisposable
             Assert.Equal(
                 "new-sandbox",
                 restartedAzureSection.Data["Sandboxes"]?["new"]?["SandboxId"]?.GetValue<string>());
+        }
+        finally
+        {
+            await migratingStateManager.ClearAllStateAsync();
+            await legacyStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
+    public async Task RecreatedClaimedDescendantDoesNotRestoreLegacyChildrenInParentRead()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+
+        try
+        {
+            var legacySandboxesSection = await legacyStateManager.AcquireSectionAsync("Azure:Sandboxes");
+            legacySandboxesSection.Data["first"] = new JsonObject
+            {
+                ["SandboxId"] = "legacy-first",
+                ["LegacyOnly"] = true
+            };
+            legacySandboxesSection.Data["second"] = new JsonObject
+            {
+                ["SandboxId"] = "legacy-second"
+            };
+            await legacyStateManager.SaveSectionAsync(legacySandboxesSection);
+
+            var firstSandboxSection = await migratingStateManager.AcquireSectionAsync("Azure:Sandboxes:first");
+            await migratingStateManager.DeleteSectionAsync(firstSandboxSection);
+
+            var newChildSection = await migratingStateManager.AcquireSectionAsync("Azure:Sandboxes:first:new");
+            newChildSection.Data["SandboxId"] = "new-sandbox";
+            await migratingStateManager.SaveSectionAsync(newChildSection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+            var restartedSandboxesSection = await restartedStateManager.AcquireSectionAsync("Azure:Sandboxes");
+
+            Assert.Null(restartedSandboxesSection.Data["first"]?["SandboxId"]);
+            Assert.Null(restartedSandboxesSection.Data["first"]?["LegacyOnly"]);
+            Assert.Equal(
+                "new-sandbox",
+                restartedSandboxesSection.Data["first"]?["new"]?["SandboxId"]?.GetValue<string>());
+            Assert.Equal(
+                "legacy-second",
+                restartedSandboxesSection.Data["second"]?["SandboxId"]?.GetValue<string>());
         }
         finally
         {
