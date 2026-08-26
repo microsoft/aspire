@@ -10,7 +10,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <remarks>
 /// Add one annotation for each concurrency constraint that applies to the resource's deployment
-/// operation. Resources that reference the same <see cref="DeploymentConcurrencyGroup"/> instance
+/// operation. Resources whose <see cref="DeploymentConcurrencyGroup"/> values have the same
+/// <see cref="DeploymentConcurrencyGroup.Name"/>
 /// must not deploy concurrently. Publishers should enforce every group associated with a resource.
 /// </remarks>
 /// <param name="group">The deployment concurrency group associated with the resource.</param>

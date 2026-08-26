@@ -670,7 +670,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             var concurrencyGroups = resource.Annotations
                 .OfType<DeploymentConcurrencyGroupAnnotation>()
                 .Select(annotation => annotation.Group)
-                .Distinct<DeploymentConcurrencyGroup>(ReferenceEqualityComparer.Instance)
+                .DistinctBy(group => group.Name, StringComparer.Ordinal)
                 .ToArray();
 
             if (concurrencyGroups.Length == 0)
@@ -914,16 +914,16 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         ValidateDependencyGraph(steps, stepsByName);
 
         // Every step acquires its groups in the same order so overlapping memberships cannot deadlock.
-        var concurrencyGates = new Dictionary<DeploymentConcurrencyGroup, (int Order, SemaphoreSlim Semaphore)>(ReferenceEqualityComparer.Instance);
+        var concurrencyGates = new Dictionary<string, (int Order, SemaphoreSlim Semaphore)>(StringComparer.Ordinal);
         var nextConcurrencyGroupOrder = 0;
         foreach (var step in steps)
         {
             foreach (var group in step.GetDeploymentConcurrencyGroups())
             {
-                if (!concurrencyGates.ContainsKey(group))
+                if (!concurrencyGates.ContainsKey(group.Name))
                 {
                     concurrencyGates.Add(
-                        group,
+                        group.Name,
                         (nextConcurrencyGroupOrder++, new SemaphoreSlim(1, 1)));
                 }
             }
@@ -974,8 +974,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             try
             {
                 var stepConcurrencyGates = step.GetDeploymentConcurrencyGroups()
-                    .Distinct<DeploymentConcurrencyGroup>(ReferenceEqualityComparer.Instance)
-                    .Select(group => concurrencyGates[group])
+                    .Select(group => group.Name)
+                    .Distinct(StringComparer.Ordinal)
+                    .Select(groupName => concurrencyGates[groupName])
                     .OrderBy(gate => gate.Order);
 
                 foreach (var gate in stepConcurrencyGates)
