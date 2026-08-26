@@ -206,6 +206,42 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("E2E", result.UnmatchedTokens);
     }
 
+    [Fact]
+    public async Task StartCommand_AllowAnonymousOptionIsPassedToAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = CliExitCodes.FailedToDotnetRunAppHost
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["start", "--apphost", appHostFile.FullName, "--allow-anonymous"]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
+
+        var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(processFactory.LastArguments));
+        var childParseResult = command.Parse(forwardedArguments);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.Equal(
+            [$"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true"],
+            childParseResult.UnmatchedTokens);
+    }
+
     [Theory]
     [InlineData("--launch-profile")]
     [InlineData("-lp")]
@@ -407,6 +443,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             "--format=table",
             "--no-build",
             "--launch-profile", "E2E",
+            "--allow-anonymous",
             "--isolated=false",
             "--wait-for-debugger",
             "--non-interactive=false",
@@ -433,6 +470,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
                 "--capture-profile",
                 "--no-build",
                 "--launch-profile", "E2E",
+                "--allow-anonymous",
                 "--isolated", "false",
                 "--wait-for-debugger",
                 "--log-level", "Debug",

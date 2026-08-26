@@ -79,6 +79,13 @@ internal sealed class AppHostLauncher(
         Description = SharedCommandStrings.LaunchProfileOptionDescription
     };
 
+    // This option explicitly opts into an unsecured dashboard. See the security considerations at
+    // https://aspire.dev/dashboard/security-considerations/ before enabling it outside local development.
+    internal static readonly Option<bool> s_allowAnonymousOption = new("--allow-anonymous")
+    {
+        Description = DashboardCommandStrings.AllowAnonymousOptionDescription
+    };
+
     /// <summary>
     /// Adds the detached launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep options in sync.
@@ -89,6 +96,24 @@ internal sealed class AppHostLauncher(
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
         command.Options.Add(s_launchProfileOption);
+        command.Options.Add(s_allowAnonymousOption);
+    }
+
+    /// <summary>
+    /// Gets the arguments to pass to the AppHost, including dashboard configuration derived from CLI options.
+    /// </summary>
+    internal static IReadOnlyList<string> GetAppHostArguments(ParseResult parseResult)
+    {
+        var arguments = new List<string>();
+        if (parseResult.GetResult(s_allowAnonymousOption) is { Implicit: false })
+        {
+            var allowAnonymous = parseResult.GetValue(s_allowAnonymousOption);
+            arguments.Add($"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}={allowAnonymous.ToString().ToLowerInvariant()}");
+        }
+
+        arguments.AddRange(parseResult.UnmatchedTokens);
+
+        return arguments;
     }
 
     /// <summary>

@@ -277,6 +277,46 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("E2E", launchProfile);
     }
 
+    [Theory]
+    [InlineData("--allow-anonymous", "true")]
+    [InlineData("--allow-anonymous=false", "false")]
+    public async Task RunCommand_AllowAnonymousOptionIsPassedToAppHost(string option, string expectedValue)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        IReadOnlyList<string>? appHostArguments = null;
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                appHostArguments = context.UnmatchedTokens;
+                context.BuildCompletionSource?.TrySetResult(false);
+                return Task.FromResult(42);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, option]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+        Assert.Equal(
+            [$"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}={expectedValue}"],
+            appHostArguments);
+    }
+
     [Fact]
     public async Task RunCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {
@@ -1168,6 +1208,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             }
             """);
         var expectedAppHostArguments = new[] { "true", "false", string.Empty, "--detach", "--option-shaped" };
+        string[] expectedForwardedAppHostArguments =
+            [$"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true", .. expectedAppHostArguments];
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
@@ -1193,6 +1235,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--apphost", appHostFile.FullName,
             "--no-build",
             $"{launchProfileOption}=--no-build",
+            "--allow-anonymous",
             "--",
             .. expectedAppHostArguments
         ]);
@@ -1200,7 +1243,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.Errors);
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
 
-        AssertDetachedChildArguments(command, processFactory.LastArguments, "--no-build", expectedAppHostArguments);
+        AssertDetachedChildArguments(command, processFactory.LastArguments, "--no-build", expectedForwardedAppHostArguments);
     }
 
     [Fact]
@@ -3916,6 +3959,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             "--detach=false",
             "--no-build",
             "--launch-profile", "E2E",
+            "--allow-anonymous",
             "--isolated=false",
             "--format=table",
             "--wait-for-debugger",
@@ -3942,6 +3986,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 "--capture-profile",
                 "--no-build",
                 "--launch-profile", "E2E",
+                "--allow-anonymous",
                 "--isolated", "false",
                 "--wait-for-debugger",
                 "--capture-profile-output", new FileInfo(relativeCapturePath).FullName,

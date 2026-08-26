@@ -329,7 +329,7 @@ internal sealed class RunCommand : BaseCommand
                 StartDebugSession = startDebugSession,
                 LaunchProfile = launchProfile,
                 EnvironmentVariables = new Dictionary<string, string>(),
-                UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
+                UnmatchedTokens = [.. AppHostLauncher.GetAppHostArguments(parseResult)],
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
                 BuildCompletionSource = buildCompletionSource,
                 BackchannelCompletionSource = backchannelCompletionSource,
@@ -1200,7 +1200,7 @@ internal sealed class RunCommand : BaseCommand
         var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var appHostArgs = parseResult.UnmatchedTokens;
+        var appHostArgs = AppHostLauncher.GetAppHostArguments(parseResult);
         var additionalArgs = new List<string>();
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
