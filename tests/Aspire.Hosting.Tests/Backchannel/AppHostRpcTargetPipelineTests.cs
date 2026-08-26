@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Tests.Backchannel;
 public class AppHostRpcTargetPipelineTests
 {
     [Fact]
-    public async Task GetPipelineStepsAsync_AppliesConcurrencyGroupsToFullList()
+    public async Task GetPipelineStepsAsync_DoesNotRepresentConcurrencyGroupsAsDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         AddGroupedDeploymentTargets(builder);
@@ -26,12 +26,12 @@ public class AppHostRpcTargetPipelineTests
         var secondStep = Assert.Single(response.Steps, step => step.Name == "provision-target2");
 
         Assert.Empty(firstStep.DependsOn);
-        Assert.Equal(["provision-target1"], secondStep.DependsOn);
+        Assert.Empty(secondStep.DependsOn);
         Assert.True(Array.IndexOf(response.Steps, firstStep) < Array.IndexOf(response.Steps, secondStep));
     }
 
     [Fact]
-    public async Task GetPipelineStepsAsync_AppliesConcurrencyGroupsAfterTargetFiltering()
+    public async Task GetPipelineStepsAsync_TargetedConcurrencyGroupMemberDoesNotAddDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         AddGroupedDeploymentTargets(builder);
