@@ -8,6 +8,7 @@
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Hashing;
@@ -788,11 +789,7 @@ internal static class AzureSandboxContainerDeployment
     internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(IEnumerable<string> environmentValues)
     {
         var allowedHosts = environmentValues
-            .Select(static value => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-                    ? uri.IdnHost
-                    : null)
-            .Where(static host => IsOutboundHost(host))
+            .SelectMany(GetOutboundHttpHosts)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -810,6 +807,47 @@ internal static class AzureSandboxContainerDeployment
                 })
             ]
         };
+    }
+
+    private static IEnumerable<string> GetOutboundHttpHosts(string value)
+    {
+        if (TryGetOutboundHttpHost(value, out var host))
+        {
+            return [host];
+        }
+
+        try
+        {
+            // Aspire connection references can resolve to composite values such as:
+            //   Endpoint=https://account.blob.core.windows.net;ContainerName=uploads
+            // Use the connection-string parser so quoted values containing semicolons remain intact.
+            var builder = new DbConnectionStringBuilder { ConnectionString = value };
+            return builder.Values
+                .Cast<object>()
+                .Select(static candidate => Convert.ToString(candidate, CultureInfo.InvariantCulture))
+                .Select(static candidate => TryGetOutboundHttpHost(candidate, out var candidateHost) ? candidateHost : null)
+                .OfType<string>();
+        }
+        catch (ArgumentException)
+        {
+            // Most environment values are not connection strings. Values that are neither a direct URI
+            // nor a parseable composite value do not describe an outbound host.
+            return [];
+        }
+    }
+
+    private static bool TryGetOutboundHttpHost(string? value, [NotNullWhen(true)] out string? host)
+    {
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+            IsOutboundHost(uri.IdnHost))
+        {
+            host = uri.IdnHost;
+            return true;
+        }
+
+        host = null;
+        return false;
     }
 
     private static bool IsOutboundHost([NotNullWhen(true)] string? host)

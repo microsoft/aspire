@@ -1900,6 +1900,7 @@ public class AzureSandboxesTests
         var egress = AzureSandboxContainerDeployment.CreateEgressPolicy(
         [
             "https://api.example.test/v1",
+            "Endpoint=https://account.blob.core.windows.net;ContainerName=uploads",
             "not-a-url",
             "https://API.example.test/v2",
             "http://*:8080",
@@ -1909,9 +1910,18 @@ public class AzureSandboxesTests
         ]);
         Assert.Equal("Deny", egress.DefaultAction);
         Assert.Equal("Full", egress.TrafficInspection);
-        var hostRule = Assert.Single(egress.HostRules);
-        Assert.Equal("Allow", hostRule.Action);
-        Assert.Equal("api.example.test", hostRule.Pattern);
+        Assert.Collection(
+            egress.HostRules,
+            hostRule =>
+            {
+                Assert.Equal("Allow", hostRule.Action);
+                Assert.Equal("account.blob.core.windows.net", hostRule.Pattern);
+            },
+            hostRule =>
+            {
+                Assert.Equal("Allow", hostRule.Action);
+                Assert.Equal("api.example.test", hostRule.Pattern);
+            });
 
         var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
         Assert.Equal("Http", endpoint.Protocol);
