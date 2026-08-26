@@ -50,6 +50,8 @@ internal abstract class BaseCommand : Command
     /// </summary>
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
+    protected virtual TimeSpan ExtensionInteractionFlushTimeout => s_extensionInteractionFlushTimeout;
+
     private readonly CliExecutionContext _executionContext;
     private bool _isJsonFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
@@ -284,7 +286,7 @@ internal abstract class BaseCommand : Command
         // Command cancellation has already been translated into CommandResult; using a canceled
         // token here would skip the final debug-console drain or throw after the command selected
         // its exit code. Bound the drain separately so a broken extension cannot hang CLI exit.
-        using var flushCancellationTokenSource = new CancellationTokenSource(s_extensionInteractionFlushTimeout);
+        using var flushCancellationTokenSource = new CancellationTokenSource(ExtensionInteractionFlushTimeout);
         try
         {
             await extensionInteractionService.FlushAsync(flushCancellationTokenSource.Token).ConfigureAwait(false);
