@@ -267,29 +267,6 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithVolumeEnvironmentThrowsForAnonymousVolumeWhenComputeEnvironmentCannotMountVolumes()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var environment = builder.AddResource(new MountIncapableComputeEnvironmentResource("env"));
-        var container = builder.AddContainer("container", "image")
-            .WithComputeEnvironment(environment);
-
-        // No public or ATS overload pairs an anonymous volume with an environment variable, so reach
-        // the guard through the shared core the way a future internal caller would.
-        VolumeResourceBuilderExtensions.WithVolumeCore(container, name: null, "/srv/data", isReadOnly: false, env: "DATA_PATH");
-
-        using var app = builder.Build();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                container.Resource,
-                DistributedApplicationOperation.Publish,
-                app.Services));
-
-        Assert.Contains("an anonymous volume", exception.Message);
-    }
-
-    [Fact]
     public async Task WithVolumeEnvironmentResolvesWhenComputeEnvironmentSupportsVolumeMounts()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

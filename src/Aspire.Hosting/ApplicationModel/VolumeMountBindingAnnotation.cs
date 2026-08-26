@@ -83,7 +83,7 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
 
             if (context.ExecutionContext.IsPublishMode)
             {
-                ThrowIfEnvironmentCannotMount(context, VolumeName, EnvironmentVariableName);
+                ThrowIfEnvironmentCannotMount(context);
             }
 
             return mountPath;
@@ -116,7 +116,7 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
     /// Throws when the resource is published to a compute environment that cannot back the volume with
     /// real storage.
     /// </summary>
-    internal static void ThrowIfEnvironmentCannotMount(EnvironmentCallbackContext context, string? volumeName, string? environmentVariableName)
+    private void ThrowIfEnvironmentCannotMount(EnvironmentCallbackContext context)
     {
         // Only an environment that consumes ContainerMountAnnotation can back the path handed to the
         // workload. When the environment is known and does not, the variable resolves to ordinary
@@ -132,13 +132,12 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
             return;
         }
 
-        var volume = volumeName is null ? "an anonymous volume" : $"volume '{volumeName}'";
-
         throw new InvalidOperationException(
-            $"Resource '{context.Resource.Name}' binds {volume} to environment variable '{environmentVariableName}', but " +
-            $"compute environment '{environment.Name}' does not support volume mounts. The variable would point at a path " +
-            $"that is not backed by storage, so anything written there is lost when the workload restarts. Remove the " +
-            $"environment variable binding, or target a compute environment that supports volume mounts.");
+            $"Resource '{context.Resource.Name}' binds volume '{VolumeName}' to environment variable " +
+            $"'{EnvironmentVariableName}', but compute environment '{environment.Name}' does not support volume " +
+            $"mounts. The variable would point at a path that is not backed by storage, so anything written there " +
+            $"is lost when the workload restarts. Remove the environment variable binding, or target a compute " +
+            $"environment that supports volume mounts.");
     }
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)

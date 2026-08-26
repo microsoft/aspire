@@ -57,27 +57,29 @@ public static class VolumeResourceBuilderExtensions
         string? name,
         string target,
         bool isReadOnly,
-        string? env,
-        Func<EnvironmentCallbackContext, string>? getRunModeHostPath = null)
+        string? env)
         where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(target);
 
-        if (env is not null)
+        if (env is null)
         {
-            ArgumentException.ThrowIfNullOrEmpty(env);
+            builder.WithAnnotation(new ContainerMountAnnotation(name, target, ContainerMountType.Volume, isReadOnly));
+            return builder;
+        }
 
-            if (builder.Resource is ProjectResource or ExecutableResource)
-            {
-                ArgumentException.ThrowIfNullOrEmpty(name);
-            }
+        ArgumentException.ThrowIfNullOrEmpty(env);
 
-            if (builder.Resource is not IResourceWithEnvironment)
-            {
-                throw new InvalidOperationException(
-                    $"Resource '{builder.Resource.Name}' does not support environment variables and cannot use the '{env}' volume path variable.");
-            }
+        // Binding an environment variable requires a named volume. Run mode scopes a local directory by
+        // the volume name, and the binding annotation below is keyed on it, so an anonymous volume has
+        // nothing to resolve against and nothing a compute environment could inspect.
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (builder.Resource is not IResourceWithEnvironment)
+        {
+            throw new InvalidOperationException(
+                $"Resource '{builder.Resource.Name}' does not support environment variables and cannot use the '{env}' volume path variable.");
         }
 
         builder.WithAnnotation(new ContainerMountAnnotation(name, target, ContainerMountType.Volume, isReadOnly));
@@ -85,47 +87,15 @@ public static class VolumeResourceBuilderExtensions
         // Restate the binding declaratively. The env callback below captures env in a closure, so a
         // compute environment inspecting the model afterwards cannot otherwise tell that this mount
         // resolves a local path in run mode.
-        VolumeMountBindingAnnotation? binding = null;
-
-        if (name is not null && (env is not null || getRunModeHostPath is not null))
+        var binding = new VolumeMountBindingAnnotation(name)
         {
-            binding = new VolumeMountBindingAnnotation(name)
-            {
-                EnvironmentVariableName = env,
-                MountPath = target,
-                RunModeHostPathResolver = getRunModeHostPath
-            };
+            EnvironmentVariableName = env,
+            MountPath = target
+        };
 
-            builder.WithAnnotation(binding);
-        }
-
-        if (env is not null)
-        {
-            builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
-            {
-                if (binding is not null)
-                {
-                    context.EnvironmentVariables[env] = binding.ResolvePath(context);
-                    return;
-                }
-
-                // Anonymous volumes have no name to scope a local directory by, so only the deployed
-                // mount path and a container's own mount are resolvable.
-                if (context.ExecutionContext.IsPublishMode || context.Resource is ContainerResource)
-                {
-                    if (context.ExecutionContext.IsPublishMode)
-                    {
-                        VolumeMountBindingAnnotation.ThrowIfEnvironmentCannotMount(context, volumeName: null, env);
-                    }
-
-                    context.EnvironmentVariables[env] = target;
-                    return;
-                }
-
-                throw new InvalidOperationException(
-                    $"Resource '{context.Resource.Name}' cannot resolve the '{env}' volume path in run mode because the volume is anonymous.");
-            }));
-        }
+        builder.WithAnnotation(binding);
+        builder.WithAnnotation(new EnvironmentCallbackAnnotation(
+            context => context.EnvironmentVariables[env] = binding.ResolvePath(context)));
 
         return builder;
     }
