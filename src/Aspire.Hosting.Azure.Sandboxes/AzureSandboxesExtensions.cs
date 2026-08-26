@@ -53,7 +53,6 @@ public static class AzureSandboxesExtensions
                 {
                     var resource = new SandboxGroup(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Location = BicepFunction.GetResourceGroup().Location,
                         Properties = [],
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
@@ -304,7 +303,7 @@ public static class AzureSandboxesExtensions
             return;
         }
 
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        var names = new HashSet<string>(StringComparers.EndpointAnnotationName);
         foreach (var endpoint in options.Endpoints)
         {
             if (endpoint is null)

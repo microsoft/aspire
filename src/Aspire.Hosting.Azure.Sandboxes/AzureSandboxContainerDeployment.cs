@@ -21,6 +21,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure;
@@ -136,9 +137,15 @@ internal static class AzureSandboxContainerDeployment
             ResourceDependencyDiscoveryMode.DirectOnly).ConfigureAwait(false);
         foreach (var dependency in dependencies)
         {
-            if (dependency.GetDeploymentTargetAnnotation(resource.Parent)?.DeploymentTarget is not AzureSandboxContainerResource producer)
+            if (dependency.GetDeploymentTargetAnnotation()?.DeploymentTarget is not AzureSandboxContainerResource producer)
             {
                 continue;
+            }
+
+            if (!ReferenceEquals(producer.Parent, resource.Parent))
+            {
+                throw new NotSupportedException(
+                    $"Azure sandbox resource '{resource.TargetResource.Name}' in sandbox group '{resource.Parent.Name}' references resource '{dependency.Name}' in sandbox group '{producer.Parent.Name}', but cross-group sandbox references are not supported. Deploy both resources to the same sandbox group.");
             }
 
             var producerSteps = context.GetSteps(producer, WellKnownPipelineTags.DeployCompute);
@@ -212,25 +219,40 @@ internal static class AzureSandboxContainerDeployment
         var targetResource = resource.TargetResource;
         var endpoints = ResolveSandboxEndpoints(resource);
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
-        var azureState = await GetAzureStateAsync(deploymentStateManager, context.CancellationToken).ConfigureAwait(false);
-
         var dataPlaneScope = CreateDataPlaneScope(resource.Parent);
         var client = CreateAzureDevComputeClient(context);
 
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
         ValidateDeploymentScope(stateSection, dataPlaneScope);
         var previousStateSection = CloneStateSection(stateSection);
+        var environmentName = context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName;
         var ownerId = CreateStableOwnerId(
+            GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
+            environmentName,
+            dataPlaneScope,
+            resource.Name);
+        var previousOwnerId = previousStateSection.Data["OwnerId"]?.GetValue<string>();
+        var ownerChanged = !string.IsNullOrWhiteSpace(previousOwnerId) &&
+            !string.Equals(previousOwnerId, ownerId, StringComparison.Ordinal);
+        var legacyOwnerId = CreateLegacyStableOwnerId(
             GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
             dataPlaneScope,
             resource.Name);
+        var pendingOwnerCleanupIds = GetPendingOwnerCleanupIds(previousStateSection, ownerId, legacyOwnerId);
+        var pendingLegacyDeploymentCleanup = CreatePendingLegacyDeploymentCleanup(
+            previousStateSection,
+            ownerId,
+            legacyOwnerId);
         stateSection.Data["OwnerId"] = ownerId;
+        SetPendingOwnerCleanupIds(stateSection, pendingOwnerCleanupIds);
+        SetPendingLegacyDeploymentCleanup(stateSection, pendingLegacyDeploymentCleanup);
         SetRecoveryStateIfMissing(stateSection, dataPlaneScope, resource);
         await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
 
         var deployId = Guid.NewGuid().ToString("N");
         var diskImageId = string.Empty;
         var sandboxId = string.Empty;
+        var addedPorts = new List<SandboxEndpoint>();
         var deploymentCommitted = false;
 
         try
@@ -262,12 +284,13 @@ internal static class AzureSandboxContainerDeployment
                 environmentVariables[key] = value;
             }
             AddManagedIdentityEnvironmentVariables(targetResource, environmentVariables);
+            var egressPolicy = CreateEgressPolicy(environmentVariables.Values);
 
             var createTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (createTask.ConfigureAwait(false))
             {
                 var sandbox = await CreateWithResponseLossCleanupAsync(
-                    () => CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, ownerId, deployId),
+                    () => CreateSandboxAsync(context, client, dataPlaneScope, resource, diskImageId, environmentVariables, imageMetadata, egressPolicy, ownerId, deployId),
                     context,
                     client,
                     dataPlaneScope,
@@ -299,6 +322,7 @@ internal static class AzureSandboxContainerDeployment
                 await using (exposeTask.ConfigureAwait(false))
                 {
                     var addedPort = await AddPortAsync(context, client, dataPlaneScope, sandboxId, endpoint).ConfigureAwait(false);
+                    addedPorts.Add(endpoint);
 
                     var endpointUrl = addedPort.Url.ToString();
                     if (endpoint.IsExternal && endpoint.IsHttp)
@@ -327,17 +351,16 @@ internal static class AzureSandboxContainerDeployment
                 endpointSecurityFingerprint);
             var pendingSecurityCleanup = previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true;
             securityConfigurationChanged |= pendingSecurityCleanup;
-            var previousOwnerId = previousStateSection.Data["OwnerId"]?.GetValue<string>();
-            var ownerChanged = !string.IsNullOrWhiteSpace(previousOwnerId) &&
-                !string.Equals(previousOwnerId, ownerId, StringComparison.Ordinal);
 
             stateSection.Data.Clear();
             stateSection.Data["OwnerId"] = ownerId;
+            SetPendingOwnerCleanupIds(stateSection, pendingOwnerCleanupIds);
+            SetPendingLegacyDeploymentCleanup(stateSection, pendingLegacyDeploymentCleanup);
             stateSection.Data["SandboxId"] = sandboxId;
             stateSection.Data["DiskImageId"] = diskImageId;
             stateSection.Data["SubscriptionId"] = dataPlaneScope.SubscriptionId;
             stateSection.Data["ResourceGroup"] = dataPlaneScope.ResourceGroupName;
-            stateSection.Data["Location"] = azureState.Location;
+            stateSection.Data["Location"] = dataPlaneScope.Region;
             stateSection.Data["SandboxGroup"] = dataPlaneScope.SandboxGroupName;
             stateSection.Data["ResourceName"] = resource.Name;
             stateSection.Data["SourceResourceName"] = targetResource.Name;
@@ -377,23 +400,40 @@ internal static class AzureSandboxContainerDeployment
                     excludedDiskImageIds,
                     throwOnError: securityConfigurationChanged).ConfigureAwait(false);
 
-                if (ownerChanged)
+                if (pendingLegacyDeploymentCleanup is not null)
+                {
+                    await DeleteExistingDeploymentAsync(
+                        context,
+                        client,
+                        dataPlaneScope,
+                        new DeploymentStateSection(
+                            stateSection.SectionName,
+                            pendingLegacyDeploymentCleanup,
+                            version: 0),
+                        throwOnError: true).ConfigureAwait(false);
+                }
+
+                foreach (var pendingOwnerCleanupId in pendingOwnerCleanupIds)
                 {
                     await DeleteRemoteDeploymentsByResourceLabelAsync(
                         context,
                         client,
                         dataPlaneScope,
-                        previousOwnerId!,
+                        pendingOwnerCleanupId,
                         resource.Name,
                         s_noExcludedIds,
                         s_noExcludedIds,
                         s_noExcludedIds,
-                        throwOnError: false).ConfigureAwait(false);
+                        throwOnError: true).ConfigureAwait(false);
                 }
 
-                if (securityConfigurationChanged)
+                if (securityConfigurationChanged ||
+                    pendingOwnerCleanupIds.Count > 0 ||
+                    pendingLegacyDeploymentCleanup is not null)
                 {
                     stateSection.Data["PendingSecurityCleanup"] = false;
+                    stateSection.Data.Remove("PendingOwnerCleanupIds");
+                    stateSection.Data.Remove("PendingLegacyDeploymentCleanup");
                     await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
                 }
             }
@@ -430,6 +470,29 @@ internal static class AzureSandboxContainerDeployment
                 using var deploymentCleanupCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
                 try
                 {
+                    if (!string.IsNullOrWhiteSpace(sandboxId))
+                    {
+                        await DeleteSandboxAsync(
+                            context,
+                            client,
+                            dataPlaneScope,
+                            sandboxId,
+                            addedPorts.Select(static endpoint => endpoint.TargetPort),
+                            throwOnError: false,
+                            deploymentCleanupCts.Token).ConfigureAwait(false);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(diskImageId))
+                    {
+                        await DeleteDiskImageAsync(
+                            context,
+                            client,
+                            dataPlaneScope,
+                            diskImageId,
+                            throwOnError: false,
+                            deploymentCleanupCts.Token).ConfigureAwait(false);
+                    }
+
                     await CleanupFailedDeploymentAsync(
                         context,
                         client,
@@ -639,11 +702,10 @@ internal static class AzureSandboxContainerDeployment
         string diskImageId,
         IReadOnlyDictionary<string, string> environmentVariables,
         ContainerImageMetadata imageMetadata,
+        AzureDevComputeSandboxEgressPolicy egressPolicy,
         string ownerId,
         string deployId)
     {
-        ValidateSandboxVolumes(resource.TargetResource);
-
         return client.CreateSandboxAsync(
             scope,
             new AzureDevComputeSandboxRequest
@@ -652,9 +714,10 @@ internal static class AzureSandboxContainerDeployment
                 Environment = environmentVariables.Count > 0 ? environmentVariables : null,
                 IdentitySettings = ResolveIdentitySettings(resource.TargetResource),
                 SkipEgressProxy = false,
-                EgressPolicy = CreateEgressPolicy(),
+                EgressPolicy = egressPolicy,
                 Entrypoint = imageMetadata.Entrypoint.Count > 0 ? [.. imageMetadata.Entrypoint] : null,
                 Cmd = imageMetadata.Command.Count > 0 ? [.. imageMetadata.Command] : null,
+                WorkingDirectory = imageMetadata.WorkingDirectory,
                 SourcesRef = new AzureDevComputeSandboxSource
                 {
                     DiskImage = new AzureDevComputeSandboxDiskImageSource
@@ -714,16 +777,46 @@ internal static class AzureSandboxContainerDeployment
         };
     }
 
-    internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy()
+    internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(IEnumerable<string> environmentValues)
     {
+        var allowedHosts = environmentValues
+            .Select(static value => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                    ? uri.IdnHost
+                    : null)
+            .Where(static host => IsOutboundHost(host))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         return new AzureDevComputeSandboxEgressPolicy
         {
             DefaultAction = "Deny",
-            TrafficInspection = "Full"
+            TrafficInspection = "Full",
+            HostRules =
+            [
+                .. allowedHosts.Select(static host => new AzureDevComputeSandboxEgressHostRule
+                {
+                    Action = "Allow",
+                    Pattern = host!
+                })
+            ]
         };
     }
 
-    internal static void ValidateSandboxVolumes(IResource resource)
+    private static bool IsOutboundHost([NotNullWhen(true)] string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host) ||
+            host is "*" or "+" or "::" or "[::]")
+        {
+            return false;
+        }
+
+        return !IPAddress.TryParse(host, out var address) ||
+            !address.Equals(IPAddress.Any) && !address.Equals(IPAddress.IPv6Any);
+    }
+
+    internal static void ValidateSandboxCompatibility(IResource resource)
     {
         if (resource.TryGetContainerMounts(out var mounts) && mounts.Any())
         {
@@ -1142,6 +1235,7 @@ internal static class AzureSandboxContainerDeployment
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
         var ownerId = stateSection.Data["OwnerId"]?.GetValue<string>();
         var appHostIdentity = GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>());
+        var environmentName = context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName;
         if (!HasRemoteDeploymentState(stateSection))
         {
             try
@@ -1152,7 +1246,7 @@ internal static class AzureSandboxContainerDeployment
                     azureState.ResourceGroup,
                     GetRequiredOutput(resource.Parent, "name"),
                     azureState.Location);
-                var stableOwnerId = CreateStableOwnerId(appHostIdentity, fallbackScope, resource.Name);
+                var stableOwnerId = CreateStableOwnerId(appHostIdentity, environmentName, fallbackScope, resource.Name);
                 await DeleteRemoteDeploymentsByResourceLabelAsync(
                     context,
                     CreateAzureDevComputeClient(context),
@@ -1185,13 +1279,28 @@ internal static class AzureSandboxContainerDeployment
             GetRequiredStateValue(stateSection, "ResourceGroup"),
             GetRequiredStateValue(stateSection, "SandboxGroup"),
             GetRequiredStateValue(stateSection, "Location"));
+        var legacyOwnerId = CreateLegacyStableOwnerId(appHostIdentity, scope, resource.Name);
 
         await DeleteExistingDeploymentAsync(context, client, scope, stateSection, throwOnError: true).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(ownerId))
+        if (!string.IsNullOrWhiteSpace(ownerId) &&
+            !string.Equals(ownerId, legacyOwnerId, StringComparison.Ordinal))
         {
             await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
         }
-        var stableOwnerIdForScope = CreateStableOwnerId(appHostIdentity, scope, resource.Name);
+        if (GetPendingLegacyDeploymentCleanup(stateSection) is JsonObject pendingLegacyDeploymentCleanup)
+        {
+            await DeleteExistingDeploymentAsync(
+                context,
+                client,
+                scope,
+                new DeploymentStateSection(stateSection.SectionName, pendingLegacyDeploymentCleanup, version: 0),
+                throwOnError: true).ConfigureAwait(false);
+        }
+        foreach (var pendingOwnerCleanupId in GetPendingOwnerCleanupIds(stateSection, ownerId))
+        {
+            await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, pendingOwnerCleanupId, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+        }
+        var stableOwnerIdForScope = CreateStableOwnerId(appHostIdentity, environmentName, scope, resource.Name);
         if (!string.Equals(ownerId, stableOwnerIdForScope, StringComparison.Ordinal))
         {
             await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, stableOwnerIdForScope, resource.Name, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
@@ -1232,10 +1341,40 @@ internal static class AzureSandboxContainerDeployment
             var cleanupTask = await context.ReportingStep.CreateTaskAsync($"Deleting stale sandbox deployment {sectionName}", context.CancellationToken).ConfigureAwait(false);
             await using (cleanupTask.ConfigureAwait(false))
             {
+                var resourceName = GetStateResourceName(stateSection, sectionName);
+                var legacyOwnerId = CreateLegacyStableOwnerId(
+                    GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
+                    scope,
+                    resourceName);
                 await DeleteExistingDeploymentAsync(context, client, scope, stateSection, throwOnError: true).ConfigureAwait(false);
-                if (stateSection.Data["OwnerId"]?.GetValue<string>() is { Length: > 0 } ownerId)
+                if (stateSection.Data["OwnerId"]?.GetValue<string>() is { Length: > 0 } ownerId &&
+                    !string.Equals(ownerId, legacyOwnerId, StringComparison.Ordinal))
                 {
-                    await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, GetStateResourceName(stateSection, sectionName), s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+                    await DeleteRemoteDeploymentsByResourceLabelAsync(context, client, scope, ownerId, resourceName, s_noExcludedIds, s_noExcludedIds, s_noExcludedIds, throwOnError: true).ConfigureAwait(false);
+                }
+                if (GetPendingLegacyDeploymentCleanup(stateSection) is JsonObject pendingLegacyDeploymentCleanup)
+                {
+                    await DeleteExistingDeploymentAsync(
+                        context,
+                        client,
+                        scope,
+                        new DeploymentStateSection(sectionName, pendingLegacyDeploymentCleanup, version: 0),
+                        throwOnError: true).ConfigureAwait(false);
+                }
+                foreach (var pendingOwnerCleanupId in GetPendingOwnerCleanupIds(
+                    stateSection,
+                    stateSection.Data["OwnerId"]?.GetValue<string>()))
+                {
+                    await DeleteRemoteDeploymentsByResourceLabelAsync(
+                        context,
+                        client,
+                        scope,
+                        pendingOwnerCleanupId,
+                        resourceName,
+                        s_noExcludedIds,
+                        s_noExcludedIds,
+                        s_noExcludedIds,
+                        throwOnError: true).ConfigureAwait(false);
                 }
                 await deploymentStateManager.DeleteSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
                 await cleanupTask.CompleteAsync($"Deleted stale sandbox deployment {sectionName}", CompletionState.Completed, context.CancellationToken).ConfigureAwait(false);
@@ -1250,8 +1389,8 @@ internal static class AzureSandboxContainerDeployment
         var options = GetAzureSandboxContainerOptions(resource.TargetResource);
         var endpointOptions = options?.Endpoints?.ToDictionary(
             static endpoint => endpoint.Name!,
-            StringComparer.Ordinal);
-        var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparer.Ordinal);
+            StringComparers.EndpointAnnotationName);
+        var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparers.EndpointAnnotationName);
         var endpoints = new Dictionary<int, SandboxEndpoint>();
         foreach (var resolvedEndpoint in resource.TargetResource.ResolveEndpoints())
         {
@@ -1415,49 +1554,60 @@ internal static class AzureSandboxContainerDeployment
         CancellationToken cancellationToken)
     {
         var labelSelector = CreateLabelSelector(ownerId, resourceName, deployId);
-        List<AzureDevComputeSandbox> sandboxes;
-        try
-        {
-            sandboxes = await client.ListSandboxesAsync(scope, labelSelector, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            context.Logger.LogWarning(ex, "Failed to list sandboxes while reconciling failed deployment '{DeployId}'.", deployId);
-            sandboxes = [];
-        }
+        var consecutiveEmptyResults = 0;
 
-        foreach (var sandbox in sandboxes.Where(sandbox => HasDeploymentLabels(sandbox.Labels, ownerId, resourceName, deployId)))
+        while (!cancellationToken.IsCancellationRequested && consecutiveEmptyResults < 3)
         {
-            await DeleteSandboxAsync(
-                context,
-                client,
-                scope,
-                sandbox.Id,
-                sandbox.Ports.Select(static port => port.Port),
-                throwOnError: false,
-                cancellationToken).ConfigureAwait(false);
-        }
+            var foundDeployment = false;
 
-        List<AzureDevComputeDiskImage> diskImages;
-        try
-        {
-            diskImages = await client.ListDiskImagesAsync(scope, labelSelector, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            context.Logger.LogWarning(ex, "Failed to list disk images while reconciling failed deployment '{DeployId}'.", deployId);
-            diskImages = [];
-        }
+            try
+            {
+                var sandboxes = await client.ListSandboxesAsync(scope, labelSelector, cancellationToken).ConfigureAwait(false);
+                foreach (var sandbox in sandboxes.Where(sandbox => HasDeploymentLabels(sandbox.Labels, ownerId, resourceName, deployId)))
+                {
+                    foundDeployment = true;
+                    await DeleteSandboxAsync(
+                        context,
+                        client,
+                        scope,
+                        sandbox.Id,
+                        sandbox.Ports.Select(static port => port.Port),
+                        throwOnError: false,
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                context.Logger.LogWarning(ex, "Failed to list sandboxes while reconciling failed deployment '{DeployId}'.", deployId);
+                foundDeployment = true;
+            }
 
-        foreach (var diskImage in diskImages.Where(diskImage => HasDeploymentLabels(diskImage.Labels, ownerId, resourceName, deployId)))
-        {
-            await DeleteDiskImageAsync(
-                context,
-                client,
-                scope,
-                diskImage.Id,
-                throwOnError: false,
-                cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var diskImages = await client.ListDiskImagesAsync(scope, labelSelector, cancellationToken).ConfigureAwait(false);
+                foreach (var diskImage in diskImages.Where(diskImage => HasDeploymentLabels(diskImage.Labels, ownerId, resourceName, deployId)))
+                {
+                    foundDeployment = true;
+                    await DeleteDiskImageAsync(
+                        context,
+                        client,
+                        scope,
+                        diskImage.Id,
+                        throwOnError: false,
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                context.Logger.LogWarning(ex, "Failed to list disk images while reconciling failed deployment '{DeployId}'.", deployId);
+                foundDeployment = true;
+            }
+
+            consecutiveEmptyResults = foundDeployment ? 0 : consecutiveEmptyResults + 1;
+            if (consecutiveEmptyResults < 3)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -1560,6 +1710,30 @@ internal static class AzureSandboxContainerDeployment
 
     internal static string CreateStableOwnerId(
         string appHostIdentity,
+        string environmentName,
+        AzureDevComputeResourceScope scope,
+        string resourceName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(appHostIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
+
+        var identity = string.Join(
+            "\n",
+            [
+                appHostIdentity.ToLowerInvariant(),
+                environmentName.ToLowerInvariant(),
+                scope.SubscriptionId.ToLowerInvariant(),
+                scope.ResourceGroupName.ToLowerInvariant(),
+                scope.SandboxGroupName.ToLowerInvariant(),
+                resourceName.ToLowerInvariant()
+            ]);
+        var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(identity));
+        return $"aspire-{hash:x16}";
+    }
+
+    internal static string CreateLegacyStableOwnerId(
+        string appHostIdentity,
         AzureDevComputeResourceScope scope,
         string resourceName)
     {
@@ -1577,6 +1751,77 @@ internal static class AzureSandboxContainerDeployment
             ]);
         var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(identity));
         return $"aspire-{hash:x16}";
+    }
+
+    internal static HashSet<string> GetPendingOwnerCleanupIds(
+        DeploymentStateSection stateSection,
+        string? currentOwnerId,
+        string? ambiguousOwnerId = null)
+    {
+        var ownerIds = stateSection.Data["PendingOwnerCleanupIds"] is JsonArray pendingOwnerIds
+            ? pendingOwnerIds.GetValues<string>().ToHashSet(StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+        if (stateSection.Data["OwnerId"]?.GetValue<string>() is { Length: > 0 } previousOwnerId &&
+            !string.Equals(previousOwnerId, currentOwnerId, StringComparison.Ordinal))
+        {
+            ownerIds.Add(previousOwnerId);
+        }
+
+        ownerIds.RemoveWhere(ownerId => string.Equals(ownerId, currentOwnerId, StringComparison.Ordinal));
+        ownerIds.RemoveWhere(ownerId => string.Equals(ownerId, ambiguousOwnerId, StringComparison.Ordinal));
+        return ownerIds;
+    }
+
+    private static void SetPendingOwnerCleanupIds(
+        DeploymentStateSection stateSection,
+        IReadOnlySet<string> ownerIds)
+    {
+        if (ownerIds.Count == 0)
+        {
+            stateSection.Data.Remove("PendingOwnerCleanupIds");
+            return;
+        }
+
+        stateSection.Data["PendingOwnerCleanupIds"] = new JsonArray(
+            ownerIds
+                .Order(StringComparer.Ordinal)
+                .Select(static ownerId => JsonValue.Create(ownerId))
+                .ToArray());
+    }
+
+    internal static JsonObject? CreatePendingLegacyDeploymentCleanup(
+        DeploymentStateSection stateSection,
+        string currentOwnerId,
+        string legacyOwnerId)
+    {
+        var pendingDeploymentCleanup = GetPendingLegacyDeploymentCleanup(stateSection);
+        if (stateSection.Data["OwnerId"]?.GetValue<string>() is { Length: > 0 } previousOwnerId &&
+            !string.Equals(previousOwnerId, currentOwnerId, StringComparison.Ordinal) &&
+            string.Equals(previousOwnerId, legacyOwnerId, StringComparison.Ordinal) &&
+            HasRemoteDeploymentState(stateSection))
+        {
+            pendingDeploymentCleanup = stateSection.Data.DeepClone().AsObject();
+            pendingDeploymentCleanup.Remove("PendingLegacyDeploymentCleanup");
+        }
+
+        return pendingDeploymentCleanup;
+    }
+
+    private static JsonObject? GetPendingLegacyDeploymentCleanup(DeploymentStateSection stateSection) =>
+        stateSection.Data["PendingLegacyDeploymentCleanup"]?.DeepClone() as JsonObject;
+
+    private static void SetPendingLegacyDeploymentCleanup(
+        DeploymentStateSection stateSection,
+        JsonObject? pendingDeploymentCleanup)
+    {
+        if (pendingDeploymentCleanup is null)
+        {
+            stateSection.Data.Remove("PendingLegacyDeploymentCleanup");
+        }
+        else
+        {
+            stateSection.Data["PendingLegacyDeploymentCleanup"] = pendingDeploymentCleanup.DeepClone();
+        }
     }
 
     internal static string GetStableAppHostIdentity(IConfiguration configuration)

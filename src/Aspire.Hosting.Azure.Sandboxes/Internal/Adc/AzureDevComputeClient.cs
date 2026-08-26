@@ -435,6 +435,8 @@ internal sealed class AzureDevComputeSandboxRequest
 
     public List<string>? Cmd { get; init; }
 
+    public string? WorkingDirectory { get; init; }
+
     public IReadOnlyDictionary<string, string>? Environment { get; init; }
 
     public List<AzureDevComputeIdentitySetting>? IdentitySettings { get; init; }
@@ -482,6 +484,15 @@ internal sealed class AzureDevComputeSandboxEgressPolicy
     public string DefaultAction { get; init; } = "Deny";
 
     public string? TrafficInspection { get; init; }
+
+    public List<AzureDevComputeSandboxEgressHostRule> HostRules { get; init; } = [];
+}
+
+internal sealed class AzureDevComputeSandboxEgressHostRule
+{
+    public string Action { get; init; } = "Allow";
+
+    public required string Pattern { get; init; }
 }
 
 internal sealed class AzureDevComputeSandbox
