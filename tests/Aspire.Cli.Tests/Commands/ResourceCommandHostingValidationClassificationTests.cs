@@ -15,15 +15,18 @@ namespace Aspire.Cli.Tests.Commands;
 public class ResourceCommandHostingValidationClassificationTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task CurrentHostZeroArgumentCommandRejectsUnknownOptionBeforeCallback()
+    public async Task MetadataMissingCommandValidatesUnknownOptionBeforeExecution()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
         var interactionService = new TestInteractionService();
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
-            SupportsV3 = true,
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Unknown argument '--unknown value' for command 'configure'."
+            },
             ResourceSnapshots =
             [
                 CreateResourceSnapshot(
@@ -39,21 +42,23 @@ public class ResourceCommandHostingValidationClassificationTests(ITestOutputHelp
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
-        Assert.Equal("Unrecognized command option '--unknown value'.", Assert.Single(interactionService.DisplayedErrors));
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.NotNull(backchannel.ExecuteResourceCommandOptions);
+        Assert.True(backchannel.ExecuteResourceCommandOptions.ValidateOnly);
+        Assert.True(backchannel.ExecuteResourceCommandOptions.ReturnArgumentInputs);
+        Assert.Equal("Unknown argument '--unknown value' for command 'configure'.", Assert.Single(interactionService.DisplayedErrors));
         Assert.Contains("Configures the browser.", output.ToString());
         Assert.Contains("Usage:", output.ToString());
     }
 
     [Fact]
-    public async Task CurrentHostCallbackFailureWithParserLikeTextDoesNotShowHelp()
+    public async Task CallbackFailureWithParserLikeTextDoesNotShowHelp()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
         var interactionService = new TestInteractionService();
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
-            SupportsV3 = true,
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = false,
@@ -78,42 +83,10 @@ public class ResourceCommandHostingValidationClassificationTests(ITestOutputHelp
 
         Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.NotNull(backchannel.ExecuteResourceCommandOptions);
+        Assert.False(backchannel.ExecuteResourceCommandOptions.ValidateOnly);
         Assert.Contains("Unknown argument '--pretend' for command 'configure'.", Assert.Single(interactionService.DisplayedErrors));
         Assert.Empty(output.ToString());
-    }
-
-    [Fact]
-    public async Task PreV3HostKeepsLegacyUnknownArgumentFallback()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var output = new StringWriter();
-        var interactionService = new TestInteractionService();
-        var backchannel = new TestAppHostAuxiliaryBackchannel
-        {
-            SupportsV3 = false,
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
-            {
-                Success = false,
-                Message = "Unknown argument '--unknown value' for command 'configure'."
-            },
-            ResourceSnapshots =
-            [
-                CreateResourceSnapshot(
-                    "web-browser-automation",
-                    CreateCommand("configure", "Configures the browser."))
-            ]
-        };
-        await using var provider = CreateServiceProvider(workspace, backchannel, interactionService);
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("""resource web-browser-automation configure --unknown value""");
-
-        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
-        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
-        Assert.Contains("Configures the browser.", output.ToString());
-        Assert.Contains("Usage:", output.ToString());
     }
 
     private ServiceProvider CreateServiceProvider(
