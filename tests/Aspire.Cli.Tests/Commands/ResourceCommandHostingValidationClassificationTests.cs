@@ -22,6 +22,7 @@ public class ResourceCommandHostingValidationClassificationTests(ITestOutputHelp
         var interactionService = new TestInteractionService();
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsV3 = true,
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = false,
