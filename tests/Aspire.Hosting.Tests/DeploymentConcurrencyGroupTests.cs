@@ -8,28 +8,9 @@ namespace Aspire.Hosting.Tests;
 public class DeploymentConcurrencyGroupTests
 {
     [Fact]
-    public void ConstructorInitializesGroup()
-    {
-        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
-
-        Assert.Equal(2, group.MaxConcurrentDeployments);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void ConstructorRejectsNonPositiveLimit(int maxConcurrentDeployments)
-    {
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(
-            () => new DeploymentConcurrencyGroup(maxConcurrentDeployments));
-
-        Assert.Equal(nameof(maxConcurrentDeployments), exception.ParamName);
-    }
-
-    [Fact]
     public void AnnotationConstructorInitializesGroup()
     {
-        var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
+        var group = new DeploymentConcurrencyGroup();
 
         var annotation = new DeploymentConcurrencyGroupAnnotation(group);
 

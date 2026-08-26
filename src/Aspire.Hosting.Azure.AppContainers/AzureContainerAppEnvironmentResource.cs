@@ -44,7 +44,7 @@ public class AzureContainerAppEnvironmentResource :
         // ACA permits only one active create or update operation per managed environment. All
         // deployment targets materialized for this environment share this group so every publisher
         // can enforce the constraint without interpreting application relationships as dependencies.
-        _deploymentConcurrencyGroup = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        _deploymentConcurrencyGroup = new DeploymentConcurrencyGroup();
 
         // Add pipeline step annotation to create steps and expand deployment target steps
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>

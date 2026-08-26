@@ -924,7 +924,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 {
                     concurrencyGates.Add(
                         group,
-                        (nextConcurrencyGroupOrder++, new SemaphoreSlim(group.MaxConcurrentDeployments, group.MaxConcurrentDeployments)));
+                        (nextConcurrencyGroupOrder++, new SemaphoreSlim(1, 1)));
                 }
             }
         }
