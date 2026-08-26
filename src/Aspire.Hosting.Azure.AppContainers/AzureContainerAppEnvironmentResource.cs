@@ -244,7 +244,7 @@ public class AzureContainerAppEnvironmentResource :
                 ContainerRegistry = this,
                 ComputeEnvironment = this
             };
-            deploymentTargetAnnotation.DeploymentConcurrencyGroups.Add(deploymentConcurrencyGroup);
+            containerApp.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(deploymentConcurrencyGroup));
             r.Annotations.Add(deploymentTargetAnnotation);
         }
 

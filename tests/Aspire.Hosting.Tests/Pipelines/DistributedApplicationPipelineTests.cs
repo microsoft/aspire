@@ -177,7 +177,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var deploymentTarget = new CustomResource("target");
         var replacementTarget = new CustomResource("target");
         var deploymentTargetAnnotation = new DeploymentTargetAnnotation(deploymentTarget);
-        deploymentTargetAnnotation.DeploymentConcurrencyGroups.Add(group);
+        deploymentTarget.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(group));
 
         var resource = builder.AddContainer("app", "myimage").Resource;
         resource.Annotations.Add(deploymentTargetAnnotation);
@@ -202,6 +202,36 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var step = Assert.Single(steps, step => step.Name == "deploy-target");
         Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups));
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_WithAnnotatedNonComputeResource_AssignsAllConcurrencyGroups()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var exclusiveGroup = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var sharedGroup = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 2);
+        var resource = builder.AddResource(new CustomResource("artifact-source")).Resource;
+        resource.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(exclusiveGroup));
+        resource.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(sharedGroup));
+        resource.Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+        {
+            Name = "download-artifact",
+            Resource = resource,
+            Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
+            Action = _ => Task.CompletedTask
+        }));
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var step = Assert.Single(steps, step => step.Name == "download-artifact");
+        Assert.Collection(
+            step.DeploymentConcurrencyGroups,
+            group => Assert.Same(exclusiveGroup, group),
+            group => Assert.Same(sharedGroup, group));
     }
 
     [Fact]
@@ -250,7 +280,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         {
             var target = new CustomResource(targetName);
             var deploymentTarget = new DeploymentTargetAnnotation(target);
-            deploymentTarget.DeploymentConcurrencyGroups.Add(group);
+            target.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(group));
 
             var resource = builder.AddContainer(resourceName, "myimage").Resource;
             resource.Annotations.Add(deploymentTarget);
@@ -293,7 +323,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         {
             var target = new CustomResource(targetName);
             var deploymentTarget = new DeploymentTargetAnnotation(target);
-            deploymentTarget.DeploymentConcurrencyGroups.Add(group);
+            target.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(group));
 
             var resource = builder.AddContainer(resourceName, "myimage").Resource;
             resource.Annotations.Add(deploymentTarget);
