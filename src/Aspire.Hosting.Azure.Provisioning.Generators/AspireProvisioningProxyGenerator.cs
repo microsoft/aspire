@@ -404,31 +404,55 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         var names = new Dictionary<INamedTypeSymbol, string>(SymbolEqualityComparer.Default);
         var coreTypePrefix = GetPackageIdentifier(generatedNamespace);
+        var desiredNames = new Dictionary<INamedTypeSymbol, string>(SymbolEqualityComparer.Default);
 
-        foreach (var group in types.GroupBy(static type => type.Name, StringComparer.Ordinal))
+        foreach (var type in types)
+        {
+            desiredNames.Add(
+                type,
+                (IsSharedProxyType(type) ? coreTypePrefix : string.Empty) +
+                type.Name +
+                "Proxy");
+        }
+
+        // Shared Azure.Provisioning types receive the package prefix, which can make their final
+        // proxy identifier collide with a service SDK type. Resolve collisions only after applying
+        // that prefix so every declaration and reference uses the same unique name.
+        var groups = desiredNames
+            .GroupBy(static pair => pair.Value, StringComparer.Ordinal)
+            .OrderBy(static group => group.Key, StringComparer.Ordinal)
+            .ToList();
+        var usedNames = new HashSet<string>(
+            groups.Where(static group => group.Count() == 1).Select(static group => group.Key),
+            StringComparer.Ordinal);
+
+        foreach (var group in groups)
         {
             if (group.Count() == 1)
             {
-                var type = group.Single();
-                names.Add(
-                    type,
-                    (IsSharedProxyType(type) ? coreTypePrefix : string.Empty) +
-                    type.Name +
-                    "Proxy");
+                var pair = group.Single();
+                names.Add(pair.Key, pair.Value);
                 continue;
             }
 
-            var index = 0;
-            foreach (var type in group.OrderBy(static type => type.ToDisplayString(), StringComparer.Ordinal))
+            var nameWithoutSuffix = group.Key.Substring(0, group.Key.Length - "Proxy".Length);
+            var suffix = 1;
+            foreach (var pair in group.OrderBy(
+                static pair => pair.Key.ToDisplayString(),
+                StringComparer.Ordinal))
             {
-                var qualifiedName = SanitizeIdentifier(type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
-                names.Add(
-                    type,
-                    (IsSharedProxyType(type) ? coreTypePrefix : string.Empty) +
-                    qualifiedName +
-                    "_" +
-                    (++index).ToString(System.Globalization.CultureInfo.InvariantCulture) +
-                    "Proxy");
+                string generatedName;
+                do
+                {
+                    generatedName = nameWithoutSuffix +
+                        "_" +
+                        suffix.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                        "Proxy";
+                    suffix++;
+                }
+                while (!usedNames.Add(generatedName));
+
+                names.Add(pair.Key, generatedName);
             }
         }
 
@@ -1342,6 +1366,9 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             .OrderBy(static type => type.ToDisplayString(), StringComparer.Ordinal)
             .ToList();
         var factoryTypeNames = CreateFactoryTypeNames(types, proxyNames);
+        // Lookup, creation, and static-property exports all share this extension class. Reserve
+        // signatures across every phase so independently derived method names cannot collide.
+        var factoryMethodSignatures = new HashSet<string>(StringComparer.Ordinal);
 
         source.AppendLine("    [global::Aspire.Hosting.AspireExportAttribute]");
         source.Append("    internal static class ").Append(FactoryClassName).AppendLine();
@@ -1357,7 +1384,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 source,
                 root.Type,
                 proxyNames[root.Type],
-                factoryTypeNames[root.Type]);
+                factoryTypeNames[root.Type],
+                factoryMethodSignatures);
         }
 
         foreach (var type in concreteTypes)
@@ -1366,16 +1394,35 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             var factoryTypeName = factoryTypeNames[type];
             if (IsProvisionableResource(type))
             {
-                GenerateResourceLookupMethods(source, type, proxyName, factoryTypeName);
+                GenerateResourceLookupMethods(
+                    source,
+                    type,
+                    proxyName,
+                    factoryTypeName,
+                    factoryMethodSignatures);
 
                 if (SelectConstructor(type, isProvisionableResource: true, proxyNames, collectionNames) is { } constructor)
                 {
-                    GenerateCreationMethod(source, type, proxyName, factoryTypeName, constructor, isProvisionableResource: true);
+                    GenerateCreationMethod(
+                        source,
+                        type,
+                        proxyName,
+                        factoryTypeName,
+                        constructor,
+                        isProvisionableResource: true,
+                        factoryMethodSignatures);
                 }
             }
             else if (SelectConstructor(type, isProvisionableResource: false, proxyNames, collectionNames) is { } constructor)
             {
-                GenerateCreationMethod(source, type, proxyName, factoryTypeName, constructor, isProvisionableResource: false);
+                GenerateCreationMethod(
+                    source,
+                    type,
+                    proxyName,
+                    factoryTypeName,
+                    constructor,
+                    isProvisionableResource: false,
+                    factoryMethodSignatures);
             }
 
             GenerateStaticPropertyFactoryMethods(
@@ -1384,7 +1431,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 proxyNames,
                 collectionNames,
                 proxyName,
-                factoryTypeName);
+                factoryTypeName,
+                factoryMethodSignatures);
         }
 
         source.AppendLine("    }");
@@ -1417,9 +1465,13 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         StringBuilder source,
         INamedTypeSymbol type,
         string proxyName,
-        string factoryTypeName)
+        string factoryTypeName,
+        HashSet<string> factoryMethodSignatures)
     {
-        var methodName = "Get" + factoryTypeName;
+        var methodName = AllocateFactoryMethodName(
+            factoryMethodSignatures,
+            "Get" + factoryTypeName,
+            parameterSignature: string.Empty);
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
         source.AppendLine();
         if (!AppendDocumentationComment(source, type, "        "))
@@ -1448,10 +1500,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         StringBuilder source,
         INamedTypeSymbol type,
         string proxyName,
-        string factoryTypeName)
+        string factoryTypeName,
+        HashSet<string> factoryMethodSignatures)
     {
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
-        var getMethodName = "Get" + factoryTypeName + "ByIdentifier";
+        var getMethodName = AllocateFactoryMethodName(
+            factoryMethodSignatures,
+            "Get" + factoryTypeName + "ByIdentifier",
+            parameterSignature: "string");
         source.AppendLine();
         if (!AppendDocumentationComment(source, type, "        "))
         {
@@ -1476,7 +1532,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.Append("            return new ").Append(proxyName).AppendLine("(value);");
         source.AppendLine("        }");
 
-        var getAllMethodName = "Get" + PluralizeIdentifier(factoryTypeName);
+        var getAllMethodName = AllocateFactoryMethodName(
+            factoryMethodSignatures,
+            "Get" + PluralizeIdentifier(factoryTypeName),
+            parameterSignature: string.Empty);
         source.AppendLine();
         if (!AppendDocumentationComment(source, type, "        "))
         {
@@ -1510,9 +1569,13 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         string proxyName,
         string factoryTypeName,
         SelectedConstructor constructor,
-        bool isProvisionableResource)
+        bool isProvisionableResource,
+        HashSet<string> factoryMethodSignatures)
     {
-        var methodName = (isProvisionableResource ? "Add" : "Create") + factoryTypeName;
+        var methodName = AllocateFactoryMethodName(
+            factoryMethodSignatures,
+            (isProvisionableResource ? "Add" : "Create") + factoryTypeName,
+            GetFactoryParameterSignature(constructor.Parameters));
         var underlyingTypeName = type.ToDisplayString(s_typeDisplayFormat);
         source.AppendLine();
         var hasSourceDocumentation = AppendDocumentationComment(
@@ -1574,7 +1637,8 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         Dictionary<INamedTypeSymbol, string> proxyNames,
         Dictionary<INamedTypeSymbol, string> collectionNames,
         string proxyName,
-        string factoryTypeName)
+        string factoryTypeName,
+        HashSet<string> factoryMethodSignatures)
     {
         // AzureLocation exposes every known region as a static property. Exporting those convenience
         // constants into every provisioning package would dominate the opt-in API surface, while the
@@ -1598,7 +1662,10 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
                 continue;
             }
 
-            var methodName = "Get" + factoryTypeName + property.Name;
+            var methodName = AllocateFactoryMethodName(
+                factoryMethodSignatures,
+                "Get" + factoryTypeName + property.Name,
+                parameterSignature: string.Empty);
             source.AppendLine();
             if (!AppendDocumentationComment(source, property, "        ", includeValue: true))
             {
@@ -1622,6 +1689,46 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             source.AppendLine(";");
             source.AppendLine("        }");
         }
+    }
+
+    private static string AllocateFactoryMethodName(
+        HashSet<string> factoryMethodSignatures,
+        string preferredName,
+        string parameterSignature)
+    {
+        var methodName = preferredName;
+        var suffix = 2;
+        while (!factoryMethodSignatures.Add(methodName + "(" + parameterSignature + ")"))
+        {
+            methodName = preferredName + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            suffix++;
+        }
+
+        return methodName;
+    }
+
+    private static string GetFactoryParameterSignature(List<MappedParameter> parameters)
+    {
+        var signature = new StringBuilder();
+        for (var index = 0; index < parameters.Count; index++)
+        {
+            if (index > 0)
+            {
+                signature.Append(',');
+            }
+
+            var parameter = parameters[index];
+            var typeName = parameter.Type.ExposedTypeName;
+            if (parameter.Parameter.Type.IsReferenceType ||
+                parameter.Type.Kind is MappedTypeKind.Proxy or MappedTypeKind.ProvisionableResource or MappedTypeKind.Collection)
+            {
+                typeName = typeName.TrimEnd('?');
+            }
+
+            signature.Append(typeName);
+        }
+
+        return signature.ToString();
     }
 
     private static SelectedConstructor? SelectConstructor(

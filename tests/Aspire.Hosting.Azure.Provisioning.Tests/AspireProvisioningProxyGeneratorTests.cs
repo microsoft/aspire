@@ -172,6 +172,48 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
+    public void ProxyNamesAreDisambiguatedAfterSharedTypePrefixing()
+    {
+        var result = ProvisioningGeneratorTest.RunWithAssemblyName(
+            "Foo",
+            SharedProxyNameCollisionSource,
+            new TestAssemblySource("Azure.Provisioning", SharedProvisioningAssemblySource));
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var sharedProxy = result.Compilation.GetTypeByMetadataName(
+            "Foo.Generated.FooManagedServiceIdentity_1Proxy");
+        Assert.NotNull(sharedProxy);
+        var serviceProxy = result.Compilation.GetTypeByMetadataName(
+            "Foo.Generated.FooManagedServiceIdentity_2Proxy");
+        Assert.NotNull(serviceProxy);
+
+        var identity = Assert.Single(serviceProxy.GetMembers("Identity").OfType<IPropertySymbol>());
+        Assert.Equal(sharedProxy, identity.Type);
+    }
+
+    [Fact]
+    public void FactoryMethodNamesAreDisambiguatedAcrossGenerationPhases()
+    {
+        var result = ProvisioningGeneratorTest.Run(FactoryMethodCollisionSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var factory = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions");
+        Assert.NotNull(factory);
+
+        var getItems = Assert.Single(factory.GetMembers("GetItems").OfType<IMethodSymbol>());
+        Assert.Equal("ItemsProxy", getItems.ReturnType.Name);
+
+        var getItems2 = Assert.Single(factory.GetMembers("GetItems2").OfType<IMethodSymbol>());
+        var itemArray = Assert.IsAssignableFrom<IArrayTypeSymbol>(getItems2.ReturnType);
+        Assert.Equal("ItemProxy", itemArray.ElementType.Name);
+    }
+
+    [Fact]
     public void NullableProxyConstructorParametersGenerateCompilableFactoryMethods()
     {
         var result = ProvisioningGeneratorTest.Run(NullableProxyConstructorSource);
@@ -699,6 +741,48 @@ public class AspireProvisioningProxyGeneratorTests
 
                 public Azure.Provisioning.Resources.ManagedServiceIdentity Identity { get; set; } = new();
                 public Azure.Provisioning.BicepList<Azure.Core.ResourceIdentifier> NetworkAclBypassResourceIds { get; } = new();
+            }
+        }
+        """;
+
+    private const string SharedProxyNameCollisionSource = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.FooManagedServiceIdentity),
+            IsInfrastructureRoot = false)]
+
+        """ + AspireRuntimeSource + """
+        namespace Test.Provisioning
+        {
+            public sealed class FooManagedServiceIdentity
+            {
+                public Azure.Provisioning.Resources.ManagedServiceIdentity Identity { get; set; } = new();
+            }
+        }
+        """;
+
+    private const string FactoryMethodCollisionSource = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.Item))]
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.Items))]
+
+        """ + CommonSource + """
+        namespace Test.Provisioning
+        {
+            public sealed class Item : Azure.Provisioning.Primitives.ProvisionableResource
+            {
+                public Item(string bicepIdentifier)
+                    : base(bicepIdentifier)
+                {
+                }
+            }
+
+            public sealed class Items : Azure.Provisioning.Primitives.ProvisionableResource
+            {
+                public Items(string bicepIdentifier)
+                    : base(bicepIdentifier)
+                {
+                }
             }
         }
         """;
