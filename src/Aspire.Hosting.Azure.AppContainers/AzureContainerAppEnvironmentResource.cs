@@ -256,6 +256,9 @@ public class AzureContainerAppEnvironmentResource :
         IServiceProvider services,
         CancellationToken cancellationToken)
     {
+        // Deployment targets are prepared during BeforeStart, before the deployment pipeline creates
+        // a ProvisioningContext. Use only the configured values known at this stage; values selected
+        // by later prompting remain unresolved below so identity matching stays conservative.
         var configuration = services.GetRequiredService<IConfiguration>();
         var currentSubscription = configuration["Azure:SubscriptionId"];
         var currentLocation = configuration["Azure:Location"];
