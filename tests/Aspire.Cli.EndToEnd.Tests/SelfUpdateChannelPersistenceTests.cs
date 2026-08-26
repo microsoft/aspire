@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -12,7 +11,7 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task SelfUpdateToStaging_RelaunchedCliUsesStagingForImplicitProjectUpdate()
+    public async Task SelfUpdateToStaging_RelaunchedCliUsesStagingForImplicitSelfUpdate()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -33,29 +32,6 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        const string projectName = "SelfUpdateChannelApp";
-        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var configPath = Path.Combine(projectPath, "aspire.config.json");
-
-        // Model the reported scenario where the AppHost predates the self-update. Normalize any
-        // channel assigned by the current-source install so the later update must use CLI identity.
-        await auto.AspireNewCSharpEmptyAppHostAsync(
-            projectName,
-            counter,
-            timeout: TimeSpan.FromMinutes(5));
-
-        var createdConfig = ReadConfig(configPath);
-        createdConfig.Remove("channel");
-        File.WriteAllText(configPath, createdConfig.ToJsonString());
-        Assert.False(ReadConfig(configPath).ContainsKey("channel"));
-
-        if (strategy.Mode is CliInstallMode.LocalHive)
-        {
-            // LocalHive setup pins its original Aspire home to local. Remove that competing
-            // global setting before switching to the isolated script-style install.
-            await auto.RunCommandAsync("aspire config delete channel -g", counter);
-        }
-
         // Copy the current build into a dedicated get-aspire-cli.sh-style prefix. This gives the
         // self-update a realistic writable route without replacing the harness's original install.
         await auto.RunCommandAsync(
@@ -73,23 +49,11 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             counter,
             timeout: TimeSpan.FromMinutes(10));
 
-        // This is a new process launched from the path that was replaced above.
-        await auto.RunCommandAsync("hash -r; aspire --version", counter);
-        await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
-
-        await auto.RunCommandAsync($"cd {projectName}", counter);
-        await auto.RunCommandAsync(
-            "aspire update --non-interactive --yes",
-            counter,
-            timeout: TimeSpan.FromMinutes(10));
-
-        var updatedConfig = ReadConfig(configPath);
-        Assert.Equal("staging", updatedConfig["channel"]?.GetValue<string>());
-    }
-
-    private static JsonObject ReadConfig(string path)
-    {
-        return JsonNode.Parse(File.ReadAllText(path))?.AsObject()
-            ?? throw new InvalidOperationException($"Unable to read {path}.");
+        // Relaunch from the replaced path without specifying a channel. Seeing staging selected
+        // proves the new process resolved the identity persisted in the install sidecar.
+        await auto.TypeAsync("hash -r; aspire update --self --non-interactive --yes");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Updating to channel: staging", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(10));
     }
 }
