@@ -46,16 +46,13 @@ internal sealed class TerminalHostLayout
     }
 
     /// <summary>
-    /// Gets the 11-character base64url replica identifier. All four per-replica files
-    /// share this prefix (e.g. <c>{ReplicaId}.dcp.sock</c>), so cleanup is a simple
-    /// directory glob.
+    /// Gets the random 11-character base64url replica identifier for this AppHost run. All
+    /// four per-replica files share this prefix (e.g. <c>{ReplicaId}.dcp.sock</c>).
     /// </summary>
     public string ReplicaId { get; }
 
     /// <summary>
-    /// Gets the zero-based index of the parent replica this host serves. Folded into
-    /// <see cref="ReplicaId"/> so per-replica hosts of the same parent resource get
-    /// distinct ids.
+    /// Gets the zero-based index of the parent replica this host serves.
     /// </summary>
     public int ParentReplicaIndex { get; }
 

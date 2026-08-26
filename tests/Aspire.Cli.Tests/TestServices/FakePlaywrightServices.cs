@@ -72,7 +72,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         }
 
         await EnsureBundleAsync(cancellationToken);
-        var bundle = await AspireSkillsBundle.LoadAsync(_bundleDirectory, cancellationToken);
+        var bundle = await new AspireSkillsBundleProvider().LoadAsync(_bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 

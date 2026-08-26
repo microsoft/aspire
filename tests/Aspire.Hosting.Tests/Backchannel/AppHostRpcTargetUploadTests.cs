@@ -19,7 +19,7 @@ public class AppHostRpcTargetUploadTests(ITestOutputHelper outputHelper)
         var fileUploadStore = app.Services.GetRequiredService<IInteractionFileUploadStore>();
         const int interactionId = 1;
         const string inputName = "File";
-        fileUploadStore.StartInteraction(interactionId);
+        fileUploadStore.StartInteraction(interactionId, [(inputName, InteractionHelpers.MaxFileCount)]);
         var data = Encoding.UTF8.GetBytes("uploaded content");
 
         var response = await target.UploadFileAsync(new UploadFileRequest
@@ -37,6 +37,62 @@ public class AppHostRpcTargetUploadTests(ITestOutputHelper outputHelper)
 
         Assert.Null(fileUploadStore.GetFilePath(response.FileId, interactionId, inputName));
         Assert.False(File.Exists(filePath));
+    }
+
+    [Theory]
+    [InlineData("../../../etc/passwd", "passwd")]
+    [InlineData("..\\..\\windows\\system32\\evil.exe", "evil.exe")]
+    [InlineData("bad*.txt", "bad*.txt")]
+    [InlineData("bad:name.txt", "bad:name.txt")]
+    [InlineData("CON.txt", "CON.txt")]
+    [InlineData("bad\0name.txt", "bad\0name.txt")]
+    public async Task UploadFileAsync_MaliciousFileName_UsesRandomDiskName(string fileName, string expectedFileName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        await using var app = builder.Build();
+        var target = app.Services.GetRequiredService<AppHostRpcTarget>();
+        var fileUploadStore = app.Services.GetRequiredService<IInteractionFileUploadStore>();
+        const int interactionId = 1;
+        const string inputName = "File";
+        fileUploadStore.StartInteraction(interactionId, [(inputName, 1)]);
+        byte[] data = [1, 2, 3];
+
+        var response = await target.UploadFileAsync(new UploadFileRequest
+        {
+            Data = data,
+            FileName = fileName,
+            InteractionId = interactionId,
+            InputName = inputName
+        });
+
+        var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, interactionId, inputName));
+        Assert.Equal(data, await File.ReadAllBytesAsync(filePath));
+        Assert.NotEqual(expectedFileName, Path.GetFileName(filePath));
+        Assert.Equal(expectedFileName, Assert.Single(fileUploadStore.GetCompletedFiles(interactionId, inputName)).Name);
+    }
+
+    [Fact]
+    public async Task UploadFileAsync_ExceedsInputFileCountLimit_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        await using var app = builder.Build();
+        var target = app.Services.GetRequiredService<AppHostRpcTarget>();
+        var fileUploadStore = app.Services.GetRequiredService<IInteractionFileUploadStore>();
+        const int interactionId = 1;
+        const string inputName = "File";
+        fileUploadStore.StartInteraction(interactionId, [(inputName, 1)]);
+        var request = new UploadFileRequest
+        {
+            Data = [1],
+            FileName = "file.txt",
+            InteractionId = interactionId,
+            InputName = inputName
+        };
+        await target.UploadFileAsync(request);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => target.UploadFileAsync(request));
+
+        Assert.Equal($"File input '{inputName}' accepts at most 1 file.", exception.Message);
     }
 
     [Theory]
@@ -87,7 +143,7 @@ public class AppHostRpcTargetUploadTests(ITestOutputHelper outputHelper)
         var fileUploadStore = app.Services.GetRequiredService<IInteractionFileUploadStore>();
         const int interactionId = 1;
         const string inputName = "File";
-        fileUploadStore.StartInteraction(interactionId);
+        fileUploadStore.StartInteraction(interactionId, [(inputName, 1)]);
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
 
@@ -100,7 +156,7 @@ public class AppHostRpcTargetUploadTests(ITestOutputHelper outputHelper)
         }, cancellationTokenSource.Token));
 
         fileUploadStore.CompleteInteraction(interactionId);
-        fileUploadStore.StartInteraction(interactionId);
+        fileUploadStore.StartInteraction(interactionId, [(inputName, 1)]);
         var (_, replacementPath) = fileUploadStore.CreateEntry("replacement.txt", interactionId, inputName);
 
         Assert.True(File.Exists(replacementPath));

@@ -522,10 +522,10 @@ public class AzureSandboxesTests
         var buildOptionsCallbackCount = container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count();
 
         container.PublishAsAzureSandbox(sandboxGroup, options => configureCalled = true);
-        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
         {
             AutoSuspendMode = (AzureSandboxAutoSuspendMode)(-1)
-        }));
+        });
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -534,32 +534,8 @@ public class AzureSandboxesTests
         Assert.DoesNotContain(model.Resources, resource => resource is AzureSandboxGroupResource or AzureSandboxCleanupResource);
         Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-acr");
         Assert.Null(computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource));
-        Assert.True(configureCalled);
+        Assert.False(configureCalled);
         Assert.Equal(buildOptionsCallbackCount, container.Resource.Annotations.OfType<ContainerBuildOptionsCallbackAnnotation>().Count());
-    }
-
-    [Fact]
-    public void ContainerImageMetadataBuildsSandboxEntrypointFromImageConfig()
-    {
-        var metadata = AzureSandboxContainerDeployment.ParseContainerImageMetadata(
-            """
-            {
-              "Entrypoint": ["dotnet", "/app/yarp.dll"],
-              "Cmd": null,
-              "WorkingDir": "/app",
-              "Env": [
-                "PATH=/usr/local/bin:/usr/bin:/bin",
-                "ASPNETCORE_URLS=http://+:5000",
-                "EMPTY="
-              ]
-            }
-            """,
-            "example.azurecr.io/site:tag");
-
-        Assert.Equal(["dotnet", "/app/yarp.dll"], metadata.Entrypoint);
-        Assert.Empty(metadata.Command);
-        Assert.Empty(metadata.EnvironmentVariables);
-        Assert.Equal("/app", metadata.WorkingDirectory);
     }
 
     [Fact]
@@ -853,16 +829,19 @@ public class AzureSandboxesTests
         var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
         var firstAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(firstPolyglotBuilder.Configuration);
         var secondAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(secondPolyglotBuilder.Configuration);
-        var owner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity, scope, "frontend-sandbox-container");
-        var freshRunOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity.ToLowerInvariant(), scope, "frontend-sandbox-container");
-        var otherAppOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(secondAppHostIdentity, scope, "frontend-sandbox-container");
+        var owner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity, "Production", scope, "frontend-sandbox-container");
+        var freshRunOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity.ToLowerInvariant(), "production", scope, "frontend-sandbox-container");
+        var otherEnvironmentOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity, "Staging", scope, "frontend-sandbox-container");
+        var otherAppOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(secondAppHostIdentity, "Production", scope, "frontend-sandbox-container");
         var otherScopeOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(
             firstAppHostIdentity,
+            "Production",
             new AzureDevComputeResourceScope("sub", "other-rg", "sandboxes", "westus3"),
             "frontend-sandbox-container");
 
         Assert.NotEqual(firstAppHostIdentity, secondAppHostIdentity);
         Assert.Equal(owner, freshRunOwner);
+        Assert.NotEqual(owner, otherEnvironmentOwner);
         Assert.NotEqual(owner, otherAppOwner);
         Assert.NotEqual(owner, otherScopeOwner);
         Assert.True(AzureSandboxContainerDeployment.ShouldDeleteLabeledDeployment(
@@ -876,6 +855,70 @@ public class AzureSandboxesTests
             "frontend-sandbox-container",
             new HashSet<string>(),
             new HashSet<string>()));
+    }
+
+    [Fact]
+    public void SandboxOwnerMigrationRetainsPendingOwnersAcrossRetries()
+    {
+        var state = new DeploymentStateSection(
+            "Azure:Sandboxes:frontend",
+            new JsonObject
+            {
+                ["OwnerId"] = "legacy-owner",
+                ["PendingOwnerCleanupIds"] = new JsonArray("older-owner", "current-owner")
+            },
+            version: 0);
+
+        var pendingOwnerIds = AzureSandboxContainerDeployment.GetPendingOwnerCleanupIds(
+            state,
+            "current-owner");
+
+        Assert.Equal(
+            new HashSet<string>(["legacy-owner", "older-owner"], StringComparer.Ordinal),
+            pendingOwnerIds);
+    }
+
+    [Fact]
+    public void SandboxLegacyOwnerMigrationUsesOnlyPersistedDeploymentIds()
+    {
+        var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
+        var legacyOwner = AzureSandboxContainerDeployment.CreateLegacyStableOwnerId(
+            "apphost",
+            scope,
+            "frontend");
+        var productionOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(
+            "apphost",
+            "Production",
+            scope,
+            "frontend");
+        var stagingOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(
+            "apphost",
+            "Staging",
+            scope,
+            "frontend");
+        var state = new DeploymentStateSection(
+            "Azure:Sandboxes:frontend",
+            new JsonObject
+            {
+                ["OwnerId"] = legacyOwner,
+                ["SandboxId"] = "production-sandbox",
+                ["DiskImageId"] = "production-disk"
+            },
+            version: 0);
+
+        var broadCleanupOwners = AzureSandboxContainerDeployment.GetPendingOwnerCleanupIds(
+            state,
+            productionOwner,
+            legacyOwner);
+        var directCleanupState = AzureSandboxContainerDeployment.CreatePendingLegacyDeploymentCleanup(
+            state,
+            productionOwner,
+            legacyOwner);
+
+        Assert.NotEqual(productionOwner, stagingOwner);
+        Assert.Empty(broadCleanupOwners);
+        Assert.Equal("production-sandbox", directCleanupState?["SandboxId"]?.GetValue<string>());
+        Assert.Equal("production-disk", directCleanupState?["DiskImageId"]?.GetValue<string>());
     }
 
     [Fact]
@@ -904,7 +947,8 @@ public class AzureSandboxesTests
                 Anonymous: false,
                 AuthorizedConnectorGateways: [])
         };
-        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(endpoints);
+        const string imageReference = "example/image@sha256:first";
+        var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(imageReference, endpoints);
         var previousState = new DeploymentStateSection(
             "Azure:Sandboxes:frontend-sandbox-container",
             new JsonObject
@@ -918,14 +962,19 @@ public class AzureSandboxesTests
 
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
-        previousState.Data["EndpointSecurityFingerprint"] = $"example/image@sha256:first|{fingerprint}";
-        Assert.False(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
+        var updatedImageFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            "example/image@sha256:second",
+            endpoints);
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedImageFingerprint));
+        previousState.Data["EndpointSecurityFingerprint"] = fingerprint[(imageReference.Length + 1)..];
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
         previousState.Data["PendingSecurityCleanup"] = true;
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint));
         previousState.Data["PendingSecurityCleanup"] = false;
 
         var anonymousFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
+            imageReference,
         [
             endpoints[0] with { Anonymous = true }
         ]);
@@ -1025,9 +1074,28 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxDiskImageCreateResponseLossReconcilesLabeledDiskImage()
+    {
+        var client = await RunCreateResponseLossAsync(includeSandbox: false);
+
+        Assert.False(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
+    }
+
+    [Fact]
+    public async Task SandboxCreateResponseLossReconcilesLabeledResources()
+    {
+        var client = await RunCreateResponseLossAsync(includeSandbox: true);
+
+        Assert.True(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
+    }
+
+    [Fact]
     public async Task AzureDevComputeClientRetriesForbiddenResponses()
     {
         var attempts = 0;
+        var credential = new RecordingTokenCredential();
         var handler = new RecordingHandler(_ =>
         {
             attempts++;
@@ -1045,7 +1113,7 @@ public class AzureSandboxesTests
                 }
                 """));
         });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
+        var client = new AzureDevComputeClient(new HttpClient(handler), credential, NullLogger.Instance, TimeSpan.Zero);
 
         var diskImage = await client.GetDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
@@ -1054,6 +1122,7 @@ public class AzureSandboxesTests
 
         Assert.Equal("disk-1", diskImage.Id);
         Assert.Equal(2, attempts);
+        Assert.Equal(2, credential.RequestCount);
     }
 
     [Fact]
@@ -1076,7 +1145,7 @@ public class AzureSandboxesTests
             "disk-1",
             CancellationToken.None));
 
-        Assert.Equal(3, attempts);
+        Assert.Equal(21, attempts);
         Assert.Contains("Container Apps SandboxGroup Data Owner", exception.Message);
     }
 
@@ -1258,115 +1327,13 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public void SandboxImageReferencesResolveToImmutableDigests()
-    {
-        var reference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-            """{ "Descriptor": { "digest": "sha256:abc123" } }""",
-            "example.azurecr.io/site:latest");
-
-        Assert.Equal("example.azurecr.io/site@sha256:abc123", reference);
-
-        var podmanReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-            """{ "digest": "sha256:podman123" }""",
-            "example.azurecr.io/site:latest");
-
-        Assert.Equal("example.azurecr.io/site@sha256:podman123", podmanReference);
-
-        var verboseReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-            """
-            [
-              {
-                "Descriptor": {
-                  "digest": "sha256:amd64",
-                  "platform": { "os": "linux", "architecture": "amd64" }
-                }
-              },
-              {
-                "Descriptor": {
-                  "digest": "sha256:arm64",
-                  "platform": { "os": "linux", "architecture": "arm64" }
-                }
-              }
-            ]
-            """,
-            "example.azurecr.io/site:latest");
-
-        Assert.Equal("example.azurecr.io/site@sha256:amd64", verboseReference);
-
-        var pinnedIndexReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-            """
-            {
-              "manifests": [
-                {
-                  "digest": "sha256:linux-amd64",
-                  "platform": { "os": "linux", "architecture": "amd64" }
-                },
-                {
-                  "digest": "sha256:linux-arm64",
-                  "platform": { "os": "linux", "architecture": "arm64" }
-                }
-              ]
-            }
-            """,
-            "example.azurecr.io/site@sha256:index");
-
-        Assert.Equal("example.azurecr.io/site@sha256:linux-amd64", pinnedIndexReference);
-
-        var pinnedManifestReference = AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-            """
-            {
-              "Descriptor": {
-                "digest": "sha256:linux-amd64",
-                "platform": { "os": "linux", "architecture": "amd64" }
-              }
-            }
-            """,
-            "example.azurecr.io/site@sha256:linux-amd64");
-
-        Assert.Equal("example.azurecr.io/site@sha256:linux-amd64", pinnedManifestReference);
-
-        var incompatiblePlatformException = Assert.Throws<InvalidOperationException>(() =>
-            AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-                """
-                {
-                  "Descriptor": {
-                    "digest": "sha256:windows-amd64",
-                    "platform": { "os": "windows", "architecture": "amd64" }
-                  }
-                }
-                """,
-                "example.azurecr.io/site@sha256:windows-amd64"));
-        Assert.Contains("require linux/amd64", incompatiblePlatformException.Message);
-
-        var unverifiablePlatformException = Assert.Throws<InvalidOperationException>(() =>
-            AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-                """{ "Descriptor": { "digest": "sha256:unknown" } }""",
-                "example.azurecr.io/site@sha256:unknown"));
-        Assert.Contains("platform could not be verified", unverifiablePlatformException.Message);
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            AzureSandboxContainerDeployment.ResolveLinuxAmd64ManifestReference(
-                """{ "schemaVersion": 2 }""",
-                "example.azurecr.io/site:latest"));
-        Assert.Contains("mutable", exception.Message);
-    }
-
-    [Fact]
     public async Task DigestPinnedSandboxImageReferencesAreInspected()
     {
         var runtime = new FakeContainerRuntime
         {
-            InspectImageManifestAsyncCallback = static (_, _) => Task.FromResult(
-                """
-                {
-                  "manifests": [
-                    {
-                      "digest": "sha256:linux-amd64",
-                      "platform": { "os": "linux", "architecture": "amd64" }
-                    }
-                  ]
-                }
-                """)
+            InspectedImageDigest = "sha256:linux-amd64",
+            InspectedImageOperatingSystem = "linux",
+            InspectedImageArchitecture = "amd64"
         };
 
         var reference = await AzureSandboxContainerDeployment.ResolveContainerImageReferenceForDiskImageAsync(
@@ -1400,6 +1367,7 @@ public class AzureSandboxesTests
             Assert.Equal("dotnet", root.GetProperty("entrypoint")[0].GetString());
             Assert.Equal("/app/app.dll", root.GetProperty("entrypoint")[1].GetString());
             Assert.Equal("--urls", root.GetProperty("cmd")[0].GetString());
+            Assert.Equal("/app", root.GetProperty("workingDirectory").GetString());
             Assert.Equal("http://+:5000", root.GetProperty("environment").GetProperty("ASPNETCORE_URLS").GetString());
             return JsonResponse(
                 """
@@ -1425,6 +1393,7 @@ public class AzureSandboxesTests
                 },
                 Entrypoint = ["dotnet", "/app/app.dll"],
                 Cmd = ["--urls"],
+                WorkingDirectory = "/app",
                 Environment = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["ASPNETCORE_URLS"] = "http://+:5000"
@@ -1629,7 +1598,7 @@ public class AzureSandboxesTests
                 [
                     new AzureSandboxEndpointOptions
                     {
-                        Name = "http",
+                        Name = "HTTP",
                         Anonymous = false
                     }
                 ]
@@ -1661,9 +1630,21 @@ public class AzureSandboxesTests
         Assert.Equal("AfterSuspend", lifecycle.AutoDeletePolicy.Trigger);
         Assert.Equal(TimeSpan.FromMinutes(2), AzureSandboxContainerDeployment.GetPublicEndpointReadyTimeout(sandboxContainer));
 
-        var egress = AzureSandboxContainerDeployment.CreateEgressPolicy();
+        var egress = AzureSandboxContainerDeployment.CreateEgressPolicy(
+        [
+            "https://api.example.test/v1",
+            "not-a-url",
+            "https://API.example.test/v2",
+            "http://*:8080",
+            "http://+:8080",
+            "http://0.0.0.0:8080",
+            "http://[::]:8080"
+        ]);
         Assert.Equal("Deny", egress.DefaultAction);
         Assert.Equal("Full", egress.TrafficInspection);
+        var hostRule = Assert.Single(egress.HostRules);
+        Assert.Equal("Allow", hostRule.Action);
+        Assert.Equal("api.example.test", hostRule.Pattern);
 
         var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
         Assert.Equal("Http", endpoint.Protocol);
@@ -1750,6 +1731,14 @@ public class AzureSandboxesTests
         {
             AutoDeleteTrigger = (AzureSandboxAutoDeleteTrigger)(-1)
         }));
+        Assert.Throws<ArgumentException>(() => container.PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+        {
+            Endpoints =
+            [
+                new AzureSandboxEndpointOptions { Name = "http" },
+                new AzureSandboxEndpointOptions { Name = "HTTP" }
+            ]
+        }));
     }
 
     [Fact]
@@ -1763,12 +1752,10 @@ public class AzureSandboxesTests
             .PublishAsAzureSandbox(sandboxGroup);
 
         using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
-
-        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
-        var exception = Assert.Throws<NotSupportedException>(() => AzureSandboxContainerDeployment.ValidateSandboxVolumes(computeResource));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
         Assert.Contains("volume provisioning is not supported", exception.Message);
+        Assert.IsType<NotSupportedException>(exception.InnerException);
     }
 
     [Fact]
@@ -2254,6 +2241,43 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxDeployStepsRejectCrossGroupEndpointDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var producerGroup = builder.AddAzureSandboxGroup("producer-group");
+        var consumerGroup = builder.AddAzureSandboxGroup("consumer-group");
+        var api = builder.AddContainer("api", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(producerGroup);
+        builder.AddContainer("web", "image")
+            .WithEnvironment("API_URL", api.GetEndpoint("http"))
+            .PublishAsAzureSandbox(consumerGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var steps = await CreateStepsAsync(app, consumerGroup.Resource);
+        var context = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Steps = steps,
+            Model = app.Services.GetRequiredService<DistributedApplicationModel>()
+        };
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        {
+            foreach (var annotation in consumerGroup.Resource.Annotations.OfType<PipelineConfigurationAnnotation>())
+            {
+                await annotation.Callback(context);
+            }
+        });
+
+        Assert.Contains("producer-group", exception.Message);
+        Assert.Contains("consumer-group", exception.Message);
+    }
+
+    [Fact]
     public async Task SandboxDeployStepsRejectCircularEndpointDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -2354,6 +2378,44 @@ public class AzureSandboxesTests
         return results;
     }
 
+    private static async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(bool includeSandbox)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var app = builder.Build();
+        using var pipelineCts = new CancellationTokenSource();
+        pipelineCts.Cancel();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            pipelineCts.Token);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var client = new ResponseLossCleanupClient(includeSandbox);
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            AzureSandboxContainerDeployment.CreateWithResponseLossCleanupAsync(
+                client.CreateResourceThenLoseResponseAsync,
+                stepContext,
+                client,
+                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
+                "owner",
+                "frontend-sandbox-container",
+                "deploy"));
+
+        Assert.Equal("create response lost", exception.Message);
+        Assert.Equal(
+            "aspire-owner=owner,aspire-resource=frontend-sandbox-container,aspire-deploy=deploy",
+            client.LabelSelector);
+        Assert.False(client.CleanupCancellationRequested);
+        return client;
+    }
+
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "testproject";
@@ -2423,6 +2485,97 @@ public class AzureSandboxesTests
         public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
+    private sealed class ResponseLossCleanupClient(bool includeSandbox) : IAzureDevComputeClient
+    {
+        private bool _resourceCreated;
+        private bool _sandboxDeleted;
+        private bool _diskImageDeleted;
+
+        private static readonly Dictionary<string, string> s_labels = new()
+        {
+            ["aspire-owner"] = "owner",
+            ["aspire-resource"] = "frontend-sandbox-container",
+            ["aspire-deploy"] = "deploy"
+        };
+
+        public string? LabelSelector { get; private set; }
+        public bool DeleteSandboxCalled { get; private set; }
+        public bool DeleteDiskImageCalled { get; private set; }
+        public bool CleanupCancellationRequested { get; private set; }
+
+        public Task<string> CreateResourceThenLoseResponseAsync()
+        {
+            _resourceCreated = true;
+            throw new HttpRequestException("create response lost");
+        }
+
+        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(
+            AzureDevComputeResourceScope scope,
+            string? labels,
+            CancellationToken cancellationToken)
+        {
+            LabelSelector = labels;
+            CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
+            return Task.FromResult(_resourceCreated && includeSandbox && !_sandboxDeleted
+                ? new List<AzureDevComputeSandbox>
+                {
+                    new()
+                    {
+                        Id = "sandbox",
+                        Labels = s_labels
+                    }
+                }
+                : []);
+        }
+
+        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(
+            AzureDevComputeResourceScope scope,
+            string? labels,
+            CancellationToken cancellationToken)
+        {
+            Assert.Equal(LabelSelector, labels);
+            CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
+            return Task.FromResult(_resourceCreated && !_diskImageDeleted
+                ? new List<AzureDevComputeDiskImage>
+                {
+                    new()
+                    {
+                        Id = "disk-image",
+                        Labels = s_labels,
+                        Status = new AzureDevComputeDiskImageStatus { State = "Ready" }
+                    }
+                }
+                : []);
+        }
+
+        public Task DeleteSandboxAsync(
+            AzureDevComputeResourceScope scope,
+            string sandboxId,
+            CancellationToken cancellationToken)
+        {
+            DeleteSandboxCalled = true;
+            _sandboxDeleted = true;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteDiskImageAsync(
+            AzureDevComputeResourceScope scope,
+            string diskImageId,
+            CancellationToken cancellationToken)
+        {
+            DeleteDiskImageCalled = true;
+            _diskImageDeleted = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
     private sealed class FailingPortRemovalClient : IAzureDevComputeClient
     {
         public bool DeleteSandboxCalled { get; private set; }
@@ -2466,16 +2619,19 @@ public class AzureSandboxesTests
     private sealed class RecordingTokenCredential : TokenCredential
     {
         public string[] Scopes { get; private set; } = [];
+        public int RequestCount { get; private set; }
 
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             Scopes = [.. requestContext.Scopes];
+            RequestCount++;
             return new AccessToken("test-token", DateTimeOffset.UtcNow.AddHours(1));
         }
 
         public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
             Scopes = [.. requestContext.Scopes];
+            RequestCount++;
             return ValueTask.FromResult(new AccessToken("test-token", DateTimeOffset.UtcNow.AddHours(1)));
         }
     }

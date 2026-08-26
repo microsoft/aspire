@@ -248,14 +248,13 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     /// <inheritdoc />
     public RuntimeSpec GetRuntimeSpec()
     {
-        return new RuntimeSpec
+        var runtimeSpec = new RuntimeSpec
         {
             Language = LanguageId,
             DisplayName = LanguageDisplayName,
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
             ExtensionLaunchCapability = "node",
-            CertificateBundleEnvironmentVariable = CertificateBundleEnvironmentVariable,
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",
@@ -293,5 +292,25 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 [AppHostTsConfigFileName] = s_appHostTsConfigContent
             }
         };
+
+        SetCertificateBundleEnvironmentVariableIfSupported(runtimeSpec, CertificateBundleEnvironmentVariable);
+
+        return runtimeSpec;
+    }
+
+    /// <summary>
+    /// Sets the certificate bundle environment variable when the runtime contract supports it.
+    /// </summary>
+    internal static void SetCertificateBundleEnvironmentVariableIfSupported(
+        object runtimeSpec,
+        string environmentVariableName)
+    {
+        // Aspire.TypeSystem is force-shared from the installed CLI. A newer codegen assembly can
+        // therefore run against an older RuntimeSpec that has the same assembly identity but does not
+        // expose this additive property. Probe by name so the new certificate feature is skipped while
+        // the rest of code generation remains compatible.
+        runtimeSpec.GetType()
+            .GetProperty(nameof(RuntimeSpec.CertificateBundleEnvironmentVariable))
+            ?.SetValue(runtimeSpec, environmentVariableName);
     }
 }

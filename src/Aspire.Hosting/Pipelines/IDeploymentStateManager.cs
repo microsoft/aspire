@@ -26,6 +26,14 @@ public interface IDeploymentStateManager
     Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Acquires a specific section from the current deployment state without falling back to legacy state.
+    /// </summary>
+    /// <param name="sectionName">The name of the section to acquire (e.g., "Parameters", "Azure").</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A StateSection containing the current section data and version information.</returns>
+    Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Saves a section of deployment state with optimistic concurrency control.
     /// The section must have a matching version number or a concurrency exception will be thrown.
     /// </summary>

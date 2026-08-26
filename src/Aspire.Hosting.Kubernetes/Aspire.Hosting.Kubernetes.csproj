@@ -14,8 +14,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared\ComputeEnvironmentEndpointResolver.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" LinkBase="Process" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" LinkBase="Process" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessOutputCapture.cs" LinkBase="Process" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" LinkBase="Process" />
+    <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)PathLookupHelper.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Yaml\*.cs" LinkBase="Shared\Yaml" />
   </ItemGroup>
 

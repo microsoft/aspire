@@ -30,7 +30,12 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -150,7 +155,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private async Task SubscribeResourcesAsync()
     {
-        var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_cts.Token);
+        var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
 
         // Apply snapshot.
         foreach (var resource in snapshot)
@@ -552,22 +557,25 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
             var selectedResources = GetSelectedResourcesAndDataTypes();
 
             // Clear telemetry signals via repository
-            TelemetryRepository.ClearSelectedSignals(selectedResources);
+            DataSource.EnsureWritable();
+            await TelemetryRepositoryWriter.ClearSelectedSignalsAsync(selectedResources);
 
-            // Handle console logs filtering separately (not stored in TelemetryRepository)
-            // Console logs are only available when the dashboard client is enabled
+            // Console logs are stored by the resource repository and are only available when the dashboard client is enabled.
             if (DashboardClient.IsEnabled)
             {
-                var consoleLogResourcesToFilter = selectedResources
+                var consoleLogResourceNames = selectedResources
                     .Where(kvp => kvp.Value.Contains(AspireDataType.ConsoleLogs))
                     .Select(kvp => kvp.Key)
                     .ToList();
 
-                if (consoleLogResourcesToFilter.Count > 0)
+                if (consoleLogResourceNames.Count > 0)
                 {
                     var filterDate = TimeProvider.GetUtcNow().UtcDateTime;
+                    await DataSource.ResourceRepository.ClearConsoleLogsAsync(consoleLogResourceNames, filterDate);
+
+                    // Keep the filter to suppress console logs already buffered by the live AppHost.
                     var filters = ConsoleLogsManager.Filters;
-                    foreach (var resourceName in consoleLogResourcesToFilter)
+                    foreach (var resourceName in consoleLogResourceNames)
                     {
                         filters = filters.WithResourceCleared(resourceName, filterDate);
                     }

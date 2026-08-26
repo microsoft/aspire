@@ -70,6 +70,51 @@ namespace Aspire.Hosting.Testing.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The dashboard is not enabled for this application..
+        /// </summary>
+        internal static string DashboardDisabledExceptionMessage {
+            get {
+                return ResourceManager.GetString("DashboardDisabledExceptionMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The application must be started before retrieving the dashboard URL..
+        /// </summary>
+        internal static string DashboardUrlApplicationNotStartedExceptionMessage {
+            get {
+                return ResourceManager.GetString("DashboardUrlApplicationNotStartedExceptionMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The dashboard URL is not available in publish mode..
+        /// </summary>
+        internal static string DashboardUrlPublishModeExceptionMessage {
+            get {
+                return ResourceManager.GetString("DashboardUrlPublishModeExceptionMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The dashboard URL is not available..
+        /// </summary>
+        internal static string DashboardUrlUnavailableExceptionMessage {
+            get {
+                return ResourceManager.GetString("DashboardUrlUnavailableExceptionMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard testing is not supported in publish mode..
+        /// </summary>
+        internal static string DashboardTestingPublishModeExceptionMessage {
+            get {
+                return ResourceManager.GetString("DashboardTestingPublishModeExceptionMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Endpoint &apos;{0}&apos; for resource &apos;{1}&apos; not found..
         /// </summary>
         internal static string EndpointForResourceNotFoundExceptionMessage {

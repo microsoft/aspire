@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -63,6 +62,67 @@ public class ContainerRuntimeBaseTests
             },
             arguments => Assert.Equal(["manifest", "inspect", "--verbose", imageName], arguments));
     }
+
+    [Fact]
+    public async Task DockerInspectionReturnsTypedResults()
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """{"Entrypoint":["dotnet","/app/app.dll"],"Cmd":["--urls"],"WorkingDir":"/app"}"""
+            ]),
+            new ProcessResult(0,
+            [
+                """
+                [
+                  {
+                    "Descriptor": {
+                      "digest": "sha256:linux-amd64",
+                      "platform": { "os": "linux", "architecture": "amd64" }
+                    }
+                  }
+                ]
+                """
+            ])
+        ]);
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var configResult = await runtime.InspectImageConfigAsync(
+            "example/image:tag",
+            TestContext.Current.CancellationToken);
+        var manifestResult = await runtime.InspectImageManifestAsync(
+            "example/image:tag",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, configResult.Status);
+        Assert.True(configResult.TryGetConfig(out var config));
+        Assert.Equal(["dotnet", "/app/app.dll"], config.Entrypoint);
+        Assert.Equal(["--urls"], config.Command);
+        Assert.Equal("/app", config.WorkingDirectory);
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, manifestResult.Status);
+        Assert.True(manifestResult.TryGetManifest("linux", "amd64", out var manifest));
+        Assert.Equal("sha256:linux-amd64", manifest.Digest);
+    }
+
+    [Fact]
+    public async Task ContainerRuntimeInspectionDefaultsToUnsupported()
+    {
+        IContainerRuntime runtime = new UnsupportedInspectionContainerRuntime();
+
+        var configResult = await runtime.InspectImageConfigAsync(
+            "example/image:tag",
+            TestContext.Current.CancellationToken);
+        var manifestResult = await runtime.InspectImageManifestAsync(
+            "example/image:tag",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContainerImageInspectionStatus.Unsupported, configResult.Status);
+        Assert.False(configResult.TryGetConfig(out _));
+        Assert.Equal(ContainerImageInspectionStatus.Unsupported, manifestResult.Status);
+        Assert.False(manifestResult.TryGetManifest("linux", "amd64", out _));
+    }
+
     [Fact]
     public async Task PodmanInspectsRemoteImageManifestsUsingRegistryTransport()
     {
@@ -77,6 +137,42 @@ public class ContainerRuntimeBaseTests
             processRunner.ArgumentLists,
             arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
             arguments => Assert.Equal(["manifest", "inspect", "docker://registry/image:tag"], arguments));
+    }
+
+    [Fact]
+    public async Task PodmanReturnsTypedManifestFromNativeIndex()
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """
+                {
+                  "manifests": [
+                    {
+                      "digest": "sha256:linux-amd64",
+                      "platform": { "os": "linux", "architecture": "amd64" }
+                    },
+                    {
+                      "digest": "sha256:linux-arm64",
+                      "platform": { "os": "linux", "architecture": "arm64" }
+                    }
+                  ]
+                }
+                """
+            ])
+        ]);
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+
+        var result = await runtime.InspectImageManifestAsync(
+            "registry/image:tag",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, result.Status);
+        Assert.True(result.TryGetManifest("linux", "amd64", out var manifest));
+        Assert.Equal("sha256:linux-amd64", manifest.Digest);
+        Assert.False(result.TryGetManifest("windows", "amd64", out _));
+        Assert.Contains("\"manifests\"", result.RawJson);
     }
 
     [Fact]
@@ -97,15 +193,15 @@ public class ContainerRuntimeBaseTests
         var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
         const string maliciousImageName = "registry/image\\\" --help:tag";
 
-        var manifest = await runtime.InspectImageManifestAsync(
+        var result = await runtime.InspectImageManifestAsync(
             $"docker://{maliciousImageName}",
             TestContext.Current.CancellationToken);
 
-        using var document = JsonDocument.Parse(manifest);
-        var descriptor = document.RootElement.GetProperty("Descriptor");
-        Assert.Equal("sha256:linux-amd64", descriptor.GetProperty("digest").GetString());
-        Assert.Equal("linux", descriptor.GetProperty("platform").GetProperty("os").GetString());
-        Assert.Equal("amd64", descriptor.GetProperty("platform").GetProperty("architecture").GetString());
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, result.Status);
+        Assert.True(result.TryGetManifest("linux", "amd64", out var manifest));
+        Assert.Equal("sha256:linux-amd64", manifest.Digest);
+        Assert.Equal("linux", manifest.OperatingSystem);
+        Assert.Equal("amd64", manifest.Architecture);
         Assert.Collection(
             processRunner.ArgumentLists,
             arguments => Assert.Equal(["manifest", "inspect", $"docker://{maliciousImageName}"], arguments),
@@ -159,6 +255,30 @@ public class ContainerRuntimeBaseTests
                 "test-image",
                 cancellationToken);
         }
+    }
+
+    private sealed class UnsupportedInspectionContainerRuntime : IContainerRuntime
+    {
+        public string Name => "unsupported-inspection";
+
+        public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
+        public Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task TagImageAsync(string localImageName, string targetImageName, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task RemoveImageAsync(string imageName, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task PushImageAsync(IResource resource, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ComposeDownAsync(ComposeOperationContext context, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<ComposeServiceInfo>?>(null);
     }
 
     private sealed class CapturingProcessRunner(IEnumerable<ProcessResult>? results = null) : IProcessRunner

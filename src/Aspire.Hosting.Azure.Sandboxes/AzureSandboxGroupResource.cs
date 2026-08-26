@@ -196,6 +196,8 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                 AddUserAssignedIdentity(userAssignedIdentity);
             }
 
+            AzureSandboxContainerDeployment.ValidateSandboxCompatibility(resource);
+
             resource.Annotations.Add(new ContainerBuildOptionsCallbackAnnotation(static buildOptions =>
             {
                 // ADC requires a single Docker-format linux/amd64 manifest. Buildx's default OCI

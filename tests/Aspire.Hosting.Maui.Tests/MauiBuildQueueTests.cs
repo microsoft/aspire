@@ -6,6 +6,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -631,6 +632,7 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18592")]
     public async Task ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();

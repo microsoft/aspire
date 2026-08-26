@@ -4,7 +4,9 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
@@ -16,7 +18,7 @@ namespace Aspire.Hosting.Publishing;
 /// Base class for container runtime implementations that provides common process execution,
 /// logging, and error handling patterns.
 /// </summary>
-internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, IContainerImageInspector where TLogger : class
+internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where TLogger : class
 {
     private readonly ILogger<TLogger> _logger;
     private readonly IProcessRunner _processRunner;
@@ -95,32 +97,228 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime, ICont
             remoteImageName).ConfigureAwait(false);
     }
 
-    public virtual Task<string> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+    public virtual async Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
 
-        return ExecuteContainerCommandForOutputAsync(
-            [
-                "image",
-                "inspect",
+        string output;
+        try
+        {
+            output = await ExecuteContainerCommandForOutputAsync(
+                [
+                    "image",
+                    "inspect",
+                    imageName,
+                    "--format",
+                    """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
+                ],
+                "inspect image config",
                 imageName,
-                "--format",
-                """{"Entrypoint":{{json .Config.Entrypoint}},"Cmd":{{json .Config.Cmd}},"WorkingDir":{{json .Config.WorkingDir}}}"""
-            ],
-            "inspect image config",
-            imageName,
-            cancellationToken);
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageConfigInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                configAccessor: null);
+        }
+
+        if (!TryParseImageConfig(output, out var config))
+        {
+            return new ContainerImageConfigInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                output,
+                $"Container runtime returned invalid image configuration for '{imageName}'.",
+                configAccessor: null);
+        }
+
+        return new ContainerImageConfigInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            output,
+            errorMessage: null,
+            () => config);
     }
 
-    public virtual Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    public virtual async Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
 
-        return ExecuteContainerCommandForOutputAsync(
-            ["manifest", "inspect", "--verbose", imageName],
-            "inspect image manifest",
-            imageName,
-            cancellationToken);
+        string output;
+        try
+        {
+            output = await ExecuteContainerCommandForOutputAsync(
+                ["manifest", "inspect", "--verbose", imageName],
+                "inspect image manifest",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        if (!IsJsonObjectOrArray(output))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                output,
+                $"Container runtime returned invalid image manifest for '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        return new ContainerImageManifestInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            output,
+            errorMessage: null,
+            (operatingSystem, architecture) => FindManifest(output, operatingSystem, architecture));
+    }
+
+    private static bool TryParseImageConfig(string output, [NotNullWhen(true)] out ContainerImageConfig? config)
+    {
+        config = null;
+
+        try
+        {
+            var root = JsonNode.Parse(output) as JsonObject;
+            if (root is null)
+            {
+                return false;
+            }
+
+            config = new ContainerImageConfig(
+                ReadStringArray(root["Entrypoint"]),
+                ReadStringArray(root["Cmd"]),
+                root["WorkingDir"]?.GetValue<string>());
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonNode? node)
+    {
+        if (node is not JsonArray array)
+        {
+            return [];
+        }
+
+        var values = new List<string>(array.Count);
+        foreach (var item in array)
+        {
+            if (item?.GetValue<string>() is { } value)
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
+    }
+
+    protected static bool IsJsonObjectOrArray(string output)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(output);
+            return document.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    protected static ContainerImageManifest? FindManifest(string output, string operatingSystem, string architecture)
+    {
+        try
+        {
+            var root = JsonNode.Parse(output);
+            if (root is JsonArray verboseManifests)
+            {
+                foreach (var item in verboseManifests.OfType<JsonObject>())
+                {
+                    if (TryCreateManifest(item["Descriptor"] as JsonObject, operatingSystem, architecture, out var manifest))
+                    {
+                        return manifest;
+                    }
+                }
+
+                return null;
+            }
+
+            if (root is not JsonObject manifestObject)
+            {
+                return null;
+            }
+
+            if (manifestObject["manifests"] is JsonArray manifests)
+            {
+                foreach (var item in manifests.OfType<JsonObject>())
+                {
+                    if (TryCreateManifest(item, operatingSystem, architecture, out var manifest))
+                    {
+                        return manifest;
+                    }
+                }
+
+                return null;
+            }
+
+            var descriptor = manifestObject["Descriptor"] as JsonObject ??
+                manifestObject["descriptor"] as JsonObject ??
+                manifestObject;
+            return TryCreateManifest(descriptor, operatingSystem, architecture, out var singleManifest)
+                ? singleManifest
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool TryCreateManifest(
+        JsonObject? descriptor,
+        string operatingSystem,
+        string architecture,
+        [NotNullWhen(true)] out ContainerImageManifest? manifest)
+    {
+        manifest = null;
+        if (descriptor is null)
+        {
+            return false;
+        }
+
+        var platform = descriptor["platform"] as JsonObject;
+        var actualOperatingSystem = platform?["os"]?.GetValue<string>();
+        var actualArchitecture = platform?["architecture"]?.GetValue<string>();
+        var digest = descriptor["digest"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(digest) ||
+            actualOperatingSystem is null ||
+            actualArchitecture is null ||
+            !string.Equals(actualOperatingSystem, operatingSystem, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(actualArchitecture, architecture, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        manifest = new ContainerImageManifest(digest, actualOperatingSystem, actualArchitecture);
+        return true;
     }
 
     public virtual async Task LoginToRegistryAsync(string registryServer, string username, string password, CancellationToken cancellationToken)

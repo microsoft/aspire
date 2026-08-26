@@ -7,6 +7,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -572,4 +573,34 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         await Verify(mainBicep, "bicep")
             .AppendContentAsFile(envBicep, "bicep");
     }
+
+    [Fact]
+    public async Task RunningTheDeploymentTargetHooksTwiceLeavesOneTargetPerEnvironment()
+    {
+        // The prepare-azure-container-apps step declares RequiredBySteps = [BeforeStart], so it runs
+        // once in the BeforeStart pipeline and again in the publish DAG. Without a guard the second
+        // pass adds a second DeploymentTargetAnnotation, and GetDeploymentTargetAnnotation then throws
+        // on the ambiguity, which fails every publish that goes through both paths.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "nginx")
+            .WithHttpEndpoint(port: 8080, targetPort: 80, name: "http")
+            .WithComputeEnvironment(environment);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var api = model.Resources.First(r => r.Name == "api");
+
+        Assert.Single(api.Annotations.OfType<DeploymentTargetAnnotation>());
+        Assert.Same(environment.Resource, api.GetDeploymentTargetAnnotation()!.ComputeEnvironment);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }

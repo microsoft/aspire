@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Projects;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -1040,6 +1041,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(
                 ["--from-msbuild", "two words", "--explicit", "1"],
                 args);
+            // The direct command line carries no "--" separator, so the boundary between the
+            // MSBuild-supplied arguments and the user's AppHost arguments travels in the options
+            // and is what keeps "--explicit 1" out of logs and traces.
+            Assert.Equal(2, options.AppHostArgumentStartIndex);
+            Assert.Equal(
+                "--from-msbuild two words <redacted> <redacted>",
+                AppHostArgumentRedactor.RedactFromToString(args, options.AppHostArgumentStartIndex!.Value));
             Assert.NotNull(env);
             Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
@@ -1062,6 +1070,353 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(123, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "playwright": {
+                  "commandName": "Project",
+                  "applicationUrl": "http://localhost:15000",
+                  "commandLineArgs": "--from-profile playwright",
+                  "environmentVariables": {
+                    "SELECTED_PROFILE": "playwright"
+                  }
+                },
+                "E2E": {
+                  "commandName": "Project",
+                  "applicationUrl": "http://localhost:16000",
+                  "commandLineArgs": "--from-profile E2E",
+                  "executablePath": false,
+                  "workingDirectory": true,
+                  "environmentVariables": {
+                    "SELECTED_PROFILE": "E2E",
+                    "PROFILE_ONLY": "E2E"
+                  }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("dotnet run should not be used for a selected Project launch profile.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+        var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var rootCommand = provider.GetRequiredService<RootCommand>();
+        var parseResult = rootCommand.Parse(
+        [
+            "run",
+            "--non-interactive",
+            "--apphost", appHostFile.FullName,
+            "--log-file", Path.Combine(_workspace.WorkspaceRoot.FullName, "child.log"),
+            "--launch-profile=e2e"
+        ]);
+
+        Assert.Empty(parseResult.Errors);
+        Assert.Empty(parseResult.UnmatchedTokens);
+
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, args, env, _, options, _) =>
+        {
+            Assert.Equal(appHostCommand.FullName, command);
+            Assert.Equal("e2e", options.LaunchProfile);
+            Assert.Equal(["--from-profile", "E2E"], args);
+            Assert.NotNull(env);
+            Assert.Equal("e2e", env["DOTNET_LAUNCH_PROFILE"]);
+            Assert.Equal("http://localhost:16000", env[KnownAspNetCoreConfigNames.Urls]);
+            Assert.Equal("from-context", env["SELECTED_PROFILE"]);
+            Assert.Equal("E2E", env["PROFILE_ONLY"]);
+            return Task.FromResult(125);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption),
+            NoBuild = false,
+            NoRestore = false,
+            UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["SELECTED_PROFILE"] = "from-context"
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(125, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostMissingSelectedLaunchProfileFallsBackWithoutSelectingDefault()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "playwright": {
+                  "commandName": "Project",
+                  "environmentVariables": {
+                    "SELECTED_PROFILE": "playwright"
+                  }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not substitute the default profile.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, watch, noBuild, noRestore, args, env, _, options, _) =>
+        {
+            Assert.False(watch);
+            Assert.True(noBuild);
+            Assert.False(noRestore);
+            Assert.Empty(args);
+            Assert.Equal("missing", options.LaunchProfile);
+            Assert.NotNull(env);
+            Assert.False(env.ContainsKey("SELECTED_PROFILE"));
+            return Task.FromResult(126);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "missing",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(126, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostSelectedLaunchProfileWithoutLaunchSettingsFallsBack()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not ignore an explicit launch profile.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, noBuild, _, _, _, _, options, _) =>
+        {
+            Assert.True(noBuild);
+            Assert.Equal("E2E", options.LaunchProfile);
+            return Task.FromResult(127);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(127, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostAmbiguousSelectedLaunchProfileFallsBack()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "E2E": { "commandName": "Project" },
+                "e2e": { "commandName": "Project" }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not choose between ambiguous profile names.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, _, _, options, _) =>
+        {
+            Assert.Equal("e2e", options.LaunchProfile);
+            return Task.FromResult(128);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "e2e",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(128, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostSelectedLaunchProfileWithInvalidCommandNameCasingFallsBack()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "E2E": { "commandName": "project" }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not accept an SDK-invalid command name.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, _, _, options, _) =>
+        {
+            Assert.Equal("E2E", options.LaunchProfile);
+            return Task.FromResult(129);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(129, exitCode);
+    }
+
+    [Theory]
+    [InlineData("\"launchBrowser\": \"yes\"")]
+    [InlineData("\"launchUrl\": true")]
+    [InlineData("\"dotnetRunMessages\": \"yes\"")]
+    public async Task RunAsync_ProjectAppHostSelectedLaunchProfileWithInvalidSdkPropertyFallsBack(string invalidProperty)
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), $$"""
+            {
+              "profiles": {
+                "E2E": {
+                  "commandName": "Project",
+                  {{invalidProperty}},
+                  "environmentVariables": { "PROFILE": "direct-launch" }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not accept a profile that the SDK cannot deserialize.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
+        {
+            Assert.Equal("E2E", options.LaunchProfile);
+            Assert.NotNull(env);
+            Assert.False(env.ContainsKey("PROFILE"));
+            return Task.FromResult(131);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(131, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDuplicateSelectedLaunchProfileFallsBack()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "E2E": { "commandName": "Project", "environmentVariables": { "PROFILE": "first" } },
+                "E2E": { "commandName": "Project", "environmentVariables": { "PROFILE": "second" } }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not collapse duplicate profile properties.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
+        {
+            Assert.Equal("e2e", options.LaunchProfile);
+            Assert.NotNull(env);
+            Assert.False(env.ContainsKey("PROFILE"));
+            return Task.FromResult(130);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "e2e",
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(130, exitCode);
     }
 
     [Fact]
@@ -1605,19 +1960,21 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
         var project = CreateDotNetAppHostProject(runner);
 
-        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, _, _) =>
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, options, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.False(watch);
             Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.Equal(["--explicit", "1"], args);
+            Assert.Equal("TOOL", options.LaunchProfile);
             return Task.FromResult(103);
         };
 
         var exitCode = await project.RunAsync(new AppHostProjectContext
         {
             AppHostFile = appHostFile,
+            LaunchProfile = "TOOL",
             NoBuild = false,
             NoRestore = false,
             UnmatchedTokens = ["--explicit", "1"],

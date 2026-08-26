@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 
 using Aspire.Hosting.ApplicationModel;
 
-public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerImageInspector, IContainerRuntimeResolver
+public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerRuntimeResolver
 {
     public string Name => name;
     public bool WasHealthCheckCalled { get; private set; }
@@ -36,7 +36,10 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public Dictionary<string, BuildImageSecretValue>? CapturedBuildSecrets { get; private set; }
     public string? CapturedStage { get; private set; }
     public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
-    public Func<string, CancellationToken, Task<string>>? InspectImageManifestAsyncCallback { get; set; }
+    public Func<string, CancellationToken, Task<ContainerImageManifestInspectionResult>>? InspectImageManifestAsyncCallback { get; set; }
+    public string? InspectedImageDigest { get; set; }
+    public string? InspectedImageOperatingSystem { get; set; }
+    public string? InspectedImageArchitecture { get; set; }
 
     public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
@@ -111,7 +114,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
         return Task.CompletedTask;
     }
 
-    public Task<string> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
+    public Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
     {
         WasInspectImageConfigCalled = true;
         InspectImageConfigCalls.Add(imageName);
@@ -120,10 +123,15 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
             throw new InvalidOperationException("Fake container runtime is configured to fail");
         }
 
-        return Task.FromResult("{}");
+        var config = new ContainerImageConfig([], [], workingDirectory: null);
+        return Task.FromResult(new ContainerImageConfigInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            "{}",
+            errorMessage: null,
+            () => config));
     }
 
-    public Task<string> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    public Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
     {
         WasInspectImageManifestCalled = true;
         InspectImageManifestCalls.Add(imageName);
@@ -137,7 +145,30 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
             return InspectImageManifestAsyncCallback(imageName, cancellationToken);
         }
 
-        return Task.FromResult("{}");
+        if (InspectedImageDigest is not null &&
+            InspectedImageOperatingSystem is not null &&
+            InspectedImageArchitecture is not null)
+        {
+            var manifest = new ContainerImageManifest(
+                InspectedImageDigest,
+                InspectedImageOperatingSystem,
+                InspectedImageArchitecture);
+            return Task.FromResult(new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Succeeded,
+                rawJson: null,
+                errorMessage: null,
+                (operatingSystem, architecture) =>
+                    string.Equals(operatingSystem, manifest.OperatingSystem, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(architecture, manifest.Architecture, StringComparison.OrdinalIgnoreCase)
+                        ? manifest
+                        : null));
+        }
+
+        return Task.FromResult(new ContainerImageManifestInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            "{}",
+            errorMessage: null,
+            manifestAccessor: null));
     }
 
     public Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)

@@ -623,7 +623,6 @@ public static class AzureSandboxesExtensions
                 {
                     var resource = new SandboxGroup(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Location = BicepFunction.GetResourceGroup().Location,
                         Properties = [],
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
@@ -680,13 +679,13 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
 
-        var sandboxOptions = options ?? new AzureSandboxOptions();
-        ValidateSandboxOptions(sandboxOptions);
-
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
+
+        var sandboxOptions = options ?? new AzureSandboxOptions();
+        ValidateSandboxOptions(sandboxOptions);
 
         var copiedOptions = CopyAzureSandboxOptions(sandboxOptions);
 
@@ -716,6 +715,11 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sandboxGroup);
         ArgumentNullException.ThrowIfNull(configure);
+
+        if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
 
         var options = new AzureSandboxOptions();
         configure(options);
@@ -936,7 +940,7 @@ public static class AzureSandboxesExtensions
             return;
         }
 
-        var names = new HashSet<string>(StringComparer.Ordinal);
+        var names = new HashSet<string>(StringComparers.EndpointAnnotationName);
         foreach (var endpoint in options.Endpoints)
         {
             if (endpoint is null)

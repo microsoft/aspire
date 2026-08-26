@@ -14,6 +14,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
@@ -146,18 +147,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             };
         }
 
-        var operation = _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
+        return _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
         {
-            "publish" => DistributedApplicationOperation.Publish,
-            "run" => DistributedApplicationOperation.Run,
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
-        };
-
-        return operation switch
-        {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
-            DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            "run" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
+            "publish" or "inspect" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
+            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish', 'run', or 'inspect'.")
         };
     }
 
@@ -405,7 +399,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
-        _innerBuilder.Services.AddSingleton<ParameterProcessor>();
+        _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
+        {
+            var parameterProcessor = ActivatorUtilities.CreateInstance<ParameterProcessor>(sp);
+            // Wire the AppHost-scoped redaction history after construction (not through the public constructor) so
+            // the processor records resolved secret values as they are assigned/replaced. This populates the
+            // describe/watch redaction set from startup, independent of any backchannel connection, while keeping
+            // ParameterProcessor's public constructor unchanged (https://github.com/microsoft/aspire/issues/19241).
+            parameterProcessor.SecretRedactionHistory = sp.GetRequiredService<SecretRedactionHistory>();
+            return parameterProcessor;
+        });
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -448,6 +451,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
+        // Shared by every per-connection AuxiliaryBackchannelRpcTarget so the describe/watch secret redaction set
+        // outlives an individual connection (https://github.com/microsoft/aspire/issues/19241).
+        _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
 
@@ -563,6 +569,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
+            _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -790,6 +798,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Pipeline options (valid for aspire do based commands)
             { "--step", "Pipeline:Step" },
+            { "--list-steps", "Pipeline:ListSteps" },
             { "--output-path", "Pipeline:OutputPath" },
             { "--log-level", "Pipeline:LogLevel" },
             { "--include-exception-details", "Pipeline:IncludeExceptionDetails" },
@@ -1016,37 +1025,34 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = GetDeploymentStatePath(appHostSha, environment);
-        if (!File.Exists(deploymentStatePath) &&
-            !string.IsNullOrEmpty(legacyAppHostSha))
-        {
-            var legacyDeploymentStatePath = GetDeploymentStatePath(legacyAppHostSha, environment);
-            if (File.Exists(legacyDeploymentStatePath))
-            {
-                deploymentStatePath = legacyDeploymentStatePath;
-            }
-        }
-
-        if (!File.Exists(deploymentStatePath))
-        {
-            return;
-        }
+        var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
+            _innerBuilder.Configuration,
+            appHostSha,
+            environment)!;
+        var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
+            ? null
+            : FileDeploymentStateManager.GetStatePath(
+                _innerBuilder.Configuration,
+                legacyAppHostSha,
+                environment);
 
         try
         {
-            _innerBuilder.Configuration.AddJsonFile(deploymentStatePath, optional: true, reloadOnChange: false);
+            var effectiveState = FileDeploymentStateManager.LoadEffectiveState(
+                deploymentStatePath,
+                legacyDeploymentStatePath);
+            if (effectiveState.Count > 0)
+            {
+                var flattenedState = JsonFlattener.FlattenJsonObject(effectiveState);
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(flattenedState.ToJsonString()));
+                _innerBuilder.Configuration.AddJsonStream(stream);
+            }
         }
-        catch { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
+        {
+            Debug.WriteLine($"Failed to load deployment state from '{deploymentStatePath}': {ex}");
+        }
     }
-
-    private static string GetDeploymentStatePath(string appHostSha, string environment) =>
-        Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
-            ".aspire",
-            "deployments",
-            appHostSha,
-            $"{environment}.json"
-        );
 
     /// <summary>
     /// Gets the metadata value for the specified key from the assembly metadata.

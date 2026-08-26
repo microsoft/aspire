@@ -46,7 +46,7 @@
                 {
                     <FluentButton Appearance="Appearance.Lightweight"
                                   Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
-                                  Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
+                                  Disabled="@(DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
                                   Class="highlighted-command">
                         <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" />
@@ -77,6 +77,7 @@
                     {
                         <FluentSearch @bind-Value="_logFilter"
                                       Name="console-logs-search"
+                                      AutoComplete="off"
                                       Immediate="true"
                                       ImmediateDelay="@FluentUIExtensions.InputDelay"
                                       Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -98,6 +99,7 @@
                 {
                     <FluentSearch @bind-Value="_logFilter"
                                   Name="console-logs-search"
+                                  AutoComplete="off"
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -151,6 +153,7 @@
                         IsTimestampUtc="@_isTimestampUtc"
                         NoWrapLogs="@_noWrapLogs"
                         ShowNoLogsMessage="@_showNoLogsMessage"
+                        NoLogsMessage="@GetNoLogsMessage()"
                         ShowResourcePrefix="@_isSubscribedToAll"/>
                 </div>
                 <div style="@(_activeView == ConsoleLogsView.Terminal ? "display: contents;" : "display: none;")">
@@ -171,8 +174,15 @@
                     IsTimestampUtc="@_isTimestampUtc"
                     NoWrapLogs="@_noWrapLogs"
                     ShowNoLogsMessage="@_showNoLogsMessage"
+                    NoLogsMessage="@GetNoLogsMessage()"
                     ShowResourcePrefix="@_isSubscribedToAll"/>
             }
         </MainSection>
+        <FooterSection>
+            @if (PauseText is not null)
+            {
+                <PauseWarning PauseText="@PauseText" />
+            }
+        </FooterSection>
     </AspirePageContentLayout>
 </div>

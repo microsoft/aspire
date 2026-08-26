@@ -5,6 +5,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Immutable;
@@ -390,14 +391,7 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
     {
         try
         {
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(s_userDevCertificateLocation);
-            }
-            else
-            {
-                Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-            }
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(s_userDevCertificateLocation);
 
             File.WriteAllText(certFileName, certificate.ExportCertificatePem());
 

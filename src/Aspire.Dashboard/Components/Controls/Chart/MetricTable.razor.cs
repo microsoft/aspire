@@ -27,7 +27,9 @@ public partial class MetricTable : ChartBase
 
     private OtlpInstrumentSummary? _instrument;
     private bool _showCount;
-    private DateTimeOffset? _lastUpdate;
+    private bool _hasUpdated;
+
+    protected override TimeSpan UpdateInterval => TimeSpan.FromSeconds(1);
 
     private IQueryable<MetricViewBase> _metricsView => _metrics.Values.AsEnumerable().Reverse().ToList().AsQueryable();
 
@@ -46,14 +48,6 @@ public partial class MetricTable : ChartBase
     {
         Debug.Assert(_jsModule != null, "The module should be initialized before chart data is sent to control.");
 
-        // Only update the data grid once per second to avoid additional DOM re-renders.
-        if (inProgressDataTime - _lastUpdate < TimeSpan.FromSeconds(1))
-        {
-            return;
-        }
-
-        _lastUpdate = inProgressDataTime;
-
         if (!Equals(_instrument?.Name, InstrumentViewModel.Instrument?.Name) || _showCount != InstrumentViewModel.ShowCount)
         {
             _metrics.Clear();
@@ -66,12 +60,19 @@ public partial class MetricTable : ChartBase
 
         _metrics = UpdateMetrics(out var xValuesToAnnounce, traces, xValues, exemplars);
         _exemplars = exemplars;
+        // A newly activated table can calculate before its first live tick reaches the current data window.
+        // Keep showing the loading state until rows are available or a tick confirms that the window is empty.
+        _hasUpdated |= tickUpdate || _metrics.Count > 0;
+
+        // Render the updated rows before delaying their accessibility announcement.
+        await InvokeAsync(StateHasChanged);
 
         if (xValuesToAnnounce.Count == 0)
         {
             return;
         }
 
+        // Give the data grid time to render the new rows before announcing their positions to screen readers.
         await Task.Delay(500, cancellationToken);
 
         var metricView = _metricsView.ToList();

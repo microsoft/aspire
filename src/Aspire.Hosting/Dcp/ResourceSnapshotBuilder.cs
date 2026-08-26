@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -168,6 +170,9 @@ internal class ResourceSnapshotBuilder
         }
 
         var launchArguments = GetLaunchArgs(executable, effectiveArgs);
+        var properties = GetLaunchConfigurationType(appModelResource) is { } launchConfigurationType
+            ? previous.Properties.SetResourceProperty(KnownProperties.Resource.LaunchConfigurationType, launchConfigurationType)
+            : previous.Properties.RemoveResourceProperty(KnownProperties.Resource.LaunchConfigurationType);
 
         if (projectPath is not null)
         {
@@ -176,7 +181,7 @@ internal class ResourceSnapshotBuilder
                 ResourceType = previous.ResourceType ?? KnownResourceTypes.Project,
                 State = state,
                 ExitCode = executable.Status?.ExitCode,
-                Properties = previous.Properties.SetResourcePropertyRange([
+                Properties = properties.SetResourcePropertyRange([
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
@@ -200,7 +205,7 @@ internal class ResourceSnapshotBuilder
             ResourceType = previous.ResourceType ?? KnownResourceTypes.Executable,
             State = state,
             ExitCode = executable.Status?.ExitCode,
-            Properties = previous.Properties.SetResourcePropertyRange([
+            Properties = properties.SetResourcePropertyRange([
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
@@ -215,6 +220,21 @@ internal class ResourceSnapshotBuilder
             Urls = urls,
             Relationships = relationships
         };
+    }
+
+    private static string? GetLaunchConfigurationType(IResource? resource)
+    {
+        // The annotation identifies the debugger even when the current IDE lacks it. Structural exclusions
+        // cannot be fixed by installing an extension, so do not advertise those resources as debuggable.
+        if (resource is not null
+            && resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var annotation)
+            && !resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
+            && !resource.HasPersistentLifetime())
+        {
+            return annotation.LaunchConfigurationType;
+        }
+
+        return null;
     }
 
     private static bool IsNotStartedExecutableState(string? state)

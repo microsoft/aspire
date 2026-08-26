@@ -9,7 +9,7 @@ param principalType string
 
 resource hostgroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
   name: take('hostgroup-${uniqueString(resourceGroup().id)}', 63)
-  location: resourceGroup().location
+  location: location
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {

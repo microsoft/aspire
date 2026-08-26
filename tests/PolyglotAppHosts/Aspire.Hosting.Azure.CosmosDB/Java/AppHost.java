@@ -22,12 +22,12 @@ void main() throws Exception {
         cosmosEmulator.runAsEmulator((emulator) -> {
             emulator.withDataVolume("cosmos-emulator-data"); // 9) withDataVolume
             emulator.withGatewayPort(18081.0); // 10) withGatewayPort
-            emulator.withPartitionCount(25); // 11) withPartitionCount
+            emulator.withDataExplorer(11234.0); // 11) withDataExplorer
         });
-        // 12) runAsPreviewEmulator + 13) withDataExplorer
-        var cosmosPreview = builder.addAzureCosmosDB("cosmos-preview-emulator");
-        cosmosPreview.runAsPreviewEmulator((emulator) -> {
-                emulator.withDataExplorer(11234.0);
+        // 12) runAsClassicEmulator + 13) withPartitionCount
+        var cosmosClassic = builder.addAzureCosmosDB("cosmos-classic-emulator");
+        cosmosClassic.runAsClassicEmulator((emulator) -> {
+                emulator.withPartitionCount(25);
             });
         var app = builder.build();
         app.run();
