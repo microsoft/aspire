@@ -3418,7 +3418,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AliasUsingProvisionedEnvironmentNameOutputSharesConcurrencyGroup()
+    public async Task ExistingEnvironmentsThatMayAliasProvisionedEnvironmentShareConcurrencyGroup()
     {
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
         const string resourceGroup = "shared-rg";
@@ -3431,6 +3431,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var alias = builder.AddAzureContainerAppEnvironment("alias");
         alias.Resource.Annotations.Add(new ExistingAzureResourceAnnotation(
             provisioned.Resource.NameOutputReference));
+        var literalAlias = builder.AddAzureContainerAppEnvironment("literal-alias")
+            .PublishAsExisting("stable-environment-name", resourceGroup);
         var otherScope = builder.AddAzureContainerAppEnvironment("other-scope");
         otherScope.Resource.Annotations.Add(new ExistingAzureResourceAnnotation(
             provisioned.Resource.NameOutputReference,
@@ -3439,6 +3441,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddContainer("api", "myimage").WithComputeEnvironment(provisioned);
         builder.AddContainer("worker", "myimage").WithComputeEnvironment(alias);
+        builder.AddContainer("literal-worker", "myimage").WithComputeEnvironment(literalAlias);
         builder.AddContainer("other-worker", "myimage").WithComputeEnvironment(otherScope);
 
         using var app = builder.Build();
@@ -3448,9 +3451,11 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
         var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
+        var literalWorkerGroup = GetDeploymentConcurrencyGroup(model, "literal-worker");
         var otherWorkerGroup = GetDeploymentConcurrencyGroup(model, "other-worker");
 
         Assert.Same(apiGroup, workerGroup);
+        Assert.Same(apiGroup, literalWorkerGroup);
         Assert.NotSame(apiGroup, otherWorkerGroup);
     }
 

@@ -227,18 +227,30 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         using var builder = CreatePipelineTestBuilder();
         var pipeline = new DistributedApplicationPipeline();
         var group = new DeploymentConcurrencyGroup(maxConcurrentDeployments: 1);
+        var failingStepStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var independentStepExecuted = false;
         var failingStep = new PipelineStep
         {
             Name = "failing",
-            Action = _ => throw new InvalidOperationException("Expected failure")
+            Action = _ =>
+            {
+                failingStepStarted.TrySetResult();
+                throw new InvalidOperationException("Expected failure");
+            }
         };
         failingStep.DeploymentConcurrencyGroups.Add(group);
         pipeline.AddStep(failingStep);
 
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "failing-started",
+            Action = async _ => await failingStepStarted.Task.ConfigureAwait(false)
+        });
+
         var independentStep = new PipelineStep
         {
             Name = "independent",
+            DependsOnSteps = ["failing-started"],
             Action = _ =>
             {
                 independentStepExecuted = true;
@@ -312,7 +324,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
 
         var step = Assert.Single(steps, step => step.Name == "deploy-target");
-        Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups));
+        Assert.Same(group, Assert.Single(step.GetDeploymentConcurrencyGroups()));
     }
 
     [Theory]
@@ -353,7 +365,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var deploymentSteps = steps.Where(step => step.Name.StartsWith("deploy-target-", StringComparison.Ordinal)).ToArray();
         Assert.Equal(2, deploymentSteps.Length);
-        Assert.All(deploymentSteps, step => Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups)));
+        Assert.All(deploymentSteps, step => Assert.Same(group, Assert.Single(step.GetDeploymentConcurrencyGroups())));
     }
 
     [Fact]
@@ -381,7 +393,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var step = Assert.Single(steps, step => step.Name == "download-artifact");
         Assert.Collection(
-            step.DeploymentConcurrencyGroups,
+            step.GetDeploymentConcurrencyGroups(),
             group => Assert.Same(exclusiveGroup, group),
             group => Assert.Same(sharedGroup, group));
     }
@@ -411,16 +423,44 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var firstResolution = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
         var firstStep = Assert.Single(firstResolution, step => step.Name == "download-artifact");
-        Assert.Same(firstGroup, Assert.Single(firstStep.DeploymentConcurrencyGroups));
+        Assert.Same(firstGroup, Assert.Single(firstStep.GetDeploymentConcurrencyGroups()));
 
         resource.Annotations.Remove(firstGroupAnnotation);
         resource.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(secondGroup));
 
         var secondResolution = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
         var secondStep = Assert.Single(secondResolution, step => step.Name == "download-artifact");
-        Assert.Same(secondGroup, Assert.Single(secondStep.DeploymentConcurrencyGroups));
+        Assert.Same(secondGroup, Assert.Single(secondStep.GetDeploymentConcurrencyGroups()));
         Assert.Empty(reusedStep.DeploymentConcurrencyGroups);
-        Assert.Null(reusedStep.Resource);
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_PreservesDerivedPipelineStep()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var derivedStep = new DerivedPipelineStep
+        {
+            Name = "derived-step",
+            Metadata = "preserved",
+            Action = _ => Task.CompletedTask
+        };
+        builder.AddResource(new CustomResource("resource"))
+            .WithPipelineStepFactory(_ => derivedStep);
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = CreateDeployingContext(app);
+
+        var resolvedSteps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+        var resolvedStep = Assert.IsType<DerivedPipelineStep>(
+            Assert.Single(resolvedSteps, step => step.Name == derivedStep.Name));
+        Assert.Same(derivedStep, resolvedStep);
+        Assert.Equal("preserved", resolvedStep.Metadata);
+
+        var (filteredSteps, _) = DistributedApplicationPipeline.FilterStepsForExecution(
+            resolvedSteps,
+            derivedStep.Name);
+        Assert.Same(derivedStep, Assert.IsType<DerivedPipelineStep>(Assert.Single(filteredSteps)));
     }
 
     [Fact]
@@ -500,10 +540,10 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var resolvedSteps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
         Assert.All(
             resolvedSteps.Where(step => step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure)),
-            step => Assert.Same(group, Assert.Single(step.DeploymentConcurrencyGroups)));
+            step => Assert.Same(group, Assert.Single(step.GetDeploymentConcurrencyGroups())));
         Assert.All(
             resolvedSteps.Where(step => step.Tags.Contains(WellKnownPipelineTags.DeployCompute)),
-            step => Assert.Empty(step.DeploymentConcurrencyGroups));
+            step => Assert.Empty(step.GetDeploymentConcurrencyGroups()));
 
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
@@ -2904,5 +2944,10 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         }
 
         return builder;
+    }
+
+    private sealed class DerivedPipelineStep : PipelineStep
+    {
+        public required string Metadata { get; init; }
     }
 }

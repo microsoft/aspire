@@ -624,10 +624,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
     {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps
-            .Select(step => step.Clone())
-            .Concat(annotationSteps)
-            .ToList();
+        var allSteps = _steps.Concat(annotationSteps).ToList();
 
         // Execute configuration callbacks even if there are no steps
         // This allows callbacks to run validation or other logic
@@ -656,6 +653,11 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         List<PipelineStep> steps)
     {
         var resourceNameComparer = new ResourceNameComparer();
+        foreach (var step in steps)
+        {
+            step.ResolvedDeploymentConcurrencyGroups.Clear();
+        }
+
         var deploymentResources = model.Resources
             .Concat(model.Resources.SelectMany(resource =>
                 resource.Annotations
@@ -693,9 +695,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 foreach (var group in concurrencyGroups)
                 {
-                    if (!deploymentStep.DeploymentConcurrencyGroups.Any(existing => ReferenceEquals(existing, group)))
+                    if (!deploymentStep.GetDeploymentConcurrencyGroups().Any(existing => ReferenceEquals(existing, group)))
                     {
-                        deploymentStep.DeploymentConcurrencyGroups.Add(group);
+                        deploymentStep.ResolvedDeploymentConcurrencyGroups.Add(group);
                     }
                 }
             }
@@ -746,8 +748,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         if (string.IsNullOrWhiteSpace(stepName))
         {
-            var clonedSteps = allSteps.Select(step => step.Clone()).ToList();
-            return (clonedSteps, clonedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal));
+            return (allSteps, allStepsByName);
         }
 
         if (!allStepsByName.TryGetValue(stepName, out var targetStep))
@@ -761,9 +762,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Since RequiredBy relationships have been normalized to DependsOn,
         // this automatically includes all steps that the target depends on
         var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
-        // Clone the selected graph so execution-specific state remains isolated when a pipeline
-        // annotation returns the same PipelineStep instance more than once.
-        stepsToExecute = stepsToExecute.Select(step => step.Clone()).ToList();
 
         var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
         return (stepsToExecute, filteredStepsByName);
@@ -822,9 +820,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
                 foreach (var step in annotationSteps)
                 {
-                    var resolvedStep = step.Clone();
-                    resolvedStep.Resource ??= resource;
-                    steps.Add(resolvedStep);
+                    steps.Add(step);
+                    step.Resource ??= resource;
                 }
             }
         }
@@ -921,7 +918,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         var nextConcurrencyGroupOrder = 0;
         foreach (var step in steps)
         {
-            foreach (var group in step.DeploymentConcurrencyGroups)
+            foreach (var group in step.GetDeploymentConcurrencyGroups())
             {
                 if (!concurrencyGates.ContainsKey(group))
                 {
@@ -976,7 +973,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             var acquiredConcurrencyGates = new Stack<SemaphoreSlim>();
             try
             {
-                var stepConcurrencyGates = step.DeploymentConcurrencyGroups
+                var stepConcurrencyGates = step.GetDeploymentConcurrencyGroups()
                     .Distinct<DeploymentConcurrencyGroup>(ReferenceEqualityComparer.Instance)
                     .Select(group => concurrencyGates[group])
                     .OrderBy(gate => gate.Order);

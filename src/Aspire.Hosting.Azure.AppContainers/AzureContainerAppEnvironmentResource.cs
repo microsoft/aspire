@@ -28,7 +28,6 @@ public class AzureContainerAppEnvironmentResource :
     AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
-    private static readonly ResourceNameComparer s_resourceNameComparer = new();
     private readonly DeploymentConcurrencyGroup _deploymentConcurrencyGroup;
 
     /// <inheritdoc />
@@ -302,8 +301,8 @@ public class AzureContainerAppEnvironmentResource :
 
         // The current deployment scope and parameter values can remain unresolved while deployment
         // targets are materialized. Treat only those unresolved parts as potentially matching explicit
-        // values. Existing environments can also reference a provisioned environment's name output,
-        // so include both kinds in the connected component before choosing a canonical owner.
+        // values. An existing environment can also identify a provisioned environment through an output
+        // reference or an eventual literal name, so include both kinds before choosing a canonical owner.
         var possibleAliases = new HashSet<AzureContainerAppEnvironmentResource>(ReferenceEqualityComparer.Instance)
         {
             this
@@ -358,13 +357,9 @@ public class AzureContainerAppEnvironmentResource :
         var existing = leftIsExisting ? left : right;
         var provisioned = leftIsExisting ? right : left;
 
-        // Resource transformations can replace the output owner while preserving its logical identity.
         return ExistingResourceIdentityPartMayMatch(existing.Subscription, provisioned.Subscription) &&
                ExistingResourceIdentityPartMayMatch(existing.ResourceGroup, provisioned.ResourceGroup) &&
-               existing.Name is BicepOutputReference existingName &&
-               provisioned.Name is BicepOutputReference provisionedName &&
-               string.Equals(existingName.Name, provisionedName.Name, StringComparison.Ordinal) &&
-               s_resourceNameComparer.Equals(existingName.Resource, provisionedName.Resource);
+               ExistingResourceIdentityPartMayMatch(existing.Name, provisioned.Name);
     }
 
     private static async ValueTask<(object? Name, object? Subscription, object? ResourceGroup)> ResolveExistingResourceIdentityAsync(
