@@ -1,0 +1,47 @@
+{
+  "run_id": 32909638198,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32909638198",
+  "analyzed_at": "2026-08-26T00:03:04Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19677,
+    "title": "Fix broken `main` CI",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "radical-fix-installer-template-packages",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19677"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "id": 98006235367,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32909638198/job/98006235367",
+      "classification": "flaky-test",
+      "reason": "Test failure is a socket-level 'Connection reset by peer' network error in an OTLP HTTP integration test. The PR only changes workflow YAML files and a workflow test (CiWorkflowTests.cs), none of which touch Aspire.Dashboard code, so the failure is unrelated to PR changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, edge-cases)",
+      "id": 98008282405,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32909638198/job/98008282405",
+      "classification": "flaky-test",
+      "reason": "Job fails with a generic exit code 1 and no retrievable logs, matching the well-known recurring 'VS Code extension E2E (Windows, edge-cases)' flaky pattern (24 prior occurrences). The PR does not touch the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Tests.Integration.OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure",
+      "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
+      "error": "System.Net.Http.HttpRequestException : Error while copying content to a stream.\n---- System.IO.IOException : Unable to write data to the transport connection: Connection reset by peer.\n-------- System.Net.Sockets.SocketException : Connection reset by peer",
+      "stack_trace": "at System.Net.Http.HttpContent.<CopyToAsync>g__WaitAsync|56_0(ValueTask copyTask)\n   at System.Net.Http.HttpConnection.SendRequestContentAsync(HttpRequestMessage request, HttpContentWriteStream stream, Boolean async, CancellationToken cancellationToken)\n   at System.Net.Http.HttpConnection.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)\n   at Aspire.Dashboard.Tests.Integration.OtlpHttpServiceTests.CallService_OtlpHttpEndPoint_ExceedRequestLimit_Failure() in /_/tests/Aspire.Dashboard.Tests/Integration/OtlpHttpServiceTests.cs:line 79",
+      "classification": "flaky",
+      "reason": "Socket-level 'Connection reset by peer' error during an HTTP request-limit test is a timing/environment-dependent network issue, not caused by the PR's workflow-only changes."
+    }
+  ],
+  "causes": ["aspire-dashboard-otlphttpservicetests-connectionreset", "vscode-e2e-windows-edge-cases-flaky"]
+}
