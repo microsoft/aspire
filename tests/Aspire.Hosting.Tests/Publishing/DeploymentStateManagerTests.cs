@@ -670,6 +670,47 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task RecreatedClaimedParentDoesNotRestoreLegacyChildren()
+    {
+        var legacySha = Guid.NewGuid().ToString("N");
+        var currentSha = Guid.NewGuid().ToString("N");
+        var legacyStateManager = CreateFileDeploymentStateManager(legacySha);
+        var migratingStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+
+        try
+        {
+            var legacyAzureSection = await legacyStateManager.AcquireSectionAsync("Azure");
+            legacyAzureSection.Data["SubscriptionId"] = "legacy-subscription";
+            legacyAzureSection.Data["Sandboxes"] = new JsonObject
+            {
+                ["legacy"] = new JsonObject { ["SandboxId"] = "legacy-sandbox" }
+            };
+            await legacyStateManager.SaveSectionAsync(legacyAzureSection);
+
+            var azureSection = await migratingStateManager.AcquireSectionAsync("Azure");
+            await migratingStateManager.DeleteSectionAsync(azureSection);
+
+            var newSandboxSection = await migratingStateManager.AcquireSectionAsync("Azure:Sandboxes:new");
+            newSandboxSection.Data["SandboxId"] = "new-sandbox";
+            await migratingStateManager.SaveSectionAsync(newSandboxSection);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(currentSha, legacySha);
+            var restartedAzureSection = await restartedStateManager.AcquireSectionAsync("Azure");
+
+            Assert.Null(restartedAzureSection.Data["SubscriptionId"]);
+            Assert.Null(restartedAzureSection.Data["Sandboxes"]?["legacy"]);
+            Assert.Equal(
+                "new-sandbox",
+                restartedAzureSection.Data["Sandboxes"]?["new"]?["SandboxId"]?.GetValue<string>());
+        }
+        finally
+        {
+            await migratingStateManager.ClearAllStateAsync();
+            await legacyStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentSourceAppHostSavesPreserveCanonicalStateAndMigrationMetadata()
     {
         var legacySha = Guid.NewGuid().ToString("N");
