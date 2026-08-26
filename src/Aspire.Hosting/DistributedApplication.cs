@@ -242,6 +242,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
         if (!string.IsNullOrEmpty(options.ProjectDirectory))
         {
             realOptions.ProjectDirectory = options.ProjectDirectory;
+            // The polyglot AppHost runs in a separate guest process, so the managed server's
+            // working directory does not point at the user's appsettings files.
+            realOptions.ContentRootPath = options.ProjectDirectory;
         }
 
         if (!string.IsNullOrEmpty(options.AppHostFilePath))

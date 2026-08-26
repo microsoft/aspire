@@ -190,7 +190,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _options = options;
 
-        var innerBuilderOptions = new HostApplicationBuilderSettings();
+        var innerBuilderOptions = new HostApplicationBuilderSettings
+        {
+            ContentRootPath = options.ContentRootPath
+        };
 
         // Args are set later in config with switch mappings. But specify them when creating the builder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
@@ -214,6 +217,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
+        if (options.ContentRootPath is not null)
+        {
+            // Polyglot AppHosts previously inherited these filters from the managed server's
+            // appsettings.json. Keep the defaults without exposing the server's private configuration.
+            _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+            _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dcp", LogLevel.Warning);
+        }
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
