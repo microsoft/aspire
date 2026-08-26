@@ -109,6 +109,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
       "pr_number": 19615,
       "observed_at": "2026-08-25T19:53:19Z"
+    },
+    {
+      "run_id": 32994724407,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32994724407",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "pr_number": 19702,
+      "observed_at": "2026-08-26T18:02:12Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19597"

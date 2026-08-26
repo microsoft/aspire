@@ -1,0 +1,29 @@
+{
+  "run_id": 32994724407,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32994724407",
+  "analyzed_at": "2026-08-26T18:02:12Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19702,
+    "title": "Fix VS Code debugger guidance E2E contract",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-fix-vscode-e2e-flakes",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19702"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, workspace-target-proof)",
+      "id": 98264721132,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32994724407/job/98264721132",
+      "classification": "flaky-test",
+      "reason": "Job failed with generic exit code 1 on the 'workspace-target-proof' shard; job logs unavailable ('Failed to fetch logs for job'), and no TRX test failures were extracted. This exact shard has failed 15 prior times with the same signature (tracked under issue #19597), unrelated to specific PR content. The PR only modifies extension test files (edgeCases.e2e.test.ts, e2eLaunchProfile.test.ts) which is a minor change and does not correspond to a code defect indicated by any concrete error output.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-linux-workspace-target-proof-flaky"]
+}
