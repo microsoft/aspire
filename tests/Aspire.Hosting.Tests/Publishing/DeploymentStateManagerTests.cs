@@ -221,7 +221,8 @@ public class DeploymentStateManagerTests : IDisposable
     [Fact]
     public async Task BackwardCompatibility_LoadsStateWithoutMetadata()
     {
-        var stateManager = CreateFileDeploymentStateManager();
+        var sha = Guid.NewGuid().ToString("N");
+        var stateManager = CreateFileDeploymentStateManager(sha);
 
         var state = new JsonObject
         {
@@ -232,8 +233,14 @@ public class DeploymentStateManagerTests : IDisposable
         await stateManager.SaveStateAsync(state);
 
         var parametersSection = await stateManager.AcquireSectionAsync("Parameters");
+        var azureSection = await stateManager.AcquireSectionAsync("Azure");
+        var restartedStateManager = CreateFileDeploymentStateManager(sha);
+        var restartedParametersSection = await restartedStateManager.AcquireSectionAsync("Parameters");
 
         Assert.Equal(0, parametersSection.Version);
+        Assert.Equal("value1", parametersSection.Data["param1"]?.GetValue<string>());
+        Assert.Equal("azure-value1", azureSection.Data["resource1"]?.GetValue<string>());
+        Assert.Equal("value1", restartedParametersSection.Data["param1"]?.GetValue<string>());
     }
 
     [Fact]
@@ -576,6 +583,33 @@ public class DeploymentStateManagerTests : IDisposable
         {
             await migratingStateManager.ClearAllStateAsync();
             await legacyStateManager.ClearAllStateAsync();
+        }
+    }
+
+    [Fact]
+    public async Task FirstScalarSavePreservesCanonicalValueWithoutMigrationMetadata()
+    {
+        var sha = Guid.NewGuid().ToString("N");
+        var stateManager = CreateFileDeploymentStateManager(sha);
+
+        try
+        {
+            var statePath = stateManager.StateFilePath!;
+            Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
+            await File.WriteAllTextAsync(statePath, """{"Parameters:secret":"existing"}""");
+
+            var section = await stateManager.AcquireSectionAsync("Parameters:secret");
+            Assert.Equal("existing", section.Data[""]?.GetValue<string>());
+
+            await stateManager.SaveSectionAsync(section);
+
+            var restartedStateManager = CreateFileDeploymentStateManager(sha);
+            var restartedSection = await restartedStateManager.AcquireSectionAsync("Parameters:secret");
+            Assert.Equal("existing", restartedSection.Data[""]?.GetValue<string>());
+        }
+        finally
+        {
+            await stateManager.ClearAllStateAsync();
         }
     }
 
