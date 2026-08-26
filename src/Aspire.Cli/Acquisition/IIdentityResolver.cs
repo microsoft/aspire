@@ -34,6 +34,11 @@ internal interface IIdentityResolver
     IdentityValue<string> ResolveChannel();
 
     /// <summary>
+    /// Resolves the channel baked into the running CLI assembly, ignoring environment and sidecar overrides.
+    /// </summary>
+    IdentityValue<string> ResolveBuildChannel();
+
+    /// <summary>
     /// Resolves the running CLI's informational version
     /// (e.g. <c>13.4.0-preview.1.25366.3</c>).
     /// </summary>

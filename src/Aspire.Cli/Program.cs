@@ -709,6 +709,7 @@ public class Program
         var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
 
         var channel = identityResolver.ResolveChannel();
+        var buildChannel = identityResolver.ResolveBuildChannel();
         var version = identityResolver.ResolveVersion();
         var commit = identityResolver.ResolveCommit();
         var nugetServiceIndexOverride = identityResolver.ResolveNuGetServiceIndexOverride();
@@ -745,6 +746,8 @@ public class Program
             new DirectoryInfo(logsDirectory),
             logFilePath,
             identityChannel: channel.Value,
+            buildChannel: buildChannel.Value,
+            identityChannelSource: channel.Source,
             identityVersion: version.Value,
             identityCommit: commit.Value,
             nugetServiceIndexOverride: nugetServiceIndexOverride.Value,

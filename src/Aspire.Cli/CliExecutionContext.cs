@@ -2,13 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, bool debugMode = false, LogLevel? consoleLogLevel = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null, bool identityOverrideNoticeRequired = false)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, string identityChannel, string? buildChannel = null, IdentitySource identityChannelSource = IdentitySource.AssemblyFallback, bool debugMode = false, LogLevel? consoleLogLevel = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null, bool identityOverridden = false, DirectoryInfo? identityPackagesDirectory = null, bool identityOverrideNoticeRequired = false)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -16,12 +17,10 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
 
     /// <summary>
-    /// Gets the hive label baked into the <strong>running CLI binary</strong>:
+    /// Gets the effective channel identity of the running CLI:
     /// one of <c>local</c>, <c>stable</c>, <c>staging</c>, <c>daily</c>, or the
-    /// per-PR label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>). The value
-    /// is sourced from <c>[AssemblyMetadata("AspireCliChannel", "...")]</c> and
-    /// is consumed verbatim by the packaging service to select the matching
-    /// hive directory for this CLI process.
+    /// per-PR label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>). Environment
+    /// and install-sidecar values take precedence over the assembly's build-time stamp.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -40,6 +39,21 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// </para>
     /// </remarks>
     public string IdentityChannel { get; } = identityChannel;
+
+    /// <summary>
+    /// Gets the source of <see cref="IdentityChannel"/>.
+    /// </summary>
+    public IdentitySource IdentityChannelSource { get; } = identityChannelSource;
+
+    /// <summary>
+    /// Gets the channel baked into the physical CLI assembly.
+    /// </summary>
+    /// <remarks>
+    /// This can differ from <see cref="IdentityChannel"/> after a self-update. For example, the
+    /// staging download route can serve a stable-stamped release binary while the install sidecar
+    /// retains <c>staging</c> as the route for subsequent updates.
+    /// </remarks>
+    public string BuildChannel { get; } = buildChannel ?? identityChannel;
 
     /// <summary>
     /// Gets the running CLI's informational version string (for example

@@ -74,18 +74,19 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     /// <c>NuGet.config</c> that pins Aspire packages to this channel's feed(s).
     /// </summary>
     /// <remarks>
-    /// Only channels that route Aspire packages to a <em>custom</em> feed need a per-project
-    /// <c>NuGet.config</c>. The <c>stable</c> channel maps everything to nuget.org — the ambient
-    /// default source — so emitting a <c>&lt;clear/&gt;</c>-based config would be redundant and,
-    /// worse, would wipe any additional feeds the user already relies on. Daily
+    /// Only channels that route packages to a <em>custom</em> feed need a per-project
+    /// <c>NuGet.config</c>. A channel whose only mapping is nuget.org uses the ambient default
+    /// source, so emitting a <c>&lt;clear/&gt;</c>-based config would be redundant and, worse,
+    /// would wipe any additional feeds the user already relies on. Daily
     /// (<c>dnceng/dotnet9</c>), staging (<c>darc-pub-microsoft-aspire-&lt;sha&gt;</c>), and
     /// <c>pr-&lt;N&gt;</c>/local-hive channels all point at custom feeds, so their mappings must be
-    /// persisted for restore to succeed. This deliberately mirrors <see cref="ShouldPersistChannelName"/>:
-    /// the set of channels whose name we pin is exactly the set we drop a config for (those that
-    /// additionally carry feed mappings).
+    /// persisted for restore to succeed. Channel-name persistence remains independent: a
+    /// staging-selected stable build still persists <c>staging</c> for future CLI updates while
+    /// resolving its matching packages from nuget.org.
     /// </remarks>
     public bool ShouldCreateNuGetConfig() =>
-        ShouldPersistChannelName() && Mappings is { Length: > 0 };
+        ShouldPersistChannelName() &&
+        Mappings?.Any(static mapping => !string.Equals(mapping.Source, PackageSources.NuGetOrg, StringComparison.OrdinalIgnoreCase)) == true;
 
     /// <summary>
     /// Whether this channel resolves Aspire.* packages from a local directory of <c>.nupkg</c>

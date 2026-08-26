@@ -46,10 +46,11 @@ internal class PackagingService : IPackagingService
     // identity channel (see IsStagingChannelSynthesisAllowed). Surfaced from
     // tests via InternalsVisibleTo so a single literal change can't drift.
     internal const string OverrideStagingFeedConfigKey = "overrideStagingFeed";
+    internal const string OverrideStagingCliDownloadBaseUrlConfigKey = "overrideStagingCliDownloadBaseUrl";
 
-    // Diagnostic overrides for validating staging FEED ROUTING from a locally built CLI without
-    // having to produce a real official staging build. They are intentionally scoped to the
-    // staging-feed decisions in this service (they do NOT change the global
+    // Diagnostic overrides for validating staging feed routing and self-update from a locally built
+    // CLI without having to produce a real official staging build. They are intentionally scoped to
+    // staging decisions in this service (they do NOT change the global
     // CliExecutionContext.IdentityChannel used for hive/packages directory lookups), so a plain
     // local dev build can be made to derive and resolve from a real darc-pub-microsoft-aspire-<sha>
     // feed exactly the way an official staging build would. See docs/cli-staging-validation.md.
@@ -181,15 +182,15 @@ internal class PackagingService : IPackagingService
         // need the channel materialized before they can match it below.
         var stagingChannelConfigured = string.Equals(_configuration["channel"], PackageChannelNames.Staging, StringComparisons.ChannelName);
         var stagingChannelRequested = string.Equals(requestedChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName);
-        var stagingIdentityChannel = string.Equals(GetEffectiveIdentityChannel(), PackageChannelNames.Staging, StringComparisons.ChannelName);
+        var stagingIdentityChannel = string.Equals(GetEffectiveRouteChannel(), PackageChannelNames.Staging, StringComparisons.ChannelName);
         var stagingFeatureEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
         if (stagingFeatureEnabled || stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel)
         {
             // Default quality selection rules (per staging entry point). NOTE: quality controls
             // version FILTERING only (which versions in the feed are eligible); it no longer
-            // selects the feed itself. Feed PROVENANCE is identity-driven inside
-            // ShouldUseSharedStagingFeed — a staging-identity CLI always resolves Aspire.* from its
-            // own SHA-specific darc-pub-microsoft-aspire-<commit> feed.
+            // selects the feed itself. Feed PROVENANCE is selected by GetStagingPackageSource:
+            // a physically staging-stamped CLI resolves Aspire.* from its own SHA-specific
+            // darc-pub-microsoft-aspire-<commit> feed.
             //   - Explicit user opt-in (`stagingChannelConfigured`, `stagingChannelRequested`): Both.
             //     The user picked staging deliberately; they get the broadest matching window.
             //   - `stagingFeatureEnabled` only (no other staging signal): Stable. Preserves the
@@ -352,14 +353,8 @@ internal class PackagingService : IPackagingService
         return plusIndex >= 0 ? version[..plusIndex] : version;
     }
 
-    // Returns the identity channel used for staging-feed routing decisions. Normally this is the
-    // CLI build's baked identity (CliExecutionContext.IdentityChannel). For local validation of
-    // staging feed routing, overrideCliIdentityChannel can force a different identity (validated
-    // against the known channel set via IdentityChannelReader.IsValidChannel) WITHOUT changing the
-    // global identity used elsewhere (hive/packages directory lookups), keeping the blast radius
-    // limited to feed provenance. Invalid override values are ignored — we fall back to the real
-    // identity, mirroring how overrideStagingFeed ignores malformed URLs.
-    private string GetEffectiveIdentityChannel()
+    // Returns the channel selected for CLI update routing. Invalid diagnostic overrides are ignored.
+    private string GetEffectiveRouteChannel()
     {
         var overrideChannel = _configuration[OverrideCliIdentityChannelConfigKey];
         if (!string.IsNullOrEmpty(overrideChannel) && IdentityChannelReader.IsValidChannel(overrideChannel))
@@ -370,6 +365,14 @@ internal class PackagingService : IPackagingService
         return _executionContext.IdentityChannel;
     }
 
+    // Environment/config/sidecar identity normally controls package provenance. The one route where
+    // the physical stamp differs is handled explicitly by GetStagingPackageSource: a staging
+    // sidecar paired with a stable build resolves the stable package graph from nuget.org.
+    private string GetEffectivePackageProvenanceChannel()
+    {
+        return GetEffectiveRouteChannel();
+    }
+
     // Emits a single warning when either staging diagnostic override is active, so a normal CLI
     // invocation can't silently resolve Aspire.* from an overridden identity/feed without a trace
     // in the logs. Emitted at most once per process to avoid noise across repeated GetChannelsAsync
@@ -378,7 +381,10 @@ internal class PackagingService : IPackagingService
     {
         var identityOverride = _configuration[OverrideCliIdentityChannelConfigKey];
         var versionOverride = _configuration[OverrideCliInformationalVersionConfigKey];
-        if (string.IsNullOrEmpty(identityOverride) && string.IsNullOrEmpty(versionOverride))
+        var downloadBaseUrlOverride = _configuration[OverrideStagingCliDownloadBaseUrlConfigKey];
+        if (string.IsNullOrEmpty(identityOverride) &&
+            string.IsNullOrEmpty(versionOverride) &&
+            string.IsNullOrEmpty(downloadBaseUrlOverride))
         {
             return;
         }
@@ -386,13 +392,23 @@ internal class PackagingService : IPackagingService
         if (Interlocked.Exchange(ref _stagingDiagnosticOverrideLogged, 1) == 0)
         {
             _logger.LogWarning(
-                "Staging feed-routing diagnostic overrides are active: {IdentityKey}={IdentityValue}, {VersionKey}={VersionValue}. " +
+                "Staging diagnostic overrides are active: {IdentityKey}={IdentityValue}, {VersionKey}={VersionValue}, {DownloadKey}={DownloadValue}. " +
                 "These are intended only for local validation of staging feed routing and must not be set on a normal CLI.",
                 OverrideCliIdentityChannelConfigKey,
                 string.IsNullOrEmpty(identityOverride) ? "(unset)" : identityOverride,
                 OverrideCliInformationalVersionConfigKey,
-                string.IsNullOrEmpty(versionOverride) ? "(unset)" : versionOverride);
+                string.IsNullOrEmpty(versionOverride) ? "(unset)" : versionOverride,
+                OverrideStagingCliDownloadBaseUrlConfigKey,
+                string.IsNullOrEmpty(downloadBaseUrlOverride) ? "(unset)" : downloadBaseUrlOverride);
         }
+    }
+
+    private string GetStagingCliDownloadBaseUrl()
+    {
+        var overrideUrl = _configuration[OverrideStagingCliDownloadBaseUrlConfigKey];
+        return !string.IsNullOrEmpty(overrideUrl) && UrlHelper.IsHttpUrl(overrideUrl)
+            ? overrideUrl
+            : "https://aka.ms/dotnet/9/aspire/rc/daily";
     }
 
     private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
@@ -416,14 +432,14 @@ internal class PackagingService : IPackagingService
         var stagingQuality = GetStagingQuality(defaultQuality);
         var hasExplicitFeedOverride = !string.IsNullOrEmpty(_configuration[OverrideStagingFeedConfigKey]);
 
-        // Feed PROVENANCE is decided by the CLI build identity; version FILTERING is decided by
-        // quality. These are independent concerns and must not be conflated (see
-        // https://github.com/microsoft/aspire/issues/16652 for the original misroute, and the
+        // Feed PROVENANCE is decided by the physical CLI build plus any explicit emulation; version
+        // FILTERING is decided by quality. These are independent concerns and must not be conflated
+        // (see https://github.com/microsoft/aspire/issues/16652 for the original misroute, and the
         // staging-identity prerelease regression that motivated separating them).
-        var effectiveIdentityChannel = GetEffectiveIdentityChannel();
-        var useSharedFeed = ShouldUseSharedStagingFeed(hasExplicitFeedOverride, stagingQuality, effectiveIdentityChannel);
+        var effectiveIdentityChannel = GetEffectivePackageProvenanceChannel();
+        var packageSource = GetStagingPackageSource(hasExplicitFeedOverride, stagingQuality, effectiveIdentityChannel);
 
-        var stagingFeedUrl = GetStagingFeedUrl(useSharedFeed);
+        var stagingFeedUrl = GetStagingFeedUrl(packageSource);
         if (stagingFeedUrl is null)
         {
             // Reaching here means synthesis was allowed (IsStagingChannelSynthesisAllowed passed) but the
@@ -442,13 +458,30 @@ internal class PackagingService : IPackagingService
             return null;
         }
 
-        var pinnedVersion = GetStagingPinnedVersion(useSharedFeed);
+        var pinnedVersion = GetStagingPinnedVersion(packageSource);
+        var mappings = packageSource is StagingPackageSource.NuGetOrg
+            ? new[]
+            {
+                new PackageMapping(PackageMapping.AllPackages, stagingFeedUrl)
+            }
+            : new[]
+            {
+                new PackageMapping("Aspire*", stagingFeedUrl),
+                new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
+            };
 
-        var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, stagingQuality, new[]
-        {
-            new PackageMapping("Aspire*", stagingFeedUrl),
-            new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
-        }, _nuGetPackageCache, _features, _logger, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            stagingQuality,
+            mappings,
+            _nuGetPackageCache,
+            _features,
+            _logger,
+            configureGlobalPackagesFolder: packageSource is StagingPackageSource.Darc or StagingPackageSource.Override,
+            cliDownloadBaseUrl: GetStagingCliDownloadBaseUrl(),
+            pinnedVersion: pinnedVersion,
+            currentCliVersion: _executionContext.IdentitySdkVersion,
+            validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is
@@ -469,40 +502,42 @@ internal class PackagingService : IPackagingService
     /// <inheritdoc />
     public string? GetStagingChannelUnavailableReason() => _stagingUnavailableReasonCache.Value;
 
-    // Decides whether the synthesized staging channel routes Aspire.* at the SHARED dnceng/dotnet9
-    // daily feed (true) or at the SHA-specific darc-pub-microsoft-aspire-<commit> feed (false).
+    // Selects the package provenance for the synthesized staging channel.
     //
-    // The rule is identity-driven, NOT version-shape-driven:
-    //   * Explicit overrideStagingFeed  -> false. The caller named an exact feed; GetStagingFeedUrl
-    //     returns it verbatim, so the shared-vs-darc distinction is moot.
-    //   * staging IDENTITY              -> false (always its own darc feed, any version shape). A CLI
-    //     whose baked AspireCliChannel is `staging` is an officially published release-branch build,
-    //     and darc publishes a per-commit darc-pub-microsoft-aspire-<commit> feed for EVERY such
-    //     build — prerelease-shaped 13.4.0-preview.* and stable-shaped 13.4.0 alike. That feed is
-    //     derived from the CLI's own commit, so it always carries the CLI's matching packages.
-    //     Falling back to the shared dotnet9 daily feed (which only carries main-branch daily
-    //     packages) silently resolves the wrong packages for polyglot apphosts while C# apphosts —
-    //     whose nuget.config has the darc feed baked in — resolve correctly. That asymmetry is the
-    //     bug this method fixes. (A missing darc feed for an officially published staging build is a
-    //     publish/infra failure that should surface as an unresolved package, not be masked by a
-    //     silent downgrade to daily packages.)
-    //   * any other identity opting into staging (stable identity via config pin / StagingChannelEnabled
-    //     feature) -> keep the historical quality-based routing: non-Stable quality uses the shared
-    //     feed, Stable quality uses the SHA feed. Those identities do not own a release-branch darc
-    //     feed of their own, so this preserves prior behavior unchanged.
-    private static bool ShouldUseSharedStagingFeed(bool hasExplicitFeedOverride, PackageChannelQuality stagingQuality, string identityChannel)
+    // The rule is build-identity-driven, NOT version-shape-driven:
+    //   * An explicit override names the exact feed.
+    //   * A physically staging-stamped CLI owns its SHA-specific darc feed for every version shape.
+    //   * A stable-stamped binary selected through a sidecar-persisted staging route uses nuget.org,
+    //     pinned to the binary's version. Release scripts intentionally publish stable-stamped
+    //     ship-candidate archives through the staging route; their matching package graph is the
+    //     same nuget.org graph that the stable binary's C# AppHost templates use.
+    //   * Other identities opting into staging retain the historical quality-based routing:
+    //     non-Stable quality uses the shared feed, while Stable quality uses the SHA feed.
+    private StagingPackageSource GetStagingPackageSource(
+        bool hasExplicitFeedOverride,
+        PackageChannelQuality stagingQuality,
+        string identityChannel)
     {
         if (hasExplicitFeedOverride)
         {
-            return false;
+            return StagingPackageSource.Override;
+        }
+
+        if (_executionContext.IdentityChannelSource is IdentitySource.Sidecar &&
+            string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName) &&
+            string.Equals(_executionContext.BuildChannel, PackageChannelNames.Stable, StringComparisons.ChannelName))
+        {
+            return StagingPackageSource.NuGetOrg;
         }
 
         if (string.Equals(identityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName))
         {
-            return false;
+            return StagingPackageSource.Darc;
         }
 
-        return stagingQuality is not PackageChannelQuality.Stable;
+        return stagingQuality is PackageChannelQuality.Stable
+            ? StagingPackageSource.Darc
+            : StagingPackageSource.Shared;
     }
 
     private string? ComputeStagingChannelUnavailableReason()
@@ -515,7 +550,7 @@ internal class PackagingService : IPackagingService
         return string.Format(
             CultureInfo.CurrentCulture,
             PackagingStrings.StagingChannelUnavailableOnDailyCli,
-            GetEffectiveIdentityChannel());
+            GetEffectivePackageProvenanceChannel());
     }
 
     private bool IsStagingChannelSynthesisAllowed()
@@ -542,11 +577,12 @@ internal class PackagingService : IPackagingService
         // For daily, local, and pr-<N> identities, falling back to either the SHA feed (no real
         // darc feed exists) or the shared daily feed silently resolves daily packages — the
         // exact bug tracked by https://github.com/microsoft/aspire/issues/16652.
-        return string.Equals(GetEffectiveIdentityChannel(), PackageChannelNames.Stable, StringComparisons.ChannelName)
-            || string.Equals(GetEffectiveIdentityChannel(), PackageChannelNames.Staging, StringComparisons.ChannelName);
+        var provenanceChannel = GetEffectivePackageProvenanceChannel();
+        return string.Equals(provenanceChannel, PackageChannelNames.Stable, StringComparisons.ChannelName)
+            || string.Equals(provenanceChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
-    private string? GetStagingFeedUrl(bool useSharedFeed)
+    private string? GetStagingFeedUrl(StagingPackageSource packageSource)
     {
         // Check for _configuration override first
         var overrideFeed = _configuration[OverrideStagingFeedConfigKey];
@@ -560,8 +596,12 @@ internal class PackagingService : IPackagingService
             // Invalid URL, fall through to default behavior
         }
 
-        // Use the shared daily feed when the routing policy selected it (see ShouldUseSharedStagingFeed).
-        if (useSharedFeed)
+        if (packageSource is StagingPackageSource.NuGetOrg)
+        {
+            return NuGetOrgUrl;
+        }
+
+        if (packageSource is StagingPackageSource.Shared)
         {
             return "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         }
@@ -627,11 +667,17 @@ internal class PackagingService : IPackagingService
         return string.IsNullOrEmpty(overrideQuality) ? defaultQuality : PackageChannelQuality.Stable;
     }
 
-    private string? GetStagingPinnedVersion(bool useSharedFeed)
+    private string? GetStagingPinnedVersion(StagingPackageSource packageSource)
     {
+        if (packageSource is StagingPackageSource.NuGetOrg)
+        {
+            return _executionContext.IdentitySdkVersion;
+        }
+
         // Only pin versions when using the shared feed and the config flag is set
         var pinToCliVersion = _configuration["stagingPinToCliVersion"];
-        if (!useSharedFeed || !string.Equals(pinToCliVersion, "true", StringComparison.OrdinalIgnoreCase))
+        if (packageSource is not StagingPackageSource.Shared ||
+            !string.Equals(pinToCliVersion, "true", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -640,6 +686,14 @@ internal class PackagingService : IPackagingService
         // sidecar / the overrideCliInformationalVersion diagnostic), stripped of build metadata.
         var informationalVersion = _cliInformationalVersionProvider();
         return string.IsNullOrEmpty(informationalVersion) ? null : StripBuildMetadata(informationalVersion);
+    }
+
+    private enum StagingPackageSource
+    {
+        Darc,
+        Shared,
+        NuGetOrg,
+        Override,
     }
 
     // Local hive channels point at a flat directory of .nupkg files instead of a searchable feed.

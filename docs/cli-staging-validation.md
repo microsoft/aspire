@@ -12,7 +12,12 @@ a SHA-specific `darc-pub-microsoft-aspire-<commit>` feed carrying its matching p
 **provenance** is decided by the CLI's baked build **identity** (`AspireCliChannel`),
 and official staging identities use `Both` quality because one build can publish stable
 packages alongside integrations that deliberately remain prerelease. See
-`PackagingService.ShouldUseSharedStagingFeed`.
+`PackagingService.GetStagingPackageSource`.
+
+A staging update route can also serve a stable-stamped release binary. In that case the
+install sidecar retains `staging` as the route for later CLI self-updates, while package
+provenance follows the physical stable build: the matching SDK version is pinned and
+resolved from nuget.org.
 
 A locally built CLI bakes a `local` identity and an unstamped informational version, so
 it never synthesizes a staging channel and never derives a darc feed. The two diagnostic
@@ -36,6 +41,11 @@ package-directory lookups):
 
 When either override is set, the CLI emits a one-time warning so an overridden
 identity/feed can't silently resolve packages on a normal invocation.
+
+`overrideStagingCliDownloadBaseUrl` is a separate self-update test hook. When set to
+an absolute HTTP(S) URL, the staging channel downloads its CLI archive and checksum
+from that base URL while package feed routing remains unchanged. The CLI also includes
+this key in the one-time diagnostic warning.
 
 ## Recipe
 

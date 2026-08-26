@@ -56,14 +56,33 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             await auto.RunCommandAsync("aspire config delete channel -g", counter);
         }
 
+        // Serve the current-source binary in the same archive shape as the acquisition endpoint.
+        // Using the live staging endpoint here would relaunch an already-published CLI, so changes
+        // under test in this branch could not affect the implicit project update after replacement.
+        // The checksum keeps the real self-update validation path in the scenario.
+        await auto.RunCommandAsync(
+            "feed_root=/tmp/aspire-self-update-feed; port=38417; " +
+            "rm -rf \"$feed_root\"; mkdir -p \"$feed_root\"; " +
+            "arch=$(uname -m); if [ \"$arch\" = aarch64 ]; then arch=arm64; else arch=x64; fi; " +
+            "archive=\"$feed_root/aspire-cli-linux-$arch.tar.gz\"; " +
+            "tar -czf \"$archive\" -C \"$(dirname \"$(command -v aspire)\")\" aspire; " +
+            "sha512sum \"$archive\" | cut -d' ' -f1 > \"$archive.sha512\"; " +
+            "nohup python3 -m http.server \"$port\" --directory \"$feed_root\" >/tmp/aspire-self-update-feed.log 2>&1 & " +
+            "for attempt in $(seq 1 20); do curl --fail --silent \"http://127.0.0.1:$port/$(basename \"$archive\").sha512\" >/dev/null && break; sleep 0.1; done; " +
+            "curl --fail --silent \"http://127.0.0.1:$port/$(basename \"$archive\").sha512\" >/dev/null; " +
+            "aspire config set overrideStagingCliDownloadBaseUrl \"http://127.0.0.1:$port\" -g",
+            counter);
+
         // Copy the current build into a dedicated get-aspire-cli.sh-style prefix. This gives the
         // self-update a realistic writable route without replacing the harness's original install.
         await auto.RunCommandAsync(
             "install_root=$HOME/.aspire-self-update-e2e; " +
+            "packages_dir=$(dirname \"$(find ~/.aspire/hives -type f -name 'Aspire.Hosting.*.nupkg' | head -1)\"); " +
+            "test -n \"$packages_dir\"; " +
             "mkdir -p \"$install_root/bin\"; " +
             "cp \"$(command -v aspire)\" \"$install_root/bin/aspire\"; " +
             "chmod +x \"$install_root/bin/aspire\"; " +
-            "printf '%s\\n' '{\"source\":\"script\",\"channel\":\"stable\"}' > \"$install_root/bin/.aspire-install.json\"; " +
+            "printf '{\"source\":\"script\",\"channel\":\"stable\",\"packages\":\"%s\"}\\n' \"$packages_dir\" > \"$install_root/bin/.aspire-install.json\"; " +
             "export PATH=\"$install_root/bin:$PATH\" ASPIRE_CLI_TELEMETRY_OPTOUT=true; hash -r; " +
             "test \"$(command -v aspire)\" = \"$install_root/bin/aspire\"",
             counter);
