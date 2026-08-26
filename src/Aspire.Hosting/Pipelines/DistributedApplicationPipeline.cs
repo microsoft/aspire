@@ -653,34 +653,43 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         List<PipelineStep> steps)
     {
         var resourceNameComparer = new ResourceNameComparer();
+        var deploymentResources = model.Resources
+            .Concat(model.Resources.SelectMany(resource =>
+                resource.Annotations
+                    .OfType<DeploymentTargetAnnotation>()
+                    .Select(annotation => annotation.DeploymentTarget)))
+            .Distinct<IResource>(ReferenceEqualityComparer.Instance);
 
-        foreach (var computeResource in model.GetComputeResources())
+        foreach (var resource in deploymentResources)
         {
-            foreach (var deploymentTarget in computeResource.Annotations.OfType<DeploymentTargetAnnotation>())
+            var concurrencyGroups = resource.Annotations
+                .OfType<DeploymentConcurrencyGroupAnnotation>()
+                .Select(annotation => annotation.Group)
+                .Distinct<DeploymentConcurrencyGroup>(ReferenceEqualityComparer.Instance)
+                .ToArray();
+
+            if (concurrencyGroups.Length == 0)
             {
-                if (deploymentTarget.DeploymentConcurrencyGroups.Count == 0)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                var deploymentStep = steps.FirstOrDefault(step =>
-                    resourceNameComparer.Equals(step.Resource, deploymentTarget.DeploymentTarget) &&
-                    step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure))
-                    ?? steps.FirstOrDefault(step =>
-                        resourceNameComparer.Equals(step.Resource, deploymentTarget.DeploymentTarget) &&
-                        step.Tags.Contains(WellKnownPipelineTags.DeployCompute));
+            var deploymentStep = steps.FirstOrDefault(step =>
+                resourceNameComparer.Equals(step.Resource, resource) &&
+                step.Tags.Contains(WellKnownPipelineTags.ProvisionInfrastructure))
+                ?? steps.FirstOrDefault(step =>
+                    resourceNameComparer.Equals(step.Resource, resource) &&
+                    step.Tags.Contains(WellKnownPipelineTags.DeployCompute));
 
-                if (deploymentStep is null)
-                {
-                    continue;
-                }
+            if (deploymentStep is null)
+            {
+                continue;
+            }
 
-                foreach (var group in deploymentTarget.DeploymentConcurrencyGroups)
+            foreach (var group in concurrencyGroups)
+            {
+                if (!deploymentStep.DeploymentConcurrencyGroups.Any(existing => ReferenceEquals(existing, group)))
                 {
-                    if (!deploymentStep.DeploymentConcurrencyGroups.Any(existing => ReferenceEquals(existing, group)))
-                    {
-                        deploymentStep.DeploymentConcurrencyGroups.Add(group);
-                    }
+                    deploymentStep.DeploymentConcurrencyGroups.Add(group);
                 }
             }
         }

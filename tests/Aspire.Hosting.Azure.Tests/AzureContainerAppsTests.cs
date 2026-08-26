@@ -3162,9 +3162,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var containers = model.GetContainerResources().ToDictionary(resource => resource.Name);
-        var apiGroup = Assert.Single(containers["api"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(containers["worker"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
 
         Assert.Same(apiGroup, workerGroup);
         Assert.Equal(1, apiGroup.MaxConcurrentDeployments);
@@ -3217,9 +3216,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "worker"));
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "cache"));
 
-        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var cacheGroup = Assert.Single(GetComputeResource(model, "cache").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
+        var cacheGroup = GetDeploymentConcurrencyGroup(model, "cache");
 
         Assert.Same(apiGroup, workerGroup);
         Assert.Same(apiGroup, cacheGroup);
@@ -3251,11 +3250,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "c"));
         Assert.Empty(GetContainerAppDeploymentTargetReferences(model, "d"));
 
-        var containers = model.GetContainerResources().ToDictionary(resource => resource.Name);
-        var groupA = Assert.Single(containers["a"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var groupB = Assert.Single(containers["b"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var groupC = Assert.Single(containers["c"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var groupD = Assert.Single(containers["d"].GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var groupA = GetDeploymentConcurrencyGroup(model, "a");
+        var groupB = GetDeploymentConcurrencyGroup(model, "b");
+        var groupC = GetDeploymentConcurrencyGroup(model, "c");
+        var groupD = GetDeploymentConcurrencyGroup(model, "d");
 
         Assert.Same(groupA, groupB);
         Assert.Same(groupC, groupD);
@@ -3280,8 +3278,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
 
         Assert.Same(apiGroup, workerGroup);
     }
@@ -3316,10 +3314,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var otherResourceGroup = Assert.Single(GetComputeResource(model, "other-rg-app").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var otherGroup = Assert.Single(GetComputeResource(model, "other-app").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
+        var otherResourceGroup = GetDeploymentConcurrencyGroup(model, "other-rg-app");
+        var otherGroup = GetDeploymentConcurrencyGroup(model, "other-app");
 
         Assert.Same(apiGroup, workerGroup);
         Assert.NotSame(apiGroup, otherResourceGroup);
@@ -3347,8 +3345,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
 
         Assert.Same(apiGroup, workerGroup);
     }
@@ -3377,8 +3375,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
 
         Assert.Same(apiGroup, workerGroup);
     }
@@ -3411,9 +3409,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var apiGroup = Assert.Single(GetComputeResource(model, "api").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var workerGroup = Assert.Single(GetComputeResource(model, "worker").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
-        var cacheGroup = Assert.Single(GetComputeResource(model, "cache").GetDeploymentTargetAnnotation()!.DeploymentConcurrencyGroups);
+        var apiGroup = GetDeploymentConcurrencyGroup(model, "api");
+        var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
+        var cacheGroup = GetDeploymentConcurrencyGroup(model, "cache");
 
         Assert.Same(apiGroup, workerGroup);
         Assert.Same(apiGroup, cacheGroup);
@@ -3459,6 +3457,15 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
     private static IResource GetComputeResource(DistributedApplicationModel model, string name)
         => Assert.Single(model.GetComputeResources(), r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    private static DeploymentConcurrencyGroup GetDeploymentConcurrencyGroup(DistributedApplicationModel model, string resourceName)
+    {
+        var deploymentTarget = Assert.Single(
+            GetComputeResource(model, resourceName).Annotations.OfType<DeploymentTargetAnnotation>()).DeploymentTarget;
+
+        return Assert.Single(
+            deploymentTarget.Annotations.OfType<DeploymentConcurrencyGroupAnnotation>()).Group;
+    }
 
     private static string[] GetContainerAppDeploymentTargetReferences(DistributedApplicationModel model, string resourceName)
     {
