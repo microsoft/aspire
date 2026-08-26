@@ -489,6 +489,87 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
+        test('scopes environment variables to one POSIX command without changing ordinary commands', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('linux');
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const executedCommands: string[] = [];
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommands.push(commandLine);
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal(
+                    ['new', 'aspire-test'],
+                    false,
+                    undefined,
+                    {
+                        target: windowCliPathTarget,
+                        environmentVariables: { ASPIRE_CLI_SHOW_ALL_TEMPLATES: 'true' },
+                    });
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', false);
+
+                assert.deepStrictEqual(executedCommands, [
+                    "env 'ASPIRE_CLI_SHOW_ALL_TEMPLATES=true' aspire new aspire-test",
+                    'aspire logs',
+                ]);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+                platformStub.restore();
+            }
+        });
+
+        test('restores PowerShell environment variables after the scoped command', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            let executedCommand: string | undefined;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal(
+                    ['new', 'aspire-test'],
+                    false,
+                    undefined,
+                    {
+                        target: windowCliPathTarget,
+                        environmentVariables: { ASPIRE_CLI_SHOW_ALL_TEMPLATES: 'true' },
+                    });
+
+                assert.strictEqual(executedCommand,
+                    '$__aspirePreviousEnvironment0 = $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES; ' +
+                    'try { $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES = "true"; & "aspire" new aspire-test } ' +
+                    'finally { $env:ASPIRE_CLI_SHOW_ALL_TEMPLATES = $__aspirePreviousEnvironment0 }');
+            }
+            finally {
+                getAspireTerminalStub.restore();
+                platformStub.restore();
+            }
+        });
+
         test('creates a new editor terminal when terminalTarget is editor', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const createdTerminal = {

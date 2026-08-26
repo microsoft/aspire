@@ -95,7 +95,13 @@ export async function addIntegrationTestProject(
         ['new', 'aspire-test'],
         true,
         ['--apphost', appHostPath],
-        { cliPath, target });
+        {
+            cliPath,
+            target,
+            environmentVariables: {
+                FEATURES__SHOWALLTEMPLATES: 'true',
+            },
+        });
 }
 
 function getAvailabilityTarget(): CliPathResolutionTarget {

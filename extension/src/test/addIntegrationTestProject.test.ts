@@ -76,7 +76,13 @@ suite('addIntegrationTestProject', () => {
             ['new', 'aspire-test'],
             true,
             ['--apphost', appHostPath],
-            { cliPath: '/selected/aspire', target }));
+            {
+                cliPath: '/selected/aspire',
+                target,
+                environmentVariables: {
+                    FEATURES__SHOWALLTEMPLATES: 'true',
+                },
+            }));
     });
 
     test('does not invoke a CLI that does not advertise support', async () => {

@@ -28,6 +28,7 @@ export interface AspireTerminal {
 }
 
 export interface SendAspireCommandOptions {
+    environmentVariables?: Readonly<Record<string, string>>;
     redactAdditionalArgs?: boolean;
     terminalTarget?: 'shared' | 'editor';
     target: CliPathResolutionTarget;
@@ -201,6 +202,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
             const quotedArgs = cliArgs.map(arg => quoteShellArg(arg));
             command += ' ' + quotedArgs.join(' ');
         }
+        command = scopeCommandEnvironment(command, options?.environmentVariables);
         assertNoTerminalControlCharacters(command);
 
         let logCommand = command;
@@ -553,6 +555,43 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
         return this._windowsPowerShellPath;
     }
+}
+
+function scopeCommandEnvironment(
+    command: string,
+    environmentVariables: Readonly<Record<string, string>> | undefined,
+    platform: NodeJS.Platform = process.platform,
+): string {
+    const entries = Object.entries(environmentVariables ?? {});
+    if (entries.length === 0) {
+        return command;
+    }
+
+    for (const [name, value] of entries) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+            throw new Error(`Invalid environment variable name: ${name}`);
+        }
+        assertNoTerminalControlCharacters(value);
+    }
+
+    if (platform !== 'win32') {
+        const assignments = entries.map(([name, value]) => quoteShellArg(`${name}=${value}`, platform));
+        return `env ${assignments.join(' ')} ${command}`;
+    }
+
+    const previousValues = entries
+        .map(([name], index) => `$__aspirePreviousEnvironment${index} = $env:${name}`)
+        .join('; ');
+    const setValues = entries
+        .map(([name, value]) => `$env:${name} = ${quoteShellArg(value, platform)}`)
+        .join('; ');
+    const restoreValues = entries
+        .map(([name], index) => `$env:${name} = $__aspirePreviousEnvironment${index}`)
+        .join('; ');
+
+    // The Aspire terminal is reused. Restore inherited values even when the CLI fails or is
+    // interrupted so this one-command override cannot affect later commands in the terminal.
+    return `${previousValues}; try { ${setValues}; ${command} } finally { ${restoreValues} }`;
 }
 
 function areResolvedCliPathsEqual(left: string | undefined, right: string): boolean {
