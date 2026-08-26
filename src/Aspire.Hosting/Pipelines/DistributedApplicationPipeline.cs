@@ -821,8 +821,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
                 foreach (var step in annotationSteps)
                 {
-                    steps.Add(step);
-                    step.Resource ??= resource;
+                    var resolvedStep = step.Clone();
+                    resolvedStep.Resource ??= resource;
+                    steps.Add(resolvedStep);
                 }
             }
         }

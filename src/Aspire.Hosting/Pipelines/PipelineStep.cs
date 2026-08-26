@@ -121,7 +121,7 @@ public class PipelineStep
     /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, <see cref="Tags"/>, and
     /// <see cref="DeploymentConcurrencyGroups"/> and final action lists. Used by
     /// <see cref="DistributedApplicationPipeline"/> when isolating step-graph mutations
-    /// during a phase such as BeforeStart.
+    /// when isolating step-graph mutations during resolution or a phase such as BeforeStart.
     /// </summary>
     internal PipelineStep Clone()
     {
