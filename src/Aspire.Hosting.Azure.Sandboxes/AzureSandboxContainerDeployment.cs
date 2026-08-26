@@ -278,7 +278,8 @@ internal static class AzureSandboxContainerDeployment
             }
 
             var environmentVariables = new Dictionary<string, string>(imageMetadata.EnvironmentVariables, StringComparer.Ordinal);
-            foreach (var (key, value) in await ResolveEnvironmentVariablesAsync(context, targetResource).ConfigureAwait(false))
+            var resolvedEnvironmentVariables = await ResolveEnvironmentVariablesAsync(context, targetResource).ConfigureAwait(false);
+            foreach (var (key, value) in resolvedEnvironmentVariables)
             {
                 environmentVariables[key] = value;
             }
@@ -352,7 +353,8 @@ internal static class AzureSandboxContainerDeployment
                 egressPolicy);
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
-                endpointSecurityFingerprint);
+                endpointSecurityFingerprint,
+                resolvedEnvironmentVariables.Count > 0);
             var pendingSecurityCleanup = previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true;
             securityConfigurationChanged |= pendingSecurityCleanup;
 
@@ -371,6 +373,7 @@ internal static class AzureSandboxContainerDeployment
             stateSection.Data["DeployId"] = deployId;
             stateSection.Data["Ports"] = portStates;
             stateSection.Data["EndpointSecurityFingerprint"] = endpointSecurityFingerprint;
+            stateSection.Data["HasRuntimeEnvironmentConfiguration"] = resolvedEnvironmentVariables.Count > 0;
             stateSection.Data["PendingSecurityCleanup"] = securityConfigurationChanged;
             await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
             deploymentCommitted = true;
@@ -1799,11 +1802,21 @@ internal static class AzureSandboxContainerDeployment
 
     internal static bool HasSecurityRelevantEndpointChange(
         DeploymentStateSection previousStateSection,
-        string currentFingerprint)
+        string currentFingerprint,
+        bool hasRuntimeEnvironmentConfiguration)
     {
         if (!HasRemoteDeploymentState(previousStateSection))
         {
             return false;
+        }
+
+        // Resolved environment values can contain secrets, so never persist a comparable value-derived
+        // fingerprint. Conservatively remove the previous generation whenever runtime configuration is
+        // present, and once more when it is removed from a deployment that previously had it.
+        if (hasRuntimeEnvironmentConfiguration ||
+            previousStateSection.Data["HasRuntimeEnvironmentConfiguration"]?.GetValue<bool>() == true)
+        {
+            return true;
         }
 
         if (previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true)
