@@ -25,6 +25,13 @@
       "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
       "pr_number": 19627,
       "observed_at": "2026-08-25T15:42:12Z"
+    },
+    {
+      "run_id": 32997866203,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32997866203",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+      "pr_number": 19705,
+      "observed_at": "2026-08-26T18:41:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19639"

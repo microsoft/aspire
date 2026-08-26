@@ -1,0 +1,38 @@
+{
+  "run_id": 32997866203,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/32997866203",
+  "analyzed_at": "2026-08-26T18:41:34Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19705,
+    "title": "[Automated] Update Microsoft Foundry Models",
+    "author": "aspire-repo-bot[bot]",
+    "state": "closed",
+    "head_branch": "update-ai-foundry-models",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19705"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+      "id": 98276278734,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32997866203/job/98276278734",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no job logs available and no TRX test failures. Matches known recurring VS Code extension E2E flaky shard. PR only changes src/Aspire.Hosting.Foundry/FoundryModel.Local.Generated.cs, unrelated to the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 98276278857,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/32997866203/job/98276278857",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 with no job logs available and no TRX test failures. Matches known recurring VS Code extension E2E flaky shard. PR only changes src/Aspire.Hosting.Foundry/FoundryModel.Local.Generated.cs, unrelated to the VS Code extension.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-apphost-lifecycle-tools-windows-flaky", "vscode-e2e-linux-azure-functions-flaky"]
+}

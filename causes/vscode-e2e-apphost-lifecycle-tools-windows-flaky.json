@@ -2,7 +2,8 @@
   "id": "vscode-e2e-apphost-lifecycle-tools-windows-flaky",
   "type": "flaky-test",
   "title": "Flaky: VS Code extension E2E (Windows, apphost-lifecycle-tools) shard fails, unrelated to PR changes",
-  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; detailed job logs unavailable)",
+  "test_name": "VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; detailed job logs unavailable). No TRX test failures extracted. Occurs on PRs unrelated to VS Code extension code.",
   "occurrences": [
     {
       "run_id": 31762325235,
@@ -10,6 +11,13 @@
       "job": "Tests / Dashboard / Dashboard (ubuntu-latest)",
       "pr_number": 19371,
       "observed_at": "2026-08-14T03:43:25Z"
+    },
+    {
+      "run_id": 32997866203,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/32997866203",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-lifecycle-tools)",
+      "pr_number": 19705,
+      "observed_at": "2026-08-26T18:41:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19380"
