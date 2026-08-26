@@ -12,7 +12,7 @@ import { DotNetService } from '../debugger/languages/dotnet';
 import { cleanupRun, registerRunCleanup } from '../debugger/runCleanupRegistry';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { AspireResourceExtendedDebugConfiguration, AzureFunctionsLaunchConfiguration, EnvVar, LaunchOptions } from '../dcp/types';
-import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
+import { azureFunctionsCmdDelayedExpansion, azureFunctionsCmdPercentArgument, azureFunctionsInvalidProcessId, azureFunctionsUnsupportedTaskShell } from '../loc/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('Azure Functions Debugger Extension Tests', () => {
@@ -348,31 +348,33 @@ suite('Azure Functions Debugger Extension Tests', () => {
         sinon.assert.calledOnceWithExactly(fsRmSync, ownedMetadataDirectory, { recursive: true, force: true });
     });
 
-    test('quotes backslashes and apostrophes for a configured POSIX task shell', async () => {
-        const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
-        const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
-        const statusServer = await createFuncHostStatusServer(() => funcHostStatus);
-        const debugConfiguration = createDebugConfiguration(projectPath, ['--port', String(statusServer.port), '--password', "a\\b'c"]);
+    for (const shell of ['bash', 'dash', 'ash']) {
+        test(`quotes backslashes and apostrophes for a configured ${shell} task shell`, async () => {
+            const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+            const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+            const statusServer = await createFuncHostStatusServer(() => funcHostStatus);
+            const debugConfiguration = createDebugConfiguration(projectPath, ['--port', String(statusServer.port), '--password', "a\\b'c"]);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
-        stubTaskShell('linux', { path: '/bin/bash' });
+            sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+            sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            stubTaskShell('linux', { path: `/bin/${shell}` });
 
-        try {
-            await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
-                createLaunchConfiguration(projectPath),
-                debugConfiguration.args as string[],
-                [],
-                createLaunchOptions(false),
-                debugConfiguration);
+            try {
+                await azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    createLaunchConfiguration(projectPath),
+                    debugConfiguration.args as string[],
+                    [],
+                    createLaunchOptions(false),
+                    debugConfiguration);
 
-            assert.strictEqual(
-                (taskHarness.getExecutedTask()?.execution as vscode.ShellExecution).commandLine,
-                `func host start --port ${statusServer.port} --password 'a\\b'"'"'c' --enable-json-output --json-output-file ${defaultWorkerPidArgument}`);
-        } finally {
-            await close(statusServer.server);
-        }
-    });
+                assert.strictEqual(
+                    (taskHarness.getExecutedTask()?.execution as vscode.ShellExecution).commandLine,
+                    `func host start --port ${statusServer.port} --password 'a\\b'"'"'c' --enable-json-output --json-output-file ${defaultWorkerPidArgument}`);
+            } finally {
+                await close(statusServer.server);
+            }
+        });
+    }
 
     test('quotes a backslash before an apostrophe for a configured fish task shell', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
@@ -406,8 +408,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
         const debugConfiguration = createDebugConfiguration(projectPath, ['--password', '%TEMP%']);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe' });
 
         await assert.rejects(
@@ -418,6 +420,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 createLaunchOptions(false),
                 debugConfiguration),
             (error: Error) => error.message === azureFunctionsCmdPercentArgument);
+        sinon.assert.notCalled(buildDotNetProject);
+        sinon.assert.notCalled(getDotNetTargetPath);
         sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
     });
 
@@ -426,8 +430,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
         const debugConfiguration = createDebugConfiguration(projectPath, ['--password', '!ASPIRE_PASSWORD!']);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         stubTaskShell('win32', { path: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/v:off', '/c'] });
 
         await assert.rejects(
@@ -438,6 +442,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 createLaunchOptions(false),
                 debugConfiguration),
             (error: Error) => error.message === azureFunctionsCmdDelayedExpansion);
+        sinon.assert.notCalled(buildDotNetProject);
+        sinon.assert.notCalled(getDotNetTargetPath);
         sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
     });
 
@@ -446,8 +452,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
         const debugConfiguration = createDebugConfiguration(projectPath, ['--password', ')unsafe']);
 
-        sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
-        sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+        const getDotNetTargetPath = sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+        const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         stubTaskShell('win32', { path: 'C:\\tools\\nu.exe' });
 
         await assert.rejects(
@@ -458,6 +464,8 @@ suite('Azure Functions Debugger Extension Tests', () => {
                 createLaunchOptions(false),
                 debugConfiguration),
             (error: Error) => error.message === azureFunctionsUnsupportedTaskShell);
+        sinon.assert.notCalled(buildDotNetProject);
+        sinon.assert.notCalled(getDotNetTargetPath);
         sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
     });
 
@@ -722,6 +730,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
         const buildDotNetProject = sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
         fsMkdtempSync.returns(debugTempPath);
         fsReadFileSync.withArgs(workerPidPath, 'utf8').returns([
+            'null',
             JSON.stringify({ name: 'unrelated-event', workerProcessId: 1111 }),
             JSON.stringify({ name: 'dotnet-worker-startup', workerProcessId: 4242 }),
             JSON.stringify({ name: 'dotnet-worker-startup', workerProcessId: 4343 }),
@@ -762,6 +771,31 @@ suite('Azure Functions Debugger Extension Tests', () => {
         taskHarness.end(0);
         await new Promise<void>(resolve => setImmediate(resolve));
     });
+
+    for (const processId of ['worker-1', 0, -1, 1.5, 0x80000000] as const) {
+        test(`rejects invalid Azure Functions worker process ID '${processId}'`, async () => {
+            const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');
+            const targetPath = path.join('/workspace', 'FunctionsApp', 'bin', 'Debug', 'net10.0', 'FunctionsApp.dll');
+            const buildOutputPath = path.dirname(targetPath);
+            const debugTempPath = path.join(buildOutputPath, 'aspire-functions-worker-invalid');
+            const workerPidPath = path.join(debugTempPath, 'worker-startup.json');
+            sinon.stub(DotNetService.prototype, 'getDotNetTargetPath').resolves(targetPath);
+            sinon.stub(DotNetService.prototype, 'buildDotNetProject').resolves();
+            fsMkdtempSync.returns(debugTempPath);
+            fsReadFileSync
+                .withArgs(workerPidPath, 'utf8')
+                .returns(`${JSON.stringify({ name: 'dotnet-worker-startup', workerProcessId: processId })}\n`);
+
+            await assert.rejects(
+                azureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    createLaunchConfiguration(projectPath),
+                    [],
+                    [],
+                    createLaunchOptions(true),
+                    createDebugConfiguration(projectPath)),
+                (error: Error) => error.message === azureFunctionsInvalidProcessId(String(processId)));
+        });
+    }
 
     test('continues run cleanup and retries when debug temp directory removal fails', async () => {
         const projectPath = path.join('/workspace', 'FunctionsApp', 'FunctionsApp.csproj');

@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Интерактивный ввод не поддерживается в этой среде. Используйте флаг --non-interactive или убедитесь, что CLI запущен в интерактивном терминале.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Дополнительные сведения: [link]{0}[/][/]</target>

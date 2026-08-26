@@ -43,8 +43,7 @@ public static class KnownLaunchConfigurationTypes
     /// </summary>
     /// <remarks>
     /// This type is reserved for resources that carry <see cref="IProjectMetadata"/>. Aspire hands the
-    /// project path (and launch profile) to the IDE, which owns building and launching the project, so
-    /// no process fallback is offered for resources using this type.
+    /// project path and launch profile to the IDE, which owns building and launching the project.
     /// </remarks>
     public const string Project = "project";
 }
@@ -100,8 +99,7 @@ public class ExecutableLaunchConfiguration(string type)
 /// The launch configuration used for .NET projects and file-based C# apps.
 /// </summary>
 /// <remarks>
-/// The IDE builds and launches the project itself, so resources using this launch configuration do not
-/// get a process fallback. The resource must carry <see cref="IProjectMetadata"/>.
+/// The IDE builds and launches the project itself. The resource must carry <see cref="IProjectMetadata"/>.
 /// </remarks>
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration(KnownLaunchConfigurationTypes.Project)

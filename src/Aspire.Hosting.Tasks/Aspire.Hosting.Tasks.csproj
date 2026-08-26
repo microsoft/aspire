@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.Build.Utilities.Core" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Sdk.Tests" />
+  </ItemGroup>
+
 </Project>

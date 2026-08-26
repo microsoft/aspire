@@ -13,6 +13,11 @@ import { AspireDebugSession } from '../../debugger/AspireDebugSession';
 import { dashboardDefaultChangedNotificationKey } from '../../utils/dashboardNotificationState';
 import { AspireExtensionContext } from '../../AspireExtensionContext';
 import { debugSessionStopTimedOut } from '../../loc/strings';
+import { appHostSelectionOriginConfigKey } from '../../debugger/AspireDebugConfigurationMetadata';
+import { AspireDebugConfigurationProvider } from '../../debugger/AspireDebugConfigurationProvider';
+import type { AspireExtendedDebugConfiguration } from '../../dcp/types';
+import type { AppHostDiscoveryService } from '../../utils/appHostDiscovery';
+import * as cliPathModule from '../../utils/cliPath';
 
 suite('InteractionService endpoints', () => {
 	let statusBarItem: vscode.StatusBarItem;
@@ -171,10 +176,208 @@ suite('InteractionService endpoints', () => {
 					},
 				});
 
+			assert.ok(startDebuggingStub.calledOnce);
 			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
 			assert.deepStrictEqual(debugConfiguration.env, {
 				ASPIRE_HOME: '/isolated/aspire-home',
 			});
+		}
+		finally {
+			startDebuggingStub.restore();
+		}
+	});
+
+	test('startDebugSession carries explicit CLI AppHost selection origin', async () => {
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+		const options = {
+			command: 'run',
+			appHostSelectionOrigin: 'explicit-cli' as const,
+		};
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				'/workspace',
+				'/workspace/apphost.cs',
+				false,
+				options);
+
+			assert.ok(startDebuggingStub.calledOnce);
+			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+			assert.strictEqual(debugConfiguration[appHostSelectionOriginConfigKey], 'explicit-cli');
+		}
+		finally {
+			startDebuggingStub.restore();
+		}
+	});
+
+	test('explicit CLI selection origin survives both resolver stages and reaches the spawned CLI', async () => {
+		// `aspire run --apphost <directory>` typed in an Aspire terminal only preserves the recorded
+		// default when `explicit-cli` reaches the spawned CLI: AspireDebugSession omits `--apphost`
+		// for a directory target under every other origin, so the child CLI falls back to discovery
+		// and rewrites the default. VS Code resolves a configuration in two stages and can hand a
+		// cloned object to each, and `ensureAppHostSelectionOrigin` backfills an absent origin with
+		// `explicit-launch-configuration`. A dropped value is therefore silent: the session still
+		// starts, just against the wrong AppHost. The test above and the AspireDebugSession tests
+		// cover the producer and the consumer, but both stub the resolver stages out, so this test
+		// runs the real InteractionService, both real resolver stages, and a real AspireDebugSession
+		// to protect the whole handoff.
+		const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-explicit-cli-origin-'));
+		const appHostDirectory = path.join(workspaceRoot, 'Alternate');
+		await fs.mkdir(appHostDirectory);
+		await fs.writeFile(
+			path.join(appHostDirectory, 'apphost.cs'),
+			'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.Build().Run();');
+
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+		const resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath')
+			.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				workspaceRoot,
+				appHostDirectory,
+				false,
+				{ command: 'run', appHostSelectionOrigin: 'explicit-cli' });
+
+			assert.ok(startDebuggingStub.calledOnce);
+			const launchedConfiguration = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+
+			const provider = new AspireDebugConfigurationProvider(
+				createDirectoryAppHostDiscoveryService(),
+				{
+					tryReserveExternalLaunch: () => 'reservation-1',
+					validateOrReacquireExternalLaunchReservation: (_appHostPath, reservationId) => reservationId,
+					replaceExternalLaunchReservation: () => 'reservation-1',
+					releaseExternalLaunchReservation: () => { },
+					tryReserveExternalOperation: () => 'operation-1',
+					validateOrReacquireExternalOperationReservation: (_appHostPath, reservationId) => reservationId,
+					replaceExternalOperationReservation: () => 'operation-1',
+					releaseExternalOperationReservation: () => { },
+					prepareLaunchArguments: async (_appHostPath, _command, args) => ({ args }),
+				},
+				createTestMemento());
+			const workspaceFolder: vscode.WorkspaceFolder = {
+				uri: vscode.Uri.file(workspaceRoot),
+				name: 'workspace',
+				index: 0,
+			};
+
+			// Clone between the stages the way VS Code does when it carries a configuration across
+			// the resolver boundary. Passing one shared object straight through would let an origin
+			// that only survives by reference identity look like it survived the real handoff.
+			const firstStage = await provider.resolveDebugConfiguration(
+				workspaceFolder,
+				cloneDebugConfigurationAcrossResolverStage(launchedConfiguration)) as AspireExtendedDebugConfiguration | undefined;
+			assert.ok(firstStage);
+
+			const secondStage = await provider.resolveDebugConfigurationWithSubstitutedVariables(
+				workspaceFolder,
+				cloneDebugConfigurationAcrossResolverStage(firstStage)) as AspireExtendedDebugConfiguration | undefined;
+			assert.ok(secondStage);
+			assert.strictEqual(secondStage[appHostSelectionOriginConfigKey], 'explicit-cli');
+			assert.strictEqual(secondStage.program, appHostDirectory);
+
+			const parentDebugSession = {
+				id: 'aspire-session',
+				type: 'aspire',
+				name: 'Aspire',
+				workspaceFolder: undefined,
+				configuration: secondStage,
+				customRequest: sinon.stub(),
+				getDebugProtocolBreakpoint: sinon.stub(),
+			};
+			const aspireDebugSession = new AspireDebugSession(
+				parentDebugSession as unknown as vscode.DebugSession,
+				{} as any,
+				{} as any,
+				{ isCliDebugLoggingEnabled: () => false } as any,
+				() => { });
+			const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+			try {
+				aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: true } });
+				await waitForStub(spawnStub);
+
+				assert.deepStrictEqual(spawnStub.firstCall.args[0], [
+					'run',
+					'--nologo',
+					'--apphost',
+					appHostDirectory,
+				]);
+				assert.deepStrictEqual(spawnStub.firstCall.args[4], [{
+					name: 'ASPIRE_CLI_APPHOST_SELECTION_ORIGIN',
+					value: 'explicit-cli',
+				}]);
+			}
+			finally {
+				spawnStub.restore();
+			}
+		}
+		finally {
+			resolveCliPathStub.restore();
+			startDebuggingStub.restore();
+			await fs.rm(workspaceRoot, { recursive: true, force: true });
+		}
+	});
+
+	test('startDebugSession preserves user selection fallback for older CLIs', async () => {
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				'/workspace',
+				'/workspace/apphost.cs',
+				false);
+
+			assert.ok(startDebuggingStub.calledOnce);
+			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+			assert.strictEqual(debugConfiguration[appHostSelectionOriginConfigKey], 'user-selection');
+		}
+		finally {
+			startDebuggingStub.restore();
+		}
+	});
+
+	test('startDebugSession preserves default discovery fallback for older CLIs', async () => {
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				'/workspace',
+				null,
+				false);
+
+			assert.ok(startDebuggingStub.calledOnce);
+			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+			assert.strictEqual(debugConfiguration[appHostSelectionOriginConfigKey], 'default-discovery');
+		}
+		finally {
+			startDebuggingStub.restore();
+		}
+	});
+
+	test('startDebugSession carries explicit default discovery origin', async () => {
+		const testInfo = await createTestRpcServer();
+		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+		const options = {
+			command: 'run',
+			appHostSelectionOrigin: 'default-discovery' as const,
+		};
+
+		try {
+			await testInfo.interactionService.startDebugSession(
+				'/workspace',
+				'/workspace/apphost.cs',
+				false,
+				options);
+
+			assert.ok(startDebuggingStub.calledOnce);
+			const debugConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+			assert.strictEqual(debugConfiguration[appHostSelectionOriginConfigKey], 'default-discovery');
 		}
 		finally {
 			startDebuggingStub.restore();
@@ -1263,4 +1466,36 @@ async function createTestRpcServer(debugSessionId?: string | null, getAspireDebu
 		rpcClient: rpcClient,
 		interactionService: rpcClient.interactionService
 	};
+}
+
+/**
+ * Round-trips a debug configuration through JSON the way VS Code does when it carries one across
+ * the two resolver stages. Every property the provider relies on is a plain string-keyed value, so
+ * this preserves exactly what a real cross-stage handoff preserves and drops what it drops.
+ */
+function cloneDebugConfigurationAcrossResolverStage(configuration: vscode.DebugConfiguration): vscode.DebugConfiguration {
+	return JSON.parse(JSON.stringify(configuration)) as vscode.DebugConfiguration;
+}
+
+/**
+ * Discovery that leaves a directory launch target alone, matching a workspace where the CLI already
+ * picked the AppHost directory and the extension has no better concrete candidate to substitute.
+ */
+function createDirectoryAppHostDiscoveryService(): AppHostDiscoveryService {
+	return {
+		resolveDebugTarget: async (filePath: string) => filePath,
+		tryFindWorkspaceDefaultCandidate: async () => undefined,
+		tryFindCandidateForEditorFile: async () => undefined,
+	} as unknown as AppHostDiscoveryService;
+}
+
+async function waitForStub(stub: sinon.SinonStub, timeoutMs = 5000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!stub.called) {
+		if (Date.now() > deadline) {
+			throw new Error('Timed out waiting for the Aspire CLI to be spawned.');
+		}
+
+		await new Promise(resolve => setTimeout(resolve, 10));
+	}
 }

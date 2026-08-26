@@ -5,7 +5,7 @@ import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler 
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProcessRestartedNotification, ProjectLaunchConfiguration, JavaLaunchConfiguration, RustLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions, AspireOperationKind } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
-import { spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
+import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from "../utils/process/cliProcess";
 import { disconnectingFromSession, launchingWithAppHost, launchingWithDirectory, processExceptionOccurred, processExitedWithCode, appHostSessionTerminated, debugSessionsFailedToStop, debugSessionStartTimedOut, debugSessionStopTimedOut, rustDebuggerExtensionNotInstalled, javaDebuggerExtensionNotInstalled, javaAppHostCommandNotRecognized } from "../loc/strings";
 import { isExtensionInstalled } from "../capabilities";
 import { projectDebuggerExtension } from "./languages/dotnet";
@@ -29,11 +29,14 @@ import { classifyAppHostPath, classifyAppHostDirectory, type AppHostLanguage } f
 import { bucketAspireCommand } from "../utils/telemetryBuckets";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
-import { appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
+import { markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
-import { getCliPathTargetForUri, windowCliPathTarget } from "../utils/cliPathVariables";
+import { getAppHostLaunchProfileOptions, getRootLaunchProfileCliArg } from "../utils/launchProfile";
+import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
+import { hasRootNoLogoOption } from "../utils/cliCompatibility";
 
 export type AppHostDebugSessionTracker = (owner: AspireDebugSession, appHostPath: string, debugSession: AspireResourceDebugSession) => void;
 
@@ -54,19 +57,27 @@ function getOperationKind(value: unknown): AspireOperationKind {
 }
 
 export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
+  // Debugger argument lists can include forwarded AppHost secrets. Redact them before the
+  // environment branches so the include-environment fast path also returns a safe clone.
+  const loggableConfig = {
+    ...debugConfig,
+    args: debugConfig.args === undefined ? undefined : '<redacted>',
+    runtimeArgs: debugConfig.runtimeArgs === undefined ? undefined : '<redacted>',
+  };
+
   if (includeEnvironment && !debugConfigurationsWithSensitiveEnvironment.has(debugConfig)) {
     if (debugConfig.type !== 'maui') {
-      return debugConfig;
+      return loggableConfig;
     }
 
     return {
-      ...debugConfig,
+      ...loggableConfig,
       environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
     };
   }
 
   return {
-    ...debugConfig,
+    ...loggableConfig,
     env: debugConfig.env ? '<redacted>' : undefined,
     environment: debugConfig.environment ? '<redacted>' : undefined,
     environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
@@ -199,6 +210,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   private _cliProcess: ChildProcessWithoutNullStreams | undefined;
   private _cliTerminationTimer: ReturnType<typeof setTimeout> | undefined;
   private _cliProcessTreeTerminationAttempted = false;
+  private _cliProcessTreeTerminationPromise: Promise<void> | undefined;
   private _extensionShutdownRequested = false;
   // Timestamp for the `debug/apphost/end` duration measurement. Captured the first
   // time we observe a `launch` request so it covers the actual user-visible session
@@ -444,6 +456,13 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     let pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(resourceDeadline, stopFailures);
     await this.drainLateResourceStops(resourceDeadline, stopFailures);
 
+    // A blocked extension host can resume after the absolute shutdown deadline has passed. Timers
+    // could not enforce that deadline while JavaScript was blocked, so preserve the documented final
+    // phase reserve from the point at which AppHost teardown can actually begin.
+    const finalStopDeadline = Math.max(
+      deadline,
+      Date.now() + AspireDebugSession._appHostStopReserveMs);
+
     // Global/E2E stop requests target the synthetic Aspire session. Stop the real AppHost session
     // explicitly before the parent so we do not rely on VS Code cascading termination before the
     // AppHost registry refresh runs.
@@ -453,7 +472,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         await this.stopWithinBudget(
           () => appHostDebugSession.stopSession(),
           appHostDebugSession.session.name,
-          deadline,
+          finalStopDeadline,
           () => appHostDebugSession.resetStopSessionAttempt?.());
         this._appHostStopped = true;
         this._resourceDebugSessions = this._resourceDebugSessions.filter(session => session.id !== appHostDebugSession.id);
@@ -468,18 +487,21 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         // resources stay in the Call Stack pane. Escalate to the CLI process tree, which owns that
         // process: the cooperative `stopCli` gets the grace period first and the hard kill follows
         // only if it does not land.
+        void this.requestCliStopForExtensionShutdown().catch(cliStopError => {
+          extensionLogOutputChannel.warn(`Failed to stop Aspire CLI after AppHost debug-session shutdown failed: ${cliStopError}`);
+        });
         this.scheduleCliProcessTermination();
       }
     }
 
     if (!pendingStartBudgetExhausted) {
-      pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(deadline, stopFailures);
+      pendingStartBudgetExhausted = await this.drainPendingDebugSessionStarts(finalStopDeadline, stopFailures);
     }
-    await this.drainLateResourceStops(deadline, stopFailures);
+    await this.drainLateResourceStops(finalStopDeadline, stopFailures);
 
     if (!this._parentStopped) {
       try {
-        await this.stopWithinBudget(() => this.stopParentDebugSession(), this._session.name, deadline);
+        await this.stopWithinBudget(() => this.stopParentDebugSession(), this._session.name, finalStopDeadline);
       }
       catch (err) {
         stopFailures.push(err);
@@ -487,9 +509,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     }
 
     if (!pendingStartBudgetExhausted) {
-      await this.drainPendingDebugSessionStarts(deadline, stopFailures);
+      await this.drainPendingDebugSessionStarts(finalStopDeadline, stopFailures);
     }
-    await this.drainLateResourceStops(deadline, stopFailures);
+    await this.drainLateResourceStops(finalStopDeadline, stopFailures);
 
     return stopFailures;
   }
@@ -642,28 +664,52 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
    * signalled directly whenever the cooperative path did not finish the job. The leader may already
    * have exited by then, but that does not prove its descendants exited too.
    */
-  terminateCliProcessTree(options?: { force?: boolean }): void {
+  terminateCliProcessTree(options?: { force?: boolean }): Promise<void> {
     this.cancelScheduledCliProcessTermination();
     const cliProcess = this._cliProcess;
     if (!cliProcess) {
-      return;
+      return Promise.resolve();
     }
 
     // A force sweep can run after the CLI leader has exited. Never aim another signal at that
     // recorded PID afterward: on Windows the PID may already have been recycled, and `taskkill /t`
     // would then target an unrelated process tree.
     if (this._cliProcessTreeTerminationAttempted) {
-      return;
+      return this._cliProcessTreeTerminationPromise ?? Promise.resolve();
     }
 
     // Deliberately not skipped once the leader has exited. `terminateCliProcess` reaps the surviving
     // members of a managed process group in that case, and that is the only path that collects
     // AppHost and resource processes which outlived the CLI that owned them.
     this._cliProcessTreeTerminationAttempted = true;
-    terminateCliProcess(cliProcess, `Aspire CLI for debug session ${this.debugSessionId}`, options);
-    if (this._disposed) {
-      this.releaseExtensionContextOwnership();
-    }
+    const termination = terminateCliProcess(
+      cliProcess,
+      `Aspire CLI for debug session ${this.debugSessionId}`,
+      options);
+    let trackedTermination!: Promise<void>;
+    trackedTermination = (async () => {
+      try {
+        await termination;
+      }
+      catch (error) {
+        extensionLogOutputChannel.error(`Failed to terminate Aspire CLI for debug session ${this.debugSessionId}: ${String(error)}`);
+        throw error;
+      }
+      finally {
+        if (this._cliProcessTreeTerminationPromise === trackedTermination) {
+          this._cliProcessTreeTerminationPromise = undefined;
+        }
+        if (this._disposed) {
+          this.releaseExtensionContextOwnership();
+        }
+      }
+    })();
+    this._cliProcessTreeTerminationPromise = trackedTermination;
+    // Exit callbacks and timers cannot await this method. Observe failures here while returning
+    // the same promise to lifecycle owners that can include it in bounded shutdown.
+    void this._cliProcessTreeTerminationPromise.catch(() => { });
+
+    return this._cliProcessTreeTerminationPromise;
   }
 
   private scheduleCliProcessTermination(): void {
@@ -676,8 +722,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     // context, so use the hard-kill path rather than scheduling another unref'd escalation.
     this._cliTerminationTimer = setTimeout(() => {
       this._cliTerminationTimer = undefined;
-      this.terminateCliProcessTree({ force: true });
-      this.releaseExtensionContextOwnership();
+      void this.terminateCliProcessTree({ force: true });
     }, AspireDebugSession._cliCooperativeStopGraceMs);
     this._cliTerminationTimer.unref?.();
   }
@@ -711,7 +756,9 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 
   private releaseExtensionContextOwnership(): void {
-    if (this._removedFromExtensionContext) {
+    if (this._removedFromExtensionContext ||
+      this._cliTerminationTimer ||
+      this._cliProcessTreeTerminationPromise) {
       return;
     }
 
@@ -901,7 +948,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   private async handleLaunchMessage(message: any): Promise<void> {
     const command = this.configuration.command ?? 'run';
-    const noDebug = !!message.arguments?.noDebug && command === 'run';
+    const noDebug = !!message.arguments?.noDebug && (command === 'run' || command === 'do');
 
     // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
     const commandArgs = this.configuration.args ?? [];
@@ -944,18 +991,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this._appHostIsDirectoryAtLaunch = appHostIsDirectory ? 'true' : 'false';
     this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory, appHostTelemetryTargetPath);
 
-    // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
-    const step = this.configuration.step;
-    if (command === 'do' && step && commandArgs.length === 0) {
-      extensionArgs.push(step);
-    }
-
     // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
     if (!noDebug) {
       extensionArgs.push('--start-debug-session');
     }
 
-    if (!commandArgs.includes('--nologo')) {
+    if (!hasRootNoLogoOption(commandArgs)) {
       extensionArgs.push('--nologo');
     }
 
@@ -971,11 +1012,11 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       extensionArgs.push('--debug');
     }
 
-    if (!appHostIsDirectory) {
+    if (!appHostIsDirectory || appHostSelectionOrigin === 'explicit-cli') {
       extensionArgs.push('--apphost', appHostPath);
     }
 
-    const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
+    const args = buildAspireCommandArgs(command, commandArgs, extensionArgs, this.configuration.step);
     const commandLabel = `aspire ${command}`;
     const sessionType = noDebug ? 'run' : 'debug';
 
@@ -1124,7 +1165,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           // sweep of that same spent PID once the grace period elapses, so retire it here instead
           // of only skipping the immediate call.
           if (process.platform !== 'win32') {
-            this.terminateCliProcessTree({ force: true });
+            void this.terminateCliProcessTree({ force: true });
           }
           else {
             this.abandonCliProcessTree();
@@ -1162,7 +1203,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         void this.requestCliStopForExtensionShutdown().catch((err) => {
           extensionLogOutputChannel.info(`stopCli failed (connection may already be closed): ${err}`);
         });
-        extensionLogOutputChannel.info(`Requested Aspire CLI exit with args: ${args.join(' ')}`);
+        extensionLogOutputChannel.info(`Requested Aspire CLI exit with args: ${redactCliArgsForLogging(args).join(' ')}`);
         // `stopCli` is cooperative and cannot be the only stop mechanism: it resolves without
         // effect when the transport is already closed, and never settles when the CLI has stopped
         // servicing the connection. Escalate to signalling the process group once the CLI has had
@@ -1209,7 +1250,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       const javaCommand = isJavaAppHost ? parseJavaAppHostCommand(args) : null;
 
       if (isJavaAppHost && !javaCommand) {
-        throw new Error(javaAppHostCommandNotRecognized(args.join(' ')));
+        throw new Error(javaAppHostCommandNotRecognized());
       }
 
       const debuggerExtension = isNodeAppHost
@@ -1263,7 +1304,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
-      let appHostArgs: string[];
+      let appHostArgs: string[] | undefined;
       let launchConfig;
 
       if (isNodeAppHost) {
@@ -1307,12 +1348,27 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
       else {
         // The CLI sends the full dotnet CLI args (e.g., ["run", "--no-build", "--project", "...", "--", ...appHostArgs]).
         // Since we launch the apphost directly via the debugger (not via dotnet run), extract only the args after "--".
+        // The parent configuration's typed profile has to cross this second launch boundary explicitly;
+        // the CLI option itself is one of the root arguments intentionally removed here.
         const separatorIndex = args.indexOf('--');
-        appHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : args;
-        launchConfig = { project_path: projectFile, type: 'project' } as ProjectLaunchConfiguration;
+        const explicitAppHostArgs = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
+        appHostArgs = explicitAppHostArgs.length > 0 ? explicitAppHostArgs : undefined;
+        const launchProfileOptions = getAppHostLaunchProfileOptions(
+          this.configuration,
+          classifyAppHostPath(projectFile) === 'csharp');
+        const launchProfile = launchProfileOptions.disableLaunchProfile === true
+          ? undefined
+          : launchProfileOptions.launchProfile ?? getRootLaunchProfileCliArg(args);
+        launchConfig = {
+          project_path: projectFile,
+          type: 'project',
+          ...(launchProfile !== undefined
+            ? { launch_profile: launchProfile }
+            : {})
+        } as ProjectLaunchConfiguration;
       }
 
-      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with args: ${appHostArgs.join(' ')}`);
+      extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with argument count: ${appHostArgs?.length ?? 0}`);
 
       const appHostDebugSessionConfiguration = await createDebugSessionConfiguration(
         this.configuration,
@@ -1366,11 +1422,35 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
               void this.requestCliStopForExtensionShutdown().catch(cliStopError => {
                 extensionLogOutputChannel.warn(`Failed to stop Aspire CLI after AppHost restart cleanup failed: ${cliStopError}`);
               });
-              this.terminateCliProcessTree({ force: true });
+              try {
+                await this.terminateCliProcessTree({ force: true });
+              }
+              catch {
+                // terminateCliProcessTree already records the failure; the restart is aborted either way.
+              }
               return;
             }
 
             extensionLogOutputChannel.info('AppHost restart requested, restarting Aspire debug session');
+            // The descriptor factory strips the private CLI marker before the adapter starts.
+            // Re-establish it for the replacement without marking that launch as owned by the old
+            // generation, so the provider validates this exact executable and reserves afresh.
+            if (typeof config.resolvedCliPath === 'string') {
+              const cliPathTargetSource = this.resolvedAppHostPath ?? this.appHostPath ?? config.program;
+              const cliPathTarget = typeof cliPathTargetSource === 'string'
+                ? getCliPathTargetForUri(vscode.Uri.file(cliPathTargetSource))
+                : windowCliPathTarget;
+              markAspireDebugConfigurationWithResolvedCliPath(config, config.resolvedCliPath);
+              markAspireDebugConfigurationWithResolvedCliPathScope(config, getCliPathTargetKey(cliPathTarget));
+            }
+            const operationKind = getOperationKind(config.command);
+            if (typeof config[appHostLaunchTokenConfigKey] === 'number' &&
+              (operationKind === 'deploy' || operationKind === 'publish' || operationKind === 'do')) {
+              // The launch service moved this operation back to its token while the old session
+              // stopped. Restore its private ownership proof so the provider does not make the
+              // replacement contend with the operation it is meant to reclaim.
+              markAspireDebugConfigurationAsExtensionOwned(config);
+            }
             await vscode.debug.startDebugging(undefined, config);
           }
           else {
@@ -1723,9 +1803,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
     this._onDidSendDebugConsoleOutput.dispose();
     // Keep this disposed session tracked while its delayed CLI termination is pending, so
     // extension deactivation can still force-drain the process tree before VS Code exits.
-    if (!this._cliTerminationTimer) {
-      this.releaseExtensionContextOwnership();
-    }
+    this.releaseExtensionContextOwnership();
 
     // Telemetry: emit `debug/apphost/end` after a short grace window so any
     // pending `sessionTerminated` notifications kicked off by the child-stop
@@ -1811,8 +1889,12 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   }
 }
 
-export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {
+export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[], step?: string): string[] {
   const args = [command];
+  if (command === 'do' && step) {
+    args.push(step);
+  }
+
   const separatorIndex = commandArgs.indexOf('--');
   if (separatorIndex < 0) {
     args.push(...commandArgs, ...extensionArgs);

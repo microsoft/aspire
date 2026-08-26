@@ -302,6 +302,11 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 Assert.True(File.Exists(appHostFile));
                 Assert.Contains(s_prVersion, await File.ReadAllTextAsync(appHostFile));
 
+                var csharpConfig = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(csharpConfig);
+                Assert.Equal(PrChannelName, csharpConfig.Channel);
+                Assert.Equal(s_prVersion, csharpConfig.SdkVersion);
+
                 var csharpNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
                 Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), csharpNuGetConfig);
                 break;
@@ -311,10 +316,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 var config = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(config);
                 Assert.Equal(PrChannelName, config.Channel);
-                if (config.SdkVersion is not null)
-                {
-                    Assert.Equal(s_prVersion, config.SdkVersion);
-                }
+                Assert.Equal(s_prVersion, config.SdkVersion);
                 break;
 
             case PrDogfoodNewTemplateContract.DotNetTemplate:
@@ -327,6 +329,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 var dotNetConfig = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(dotNetConfig);
                 Assert.Equal(PrChannelName, dotNetConfig.Channel);
+                Assert.Equal(s_prVersion, dotNetConfig.SdkVersion);
 
                 var dotNetNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
                 Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), dotNetNuGetConfig);

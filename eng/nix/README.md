@@ -86,17 +86,17 @@ Use the overlay the same way:
 
 ## Updating the packaged version
 
-The stable GitHub release assets must exist before this manifest is updated. The `release-publish-nuget` Azure DevOps pipeline dispatches `.github/workflows/update-nix-cli-flake.yml` after stable CLI archives and `.sha512` sidecars are uploaded to the GitHub release. That workflow runs the updater below, commits the Nix manifest change to the `update-baseline-<version>` branch created by `release-github-tasks.yml`, and creates or updates the baseline PR so the post-release stable version updates stay together.
+The `release-publish-nuget` Azure DevOps pipeline dispatches `.github/workflows/update-nix-cli-flake.yml` as part of a stable release. The pipeline reads the `aspire-cli-*.tar.gz.sha512` checksums from the signed source build's `BlobArtifacts` (the same artifacts it verifies and uploads to the release) and passes them to the workflow as inputs, so the manifest is built from the build rather than the GitHub release. This lets the manifest be produced while the release is still an unpublished **draft** — required for GitHub's immutable releases, where a draft's assets are not served from the public `releases/download/...` URL. The workflow commits the Nix manifest change to the `update-baseline-<version>` branch created by `release-github-tasks.yml`, and creates or updates the baseline PR so the post-release stable version updates stay together.
 
-Merging the baseline PR is the in-repo Nix "ship" step: it updates the flake metadata in `main` to point at the already-published GitHub release assets and hashes. There is no separate Nix registry publish step in this repository.
+Merging the baseline PR is the in-repo Nix "ship" step: it updates the flake metadata in `main` to point at the GitHub release assets and hashes (the `url` fields are always the public versioned release download URLs, which become live once the release manager publishes the draft). There is no separate Nix registry publish step in this repository.
 
-To update the manifest manually after a stable Aspire release publishes native CLI assets to GitHub, pass the same stable version used by the release baseline PR:
+To update the manifest manually against an **already-published** stable release, pass the same stable version used by the release baseline PR:
 
 ```sh
 eng/nix/update-versions.sh --version <stable-release-version>
 ```
 
-The script downloads each official `.sha512` checksum asset and rewrites `versions.json` with Nix SRI hashes. The manifest must use versioned GitHub release URLs, not mutable `aka.ms` channel redirects, so Nix fixed-output fetches remain reproducible.
+Run manually like this, the script downloads each official `.sha512` checksum asset from the published release and rewrites `versions.json` with Nix SRI hashes. When the release pipeline runs it instead, it passes `--sha512 <rid>=<hex>` for all four platforms so no release read happens (see the script header for the offline-mode contract). Either way the manifest uses versioned GitHub release URLs, not mutable `aka.ms` channel redirects, so Nix fixed-output fetches remain reproducible.
 
 ## Relationship to nixpkgs
 

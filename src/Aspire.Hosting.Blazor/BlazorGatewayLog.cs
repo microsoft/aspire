@@ -34,6 +34,9 @@ internal static partial class BlazorGatewayLog
     [LoggerMessage(Level = LogLevel.Error, Message = "ResolveStaticWebAssetsConfiguration failed for {ProjectPath}:\n{Stdout}\n{Stderr}")]
     public static partial void MsBuildTargetFailed(ILogger logger, string projectPath, string stdout, string stderr);
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "ResolveWebAssemblyProjectReferences failed for {ProjectPath}:\n{Stdout}\n{Stderr}")]
+    public static partial void WasmClientDiscoveryFailed(ILogger logger, string projectPath, string stdout, string stderr);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "ResolveStaticWebAssetsConfiguration returned incomplete paths: Endpoints='{EndpointsPath}', Runtime='{RuntimePath}'")]
     public static partial void IncompleteManifestPaths(ILogger logger, string? endpointsPath, string? runtimePath);
 

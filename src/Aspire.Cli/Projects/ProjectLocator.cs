@@ -15,6 +15,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -150,6 +151,7 @@ internal sealed class ProjectLocator(
     private const string AspireConfigAppHostPathKey = "appHost.path";
     private const string LegacySettingsAppHostPathKey = "appHostPath";
     private const string ExplicitLaunchConfigurationSelectionOrigin = "explicit-launch-configuration";
+    private const string ExplicitCliSelectionOrigin = "explicit-cli";
     private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
@@ -885,6 +887,7 @@ internal sealed class ProjectLocator(
     public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
+        var explicitSelectionWasPrompted = false;
 
         if (projectFile is not null)
         {
@@ -966,6 +969,7 @@ internal sealed class ProjectLocator(
                     if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Prompt)
                     {
                         logger.LogDebug("Multiple AppHost project files found in directory {Directory}, prompting user to select", directory.FullName);
+                        explicitSelectionWasPrompted = true;
                         projectFile = await interactionService.PromptForSelectionAsync(
                             InteractionServiceStrings.SelectAppHostToUse,
                             appHostProjects,
@@ -1024,10 +1028,13 @@ internal sealed class ProjectLocator(
                         logger.LogDebug("Using {Language} apphost {ProjectFile}", handler.DisplayName, projectFile.FullName);
                         if (createSettingsFile)
                         {
-                            await CreateSettingsFileAsync(projectFile, cancellationToken);
+                            await CreateSettingsFileAsync(projectFile, preserveExistingDefault: !explicitSelectionWasPrompted, cancellationToken);
                         }
 
-                        return new AppHostProjectSearchResult(projectFile, [projectFile]);
+                        return new AppHostProjectSearchResult(projectFile, [projectFile])
+                        {
+                            WasExplicitDirectorySelectionPrompted = explicitSelectionWasPrompted
+                        };
                     }
 
                     if (validationResult.IsPossiblyUnbuildable)
@@ -1072,7 +1079,7 @@ internal sealed class ProjectLocator(
             // was only kept because MSBuild failed into a confirmed choice.
             if (createSettingsFile && !settingsResult.IsUnverified)
             {
-                await CreateSettingsFileAsync(settingsAppHost, cancellationToken);
+                await CreateSettingsFileAsync(settingsAppHost, preserveExistingDefault: false, cancellationToken);
             }
 
             return new AppHostProjectSearchResult(settingsAppHost, [settingsAppHost]);
@@ -1165,7 +1172,7 @@ internal sealed class ProjectLocator(
 
         if (createSettingsFile && !selectionIsUnverifiedSettingsAppHost)
         {
-            await CreateSettingsFileAsync(selectedAppHost!, cancellationToken);
+            await CreateSettingsFileAsync(selectedAppHost!, preserveExistingDefault: false, cancellationToken);
         }
 
         // Ensure the selected AppHost is always represented in the candidate list so callers
@@ -1200,10 +1207,22 @@ internal sealed class ProjectLocator(
         return string.Equals(persistedPath, selectedPath, pathComparison);
     }
 
-    private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    private async Task CreateSettingsFileAsync(FileInfo projectFile, bool preserveExistingDefault, CancellationToken cancellationToken)
     {
-        var selectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
-        var isExplicitLaunchConfiguration = string.Equals(selectionOrigin, ExplicitLaunchConfigurationSelectionOrigin, StringComparison.OrdinalIgnoreCase);
+        var configuredSelectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
+        var isExplicitLaunchConfigurationSelection = string.Equals(
+            configuredSelectionOrigin,
+            ExplicitLaunchConfigurationSelectionOrigin,
+            StringComparison.OrdinalIgnoreCase);
+        var isExplicitCliSelection = string.Equals(
+            configuredSelectionOrigin,
+            ExplicitCliSelectionOrigin,
+            StringComparison.OrdinalIgnoreCase);
+        var hasConfiguredSelectionOrigin = !string.IsNullOrEmpty(configuredSelectionOrigin);
+        var selectionOrigin = hasConfiguredSelectionOrigin ? configuredSelectionOrigin : "--apphost";
+        var shouldPreserveExistingDefault =
+            isExplicitLaunchConfigurationSelection ||
+            (preserveExistingDefault && (isExplicitCliSelection || !hasConfiguredSelectionOrigin));
 
         var (settingsFile, appHostDirForScopedConfig) = ResolveWorkspaceConfigTarget(projectFile);
 
@@ -1230,9 +1249,9 @@ internal sealed class ProjectLocator(
                 return;
             }
 
-            // A launch configuration or agent-selected target is for this invocation only. Preserve
+            // An explicit CLI target or launch configuration is for this invocation only. Preserve
             // an existing workspace default, but let the selected AppHost replace a deleted target.
-            if (isExplicitLaunchConfiguration && File.Exists(resolvedPath))
+            if (shouldPreserveExistingDefault && File.Exists(resolvedPath))
             {
                 logger.LogDebug(
                     "Not replacing recorded AppHost default {RecordedAppHost} with {AppHost} because the latter was selected by {SelectionOrigin}.",
@@ -1422,7 +1441,10 @@ internal enum ProjectLocatorFailureReason
     UnsupportedProjects,
 }
 
-internal record AppHostProjectSearchResult(FileInfo? SelectedProjectFile, List<FileInfo> AllProjectFileCandidates);
+internal record AppHostProjectSearchResult(FileInfo? SelectedProjectFile, List<FileInfo> AllProjectFileCandidates)
+{
+    internal bool WasExplicitDirectorySelectionPrompted { get; init; }
+}
 
 internal enum MultipleAppHostProjectsFoundBehavior
 {

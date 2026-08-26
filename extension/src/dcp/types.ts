@@ -172,10 +172,12 @@ export interface RunSessionPayload {
     args?: string[];
 }
 
+export type DebugConfigurationArguments = string | string[];
+
 export interface DebugLaunchSettings {
     [key: string]: unknown;
     env?: { [key: string]: string };
-    args?: string[];
+    args?: DebugConfigurationArguments;
     launchProfile?: string;
     disableLaunchProfile?: boolean;
 }
@@ -252,6 +254,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     program: string;
     debuggers?: AspireDebuggersConfiguration;
     command?: AspireCommandType;
+    launchProfile?: string;
     dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;

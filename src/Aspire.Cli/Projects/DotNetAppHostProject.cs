@@ -127,6 +127,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public string DisplayName => "C# (.NET)";
 
+    /// <inheritdoc />
+    public bool SupportsLaunchProfiles => true;
+
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════
@@ -1541,6 +1544,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             KillOnParentExit = true,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
+            LaunchProfile = context.LaunchProfile,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -1555,7 +1559,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
         var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
-            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, cancellationToken)
+            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, runOptions.LaunchProfile, cancellationToken)
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
@@ -1575,6 +1579,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
             if (directRun is not null)
             {
+                // The direct command line has no "--" separator, so the forwarded-argument boundary
+                // has to be carried alongside it for logging. Clone rather than mutate because the
+                // caller may reuse runOptions for other invocations.
+                var directRunOptions = runOptions.Clone();
+                directRunOptions.AppHostArgumentStartIndex = directRun.AppHostArgumentStartIndex;
+
                 return await _runner.RunAppHostCommandAsync(
                     effectiveAppHostFile,
                     directRun.Command,
@@ -1582,7 +1592,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     directRun.Arguments,
                     directRun.Environment,
                     backchannelCompletionSource,
-                    runOptions,
+                    directRunOptions,
                     cancellationToken);
             }
 
@@ -1770,6 +1780,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         string[] unmatchedTokens,
         bool noLaunchProfile,
+        string? launchProfile,
         CancellationToken cancellationToken)
     {
         if (await IsDirectLaunchDisabledAsync(effectiveAppHostFile, cancellationToken).ConfigureAwait(false))
@@ -1800,6 +1811,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 directEnv,
                 arguments,
                 noLaunchProfile,
+                launchProfile,
                 hasExplicitApplicationArgs: unmatchedTokens.Length > 0,
                 hasRunArguments))
         {
@@ -1813,13 +1825,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         arguments.AddRange(unmatchedTokens);
 
+        // Everything before this index came from MSBuild RunArguments or the launch profile; the
+        // tail is user-supplied AppHost input that can carry connection strings and API keys.
+        var appHostArgumentStartIndex = arguments.Count - unmatchedTokens.Length;
+
         _logger.LogDebug(
             "Launching AppHost directly via {Command} in {WorkingDirectory} with arguments {Arguments}.",
             command,
             workingDirectory.FullName,
-            string.Join(" ", arguments));
+            AppHostArgumentRedactor.RedactFromToString(arguments, appHostArgumentStartIndex));
 
-        return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv);
+        return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv, appHostArgumentStartIndex);
     }
 
     private async Task<bool> IsDirectLaunchDisabledAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
@@ -1935,6 +1951,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         List<string> arguments,
         bool noLaunchProfile,
+        string? launchProfile,
         bool hasExplicitApplicationArgs,
         bool hasRunArguments)
     {
@@ -1947,16 +1964,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         {
             if (!TryGetLaunchSettingsPath(effectiveAppHostFile, out var launchSettingsPath))
             {
-                return true;
+                // An explicitly selected profile must not be silently ignored. Let the SDK path
+                // remain authoritative for its missing launch-settings/profile diagnostic.
+                return string.IsNullOrEmpty(launchProfile);
             }
 
-            var launchSettings = LaunchSettingsReader.ReadLaunchSettingsFile(
-                launchSettingsPath,
-                $"AppHost project '{effectiveAppHostFile.FullName}'",
-                AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchSettings);
-            if (!TryGetDefaultSupportedLaunchProfile(launchSettings, out var profileName, out var profile))
+            if (!TryGetLaunchProfile(launchSettingsPath, launchProfile, out var profileName, out var profile))
             {
-                _logger.LogDebug("Falling back to dotnet run for {Project}; launch settings do not contain a supported profile.", effectiveAppHostFile.FullName);
+                _logger.LogDebug(
+                    "Falling back to dotnet run for {Project}; launch settings do not contain the requested or a supported default profile.",
+                    effectiveAppHostFile.FullName);
                 return false;
             }
 
@@ -2013,7 +2030,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             return true;
         }
-        catch (InvalidDataException ex)
+        catch (JsonException ex)
         {
             _logger.LogDebug(ex, "Falling back to dotnet run because launch settings could not be parsed for {Project}.", effectiveAppHostFile.FullName);
             return false;
@@ -2036,9 +2053,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         // Keep this lookup in sync with the SDK's `dotnet run` launch-settings discovery:
         // first check Properties/launchSettings.json (or My Project/launchSettings.json for VB),
-        // then fall back to the flat <ProjectName>.run.json file. The shared reader owns parsing
-        // once a file is selected, but it intentionally does not encode the SDK's project-file
-        // discovery rules.
+        // then fall back to the flat <ProjectName>.run.json file. Profile parsing intentionally
+        // stays separate because it must preserve raw JSON property enumeration to match SDK
+        // duplicate-profile detection.
         // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/LaunchSettings.cs
         var propertiesDirectoryName = projectFile.Extension.Equals(".vbproj", StringComparison.OrdinalIgnoreCase)
             ? "My Project"
@@ -2062,48 +2079,102 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
-    private static bool TryGetDefaultSupportedLaunchProfile(AppHostLaunchSettings? launchSettings, out string profileName, out AppHostLaunchProfile profile)
+    private static bool TryGetLaunchProfile(
+        string launchSettingsPath,
+        string? requestedProfileName,
+        out string profileName,
+        out AppHostLaunchProfile profile)
     {
-        if (launchSettings?.Profiles is null)
+        using var stream = File.OpenRead(launchSettingsPath);
+        using var document = JsonDocument.Parse(stream, new JsonDocumentOptions
         {
-            // launchSettings.json with `"profiles": null` (or no profiles map at all) deserializes
-            // the Profiles property to null even though it is declared non-nullable. Treat that
-            // shape the same as a missing launchSettings.json and fall through to `dotnet run`.
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+        });
+
+        if (document.RootElement.ValueKind is not JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("profiles", out var profiles) ||
+            profiles.ValueKind is not JsonValueKind.Object)
+        {
             profileName = null!;
             profile = null!;
             return false;
         }
 
-        foreach (var (candidateProfileName, candidateProfile) in launchSettings.Profiles)
+        JsonProperty selectedProfile = default;
+
+        if (!string.IsNullOrEmpty(requestedProfileName))
         {
-            // A profile entry can be explicitly null in JSON (e.g. `"http": null`). Skip those
-            // rather than crashing inside IsSupportedLaunchProfile when reading CommandName.
-            if (candidateProfile is null)
+            var hasMatch = false;
+            foreach (var candidate in profiles.EnumerateObject())
             {
-                continue;
+                if (!string.Equals(candidate.Name, requestedProfileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // The SDK enumerates raw JSON properties so both duplicate names and names that
+                // differ only by casing remain visible. Preserve that behavior instead of letting
+                // dictionary deserialization silently replace an earlier property.
+                if (hasMatch)
+                {
+                    profileName = null!;
+                    profile = null!;
+                    return false;
+                }
+
+                selectedProfile = candidate;
+                hasMatch = true;
             }
 
-            if (IsSupportedLaunchProfile(candidateProfile))
+            if (!hasMatch || selectedProfile.Value.ValueKind is not JsonValueKind.Object)
             {
-                profileName = candidateProfileName;
-                profile = candidateProfile;
-                return true;
+                profileName = null!;
+                profile = null!;
+                return false;
+            }
+        }
+        else
+        {
+            foreach (var candidate in profiles.EnumerateObject())
+            {
+                if (candidate.Value.ValueKind is not JsonValueKind.Object ||
+                    !candidate.Value.TryGetProperty("commandName", out var commandName) ||
+                    commandName.ValueKind is not JsonValueKind.String ||
+                    commandName.GetString() is not ("Project" or "Executable"))
+                {
+                    continue;
+                }
+
+                selectedProfile = candidate;
+                break;
+            }
+
+            if (selectedProfile.Value.ValueKind is not JsonValueKind.Object)
+            {
+                profileName = null!;
+                profile = null!;
+                return false;
             }
         }
 
-        profileName = null!;
-        profile = null!;
-        return false;
+        var selectedProfileValue = selectedProfile.Value.Deserialize(AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchProfile);
+        if (selectedProfileValue is null)
+        {
+            profileName = null!;
+            profile = null!;
+            return false;
+        }
+
+        profileName = string.IsNullOrEmpty(requestedProfileName)
+            ? selectedProfile.Name
+            : requestedProfileName;
+        profile = selectedProfileValue;
+        return true;
     }
 
-    private static bool IsSupportedLaunchProfile(AppHostLaunchProfile profile)
-        => IsProjectLaunchProfile(profile) || IsExecutableLaunchProfile(profile);
-
     private static bool IsProjectLaunchProfile(AppHostLaunchProfile profile)
-        => string.Equals(profile.CommandName, "Project", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsExecutableLaunchProfile(AppHostLaunchProfile profile)
-        => string.Equals(profile.CommandName, "Executable", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(profile.CommandName, "Project", StringComparison.Ordinal);
 
     private static bool IsProjectFile(FileInfo appHostFile)
         => ProjectExtensions.Contains(appHostFile.Extension.ToLowerInvariant());
@@ -2608,5 +2679,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         string Command,
         DirectoryInfo WorkingDirectory,
         string[] Arguments,
-        Dictionary<string, string> Environment);
+        Dictionary<string, string> Environment,
+        int AppHostArgumentStartIndex);
 }

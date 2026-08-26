@@ -5,60 +5,80 @@
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
+@inject IStringLocalizer<ControlsStrings> ControlsLoc
 
 <EditForm EditContext="@EditContext" OnValidSubmit="@Apply">
     <DataAnnotationsValidator />
 
     <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
         <div class="filter-input-container input-container">
-            <FluentSelect TOption="SelectViewModel<string>"
-                          Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
-                          Label="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]"
-                          Items="@_parameters"
-                          @bind-SelectedOption="@_formModel.Parameter"
-                          @bind-SelectedOption:after="ParameterChangedAsync"
-                          Width="100%"
-                          Height="400px"
-                          OptionText="@(c => c.Name)"
-                          OptionDisabled="@(c => c.Id is null)"
-                          OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))">
-            </FluentSelect>
+            <FluentInputLabel ForId="filter-dialog-parameter-select"
+                              Label="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]"
+                              AriaLabel="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]" />
+            <div class="input-line-container">
+                <FluentSelect Id="filter-dialog-parameter-select"
+                              TOption="SelectViewModel<string>"
+                              Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
+                              Items="@_parameters"
+                              @bind-SelectedOption="@_formModel.Parameter"
+                              @bind-SelectedOption:after="ParameterChangedAsync"
+                              Height="400px"
+                              Disabled="@_loadingPropertyKeys"
+                              OptionText="@(c => c.Name)"
+                              OptionDisabled="@(c => c.Id is null)"
+                              OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))">
+                </FluentSelect>
+                @if (_loadingPropertyKeys)
+                {
+                    <FluentProgressRing Width="20px" Class="input-progress" aria-label="@ControlsLoc[nameof(ControlsStrings.Loading)]" />
+                }
+            </div>
         </div>
 
         <div class="filter-input-container input-container">
-            <FluentSelect TOption="SelectViewModel<FilterCondition>"
-                          Items="@_filterConditions"
-                          @bind-SelectedOption="@_formModel.Condition"
-                          Label="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]"
-                          OptionText="@(i => i.Name)"
-                          Width="100%" />
+            <FluentInputLabel ForId="filter-dialog-condition-select"
+                              Label="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]"
+                              AriaLabel="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]" />
+            <div class="input-line-container">
+                <FluentSelect Id="filter-dialog-condition-select"
+                              TOption="SelectViewModel<FilterCondition>"
+                              Items="@_filterConditions"
+                              @bind-SelectedOption="@_formModel.Condition"
+                              OptionText="@(i => i.Name)" />
+            </div>
         </div>
 
         @if (_formModel.ValueIsNumeric)
         {
             <div class="filter-input-container input-container">
-                <FluentNumberField TValue="double?"
-                                   @bind-Value="_formModel.NumericValue"
-                                   Min="0"
-                                   Step="50"
-                                   Width="100%"
-                                   Immediate="true"
-                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                   Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
+                <FluentInputLabel ForId="filter-dialog-number-field"
+                                  Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]"
+                                  AriaLabel="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
+                <div class="input-line-container">
+                    <FluentNumberField Id="filter-dialog-number-field"
+                                       TValue="double?"
+                                       @bind-Value="_formModel.NumericValue"
+                                       Min="0"
+                                       Step="50"
+                                       Immediate="true"
+                                       ImmediateDelay="@FluentUIExtensions.InputDelay" />
+                </div>
                 <ValidationMessage For="() => _formModel.NumericValue" />
             </div>
         }
         else if (_formModel.ValueIsDate)
         {
             <div class="filter-input-container input-container">
+                <FluentInputLabel ForId="filter-dialog-date-value"
+                                  Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]"
+                                  AriaLabel="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]" />
                 @* Position relative to correctly align the absolute positioned date picker *@
-                <div style="position: relative;">
-                    <FluentTextField @bind-Value="_formModel.Value"
-                                    Style="min-width: 100%"
-                                    Immediate="true"
-                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                    Placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]"
-                                    Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]">
+                <div class="input-line-container" style="position: relative;">
+                    <FluentTextField Id="filter-dialog-date-value"
+                                     @bind-Value="_formModel.Value"
+                                     Immediate="true"
+                                     ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                     Placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]">
                         <FluentIcon slot="end"
                                     Value="@(new Icons.Regular.Size16.Calendar())"
                                     Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
@@ -66,11 +86,11 @@
                                     Style="cursor: pointer;" />
                     </FluentTextField>
                     <input type="datetime-local"
-                        @ref="_datePickerInput"
-                        step="1"
-                        value="@_formModel.DateTimeLocalValue"
-                        @oninput="OnDateTimePickerChanged"
-                        style="position: absolute; right: 0; bottom: 0; height: 0; width: 0; overflow: hidden; border: none; padding: 0; margin: 0; pointer-events: none; opacity: 0;" />
+                           @ref="_datePickerInput"
+                           step="1"
+                           value="@_formModel.DateTimeLocalValue"
+                           @oninput="OnDateTimePickerChanged"
+                           style="position: absolute; right: 0; bottom: 0; height: 0; width: 0; overflow: hidden; border: none; padding: 0; margin: 0; pointer-events: none; opacity: 0;" />
                 </div>
                 <ValidationMessage For="() => _formModel.Value" />
             </div>
@@ -78,28 +98,37 @@
         else
         {
             <div class="filter-input-container input-container">
-                <FluentCombobox TOption="SelectViewModel<FieldValue>"
-                                @bind-Value="_formModel.Value"
-                                @bind-Value:after="ValueChanged"
-                                Items="@_filteredValues"
-                                Width="100%"
-                                Height="400px"
-                                OptionText="@(c => c.Name)"
-                                OptionValue="@(c => c.Name)"
-                                OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                                Immediate="true"
-                                ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
-                    <OptionTemplate Context="optionContext">
-                        <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
-                            @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
-                            @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
-                            @* Workaround this issue by inserting extra text using CSS. *@
-                            <span data-filtercount="@optionContext.Id!.Count"></span>
-                        </FluentBadge>
-                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
-                    </OptionTemplate>
-                </FluentCombobox>
+                <FluentInputLabel ForId="filter-dialog-text-value"
+                                  Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]"
+                                  AriaLabel="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
+                <div class="input-line-container">
+                    <FluentCombobox Id="filter-dialog-text-value"
+                                    TOption="SelectViewModel<FieldValue>"
+                                    @bind-Value="_formModel.Value"
+                                    @bind-Value:after="ValueChanged"
+                                    Items="@_filteredValues"
+                                    Height="400px"
+                                    Disabled="@_loadingFieldValues"
+                                    OptionText="@(c => c.Name)"
+                                    OptionValue="@(c => c.Name)"
+                                    OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
+                                    Immediate="true"
+                                    ImmediateDelay="@FluentUIExtensions.InputDelay">
+                        <OptionTemplate Context="optionContext">
+                            <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
+                                @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
+                                @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
+                                @* Workaround this issue by inserting extra text using CSS. *@
+                                <span data-filtercount="@optionContext.Id!.Count"></span>
+                            </FluentBadge>
+                            <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
+                        </OptionTemplate>
+                    </FluentCombobox>
+                    @if (_loadingFieldValues)
+                    {
+                        <FluentProgressRing Width="20px" Class="input-progress" aria-label="@ControlsLoc[nameof(ControlsStrings.Loading)]" />
+                    }
+                </div>
                 <ValidationMessage For="() => _formModel.Value" />
             </div>
         }

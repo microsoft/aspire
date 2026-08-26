@@ -38,6 +38,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
+    <!-- Resolves pwsh from PATH for the workflow step tests, which replace PATH with a stub directory. -->
+    <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="shared/PathLookupHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -125,14 +125,14 @@ jobs:
       contents: read
     steps:
       - name: Check out outcome validator
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.1
         with:
           sparse-checkout: |
             .github/workflows/pr-docs-check/resolve_safe_output_target.py
             .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: agent
           path: /tmp/gh-aw/
@@ -190,7 +190,7 @@ safe-outputs:
   steps:
     - name: Check out safe-output target resolver
       if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4.3.1
       with:
         path: _resolver
         persist-credentials: false
@@ -276,7 +276,7 @@ safe-outputs:
           type: string
       steps:
         - name: Check out outcome validator
-          uses: actions/checkout@v4
+          uses: actions/checkout@v4.3.1
           with:
             path: _validator
             sparse-checkout: |
@@ -336,7 +336,7 @@ safe-outputs:
             owner: microsoft
             repositories: aspire
         - name: Post status comment on source PR
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
@@ -471,7 +471,7 @@ safe-outputs:
               core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
@@ -541,7 +541,7 @@ pre-agent-steps:
     # For a merged pull_request:closed event, the default `ref` is the updated
     # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
     # Both select the helper version associated with the workflow being run.
-    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    uses: actions/checkout@v6.0.2
     with:
       repository: microsoft/aspire
       path: _repos/aspire

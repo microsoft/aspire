@@ -27,6 +27,28 @@ jobs:
           path: ${{ github.workspace }}/native-archives
           merge-multiple: false
 
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: built-nugets
+          path: ${{ github.workspace }}/built-nugets
+
+      - name: Configure CLI package override
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $templatePackages = @(
+            Get-ChildItem -Path "$env:GITHUB_WORKSPACE/built-nugets" -Recurse -File -Filter 'Aspire.ProjectTemplates.*.nupkg' |
+              Where-Object { $_.Directory.Name -eq 'Shipping' }
+          )
+          if ($templatePackages.Count -ne 1) {
+            throw "Expected exactly one Shipping/Aspire.ProjectTemplates.*.nupkg in the built-nugets artifact, found $($templatePackages.Count)."
+          }
+
+          $packageDirectory = $templatePackages[0].Directory.FullName
+          "ASPIRE_CLI_PACKAGES=$packageDirectory" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using same-run Aspire packages from '$packageDirectory'."
+
       - name: Prepare WinGet manifest artifact
         if: ${{ inputs.installer == 'winget' }}
         shell: pwsh

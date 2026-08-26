@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 
@@ -114,6 +115,14 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
              nonInteractive.Equals("1", StringComparison.Ordinal)))
         {
             return false;
+        }
+
+        // The extension backchannel provides input independently of the terminal, so ambient CI
+        // markers must not suppress prompts when the extension explicitly enables them.
+        if (configuration[KnownConfigNames.ExtensionEndpoint] is not null &&
+            configuration[KnownConfigNames.ExtensionPromptEnabled] is "true")
+        {
+            return true;
         }
 
         // Check if running in CI environment (no interactive input possible)
