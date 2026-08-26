@@ -66,7 +66,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 3,
+              "version": 4,
               "isInternalMicrosoft": false,
               "isCIEnvironment": false,
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
@@ -100,7 +100,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 3,
+              "version": 4,
               "isInternalMicrosoft": true,
               "isCIEnvironment": false,
               "source": "VS Code Microsoft tenant",
@@ -129,7 +129,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 3,
+              "version": 4,
               "isInternalMicrosoft": true,
               "isCIEnvironment": false,
               "source": "VS Code Microsoft tenant",
@@ -155,7 +155,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 3,
+              "version": 4,
               "isInternalMicrosoft": true,
               "isCIEnvironment": false,
               "source": "VS Code Microsoft tenant",
@@ -240,7 +240,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 3,
+              "version": 4,
               "isInternalMicrosoft": true,
               "isCIEnvironment": false,
               "source": "VS Code Microsoft tenant",
@@ -271,7 +271,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 3,
+              "version": 4,
               "isInternalMicrosoft": false,
               "isCIEnvironment": false,
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
@@ -315,7 +315,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 3", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 4", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isCIEnvironment\": false", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
@@ -622,7 +622,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, ciResult.Outcome);
         var ciCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 3", ciCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 4", ciCache, StringComparison.Ordinal);
         Assert.Contains("\"isCIEnvironment\": true", ciCache, StringComparison.Ordinal);
 
         var localProbeRan = false;
@@ -643,17 +643,19 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("local.alias", localResult.Alias);
     }
 
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_CanonicalizesLegacyCachedAliases()
+    [Theory]
+    [InlineData("Visual Studio Microsoft tenant")]
+    [InlineData("WSL Visual Studio Microsoft tenant")]
+    public async Task IsInternalMicrosoftMachineAsync_RejectsLegacyVisualStudioCacheEntry(string source)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
         var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
+        await File.WriteAllTextAsync(cacheFilePath, $$"""
             {
               "isInternalMicrosoft": true,
-              "source": "Visual Studio Microsoft tenant",
+              "source": "{{source}}",
               "alias": "Cached.Alias",
               "domain": "redmond.corp.microsoft.com",
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
@@ -663,9 +665,10 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("cached.alias", result.Alias);
-        Assert.Equal("REDMOND", result.Domain);
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.Null(result.Alias);
+        Assert.Null(result.Domain);
     }
 
     [Fact]
@@ -1019,14 +1022,84 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public void DetectMicrosoftTenantForTesting_UsesTenantBoundJwtAlias()
+    public void DetectVisualStudioMicrosoftTenantForTesting_PrefersPersonalizationAccount()
     {
-        var result = InternalMicrosoftDetector.DetectMicrosoftTenantForTesting(
-            CreateJwt(MicrosoftTenantIdForTests, "Current.Alias@microsoft.com"),
+        var store = CreateVisualStudioAccountStore(
+            new VisualStudioAccountRecord("fallback.alias@microsoft.com"),
+            new VisualStudioAccountRecord("Current.Alias@microsoft.com", IsPersonalizationAccount: true));
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            store,
             CancellationToken.None);
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("current.alias", result.Alias);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_UsesNonPersonalizationAccountAsFallback()
+    {
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            CreateVisualStudioAccountStore(new VisualStudioAccountRecord("Fallback.Alias@microsoft.com")),
+            CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("fallback.alias", result.Alias);
+    }
+
+    [Theory]
+    [InlineData("stale")]
+    [InlineData("identity-provider")]
+    [InlineData("home-tenant")]
+    [InlineData("token-tenant")]
+    [InlineData("token-issuer")]
+    [InlineData("preferred-username")]
+    [InlineData("token-payload")]
+    public void DetectVisualStudioMicrosoftTenantForTesting_RejectsIncompleteOrMismatchedEvidence(string mismatch)
+    {
+        const string OtherTenantId = "11111111-1111-1111-1111-111111111111";
+        var account = mismatch switch
+        {
+            "stale" => new VisualStudioAccountRecord("user@microsoft.com", Stale: true),
+            "identity-provider" => new VisualStudioAccountRecord("user@microsoft.com", IdentityProvider: OtherTenantId),
+            "home-tenant" => new VisualStudioAccountRecord("user@microsoft.com", HomeTenant: OtherTenantId),
+            "token-tenant" => new VisualStudioAccountRecord("user@microsoft.com", TokenTenant: OtherTenantId),
+            "token-issuer" => new VisualStudioAccountRecord("user@microsoft.com", TokenIssuer: $"https://login.microsoftonline.com/{OtherTenantId}/v2.0"),
+            "preferred-username" => new VisualStudioAccountRecord("user@example.com"),
+            "token-payload" => new VisualStudioAccountRecord(
+                "user@microsoft.com",
+                IdTokenPayload: CreateJwt(MicrosoftTenantIdForTests, "user@microsoft.com")),
+            _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
+        };
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(
+            CreateVisualStudioAccountStore(account),
+            CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+    }
+
+    [Fact]
+    public void DetectVisualStudioMicrosoftTenantForTesting_DoesNotMatchUnrelatedTenantTextOrAlias()
+    {
+        var store = $$"""
+            [
+              {
+                "Stale": false,
+                "IsPersonalizationAccount": true,
+                "DisplayInfo": "wrong.alias@microsoft.com",
+                "Properties": {
+                  "UnrelatedTenant": "{{MicrosoftTenantIdForTests}}"
+                }
+              }
+            ]
+            """;
+
+        var result = InternalMicrosoftDetector.DetectVisualStudioMicrosoftTenantForTesting(store, CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
     }
 
     [Fact]
@@ -1180,6 +1253,37 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
     private static string Base64UrlEncode(byte[] bytes)
         => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static string CreateVisualStudioAccountStore(params VisualStudioAccountRecord[] accounts)
+    {
+        return JsonSerializer.Serialize(accounts.Select(account => new
+        {
+            account.Stale,
+            account.IsPersonalizationAccount,
+            DisplayInfo = account.PreferredUsername,
+            Properties = new
+            {
+                IdentityProvider = account.IdentityProvider ?? MicrosoftTenantIdForTests,
+                HomeTenant = account.HomeTenant ?? MicrosoftTenantIdForTests,
+                IdTokenPayload = account.IdTokenPayload ?? JsonSerializer.Serialize(new
+                {
+                    tid = account.TokenTenant ?? MicrosoftTenantIdForTests,
+                    iss = account.TokenIssuer ?? $"https://login.microsoftonline.com/{MicrosoftTenantIdForTests}/v2.0",
+                    preferred_username = account.PreferredUsername
+                })
+            }
+        }));
+    }
+
+    private sealed record VisualStudioAccountRecord(
+        string PreferredUsername,
+        bool IsPersonalizationAccount = false,
+        bool Stale = false,
+        string? IdentityProvider = null,
+        string? HomeTenant = null,
+        string? TokenTenant = null,
+        string? TokenIssuer = null,
+        string? IdTokenPayload = null);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

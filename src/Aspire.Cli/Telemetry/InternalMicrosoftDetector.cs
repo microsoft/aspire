@@ -37,7 +37,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CacheSubdirectoryName = "internal-microsoft";
     private const string CacheFileName = "detector.json";
     private const string VsCodeMicrosoftTenantProbeName = "VS Code Microsoft tenant";
-    private const int CacheVersion = 3;
+    private const string VisualStudioMicrosoftTenantProbeName = "Visual Studio Microsoft tenant";
+    private const string WslVisualStudioMicrosoftTenantProbeName = "WSL Visual Studio Microsoft tenant";
+    private const int CacheVersion = 4;
     private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
@@ -227,7 +229,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             // Check for a Microsoft tenant in the Visual Studio account store, which is a strong signal of being a Microsoft employee.
             // This is also relatively fast and doesn't require admin privileges, so we check it in stage 1.
-            stage1.Add(new("Visual Studio Microsoft tenant", CheckVisualStudioMicrosoftTenantAsync));
+            stage1.Add(new(VisualStudioMicrosoftTenantProbeName, CheckVisualStudioMicrosoftTenantAsync));
 
             // Stage 3
 
@@ -245,7 +247,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             // Check for a Microsoft tenant in the Visual Studio account store on the Windows host, which is a strong signal of being a Microsoft employee.
             // This is also relatively fast and doesn't require admin privileges, so we check it in stage 1.
-            stage1.Add(new("WSL Visual Studio Microsoft tenant", CheckWslVisualStudioMicrosoftTenantAsync));
+            stage1.Add(new(WslVisualStudioMicrosoftTenantProbeName, CheckWslVisualStudioMicrosoftTenantAsync));
 
             // Stage 3
 
@@ -487,11 +489,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             if (entry.Version == 0)
             {
                 // Legacy entries do not record whether the probe set ran in CI mode. A positive
-                // signal remains useful across modes, except for VS Code entries produced by the
-                // removed native store parser. Reusing an ambiguous negative could also hide the
-                // GitHub probes that are intentionally skipped only in CI.
+                // signal remains useful across modes, except for account-store entries produced by
+                // the removed VS Code parser or the superseded Visual Studio raw-text scanner.
+                // Reusing an ambiguous negative could also hide the GitHub probes that are
+                // intentionally skipped only in CI.
                 if (!entry.IsInternalMicrosoft ||
-                    entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true)
+                    IsHardenedLegacyStoreProbe(entry.Source))
                 {
                     return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
                 }
@@ -539,6 +542,14 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             Alias = alias,
             Domain = domain
         };
+    }
+
+    private static bool IsHardenedLegacyStoreProbe(string? source)
+    {
+        return source is not null &&
+            (source.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) ||
+             source.Equals(VisualStudioMicrosoftTenantProbeName, StringComparison.Ordinal) ||
+             source.Equals(WslVisualStudioMicrosoftTenantProbeName, StringComparison.Ordinal));
     }
 
     private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, CancellationToken cancellationToken)
@@ -624,7 +635,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var text = await FileSystemHelper.TryReadAllTextAsync(accountStore, cancellationToken).ConfigureAwait(false);
-        return DetectMicrosoftTenant(text, cancellationToken);
+        return DetectVisualStudioMicrosoftTenant(text, cancellationToken);
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckWslVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
@@ -640,7 +651,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             cancellationToken).ConfigureAwait(false);
 
         return result.ExitCode == 0
-            ? DetectMicrosoftTenant(result.Stdout, cancellationToken)
+            ? DetectVisualStudioMicrosoftTenant(result.Stdout, cancellationToken)
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -1062,123 +1073,103 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return values;
     }
 
-    private static InternalMicrosoftProbeResult DetectMicrosoftTenant(string? text, CancellationToken cancellationToken)
+    private static InternalMicrosoftProbeResult DetectVisualStudioMicrosoftTenant(string? text, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var alias = ExtractMicrosoftAccountAliasFromText(text, cancellationToken);
-        if (text.Contains(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
-        {
-            return Detected(alias);
-        }
-
-        foreach (var evidence in ExtractTenantAliasEvidenceFromJwtPayloads(text, cancellationToken))
-        {
-            if (evidence.TenantId.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
-            {
-                return Detected(evidence.Alias);
-            }
-        }
-
-        return InternalMicrosoftProbeResult.NotDetected;
-    }
-
-    internal static InternalMicrosoftProbeResult DetectMicrosoftTenantForTesting(string text, CancellationToken cancellationToken)
-        => DetectMicrosoftTenant(text, cancellationToken);
-
-    private static IEnumerable<TenantAliasEvidence> ExtractTenantAliasEvidenceFromJwtPayloads(string text, CancellationToken cancellationToken)
-    {
-        // Account stores often embed JWTs. Decode only the payload segment:
-        //   base64url(header).base64url(payload).base64url(signature)
-        // and look for tenant/user claims such as tid, tenantId, preferred_username, and upn.
-        var evidence = new List<TenantAliasEvidence>();
-        foreach (Match match in JwtRegex().Matches(text))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var parts = match.Value.Split('.');
-            if (parts.Length < 2)
-            {
-                continue;
-            }
-
-            var payload = DecodeBase64Url(parts[1]);
-            if (payload is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(payload);
-                var tid = TryGetString(doc.RootElement, "tid") ?? TryGetString(doc.RootElement, "tenantId");
-                if (!string.IsNullOrWhiteSpace(tid))
-                {
-                    evidence.Add(new TenantAliasEvidence(tid, ExtractAliasFromTokenPayload(doc.RootElement)));
-                }
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-        }
-
-        return evidence;
-    }
-
-    private static string? ExtractAliasFromTokenPayload(JsonElement payload)
-    {
-        foreach (var claimName in new[] { "preferred_username", "upn", "email", "unique_name" })
-        {
-            var alias = ExtractAliasFromAccountIdentifier(TryGetString(payload, claimName));
-            if (!string.IsNullOrWhiteSpace(alias))
-            {
-                return alias;
-            }
-        }
-
-        return null;
-    }
-
-    private static string? ExtractMicrosoftAccountAliasFromText(string text, CancellationToken cancellationToken)
-    {
-        foreach (var evidence in ExtractTenantAliasEvidenceFromJwtPayloads(text, cancellationToken))
-        {
-            if (evidence.TenantId.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(evidence.Alias))
-            {
-                return evidence.Alias;
-            }
-        }
-
-        foreach (Match match in MicrosoftAccountRegex().Matches(text))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var alias = NormalizeAlias(match.Groups["alias"].Value);
-            if (!string.IsNullOrWhiteSpace(alias))
-            {
-                return alias;
-            }
-        }
-
-        return null;
-    }
-
-    private static string? DecodeBase64Url(string value)
-    {
         try
         {
-            var padded = value.Replace('-', '+').Replace('_', '/');
-            padded = padded.PadRight(padded.Length + ((4 - padded.Length % 4) % 4), '=');
-            return Encoding.UTF8.GetString(Convert.FromBase64String(padded));
+            using var store = JsonDocument.Parse(text);
+            if (store.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return InternalMicrosoftProbeResult.NotDetected;
+            }
+
+            InternalMicrosoftProbeResult? fallback = null;
+            foreach (var account in store.RootElement.EnumerateArray())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var result = TryDetectVisualStudioMicrosoftTenantAccount(account);
+                if (!result.IsInternalMicrosoft)
+                {
+                    continue;
+                }
+
+                if (TryGetBoolean(account, "IsPersonalizationAccount") == true)
+                {
+                    return result;
+                }
+
+                fallback ??= result;
+            }
+
+            return fallback ?? InternalMicrosoftProbeResult.NotDetected;
         }
-        catch (FormatException)
+        catch (JsonException)
         {
-            return null;
+            return InternalMicrosoftProbeResult.NotDetected;
         }
+    }
+
+    private static InternalMicrosoftProbeResult TryDetectVisualStudioMicrosoftTenantAccount(JsonElement account)
+    {
+        // Visual Studio's internal V3 account store currently contains records shaped like:
+        //   [{
+        //     "Stale": false,
+        //     "IsPersonalizationAccount": true,
+        //     "Properties": {
+        //       "IdentityProvider": "<tenant-guid>",
+        //       "HomeTenant": "<tenant-guid>",
+        //       "IdTokenPayload": "{\"tid\":\"<tenant-guid>\",\"iss\":\"https://login.microsoftonline.com/<tenant-guid>/v2.0\",\"preferred_username\":\"alias@microsoft.com\"}"
+        //     }
+        //   }]
+        // The format is not a supported Visual Studio contract, so require every piece of tenant
+        // and alias evidence to be structurally bound to one non-stale record and fail closed when
+        // the shape changes. IsPersonalizationAccount is used only to rank matching records.
+        if (account.ValueKind != JsonValueKind.Object ||
+            TryGetBoolean(account, "Stale") != false ||
+            !account.TryGetProperty("Properties", out var properties) ||
+            properties.ValueKind != JsonValueKind.Object ||
+            !HasJsonStringProperty(properties, "IdentityProvider", MicrosoftTenantId) ||
+            !HasJsonStringProperty(properties, "HomeTenant", MicrosoftTenantId) ||
+            TryGetString(properties, "IdTokenPayload") is not { } idTokenPayload)
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
+        try
+        {
+            using var token = JsonDocument.Parse(idTokenPayload);
+            var expectedIssuer = $"https://login.microsoftonline.com/{MicrosoftTenantId}/v2.0";
+            if (token.RootElement.ValueKind != JsonValueKind.Object ||
+                !HasJsonStringProperty(token.RootElement, "tid", MicrosoftTenantId) ||
+                !HasJsonStringProperty(token.RootElement, "iss", expectedIssuer) ||
+                ExtractAliasFromAccountIdentifier(TryGetString(token.RootElement, "preferred_username")) is not { } alias)
+            {
+                return InternalMicrosoftProbeResult.NotDetected;
+            }
+
+            return Detected(alias);
+        }
+        catch (JsonException)
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+    }
+
+    internal static InternalMicrosoftProbeResult DetectVisualStudioMicrosoftTenantForTesting(string text, CancellationToken cancellationToken)
+        => DetectVisualStudioMicrosoftTenant(text, cancellationToken);
+
+    private static bool? TryGetBoolean(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? property.GetBoolean()
+                : null;
     }
 
     private static string? TryGetString(JsonElement element, string propertyName)
@@ -1186,6 +1177,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+    }
+
+    private static bool HasJsonStringProperty(JsonElement element, string propertyName, string expectedValue)
+    {
+        return TryGetString(element, propertyName)?.Equals(expectedValue, StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private IEnumerable<TokenCandidate> GetGitHubTokenEnvironmentCandidates(CancellationToken cancellationToken)
@@ -1520,15 +1516,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     [GeneratedRegex(@"(?:github_pat_[A-Za-z0-9_]{20,}|gh[opsru]_[A-Za-z0-9_]{20,})")]
     private static partial Regex GitHubTokenRegex();
 
-    [GeneratedRegex(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")]
-    private static partial Regex JwtRegex();
-
     [GeneratedRegex(@"(?<![A-Za-z0-9._%+\-\\])(?<alias>[A-Za-z0-9._%+-]+)@(?<domain>(?:[A-Za-z0-9-]+\.)*microsoft\.com)(?![A-Za-z0-9._%+-])", RegexOptions.IgnoreCase)]
     private static partial Regex MicrosoftAccountRegex();
 
     private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
     private readonly record struct TokenCandidate(string Token);
-    private readonly record struct TenantAliasEvidence(string TenantId, string? Alias);
     private sealed record InternalMicrosoftCacheReadResult(InternalMicrosoftDetectorCacheEntry? Entry, string CacheStatus);
     private sealed record InternalMicrosoftProbeStageResult(InternalMicrosoftDetectionResult? Result, IReadOnlyList<InternalMicrosoftProbeDiagnostic> Diagnostics, bool TimedOut);
     private sealed record InternalMicrosoftProbeRunResult(InternalMicrosoftProbe Probe, string Source, InternalMicrosoftProbeResult Result, InternalMicrosoftProbeDiagnostic Diagnostic, long CompletionTimestamp);
