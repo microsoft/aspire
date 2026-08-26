@@ -1025,10 +1025,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = GetDeploymentStatePath(appHostSha, environment);
+        var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
+            _innerBuilder.Configuration,
+            appHostSha,
+            environment)!;
         var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
             ? null
-            : GetDeploymentStatePath(legacyAppHostSha, environment);
+            : FileDeploymentStateManager.GetStatePath(
+                _innerBuilder.Configuration,
+                legacyAppHostSha,
+                environment);
 
         try
         {
@@ -1047,15 +1053,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             Debug.WriteLine($"Failed to load deployment state from '{deploymentStatePath}': {ex}");
         }
     }
-
-    private static string GetDeploymentStatePath(string appHostSha, string environment) =>
-        Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
-            ".aspire",
-            "deployments",
-            appHostSha,
-            $"{environment}.json"
-        );
 
     /// <summary>
     /// Gets the metadata value for the specified key from the assembly metadata.
