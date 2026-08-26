@@ -679,6 +679,14 @@ public class AzureSandboxesTests
         previousState.Data["HasRuntimeEnvironmentConfiguration"] = true;
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["HasRuntimeEnvironmentConfiguration"] = false;
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(
+            previousState,
+            fingerprint,
+            hasRuntimeEnvironmentConfiguration: false,
+            hasRuntimeCommandConfiguration: true));
+        previousState.Data["HasRuntimeCommandConfiguration"] = true;
+        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
+        previousState.Data["HasRuntimeCommandConfiguration"] = false;
 
         var updatedIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             imageReference,
@@ -2075,6 +2083,11 @@ public class AzureSandboxesTests
 
         Assert.Null(entrypoint);
         Assert.Equal(["--mode", "worker"], command);
+        Assert.True(AzureSandboxContainerDeployment.HasModeledCommandConfiguration(project.Resource));
+
+        var container = builder.AddContainer("container", "image")
+            .WithEntrypoint("/bin/sh");
+        Assert.True(AzureSandboxContainerDeployment.HasModeledCommandConfiguration(container.Resource));
     }
 
     private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, IResource resource)
