@@ -163,28 +163,6 @@ internal sealed class ResourceCommand : BaseCommand
             return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
         }
 
-        if (connection.SupportsV3 && command is not null && commandArgumentsResult.RequiresHostingValidation)
-        {
-            var validationResponse = await ValidateHostingCommandArgumentsAsync(
-                connection,
-                resourceName,
-                commandName,
-                commandArguments,
-                cancellationToken).ConfigureAwait(false);
-
-            if (IsHostingUnknownArgumentValidationFailure(validationResponse, commandName))
-            {
-#pragma warning disable CS0618 // Type or member is obsolete
-                var validationErrorMessage = validationResponse.Message ?? validationResponse.ErrorMessage!;
-#pragma warning restore CS0618 // Type or member is obsolete
-                InteractionService.DisplayError(validationErrorMessage);
-                await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
-
-                ResourceCommandHelpAction.WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, resourceName, command);
-                return CommandResult.FromExitCode(CliExitCodes.InvalidCommand);
-            }
-        }
-
         (int ExitCode, ExecuteResourceCommandResponse Response) commandResult;
 
         // Use display metadata for well-known command names.
@@ -214,8 +192,7 @@ internal sealed class ResourceCommand : BaseCommand
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (!connection.SupportsV3 &&
-            command is not null &&
+        if (command is not null &&
             commandArgumentsResult.RequiresHostingValidation &&
             IsHostingUnknownArgumentValidationFailure(commandResult.Response, commandName))
         {
@@ -225,26 +202,6 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         return CommandResult.FromExitCode(commandResult.ExitCode);
-    }
-
-    private static async Task<ExecuteResourceCommandResponse> ValidateHostingCommandArgumentsAsync(
-        IAppHostAuxiliaryBackchannel connection,
-        string resourceName,
-        string commandName,
-        JsonNode? commandArguments,
-        CancellationToken cancellationToken)
-    {
-        return await connection.ExecuteResourceCommandAsync(
-            resourceName,
-            commandName,
-            new ExecuteResourceCommandOptions
-            {
-                Arguments = commandArguments,
-                ValidateOnly = true,
-                NonInteractive = true,
-                ReturnArgumentInputs = true
-            },
-            cancellationToken).ConfigureAwait(false);
     }
 
     private static bool IsHostingUnknownArgumentValidationFailure(ExecuteResourceCommandResponse response, string commandName)
@@ -364,8 +321,8 @@ internal sealed class ResourceCommand : BaseCommand
         if (command?.ArgumentInputs is not { Length: > 0 } argumentInputs)
         {
             // Without command metadata there are no options to give System.CommandLine. Preserve the
-            // raw tokens and ask a capable AppHost to validate them before command execution. Older
-            // AppHosts stay on the single-execution compatibility path so they cannot execute twice.
+            // raw tokens and let the AppHost validate them in the single execution request. This
+            // keeps older AppHosts compatible without risking a validation request executing twice.
             return (CreateUnknownArguments(capturedArguments), null, command is not null);
         }
 
