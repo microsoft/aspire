@@ -58,11 +58,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly TimeSpan _gitHubHttpTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
+    private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly IVsCodeMicrosoftAccountProvider _vsCodeMicrosoftAccountProvider;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? _probeStages;
     private readonly TimeSpan _probeStageTimeout;
 
-    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory, IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider)
+    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory, ICIEnvironmentDetector ciEnvironmentDetector, IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider)
         : this(
             executionContext,
             environment,
@@ -70,6 +71,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             timeProvider,
             logger,
             processExecutionFactory,
+            ciEnvironmentDetector,
             vsCodeMicrosoftAccountProvider,
             probeStages: null)
     {
@@ -82,6 +84,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         TimeProvider timeProvider,
         ILogger<InternalMicrosoftDetector> logger,
         IProcessExecutionFactory processExecutionFactory,
+        ICIEnvironmentDetector ciEnvironmentDetector,
         IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
@@ -98,6 +101,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _gitHubHttpTimeout = gitHubHttpTimeout ?? s_gitHubHttpTimeout;
         _timeProvider = timeProvider;
         _logger = logger;
+        _ciEnvironmentDetector = ciEnvironmentDetector;
         _vsCodeMicrosoftAccountProvider = vsCodeMicrosoftAccountProvider;
         _probeStageTimeout = probeStageTimeout ?? s_probeStageTimeout;
         _probeStages = probeStages;
@@ -109,24 +113,57 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         {
             var stopwatch = Stopwatch.StartNew();
             var vsCodeMicrosoftAccount = VsCodeMicrosoftAccountState.Unavailable;
+            InternalMicrosoftProbeDiagnostic? vsCodeProbeDiagnostic = null;
+            var vsCodeQueryStopwatch = Stopwatch.StartNew();
             using var vsCodeQueryTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             vsCodeQueryTimeout.CancelAfter(_probeStageTimeout);
             try
             {
                 var queryTask = _vsCodeMicrosoftAccountProvider.GetInternalMicrosoftAccountAsync(vsCodeQueryTimeout.Token);
                 vsCodeMicrosoftAccount = await queryTask.WaitAsync(_probeStageTimeout, cancellationToken).ConfigureAwait(false);
+                vsCodeQueryStopwatch.Stop();
             }
             catch (TimeoutException ex)
             {
+                vsCodeQueryStopwatch.Stop();
                 _logger.LogDebug(ex, "Timed out querying the Aspire VS Code extension for a Microsoft account.");
+                vsCodeProbeDiagnostic = new(
+                    VsCodeMicrosoftTenantProbeName,
+                    InternalMicrosoftProbeOutcome.TimedOut,
+                    vsCodeQueryStopwatch.Elapsed,
+                    HasAlias: false,
+                    HasDomain: false,
+                    Failure: new(
+                        InternalMicrosoftProbeFailureCode.RequestFailed,
+                        InternalMicrosoftProbeFailureStage.ExtensionRpc,
+                        ExceptionType: InternalMicrosoftProbeExceptionType.TaskCanceled));
             }
             catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
+                vsCodeQueryStopwatch.Stop();
                 _logger.LogDebug(ex, "Timed out querying the Aspire VS Code extension for a Microsoft account.");
+                vsCodeProbeDiagnostic = new(
+                    VsCodeMicrosoftTenantProbeName,
+                    InternalMicrosoftProbeOutcome.TimedOut,
+                    vsCodeQueryStopwatch.Elapsed,
+                    HasAlias: false,
+                    HasDomain: false,
+                    Failure: new(
+                        InternalMicrosoftProbeFailureCode.RequestFailed,
+                        InternalMicrosoftProbeFailureStage.ExtensionRpc,
+                        ExceptionType: InternalMicrosoftProbeExceptionType.TaskCanceled));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                vsCodeQueryStopwatch.Stop();
                 _logger.LogDebug(ex, "Failed to query the Aspire VS Code extension for a Microsoft account.");
+                vsCodeProbeDiagnostic = new(
+                    VsCodeMicrosoftTenantProbeName,
+                    InternalMicrosoftProbeOutcome.Failed,
+                    vsCodeQueryStopwatch.Elapsed,
+                    HasAlias: false,
+                    HasDomain: false,
+                    Failure: CreateExceptionFailure(ex, InternalMicrosoftProbeFailureStage.ExtensionRpc));
             }
 
             var cached = await TryReadCacheAsync(vsCodeMicrosoftAccount, cancellationToken).ConfigureAwait(false);
@@ -144,7 +181,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     []);
             }
 
-            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, vsCodeMicrosoftAccount, cancellationToken).ConfigureAwait(false);
+            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, vsCodeMicrosoftAccount, vsCodeProbeDiagnostic, cancellationToken).ConfigureAwait(false);
             if (result.Outcome is InternalMicrosoftDetectorOutcome.Detected or InternalMicrosoftDetectorOutcome.NotDetected)
             {
                 await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
@@ -260,10 +297,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return [stage1, stage3];
     }
 
-    private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(string cacheStatus, Stopwatch stopwatch, VsCodeMicrosoftAccountState vsCodeMicrosoftAccount, CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(
+        string cacheStatus,
+        Stopwatch stopwatch,
+        VsCodeMicrosoftAccountState vsCodeMicrosoftAccount,
+        InternalMicrosoftProbeDiagnostic? initialDiagnostic,
+        CancellationToken cancellationToken)
     {
-        var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
-        var timedOut = false;
+        var diagnostics = initialDiagnostic is null
+            ? new List<InternalMicrosoftProbeDiagnostic>()
+            : new List<InternalMicrosoftProbeDiagnostic> { initialDiagnostic };
+        var timedOut = initialDiagnostic?.Outcome == InternalMicrosoftProbeOutcome.TimedOut;
         var probeStages = _probeStages ?? CreateDefaultProbeStages(vsCodeMicrosoftAccount);
         foreach (var stage in probeStages)
         {
@@ -291,8 +335,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         stopwatch.Stop();
-        var allProbesFailed = diagnostics.Count > 0 &&
-            diagnostics.All(diagnostic => diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
+        var anyProbeFailed = diagnostics.Any(diagnostic => diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
         return new InternalMicrosoftDetectionResult(
             IsInternalMicrosoft: false,
             Source: null,
@@ -300,7 +343,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             Domain: null,
             Outcome: timedOut
                 ? InternalMicrosoftDetectorOutcome.TimedOut
-                : allProbesFailed
+                : anyProbeFailed
                     ? InternalMicrosoftDetectorOutcome.Failed
                     : InternalMicrosoftDetectorOutcome.NotDetected,
             CacheStatus: cacheStatus,
@@ -383,12 +426,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await probe.DetectAsync(cancellationToken).ConfigureAwait(false);
                 stopwatch.Stop();
-                var outcome = result.IsInternalMicrosoft ? InternalMicrosoftProbeOutcome.Detected : InternalMicrosoftProbeOutcome.NotDetected;
+                var outcome = result.Failure is not null
+                    ? InternalMicrosoftProbeOutcome.Failed
+                    : result.IsInternalMicrosoft
+                        ? InternalMicrosoftProbeOutcome.Detected
+                        : InternalMicrosoftProbeOutcome.NotDetected;
                 return new InternalMicrosoftProbeRunResult(
                     probe,
                     probe.Name,
                     result,
-                    new InternalMicrosoftProbeDiagnostic(probe.Name, outcome, stopwatch.Elapsed, !string.IsNullOrEmpty(result.Alias), !string.IsNullOrEmpty(result.Domain)),
+                    new InternalMicrosoftProbeDiagnostic(probe.Name, outcome, stopwatch.Elapsed, !string.IsNullOrEmpty(result.Alias), !string.IsNullOrEmpty(result.Domain), result.Failure),
                     Stopwatch.GetTimestamp());
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -412,10 +459,35 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     probe,
                     probe.Name,
                     InternalMicrosoftProbeResult.NotDetected,
-                    new InternalMicrosoftProbeDiagnostic(probe.Name, InternalMicrosoftProbeOutcome.Failed, stopwatch.Elapsed, HasAlias: false, HasDomain: false),
+                    new InternalMicrosoftProbeDiagnostic(
+                        probe.Name,
+                        InternalMicrosoftProbeOutcome.Failed,
+                        stopwatch.Elapsed,
+                        HasAlias: false,
+                        HasDomain: false,
+                        Failure: CreateExceptionFailure(ex, InternalMicrosoftProbeFailureStage.Probe)),
                     Stopwatch.GetTimestamp());
             }
         }, CancellationToken.None);
+    }
+
+    private static InternalMicrosoftProbeFailure CreateExceptionFailure(Exception exception, string stage)
+    {
+        return new(InternalMicrosoftProbeFailureCode.Exception, stage, ExceptionType: GetSafeExceptionType(exception));
+    }
+
+    private static string GetSafeExceptionType(Exception exception)
+    {
+        return exception switch
+        {
+            UnauthorizedAccessException => InternalMicrosoftProbeExceptionType.UnauthorizedAccess,
+            IOException => InternalMicrosoftProbeExceptionType.Io,
+            JsonException => InternalMicrosoftProbeExceptionType.Json,
+            HttpRequestException => InternalMicrosoftProbeExceptionType.HttpRequest,
+            TaskCanceledException => InternalMicrosoftProbeExceptionType.TaskCanceled,
+            InvalidOperationException => InternalMicrosoftProbeExceptionType.InvalidOperation,
+            _ => InternalMicrosoftProbeExceptionType.Other
+        };
     }
 
     private static int GetProbeResultScore(InternalMicrosoftProbeResult result)
@@ -508,10 +580,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var normalizedVsCodeAlias = NormalizeAlias(vsCodeMicrosoftAccount.Alias);
             var isVsCodeCacheEntry = entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true;
             if (vsCodeMicrosoftAccount.IsAvailable &&
-                ((!entry.IsInternalMicrosoft && normalizedVsCodeAlias is not null) ||
-                 (isVsCodeCacheEntry &&
-                    (normalizedVsCodeAlias is null ||
-                     !string.Equals(entry.Alias, normalizedVsCodeAlias, StringComparison.Ordinal)))))
+                ((normalizedVsCodeAlias is not null &&
+                  !string.Equals(entry.Alias, normalizedVsCodeAlias, StringComparison.Ordinal)) ||
+                 (isVsCodeCacheEntry && normalizedVsCodeAlias is null)))
             {
                 return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
             }
@@ -610,6 +681,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var result = await RunProcessAsync("cmd.exe", ["/c", "echo %USERDNSDOMAIN%&echo %USERNAME%"], cancellationToken).ConfigureAwait(false);
+        if (GetProcessFailure(result, treatNonZeroExitAsFailure: true) is { } processFailure)
+        {
+            return processFailure;
+        }
+
         var outputLines = result.Stdout.Split('\n', StringSplitOptions.TrimEntries);
         var userDnsDomain = outputLines.FirstOrDefault() ?? string.Empty;
         var userName = outputLines.Skip(1).FirstOrDefault() ?? string.Empty;
@@ -634,8 +710,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        var text = await FileSystemHelper.TryReadAllTextAsync(accountStore, cancellationToken).ConfigureAwait(false);
-        return DetectVisualStudioMicrosoftTenant(text, cancellationToken);
+        try
+        {
+            var text = await File.ReadAllTextAsync(accountStore, cancellationToken).ConfigureAwait(false);
+            return DetectVisualStudioMicrosoftTenant(text, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return InternalMicrosoftProbeResult.Failed(new(
+                InternalMicrosoftProbeFailureCode.FileUnreadable,
+                InternalMicrosoftProbeFailureStage.AccountStore,
+                ExceptionType: GetSafeExceptionType(ex)));
+        }
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckWslVisualStudioMicrosoftTenantAsync(CancellationToken cancellationToken)
@@ -649,10 +735,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             "cmd.exe",
             ["/c", "if exist \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\" type \"%LOCALAPPDATA%\\.IdentityService\\V3AccountStore.json\""],
             cancellationToken).ConfigureAwait(false);
+        if (GetProcessFailure(result, treatNonZeroExitAsFailure: true) is { } processFailure)
+        {
+            return processFailure;
+        }
 
-        return result.ExitCode == 0
-            ? DetectVisualStudioMicrosoftTenant(result.Stdout, cancellationToken)
-            : InternalMicrosoftProbeResult.NotDetected;
+        return DetectVisualStudioMicrosoftTenant(result.Stdout, cancellationToken);
     }
 
     [SupportedOSPlatform("macos")]
@@ -664,9 +752,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var result = await RunProcessAsync("app-sso", ["platform", "-s"], cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode != 0)
+        if (GetProcessFailure(result, treatNonZeroExitAsFailure: true) is { } processFailure)
         {
-            return InternalMicrosoftProbeResult.NotDetected;
+            return processFailure;
         }
 
         // app-sso emits a JSON document similar to:
@@ -676,7 +764,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var json = TryParseJsonObject($"{result.Stdout}{Environment.NewLine}{result.Stderr}");
         if (json is null)
         {
-            return InternalMicrosoftProbeResult.NotDetected;
+            return InternalMicrosoftProbeResult.Failed(new(
+                InternalMicrosoftProbeFailureCode.JsonParse,
+                InternalMicrosoftProbeFailureStage.PlatformSso,
+                ExceptionType: InternalMicrosoftProbeExceptionType.Json));
         }
 
         var expectedIssuer = $"https://login.microsoftonline.com/{MicrosoftTenantId}/v2.0";
@@ -718,12 +809,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var result = await RunProcessAsync("dsregcmd", ["/status"], cancellationToken).ConfigureAwait(false);
-        return result.ExitCode == 0
-            ? EvaluateWindowsWorkplaceJoin(
-                result.Stdout,
-                _environment.GetEnvironmentVariable("USERNAME"),
-                _environment.GetEnvironmentVariable("USERDNSDOMAIN"))
-            : InternalMicrosoftProbeResult.NotDetected;
+        if (GetProcessFailure(result, treatNonZeroExitAsFailure: true) is { } processFailure)
+        {
+            return processFailure;
+        }
+
+        return EvaluateWindowsWorkplaceJoin(
+            result.Stdout,
+            _environment.GetEnvironmentVariable("USERNAME"),
+            _environment.GetEnvironmentVariable("USERDNSDOMAIN"));
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckWslWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
@@ -734,9 +828,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var result = await RunProcessAsync("cmd.exe", ["/c", "dsregcmd /status"], cancellationToken).ConfigureAwait(false);
-        return result.ExitCode == 0
-            ? EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null, fallbackDomain: null)
-            : InternalMicrosoftProbeResult.NotDetected;
+        if (GetProcessFailure(result, treatNonZeroExitAsFailure: true) is { } processFailure)
+        {
+            return processFailure;
+        }
+
+        return EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null, fallbackDomain: null);
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckGhCliAsync(CancellationToken cancellationToken)
@@ -752,15 +849,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var tokenResult = await RunProcessAsync("gh", ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
+        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: false) is { } processFailure)
+        {
+            return processFailure;
+        }
+
         if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
         using var http = CreateGitHubHttpClient();
-        return await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false)
-            ? Detected(alias: null)
-            : InternalMicrosoftProbeResult.NotDetected;
+        return ToProbeResult(await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false));
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckWslWindowsGhCliAsync(CancellationToken cancellationToken)
@@ -776,15 +876,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var tokenResult = await RunProcessAsync("gh.exe", ["auth", "token", "--hostname", "github.com"], cancellationToken).ConfigureAwait(false);
+        if (GetProcessFailure(tokenResult, treatNonZeroExitAsFailure: false) is { } processFailure)
+        {
+            return processFailure;
+        }
+
         if (tokenResult.ExitCode != 0 || string.IsNullOrWhiteSpace(tokenResult.Stdout))
         {
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
         using var http = CreateGitHubHttpClient();
-        return await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false)
-            ? Detected(alias: null)
-            : InternalMicrosoftProbeResult.NotDetected;
+        return ToProbeResult(await CheckGitHubMembershipWithTokenAsync(http, tokenResult.Stdout.Trim(), cancellationToken).ConfigureAwait(false));
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckEnvironmentGitHubTokenAsync(CancellationToken cancellationToken)
@@ -800,9 +903,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        return await CheckAnyGitHubMembershipCandidateAsync(tokenCandidates, cancellationToken).ConfigureAwait(false)
-            ? Detected(alias: null)
-            : InternalMicrosoftProbeResult.NotDetected;
+        return ToProbeResult(await CheckAnyGitHubMembershipCandidateAsync(tokenCandidates, cancellationToken).ConfigureAwait(false));
     }
 
     internal async Task<InternalMicrosoftProbeResult> CheckCopilotCliAsync(CancellationToken cancellationToken)
@@ -835,17 +936,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        return await CheckAnyGitHubMembershipCandidateAsync(tokenCandidates, cancellationToken).ConfigureAwait(false)
-            ? Detected(alias: null)
-            : InternalMicrosoftProbeResult.NotDetected;
+        return ToProbeResult(await CheckAnyGitHubMembershipCandidateAsync(tokenCandidates, cancellationToken).ConfigureAwait(false));
     }
 
-    private async Task<bool> CheckAnyGitHubMembershipCandidateAsync(IReadOnlyList<TokenCandidate> candidates, CancellationToken cancellationToken)
+    private async Task<GitHubMembershipCheckResult> CheckAnyGitHubMembershipCandidateAsync(IReadOnlyList<TokenCandidate> candidates, CancellationToken cancellationToken)
     {
         var candidatesToCheck = candidates.Take(MaxGitHubTokenCandidates).ToArray();
         if (candidatesToCheck.Length == 0)
         {
-            return false;
+            return GitHubMembershipCheckResult.NotMember;
         }
 
         using var timeoutSource = new CancellationTokenSource(_gitHubCandidateTimeout);
@@ -853,6 +952,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var candidateTasks = candidatesToCheck
             .Select(candidate => CheckGitHubMembershipCandidateAsync(candidate, linkedSource.Token))
             .ToList();
+        InternalMicrosoftProbeFailure? failure = null;
 
         try
         {
@@ -861,19 +961,28 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 var completedTask = await Task.WhenAny(candidateTasks).WaitAsync(linkedSource.Token).ConfigureAwait(false);
                 candidateTasks.Remove(completedTask);
 
-                if (await completedTask.ConfigureAwait(false))
+                var result = await completedTask.ConfigureAwait(false);
+                if (result.IsMember)
                 {
                     await linkedSource.CancelAsync().ConfigureAwait(false);
                     await DrainGitHubCandidateTasksAsync(candidateTasks).ConfigureAwait(false);
-                    return true;
+                    return result;
                 }
+                failure ??= result.Failure;
             }
 
-            return false;
+            return failure is null
+                ? GitHubMembershipCheckResult.NotMember
+                : new GitHubMembershipCheckResult(IsMember: false, Failure: failure);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutSource.IsCancellationRequested)
         {
-            return false;
+            return new GitHubMembershipCheckResult(
+                IsMember: false,
+                new InternalMicrosoftProbeFailure(
+                    InternalMicrosoftProbeFailureCode.RequestFailed,
+                    InternalMicrosoftProbeFailureStage.GitHubCandidates,
+                    ExceptionType: InternalMicrosoftProbeExceptionType.TaskCanceled));
         }
         finally
         {
@@ -882,7 +991,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private async Task<bool> CheckGitHubMembershipCandidateAsync(TokenCandidate candidate, CancellationToken cancellationToken)
+    private async Task<GitHubMembershipCheckResult> CheckGitHubMembershipCandidateAsync(TokenCandidate candidate, CancellationToken cancellationToken)
     {
         try
         {
@@ -900,11 +1009,16 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 _logger.LogDebug(ex, "GitHub token membership probe failed.");
             }
 
-            return false;
+            return new GitHubMembershipCheckResult(
+                IsMember: false,
+                new InternalMicrosoftProbeFailure(
+                    InternalMicrosoftProbeFailureCode.RequestFailed,
+                    InternalMicrosoftProbeFailureStage.GitHubCandidates,
+                    ExceptionType: GetSafeExceptionType(ex)));
         }
     }
 
-    private async Task DrainGitHubCandidateTasksAsync(IReadOnlyList<Task<bool>> candidateTasks)
+    private async Task DrainGitHubCandidateTasksAsync(IReadOnlyList<Task<GitHubMembershipCheckResult>> candidateTasks)
     {
         if (candidateTasks.Count == 0)
         {
@@ -927,37 +1041,96 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     internal async Task<bool> CheckGitHubMembershipWithTokenAsync(string token, CancellationToken cancellationToken)
     {
         using var http = CreateGitHubHttpClient();
-        return await CheckGitHubMembershipWithTokenAsync(http, token, cancellationToken).ConfigureAwait(false);
+        return (await CheckGitHubMembershipWithTokenAsync(http, token, cancellationToken).ConfigureAwait(false)).IsMember;
     }
 
-    private static async Task<bool> CheckGitHubMembershipWithTokenAsync(HttpClient http, string token, CancellationToken cancellationToken)
+    internal async Task<InternalMicrosoftProbeResult> CheckGitHubMembershipWithTokenResultForTestingAsync(string token, CancellationToken cancellationToken)
+    {
+        using var http = CreateGitHubHttpClient();
+        return ToProbeResult(await CheckGitHubMembershipWithTokenAsync(http, token, cancellationToken).ConfigureAwait(false));
+    }
+
+    private static async Task<GitHubMembershipCheckResult> CheckGitHubMembershipWithTokenAsync(HttpClient http, string token, CancellationToken cancellationToken)
     {
         using var userRequest = NewGitHubRequest(HttpMethod.Get, "https://api.github.com/user", token);
         using var userResponse = await http.SendAsync(userRequest, cancellationToken).ConfigureAwait(false);
         if (!userResponse.IsSuccessStatusCode)
         {
-            return false;
+            return IsOperationalHttpFailure(userResponse.StatusCode)
+                ? HttpFailure(userResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubUser)
+                : GitHubMembershipCheckResult.NotMember;
         }
 
-        var login = await ReadJsonPropertyAsync(userResponse, "login", cancellationToken).ConfigureAwait(false);
+        string? login;
+        try
+        {
+            login = await ReadJsonPropertyAsync(userResponse, "login", cancellationToken).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return JsonFailure(InternalMicrosoftProbeFailureStage.GitHubUser, parseFailure: true);
+        }
         if (string.IsNullOrWhiteSpace(login))
         {
-            return false;
+            return JsonFailure(InternalMicrosoftProbeFailureStage.GitHubUser, parseFailure: false);
         }
 
         using var membershipRequest = NewGitHubRequest(HttpMethod.Get, $"https://api.github.com/user/memberships/orgs/{MicrosoftGitHubOrg}", token);
         using var membershipResponse = await http.SendAsync(membershipRequest, cancellationToken).ConfigureAwait(false);
         if (membershipResponse.IsSuccessStatusCode)
         {
-            using var doc = JsonDocument.Parse(await membershipResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
-            var state = TryGetString(doc.RootElement, "state");
-            return state?.Equals("active", StringComparison.OrdinalIgnoreCase) == true;
+            try
+            {
+                using var doc = JsonDocument.Parse(await membershipResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+                var state = TryGetString(doc.RootElement, "state");
+                return state is null
+                    ? JsonFailure(InternalMicrosoftProbeFailureStage.GitHubMembership, parseFailure: false)
+                    : new GitHubMembershipCheckResult(state.Equals("active", StringComparison.OrdinalIgnoreCase));
+            }
+            catch (JsonException)
+            {
+                return JsonFailure(InternalMicrosoftProbeFailureStage.GitHubMembership, parseFailure: true);
+            }
+        }
+        if (IsOperationalHttpFailure(membershipResponse.StatusCode))
+        {
+            return HttpFailure(membershipResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubMembership);
         }
 
         using var publicMemberRequest = NewGitHubRequest(HttpMethod.Get, $"https://api.github.com/orgs/{MicrosoftGitHubOrg}/public_members/{login}", token);
         using var publicMemberResponse = await http.SendAsync(publicMemberRequest, cancellationToken).ConfigureAwait(false);
-        return publicMemberResponse.StatusCode == HttpStatusCode.NoContent;
+        return publicMemberResponse.StatusCode == HttpStatusCode.NoContent
+            ? new GitHubMembershipCheckResult(IsMember: true)
+            : IsOperationalHttpFailure(publicMemberResponse.StatusCode)
+                ? HttpFailure(publicMemberResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubPublicMembership)
+                : GitHubMembershipCheckResult.NotMember;
     }
+
+    private static InternalMicrosoftProbeResult ToProbeResult(GitHubMembershipCheckResult result)
+        => result.IsMember
+            ? Detected(alias: null)
+            : result.Failure is not null
+                ? InternalMicrosoftProbeResult.Failed(result.Failure)
+                : InternalMicrosoftProbeResult.NotDetected;
+
+    private static bool IsOperationalHttpFailure(HttpStatusCode statusCode)
+        => statusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+
+    private static GitHubMembershipCheckResult HttpFailure(HttpStatusCode statusCode, string stage)
+        => new(
+            IsMember: false,
+            new InternalMicrosoftProbeFailure(
+                InternalMicrosoftProbeFailureCode.HttpStatus,
+                stage,
+                HttpStatusCode: (int)statusCode));
+
+    private static GitHubMembershipCheckResult JsonFailure(string stage, bool parseFailure)
+        => new(
+            IsMember: false,
+            new InternalMicrosoftProbeFailure(
+                parseFailure ? InternalMicrosoftProbeFailureCode.JsonParse : InternalMicrosoftProbeFailureCode.JsonShape,
+                stage,
+                ExceptionType: parseFailure ? InternalMicrosoftProbeExceptionType.Json : null));
 
     private HttpClient CreateGitHubHttpClient()
     {
@@ -1005,20 +1178,59 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             _executionContext.WorkingDirectory,
             options);
 
+        var started = false;
         try
         {
             if (!await execution.StartAsync(timeoutCts.Token).ConfigureAwait(false))
             {
-                return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
+                return new ProcessResult(
+                    ExitCode: -1,
+                    stdout.ToString(),
+                    stderr.ToString(),
+                    new InternalMicrosoftProbeFailure(
+                        InternalMicrosoftProbeFailureCode.ProcessStart,
+                        InternalMicrosoftProbeFailureStage.ProcessStart));
             }
 
+            started = true;
             var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
+            return new ProcessResult(
+                ExitCode: -1,
+                stdout.ToString(),
+                stderr.ToString(),
+                new InternalMicrosoftProbeFailure(
+                    InternalMicrosoftProbeFailureCode.ProcessTimeout,
+                    started ? InternalMicrosoftProbeFailureStage.ProcessExit : InternalMicrosoftProbeFailureStage.ProcessStart));
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new ProcessResult(
+                ExitCode: -1,
+                stdout.ToString(),
+                stderr.ToString(),
+                CreateExceptionFailure(
+                    ex,
+                    started ? InternalMicrosoftProbeFailureStage.ProcessExit : InternalMicrosoftProbeFailureStage.ProcessStart));
+        }
+    }
+
+    private static InternalMicrosoftProbeResult? GetProcessFailure(ProcessResult result, bool treatNonZeroExitAsFailure)
+    {
+        if (result.Failure is not null)
+        {
+            return InternalMicrosoftProbeResult.Failed(result.Failure);
+        }
+
+        return treatNonZeroExitAsFailure && result.ExitCode != 0
+            ? InternalMicrosoftProbeResult.Failed(new(
+                InternalMicrosoftProbeFailureCode.ProcessExit,
+                InternalMicrosoftProbeFailureStage.ProcessExit,
+                ProcessExitCode: result.ExitCode))
+            : null;
     }
 
     private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackAlias, string? fallbackDomain)
@@ -1085,15 +1297,21 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             using var store = JsonDocument.Parse(text);
             if (store.RootElement.ValueKind != JsonValueKind.Array)
             {
-                return InternalMicrosoftProbeResult.NotDetected;
+                return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStore);
             }
 
             InternalMicrosoftProbeResult? fallback = null;
+            InternalMicrosoftProbeResult? failure = null;
             foreach (var account in store.RootElement.EnumerateArray())
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var result = TryDetectVisualStudioMicrosoftTenantAccount(account);
+                if (result.Failure is not null)
+                {
+                    failure ??= result;
+                    continue;
+                }
                 if (!result.IsInternalMicrosoft)
                 {
                     continue;
@@ -1107,11 +1325,14 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 fallback ??= result;
             }
 
-            return fallback ?? InternalMicrosoftProbeResult.NotDetected;
+            return fallback ?? failure ?? InternalMicrosoftProbeResult.NotDetected;
         }
         catch (JsonException)
         {
-            return InternalMicrosoftProbeResult.NotDetected;
+            return InternalMicrosoftProbeResult.Failed(new(
+                InternalMicrosoftProbeFailureCode.JsonParse,
+                InternalMicrosoftProbeFailureStage.AccountStore,
+                ExceptionType: InternalMicrosoftProbeExceptionType.Json));
         }
     }
 
@@ -1130,36 +1351,99 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         // The format is not a supported Visual Studio contract, so require every piece of tenant
         // and alias evidence to be structurally bound to one non-stale record and fail closed when
         // the shape changes. IsPersonalizationAccount is used only to rank matching records.
-        if (account.ValueKind != JsonValueKind.Object ||
-            TryGetBoolean(account, "Stale") != false ||
-            !account.TryGetProperty("Properties", out var properties) ||
-            properties.ValueKind != JsonValueKind.Object ||
-            !HasJsonStringProperty(properties, "IdentityProvider", MicrosoftTenantId) ||
-            !HasJsonStringProperty(properties, "HomeTenant", MicrosoftTenantId) ||
-            TryGetString(properties, "IdTokenPayload") is not { } idTokenPayload)
+        if (account.ValueKind != JsonValueKind.Object)
+        {
+            return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStoreRecord);
+        }
+
+        var stale = TryGetBoolean(account, "Stale");
+        if (stale is null)
+        {
+            return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStoreRecordStale);
+        }
+        if (stale.Value)
         {
             return InternalMicrosoftProbeResult.NotDetected;
+        }
+
+        if (!account.TryGetProperty("Properties", out var properties) ||
+            properties.ValueKind != JsonValueKind.Object)
+        {
+            return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStoreRecordProperties);
+        }
+
+        var identityProvider = TryGetString(properties, "IdentityProvider");
+        if (identityProvider is null)
+        {
+            return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStoreRecordIdentityProvider);
+        }
+        if (!identityProvider.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
+        var homeTenant = TryGetString(properties, "HomeTenant");
+        if (homeTenant is null)
+        {
+            return JsonShapeFailure(InternalMicrosoftProbeFailureStage.AccountStoreRecordHomeTenant);
+        }
+        if (!homeTenant.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
+        {
+            return InternalMicrosoftProbeResult.NotDetected;
+        }
+
+        if (TryGetString(properties, "IdTokenPayload") is not { } idTokenPayload)
+        {
+            return JsonShapeFailure(InternalMicrosoftProbeFailureStage.IdTokenPayload);
         }
 
         try
         {
             using var token = JsonDocument.Parse(idTokenPayload);
             var expectedIssuer = $"https://login.microsoftonline.com/{MicrosoftTenantId}/v2.0";
-            if (token.RootElement.ValueKind != JsonValueKind.Object ||
-                !HasJsonStringProperty(token.RootElement, "tid", MicrosoftTenantId) ||
-                !HasJsonStringProperty(token.RootElement, "iss", expectedIssuer) ||
-                ExtractAliasFromAccountIdentifier(TryGetString(token.RootElement, "preferred_username")) is not { } alias)
+            if (token.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return JsonShapeFailure(InternalMicrosoftProbeFailureStage.IdTokenPayload);
+            }
+
+            var tenant = TryGetString(token.RootElement, "tid");
+            if (tenant is null)
+            {
+                return JsonShapeFailure(InternalMicrosoftProbeFailureStage.IdTokenTenant);
+            }
+            if (!tenant.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase))
             {
                 return InternalMicrosoftProbeResult.NotDetected;
+            }
+
+            var issuer = TryGetString(token.RootElement, "iss");
+            if (issuer is null)
+            {
+                return JsonShapeFailure(InternalMicrosoftProbeFailureStage.IdTokenIssuer);
+            }
+            if (!issuer.Equals(expectedIssuer, StringComparison.OrdinalIgnoreCase))
+            {
+                return InternalMicrosoftProbeResult.NotDetected;
+            }
+
+            if (ExtractAliasFromAccountIdentifier(TryGetString(token.RootElement, "preferred_username")) is not { } alias)
+            {
+                return JsonShapeFailure(InternalMicrosoftProbeFailureStage.IdTokenUsername);
             }
 
             return Detected(alias);
         }
         catch (JsonException)
         {
-            return InternalMicrosoftProbeResult.NotDetected;
+            return InternalMicrosoftProbeResult.Failed(new(
+                InternalMicrosoftProbeFailureCode.JsonParse,
+                InternalMicrosoftProbeFailureStage.IdTokenPayload,
+                ExceptionType: InternalMicrosoftProbeExceptionType.Json));
         }
     }
+
+    private static InternalMicrosoftProbeResult JsonShapeFailure(string stage)
+        => InternalMicrosoftProbeResult.Failed(new(InternalMicrosoftProbeFailureCode.JsonShape, stage));
 
     internal static InternalMicrosoftProbeResult DetectVisualStudioMicrosoftTenantForTesting(string text, CancellationToken cancellationToken)
         => DetectVisualStudioMicrosoftTenant(text, cancellationToken);
@@ -1177,11 +1461,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
-    }
-
-    private static bool HasJsonStringProperty(JsonElement element, string propertyName, string expectedValue)
-    {
-        return TryGetString(element, propertyName)?.Equals(expectedValue, StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private IEnumerable<TokenCandidate> GetGitHubTokenEnvironmentCandidates(CancellationToken cancellationToken)
@@ -1310,31 +1589,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     }
 
     private bool IsCIEnvironment()
-    {
-        foreach (var variableName in new[] { "TF_BUILD", "GITHUB_ACTIONS", "APPVEYOR", "CI", "TRAVIS", "CIRCLECI" })
-        {
-            var value = _environment.GetEnvironmentVariable(variableName);
-            if (value?.Equals("true", StringComparison.OrdinalIgnoreCase) == true || value == "1")
-            {
-                return true;
-            }
-        }
-
-        foreach (var variableName in new[] { "TEAMCITY_VERSION", "JB_SPACE_API_URL" })
-        {
-            if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(variableName)))
-            {
-                return true;
-            }
-        }
-
-        return (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("CODEBUILD_BUILD_ID")) &&
-                !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("AWS_REGION"))) ||
-            (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
-                !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_URL"))) ||
-            (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
-                !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("PROJECT_ID")));
-    }
+        => _ciEnvironmentDetector.IsCIEnvironment();
 
     private bool CommandExists(string command)
     {
@@ -1519,8 +1774,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     [GeneratedRegex(@"(?<![A-Za-z0-9._%+\-\\])(?<alias>[A-Za-z0-9._%+-]+)@(?<domain>(?:[A-Za-z0-9-]+\.)*microsoft\.com)(?![A-Za-z0-9._%+-])", RegexOptions.IgnoreCase)]
     private static partial Regex MicrosoftAccountRegex();
 
-    private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr);
+    private readonly record struct ProcessResult(int ExitCode, string Stdout, string Stderr, InternalMicrosoftProbeFailure? Failure = null);
     private readonly record struct TokenCandidate(string Token);
+    private readonly record struct GitHubMembershipCheckResult(bool IsMember, InternalMicrosoftProbeFailure? Failure = null)
+    {
+        public static GitHubMembershipCheckResult NotMember { get; } = new(IsMember: false);
+    }
     private sealed record InternalMicrosoftCacheReadResult(InternalMicrosoftDetectorCacheEntry? Entry, string CacheStatus);
     private sealed record InternalMicrosoftProbeStageResult(InternalMicrosoftDetectionResult? Result, IReadOnlyList<InternalMicrosoftProbeDiagnostic> Diagnostics, bool TimedOut);
     private sealed record InternalMicrosoftProbeRunResult(InternalMicrosoftProbe Probe, string Source, InternalMicrosoftProbeResult Result, InternalMicrosoftProbeDiagnostic Diagnostic, long CompletionTimestamp);
@@ -1528,9 +1787,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
 internal sealed record InternalMicrosoftProbe(string Name, Func<CancellationToken, Task<InternalMicrosoftProbeResult>> DetectAsync);
 
-internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias, string? Domain)
+internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias, string? Domain, InternalMicrosoftProbeFailure? Failure = null)
 {
     public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null, Domain: null);
+
+    public static InternalMicrosoftProbeResult Failed(InternalMicrosoftProbeFailure failure)
+        => new(IsInternalMicrosoft: false, Alias: null, Domain: null, Failure: failure);
 }
 
 internal static class InternalMicrosoftDetectorOutcome
@@ -1557,7 +1819,61 @@ internal static class InternalMicrosoftProbeOutcome
     public const string TimedOut = "timed_out";
 }
 
-internal sealed record InternalMicrosoftProbeDiagnostic(string Source, string Outcome, TimeSpan Duration, bool HasAlias, bool HasDomain);
+internal sealed record InternalMicrosoftProbeDiagnostic(string Source, string Outcome, TimeSpan Duration, bool HasAlias, bool HasDomain, InternalMicrosoftProbeFailure? Failure = null);
+
+internal sealed record InternalMicrosoftProbeFailure(
+    string Code,
+    string Stage,
+    string? ExceptionType = null,
+    int? ProcessExitCode = null,
+    int? HttpStatusCode = null);
+
+internal static class InternalMicrosoftProbeFailureCode
+{
+    public const string Exception = "exception";
+    public const string FileUnreadable = "file_unreadable";
+    public const string HttpStatus = "http_status";
+    public const string JsonParse = "json_parse";
+    public const string JsonShape = "json_shape";
+    public const string ProcessExit = "process_exit";
+    public const string ProcessStart = "process_start";
+    public const string ProcessTimeout = "process_timeout";
+    public const string RequestFailed = "request_failed";
+}
+
+internal static class InternalMicrosoftProbeFailureStage
+{
+    public const string AccountStore = "account_store";
+    public const string AccountStoreRecord = "account_store_record";
+    public const string AccountStoreRecordHomeTenant = "account_store_record.home_tenant";
+    public const string AccountStoreRecordIdentityProvider = "account_store_record.identity_provider";
+    public const string AccountStoreRecordProperties = "account_store_record.properties";
+    public const string AccountStoreRecordStale = "account_store_record.stale";
+    public const string GitHubCandidates = "github_candidates";
+    public const string GitHubMembership = "github_membership";
+    public const string GitHubPublicMembership = "github_public_membership";
+    public const string GitHubUser = "github_user";
+    public const string ExtensionRpc = "extension_rpc";
+    public const string IdTokenPayload = "id_token_payload";
+    public const string IdTokenIssuer = "id_token_payload.iss";
+    public const string IdTokenTenant = "id_token_payload.tid";
+    public const string IdTokenUsername = "id_token_payload.preferred_username";
+    public const string PlatformSso = "platform_sso";
+    public const string ProcessExit = "process_exit";
+    public const string ProcessStart = "process_start";
+    public const string Probe = "probe";
+}
+
+internal static class InternalMicrosoftProbeExceptionType
+{
+    public const string HttpRequest = "HttpRequestException";
+    public const string InvalidOperation = "InvalidOperationException";
+    public const string Io = "IOException";
+    public const string Json = "JsonException";
+    public const string Other = "Other";
+    public const string TaskCanceled = "TaskCanceledException";
+    public const string UnauthorizedAccess = "UnauthorizedAccessException";
+}
 
 internal sealed record InternalMicrosoftDetectionResult(
     bool IsInternalMicrosoft,

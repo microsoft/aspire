@@ -19,6 +19,7 @@ suite('MicrosoftAccountProvider tests', () => {
             createAccount(microsoftTenantId, 'user@microsoft.com'),
             createAccount(`internal-user.${microsoftTenantId}`, 'Display Name'),
             createAccount(`internal-user.${microsoftTenantId}`, 'bad alias@microsoft.com'),
+            createAccount(`internal-user.${microsoftTenantId}`, 'external.user@example.com'),
         ]);
 
         assert.strictEqual(alias, undefined);
@@ -99,6 +100,46 @@ suite('MicrosoftAccountProvider tests', () => {
             await assert.rejects(
                 () => provider.getAliasAsync(),
                 /VS Code Microsoft accounts are unavailable/);
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
+
+    test('waits for a superseding session refresh before returning an alias', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let getAccountsCallCount = 0;
+        let resolveFirst!: (accounts: readonly vscode.AuthenticationSessionAccountInformation[]) => void;
+        let resolveSecond!: (accounts: readonly vscode.AuthenticationSessionAccountInformation[]) => void;
+        const provider = new MicrosoftAccountProvider({
+            getAccounts: async () => {
+                getAccountsCallCount++;
+                return await new Promise<readonly vscode.AuthenticationSessionAccountInformation[]>(resolve => {
+                    if (getAccountsCallCount === 1) {
+                        resolveFirst = resolve;
+                    }
+                    else {
+                        resolveSecond = resolve;
+                    }
+                });
+            },
+            onDidChangeSessions: sessionChanges.event,
+        });
+
+        try {
+            let settled = false;
+            const aliasTask = provider.getAliasAsync().finally(() => { settled = true; });
+            await waitFor(() => getAccountsCallCount === 1);
+
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+            await waitFor(() => getAccountsCallCount === 2);
+            resolveFirst([createAccount(`old-user.${microsoftTenantId}`, 'old.user@microsoft.com')]);
+            await new Promise(resolve => setTimeout(resolve, 10));
+            assert.strictEqual(settled, false);
+
+            resolveSecond([]);
+            assert.strictEqual(await aliasTask, undefined);
         }
         finally {
             provider.dispose();

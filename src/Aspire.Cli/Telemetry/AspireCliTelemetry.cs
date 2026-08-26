@@ -16,7 +16,7 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal sealed class AspireCliTelemetry : IHostedService
 {
-    private static readonly TimeSpan s_internalMicrosoftDiagnosticsCompletionTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan s_internalMicrosoftDiagnosticsCompletionTimeout = TimeSpan.FromSeconds(20);
 
     /// <summary>
     /// The name of the ActivitySource for report telemetry. This telemetry is exported to external systems.
@@ -393,6 +393,11 @@ internal sealed class AspireCliTelemetry : IHostedService
 
     private async Task EmitInternalMicrosoftDetectorDiagnosticsAsync(Task<InternalMicrosoftDetectionResult?> resultTask)
     {
+        if (!_telemetryConfiguration.EmitInternalMicrosoftDiagnostics)
+        {
+            return;
+        }
+
         var result = await resultTask.ConfigureAwait(false);
         await _tagsSource.TagsTask.ConfigureAwait(false);
         if (result is null)
@@ -427,6 +432,24 @@ internal sealed class AspireCliTelemetry : IHostedService
                 [TelemetryConstants.Tags.InternalMicrosoftProbeHasAlias] = probe.HasAlias,
                 [TelemetryConstants.Tags.InternalMicrosoftProbeHasDomain] = probe.HasDomain
             };
+
+            if (probe.Failure is { } failure)
+            {
+                tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode] = failure.Code;
+                tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage] = failure.Stage;
+                if (failure.ExceptionType is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType] = failure.ExceptionType;
+                }
+                if (failure.ProcessExitCode is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode] = failure.ProcessExitCode;
+                }
+                if (failure.HttpStatusCode is not null)
+                {
+                    tags[TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode] = failure.HttpStatusCode;
+                }
+            }
 
             activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.InternalMicrosoftProbe, tags: tags));
         }

@@ -108,6 +108,57 @@ public class TelemetryConfigurationTests
         Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
     }
 
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("-h")]
+    [InlineData("-?")]
+    [InlineData("/h")]
+    [InlineData("/?")]
+    public void ReportedTelemetry_Disabled_WhenHelpFlagProvided(string helpFlag)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [helpFlag]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Theory]
+    [InlineData("terminal", "ps", "-v")]
+    [InlineData("run", "--", "-v")]
+    [InlineData("add", "docker", "--version", "9.2.0")]
+    public void ReportedTelemetry_RemainsEnabled_WhenVersionLikeOptionIsNotRootInformational(params string[] args)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, args);
+
+        Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Fact]
+    public void ReportedTelemetry_Disabled_WhenShortVersionFollowsRootOptionValue()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--log-level", "Debug", "-v"]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Fact]
+    public void DetectorDiagnostics_Disabled_ForAgentTelemetryInvocation()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(
+            configuration,
+            ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
+        Assert.False(telemetryConfiguration.EmitInternalMicrosoftDiagnostics);
+    }
+
     [Fact]
     public async Task ReportedTelemetry_Disabled_WhenOptOutSet_DoesNotRunInternalMicrosoftDetector()
     {

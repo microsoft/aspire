@@ -272,6 +272,11 @@ public class AspireCliTelemetryTests
         Assert.Equal("aspire.cli.microsoft_internal_alias", TelemetryConstants.Tags.InternalMicrosoftAlias);
         Assert.Equal("aspire.cli.microsoft_internal_domain", TelemetryConstants.Tags.InternalMicrosoftDomain);
         Assert.Equal("aspire.cli.microsoft_internal_detector.outcome", TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.failure_code", TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.failure_stage", TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.exception_type", TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.process_exit_code", TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.http_status_code", TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode);
 
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
@@ -485,6 +490,41 @@ public class AspireCliTelemetryTests
         var probeEvent = Assert.Single(activity.Events);
         Assert.Equal(TelemetryConstants.Events.InternalMicrosoftProbe, probeEvent.Name);
         Assert.Contains(probeEvent.Tags, tag => tag.Key == TelemetryConstants.Tags.InternalMicrosoftProbeOutcome && (string?)tag.Value == InternalMicrosoftProbeOutcome.Detected);
+    }
+
+    [Fact]
+    public void Initialize_EmitsOnlyAllowListedProbeFailureMetadata()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            ProbeDiagnostics =
+            [
+                new InternalMicrosoftProbeDiagnostic(
+                    "test source",
+                    InternalMicrosoftProbeOutcome.Failed,
+                    TimeSpan.FromMilliseconds(18),
+                    HasAlias: false,
+                    HasDomain: false,
+                    Failure: new InternalMicrosoftProbeFailure(
+                        InternalMicrosoftProbeFailureCode.ProcessExit,
+                        InternalMicrosoftProbeFailureStage.ProcessExit,
+                        ExceptionType: InternalMicrosoftProbeExceptionType.Other,
+                        ProcessExitCode: 7,
+                        HttpStatusCode: 503))
+            ]
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var probeEvent = Assert.Single(fixture.CapturedActivity!.Events);
+        var tags = probeEvent.Tags.ToDictionary(tag => tag.Key, tag => tag.Value);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessExit, tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode]);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage]);
+        Assert.Equal(InternalMicrosoftProbeExceptionType.Other, tags[TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType]);
+        Assert.Equal(7, tags[TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode]);
+        Assert.Equal(503, tags[TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode]);
+        Assert.DoesNotContain(tags, tag => tag.Key.Contains("message", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(tags, tag => tag.Key.Contains("path", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]

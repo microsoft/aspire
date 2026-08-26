@@ -13,6 +13,8 @@ internal static class CommonOptionNames
     public const string Help = "--help";
     public const string HelpShort = "-h";
     public const string HelpAlt = "-?";
+    public const string HelpSlash = "/h";
+    public const string HelpAltSlash = "/?";
     public const string NoLogo = "--nologo";
     public const string Banner = "--banner";
     public const string Debug = "--debug";
@@ -22,9 +24,57 @@ internal static class CommonOptionNames
     public const string CliWaitForDebugger = "--cli-wait-for-debugger";
     public const string StartDebugSession = "--start-debug-session";
 
+    private static readonly HashSet<string> s_rootOptionsWithValues =
+    [
+        "--log-level",
+        "-l",
+        "--capture-profile-output",
+        "--capture-profile-delay",
+        "--log-file"
+    ];
+
     /// <summary>
-    /// Options that represent informational commands (e.g. --version, --help) which should
-    /// opt out of telemetry and suppress first-run experience.
+    /// Determines whether the arguments request root informational output that should opt out of
+    /// telemetry and suppress the first-run experience.
     /// </summary>
-    public static readonly string[] InformationalOptionNames = [Version, VersionShort, Help, HelpShort, HelpAlt];
+    internal static bool IsInformationalInvocation(string[]? args)
+    {
+        if (args is null)
+        {
+            return false;
+        }
+
+        var commandSeen = false;
+        for (var index = 0; index < args.Length; index++)
+        {
+            var arg = args[index];
+            if (arg == "--")
+            {
+                break;
+            }
+
+            if (arg is Help or HelpShort or HelpAlt or HelpSlash or HelpAltSlash)
+            {
+                return true;
+            }
+
+            if (!commandSeen && arg is Version or VersionShort)
+            {
+                return true;
+            }
+
+            if (!commandSeen && s_rootOptionsWithValues.Contains(arg))
+            {
+                index++;
+                continue;
+            }
+
+            if (!commandSeen && !arg.StartsWith('-'))
+            {
+                commandSeen = true;
+            }
+        }
+
+        return false;
+    }
 }

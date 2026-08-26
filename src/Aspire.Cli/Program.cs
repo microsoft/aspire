@@ -809,7 +809,7 @@ public class Program
     internal static async Task DisplayFirstTimeUseNoticeIfNeededAsync(IServiceProvider serviceProvider, string[] args, CancellationToken cancellationToken = default)
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var isInformationalCommand = ContainsRootOption(args, CommonOptionNames.InformationalOptionNames.Contains);
+        var isInformationalCommand = CommonOptionNames.IsInformationalInvocation(args);
         var isMachineReadableOutput = HasMachineReadableOutput(args);
         var noLogo = ContainsRootOption(args, a => a == CommonOptionNames.NoLogo)
             || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false)

@@ -165,6 +165,31 @@ internal static class TelemetryConstants
         public const string InternalMicrosoftProbeHasDomain = "aspire.cli.microsoft_internal_probe.has_domain";
 
         /// <summary>
+        /// Low-cardinality failure classification for one Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeFailureCode = "aspire.cli.microsoft_internal_probe.failure_code";
+
+        /// <summary>
+        /// Static stage within a Microsoft-internal probe where a failure occurred.
+        /// </summary>
+        public const string InternalMicrosoftProbeFailureStage = "aspire.cli.microsoft_internal_probe.failure_stage";
+
+        /// <summary>
+        /// Allow-listed exception type for one Microsoft-internal probe failure.
+        /// </summary>
+        public const string InternalMicrosoftProbeExceptionType = "aspire.cli.microsoft_internal_probe.exception_type";
+
+        /// <summary>
+        /// Exit code returned by a process-backed Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeProcessExitCode = "aspire.cli.microsoft_internal_probe.process_exit_code";
+
+        /// <summary>
+        /// HTTP status code returned by a network-backed Microsoft-internal probe.
+        /// </summary>
+        public const string InternalMicrosoftProbeHttpStatusCode = "aspire.cli.microsoft_internal_probe.http_status_code";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";

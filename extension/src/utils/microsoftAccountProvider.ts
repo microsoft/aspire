@@ -40,13 +40,24 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
     }
 
     async getAliasAsync(): Promise<string | undefined> {
-        this.initialize();
-        await this._refreshTask;
-        if (!this._latestRefreshSucceeded) {
-            throw new Error('VS Code Microsoft accounts are unavailable.');
-        }
+        while (true) {
+            this.initialize();
+            const refreshTask = this._refreshTask;
+            await refreshTask;
 
-        return this._alias;
+            if (refreshTask !== this._refreshTask) {
+                if (!this._latestRefreshSucceeded && this._refreshTask === undefined) {
+                    throw new Error('VS Code Microsoft accounts are unavailable.');
+                }
+                continue;
+            }
+
+            if (!this._latestRefreshSucceeded) {
+                throw new Error('VS Code Microsoft accounts are unavailable.');
+            }
+
+            return this._alias;
+        }
     }
 
     async refresh(): Promise<void> {
@@ -108,6 +119,11 @@ function getHomeTenantId(accountId: string): string | undefined {
 function getAlias(accountLabel: string): string | undefined {
     const atIndex = accountLabel.lastIndexOf('@');
     if (atIndex <= 0) {
+        return undefined;
+    }
+
+    const domain = accountLabel.slice(atIndex + 1).toLowerCase();
+    if (domain !== 'microsoft.com' && !domain.endsWith('.microsoft.com')) {
         return undefined;
     }
 
