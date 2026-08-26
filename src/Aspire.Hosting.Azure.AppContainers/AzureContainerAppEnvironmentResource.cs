@@ -239,13 +239,12 @@ public class AzureContainerAppEnvironmentResource :
             // Capture information about the container registry used by the
             // container app environment in the deployment target information
             // associated with each compute resource that needs an image
-            var deploymentTargetAnnotation = new DeploymentTargetAnnotation(containerApp)
+            containerApp.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(deploymentConcurrencyGroup));
+            r.Annotations.Add(new DeploymentTargetAnnotation(containerApp)
             {
                 ContainerRegistry = this,
                 ComputeEnvironment = this
-            };
-            containerApp.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(deploymentConcurrencyGroup));
-            r.Annotations.Add(deploymentTargetAnnotation);
+            });
         }
 
         // Log once about all HTTP endpoints upgraded to HTTPS
