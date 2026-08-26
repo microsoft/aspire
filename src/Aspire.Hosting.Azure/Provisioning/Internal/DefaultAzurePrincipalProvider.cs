@@ -13,8 +13,9 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
 {
     // Microsoft Entra reports the token's identity type in the `idtyp` claim: "app" for app-only
     // (service principal / managed identity / federated workload identity) tokens and "user" for
-    // user-delegated ones. Because `idtyp` is optional, the parser also uses the standard token
-    // shape: delegated tokens carry `scp`, while app-only tokens carry `roles` without `scp`.
+    // user-delegated ones. Because `idtyp` is optional, the parser also uses the token shape:
+    // delegated tokens carry `scp` or user name claims, while app-only tokens can omit `roles`
+    // when the resource authorizes clients through an ACL.
     // See: https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference#payload-claims
     private const string IdTypApp = "app";
 
@@ -81,15 +82,18 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
                     "the credential does not contain a valid 'oid' (object id) claim.");
             }
 
-            // `idtyp` is authoritative when present. When it is absent, `scp` identifies a
-            // delegated token and a non-empty `roles` array identifies an app-only token.
-            // Tokens with neither shape retain the historical User fallback.
+            // `idtyp` is authoritative when present. When it is absent, `scp` or a user name
+            // claim identifies a delegated token. App-only tokens can omit `roles` when the
+            // resource performs ACL-based authorization, so the absence of application roles
+            // cannot be used to fall back to User.
             var identityType = GetRootString(root, "idtyp");
             var hasDelegatedScopes = GetRootString(root, "scp") is { Length: > 0 };
-            var hasApplicationRoles = HasRootStringArrayValue(root, "roles");
+            var hasUserName =
+                GetRootString(root, "upn") is { Length: > 0 } ||
+                GetRootString(root, "email") is { Length: > 0 };
             var isAppOnly =
                 string.Equals(identityType, IdTypApp, StringComparison.OrdinalIgnoreCase) ||
-                (identityType is null && !hasDelegatedScopes && hasApplicationRoles);
+                (identityType is null && !hasDelegatedScopes && !hasUserName);
 
             var principalType = isAppOnly
                 ? PrincipalTypeServicePrincipal
@@ -152,9 +156,4 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
             ? value.GetString()
             : null;
 
-    private static bool HasRootStringArrayValue(JsonElement root, string claimName) =>
-        root.TryGetProperty(claimName, out var value) &&
-        value.ValueKind == JsonValueKind.Array &&
-        value.EnumerateArray().Any(static item =>
-            item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()));
 }

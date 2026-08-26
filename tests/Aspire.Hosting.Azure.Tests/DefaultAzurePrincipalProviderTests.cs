@@ -111,6 +111,23 @@ public class DefaultAzurePrincipalProviderTests
     }
 
     [Fact]
+    public async Task GetPrincipalAsync_DetectsRoleLessServicePrincipalWhenIdtypMissing()
+    {
+        // Entra can issue app-only tokens without `roles` when the target resource authorizes
+        // clients through an ACL instead of application permissions.
+        var payloadJson = """
+            {"oid":"11111111-2222-3333-4444-555555555555","appid":"22222222-3333-4444-5555-666666666666","app_displayname":"acl-authorized-app"}
+            """;
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
+        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetPrincipalAsync();
+
+        Assert.Equal("ServicePrincipal", principal.Type);
+        Assert.Equal("acl-authorized-app", principal.Name);
+    }
+
+    [Fact]
     public async Task GetPrincipalAsync_DetectsDelegatedTokenFromScopesWhenRolesAreAlsoPresent()
     {
         var payloadJson = """
@@ -207,7 +224,7 @@ public class DefaultAzurePrincipalProviderTests
     // Entra's groups-overage payload nests an object under `_claim_sources`; this variant hides a
     // conflicting `idtyp` there while the token itself carries none, so no ordering is involved.
     [InlineData("""
-        {"oid":"11111111-2222-3333-4444-555555555555","_claim_sources":{"src1":{"idtyp":"app"}}}
+        {"oid":"11111111-2222-3333-4444-555555555555","upn":"real@example.com","_claim_sources":{"src1":{"idtyp":"app"}}}
         """, "User")]
     public async Task GetPrincipalAsync_IgnoresClaimsNestedInsideOtherClaims(string payloadJson, string expectedPrincipalType)
     {
