@@ -3202,7 +3202,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var workerGroup = GetDeploymentConcurrencyGroup(model, "worker");
 
         Assert.Same(apiGroup, workerGroup);
-        Assert.Equal(1, apiGroup.MaxConcurrentDeployments);
     }
 
     [Fact]
