@@ -386,13 +386,19 @@ internal sealed class RunCommand : BaseCommand
             }
             if (!buildSuccess)
             {
+                var runExitCode = await runTask;
+                if (cancellationToken.IsCancellationRequested && runExitCode == CliExitCodes.Cancelled)
+                {
+                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
+                    return CommandResult.Cancelled(CliExitCodes.Success);
+                }
+
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
                 // Build failed - display captured output and return exit code
                 if (context.OutputCollector is { } outputCollector)
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                var runExitCode = await runTask;
                 return CommandResult.Failure(
                     runExitCode == CliExitCodes.Success ? CliExitCodes.FailedToDotnetRunAppHost : runExitCode,
                     InteractionServiceStrings.ProjectCouldNotBeBuilt);

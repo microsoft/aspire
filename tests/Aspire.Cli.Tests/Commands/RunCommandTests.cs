@@ -434,6 +434,51 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenProjectReturnsCancelledDuringBuild_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                // GuestAppHostProject signals failed preparation before translating cancellation to
+                // an exit code. Complete both synchronously to exercise that returned-result path.
+                context.BuildCompletionSource?.TrySetResult(false);
+                cts.Cancel();
+                return Task.FromResult(CliExitCodes.Cancelled);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task RunCommand_WhenAppHostStartupTimesOut_DisplaysTimeoutGuidance()
     {
         var interactionService = new TestInteractionService();
