@@ -91,7 +91,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     {
                         var result = await interactionService.PromptNotificationAsync(
                             "Clear Deployment State",
-                            $"The deployment state for the '{hostEnvironment.EnvironmentName}' environment will be deleted. Do you want to continue?",
+                            $"The deployment state for the '{hostEnvironment.EnvironmentName}' environment will be cleared. Do you want to continue?",
                             new NotificationInteractionOptions
                         {
                             Intent = MessageIntent.Confirmation,
@@ -109,7 +109,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                         }
                     }
 
-                    context.Logger.LogInformation("Deleting deployment state due to --clear-cache flag.");
+                    context.Logger.LogInformation("Clearing deployment state due to --clear-cache flag.");
                     await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
                 }
 
