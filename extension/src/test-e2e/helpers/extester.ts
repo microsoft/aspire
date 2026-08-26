@@ -4,6 +4,7 @@ const extester = require(extesterModulePath);
 export interface WebDriver {
     wait<T>(condition: () => Promise<T | boolean> | T | boolean, timeout?: number, message?: string): Promise<T>;
     executeScript<T>(script: string, ...args: unknown[]): Promise<T>;
+    findElements(locator: Locator): Promise<WebElement[]>;
     actions(): {
         sendKeys(...keys: string[]): { perform(): Promise<void> };
     };
@@ -14,6 +15,10 @@ export interface Locator {
 
 export interface WebElement {
     getText(): Promise<string>;
+    isDisplayed(): Promise<boolean>;
+    findElements(locator: Locator): Promise<WebElement[]>;
+    click(): Promise<void>;
+    sendKeys(...keys: string[]): Promise<void>;
 }
 
 export interface VSBrowserInstance {
@@ -86,6 +91,7 @@ export interface QuickPickItem {
 export interface Notification {
     getMessage(): Promise<string>;
     dismiss(): Promise<void>;
+    takeAction(title: string): Promise<void>;
 }
 
 export interface ModalDialog {
@@ -101,9 +107,18 @@ export interface TerminalView {
     getText(): Promise<string>;
 }
 
+export interface CodeLens {
+    getText(): Promise<string>;
+}
+
+export interface TextEditor {
+    getCodeLenses(): Promise<CodeLens[]>;
+}
+
 export interface EditorView {
     getOpenEditorTitles(): Promise<string[]>;
     closeAllEditors(): Promise<void>;
+    openEditor(title: string): Promise<TextEditor>;
 }
 
 export interface WebView {

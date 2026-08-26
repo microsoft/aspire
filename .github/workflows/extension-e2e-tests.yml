@@ -75,7 +75,9 @@ jobs:
     name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
     needs: verify_extester_feed
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 75
+    # The Java AppHost shard imports a multi-project Gradle build and then runs the whole
+    # application under a debugger, so it needs more than the shared budget.
+    timeout-minutes: ${{ matrix.timeoutMinutes || 75 }}
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -133,6 +135,22 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: dynamic-debug-configuration
+            spec: out/test-e2e/test-e2e/dynamicDebugConfiguration.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: dynamic-debug-configuration
+            spec: out/test-e2e/test-e2e/dynamicDebugConfiguration.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: apphost-tree
             advisoryIssue: https://github.com/microsoft/aspire/issues/19282
             spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
@@ -249,6 +267,68 @@ jobs:
             cliBinary: aspire.exe
             useXvfb: false
           - name: Linux
+            shardName: java-apphost
+            spec: out/test-e2e/test-e2e/javaAppHost.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+          - name: Linux
+            shardName: java-apphost-debug-startup-timeout
+            spec: out/test-e2e/test-e2e/javaAppHostDebugStartupTimeout.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+            unsetCliStartTimeout: true
+          - name: Linux
+            shardName: java-codelens
+            spec: out/test-e2e/test-e2e/javaCodeLens.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+          - name: Linux
+            shardName: workspace-target-proof
+            spec: out/test-e2e/test-e2e/workspaceTargetProof.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Linux
+            shardName: cli-path-resolution
+            spec: out/test-e2e/test-e2e/cliPathResolution.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Linux
+            shardName: cli-path-rejection
+            spec: out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: cli-path-rejection
+            spec: out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
             shardName: edge-cases
             spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
             runner: ubuntu-latest
@@ -259,6 +339,22 @@ jobs:
           - name: Windows
             shardName: edge-cases
             spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: launch-profiles
+            spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: launch-profiles
+            spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
             runner: windows-latest
             rid: win-x64
             archivePattern: aspire-cli-win-x64*.zip
@@ -266,7 +362,6 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: azure-functions
-            advisoryIssue: https://github.com/microsoft/aspire/issues/19151
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -399,6 +494,18 @@ jobs:
           export PATH="$core_tools_directory:$PATH"
           func --version
 
+          dotnet_runtime_vsix="$RUNNER_TEMP/vscode-dotnet-runtime-3.1.0.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$dotnet_runtime_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/vscode-dotnet-runtime/3.1.0/vspackage'
+          echo '8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a  '"$dotnet_runtime_vsix" | sha256sum --check -
+
+          csharp_vsix="$RUNNER_TEMP/vscode-csharp-2.148.23-linux-x64.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$csharp_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.148.23/vspackage?targetPlatform=linux-x64'
+          echo '18b503e614a979212762683b35a4fa1806688ba773d5fe93bf62c9f9346db23f  '"$csharp_vsix" | sha256sum --check -
+
           azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
           curl --fail --location --compressed --retry 3 --retry-all-errors \
             --output "$azure_resource_groups_vsix" \
@@ -413,10 +520,143 @@ jobs:
 
           {
             echo 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'
+            echo "ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnet_runtime_vsix"
+            echo "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix"
             echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
             echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
             echo 'FUNCTIONS_CORE_TOOLS_TELEMETRY_OPTOUT=1'
           } >> "$GITHUB_ENV"
+
+      - name: Set up the JDK for the Java E2E specs
+        if: ${{ matrix.installJava }}
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          # The CLI compiles a scaffolded Java AppHost with `javac --release 25`, because the AppHost
+          # uses an instance main method in an implicitly declared class (JEP 512, finalized in 25).
+          # Hosted runner images ship 17 and 21, so neither the AppHost nor the playground's Gradle
+          # toolchain resolves without this.
+          java-version: '25'
+
+      - name: Cache Java dependencies for the Java E2E specs
+        if: ${{ matrix.installJava }}
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          # The Java specs launch real Spring Boot resources, so a cold runner otherwise downloads the
+          # whole Spring dependency tree inside the test's readiness budget. Cache the user-level Maven
+          # and Gradle stores rather than a per-project directory: the specs run out of a generated
+          # workspace copied from the playground, so only the shared caches survive the copy.
+          #
+          # `~/.m2/wrapper` holds the Maven distribution itself, which `mvnw` downloads from
+          # repo.maven.apache.org into `${MAVEN_USER_HOME}/wrapper/dists` because these projects pin
+          # `distributionType=only-script`. Without it cached, every run re-fetched Maven from Maven
+          # Central, so a single outage there failed the shard - the `~/.gradle/wrapper` entry below
+          # already gave Gradle the equivalent protection.
+          path: |
+            ~/.m2/repository
+            ~/.m2/wrapper
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          # `maven-wrapper.properties` participates in the key for the same reason
+          # `gradle-wrapper.properties` does: it carries the pinned `distributionUrl`, so the entry has
+          # to rotate when the Maven version changes. Otherwise the key would still hit exactly after a
+          # version bump, actions/cache would skip the save, and the newly downloaded distribution would
+          # never make it into the cache.
+          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties', 'playground/JavaSpringBoot/**/maven-wrapper.properties') }}
+          restore-keys: |
+            java-e2e-${{ runner.os }}-
+
+      - name: Warm the Java dependency caches
+        if: ${{ matrix.installJava }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Resolving dependencies here rather than inside the specs keeps a cold cache from being
+          # charged against the in-test wait for a resource endpoint, which is what made these shards
+          # time out on cache misses. The AppHost project is deliberately excluded: it compiles against
+          # the Aspire Java SDK that the CLI generates later, during the E2E run itself.
+          #
+          # A resolution failure must not fail the job - it only means the specs pay the download cost
+          # they paid before this step existed.
+          #
+          # Retry before giving up, though. Both wrappers fetch their own distribution on a cold cache,
+          # and a failure there is not merely a slower run: it leaves no Maven on the runner at all, so
+          # the build inside the spec exits 1, the resource never starts, and the shard fails 15 minutes
+          # later as "Timed out after 900000ms waiting for an HTTP endpoint for resource 'catalog'"
+          # rather than as the download error it actually is.
+          warm() {
+            local description=$1
+            local directory=$2
+            shift 2
+
+            local attempt
+            for attempt in 1 2 3; do
+              if ( cd "$directory" && "$@" ); then
+                return 0
+              fi
+
+              if [ "$attempt" -lt 3 ]; then
+                echo "warning: pre-resolving $description failed (attempt $attempt/3), retrying"
+                sleep $((attempt * 15))
+              fi
+            done
+
+            echo "warning: could not pre-resolve $description"
+          }
+
+          cd playground/JavaSpringBoot
+          for maven_project in catalog worker; do
+            # `dependency:go-offline` resolves the dependency tree but not every plugin a real build
+            # runs, so compiling here is what actually leaves `~/.m2` - the directory this job caches -
+            # holding the compiler, resources and Spring Boot plugins. The build output itself is
+            # deliberately not reused: the specs copy the playground without `target/` so each run
+            # builds clean, which is the same reason the Gradle project below is compiled rather than
+            # only resolved.
+            warm "Maven dependencies for $maven_project" "$maven_project" \
+              ./mvnw --batch-mode --no-transfer-progress -q dependency:go-offline compile
+          done
+          warm "Gradle dependencies for orders" orders \
+            ./gradlew --no-daemon --quiet compileJava
+
+      - name: Install Java E2E prerequisites
+        if: ${{ matrix.installJava }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The E2E VS Code instance runs offline, and the extension only advertises the `java`
+          # capability - which is what makes the CLI hand a Java AppHost back to the extension to
+          # launch and debug, instead of spawning `java` itself - when redhat.java and
+          # vscjava.vscode-java-debug are both installed. vscode-java-dependency is a hard activation
+          # dependency of the debug extension. Versions and digests are pinned so a marketplace
+          # release cannot change what these shards are testing.
+          #
+          # redhat.java also publishes platform-specific builds that embed a JRE; the universal build
+          # is a third of the size and runs on the JDK installed above.
+          java_language_vsix="$RUNNER_TEMP/redhat-java-1.55.0.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$java_language_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/redhat/vsextensions/java/1.55.0/vspackage'
+          echo '011639c3ee347b9591895bfc77d8cf28f836c053d0a49ae4a83efe9dc473a603  '"$java_language_vsix" | sha256sum --check -
+
+          java_debug_vsix="$RUNNER_TEMP/vscjava-vscode-java-debug-0.59.0.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$java_debug_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vscjava/vsextensions/vscode-java-debug/0.59.0/vspackage'
+          echo 'e5973fcd763a984ea4d6e57644ccf8f5fe6caa80c0e589f29403f00c9ace3920  '"$java_debug_vsix" | sha256sum --check -
+
+          java_dependency_vsix="$RUNNER_TEMP/vscjava-vscode-java-dependency-0.27.6.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$java_dependency_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vscjava/vsextensions/vscode-java-dependency/0.27.6/vspackage'
+          echo 'e4e7c8b90953e62c8ebcedaaafb88b3c42ddec3fcc9e37f268ac3203427d9fa0  '"$java_dependency_vsix" | sha256sum --check -
+
+          {
+            echo "ASPIRE_EXTENSION_E2E_JAVA_VSIX=$java_language_vsix:$java_debug_vsix:$java_dependency_vsix"
+          } >> "$GITHUB_ENV"
+
+          java -version
 
       - name: Prepare Aspire CLI and package hive
         id: prepare_cli
@@ -449,6 +689,33 @@ jobs:
           }
 
           & $cli.FullName setup
+          # pwsh does not stop on a native command's exit code, so an unchecked failure here left the
+          # shard running without the orchestration component and failing minutes later with a debug
+          # startup timeout instead of the real reason - "The Aspire orchestration component is not
+          # installed at ~/.nuget/packages/microsoft.developercontrolplane.<rid>/<version>/tools/dcp".
+          if ($LASTEXITCODE -ne 0) { throw "aspire setup failed with exit code $LASTEXITCODE." }
+
+          # A zero exit code only means setup ran, not that it produced an orchestration component. The
+          # shards resolve DCP from this bundle rather than from ~/.nuget/packages, because a
+          # guest-language AppHost never restores the Microsoft.DeveloperControlPlane.<rid> package.
+          # Assert it is really here so a missing DCP fails on this line, naming the component, instead
+          # of surfacing minutes later as an unexplained debug startup timeout.
+          #
+          # `aspire setup` extracts to SetupCommand.GetDefaultInstallPath(processPath), which is the
+          # *parent of the parent* of the CLI binary - not the directory the archive was unpacked into.
+          # With the CLI at artifacts/bundle/<rid>/aspire that install path is artifacts/bundle, so DCP
+          # lands beside $bundleDir rather than inside it. Derive the same path the CLI derives instead
+          # of assuming a layout, otherwise this assertion fails on every shard even when setup worked.
+          $cliDir = Split-Path -Path $cli.FullName -Parent
+          $installPath = Split-Path -Path $cliDir -Parent
+          $dcpExecutable = if ('${{ runner.os }}' -eq 'Windows') { 'dcp.exe' } else { 'dcp' }
+          $dcp = Get-ChildItem -Path $installPath -Recurse -File -Filter $dcpExecutable -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $dcp) {
+            Get-ChildItem -Path $installPath -Recurse -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+            throw "'aspire setup' succeeded but no $dcpExecutable exists under $installPath, so every AppHost in this shard would fail to orchestrate."
+          }
+          Write-Host "Orchestration component: $($dcp.FullName)"
+          "ASPIRE_DCP_PATH=$($dcp.Directory.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           $shippingDir = Join-Path '${{ github.workspace }}' 'artifacts/nugets/Debug/Shipping'
           if (-not (Test-Path $shippingDir)) {
@@ -477,6 +744,7 @@ jobs:
             Get-ChildItem -Path $ridNugets -Recurse -File -Filter '*.nupkg' | Copy-Item -Destination $hiveDir -Force
           }
 
+          "ASPIRE_CLI_PACKAGES=$hiveDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASPIRE_EXTENSION_E2E_CLI_PATH=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION=$(($samplePackage.Name -replace '^Aspire\.Hosting\.AppHost\.', '') -replace '\.nupkg$', '')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $cli.FullName --version
@@ -493,12 +761,54 @@ jobs:
       - name: Install E2E recorder
         if: ${{ matrix.useXvfb }}
         run: |
+          # ffmpeg only powers the diagnostic screen recordings, and run-e2e.js already skips
+          # recording with a warning when the binary is missing. So this step must never be able to
+          # fail or stall a shard: it is strictly a nice-to-have for debugging flakes after the fact.
+          #
+          # It used to call apt-get unguarded, which talks to the Azure Ubuntu mirrors. That is a
+          # network dependency with no timeout, and a degraded mirror has hung this step past the
+          # job timeout - taking down shards (including ones with no Java or recording relevance)
+          # that were otherwise healthy. Bound every call and give up quietly instead.
           if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
             ffmpeg -version | Select-Object -First 1
-          } else {
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ffmpeg
           }
+          else {
+            $installed = $false
+            $attempts = 2
+
+            for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+              # `timeout` (coreutils) bounds a stalled child and exits 124, which is what converts an
+              # unresponsive mirror into a retryable failure rather than an open-ended wait.
+              # `--kill-after` matters: plain `timeout` only sends SIGTERM, and apt/dpkg block or
+              # defer signals around critical sections, so without the escalation to SIGKILL a
+              # wedged child could still outlive its own timeout.
+              sudo timeout --kill-after=30 180 apt-get update
+
+              # Only the install decides success: `apt-get update` can time out while the install
+              # still succeeds from the indices already on the runner image.
+              sudo timeout --kill-after=30 180 apt-get install -y --no-install-recommends ffmpeg
+              if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+                break
+              }
+
+              if ($attempt -lt $attempts) {
+                Write-Host "::warning::Attempt $attempt to install ffmpeg failed; retrying."
+                Start-Sleep -Seconds 15
+              }
+            }
+
+            if (-not $installed) {
+              Write-Host '::warning::ffmpeg could not be installed; E2E screen recordings are disabled for this shard.'
+            }
+          }
+
+          # GitHub's pwsh wrapper appends `if ((Test-Path variable:/LASTEXITCODE)) { exit $LASTEXITCODE }`,
+          # so a failed apt-get would otherwise fail this step through the leftover exit code and take
+          # the shard down over a missing diagnostic recorder. Exit explicitly to hold the
+          # "this step must never fail the job" contract.
+          # https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax#exit-codes-and-error-action-preference
+          exit 0
 
       - name: Run extension E2E tests
         working-directory: extension

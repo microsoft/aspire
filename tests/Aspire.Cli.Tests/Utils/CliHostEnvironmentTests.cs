@@ -99,6 +99,23 @@ public class CliHostEnvironmentTests
         Assert.False(env.SupportsInteractiveInput);
     }
 
+    [Fact]
+    public void SupportsInteractiveInput_ReturnsTrue_WhenExtensionPromptsEnabledInCI()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_EXTENSION_ENDPOINT"] = "localhost:1234",
+                ["ASPIRE_EXTENSION_PROMPT_ENABLED"] = "true",
+                ["GITHUB_ACTIONS"] = "true"
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false);
+
+        Assert.True(env.SupportsInteractiveInput);
+    }
+
     [Theory]
     [InlineData("CI", "true")]
     [InlineData("CI", "1")]

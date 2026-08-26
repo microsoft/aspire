@@ -133,6 +133,9 @@
   <data name="ConsoleLogsNoLogsFound" xml:space="preserve">
     <value>No logs found</value>
   </data>
+  <data name="ConsoleLogsNotCapturedForRun" xml:space="preserve">
+    <value>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</value>
+  </data>
   <data name="ConsoleLogsNoLogsMatchFilter" xml:space="preserve">
     <value>No logs match the filter</value>
   </data>
@@ -175,6 +178,10 @@
   <data name="ConsoleLogsPauseActive" xml:space="preserve">
     <value>&lt;Log capture paused at {0}, {1} log(s) filtered out&gt;</value>
     <comment>{0} is a date, {1} is a number</comment>
+  </data>
+  <data name="PauseInProgressText" xml:space="preserve">
+    <value>Console logs capture paused at {0}</value>
+    <comment>{0} is a time</comment>
   </data>
   <data name="ConsoleLogsPauseDetails" xml:space="preserve">
     <value>&lt;Log capture paused between {0} and {1}, {2} log(s) filtered out&gt;</value>

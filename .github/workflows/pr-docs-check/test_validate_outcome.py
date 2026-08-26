@@ -39,17 +39,18 @@ def payload(
     }
 
 
-def create_pull_request_item(base_branch: object = "release/13.5") -> dict:
-    return {
+def create_pull_request_item(**target_fields: object) -> dict:
+    item = {
         "type": "create_pull_request",
         "title": "Draft docs",
         "body": "Docs",
-        "base_branch": base_branch,
     }
+    item.update(target_fields or {"base": "release/13.5"})
+    return item
 
 
 class ValidateOutcomeTests(unittest.TestCase):
-    def test_drafted_with_correct_actual_base_passes(self) -> None:
+    def test_drafted_with_current_base_passes(self) -> None:
         drafted_payload = payload("drafted", target_branch="release/13.5")
         drafted_payload["items"].append(create_pull_request_item())
 
@@ -65,6 +66,108 @@ class ValidateOutcomeTests(unittest.TestCase):
             message,
         )
 
+    def test_drafted_with_legacy_base_branch_passes(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(
+            create_pull_request_item(base_branch="release/13.5")
+        )
+
+        message = validate_outcome(
+            drafted_payload,
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
+        )
+
+        self.assertIn("Confirmed drafted documentation PR", message)
+
+    def test_drafted_with_agreeing_base_fields_passes(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(
+            create_pull_request_item(
+                base="release/13.5",
+                base_branch="release/13.5",
+            )
+        )
+
+        message = validate_outcome(
+            drafted_payload,
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
+        )
+
+        self.assertIn("Confirmed drafted documentation PR", message)
+
+    def test_drafted_with_disagreeing_base_fields_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(
+            create_pull_request_item(
+                base="release/13.5",
+                base_branch="main",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Canonical create_pull_request base and base_branch disagree",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "release/13.5",
+            )
+
+    def test_drafted_with_invalid_canonical_target_fails(self) -> None:
+        cases = {
+            "missing": {},
+            "invalid current base": {"base": "release/latest"},
+            "current base wrong type": {"base": 13.5},
+            "invalid legacy base": {"base_branch": "release/latest"},
+            "legacy base wrong type": {"base_branch": 13.5},
+            "invalid current base with valid legacy base": {
+                "base": "release/latest",
+                "base_branch": "release/13.5",
+            },
+            "valid current base with invalid legacy base": {
+                "base": "release/13.5",
+                "base_branch": "release/latest",
+            },
+        }
+        for name, target_fields in cases.items():
+            with self.subTest(name=name):
+                drafted_payload = payload("drafted", target_branch="release/13.5")
+                create_item = create_pull_request_item()
+                create_item.pop("base")
+                create_item.update(target_fields)
+                drafted_payload["items"].append(create_item)
+
+                with self.assertRaises(OutcomeValidationError):
+                    validate_outcome(
+                        drafted_payload,
+                        "https://github.com/microsoft/aspire.dev/pull/1447",
+                        EXPECTED_SOURCE_PR_NUMBER,
+                        "release/13.5",
+                    )
+
+    def test_drafted_with_duplicate_create_items_fails(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].extend(
+            [create_pull_request_item(), create_pull_request_item()]
+        )
+
+        with self.assertRaisesRegex(
+            OutcomeValidationError,
+            "Expected exactly one create_pull_request item for a drafted outcome, found 2",
+        ):
+            validate_outcome(
+                drafted_payload,
+                "https://github.com/microsoft/aspire.dev/pull/1447",
+                EXPECTED_SOURCE_PR_NUMBER,
+                "release/13.5",
+            )
+
     def test_drafted_with_actual_base_mismatch_fails(self) -> None:
         drafted_payload = payload("drafted", target_branch="release/13.5")
         drafted_payload["items"].append(create_pull_request_item())
@@ -72,7 +175,7 @@ class ValidateOutcomeTests(unittest.TestCase):
         with self.assertRaisesRegex(
             OutcomeValidationError,
             "Drafted PR base branch main does not match canonical "
-            "create_pull_request base_branch release/13.5",
+            "create_pull_request target branch release/13.5",
         ):
             validate_outcome(
                 drafted_payload,
@@ -87,7 +190,7 @@ class ValidateOutcomeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             OutcomeValidationError,
-            "Canonical create_pull_request base_branch release/13.5 does not match "
+            "Canonical create_pull_request target branch release/13.5 does not match "
             "notify_source_pr target_branch main",
         ):
             validate_outcome(

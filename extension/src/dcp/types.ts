@@ -57,6 +57,21 @@ export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration 
     return obj && obj.type === 'go';
 }
 
+export interface RustCargoLaunchTarget {
+    args?: string[];
+    executable_path?: string;
+}
+
+export interface RustLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "rust";
+    cargo?: RustCargoLaunchTarget;
+    working_directory?: string;
+}
+
+export function isRustLaunchConfiguration(obj: any): obj is RustLaunchConfiguration {
+    return obj && obj.type === 'rust';
+}
+
 export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchConfiguration {
     type: "node" | "bun";
     script_path?: string;
@@ -119,6 +134,33 @@ export function isMauiLaunchConfiguration(obj: any): obj is MauiLaunchConfigurat
     return obj && obj.type === 'maui';
 }
 
+export interface JavaLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "java";
+    request?: "launch" | "attach";
+    working_directory?: string;
+    // A fully qualified class name, optionally prefixed with a Java module name
+    // ("[module/]com.example.Api"), or the path of the .java source file declaring main. Absent when
+    // the IDE should resolve the entry point itself. A JAR path is never valid here; an executable
+    // JAR is sent on class_paths with its manifest Main-Class here.
+    // See src/Aspire.Hosting.Java/JavaLaunchConfiguration.cs.
+    main_class?: string;
+    // The name the Java tooling imported this resource's project under. Only sent when main_class
+    // could not be determined, to scope the adapter's entry point search to a single project.
+    project_name?: string;
+    // Classpath entries to launch the JVM with, used when the resource runs a prebuilt JAR. Absent
+    // when the IDE should resolve the classpath from the project itself.
+    class_paths?: string[];
+    // JVM options (e.g. "-Xmx512m"). These are the JVM's own arguments, not the application's.
+    vm_args?: string[];
+    // "maven" or "gradle", or absent when the resource runs a prebuilt JAR and therefore has no
+    // build files whose classpath the Java language server could refresh.
+    build_tool?: string;
+}
+
+export function isJavaLaunchConfiguration(obj: any): obj is JavaLaunchConfiguration {
+    return obj && obj.type === 'java';
+}
+
 export interface EnvVar {
     name: string;
     value: string;
@@ -130,10 +172,12 @@ export interface RunSessionPayload {
     args?: string[];
 }
 
+export type DebugConfigurationArguments = string | string[];
+
 export interface DebugLaunchSettings {
     [key: string]: unknown;
     env?: { [key: string]: string };
-    args?: string[];
+    args?: DebugConfigurationArguments;
     launchProfile?: string;
     disableLaunchProfile?: boolean;
 }
@@ -210,10 +254,12 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     program: string;
     debuggers?: AspireDebuggersConfiguration;
     command?: AspireCommandType;
+    launchProfile?: string;
     dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;
     skipCliAvailabilityCheck?: boolean;
+    resolvedCliPath?: string;
     env?: { [key: string]: string };
     [appHostLaunchTokenConfigKey]?: number;
     [appHostRestartSourceSessionIdConfigKey]?: string;

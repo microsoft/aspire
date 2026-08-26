@@ -510,9 +510,10 @@ internal static class InteractionCommands
                 foreach (var updatedInput in result.Data)
                 {
                     var value = updatedInput.Value;
-                    if (updatedInput.InputType == InputType.File && updatedInput.Files is { Count: > 0 })
+                    using var files = updatedInput.GetFiles();
+                    if (updatedInput.InputType == InputType.File && files.Count > 0)
                     {
-                        value += $" (Files: {string.Join(", ", updatedInput.Files.Select(f => f.Name))})";
+                        value += $" (Files: {string.Join(", ", files.Select(f => f.Name))})";
                     }
                     logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, value);
                 }
@@ -797,9 +798,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Please wait while resources are being downloaded...",
-                    "Downloading resources",
                     new ProgressInteractionOptions
                     {
+                        Title = "Downloading resources",
                         PrimaryButtonText = "Cancel",
                         Work = async ctx =>
                         {
@@ -826,7 +827,6 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Please wait while resources are being downloaded...",
-                    title: null,
                     options: new ProgressInteractionOptions
                     {
                         Work = async ctx =>
@@ -856,7 +856,7 @@ internal static class InteractionCommands
 
                 var progressTask = interactionService.PromptProgressAsync(
                     "This dialog has no cancel button. It will close automatically.",
-                    "Processing",
+                    new ProgressInteractionOptions { Title = "Processing" },
                     cancellationToken: cts.Token);
 
                 // Simulate background work, then close the dialog.
@@ -878,9 +878,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Please wait while data is being loaded...",
-                    "Loading",
                     new ProgressInteractionOptions
                     {
+                        Title = "Loading",
                         Work = async ctx =>
                         {
                             await Task.Delay(10000, ctx.CancellationToken);
@@ -924,9 +924,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Provisioning resources for **MyApp**.\n\nThis may take several minutes.",
-                    "Deploying to Azure",
                     new ProgressInteractionOptions
                     {
+                        Title = "Deploying to Azure",
                         PrimaryButtonText = "Abort deployment",
                         EnableMessageMarkdown = true,
                         Work = async ctx =>
@@ -949,9 +949,9 @@ internal static class InteractionCommands
 
                 var result = await interactionService.PromptProgressAsync(
                     "Building and pushing container images to registry. This will take approximately 30 seconds.",
-                    "Building container images",
                     new ProgressInteractionOptions
                     {
+                        Title = "Building container images",
                         PrimaryButtonText = "Cancel build"
                     },
                     commandContext.CancellationToken);
@@ -1009,12 +1009,13 @@ internal static class InteractionCommands
                 }
 
                 var input = result.Data;
-                if (input.Files is not { Count: > 0 })
+                using var files = input.GetFiles();
+                if (files.Count == 0)
                 {
                     return CommandResults.Failure("No file was uploaded.");
                 }
 
-                var file = input.Files[0];
+                var file = files[0];
                 var content = await file.ReadAllBytesAsync(commandContext.CancellationToken);
 
                 var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
@@ -1055,7 +1056,8 @@ internal static class InteractionCommands
                 }
 
                 var input = result.Data;
-                if (input.Files is not { Count: > 0 })
+                using var files = input.GetFiles();
+                if (files.Count == 0)
                 {
                     return CommandResults.Failure("No certificates were uploaded.");
                 }
@@ -1064,7 +1066,7 @@ internal static class InteractionCommands
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 var fileDetails = new List<object>();
-                foreach (var file in input.Files)
+                foreach (var file in files)
                 {
                     var bytes = await file.ReadAllBytesAsync(commandContext.CancellationToken);
                     logger.LogInformation("Installed certificate '{FileName}' ({Size} bytes)", file.Name, bytes.Length);
@@ -1077,7 +1079,7 @@ internal static class InteractionCommands
                     Value = json,
                     Format = CommandResultFormat.Json
                 };
-                return CommandResults.Success($"Installed {input.Files.Count} certificate(s).", resultData);
+                return CommandResults.Success($"Installed {files.Count} certificate(s).", resultData);
             }, new CommandOptions
             {
                 Description = "Upload TLS certificate files to install on the resource.",

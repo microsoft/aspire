@@ -26,6 +26,30 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
     {
         _logger.LogDebug($"PostConfigure {nameof(DashboardOptions)} with name '{name}'.");
 
+        if (_configuration[DashboardConfigNames.DashboardApplicationName.EnvVarName] is { Length: > 0 } applicationName)
+        {
+            options.ApplicationName = applicationName;
+        }
+
+        if (_configuration[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] is { Length: > 0 } dataDirectory)
+        {
+            options.Data.Directory = dataDirectory;
+        }
+
+        if (_configuration[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] is { Length: > 0 } persistenceMode)
+        {
+            if (Enum.TryParse<DashboardPersistenceMode>(persistenceMode, ignoreCase: true, out var parsedPersistenceMode) &&
+                Enum.IsDefined(parsedPersistenceMode))
+            {
+                options.Data.PersistenceMode = parsedPersistenceMode;
+                options.Data.PersistenceModeParseError = null;
+            }
+            else
+            {
+                options.Data.PersistenceModeParseError = $"Failed to parse dashboard persistence mode '{persistenceMode}'. Possible values: {string.Join(", ", typeof(DashboardPersistenceMode).GetEnumNames())}.";
+            }
+        }
+
         // Copy aliased config values to the strongly typed options.
         if (_configuration.GetString(DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey,
                                      DashboardConfigNames.Legacy.DashboardOtlpGrpcUrlName.ConfigKey, fallbackOnEmpty: true) is { } otlpGrpcUrl)
@@ -54,6 +78,10 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         if (_configuration.GetBool(DashboardConfigNames.DashboardUnsecuredAllowAnonymousName.ConfigKey,
                                    DashboardConfigNames.Legacy.DashboardUnsecuredAllowAnonymousName.ConfigKey) ?? false)
         {
+            // This setting explicitly opts into unsecured endpoints. See the security considerations at
+            // https://aspire.dev/dashboard/security-considerations/ before enabling it outside local development.
+            // When the corresponding endpoints are enabled, the dashboard logs warnings and displays a warning
+            // in the UI to inform users about the risks of anonymous access.
             options.Frontend.AuthMode = FrontendAuthMode.Unsecured;
             options.Otlp.AuthMode = OtlpAuthMode.Unsecured;
             options.Api.AuthMode = ApiAuthMode.Unsecured;
@@ -61,6 +89,8 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         else
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
+            // OTLP is unsecured by default for local development. See the security considerations at
+            // https://aspire.dev/dashboard/security-considerations/ when exposing the endpoint outside a trusted environment.
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
             options.Api.AuthMode ??= ApiAuthMode.ApiKey;
         }

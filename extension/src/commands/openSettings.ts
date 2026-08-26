@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { CliPathResolutionTarget, windowCliPathTarget } from '../utils/cliPathVariables';
 
 /**
  * Opens the local or global Aspire configuration file.
@@ -13,8 +14,8 @@ import { ConfigInfoProvider } from '../utils/configInfoProvider';
  * in the current workspace. The path is resolved by the CLI via `aspire config info`.
  * Creates the file with an empty JSON object if it doesn't exist.
  */
-export async function openLocalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
-    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
+export async function openLocalSettingsCommand(terminalProvider: AspireTerminalProvider, target: CliPathResolutionTarget, cliPath: string): Promise<void> {
+    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo({ target, cliPath });
     if (!configInfo) {
         throw new vscode.CancellationError();
     }
@@ -32,7 +33,7 @@ export async function openLocalSettingsCommand(terminalProvider: AspireTerminalP
  * Creates the file with an empty JSON object if it doesn't exist.
  */
 export async function openGlobalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
-    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
+    const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo({ target: windowCliPathTarget });
     if (!configInfo) {
         throw new vscode.CancellationError();
     }

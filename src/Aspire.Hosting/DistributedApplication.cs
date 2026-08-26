@@ -463,8 +463,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // publish mode. In inspect mode we try to avoid lifecycle hooks
             // kickings. Eventing will still work generally since they are more
             // targetted.
-            var executionContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-            if (executionContext.IsPublishMode || executionContext.IsRunMode)
+            if (!IsInspectMode(configuration))
             {
                 await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -535,8 +534,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     // publish mode. In inspect mode we try to avoid lifecycle hooks
                     // kickings. Eventing will still work generally since they are more
                     // targetted.
-                    var executionContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-                    if (executionContext.IsPublishMode || executionContext.IsRunMode)
+                    if (!IsInspectMode(configuration))
                     {
                         await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -559,6 +557,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // Do nothing
         }
     }
+
+    private static bool IsInspectMode(IConfiguration configuration)
+        => string.Equals(configuration["AppHost:Operation"], "inspect", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Runs an application and blocks the calling thread until host shutdown is triggered and all
