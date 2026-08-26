@@ -326,7 +326,7 @@ INFO: Orphaned steps (no dependencies, not required by others):
 
 EXECUTION SIMULATION ("What If" Analysis):
 Shows what steps would run for each possible target step and in what order.
-Steps at the same level can run concurrently.
+Steps at the same level have no dependency ordering, but deployment concurrency groups may still limit concurrent execution.
 ─────────────────────────────────────────────────────────────────────────────
 If targeting 'azure-prepare-resources':
   Direct dependencies: none
