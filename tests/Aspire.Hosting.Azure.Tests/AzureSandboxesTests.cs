@@ -1090,6 +1090,53 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxDestroyPropagatesFallbackCleanupFailure()
+    {
+        var stateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
+        var azureState = await stateManager.AcquireSectionAsync("Azure", TestContext.Current.CancellationToken);
+        azureState.Data["SubscriptionId"] = "sub";
+        azureState.Data["ResourceGroup"] = "rg";
+        azureState.Data["Location"] = "westus3";
+        await stateManager.SaveSectionAsync(azureState, TestContext.Current.CancellationToken);
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = JsonContent.Create(new { message = "cleanup failed" })
+        }));
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        sandboxGroup.Resource.Outputs["name"] = "sandbox-group";
+        var targetResource = builder.AddContainer("frontend", "example/image").Resource;
+        var sandboxResource = new AzureSandboxContainerResource(
+            "frontend-sandbox-container",
+            targetResource,
+            sandboxGroup.Resource);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<ITokenCredentialProvider>(ProvisioningTestHelpers.CreateTokenCredentialProvider());
+        builder.Services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory(handler));
+
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            AzureSandboxContainerDeployment.DestroyAsync(stepContext, sandboxResource));
+
+        Assert.Contains("ADC request", exception.Message);
+        Assert.Contains("HTTP 400", exception.Message);
+    }
+
+    [Fact]
     public void SandboxDiskImageFailureRedactsServiceStatusDetails()
     {
         const string secret = "short-lived-acr-refresh-token";

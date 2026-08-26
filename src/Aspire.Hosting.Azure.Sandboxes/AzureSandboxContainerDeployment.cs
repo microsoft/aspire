@@ -1143,7 +1143,7 @@ internal static class AzureSandboxContainerDeployment
         return ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(endpointReferenceExpression, [currentComputeEnvironment], out expression);
     }
 
-    private static async Task DestroyAsync(PipelineStepContext context, AzureSandboxContainerResource resource)
+    internal static async Task DestroyAsync(PipelineStepContext context, AzureSandboxContainerResource resource)
     {
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
@@ -1152,29 +1152,15 @@ internal static class AzureSandboxContainerDeployment
         var environmentName = context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName;
         if (!HasRemoteDeploymentState(stateSection))
         {
+            AzureDevComputeResourceScope fallbackScope;
             try
             {
                 var azureState = await GetAzureStateAsync(deploymentStateManager, context.CancellationToken).ConfigureAwait(false);
-                var fallbackScope = new AzureDevComputeResourceScope(
+                fallbackScope = new AzureDevComputeResourceScope(
                     azureState.SubscriptionId,
                     azureState.ResourceGroup,
                     GetRequiredOutput(resource.Parent, "name"),
                     azureState.Location);
-                var stableOwnerId = CreateStableOwnerId(appHostIdentity, environmentName, fallbackScope, resource.Name);
-                await DeleteRemoteDeploymentsByResourceLabelAsync(
-                    context,
-                    CreateAzureDevComputeClient(context),
-                    fallbackScope,
-                    stableOwnerId,
-                    resource.Name,
-                    s_noExcludedIds,
-                    s_noExcludedIds,
-                    s_noExcludedIds,
-                    throwOnError: true).ConfigureAwait(false);
-                await context.ReportingStep.CompleteAsync(
-                    "No local sandbox deployment state was found; stable ownership labels were used for cleanup.",
-                    CompletionState.Completed,
-                    context.CancellationToken).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
@@ -1183,7 +1169,24 @@ internal static class AzureSandboxContainerDeployment
                     "No sandbox deployment state or stable cleanup scope was available.",
                     CompletionState.CompletedWithWarning,
                     context.CancellationToken).ConfigureAwait(false);
+                return;
             }
+
+            var stableOwnerId = CreateStableOwnerId(appHostIdentity, environmentName, fallbackScope, resource.Name);
+            await DeleteRemoteDeploymentsByResourceLabelAsync(
+                context,
+                CreateAzureDevComputeClient(context),
+                fallbackScope,
+                stableOwnerId,
+                resource.Name,
+                s_noExcludedIds,
+                s_noExcludedIds,
+                s_noExcludedIds,
+                throwOnError: true).ConfigureAwait(false);
+            await context.ReportingStep.CompleteAsync(
+                "No local sandbox deployment state was found; stable ownership labels were used for cleanup.",
+                CompletionState.Completed,
+                context.CancellationToken).ConfigureAwait(false);
             return;
         }
 
