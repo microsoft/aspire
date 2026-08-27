@@ -301,7 +301,7 @@ suite('outdatedCliNotifier', () => {
         notifier.dispose();
     });
 
-    test('stale warning action is suppressed but inconclusive recheck remains usable', async () => {
+    test('stale or inconclusive warning actions are suppressed', async () => {
         const { notifier, versionProvider, surface } = createNotifier();
         let resolveSelection!: (selection: string | undefined) => void;
         surface.selectionPromise = new Promise(resolve => resolveSelection = resolve);
@@ -320,7 +320,7 @@ suite('outdatedCliNotifier', () => {
         second.surface.selection = strings.updateAspireCliAction;
         second.versionProvider.currentVersion = null;
         await second.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
-        assert.strictEqual(second.surface.commands.length, 1);
+        assert.deepStrictEqual(second.surface.commands, []);
         second.notifier.dispose();
         notifier.dispose();
     });

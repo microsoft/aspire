@@ -118,7 +118,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         if (!currentVersionProbe.executed || this._disposed) {
             return;
         }
-        if (currentVersionProbe.value && currentVersionProbe.value.version !== notification.cli.version) {
+        if (!currentVersionProbe.value || currentVersionProbe.value.version !== notification.cli.version) {
             return;
         }
 
