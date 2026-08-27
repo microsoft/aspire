@@ -177,6 +177,40 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_RejectsFreshCacheAfterVsCodeSignOutWhenAnotherProbeWon()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var firstDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("Windows identity", _ =>
+                Task.FromResult(new InternalMicrosoftProbeResult(true, "windows.alias", "REDMOND")))]],
+            vsCodeMicrosoftAlias: "vscode.alias");
+
+        var firstResult = await firstDetector.IsInternalMicrosoftMachineAsync();
+        Assert.Equal("windows.alias", firstResult.Alias);
+
+        var probeRan = false;
+        var secondDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("current identity", _ =>
+            {
+                probeRan = true;
+                return Task.FromResult(InternalMicrosoftProbeResult.NotDetected);
+            })]],
+            vsCodeMicrosoftProviderAvailable: true);
+
+        var secondResult = await secondDetector.IsInternalMicrosoftMachineAsync();
+
+        Assert.True(probeRan);
+        Assert.False(secondResult.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, secondResult.CacheStatus);
+    }
+
+    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_RejectsFreshVsCodeCacheAfterSignOut()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

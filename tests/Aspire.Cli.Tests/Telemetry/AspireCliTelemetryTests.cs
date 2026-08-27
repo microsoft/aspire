@@ -506,6 +506,41 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public async Task Initialize_RecordsActualElapsedDurationWhenInternalMicrosoftDetectorTimesOut()
+    {
+        var timeout = TimeSpan.FromMilliseconds(25);
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            DetectionCallback = async cancellationToken =>
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    throw new UnreachableException();
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(20), CancellationToken.None);
+                    throw;
+                }
+            }
+        };
+        using var fixture = new TelemetryFixture(
+            internalMicrosoftDetector: internalMicrosoftDetector,
+            telemetryConfiguration: new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = true,
+                EmitInternalMicrosoftDiagnostics = true,
+                InternalMicrosoftDetectionTimeout = timeout
+            });
+        await fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+
+        var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
+        Assert.True((long?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs) > timeout.TotalMilliseconds);
+    }
+
+    [Fact]
     public void CompleteInternalMicrosoftDiagnosticsAsync_ReusesOneCompletionWait()
     {
         using var fixture = new TelemetryFixture();

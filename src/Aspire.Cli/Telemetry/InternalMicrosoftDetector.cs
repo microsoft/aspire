@@ -588,8 +588,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             // a VS Code-sourced result is now signed out. An unavailable provider is intentionally not
             // stale so standalone CLI invocations can still use a cache created through VS Code.
             if (vsCodeMicrosoftAccount.IsAvailable &&
-                ((normalizedVsCodeAlias is not null &&
-                  !string.Equals(entry.VsCodeAlias, normalizedVsCodeAlias, StringComparison.Ordinal)) ||
+                (!string.Equals(entry.VsCodeAlias, normalizedVsCodeAlias, StringComparison.Ordinal) ||
                  (isVsCodeCacheEntry && normalizedVsCodeAlias is null)))
             {
                 return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);

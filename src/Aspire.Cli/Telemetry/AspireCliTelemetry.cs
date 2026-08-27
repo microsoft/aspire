@@ -323,7 +323,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                             Domain: null,
                             Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
                             CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                            Duration: _telemetryConfiguration.InternalMicrosoftDetectionTimeout.GetValueOrDefault(),
+                            Duration: Stopwatch.GetElapsedTime(internalMicrosoftStartTimestamp),
                             ProbeDiagnostics: []);
                     }
                     catch (Exception ex)
