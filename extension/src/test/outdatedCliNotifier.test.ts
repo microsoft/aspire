@@ -118,6 +118,26 @@ suite('outdatedCliNotifier', () => {
         notifier.dispose();
     });
 
+    test('warns when stable 13.4.0 is behind stable 15.3.2', async () => {
+        const { notifier, versionProvider, surface } = createNotifier();
+        versionProvider.identity = {
+            cliPath: '/cli/aspire',
+            version: '13.4.0',
+        };
+        versionProvider.recommendation = {
+            status: 'available',
+            currentVersion: '13.4.0',
+            version: '15.3.2',
+        };
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(
+            surface.warnings[0].message,
+            'Aspire CLI 13.4.0 at /cli/aspire has a newer version available for its current channel: 15.3.2.');
+        notifier.dispose();
+    });
+
     test('uses five-minute version and six-hour update refresh intervals', async () => {
         let now = 0;
         const { notifier, versionProvider, surface } = createNotifier(() => now);

@@ -297,6 +297,9 @@ suite('configInfoProvider tests', () => {
 
     test('parseCliUpdateRecommendationOutput accepts stable and prerelease recommendations', () => {
         assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.4.0', '15.3.2')),
+            { status: 'available', currentVersion: '13.4.0', version: '15.3.2' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
             createDoctorVersionOutput('13.5.0', '13.6.0')),
             { status: 'available', currentVersion: '13.5.0', version: '13.6.0' });
         assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
