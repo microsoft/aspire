@@ -8,7 +8,9 @@
     "@inlineHamed"
   ],
   "description": "Filter value tags on the metrics page are now clickable — clicking a tag immediately applies or removes that filter. Clicking the overflow (+N) badge opens the filter popover directly. Tags are ordered numerically when all values parse as numbers, otherwise alphabetically.",
-  "docsPrs": [],
+  "docsPrs": [
+    1581
+  ],
   "docsRequired": false,
   "emoji": "🏷️",
   "firstMergedAt": "2026-06-21T03:00:08Z",

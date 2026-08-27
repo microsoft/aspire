@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "Resources that support terminal access can now be opened directly from the VS Code extension's resource tree context menu, running `aspire terminal attach` for the selected resource without leaving the IDE.",
-  "docsPrs": [],
+  "docsPrs": [
+    1580
+  ],
   "docsRequired": false,
   "emoji": "🖥️",
   "firstMergedAt": "2026-06-23T03:53:53Z",

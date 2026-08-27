@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Homepage CSS/UX tweak only, no product changelog entry",
+  "mergedAt": "2026-08-26T14:53:09Z",
+  "number": 1572,
+  "runDate": "2026-08-27T01:12:13Z",
+  "status": "excluded",
+  "title": "fix(home): align closing CTA button heights with hero CTAs"
+}

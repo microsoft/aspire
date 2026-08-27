@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Release-engineering automation change, not user-facing",
+  "mergedAt": "2026-08-26T15:14:57Z",
+  "number": 1567,
+  "runDate": "2026-08-27T01:12:13Z",
+  "status": "excluded",
+  "title": "Add release checks for short links and diagnostics"
+}
