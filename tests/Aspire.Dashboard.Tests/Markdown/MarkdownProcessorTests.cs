@@ -262,6 +262,29 @@ public class MarkdownProcessorTests
     }
 
     [Theory]
+    [InlineData("vscode://%0alocalhost:8080")]
+    [InlineData("http://%0alocalhost:8080")]
+    public void ToHtml_UrlThatCannotBeParsed_UrlRemoved(string url)
+    {
+        // Arrange
+        var processor = CreateMarkdownProcessor(safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes);
+
+        var markdown =
+            $"""
+            [test]({url})
+            """;
+
+        // Act
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        // Assert
+        Assert.Equal(
+            """
+            <p><a href="">test</a></p>
+            """, html.Trim(), ignoreLineEndingDifferences: true);
+    }
+
+    [Theory]
     [InlineData("http://contoso.com:8080", "http://contoso.com:8080")]
     [InlineData("https://contoso.com:8081", "https://contoso.com:8081")]
     [InlineData("mailto:test@test.com", "test@test.com")]
