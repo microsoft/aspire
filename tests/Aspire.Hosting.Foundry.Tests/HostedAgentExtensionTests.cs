@@ -423,7 +423,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            hostedAgent.Target,
             NullLogger.Instance,
             CancellationToken.None);
 
@@ -571,7 +570,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            agent.Resource,
             NullLogger.Instance,
             CancellationToken.None);
 
@@ -579,6 +577,31 @@ public class HostedAgentExtensionTests
         Assert.DoesNotContain("AGENT_NAME", envVars.Keys);
         Assert.DoesNotContain("FOUNDRY_MODE", envVars.Keys);
         Assert.Equal("my-value", envVars["MY_VAR"]);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_EvaluatesHostedAgentTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        IResource? evaluatedResource = null;
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment(context =>
+            {
+                evaluatedResource = context.Resource;
+                context.EnvironmentVariables["RESOURCE_NAME"] = context.Resource.Name;
+            });
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Same(hostedAgent.Target, evaluatedResource);
+        Assert.Equal(agent.Resource.Name, envVars["RESOURCE_NAME"]);
     }
 
     [Fact]
@@ -597,7 +620,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            agent.Resource,
             NullLogger.Instance,
             CancellationToken.None);
 
