@@ -272,12 +272,12 @@ jobs:
           echo "One or more dependent jobs failed."
           exit 1
 
-  # Track red-main: file/update one deduplicated issue per branch when a push to a
-  # protected branch (main, release/**) is red, and close it when a later push to
-  # the same branch is green. One job handles both — it runs on every push
-  # (if: always()) and the script opens or closes based on the aggregate CI result
-  # passed in CI_RED / CI_GREEN. Runs only on push; PR failures live in the PR's own
-  # checks and are owned by the author.
+  # Track red protected branches: file/update one deduplicated issue per branch when
+  # CI is red, and close it when a later push to the same branch is green. Main gets
+  # one automatic retry from auto-rerun-transient-ci-failures.yml, so its first failed
+  # attempt is not reported. The tracker is rerun as a dependent job; if attempt 2
+  # also fails, it files the issue. Release branches do not get that retry and remain
+  # reportable on attempt 1. PR failures live in the PR's own checks.
   #
   # CI_RED / CI_GREEN are derived from explicit needs.*.result checks rather than
   # failure()/success() because tests/stabilization_check are *skipped* on the
@@ -302,7 +302,9 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           REF: ${{ github.ref_name }}
-          CI_RED: ${{ contains(needs.*.result, 'failure') }}
+          CI_RED: >-
+            ${{ contains(needs.*.result, 'failure') &&
+                (github.ref != 'refs/heads/main' || github.run_attempt > 1) }}
           CI_GREEN: >-
             ${{ needs.prepare_for_ci.result == 'success' &&
                 needs.tests.result == 'success' &&

@@ -355,7 +355,7 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void CiFailureTrackerPushResultContractIsUnchanged()
+    public void CiFailureTrackerDefersMainFailureUntilRetryAttempt()
     {
         var tracker = Mapping(s_ciJobs, "ci_failure_tracker");
 
@@ -366,7 +366,9 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
 
         var scriptStep = Assert.Single(Steps(tracker), step => Scalar(step, "name") == "File or close the red-main issue");
         var environment = Mapping(scriptStep, "env");
-        Assert.Equal("${{ contains(needs.*.result, 'failure') }}", Scalar(environment, "CI_RED"));
+        Assert.Equal(
+            "${{ contains(needs.*.result, 'failure') && (github.ref != 'refs/heads/main' || github.run_attempt > 1) }}",
+            CollapseWhitespace(Scalar(environment, "CI_RED")));
         Assert.Equal(
             "${{ needs.prepare_for_ci.result == 'success' && needs.tests.result == 'success' && needs.stabilization_check.result == 'success' }}",
             CollapseWhitespace(Scalar(environment, "CI_GREEN")));

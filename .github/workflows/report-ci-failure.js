@@ -1,6 +1,7 @@
-// Red-main CI reporter, used by ci.yml. Files/updates a single deduplicated issue
-// when a push to a protected branch (main, release/**) fails CI, and closes that
-// issue again when a later push to the same branch is green.
+// Red-main CI reporter, used by ci.yml and by the rolling retry fallback.
+// Files/updates a single deduplicated issue when a push to a protected branch
+// (main, release/**) has a reportable CI failure, and closes that issue again when
+// a later push to the same branch is green.
 //
 // Self-closing by design: ci.yml runs on every push, so a green push is the most
 // timely signal that the branch is no longer red — there is no need to wait for an
@@ -142,7 +143,7 @@ async function resolveSuccess({ github, context, core }) {
 // Single entry point for ci.yml's tracker job, which runs on every push
 // (if: always()). The workflow computes the aggregate CI result from
 // needs.*.result and passes it in env:
-//   CI_RED   = 'true' when any dependency failed (the branch is red).
+//   CI_RED   = 'true' when a dependency failed and the retry policy is exhausted.
 //   CI_GREEN = 'true' when every dependency succeeded (the branch is green).
 // A run that is neither (a skipped no-relevant-changes push, or a cancelled run)
 // is a no-op: there is no CI signal, so an open issue is left untouched. CI_RED is
