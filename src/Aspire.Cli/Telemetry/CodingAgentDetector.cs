@@ -57,7 +57,10 @@ internal sealed class CodingAgentDetector(IConfiguration configuration) : ICodin
             if (rule.IsMatch(_configuration))
             {
                 agentNames ??= [];
-                agentNames.Add(rule.AgentName);
+                if (!agentNames.Contains(rule.AgentName, StringComparer.Ordinal))
+                {
+                    agentNames.Add(rule.AgentName);
+                }
             }
         }
 

@@ -526,6 +526,7 @@ public class AspireCliTelemetryTests
         { [("COPILOT_GITHUB_TOKEN", "token")], "copilot-cli" },
         { [("AI_AGENT", "github_copilot_vscode_agent")], "copilot-vscode" },
         { [("COPILOT_AGENT", "1")], "copilot-vscode" },
+        { [("AI_AGENT", "github_copilot_vscode_agent"), ("COPILOT_AGENT", "1")], "copilot-vscode" },
         { [("CODEX_CLI", "1")], "codex" },
         { [("CODEX_SANDBOX", "1")], "codex" },
         { [("CODEX_CI", "1")], "codex" },
