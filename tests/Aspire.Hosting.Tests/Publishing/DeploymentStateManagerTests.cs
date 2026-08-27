@@ -1152,6 +1152,34 @@ public class DeploymentStateManagerTests : IDisposable
                 .Data["SandboxId"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task LoadStateDoesNotCreateLegacyDirectoryWhenLegacyFileAbsent()
+    {
+        var canonicalSha = Guid.NewGuid().ToString("N");
+        var legacySha = Guid.NewGuid().ToString("N");
+        var stateManager = CreateFileDeploymentStateManager(canonicalSha, legacySha);
+
+        // Acquiring a section triggers the load path. When the legacy identity has no state file,
+        // the manager must not manufacture the shared legacy directory or its lock file.
+        await stateManager.AcquireSectionAsync("Azure");
+
+        var legacyDirectory = Path.Combine(_aspireHome.FullName, "deployments", legacySha);
+        Assert.False(Directory.Exists(legacyDirectory));
+    }
+
+    [Fact]
+    public void LoadEffectiveStateDoesNotCreateLegacyDirectoryWhenLegacyFileAbsent()
+    {
+        var canonicalPath = Path.Combine(_aspireHome.FullName, "deployments", Guid.NewGuid().ToString("N"), "production.json");
+        var legacyDirectory = Path.Combine(_aspireHome.FullName, "deployments", Guid.NewGuid().ToString("N"));
+        var legacyPath = Path.Combine(legacyDirectory, "production.json");
+
+        var effectiveState = FileDeploymentStateManager.LoadEffectiveState(canonicalPath, legacyPath);
+
+        Assert.Empty(effectiveState);
+        Assert.False(Directory.Exists(legacyDirectory));
+    }
+
     private FileDeploymentStateManager CreateFileDeploymentStateManager(string? sha = null, string? legacySha = null)
     {
         // Use a unique SHA per test by default to avoid test interference,
