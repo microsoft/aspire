@@ -356,8 +356,12 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         var stageStartTimestamp = Stopwatch.GetTimestamp();
         var stageDeadlineTimestamp = stageStartTimestamp + (long)(_probeStageTimeout.TotalSeconds * Stopwatch.Frequency);
-        using var stageTimeout = new CancellationTokenSource(_probeStageTimeout);
+        var stageTimeoutTimestamp = long.MaxValue;
+        using var stageTimeout = new CancellationTokenSource();
         using var stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stageTimeout.Token);
+        using var stageTimeoutRegistration = stageTimeout.Token.Register(
+            () => Interlocked.Exchange(ref stageTimeoutTimestamp, Stopwatch.GetTimestamp()));
+        stageTimeout.CancelAfter(_probeStageTimeout);
         var probeTasks = probes.Select(probe => RunProbeAsync(probe, stageCancellation.Token)).ToList();
         var timedOut = false;
 
@@ -375,6 +379,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             await DrainCancelledProbesAsync(probeTasks).ConfigureAwait(false);
         }
 
+        // Timers can fire slightly before their nominal deadline on some platforms. Once the
+        // timeout token is signaled, results completed during cancellation draining are late even
+        // when their timestamp precedes the originally calculated deadline.
+        stageDeadlineTimestamp = Math.Min(stageDeadlineTimestamp, Volatile.Read(ref stageTimeoutTimestamp));
         var completedResults = new List<InternalMicrosoftProbeRunResult>();
         var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
         foreach (var task in probeTasks)
