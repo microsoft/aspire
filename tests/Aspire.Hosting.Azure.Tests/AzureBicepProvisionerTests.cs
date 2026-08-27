@@ -1878,6 +1878,9 @@ public class AzureBicepProvisionerTests
             return Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
         }
 
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
+
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
