@@ -1923,7 +1923,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.5-0.8B">Qwen3.5-0.8B</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Qwen3508b = new() { Name = "qwen3.5-0.8b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel Qwen3508b = new() { Name = "qwen3.5-0.8b", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Qwen3.5-2B to enable local inference. This model uses RTN quantization.</para>
@@ -1968,7 +1968,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.5-2B">Qwen3.5-2B</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Qwen352b = new() { Name = "qwen3.5-2b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel Qwen352b = new() { Name = "qwen3.5-2b", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized text-only version of Qwen3.5-2B to enable local inference with CUDA. This model uses RTN quantization.</para>
@@ -2058,7 +2058,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.5-4B">Qwen3.5-4B</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Qwen354b = new() { Name = "qwen3.5-4b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel Qwen354b = new() { Name = "qwen3.5-4b", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Qwen3.5-9B to enable local inference. This model uses RTN quantization.</para>
@@ -2103,7 +2103,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.5-9B">Qwen3.5-9B</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Qwen359b = new() { Name = "qwen3.5-9b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel Qwen359b = new() { Name = "qwen3.5-9b", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of SmolLM3-3B to enable local inference. This model uses GPTQ quantization.</para>

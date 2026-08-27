@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -12,6 +13,7 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/19708")]
     public async Task SelfUpdateToStaging_RelaunchedCliUsesStagingForImplicitProjectUpdate()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
