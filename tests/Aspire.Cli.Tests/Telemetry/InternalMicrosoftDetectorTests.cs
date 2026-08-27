@@ -745,7 +745,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("test.alias", result.Alias);
         Assert.Equal("REDMOND", result.Domain);
-        Assert.Null(result.DiagnosticOutcome);
+        Assert.Null(result.Failure);
     }
 
     [Fact]
@@ -759,7 +759,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.WrongTenant, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.TenantMismatch, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSsoIssuer, result.Failure?.Stage);
     }
 
     [Fact]
@@ -773,7 +774,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.IncompleteRegistration, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.RegistrationIncomplete, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSsoRegistration, result.Failure?.Stage);
     }
 
     [Fact]
@@ -787,7 +789,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.MalformedOutput, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonShape, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSsoKeyEndpoint, result.Failure?.Stage);
     }
 
     [Fact]
@@ -801,7 +804,22 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.NoCorporateIdentity, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.IdentityMismatch, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSsoIdentity, result.Failure?.Stage);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("[\"unexpected\"]")]
+    public void EvaluateMacPlatformSso_RejectsMalformedKerberosStatus(string replacement)
+    {
+        var output = ReplaceMacPlatformSsoKerberosStatus(replacement);
+
+        var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonShape, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSsoIdentity, result.Failure?.Stage);
     }
 
     [Fact]
@@ -821,7 +839,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = InternalMicrosoftDetector.EvaluateMacPlatformSso(output);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.MalformedOutput, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonParse, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSso, result.Failure?.Stage);
     }
 
     [Fact]
@@ -859,6 +878,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
 
         Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Failure);
         Assert.Equal(appSsoPath, processFactory.LastFileName);
         Assert.Equal(["platform", "-s"], Assert.IsType<string[]>(processFactory.LastArguments));
     }
@@ -876,7 +896,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.CommandMissing, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.CommandMissing, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSso, result.Failure?.Stage);
     }
 
     [Fact]
@@ -900,7 +921,8 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = await detector.CheckMacPlatformSsoAsync(CancellationToken.None);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftProbeOutcome.TimedOut, result.DiagnosticOutcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessTimeout, result.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessStart, result.Failure?.Stage);
     }
 
     [Fact]
@@ -923,43 +945,60 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         using var process = new Process { StartInfo = startInfo };
         Assert.True(process.Start(), "Failed to start /usr/bin/app-sso.");
 
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         // Read both streams concurrently to avoid deadlock if a future app-sso version writes enough
         // diagnostic data to fill either pipe.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await process.WaitForExitAsync(timeout.Token);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(timeout.Token);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
 
         Assert.Equal(0, process.ExitCode);
         var result = InternalMicrosoftDetector.EvaluateMacPlatformSso($"{stdout}{Environment.NewLine}{stderr}");
         outputHelper.WriteLine(
-            $"Detected={result.IsInternalMicrosoft}; HasAlias={result.Alias is not null}; HasDomain={result.Domain is not null}; Outcome={result.DiagnosticOutcome ?? "<none>"}");
+            $"Detected={result.IsInternalMicrosoft}; HasAlias={result.Alias is not null}; HasDomain={result.Domain is not null}; FailureCode={result.Failure?.Code ?? "<none>"}; FailureStage={result.Failure?.Stage ?? "<none>"}");
 
         Assert.True(
             result.IsInternalMicrosoft,
-            $"Platform SSO did not detect a managed Microsoft identity. Outcome: {result.DiagnosticOutcome ?? InternalMicrosoftProbeOutcome.NotDetected}.");
+            $"Platform SSO did not detect a managed Microsoft identity. Failure: {result.Failure?.Code ?? InternalMicrosoftProbeOutcome.NotDetected} at {result.Failure?.Stage ?? "<none>"}.");
         Assert.NotNull(result.Alias);
         Assert.NotNull(result.Domain);
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_ReportsProbeSpecificOutcome()
+    public async Task IsInternalMicrosoftMachineAsync_ReportsPlatformSsoFailure()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
             [[new InternalMicrosoftProbe("Mac Platform SSO", _ => Task.FromResult(
-                InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.WrongTenant)))]]);
+                InternalMicrosoftProbeResult.Failed(new(
+                    InternalMicrosoftProbeFailureCode.TenantMismatch,
+                    InternalMicrosoftProbeFailureStage.PlatformSsoIssuer))))]]);
 
         var result = await detector.IsInternalMicrosoftMachineAsync();
 
         Assert.False(result.IsInternalMicrosoft);
         var diagnostic = Assert.Single(result.ProbeDiagnostics);
         Assert.Equal("Mac Platform SSO", diagnostic.Source);
-        Assert.Equal(InternalMicrosoftProbeOutcome.WrongTenant, diagnostic.Outcome);
+        Assert.Equal(InternalMicrosoftProbeOutcome.Failed, diagnostic.Outcome);
+        Assert.Equal(InternalMicrosoftProbeFailureCode.TenantMismatch, diagnostic.Failure?.Code);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.PlatformSsoIssuer, diagnostic.Failure?.Stage);
     }
 
     [Fact]
@@ -1619,6 +1658,22 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
     private static string CreateGitHubToken(int index)
         => $"gho_{index:D2}{new string('a', 24)}";
+
+    private static string ReplaceMacPlatformSsoKerberosStatus(string replacement)
+    {
+        const string propertyPrefix = "\"kerberosStatus\" : ";
+        const string followingProperty = ",\n  \"state\"";
+        var propertyIndex = MacPlatformSsoOutputFixture.IndexOf(propertyPrefix, StringComparison.Ordinal);
+        Assert.True(propertyIndex >= 0);
+        var valueStart = propertyIndex + propertyPrefix.Length;
+        var valueEnd = MacPlatformSsoOutputFixture.IndexOf(followingProperty, valueStart, StringComparison.Ordinal);
+        Assert.True(valueEnd >= 0);
+
+        return string.Concat(
+            MacPlatformSsoOutputFixture.AsSpan(0, valueStart),
+            replacement,
+            MacPlatformSsoOutputFixture.AsSpan(valueEnd));
+    }
 
     private const string MicrosoftTenantIdForTests = "72f988bf-86f1-41af-91ab-2d7cd011db47";
     private const string MacPlatformSsoOutputFixture = """
