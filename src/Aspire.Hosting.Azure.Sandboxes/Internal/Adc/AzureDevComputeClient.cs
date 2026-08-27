@@ -59,7 +59,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
 
     public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken)
     {
-        return SendAsync<AzureDevComputeDiskImage>(
+        return SendCreateAsync<AzureDevComputeDiskImage>(
             scope,
             HttpMethod.Put,
             $"{GetSandboxGroupPath(scope)}/diskimages",
@@ -100,7 +100,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
 
     public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken)
     {
-        return SendAsync<AzureDevComputeSandbox>(
+        return SendCreateAsync<AzureDevComputeSandbox>(
             scope,
             HttpMethod.Put,
             $"{GetSandboxGroupPath(scope)}/sandboxes",
@@ -217,14 +217,101 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         return result ?? throw new InvalidOperationException($"ADC request '{method} {path}' returned an empty response.");
     }
 
-    private async Task<HttpResponseMessage> SendWithRetryAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
+    private async Task<T> SendCreateAsync<T>(
+        AzureDevComputeResourceScope scope,
+        HttpMethod method,
+        string path,
+        object content,
+        CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await SendWithRetryAsync(
+                scope,
+                method,
+                path,
+                content,
+                cancellationToken,
+                isCreateOperation: true).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: true);
+        }
+        catch (OperationCanceledException ex)
+        {
+            // SendCoreAsync wraps cancellation from HttpClient.SendAsync as ambiguous. A cancellation
+            // that reaches here happened before dispatch, such as while acquiring the access token.
+            throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: false);
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    await EnsureSuccessAsync(response, method, path, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // A collection create can be accepted even when a proxy or service returns a 5xx response.
+                    // Reconcile by deployment labels rather than retrying the non-idempotent request.
+                    throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: (int)response.StatusCode >= 500);
+                }
+                catch (OperationCanceledException ex)
+                {
+                    throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: (int)response.StatusCode >= 500);
+                }
+            }
+
+            try
+            {
+                var result = await response.Content.ReadFromJsonAsync<T>(s_jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
+                if (result is null ||
+                    (result is AzureDevComputeDiskImage diskImage && string.IsNullOrWhiteSpace(diskImage.Id)) ||
+                    (result is AzureDevComputeDiskImage { Status: null }) ||
+                    (result is AzureDevComputeDiskImage { Status.State: var state } && string.IsNullOrWhiteSpace(state)) ||
+                    (result is AzureDevComputeSandbox sandbox && string.IsNullOrWhiteSpace(sandbox.Id)))
+                {
+                    throw new InvalidOperationException($"ADC request '{method} {path}' returned an incomplete response.");
+                }
+
+                return result;
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or HttpRequestException or IOException or NotSupportedException)
+            {
+                // The service may have committed the create before returning an empty or malformed payload.
+                throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: true);
+            }
+            catch (OperationCanceledException ex)
+            {
+                throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: true);
+            }
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendWithRetryAsync(
+        AzureDevComputeResourceScope scope,
+        HttpMethod method,
+        string path,
+        object? content,
+        CancellationToken cancellationToken,
+        bool isCreateOperation = false)
     {
         for (var attempt = 0; ; attempt++)
         {
             HttpResponseMessage response;
             try
             {
-                response = await SendCoreAsync(scope, method, path, content, cancellationToken).ConfigureAwait(false);
+                response = await SendCoreAsync(
+                    scope,
+                    method,
+                    path,
+                    content,
+                    cancellationToken,
+                    isCreateOperation).ConfigureAwait(false);
             }
             catch (HttpRequestException ex) when (attempt < MaxRetryCount && CanRetryAfterNetworkFailure(method))
             {
@@ -254,7 +341,14 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
                     path,
                     attempt + 1,
                     MaxForbiddenRetryCount);
-                await Task.Delay(forbiddenRetryDelay, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await Task.Delay(forbiddenRetryDelay, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException ex) when (isCreateOperation)
+                {
+                    throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: false);
+                }
                 continue;
             }
 
@@ -266,7 +360,14 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             var delay = GetRetryDelay(response, retryDelay ?? s_defaultRetryDelay, DateTimeOffset.UtcNow);
             response.Dispose();
             logger.LogInformation("ADC request {Method} {Path} returned a transient HTTP response. Retrying after {Delay}.", method.Method, path, delay);
-            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException ex) when (isCreateOperation)
+            {
+                throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: false);
+            }
         }
     }
 
@@ -308,7 +409,13 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         return delay > maximum ? maximum : delay;
     }
 
-    private async Task<HttpResponseMessage> SendCoreAsync(AzureDevComputeResourceScope scope, HttpMethod method, string path, object? content, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendCoreAsync(
+        AzureDevComputeResourceScope scope,
+        HttpMethod method,
+        string path,
+        object? content,
+        CancellationToken cancellationToken,
+        bool isCreateOperation)
     {
         var uri = CreateRequestUri(scope, path);
         using var request = new HttpRequestMessage(method, uri);
@@ -322,7 +429,14 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         }
 
         logger.LogInformation("Sending ADC request: {Method} {Path}", method.Method, uri.PathAndQuery);
-        return await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (isCreateOperation)
+        {
+            throw new AzureDevComputeCreateException(ex, responseMayHaveBeenLost: true);
+        }
     }
 
     private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
@@ -388,6 +502,14 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
     }
 
     private static string Escape(string value) => Uri.EscapeDataString(value);
+}
+
+internal sealed class AzureDevComputeCreateException(Exception originalException, bool responseMayHaveBeenLost)
+    : InvalidOperationException(originalException.Message, originalException)
+{
+    public Exception OriginalException { get; } = originalException;
+
+    public bool ResponseMayHaveBeenLost { get; } = responseMayHaveBeenLost;
 }
 
 internal sealed record AzureDevComputeResourceScope(string SubscriptionId, string ResourceGroupName, string SandboxGroupName, string Region);
