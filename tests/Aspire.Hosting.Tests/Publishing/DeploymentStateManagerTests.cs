@@ -1039,6 +1039,37 @@ public class DeploymentStateManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task MalformedCanonicalStateDoesNotHideAuthoritativeMigrationState()
+    {
+        var currentSha = Guid.NewGuid().ToString("N");
+        var currentStateManager = CreateFileDeploymentStateManager(currentSha);
+        var currentSection = await currentStateManager.AcquireSectionAsync("Azure");
+        currentSection.Data["SubscriptionId"] = "current-sub";
+        await currentStateManager.SaveSectionAsync(currentSection);
+        await File.WriteAllTextAsync(currentStateManager.StateFilePath!, "{ malformed");
+
+        var asyncEffectiveState = await FileDeploymentStateManager.LoadEffectiveStateAsync(
+            currentStateManager.StateFilePath!,
+            legacyStatePath: null);
+        var syncEffectiveState = FileDeploymentStateManager.LoadEffectiveState(
+            currentStateManager.StateFilePath!,
+            legacyStatePath: null);
+        var restartedStateManager = CreateFileDeploymentStateManager(currentSha);
+        var restartedSection = await restartedStateManager.AcquireSectionAsync("Azure");
+
+        Assert.Equal("current-sub", asyncEffectiveState["Azure"]?["SubscriptionId"]?.GetValue<string>());
+        Assert.Equal("current-sub", syncEffectiveState["Azure"]?["SubscriptionId"]?.GetValue<string>());
+        Assert.Equal("current-sub", restartedSection.Data["SubscriptionId"]?.GetValue<string>());
+
+        restartedSection.Data["Location"] = "westus";
+        await restartedStateManager.SaveSectionAsync(restartedSection);
+        var savedSection = await CreateFileDeploymentStateManager(currentSha).AcquireSectionAsync("Azure");
+
+        Assert.Equal("current-sub", savedSection.Data["SubscriptionId"]?.GetValue<string>());
+        Assert.Equal("westus", savedSection.Data["Location"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task CanceledClearPreservesCurrentState()
     {
         var stateManager = CreateFileDeploymentStateManager();
