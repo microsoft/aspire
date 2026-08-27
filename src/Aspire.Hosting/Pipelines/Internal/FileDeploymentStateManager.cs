@@ -116,7 +116,12 @@ internal sealed partial class FileDeploymentStateManager(
         }
 
         JsonObject legacyState = [];
-        if (!string.IsNullOrEmpty(legacyStatePath))
+        // Only lock and read legacy state when the file actually exists. Acquiring the lock would
+        // eagerly create the shared legacy directory and lock file for identities that never had
+        // legacy state (e.g. brand-new source AppHosts), and would serialize sibling AppHosts that
+        // share the legacy identity on that lock. Legacy state is immutable in this model, so an
+        // existence check before locking is safe.
+        if (!string.IsNullOrEmpty(legacyStatePath) && File.Exists(legacyStatePath))
         {
             try
             {
@@ -163,7 +168,9 @@ internal sealed partial class FileDeploymentStateManager(
         }
 
         JsonObject legacyState = [];
-        if (!string.IsNullOrEmpty(legacyStatePath))
+        // See LoadEffectiveStateAsync: skip locking when no legacy file exists so we do not create
+        // phantom legacy directories/locks or re-couple sibling AppHosts on a shared lock.
+        if (!string.IsNullOrEmpty(legacyStatePath) && File.Exists(legacyStatePath))
         {
             try
             {
@@ -233,9 +240,13 @@ internal sealed partial class FileDeploymentStateManager(
             }
         }
 
+        // Skip locking when no legacy file exists so we do not create a phantom legacy directory and
+        // lock for identities that never had legacy state (e.g. brand-new source AppHosts), and so
+        // sibling AppHosts that share the legacy identity do not serialize on that shared lock.
         if (!_legacyFallbackDisabled &&
             legacyStatePath is not null &&
-            !string.Equals(currentStatePath, legacyStatePath, StringComparison.Ordinal))
+            !string.Equals(currentStatePath, legacyStatePath, StringComparison.Ordinal) &&
+            File.Exists(legacyStatePath))
         {
             try
             {
