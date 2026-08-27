@@ -30,41 +30,21 @@ internal enum ResourceWaitOutcome
 /// </summary>
 internal sealed record ResourceWaitResult(
     ResourceWaitOutcome Outcome,
-    string ResourceName,
     string? State,
-    string? Health,
     bool ResourceNotFound,
-    string? ErrorMessage,
-    TimeSpan Elapsed);
+    string? ErrorMessage);
 
 /// <summary>
 /// Applies the shared Aspire backchannel wait semantics for a resource.
 /// </summary>
-internal sealed class ResourceWaitService(TimeProvider timeProvider)
+internal sealed class ResourceWaitService
 {
+#pragma warning disable CA1822 // Keep the instance shape used by existing call sites.
     public async Task<ResourceWaitResult> WaitAsync(
         IAppHostAuxiliaryBackchannel connection,
         string resourceName,
         ResourceWaitTarget target,
         int timeoutSeconds,
-        CancellationToken cancellationToken)
-    {
-        var startTimestamp = timeProvider.GetTimestamp();
-        return await WaitCoreAsync(
-            connection,
-            resourceName,
-            target,
-            timeoutSeconds,
-            startTimestamp,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<ResourceWaitResult> WaitCoreAsync(
-        IAppHostAuxiliaryBackchannel connection,
-        string resourceName,
-        ResourceWaitTarget target,
-        int timeoutSeconds,
-        long startTimestamp,
         CancellationToken cancellationToken)
     {
         var response = await connection.WaitForResourceAsync(
@@ -86,13 +66,11 @@ internal sealed class ResourceWaitService(TimeProvider timeProvider)
 
         return new ResourceWaitResult(
             outcome,
-            resourceName,
             response.State,
-            response.HealthStatus,
             response.ResourceNotFound,
-            response.ErrorMessage,
-            timeProvider.GetElapsedTime(startTimestamp));
+            response.ErrorMessage);
     }
+#pragma warning restore CA1822
 
     internal static bool IsTerminalFailureState(string? state)
     {

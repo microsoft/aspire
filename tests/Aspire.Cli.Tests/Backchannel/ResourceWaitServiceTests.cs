@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Tests.TestServices;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -15,7 +14,6 @@ public class ResourceWaitServiceTests
     [InlineData("down")]
     public async Task WaitAsync_MapsTargetsAndSuccessfulResponse(string expectedStatus)
     {
-        var timeProvider = new FakeTimeProvider();
         var target = expectedStatus switch
         {
             "healthy" => ResourceWaitTarget.Healthy,
@@ -33,16 +31,14 @@ public class ResourceWaitServiceTests
                 actualResourceName = resourceName;
                 actualStatus = status;
                 actualTimeoutSeconds = timeoutSeconds;
-                timeProvider.Advance(TimeSpan.FromMilliseconds(1250));
                 return Task.FromResult(new WaitForResourceResponse
                 {
                     Success = true,
-                    State = "Running",
-                    HealthStatus = "Healthy"
+                    State = "Running"
                 });
             }
         };
-        var service = new ResourceWaitService(timeProvider);
+        var service = new ResourceWaitService();
 
         var result = await service.WaitAsync(
             backchannel,
@@ -55,18 +51,14 @@ public class ResourceWaitServiceTests
         Assert.Equal(expectedStatus, actualStatus);
         Assert.Equal(30, actualTimeoutSeconds);
         Assert.Equal(ResourceWaitOutcome.Success, result.Outcome);
-        Assert.Equal("api", result.ResourceName);
         Assert.Equal("Running", result.State);
-        Assert.Equal("Healthy", result.Health);
         Assert.False(result.ResourceNotFound);
         Assert.Null(result.ErrorMessage);
-        Assert.Equal(TimeSpan.FromMilliseconds(1250), result.Elapsed);
     }
 
     [Fact]
     public async Task WaitAsync_TreatsFailedToStartAsFailureForDownTarget()
     {
-        var timeProvider = new FakeTimeProvider();
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
             WaitForResourceHandler = (_, _, _, _) => Task.FromResult(new WaitForResourceResponse
@@ -75,7 +67,7 @@ public class ResourceWaitServiceTests
                 State = "FailedToStart"
             })
         };
-        var service = new ResourceWaitService(timeProvider);
+        var service = new ResourceWaitService();
 
         var result = await service.WaitAsync(
             backchannel,
@@ -97,20 +89,18 @@ public class ResourceWaitServiceTests
         bool timedOut,
         string expectedOutcomeName)
     {
-        var timeProvider = new FakeTimeProvider();
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
             WaitForResourceHandler = (_, _, _, _) => Task.FromResult(new WaitForResourceResponse
             {
                 Success = false,
                 State = "Waiting",
-                HealthStatus = "Unhealthy",
                 ResourceNotFound = resourceNotFound,
                 TimedOut = timedOut,
                 ErrorMessage = "Wait failed."
             })
         };
-        var service = new ResourceWaitService(timeProvider);
+        var service = new ResourceWaitService();
 
         var result = await service.WaitAsync(
             backchannel,
@@ -120,9 +110,7 @@ public class ResourceWaitServiceTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(Enum.Parse<ResourceWaitOutcome>(expectedOutcomeName), result.Outcome);
-        Assert.Equal("api", result.ResourceName);
         Assert.Equal("Waiting", result.State);
-        Assert.Equal("Unhealthy", result.Health);
         Assert.Equal(resourceNotFound, result.ResourceNotFound);
         Assert.Equal("Wait failed.", result.ErrorMessage);
     }
