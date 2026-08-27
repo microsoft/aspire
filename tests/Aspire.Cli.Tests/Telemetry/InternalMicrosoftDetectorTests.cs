@@ -1079,6 +1079,32 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.False(File.Exists(cacheFilePath));
     }
 
+    [Theory]
+    [InlineData("/user", InternalMicrosoftProbeFailureStage.GitHubUser)]
+    [InlineData("/user/memberships/orgs/microsoft", InternalMicrosoftProbeFailureStage.GitHubMembership)]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsShapeFailureForNonObjectResponse(string malformedPath, string expectedStage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                var path when path == malformedPath => JsonResponse(HttpStatusCode.OK, "[]"),
+                "/user" => JsonResponse(HttpStatusCode.OK, """{"login":"testuser"}"""),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenResultForTestingAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.JsonShape, result.Failure?.Code);
+        Assert.Equal(expectedStage, result.Failure?.Stage);
+        Assert.Null(result.Failure?.ExceptionType);
+    }
+
     [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsTrueForActivePrivateMembership()
     {

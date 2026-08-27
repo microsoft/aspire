@@ -1443,7 +1443,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private static string? TryGetString(JsonElement element, string propertyName)
     {
-        return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+        return element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
     }
