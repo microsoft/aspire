@@ -83,6 +83,7 @@ describe('FluentPromise', () => {
         const chained = promise.withValue('one').withValue('two');
         const namePromise = chained.name();
 
+        expect('withValue' in promise).toBe(true);
         expect((promise as unknown as { catch?: unknown }).catch).toBeUndefined();
         expect(namePromise).toBeInstanceOf(Promise);
         await expect(namePromise).resolves.toBe('one,two');

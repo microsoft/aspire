@@ -580,6 +580,10 @@ export class FluentPromise<T> implements PromiseLike<T> {
         }
 
         return new Proxy(this, {
+            has: (target, property) =>
+                Reflect.has(target, property) ||
+                (typeof property === 'string' &&
+                    Object.prototype.hasOwnProperty.call(target.transitions, property)),
             get: (target, property, receiver) => {
                 const isForwardedMember = typeof property === 'string' &&
                     Object.prototype.hasOwnProperty.call(target.transitions, property);
