@@ -80,10 +80,14 @@ is declared beside it.
 - template distribution through NuGet; and
 - template selection tied to the Aspire CLI's package channel and version.
 
-NuGet remains useful for Visual Studio and `dotnet new`, but it is a high-friction
-publishing mechanism for an ecosystem template repository. Git is the natural
-collaboration and forking boundary. Separating acquisition from project creation also
-lets the CLI establish provenance and cache policy before template content is used.
+Reusing `template.json` is a format choice, not a requirement that template authors
+adopt the .NET toolchain. A TypeScript, Python, or .NET developer should be able to
+turn runnable Aspire code into a template and share or fork it through Git without
+creating a NuGet package or invoking `dotnet new`. NuGet remains useful as a
+compatibility distribution channel for Visual Studio and direct `dotnet new` users,
+while Git becomes the ecosystem collaboration boundary. Separating acquisition from
+project creation also lets the Aspire CLI establish provenance and cache policy
+before template content is used.
 
 ## Goals
 
