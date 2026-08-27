@@ -9,6 +9,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Data.Common;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Hashing;
@@ -295,13 +296,14 @@ internal static class AzureSandboxContainerDeployment
 
             var environmentVariables = new Dictionary<string, string>(imageMetadata.EnvironmentVariables, StringComparer.Ordinal);
             var resolvedEnvironmentVariables = await ResolveEnvironmentVariablesAsync(context, targetResource).ConfigureAwait(false);
-            foreach (var (key, value) in resolvedEnvironmentVariables)
+            foreach (var (key, value) in resolvedEnvironmentVariables.Values)
             {
                 environmentVariables[key] = value;
             }
             AddManagedIdentityEnvironmentVariables(targetResource, environmentVariables);
             var identitySettings = ResolveIdentitySettings(targetResource);
-            var egressPolicy = CreateEgressPolicy(environmentVariables.Values, imageMetadata.Command);
+            var egressPolicy = CreateEgressPolicy(
+                resolvedEnvironmentVariables.EgressHosts.Concat(imageMetadata.EgressHosts));
 
             var createTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (createTask.ConfigureAwait(false))
@@ -370,7 +372,7 @@ internal static class AzureSandboxContainerDeployment
             var securityConfigurationChanged = HasSecurityRelevantEndpointChange(
                 previousStateSection,
                 endpointSecurityFingerprint,
-                resolvedEnvironmentVariables.Count > 0,
+                resolvedEnvironmentVariables.Values.Count > 0,
                 hasModeledCommandConfiguration);
             var pendingSecurityCleanup = previousStateSection.Data["PendingSecurityCleanup"]?.GetValue<bool>() == true;
             securityConfigurationChanged |= pendingSecurityCleanup;
@@ -390,7 +392,7 @@ internal static class AzureSandboxContainerDeployment
             stateSection.Data["DeployId"] = deployId;
             stateSection.Data["Ports"] = portStates;
             stateSection.Data["EndpointSecurityFingerprint"] = endpointSecurityFingerprint;
-            stateSection.Data["HasRuntimeEnvironmentConfiguration"] = resolvedEnvironmentVariables.Count > 0;
+            stateSection.Data["HasRuntimeEnvironmentConfiguration"] = resolvedEnvironmentVariables.Values.Count > 0;
             stateSection.Data["HasRuntimeCommandConfiguration"] = hasModeledCommandConfiguration;
             stateSection.Data["PendingSecurityCleanup"] = securityConfigurationChanged;
             await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
@@ -803,16 +805,11 @@ internal static class AzureSandboxContainerDeployment
         };
     }
 
-    internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(IEnumerable<string> environmentValues)
-        => CreateEgressPolicy(environmentValues, commandValues: null);
-
-    internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(
-        IEnumerable<string> environmentValues,
-        IEnumerable<string>? commandValues)
+    internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(IEnumerable<string> allowedHosts)
     {
-        var allowedHosts = environmentValues
-            .Concat(commandValues ?? [])
-            .SelectMany(GetOutboundHttpHosts)
+        var normalizedHosts = allowedHosts
+            .Where(static host => Uri.CheckHostName(host) is not UriHostNameType.Unknown)
+            .Where(IsOutboundHost)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -823,10 +820,10 @@ internal static class AzureSandboxContainerDeployment
             TrafficInspection = "Full",
             HostRules =
             [
-                .. allowedHosts.Select(static host => new AzureDevComputeSandboxEgressHostRule
+                .. normalizedHosts.Select(static host => new AzureDevComputeSandboxEgressHostRule
                 {
                     Action = "Allow",
-                    Pattern = host!
+                    Pattern = host
                 })
             ]
         };
@@ -1039,21 +1036,27 @@ internal static class AzureSandboxContainerDeployment
 
     private static async Task<ContainerImageMetadata> ResolveContainerImageMetadataAsync(PipelineStepContext context, IResource resource, string imageReference)
     {
-        var (modeledEntrypoint, modeledCommand) = await ResolveModeledCommandAsync(context, resource).ConfigureAwait(false);
+        var modeledCommand = await ResolveModeledCommandAsync(context, resource).ConfigureAwait(false);
         if (resource is not ContainerResource || !resource.RequiresImageBuildAndPush())
         {
-            return new ContainerImageMetadata(modeledEntrypoint ?? [], modeledCommand ?? [], new Dictionary<string, string>(StringComparer.Ordinal), WorkingDirectory: null);
+            return new ContainerImageMetadata(
+                modeledCommand.Entrypoint ?? [],
+                modeledCommand.Command ?? [],
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                WorkingDirectory: null,
+                modeledCommand.EgressHosts);
         }
 
         var metadata = await InspectLocalContainerImageAsync(context, imageReference).ConfigureAwait(false);
         return metadata with
         {
-            Entrypoint = modeledEntrypoint ?? metadata.Entrypoint,
-            Command = modeledCommand ?? metadata.Command
+            Entrypoint = modeledCommand.Entrypoint ?? metadata.Entrypoint,
+            Command = modeledCommand.Command ?? metadata.Command,
+            EgressHosts = modeledCommand.EgressHosts
         };
     }
 
-    internal static async Task<(IReadOnlyList<string>? Entrypoint, IReadOnlyList<string>? Command)> ResolveModeledCommandAsync(PipelineStepContext context, IResource resource)
+    internal static async Task<ResolvedModeledCommand> ResolveModeledCommandAsync(PipelineStepContext context, IResource resource)
     {
         var args = new List<object>();
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var callbacks))
@@ -1071,9 +1074,12 @@ internal static class AzureSandboxContainerDeployment
         }
 
         var resolvedArgs = new List<string>();
+        var egressHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var arg in args)
         {
-            resolvedArgs.Add(await ResolveValueAsync(context, resource, arg).ConfigureAwait(false));
+            var resolvedArg = await ResolveValueWithEgressHostsAsync(context, resource, arg).ConfigureAwait(false);
+            resolvedArgs.Add(resolvedArg.Value);
+            egressHosts.UnionWith(resolvedArg.EgressHosts);
         }
 
         var entrypoint = resource is ContainerResource container && !string.IsNullOrWhiteSpace(container.Entrypoint)
@@ -1081,7 +1087,7 @@ internal static class AzureSandboxContainerDeployment
             : null;
         var command = resolvedArgs.Count == 0 ? null : resolvedArgs;
 
-        return (entrypoint, command);
+        return new ResolvedModeledCommand(entrypoint, command, egressHosts);
     }
 
     internal static bool HasModeledCommandConfiguration(IResource resource) =>
@@ -1113,7 +1119,8 @@ internal static class AzureSandboxContainerDeployment
             config.Entrypoint,
             config.Command,
             new Dictionary<string, string>(StringComparer.Ordinal),
-            config.WorkingDirectory);
+            config.WorkingDirectory,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
     private static Task<IContainerRuntime> ResolveContainerRuntimeAsync(PipelineStepContext context)
@@ -1121,7 +1128,7 @@ internal static class AzureSandboxContainerDeployment
         return context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken);
     }
 
-    private static async Task<IReadOnlyDictionary<string, string>> ResolveEnvironmentVariablesAsync(PipelineStepContext context, IResource resource)
+    internal static async Task<ResolvedEnvironmentVariables> ResolveEnvironmentVariablesAsync(PipelineStepContext context, IResource resource)
     {
         var environmentVariables = new Dictionary<string, object>();
         if (resource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var callbacks))
@@ -1138,15 +1145,21 @@ internal static class AzureSandboxContainerDeployment
         }
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var egressHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, value) in environmentVariables)
         {
-            result[key] = await ResolveValueAsync(context, resource, value).ConfigureAwait(false);
+            var resolvedValue = await ResolveValueWithEgressHostsAsync(context, resource, value).ConfigureAwait(false);
+            result[key] = resolvedValue.Value;
+            egressHosts.UnionWith(resolvedValue.EgressHosts);
         }
 
-        return result;
+        return new ResolvedEnvironmentVariables(result, egressHosts);
     }
 
     internal static async Task<string> ResolveValueAsync(PipelineStepContext context, IResource resource, object? value)
+        => (await ResolveValueWithEgressHostsAsync(context, resource, value).ConfigureAwait(false)).Value;
+
+    internal static async Task<ResolvedValue> ResolveValueWithEgressHostsAsync(PipelineStepContext context, IResource resource, object? value)
     {
         var currentComputeEnvironment = resource.GetComputeEnvironment() ?? resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment;
 
@@ -1155,32 +1168,71 @@ internal static class AzureSandboxContainerDeployment
             switch (value)
             {
                 case null:
-                    return string.Empty;
+                    return new ResolvedValue(string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 case string s:
-                    return s;
+                    return new ResolvedValue(s, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 case IResourceWithConnectionString connectionStringResource:
                     value = connectionStringResource.ConnectionStringExpression;
                     continue;
                 case EndpointReference endpointReference
                     when TryResolveEndpointReferenceValue(endpointReference, currentComputeEnvironment, out var endpointExpression):
-                    value = endpointExpression;
-                    continue;
+                    return await ResolveEndpointValueAsync(
+                        context,
+                        resource,
+                        endpointExpression,
+                        EndpointProperty.Url).ConfigureAwait(false);
                 case EndpointReferenceExpression endpointReferenceExpression
                     when TryResolveEndpointReferenceValue(endpointReferenceExpression, currentComputeEnvironment, out var endpointExpression):
-                    value = endpointExpression;
-                    continue;
+                    return await ResolveEndpointValueAsync(
+                        context,
+                        resource,
+                        endpointExpression,
+                        endpointReferenceExpression.Property).ConfigureAwait(false);
                 case ReferenceExpression referenceExpression:
                     return await ResolveReferenceExpressionAsync(context, resource, referenceExpression).ConfigureAwait(false);
                 case IValueProvider valueProvider:
-                    return await valueProvider
+                    var providedValue = await valueProvider
                         .GetValueAsync(new ValueProviderContext { ExecutionContext = context.ExecutionContext, Caller = resource }, context.CancellationToken)
                         .ConfigureAwait(false) ?? string.Empty;
+                    return new ResolvedValue(providedValue, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 default:
-                    return value.ToString() ?? string.Empty;
+                    return new ResolvedValue(value.ToString() ?? string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
             }
         }
 
-        static async Task<string> ResolveReferenceExpressionAsync(
+        static async Task<ResolvedValue> ResolveEndpointValueAsync(
+            PipelineStepContext context,
+            IResource resource,
+            object endpointExpression,
+            EndpointProperty property)
+        {
+            var resolved = await ResolveValueWithEgressHostsAsync(context, resource, endpointExpression).ConfigureAwait(false);
+            var egressHosts = new HashSet<string>(resolved.EgressHosts, StringComparer.OrdinalIgnoreCase);
+            switch (property)
+            {
+                case EndpointProperty.Url:
+                    egressHosts.UnionWith(GetOutboundHttpHosts(resolved.Value));
+                    break;
+                case EndpointProperty.Host or EndpointProperty.IPV4Host:
+                    if (Uri.CheckHostName(resolved.Value) is not UriHostNameType.Unknown &&
+                        IsOutboundHost(resolved.Value))
+                    {
+                        egressHosts.Add(resolved.Value);
+                    }
+                    break;
+                case EndpointProperty.HostAndPort:
+                    if (Uri.TryCreate($"{Uri.UriSchemeHttp}://{resolved.Value}", UriKind.Absolute, out var endpointUri) &&
+                        IsOutboundHost(endpointUri.IdnHost))
+                    {
+                        egressHosts.Add(endpointUri.IdnHost);
+                    }
+                    break;
+            }
+
+            return new ResolvedValue(resolved.Value, egressHosts);
+        }
+
+        static async Task<ResolvedValue> ResolveReferenceExpressionAsync(
             PipelineStepContext context,
             IResource resource,
             ReferenceExpression expression)
@@ -1192,20 +1244,24 @@ internal static class AzureSandboxContainerDeployment
                     ? expression.WhenTrue
                     : expression.WhenFalse;
                 return branch is null
-                    ? string.Empty
+                    ? new ResolvedValue(string.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase))
                     : await ResolveReferenceExpressionAsync(context, resource, branch).ConfigureAwait(false);
             }
 
             var arguments = new object?[expression.ValueProviders.Count];
+            var egressHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < expression.ValueProviders.Count; i++)
             {
-                var resolved = await ResolveValueAsync(context, resource, expression.ValueProviders[i]).ConfigureAwait(false);
+                var resolved = await ResolveValueWithEgressHostsAsync(context, resource, expression.ValueProviders[i]).ConfigureAwait(false);
+                egressHosts.UnionWith(resolved.EgressHosts);
                 arguments[i] = expression.StringFormats[i] is { } format
-                    ? FormatReferenceValue(resolved, format)
-                    : resolved;
+                    ? FormatReferenceValue(resolved.Value, format)
+                    : resolved.Value;
             }
 
-            return string.Format(CultureInfo.InvariantCulture, expression.Format, arguments);
+            return new ResolvedValue(
+                string.Format(CultureInfo.InvariantCulture, expression.Format, arguments),
+                egressHosts);
         }
 
         static string FormatReferenceValue(string value, string format)
@@ -1695,7 +1751,14 @@ internal static class AzureSandboxContainerDeployment
         }
         catch (Exception createException)
         {
-            var responseMayHaveBeenLost = createException is HttpRequestException or OperationCanceledException;
+            var responseMayHaveBeenLost = createException switch
+            {
+                AzureDevComputeCreateException adcCreateException => adcCreateException.ResponseMayHaveBeenLost,
+                _ => false
+            };
+            var exceptionToThrow = createException is AzureDevComputeCreateException adcException
+                ? adcException.OriginalException
+                : createException;
             var cleanupTimeout = responseMayHaveBeenLost && responseLossReconciliationTimeout is { } configuredTimeout
                 ? configuredTimeout
                 : TimeSpan.FromMinutes(2);
@@ -1721,7 +1784,8 @@ internal static class AzureSandboxContainerDeployment
                     deployId);
             }
 
-            throw;
+            ExceptionDispatchInfo.Capture(exceptionToThrow).Throw();
+            throw new UnreachableException();
         }
     }
 
@@ -2338,7 +2402,30 @@ internal static class AzureSandboxContainerDeployment
         bool? Anonymous,
         IReadOnlyList<AzureConnectorGatewayResource> AuthorizedConnectorGateways);
 
-    internal sealed record ContainerImageMetadata(IReadOnlyList<string> Entrypoint, IReadOnlyList<string> Command, IReadOnlyDictionary<string, string> EnvironmentVariables, string? WorkingDirectory);
+    internal sealed record ContainerImageMetadata(
+        IReadOnlyList<string> Entrypoint,
+        IReadOnlyList<string> Command,
+        IReadOnlyDictionary<string, string> EnvironmentVariables,
+        string? WorkingDirectory,
+        IReadOnlySet<string> EgressHosts);
+
+    internal sealed record ResolvedModeledCommand(
+        IReadOnlyList<string>? Entrypoint,
+        IReadOnlyList<string>? Command,
+        IReadOnlySet<string> EgressHosts)
+    {
+        public void Deconstruct(out IReadOnlyList<string>? entrypoint, out IReadOnlyList<string>? command)
+        {
+            entrypoint = Entrypoint;
+            command = Command;
+        }
+    }
+
+    internal sealed record ResolvedEnvironmentVariables(
+        IReadOnlyDictionary<string, string> Values,
+        IReadOnlySet<string> EgressHosts);
+
+    internal sealed record ResolvedValue(string Value, IReadOnlySet<string> EgressHosts);
 
     private sealed record AzureDeploymentState(string SubscriptionId, string ResourceGroup, string Location);
 

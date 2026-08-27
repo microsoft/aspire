@@ -1105,7 +1105,7 @@ public class AzureSandboxesTests
             }
         };
         var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(
-            ["https://api.example.com/path"]);
+            ["api.example.com"]);
         var fingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             imageReference,
             endpoints,
@@ -1198,7 +1198,7 @@ public class AzureSandboxesTests
             imageReference,
             endpoints,
             identitySettings,
-            AzureSandboxContainerDeployment.CreateEgressPolicy(["https://other.example.com/path"]));
+            AzureSandboxContainerDeployment.CreateEgressPolicy(["other.example.com"]));
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedEgressFingerprint, hasRuntimeEnvironmentConfiguration: false));
     }
 
@@ -1596,7 +1596,7 @@ public class AzureSandboxesTests
         });
         var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => client.CreateDiskImageAsync(
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
             new AzureDevComputeCreateDiskImageRequest
             {
@@ -1606,6 +1606,8 @@ public class AzureSandboxesTests
             CancellationToken.None));
 
         Assert.Equal(1, attempts);
+        Assert.True(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<HttpRequestException>(exception.OriginalException);
     }
 
     [Fact]
@@ -1619,7 +1621,7 @@ public class AzureSandboxesTests
         });
         var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => client.CreateDiskImageAsync(
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
             new AzureDevComputeCreateDiskImageRequest
             {
@@ -1629,6 +1631,175 @@ public class AzureSandboxesTests
             CancellationToken.None));
 
         Assert.Equal(1, attempts);
+        Assert.True(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<InvalidOperationException>(exception.OriginalException);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientMarksMalformedCreateResponsesAsAmbiguous()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse("{")));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.True(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<JsonException>(exception.OriginalException);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientMarksEmptyCreateResponsesAsAmbiguous()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse("null")));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.True(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<InvalidOperationException>(exception.OriginalException);
+    }
+
+    [Theory]
+    [InlineData("""{ "id": "", "labels": {}, "status": { "state": "Ready" } }""")]
+    [InlineData("""{ "id": "disk-1", "labels": {}, "status": null }""")]
+    [InlineData("""{ "id": "disk-1", "labels": {}, "status": { "state": "" } }""")]
+    public async Task AzureDevComputeClientMarksIncompleteCreateResponsesAsAmbiguous(string responseBody)
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(responseBody)));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.True(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<InvalidOperationException>(exception.OriginalException);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientMarksTruncatedCreateResponseStreamsAsAmbiguous()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+        {
+            Content = new StreamContent(new FailingReadStream())
+        }));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.True(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<HttpRequestException>(exception.OriginalException);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientMarksRejectedCreateResponsesAsDefinite()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.False(exception.ResponseMayHaveBeenLost);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.FromMinutes(1));
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(10));
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            cancellationTokenSource.Token));
+
+        Assert.False(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<TaskCanceledException>(exception.OriginalException);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientMarksCancellationBeforeCreateDispatchAsDefinite()
+    {
+        var handler = new RecordingHandler(_ => throw new InvalidOperationException("The HTTP request should not be sent."));
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new CanceledTokenCredential(),
+            NullLogger.Instance,
+            TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Name = "disk-image",
+                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+            },
+            CancellationToken.None));
+
+        Assert.False(exception.ResponseMayHaveBeenLost);
+        Assert.IsType<OperationCanceledException>(exception.OriginalException);
     }
 
     [Fact]
@@ -1997,14 +2168,13 @@ public class AzureSandboxesTests
 
         var egress = AzureSandboxContainerDeployment.CreateEgressPolicy(
         [
-            "https://api.example.test/v1",
-            "Endpoint=https://account.blob.core.windows.net;ContainerName=uploads",
-            "not-a-url",
-            "https://API.example.test/v2",
-            "http://*:8080",
-            "http://+:8080",
-            "http://0.0.0.0:8080",
-            "http://[::]:8080"
+            "api.example.test",
+            "account.blob.core.windows.net",
+            "API.example.test",
+            "*",
+            "+",
+            "0.0.0.0",
+            "::"
         ]);
         Assert.Equal("Deny", egress.DefaultAction);
         Assert.Equal("Full", egress.TrafficInspection);
@@ -2577,7 +2747,9 @@ public class AzureSandboxesTests
             .WithHttpEndpoint(name: "http", targetPort: 8080)
             .WithExternalHttpEndpoints()
             .PublishAsAzureSandbox(sandboxGroup);
+        var endpointExpression = ReferenceExpression.Create($"{api.GetEndpoint("http")}/v1");
         var web = builder.AddContainer("web", "image")
+            .WithEnvironment("API_URL", endpointExpression)
             .PublishAsAzureSandbox(sandboxGroup);
 
         using var app = builder.Build();
@@ -2611,11 +2783,13 @@ public class AzureSandboxesTests
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
         };
-        var expression = ReferenceExpression.Create($"{api.GetEndpoint("http")}/v1");
+        var value = await AzureSandboxContainerDeployment.ResolveValueWithEgressHostsAsync(stepContext, web.Resource, endpointExpression);
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(stepContext, web.Resource);
 
-        var value = await AzureSandboxContainerDeployment.ResolveValueAsync(stepContext, web.Resource, expression);
-
-        Assert.Equal("https://api.example.test/v1", value);
+        Assert.Equal("https://api.example.test/v1", value.Value);
+        Assert.Equal(["api.example.test"], value.EgressHosts);
+        Assert.Equal("https://api.example.test/v1", environment.Values["API_URL"]);
+        Assert.Equal(["api.example.test"], environment.EgressHosts);
     }
 
     [Fact]
@@ -2785,7 +2959,8 @@ public class AzureSandboxesTests
             .WithExternalHttpEndpoints()
             .PublishAsAzureSandbox(sandboxGroup);
         var worker = builder.AddContainer("worker", "image")
-            .WithArgs(api.GetEndpoint("http"))
+            .WithArgs(ReferenceExpression.Create(
+                $"https://{api.GetEndpoint("http").Property(EndpointProperty.HostAndPort)}/v1"))
             .PublishAsAzureSandbox(sandboxGroup);
 
         using var app = builder.Build();
@@ -2799,7 +2974,7 @@ public class AzureSandboxesTests
         state.Data["Ports"] = new JsonArray(new JsonObject
         {
             ["Name"] = "http",
-            ["Url"] = "https://api.example.test"
+            ["Url"] = "https://api.example.test:8443"
         });
         await stateManager.SaveSectionAsync(state, CancellationToken.None);
         var pipelineContext = new PipelineContext(
@@ -2815,13 +2990,47 @@ public class AzureSandboxesTests
             ReportingStep = reportingStep
         };
 
-        var (_, command) = await AzureSandboxContainerDeployment.ResolveModeledCommandAsync(stepContext, worker.Resource);
-        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(
-            environmentValues: [],
-            commandValues: Assert.IsAssignableFrom<IEnumerable<string>>(command));
+        var command = await AzureSandboxContainerDeployment.ResolveModeledCommandAsync(stepContext, worker.Resource);
+        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(command.EgressHosts);
 
         var hostRule = Assert.Single(egressPolicy.HostRules);
         Assert.Equal("api.example.test", hostRule.Pattern);
+    }
+
+    [Fact]
+    public async Task SandboxLiteralEnvironmentValuesDoNotExpandEgressPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var secret = builder.AddParameter("secret-url", "https://attacker.example", secret: true);
+        var worker = builder.AddContainer("worker", "image")
+            .WithEnvironment("LITERAL_URL", "https://literal.example")
+            .WithEnvironment("SECRET", secret)
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var environment = await AzureSandboxContainerDeployment.ResolveEnvironmentVariablesAsync(
+            stepContext,
+            worker.Resource);
+        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(environment.EgressHosts);
+
+        Assert.Equal("https://literal.example", environment.Values["LITERAL_URL"]);
+        Assert.Equal("https://attacker.example", environment.Values["SECRET"]);
+        Assert.Empty(egressPolicy.HostRules);
     }
 
     [Fact]
@@ -3020,7 +3229,9 @@ public class AzureSandboxesTests
         public Task<string> CreateResourceThenLoseResponseAsync()
         {
             _resourceCreated = true;
-            throw new HttpRequestException("create response lost");
+            throw new AzureDevComputeCreateException(
+                new HttpRequestException("create response lost"),
+                responseMayHaveBeenLost: true);
         }
 
         public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(
@@ -3175,6 +3386,43 @@ public class AzureSandboxesTests
             Scopes = [.. requestContext.Scopes];
             RequestCount++;
             return ValueTask.FromResult(new AccessToken("test-token", DateTimeOffset.UtcNow.AddHours(1)));
+        }
+    }
+
+    private sealed class CanceledTokenCredential : TokenCredential
+    {
+        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException();
+        }
+
+        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException();
+        }
+    }
+
+    private sealed class FailingReadStream : MemoryStream
+    {
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            throw new IOException("response stream truncated");
+        }
+
+        public override Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromException<int>(new IOException("response stream truncated"));
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromException<int>(new IOException("response stream truncated"));
         }
     }
 
