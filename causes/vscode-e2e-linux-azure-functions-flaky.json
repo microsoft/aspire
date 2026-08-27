@@ -46,6 +46,13 @@
       "job": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
       "pr_number": 19709,
       "observed_at": "2026-08-27T07:10:53Z"
+    },
+    {
+      "run_id": 33099215991,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33099215991",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "pr_number": 19710,
+      "observed_at": "2026-08-27T18:31:19Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19639"

@@ -1,0 +1,29 @@
+{
+  "run_id": 33099215991,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33099215991",
+  "analyzed_at": "2026-08-27T18:31:19Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19710,
+    "title": "Stabilize AppHost lifecycle and workspace terminal E2E tests",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-harden-apphost-lifecycle-timeout",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19710"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 98615826376,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33099215991/job/98615826376",
+      "classification": "flaky-test",
+      "reason": "Job fails with a generic 'Process completed with exit code 1' and no retrievable logs or TRX test failures. This matches the known recurring flaky pattern 'vscode-e2e-linux-azure-functions-flaky' (6 prior occurrences, most recently the day before this run). The PR's changed test files target 'appHostLifecycleTools' and 'workspaceTargetProof' e2e suites, not the 'azure-functions' shard, so the failure is unrelated to the specific test content of this PR.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["vscode-e2e-linux-azure-functions-flaky"]
+}
