@@ -10,6 +10,7 @@
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <!-- This package has no previously shipped baseline package. -->
     <EnablePackageValidation>false</EnablePackageValidation>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
   </PropertyGroup>
 
   <ItemGroup>
