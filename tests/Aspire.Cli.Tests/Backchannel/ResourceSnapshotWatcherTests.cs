@@ -188,11 +188,56 @@ public class ResourceSnapshotWatcherTests
     }
 
     [Fact]
+    public async Task ResourceSnapshotWatcher_PrefersGetSnapshotWithoutVersionCapability()
+    {
+        var replayObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = async cancellationToken =>
+            {
+                await replayObserved.Task.WaitAsync(cancellationToken);
+                return
+                [
+                    new ResourceSnapshot
+                    {
+                        Name = "api",
+                        DisplayName = "api",
+                        ResourceType = "Project",
+                        State = "Running",
+                        Version = 0
+                    }
+                ];
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) =>
+                YieldSnapshotAndWait(
+                    Task.CompletedTask,
+                    new ResourceSnapshot
+                    {
+                        Name = "api",
+                        DisplayName = "api",
+                        ResourceType = "Project",
+                        State = "Starting",
+                        Version = 0
+                    },
+                    replayObserved,
+                    cancellationToken)
+        };
+        using var watcher = new ResourceSnapshotWatcher(connection, NullLogger<ResourceSnapshotWatcher>.Instance);
+
+        await watcher.WaitForInitialLoadAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(watcher.CaptureAllResources().Resources);
+        Assert.Equal("Running", snapshot.State);
+        Assert.Equal(0, snapshot.Version);
+    }
+
+    [Fact]
     public async Task ResourceSnapshotWatcher_PrefersNewerGetSnapshotOverReplayedWatchSnapshot()
     {
         var replayObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsResourceSnapshotVersionsV1 = true,
             GetResourceSnapshotsHandler = async cancellationToken =>
             {
                 await replayObserved.Task.WaitAsync(cancellationToken);
@@ -238,6 +283,7 @@ public class ResourceSnapshotWatcherTests
         var watchObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsResourceSnapshotVersionsV1 = true,
             GetResourceSnapshotsHandler = async cancellationToken =>
             {
                 getCaptured.TrySetResult();
@@ -287,6 +333,7 @@ public class ResourceSnapshotWatcherTests
         var logger = new FakeLogger<ResourceSnapshotWatcher>();
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsResourceSnapshotVersionsV1 = true,
             GetResourceSnapshotsHandler = _ => Task.FromResult(
                 new List<ResourceSnapshot>
                 {

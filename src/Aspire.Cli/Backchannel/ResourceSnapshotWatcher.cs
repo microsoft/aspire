@@ -71,7 +71,8 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
         {
             // Start the watch before fetching the initial snapshot. The AppHost subscribes before replaying
             // its current snapshots, so the watch establishes a replay point even though the two JSON-RPC
-            // calls are not ordered. Version-aware reconciliation then retains the newest observed snapshot.
+            // calls are not ordered. Version-aware connections retain the newest observed snapshot; for older
+            // connections, the GET snapshot replaces the replay to preserve the original GET-first behavior.
             using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var cancellationArbitrationLock = new object();
             var cleanupCancellationStarted = false;
@@ -157,11 +158,10 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
             {
                 foreach (var snapshot in snapshots)
                 {
-                    if (!_resources.TryGetValue(snapshot.Name, out var currentSnapshot) ||
+                    if (!_connection.SupportsResourceSnapshotVersionsV1 ||
+                        !_resources.TryGetValue(snapshot.Name, out var currentSnapshot) ||
                         snapshot.Version > currentSnapshot.Version)
                     {
-                        // Version 0 is the compatibility value from older AppHosts. Equal or unknown
-                        // versions retain the watch value, while a newer GET replaces a stale replay.
                         _resources[snapshot.Name] = snapshot;
                     }
                 }
@@ -194,7 +194,8 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
             long? retainedVersion = null;
             lock (_resourcesLock)
             {
-                if (_resources.TryGetValue(snapshot.Name, out var currentSnapshot) &&
+                if (_connection.SupportsResourceSnapshotVersionsV1 &&
+                    _resources.TryGetValue(snapshot.Name, out var currentSnapshot) &&
                     snapshot.Version > 0 &&
                     currentSnapshot.Version > 0 &&
                     snapshot.Version < currentSnapshot.Version)
