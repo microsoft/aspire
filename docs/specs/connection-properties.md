@@ -33,19 +33,19 @@ Portable suffixes must be derived with `EnvironmentVariableNameEncoder.EncodeCon
 
 ### Client resolution and precedence
 
-Updated Aspire client integrations check the logical and portable keys within each configuration provider, from highest to lowest precedence. A higher-precedence portable key must win over a lower-precedence logical key. Do not use:
+Updated Aspire client integrations resolve the logical key through the composed configuration first, then fall back to the portable key:
 
 ```csharp
 configuration.GetConnectionString(logicalName)
     ?? configuration.GetConnectionString(portableName);
 ```
 
-That pattern searches all providers for the logical key before considering the portable key and can invert provider precedence. Direct `IConfiguration` consumers that need both forms should enumerate `IConfigurationRoot.Providers` in reverse order and check the logical key before the portable key within each provider. The first provider containing either key is authoritative even when its value is `null`, which preserves the configuration system's override semantics.
+Aspire writes the logical and portable values to the same configuration provider, so interleaving provider precedence between the aliases is unnecessary. Direct `IConfiguration` consumers that need both forms should use the same logical-then-portable fallback.
 
 ### Migration and compatibility
 
 1. **Compatibility release:** Capable targets receive both aliases. Strict targets receive the portable alias, and updated integrations resolve either alias.
-2. **Adoption period:** Integration authors consume connection-reference metadata, and direct consumers adopt precedence-preserving resolution. Applications using older integrations on strict targets should update their clients or use explicit portable `connectionName` values.
+2. **Adoption period:** Integration authors consume connection-reference metadata, and direct consumers adopt logical-then-portable fallback resolution. Applications using older integrations on strict targets should update their clients or use explicit portable `connectionName` values.
 3. **Future major release:** Legacy physical aliases may be considered for removal only after direct consumers have a public shared resolver and every workload type has an explicit migration path. A package major version alone is not sufficient reason to remove them.
 
 ## Property Catalog
