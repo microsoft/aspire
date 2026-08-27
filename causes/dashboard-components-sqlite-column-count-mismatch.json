@@ -1,0 +1,17 @@
+{
+  "id": "dashboard-components-sqlite-column-count-mismatch",
+  "type": "flaky-test",
+  "title": "Flaky: MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared fails with SQLite 'expected 0 columns' error on Windows",
+  "test_name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+  "error_pattern": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'. at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+  "occurrences": [
+    {
+      "run_id": 33086828076,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33086828076",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19730,
+      "observed_at": "2026-08-27T15:49:53Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19742"
+}

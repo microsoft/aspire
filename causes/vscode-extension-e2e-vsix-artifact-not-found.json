@@ -1,0 +1,16 @@
+{
+  "id": "vscode-extension-e2e-vsix-artifact-not-found",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E tests fail to download aspire-extension VSIX artifact after upstream packaging job failed",
+  "error_pattern": "Unable to download artifact(s): Artifact not found for name: aspire-extension. Please ensure that your artifact is not expired and the artifact was uploaded using a compatible version of toolkit/upload-artifact. Cascading failure from the upstream 'Run VS Code extension unit tests (Windows)' job which failed to produce the VSIX.",
+  "occurrences": [
+    {
+      "run_id": 33086828076,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33086828076",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19730,
+      "observed_at": "2026-08-27T15:49:53Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19744"
+}

@@ -1,0 +1,126 @@
+{
+  "run_id": 33086828076,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33086828076",
+  "analyzed_at": "2026-08-27T15:49:53Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 19730,
+    "title": "Fix duplicate coding agent telemetry labels",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-investigate-cli-agent-telemetry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19730"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows)",
+      "id": 98569392456,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33086828076/job/98569392456",
+      "classification": "transient-infra",
+      "reason": "VSIX packaging failed to produce extension/out/aspire-extension.vsix; PR only touches Aspire.Cli telemetry code, unrelated to the VS Code extension build. Job logs unavailable to confirm root cause but scope is clearly unrelated to PR.",
+      "failed_steps": ["Install dependencies", "Package VSIX", "Assert E2E VSIX contains bridge", "Package production VSIX", "Assert production VSIX excludes bridge"]
+    },
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "id": 98569430745,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33086828076/job/98569430745",
+      "classification": "transient-infra",
+      "reason": "AzureSqlPrincipalReconciliationTests fixture failed due to Docker port 1433 already in use on the shared runner (address already in use), unrelated to PR changes in Aspire.Cli telemetry.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "id": 98569431196,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33086828076/job/98569431196",
+      "classification": "flaky-test",
+      "reason": "MetricsTests fails with a SQLite column-count error unrelated to PR changes (which only touch Aspire.Cli telemetry code).",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests (all shards, Linux and Windows)",
+      "id": 98573043834,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33086828076/job/98573043834",
+      "classification": "transient-infra",
+      "reason": "All 34 E2E shards failed to download the 'aspire-extension' VSIX artifact because the upstream packaging job failed to produce it; cascading failure unrelated to PR changes.",
+      "failed_steps": ["Download VSIX"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+      "job": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "error": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'.",
+      "stack_trace": "at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)\n   at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()\n   at Aspire.Dashboard.ServiceClient.TracingSqliteConnection.TracingDbCommand.ExecuteDbDataReader(CommandBehavior behavior) in TracingSqliteConnection.cs:line 296\n   at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+      "classification": "flaky",
+      "reason": "Test namespace/area (Dashboard.Components metrics/SQLite storage) is not touched by the PR, which only modifies Aspire.Cli telemetry files. The SQLite error looks like an internal state/query issue not tied to this PR's changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationCreatesThePrincipalWithTheIdentityObjectIdAsItsSid",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint frosty_lehmann (...): failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+      "stack_trace": "at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(...) in DockerClient.cs:line 494\n   at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Docker port conflict (port 1433 already in use) on a shared CI runner is an environment/infrastructure condition, not caused by PR changes to Aspire.Cli telemetry code."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationHandlesPrincipalNamesRequiringEscaping",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port conflict as sibling test in the same fixture; environmental, not PR-related."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationIsANoOpWhenTheScriptRunsAgain",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port conflict as sibling test in the same fixture; environmental, not PR-related."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationReplacesThePrincipalWhenTheIdentityObjectIdChanges",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port conflict as sibling test in the same fixture; environmental, not PR-related."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationLeavesPrincipalsItDidNotCreateIntact",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port conflict as sibling test in the same fixture; environmental, not PR-related."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationRollsBackWhenTheUserCannotBeRecreated",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port conflict as sibling test in the same fixture; environmental, not PR-related."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests.ReconciliationFailsWithoutDamageWhenThePrincipalOwnsASchema",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (ubuntu-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync ---- Docker.DotNet.DockerApiException : failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use",
+      "stack_trace": "at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in SqlServerContainerFixture.cs:line 28",
+      "classification": "flaky",
+      "reason": "Same Docker port conflict as sibling test in the same fixture; environmental, not PR-related."
+    }
+  ],
+  "causes": [
+    "vscode-extension-vsix-package-build-failure",
+    "vscode-extension-e2e-vsix-artifact-not-found",
+    "sqlservercontainerfixture-docker-port-conflict",
+    "dashboard-components-sqlite-column-count-mismatch"
+  ]
+}

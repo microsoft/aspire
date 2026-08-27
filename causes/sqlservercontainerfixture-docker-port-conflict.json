@@ -1,0 +1,17 @@
+{
+  "id": "sqlservercontainerfixture-docker-port-conflict",
+  "type": "infra-failure",
+  "title": "SqlServerContainerFixture InitializeAsync fails with Docker port 1433 already in use on shared CI runner",
+  "test_name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests",
+  "error_pattern": "Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint frosty_lehmann ...: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"} at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync()",
+  "occurrences": [
+    {
+      "run_id": 33086828076,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33086828076",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19730,
+      "observed_at": "2026-08-27T15:49:53Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19743"
+}

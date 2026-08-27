@@ -1,0 +1,16 @@
+{
+  "id": "vscode-extension-vsix-package-build-failure",
+  "type": "infra-failure",
+  "title": "VS Code extension VSIX packaging fails on Windows unit test job, cascading to all E2E test artifact downloads",
+  "error_pattern": "No files were found with the provided path: extension/out/aspire-extension.vsix. No artifacts will be uploaded. Failed steps: Install dependencies, Package VSIX, Assert E2E VSIX contains bridge, Package production VSIX, Assert production VSIX excludes bridge. Job logs unavailable ('Failed to fetch logs for job'). PR only modifies src/Aspire.Cli/Telemetry/CodingAgentDetector.cs and its test, unrelated to VS Code extension build.",
+  "occurrences": [
+    {
+      "run_id": 33086828076,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33086828076",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 19730,
+      "observed_at": "2026-08-27T15:49:53Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/19745"
+}
