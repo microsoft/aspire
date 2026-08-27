@@ -2164,7 +2164,7 @@ public class AzureSandboxesTests
         Assert.Equal(
             "aspire-owner=owner,aspire-resource=frontend-sandbox-container,aspire-deploy=deploy",
             client.LabelSelector);
-        Assert.False(client.CleanupCancellationRequested);
+        Assert.False(client.CleanupStartedWithCancellationRequested);
         return client;
     }
 
@@ -2256,7 +2256,7 @@ public class AzureSandboxesTests
         public string? LabelSelector { get; private set; }
         public bool DeleteSandboxCalled { get; private set; }
         public bool DeleteDiskImageCalled { get; private set; }
-        public bool CleanupCancellationRequested { get; private set; }
+        public bool CleanupStartedWithCancellationRequested { get; private set; }
 
         public Task<string> CreateResourceThenLoseResponseAsync()
         {
@@ -2270,7 +2270,11 @@ public class AzureSandboxesTests
             CancellationToken cancellationToken)
         {
             LabelSelector = labels;
-            CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
+            if (_listAttempts == 0)
+            {
+                CleanupStartedWithCancellationRequested = cancellationToken.IsCancellationRequested;
+            }
+
             _listAttempts++;
             return Task.FromResult(
                 _resourceCreated &&
@@ -2294,7 +2298,6 @@ public class AzureSandboxesTests
             CancellationToken cancellationToken)
         {
             Assert.Equal(LabelSelector, labels);
-            CleanupCancellationRequested |= cancellationToken.IsCancellationRequested;
             return Task.FromResult(
                 _resourceCreated &&
                 _listAttempts > emptyPollsBeforeVisible &&
