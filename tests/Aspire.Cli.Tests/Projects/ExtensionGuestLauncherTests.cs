@@ -170,6 +170,7 @@ public class ExtensionGuestLauncherTests
         public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => throw new NotImplementedException();
         public void DisplayError(string errorMessage, bool allowMarkup = false) => throw new NotImplementedException();
+        public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
         public void DisplaySuccess(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) => throw new NotImplementedException();

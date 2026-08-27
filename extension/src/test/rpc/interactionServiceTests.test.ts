@@ -12,7 +12,7 @@ import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpc
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
 import { dashboardDefaultChangedNotificationKey } from '../../utils/dashboardNotificationState';
 import { AspireExtensionContext } from '../../AspireExtensionContext';
-import { debugSessionStopTimedOut } from '../../loc/strings';
+import { debugSessionStopTimedOut, resourceCommandOpenCliLog } from '../../loc/strings';
 import { appHostSelectionOriginConfigKey } from '../../debugger/AspireDebugConfigurationMetadata';
 import { AspireDebugConfigurationProvider } from '../../debugger/AspireDebugConfigurationProvider';
 import type { AspireExtendedDebugConfiguration } from '../../dcp/types';
@@ -390,6 +390,27 @@ suite('InteractionService endpoints', () => {
 		testInfo.interactionService.displayError('Test error message');
 		assert.ok(showErrorMessageSpy.calledWith('Test error message'));
 		showErrorMessageSpy.restore();
+	});
+
+	test('displayError endpoint opens an associated CLI log from its action', async () => {
+		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
+		const logFilePath = path.join(os.tmpdir(), 'aspire.cli.log');
+
+		try {
+			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(resourceCommandOpenCliLog as any);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+
+			testInfo.interactionService.displayError('Test error message', logFilePath);
+			await new Promise<void>(resolve => setImmediate(resolve));
+
+			assert.strictEqual(showErrorMessageStub.callCount, 1);
+			assert.deepStrictEqual(showErrorMessageStub.firstCall.args, ['Test error message', resourceCommandOpenCliLog]);
+			assert.ok(executeCommandStub.calledOnceWith('aspire-vscode.viewAppHostLogFile', logFilePath));
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test('displayMessage endpoint', async () => {

@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -48,6 +50,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
+    public List<(string ErrorMessage, string LogFilePath)> DisplayedErrorsWithLogFiles { get; } = [];
     public List<string> ValidationFailures { get; } = [];
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
@@ -246,6 +249,21 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedErrors.Add(errorMessage);
         }
+    }
+
+    public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false)
+    {
+        lock (_displayLock)
+        {
+            DisplayedErrorsWithLogFiles.Add((errorMessage, logFilePath));
+        }
+
+        DisplayError(errorMessage, allowMarkup);
+        DisplayMessage(
+            KnownEmojis.PageFacingUp,
+            string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(this, logFilePath)),
+            allowMarkup: true,
+            consoleOverride: ConsoleOutput.Error);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)

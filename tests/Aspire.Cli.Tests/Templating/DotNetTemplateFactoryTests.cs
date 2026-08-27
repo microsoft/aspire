@@ -402,6 +402,7 @@ public class DotNetTemplateFactoryTests
 
         public void DisplaySuccess(string message, bool allowMarkup = false) { }
         public void DisplayError(string message, bool allowMarkup = false) { }
+        public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false) { }
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
         public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null) { }

@@ -1239,6 +1239,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
     public void DisplayError(string errorMessage, bool allowMarkup = false) => DisplayedErrors.Add(errorMessage);
+    public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false) => DisplayedErrors.Add(errorMessage);
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
     public void DisplaySuccess(string message, bool allowMarkup = false) { }
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }

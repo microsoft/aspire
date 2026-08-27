@@ -25,6 +25,9 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? DisplayErrorAsyncCalled { get; set; }
     public Func<string, Task>? DisplayErrorAsyncCallback { get; set; }
 
+    public TaskCompletionSource? DisplayErrorWithLogFileAsyncCalled { get; set; }
+    public Func<string, string, Task>? DisplayErrorWithLogFileAsyncCallback { get; set; }
+
     public TaskCompletionSource? DisplayEmptyLineAsyncCalled { get; set; }
     public Func<Task>? DisplayEmptyLineAsyncCallback { get; set; }
 
@@ -114,6 +117,12 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         DisplayErrorAsyncCalled?.SetResult();
         return DisplayErrorAsyncCallback?.Invoke(errorMessage) ?? Task.CompletedTask;
+    }
+
+    public Task DisplayErrorWithLogFileAsync(string errorMessage, string logFilePath, CancellationToken cancellationToken)
+    {
+        DisplayErrorWithLogFileAsyncCalled?.SetResult();
+        return DisplayErrorWithLogFileAsyncCallback?.Invoke(errorMessage, logFilePath) ?? Task.CompletedTask;
     }
 
     public Task DisplayEmptyLineAsync(CancellationToken cancellationToken)

@@ -3530,6 +3530,7 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) 
         => _innerService.DisplayIncompatibleVersionError(ex, appHostHostingVersion);
     public void DisplayError(string errorMessage, bool allowMarkup = false) => _innerService.DisplayError(errorMessage, allowMarkup);
+    public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false) => _innerService.DisplayErrorWithLogFile(errorMessage, logFilePath, allowMarkup);
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => _innerService.DisplayMessage(emoji, message, allowMarkup, consoleOverride);
     public void DisplayPlainText(string text) => _innerService.DisplayPlainText(text);
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) => _innerService.DisplayRawText(text, consoleOverride);

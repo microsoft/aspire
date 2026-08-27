@@ -6,6 +6,7 @@ export type Capability =
     | 'baseline.v1'
     | 'secret-prompts.v1'
     | 'file-pickers.v1'
+    | 'error-notification-log-action.v1'
     | 'build-dotnet-using-cli' // Support building .NET projects using the CLI
     | 'devkit' // Support for .NET DevKit extension (old, used for determining whether to build .NET projects in extension)
     | 'ms-dotnettools.csdevkit' // Older AppHost versions used this extension identifier instead of devkit
@@ -109,7 +110,7 @@ export function isJavaInstalled(extensionInstalled: (extensionId: string) => boo
 }
 
 export function getSupportedCapabilities(platform: NodeJS.Platform = process.platform): Capabilities {
-    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'build-dotnet-using-cli'];
+    const capabilities: Capabilities = ['prompting', 'baseline.v1', 'secret-prompts.v1', 'file-pickers.v1', 'error-notification-log-action.v1', 'build-dotnet-using-cli'];
 
     if (isCsDevKitInstalled()) {
         capabilities.push("devkit");

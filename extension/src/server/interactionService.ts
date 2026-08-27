@@ -2,7 +2,7 @@ import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel } from '../loc/strings';
+import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel, resourceCommandOpenCliLog } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
@@ -27,7 +27,7 @@ export interface IInteractionService extends vscode.Disposable {
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
     promptForSelections: (promptText: string, choices: string[]) => Promise<string[] | null>;
     displayIncompatibleVersionError: (requiredCapability: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) => Promise<void>;
-    displayError: (errorMessage: string) => void;
+    displayError: (errorMessage: string, logFilePath?: string) => void;
     displayMessage: (emoji: string, message: string) => void;
     displaySuccess: (message: string) => void;
     displaySubtleMessage: (message: string) => void;
@@ -342,14 +342,27 @@ export class InteractionService implements IInteractionService {
         });
     }
 
-    displayError(errorMessage: string) {
+    displayError(errorMessage: string, logFilePath?: string) {
         if (errorMessage.length === 0) {
             extensionLogOutputChannel.warn('Attempted to display an empty error message.');
             return;
         }
 
         extensionLogOutputChannel.error(`Displaying error: ${errorMessage}`);
-        vscode.window.showErrorMessage(formatText(errorMessage));
+        const formattedMessage = formatText(errorMessage);
+        if (logFilePath) {
+            void (async () => {
+                const selected = await vscode.window.showErrorMessage(formattedMessage, resourceCommandOpenCliLog);
+                if (selected === resourceCommandOpenCliLog) {
+                    await vscode.commands.executeCommand('aspire-vscode.viewAppHostLogFile', logFilePath);
+                }
+            })().catch(error => {
+                extensionLogOutputChannel.error(`Failed to handle the CLI log notification action: ${error}`);
+            });
+        }
+        else {
+            void vscode.window.showErrorMessage(formattedMessage);
+        }
         this.clearProgressNotification();
     }
 
