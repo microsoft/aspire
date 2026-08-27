@@ -27,6 +27,7 @@ internal class DotNetTemplateFactory(
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
     TemplateNuGetConfigService templateNuGetConfigService,
+    IAppHostInfoResolver appHostInfoResolver,
     IEnvironment environment)
     : ITemplateFactory
 {
@@ -512,6 +513,9 @@ internal class DotNetTemplateFactory(
             var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
             if (appHostProject is not null)
             {
+                var appHostInfo = await appHostInfoResolver.GetAppHostInfoAsync(appHostProject, cancellationToken);
+                var appHostTargetFramework = GetAppHostTargetFramework(appHostInfo);
+
                 extraArgs =
                 [
                     .. extraArgs,
@@ -522,6 +526,13 @@ internal class DotNetTemplateFactory(
                     "--AppHostProjectName",
                     Path.GetFileNameWithoutExtension(appHostProject.Name)
                 ];
+
+                if (appHostTargetFramework is not null)
+                {
+                    // The templates map their Framework symbol to dotnet new's conventional
+                    // lowercase --framework option in dotnetcli.host.json.
+                    extraArgs = [.. extraArgs, "--framework", appHostTargetFramework];
+                }
             }
 
             var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
@@ -641,6 +652,28 @@ internal class DotNetTemplateFactory(
             interactionService.DisplayError(ex.Message);
             return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
+    }
+
+    private static string? GetAppHostTargetFramework(AppHostProjectInfo appHostInfo)
+    {
+        if (appHostInfo.ExitCode != 0)
+        {
+            return null;
+        }
+
+        var targetFrameworks = appHostInfo.TargetFrameworks?.Split(
+            ';',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (targetFrameworks is { Length: > 0 })
+        {
+            // Target the first declared framework so the generated single-target test project
+            // matches an AppHost inner build without guessing which SDK is preferred or installed.
+            return targetFrameworks[0];
+        }
+
+        return string.IsNullOrWhiteSpace(appHostInfo.TargetFramework)
+            ? null
+            : appHostInfo.TargetFramework.Trim();
     }
 
     private static string EscapeMSBuildItemValue(string value)

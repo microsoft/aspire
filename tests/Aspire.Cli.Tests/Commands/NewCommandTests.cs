@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Utils;
@@ -82,8 +83,17 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(command.Options, option => option.Aliases.Contains("--language", StringComparer.OrdinalIgnoreCase));
     }
 
-    [Fact]
-    public async Task NewCommand_IntegrationTestTemplatePassesAppHostToSelectedTemplate()
+    [Theory]
+    [InlineData(0, "net11.0", null, "net11.0")]
+    [InlineData(0, null, "net10.0;net11.0", "net10.0")]
+    [InlineData(0, null, " net11.0 ; net10.0 ", "net11.0")]
+    [InlineData(0, null, null, null)]
+    [InlineData(1, null, null, null)]
+    public async Task NewCommand_IntegrationTestTemplateUsesAppHostTargetFrameworkWhenAvailable(
+        int appHostInfoExitCode,
+        string? targetFramework,
+        string? targetFrameworks,
+        string? expectedTargetFramework)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("AppHost_$(literal);100%@'&");
@@ -93,6 +103,26 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         string? selectedTemplate = null;
         string? openedEditorPath = null;
         var runner = CreateTestRunnerWithStandardPackages();
+        runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
+        {
+            if (appHostInfoExitCode != 0)
+            {
+                return (appHostInfoExitCode, null);
+            }
+
+            var output = new
+            {
+                Properties = new
+                {
+                    IsAspireHost = "true",
+                    TargetFramework = targetFramework,
+                    TargetFrameworks = targetFrameworks
+                },
+                Items = new { }
+            };
+
+            return (0, JsonSerializer.SerializeToDocument(output));
+        };
         runner.NewProjectAsyncCallback = (templateName, projectName, generatedPath, _, _) =>
         {
             selectedTemplate = templateName;
@@ -130,16 +160,22 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("aspire-mstest", selectedTemplate);
         var extraArgs = Assert.IsType<string[]>(runner.LastNewProjectExtraArgs);
-        Assert.Equal(
-            [
-                "--WithAppHostReference",
-                "true",
-                "--AppHostProjectPath",
-                Path.Combine("..", "AppHost_%24%28literal%29%3B100%25%40%27&", "AppHost.csproj"),
-                "--AppHostProjectName",
-                "AppHost"
-            ],
-            extraArgs);
+        var expectedExtraArgs = new List<string>
+        {
+            "--WithAppHostReference",
+            "true",
+            "--AppHostProjectPath",
+            Path.Combine("..", "AppHost_%24%28literal%29%3B100%25%40%27&", "AppHost.csproj"),
+            "--AppHostProjectName",
+            "AppHost"
+        };
+        if (expectedTargetFramework is not null)
+        {
+            expectedExtraArgs.Add("--framework");
+            expectedExtraArgs.Add(expectedTargetFramework);
+        }
+
+        Assert.Equal(expectedExtraArgs, extraArgs);
         Assert.Equal(Path.Combine(outputPath, "IntegrationTest1.cs"), openedEditorPath);
     }
 
