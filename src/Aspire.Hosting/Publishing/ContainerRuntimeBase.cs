@@ -308,7 +308,8 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         var actualOperatingSystem = platform?["os"]?.GetValue<string>();
         var actualArchitecture = platform?["architecture"]?.GetValue<string>();
         var digest = descriptor["digest"]?.GetValue<string>();
-        if (string.IsNullOrWhiteSpace(digest) ||
+        if (digest is null ||
+            !ContainerImageManifest.IsValidDigest(digest) ||
             actualOperatingSystem is null ||
             actualArchitecture is null ||
             !string.Equals(actualOperatingSystem, operatingSystem, StringComparison.OrdinalIgnoreCase) ||

@@ -173,11 +173,18 @@ public sealed class ContainerImageManifest
     /// <param name="digest">The immutable manifest digest.</param>
     /// <param name="operatingSystem">The target operating system.</param>
     /// <param name="architecture">The target architecture.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="digest"/> is not a lowercase SHA-256 digest or another argument is empty.</exception>
     public ContainerImageManifest(string digest, string operatingSystem, string architecture)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(digest);
         ArgumentException.ThrowIfNullOrWhiteSpace(operatingSystem);
         ArgumentException.ThrowIfNullOrWhiteSpace(architecture);
+        if (!IsValidDigest(digest))
+        {
+            throw new ArgumentException(
+                "The container image manifest digest must use the format 'sha256:' followed by 64 lowercase hexadecimal characters.",
+                nameof(digest));
+        }
 
         Digest = digest;
         OperatingSystem = operatingSystem;
@@ -198,6 +205,26 @@ public sealed class ContainerImageManifest
     /// Gets the target architecture.
     /// </summary>
     public string Architecture { get; }
+
+    internal static bool IsValidDigest(string digest)
+    {
+        const string Prefix = "sha256:";
+        if (digest.Length != Prefix.Length + 64 ||
+            !digest.StartsWith(Prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var character in digest.AsSpan(Prefix.Length))
+        {
+            if (character is not (>= '0' and <= '9' or >= 'a' and <= 'f'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 /// <summary>

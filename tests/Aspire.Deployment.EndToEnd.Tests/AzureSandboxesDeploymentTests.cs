@@ -216,7 +216,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             terminal?.Dispose();
 
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
-            var (cleanupSucceeded, cleanupMessage) = await CleanupResourceGroupAsync(resourceGroupName);
+            var (cleanupSucceeded, cleanupMessage) = await CleanupResourceGroupAsync(resourceGroupName, subscriptionId);
             DeploymentReporter.ReportCleanupStatus(resourceGroupName, cleanupSucceeded, cleanupMessage);
         }
     }
@@ -312,7 +312,9 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    private async Task<(bool Success, string Message)> CleanupResourceGroupAsync(string resourceGroupName)
+    private async Task<(bool Success, string Message)> CleanupResourceGroupAsync(
+        string resourceGroupName,
+        string subscriptionId)
     {
         try
         {
@@ -328,6 +330,8 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             startInfo.ArgumentList.Add("delete");
             startInfo.ArgumentList.Add("--name");
             startInfo.ArgumentList.Add(resourceGroupName);
+            startInfo.ArgumentList.Add("--subscription");
+            startInfo.ArgumentList.Add(subscriptionId);
             startInfo.ArgumentList.Add("--yes");
             startInfo.ArgumentList.Add("--no-wait");
 
