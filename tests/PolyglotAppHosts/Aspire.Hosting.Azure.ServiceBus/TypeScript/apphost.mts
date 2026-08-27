@@ -20,7 +20,7 @@ await serviceBus.configureInfrastructure(async infrastructure => {
 
     const configuredQueue = await infrastructure.getServiceBusQueueByIdentifier("orders");
     await configuredQueue.maxDeliveryCount.set(5);
-    await configuredQueue.lockDuration.set(3000000000);
+    await configuredQueue.lockDuration.set(300000);
 
     const configuredTopic = await infrastructure.getServiceBusTopicByIdentifier("events");
     await configuredTopic.enablePartitioning.set(true);

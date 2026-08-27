@@ -180,6 +180,18 @@ public class AtsCapabilityScannerTests
         Assert.Contains(result.EnumTypes, type => type.ClrType == typeof(TestUnionEnum));
     }
 
+    [Fact]
+    public void ScanAssemblies_EnumSimpleNameCollisions_GetUniqueNames()
+    {
+        var first = CreateEnumExportAssembly("First", "Enabled");
+        var second = CreateEnumExportAssembly("Second", "Disabled");
+
+        var result = AtsCapabilityScanner.ScanAssemblies([first.Assembly, second.Assembly]);
+
+        Assert.Equal("FirstCollisionState", Assert.Single(result.EnumTypes, type => type.ClrType == first.EnumType).Name);
+        Assert.Equal("SecondCollisionState", Assert.Single(result.EnumTypes, type => type.ClrType == second.EnumType).Name);
+    }
+
     #endregion
 
     #region DeriveMethodName Tests
@@ -981,6 +993,38 @@ public class AtsCapabilityScannerTests
         _ = exportsTypeBuilder.CreateType();
 
         return assemblyBuilder;
+    }
+
+    private static (Assembly Assembly, Type EnumType) CreateEnumExportAssembly(string assemblySuffix, string enumValue)
+    {
+        var assemblyName = new AssemblyName($"EnumCollision.{assemblySuffix}");
+        var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+        var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name!);
+        var enumBuilder = moduleBuilder.DefineEnum(
+            $"Generated.{assemblySuffix}.CollisionState",
+            TypeAttributes.Public,
+            typeof(int));
+        enumBuilder.DefineLiteral(enumValue, 0);
+        var enumType = enumBuilder.CreateTypeInfo()!.AsType();
+        var exportsTypeBuilder = moduleBuilder.DefineType(
+            $"Generated.{assemblySuffix}.Exports",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var methodBuilder = exportsTypeBuilder.DefineMethod(
+            $"Use{assemblySuffix}CollisionState",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(IDistributedApplicationBuilder), enumType]);
+        methodBuilder.DefineParameter(1, ParameterAttributes.None, "builder");
+        methodBuilder.DefineParameter(2, ParameterAttributes.None, "value");
+        methodBuilder.SetCustomAttribute(
+            new CustomAttributeBuilder(
+                typeof(AspireExportAttribute).GetConstructor([typeof(string)])!,
+                [$"use{assemblySuffix}CollisionState"]));
+        methodBuilder.GetILGenerator().Emit(OpCodes.Ret);
+
+        _ = exportsTypeBuilder.CreateType();
+
+        return (assemblyBuilder, enumType);
     }
 
     private static Assembly CreateAssemblyLevelExportAssembly(Type exportedType)

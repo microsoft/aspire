@@ -61,19 +61,9 @@ with create_builder() as builder:
     infrastructure.publish_as_existing(existing_name, resource_group=existing_resource_group)
     infrastructure.as_existing(existing_name)
     identity = builder.add_azure_user_assigned_identity("resource")
-    identity_bicep_identifier = identity.get_bicep_identifier()
-
-    def configure_identity_infrastructure(infrastructure: AzureResourceInfrastructure):
-        provisioned_identity = infrastructure.get_sql_user_assigned_identity_by_identifier(
-            identity_bicep_identifier
-        )
-        deployment_location = infrastructure.bicep().location("westus2")
-        provisioned_identity.name = "polyglot-identity"
-        provisioned_identity.location = deployment_location
 
     identity_client_id = identity.get_output("clientId")
     identity_client_id_expression = ReferenceExpression.format_string("{0}", identity_client_id)
-    identity.configure_infrastructure(configure_identity_infrastructure)
     identity.with_parameter("default")
     identity.with_parameter("string-value", value="value")
     identity.with_parameter("string-values", value=["value-1", "value-2"])
