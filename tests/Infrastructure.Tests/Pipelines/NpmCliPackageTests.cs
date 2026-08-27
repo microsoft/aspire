@@ -430,10 +430,24 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
-    public async Task NativeCliUsesMicrosoftCertificate()
+    public async Task AspireCliUsesMicrosoftCertificate()
     {
         var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
 
+        AssertSigningRule(
+            signingProps,
+            "FileExtensionSignInfo",
+            ".msi",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))");
+        AssertSigningRule(
+            signingProps,
+            "FileExtensionSignInfo",
+            ".cat",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: null);
         AssertSigningRule(
             signingProps,
             "FileSignInfo",
@@ -444,10 +458,45 @@ public sealed class NpmCliPackageTests : IDisposable
         AssertSigningRule(
             signingProps,
             "FileSignInfo",
+            "aspire-managed.exe",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
             "aspire",
             "Microsoft400",
             collisionPriorityId: null,
             condition: "$([System.OperatingSystem]::IsLinux())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire-managed",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsLinux())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "get-aspire-cli.ps1",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "manifest.cat",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire.js",
+            "Microsoft400",
+            collisionPriorityId: "AspireCliNpmPackage",
+            condition: null);
     }
 
     [Fact]
@@ -456,7 +505,7 @@ public sealed class NpmCliPackageTests : IDisposable
         var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
 
         AssertSigningRule(signingProps, "FileExtensionSignInfo", ".tgz", "LinuxSign500180PGP", "AspireCliNpmPackage", condition: null);
-        AssertSigningRule(signingProps, "FileSignInfo", "aspire.js", "MicrosoftDotNet500", "AspireCliNpmPackage", condition: null);
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire.js", "Microsoft400", "AspireCliNpmPackage", condition: null);
 
         // The native npm packages are built from already-signed native archives.
         // The main Windows build should only produce the detached npm tarball
