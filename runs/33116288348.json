@@ -1,0 +1,38 @@
+{
+  "run_id": 33116288348,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33116288348",
+  "analyzed_at": "2026-08-27T21:33:49Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19567,
+    "title": "Make CLI resource observation reusable",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint-editor-assistance-cli-observation-v2",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19567"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "id": 98672216067,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33116288348/job/98672216067",
+      "classification": "flaky-test",
+      "reason": "Test failure is a known recurring SQLite column-count mismatch in the dashboard metrics storage layer, unrelated to the PR's CLI/Backchannel changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+      "job": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "error": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'.",
+      "stack_trace": "at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()\n   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)\n   at Aspire.Dashboard.ServiceClient.TracingSqliteConnection.TracingDbCommand.ExecuteDbDataReader(CommandBehavior behavior) in /_/src/Aspire.Dashboard/ServiceClient/TracingSqliteConnection.cs:line 296\n   at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause 'dashboard-components-sqlite-column-count-mismatch'. The PR only modifies Aspire.Cli/Backchannel and Aspire.Hosting resource snapshot code; it does not touch Aspire.Dashboard's SQLite telemetry storage, so this failure is unrelated to the PR's changes."
+    }
+  ],
+  "causes": ["dashboard-components-sqlite-column-count-mismatch"]
+}

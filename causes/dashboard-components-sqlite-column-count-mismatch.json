@@ -11,6 +11,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows)",
       "pr_number": 19730,
       "observed_at": "2026-08-27T15:49:53Z"
+    },
+    {
+      "run_id": 33116288348,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33116288348",
+      "job": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "pr_number": 19567,
+      "observed_at": "2026-08-27T21:33:49Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19742"
