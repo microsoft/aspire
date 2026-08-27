@@ -1662,12 +1662,13 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     private static string ReplaceMacPlatformSsoKerberosStatus(string replacement)
     {
         const string propertyPrefix = "\"kerberosStatus\" : ";
-        const string followingProperty = ",\n  \"state\"";
         var propertyIndex = MacPlatformSsoOutputFixture.IndexOf(propertyPrefix, StringComparison.Ordinal);
         Assert.True(propertyIndex >= 0);
         var valueStart = propertyIndex + propertyPrefix.Length;
-        var valueEnd = MacPlatformSsoOutputFixture.IndexOf(followingProperty, valueStart, StringComparison.Ordinal);
-        Assert.True(valueEnd >= 0);
+        var followingPropertyIndex = MacPlatformSsoOutputFixture.IndexOf("\"state\"", valueStart, StringComparison.Ordinal);
+        Assert.True(followingPropertyIndex >= 0);
+        var valueEnd = MacPlatformSsoOutputFixture.LastIndexOf(',', followingPropertyIndex);
+        Assert.True(valueEnd >= valueStart);
 
         return string.Concat(
             MacPlatformSsoOutputFixture.AsSpan(0, valueStart),
