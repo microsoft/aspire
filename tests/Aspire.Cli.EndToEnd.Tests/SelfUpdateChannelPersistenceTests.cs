@@ -11,7 +11,6 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 {
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19708")]
     [CaptureWorkspaceOnFailure]
     public async Task SelfUpdateToStaging_RelaunchedCliUsesStagingForImplicitProjectUpdate()
     {
