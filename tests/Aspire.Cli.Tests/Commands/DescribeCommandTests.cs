@@ -534,7 +534,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
                     // initial snapshot completes. The live change must win.
                     return
                     [
-                        new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Starting" },
+                        new ResourceSnapshot { Name = "redis", Version = 1, DisplayName = "redis", ResourceType = "Container", State = "Starting" },
                     ];
                 };
                 connection.WatchResourceSnapshotsHandler = (_, cancellationToken) =>
@@ -1045,6 +1045,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
             DisplayName = "redis",
             ResourceType = "Container",
             State = "Running",
+            Version = 2,
         };
         watchUpdateConsumed.TrySetResult();
     }
