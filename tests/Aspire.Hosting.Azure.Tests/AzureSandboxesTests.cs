@@ -2144,6 +2144,47 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxContainerEndpointResolutionRejectsConflictingAnonymousAccessOnSharedPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
+            .WithHttpEndpoint(name: "public", targetPort: 8080)
+            .WithHttpEndpoint(name: "private", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+            {
+                Endpoints =
+                [
+                    new AzureSandboxEndpointOptions
+                    {
+                        Name = "public",
+                        Anonymous = true
+                    },
+                    new AzureSandboxEndpointOptions
+                    {
+                        Name = "private",
+                        Anonymous = false
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+        var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource);
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(deploymentTarget?.DeploymentTarget);
+
+        var exception = Assert.Throws<NotSupportedException>(() => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
+        Assert.Equal(
+            "Endpoint 'private' on resource 'frontend' shares target port 8080 with endpoint 'public' but configures a different anonymous-access policy. Azure sandbox ports support a single access policy per target port.",
+            exception.Message);
+    }
+
+    [Fact]
     public async Task SandboxContainerEndpointResolutionRejectsTcp()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

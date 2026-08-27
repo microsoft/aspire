@@ -1401,11 +1401,15 @@ internal static class AzureSandboxContainerDeployment
                     throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {targetPort} with endpoint '{existingEndpoint.Name}' but uses a different transport. Azure sandbox ports support a single HTTP protocol per target port.");
                 }
 
+                if (existingEndpoint.Anonymous != endpoint.Anonymous)
+                {
+                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {targetPort} with endpoint '{existingEndpoint.Name}' but configures a different anonymous-access policy. Azure sandbox ports support a single access policy per target port.");
+                }
+
                 endpoints[targetPort] = existingEndpoint with
                 {
                     IsExternal = existingEndpoint.IsExternal || endpoint.IsExternal,
                     IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp,
-                    Anonymous = MergeAnonymousAccess(existingEndpoint.Anonymous, endpoint.Anonymous),
                     AuthorizedConnectorGateways = existingEndpoint.AuthorizedConnectorGateways
                         .Concat(endpoint.AuthorizedConnectorGateways)
                         .DistinctBy(static gateway => gateway.Name, StringComparers.ResourceName)
@@ -1434,16 +1438,6 @@ internal static class AzureSandboxContainerDeployment
             "http2" => "Http2",
             _ => throw new NotSupportedException($"Endpoint '{endpoint.Name}' on resource '{resource.Name}' uses transport '{endpoint.Transport}'. Azure sandbox ports currently support only HTTP and HTTP/2 endpoints.")
         };
-    }
-
-    private static bool? MergeAnonymousAccess(bool? existing, bool? current)
-    {
-        if (existing == false || current == false)
-        {
-            return false;
-        }
-
-        return existing ?? current;
     }
 
     private static async Task DeleteExistingDeploymentAsync(
