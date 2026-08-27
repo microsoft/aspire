@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as strings from '../loc/strings';
 import {
@@ -10,6 +11,7 @@ import {
 } from '../utils/configInfoProvider';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { OutdatedCliNotificationSurface, OutdatedCliNotifier } from '../utils/outdatedCliNotifier';
+import { onDidResolveCliForOperation, startCliOperationResolutionHeartbeat } from '../utils/cliOperationResolution';
 
 suite('outdatedCliNotifier', () => {
     class FakeVersionProvider {
@@ -169,6 +171,44 @@ suite('outdatedCliNotifier', () => {
         assert.strictEqual(versionProvider.recommendationCalls.length, 2);
         assert.strictEqual(surface.warnings.length, 1);
         notifier.dispose();
+    });
+
+    test('active-operation heartbeat rechecks five minutes from check start', async () => {
+        const clock = sinon.useFakeTimers({ now: 0 });
+        const { notifier, versionProvider } = createNotifier(() => Date.now());
+        versionProvider.recommendation = {
+            status: 'none',
+            currentVersion: '13.5.0',
+        };
+        let resolveIdentity!: (identity: CliIdentityInfo | null) => void;
+        versionProvider.identityPromise = new Promise(resolve => resolveIdentity = resolve);
+        const heartbeatChecks: Promise<void>[] = [];
+        const subscription = onDidResolveCliForOperation(resolution => {
+            heartbeatChecks.push(notifier.notifyIfOutdated(resolution.target, resolution.cliPath));
+        });
+        const heartbeat = startCliOperationResolutionHeartbeat(
+            windowCliPathTarget,
+            '/cli/aspire',
+            () => true);
+
+        try {
+            const initialCheck = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+            await clock.tickAsync(1_000);
+            resolveIdentity(versionProvider.identity);
+            await initialCheck;
+            versionProvider.identityPromise = undefined;
+
+            await clock.tickAsync(5 * 60 * 1_000 - 1_000);
+            await Promise.all(heartbeatChecks);
+
+            assert.strictEqual(versionProvider.identityCalls.length, 2);
+        }
+        finally {
+            heartbeat.dispose();
+            subscription.dispose();
+            notifier.dispose();
+            clock.restore();
+        }
     });
 
     test('samples version independently while unavailable doctor checks back off', async () => {

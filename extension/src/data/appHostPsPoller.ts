@@ -6,7 +6,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { errorFetchingAppHosts } from '../loc/strings';
 import { AppHostCliRunner, LimitedOutputBuffer, oneShotOutputBufferLimit } from './appHostCliRunner';
 import { windowCliPathTarget } from '../utils/cliPathVariables';
-import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
+import { reportCliResolvedForOperation, startCliOperationResolutionHeartbeat } from '../utils/cliOperationResolution';
 
 export interface PsOutput {
     readonly stdout: string;
@@ -36,6 +36,7 @@ export class AppHostPsPoller implements vscode.Disposable {
 
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
+    private _psFollowCliResolutionHeartbeat: vscode.Disposable | undefined;
     private _psPollingGeneration = 0;
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
@@ -119,6 +120,8 @@ export class AppHostPsPoller implements vscode.Disposable {
             this._pollingInterval = undefined;
             extensionLogOutputChannel.info(`aspire ps polling stopped`);
         }
+        this._psFollowCliResolutionHeartbeat?.dispose();
+        this._psFollowCliResolutionHeartbeat = undefined;
         for (const psProcess of this._psProcesses) {
             void terminateCliProcess(psProcess, 'aspire ps').catch(error => {
                 extensionLogOutputChannel.error(`Failed to terminate aspire ps: ${String(error)}`);
@@ -164,9 +167,14 @@ export class AppHostPsPoller implements vscode.Disposable {
         reportCliResolvedForOperation(windowCliPathTarget, cliPath);
 
         let psProcess: ChildProcessWithoutNullStreams | undefined;
+        let cliResolutionHeartbeat: vscode.Disposable | undefined;
         let psProcessCompletedSynchronously = false;
         let callbackInvoked = false;
         const removePsProcess = () => {
+            cliResolutionHeartbeat?.dispose();
+            if (this._psFollowCliResolutionHeartbeat === cliResolutionHeartbeat) {
+                this._psFollowCliResolutionHeartbeat = undefined;
+            }
             if (psProcess) {
                 this._psProcesses.delete(psProcess);
             } else {
@@ -236,6 +244,12 @@ export class AppHostPsPoller implements vscode.Disposable {
         });
         if (!psProcessCompletedSynchronously) {
             this._psProcesses.add(psProcess);
+            this._psFollowCliResolutionHeartbeat?.dispose();
+            cliResolutionHeartbeat = startCliOperationResolutionHeartbeat(
+                windowCliPathTarget,
+                cliPath,
+                () => this._isCurrentPsFetch(fetchVersion) && this._psProcesses.has(psProcess!));
+            this._psFollowCliResolutionHeartbeat = cliResolutionHeartbeat;
         }
 
         this._psFollowStartPending = false;

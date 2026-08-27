@@ -18,7 +18,7 @@ import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } f
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
-import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
+import { reportCliResolvedForOperation, startCliOperationResolutionHeartbeat } from '../utils/cliOperationResolution';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
@@ -48,6 +48,7 @@ interface DescribeStream {
     nonJsonLines: string[];
     stderr: string;
     restartTimer: ReturnType<typeof setTimeout> | undefined;
+    cliResolutionHeartbeat: vscode.Disposable | undefined;
     restartDelay: number;
     version: number;
 }
@@ -1048,6 +1049,7 @@ export class AppHostDataRepository {
             nonJsonLines: [],
             stderr: '',
             restartTimer: undefined,
+            cliResolutionHeartbeat: undefined,
             // A fresh stream restarts after 5s; a restart carries the backed-off delay forward via
             // `initialRestartDelay` so repeated no-data exits grow the interval (5s -> 10s -> 20s ...)
             // instead of hammering the CLI every 5s. Each stream is single-use, so the backoff has to
@@ -1143,6 +1145,8 @@ export class AppHostDataRepository {
                 }
 
                 extensionLogOutputChannel.info(`aspire describe --follow (--apphost ${appHostPath}) exited with code ${code}`);
+                stream.cliResolutionHeartbeat?.dispose();
+                stream.cliResolutionHeartbeat = undefined;
                 stream.process = undefined;
 
                 if (this._disposed) {
@@ -1211,6 +1215,8 @@ export class AppHostDataRepository {
                 // surfaces it through the shared describe banner; a non-selected peer is logged only so it
                 // can't masquerade as the selected host's error.
                 extensionLogOutputChannel.warn(`aspire describe --follow --apphost ${appHostPath} error: ${error.message}`);
+                stream.cliResolutionHeartbeat?.dispose();
+                stream.cliResolutionHeartbeat = undefined;
                 stream.process = undefined;
                 stream.resources.clear();
                 if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
@@ -1232,6 +1238,11 @@ export class AppHostDataRepository {
             }
         });
         stream.process = describeProcess;
+        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
+        stream.cliResolutionHeartbeat = startCliOperationResolutionHeartbeat(
+            target,
+            cliPath,
+            () => this._describeStreams.get(appHostPath) === stream && stream.process === describeProcess);
     }
 
     private _scheduleDescribeRestart(appHostPath: string, stream: DescribeStream): void {
@@ -1398,6 +1409,8 @@ export class AppHostDataRepository {
             clearTimeout(stream.restartTimer);
             stream.restartTimer = undefined;
         }
+        stream.cliResolutionHeartbeat?.dispose();
+        stream.cliResolutionHeartbeat = undefined;
         if (stream.process) {
             const childProcess = stream.process;
             stream.process = undefined;

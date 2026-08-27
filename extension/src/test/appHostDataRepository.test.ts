@@ -2777,6 +2777,7 @@ suite('AppHostDataRepository', () => {
                 });
             }
         });
+
         const context = await startTwoFolderDescribeStreams();
 
         try {
@@ -2788,6 +2789,40 @@ suite('AppHostDataRepository', () => {
         finally {
             resolutionSubscription.dispose();
             context.dispose();
+        }
+    });
+
+    test('active describe streams periodically re-report their exact CLI paths', async () => {
+        const resolutions: string[] = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => {
+            if (resolution.target.kind === 'workspaceFolder') {
+                resolutions.push(resolution.cliPath);
+            }
+        });
+        const clock = sinon.useFakeTimers({ shouldAdvanceTime: true });
+        let context: Awaited<ReturnType<typeof startTwoFolderDescribeStreams>> | undefined;
+
+        try {
+            context = await startTwoFolderDescribeStreams();
+            assert.deepStrictEqual(resolutions.sort(), ['/cli/peer/aspire', '/cli/selected/aspire']);
+
+            clock.tick(5 * 60 * 1_000);
+
+            assert.deepStrictEqual(resolutions.sort(), [
+                '/cli/peer/aspire',
+                '/cli/peer/aspire',
+                '/cli/selected/aspire',
+                '/cli/selected/aspire',
+            ]);
+
+            context.dispose();
+            clock.tick(5 * 60 * 1_000);
+            assert.strictEqual(resolutions.length, 4);
+        }
+        finally {
+            clock.restore();
+            resolutionSubscription.dispose();
+            context?.dispose();
         }
     });
 
@@ -6400,6 +6435,35 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
+    test('active ps follow periodically re-reports its exact CLI path', async () => {
+        const clock = sinon.useFakeTimers({ shouldAdvanceTime: true });
+        const repository = new AppHostDataRepository(terminalProvider);
+        const resolutions: string[] = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => {
+            if (resolution.target.kind === 'window') {
+                resolutions.push(resolution.cliPath);
+            }
+        });
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => resolutions.length === 1, 'global ps follow did not report its CLI');
+            clock.tick(5 * 60 * 1_000);
+            assert.deepStrictEqual(resolutions, ['aspire', 'aspire']);
+
+            repository.setPanelVisible(false);
+            clock.tick(5 * 60 * 1_000);
+            assert.strictEqual(resolutions.length, 2);
+        }
+        finally {
+            clock.restore();
+            resolutionSubscription.dispose();
+            repository.dispose();
+        }
+    });
+
     test('switching into global view while ps is already polling clears the loading spinner', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
@@ -7186,7 +7250,9 @@ suite('AppHostDataRepository global polling', () => {
             await waitForMicrotasks();
 
             assert.strictEqual(spawnStub.calledTwice, true);
-            assert.strictEqual(clock.countTimers(), timerCountBeforeFallback + 1);
+            // The fallback polling interval replaces the active follow heartbeat, so the total
+            // timer count stays constant instead of retaining both.
+            assert.strictEqual(clock.countTimers(), timerCountBeforeFallback);
         } finally {
             repository.dispose();
             clock.restore();

@@ -80,8 +80,9 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
 
+        const checkStartedAt = this._now();
         let probe!: Promise<PendingNotification | undefined>;
-        probe = this._checkForUpdate(target, cliPathKey, cliPath).finally(() => {
+        probe = this._checkForUpdate(target, cliPathKey, cliPath, checkStartedAt).finally(() => {
             if (this._inFlightByCliPath.get(cliPathKey) === probe) {
                 this._inFlightByCliPath.delete(cliPathKey);
             }
@@ -129,6 +130,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         target: CliPathResolutionTarget,
         cliPathKey: string,
         cliPath: string,
+        checkStartedAt: number,
     ): Promise<PendingNotification | undefined> {
         const versionProbe = await this._versionLimiter.run(() =>
             this._versionProvider.getCliIdentity({
@@ -146,7 +148,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         if (!identity) {
             this._stateByCliPath.set(cliPathKey, {
                 identity: previous?.identity,
-                versionValidUntil: now + versionFailureRetryMs,
+                versionValidUntil: checkStartedAt + versionFailureRetryMs,
                 updateStatus: previous?.updateStatus,
                 updateValidUntil: previous?.updateValidUntil ?? 0,
                 failureCount: previous?.failureCount ?? 0,
@@ -158,14 +160,14 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         const state: CliCheckState = identityChanged
             ? {
                 identity,
-                versionValidUntil: now + versionRefreshIntervalMs,
+                versionValidUntil: checkStartedAt + versionRefreshIntervalMs,
                 updateStatus: undefined,
                 updateValidUntil: 0,
                 failureCount: 0,
             }
             : {
                 identity,
-                versionValidUntil: now + versionRefreshIntervalMs,
+                versionValidUntil: checkStartedAt + versionRefreshIntervalMs,
                 updateStatus: previous?.updateStatus,
                 updateValidUntil: previous?.updateValidUntil ?? 0,
                 failureCount: previous?.failureCount ?? 0,
