@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency version bump for github-actions workflow deps; not user-facing",
+  "mergedAt": "2026-08-25T00:00:00Z",
+  "number": 1576,
+  "runDate": "2026-08-27T15:38:13Z",
+  "status": "excluded",
+  "title": "build(deps): bump the github-actions group with 3 updates"
+}
