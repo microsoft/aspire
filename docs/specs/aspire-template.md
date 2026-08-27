@@ -26,10 +26,11 @@ The design is based on these decisions:
    `https://github.com/microsoft/aspire-templates` repository.
 4. `aspire template update` downloads, verifies, validates, and atomically activates
    new source content. A failed update leaves the last-known-good cache usable.
-5. The preferred GitHub distribution is a fixed-name release archive accompanied by
-   its Sigstore bundle. Once a compatible release selector is known, both can be
-   downloaded through direct GitHub release-asset URLs without using a rate-limited
-   REST API.
+5. Attested acquisition is intended primarily for public GitHub templates and uses
+   Sigstore's public-good instance. The preferred distribution is a fixed-name release
+   archive accompanied by its Sigstore bundle. Once a compatible release selector is
+   known, both can be downloaded through direct GitHub release-asset URLs without
+   using a rate-limited REST API.
 6. The official source has a trust policy compiled into the CLI, including the
    repository and release workflow identity.
 7. For a third-party attested source, the first successful verification displays the
@@ -111,7 +112,7 @@ before template content is used.
 - Sandboxing generated code, `dotnet restore`, `dotnet build`, or `dotnet run`.
 - Reimplementing the complete .NET template engine in the Aspire CLI.
 - Requiring Sigstore infrastructure for every source.
-- Building an Aspire-specific TUF repository for the first version.
+- Operating an Aspire-specific TUF repository or private Sigstore trust root.
 - Supporting private GitHub release attestations or GitHub Enterprise Server in the
   first version. Generic authenticated Git remains possible through the user's Git
   credential configuration.
@@ -259,7 +260,7 @@ aspire new contoso-app
 ```
 
 `aspire new` uses the active local index and content only. It does not check releases,
-query attestations, fetch Git refs, or refresh TUF metadata.
+query attestations, fetch Git refs, or refresh Sigstore trust metadata.
 
 If two enabled sources expose the same `shortName`, Aspire does not choose one by
 hidden precedence. The user must qualify it:
@@ -277,9 +278,9 @@ Migration should either rename that option or introduce the unambiguous
 - `aspire new` works offline whenever its selected source has an active cache.
 - `aspire template update` reports a network failure and preserves the cache.
 - A source with no cache cannot be used offline.
-- An expired or unavailable Sigstore trust-root update does not invalidate content
-  that was already verified and activated. It prevents activation of new content
-  until verification can complete.
+- An expired or unavailable Sigstore public-good trust-root update does not
+  invalidate content that was already verified and activated. It prevents activation
+  of new content until verification can complete.
 
 ## Machine-global state
 
@@ -364,6 +365,10 @@ This JSON is illustrative, not a committed configuration schema.
 
 Acquisition mode is stored explicitly after enrollment. Update does not silently
 downgrade an attested source to unverified Git content.
+
+The attested modes are for public `github.com` repositories and use Sigstore's
+public-good instance. Private and other authenticated repositories use the explicit
+unverified Git mode in the first version.
 
 ### Verified GitHub release
 
@@ -638,18 +643,20 @@ repository ID is treated as deletion/recreation, not a rename, and requires remo
 and re-enrolling the source. An owner-ID change is treated as a repository transfer
 and also requires explicit review.
 
-### Sigstore TUF root rotation
+### Sigstore public-good trust-root rotation
 
-Aspire uses the Sigstore verifier's TUF client for Fulcio, Rekor, and timestamp
-authority trust-root distribution. It does not implement independent root cycling.
-Root metadata is refreshed during source update, not during `aspire new`.
+Aspire relies on the Sigstore verifier's TUF client for the public-good instance's
+Fulcio, Rekor, and timestamp-authority trust-root distribution. It does not implement
+independent root cycling, operate a TUF repository, or configure a private Sigstore
+trust root. Root metadata is refreshed during source update, not during `aspire new`.
 
 The bootstrap root included by the Sigstore client is a security-sensitive
 dependency. Upgrading that dependency and its root must receive the same review as
 changing the source trust policy.
 
-Sigstore's TUF repository protects the Sigstore trust-root lifecycle. It does not
-provide freshness or rollback protection for the Aspire template release sequence.
+The Sigstore public-good TUF repository protects the Sigstore trust-root lifecycle.
+It does not provide freshness or rollback protection for the Aspire template release
+sequence.
 
 ### Rollback and replay
 
@@ -1205,13 +1212,13 @@ This would exclude internal Git servers and simple community repositories. Expli
 unverified Git mode preserves flexibility without presenting transport or commit
 identity as build provenance.
 
-### Add an Aspire TUF repository
+### Operate an Aspire TUF repository
 
-TUF would add delegated metadata, expiration, threshold signing, and strong rollback
-protection. It also introduces an operated metadata service and key ceremony. The
-first version relies on Sigstore's TUF client for trust-root rotation and records
-template-release rollback as an unresolved property. A dedicated TUF repository can
-be reconsidered if the source ecosystem becomes a centrally curated catalog.
+This is rejected. It would make Aspire responsible for an additional metadata
+service, key ceremony, and trust-root lifecycle. Attested public templates use the
+Sigstore public-good instance and its client-managed TUF roots. Any stronger
+template-release freshness mechanism must fit the release contract or existing
+distribution systems; it will not introduce an Aspire-operated TUF service.
 
 ### Implement a custom template engine
 
@@ -1239,8 +1246,9 @@ documented `dotnet new` surface cannot provide isolation.
 4. **CLI compatibility:** How does the official source publish updates compatible
    with more than one supported CLI major without making every old CLI track an
    incompatible global latest release?
-5. **Private repositories:** Which credential source and private Sigstore trust root
-   should be supported, and how are credentials kept out of global template state?
+5. **Private repositories:** Is generic authenticated Git sufficient, given that
+   attested acquisition is scoped to public templates using Sigstore's public-good
+   instance?
 6. **Trust-policy schema:** What is the versioned schema for the non-interactive
    `--trust-policy` document?
 7. **Official identity:** What are the final repository ID, owner ID, source-ref rule,
@@ -1272,8 +1280,8 @@ The provenance and acquisition review should answer at least these questions:
   before the user sees generated output?
 - Does the per-source, SDK-versioned template host prevent collisions with and
   modification of the user's normal `dotnet new` state?
-- Are Sigstore TUF bootstrap and root updates handled entirely by the library, with
-  clear failure behavior?
+- Are Sigstore public-good TUF bootstrap and root updates handled entirely by the
+  library, with clear failure behavior?
 - Do logs and diagnostics avoid credentials while still exposing source, digest,
   commit, and builder identity needed for incident response?
 
