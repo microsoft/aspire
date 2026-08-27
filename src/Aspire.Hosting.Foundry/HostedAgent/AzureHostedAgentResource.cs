@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
+
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
@@ -319,6 +321,9 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 await callback.Callback(envContext).ConfigureAwait(false);
             }
         }
+
+        ProjectPortableConnectionStringAliases(resource, collectedEnvVars);
+
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)
         {
@@ -360,6 +365,26 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static void ProjectPortableConnectionStringAliases(IResource resource, Dictionary<string, object> environmentVariables)
+    {
+        foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        {
+            var names = reference.EnvironmentVariableNames;
+            if (string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+                !environmentVariables.ContainsKey(names.PortableName))
+            {
+                continue;
+            }
+
+            // Foundry Hosted Agents accept only letters, digits, and underscores. Deploy only the
+            // portable generated alias, preserving any later override of the exact logical alias.
+            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            {
+                environmentVariables[names.PortableName] = legacyValue;
+            }
+        }
     }
 
     private static bool IsHostedAgentTargetPortValue(object? value, AzureHostedAgentResource hostedAgent)

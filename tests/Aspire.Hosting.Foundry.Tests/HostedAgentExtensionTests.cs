@@ -582,6 +582,51 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public async Task GetResolvedEnvironmentVariables_ProjectsGeneratedConnectionStringAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override")
+            .WithEnvironment("custom-name", "custom-value");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            agent.Resource,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Collection(
+            envVars.OrderBy(static entry => entry.Key, StringComparer.Ordinal),
+            entry =>
+            {
+                Assert.Equal("ConnectionStrings__my_db", entry.Key);
+                Assert.Equal("Host=override", entry.Value);
+            },
+            entry =>
+            {
+                Assert.Equal("custom-name", entry.Key);
+                Assert.Equal("custom-value", entry.Value);
+            });
+
+        var configuration = new HostedAgentConfiguration("test-image")
+        {
+            EnvironmentVariables = envVars
+        };
+        var exception = Assert.Throws<DistributedApplicationException>(
+            () => configuration.ToProjectsAgentVersionCreationOptions(agent.Resource.Name));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'agent' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'custom-name'",
+            exception.Message);
+    }
+
+    [Fact]
     public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
     {
         var endpointProtocols = AzureHostedAgentResource.GetAgentEndpointProtocols(
