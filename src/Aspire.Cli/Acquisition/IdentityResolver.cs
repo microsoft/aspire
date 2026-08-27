@@ -88,9 +88,6 @@ internal sealed class IdentityResolver : IIdentityResolver
     public IdentityValue<string> ResolveChannel() => _identity.Value.Channel;
 
     /// <inheritdoc />
-    public IdentityValue<string> ResolveBuildChannel() => _identity.Value.BuildChannel;
-
-    /// <inheritdoc />
     public IdentityValue<string> ResolveVersion() => _identity.Value.Version;
 
     /// <inheritdoc />
@@ -108,18 +105,16 @@ internal sealed class IdentityResolver : IIdentityResolver
         // field from them. A single combined resolution is why the per-field Lazy<T> wrappers are
         // unnecessary (see the _identity field).
         var sidecar = LoadSidecar();
-        var buildChannel = ResolveBuildChannelCore();
         var assemblyVersionAndCommit = LoadAssemblyVersionAndCommit();
         return new ResolvedIdentity(
-            ResolveChannelCore(sidecar, buildChannel),
-            buildChannel,
+            ResolveChannelCore(sidecar),
             ResolveVersionCore(sidecar, assemblyVersionAndCommit),
             ResolveCommitCore(sidecar, assemblyVersionAndCommit),
             ResolveNuGetServiceIndexOverrideCore(sidecar),
             ResolvePackagesDirectoryCore(sidecar));
     }
 
-    private IdentityValue<string> ResolveChannelCore(InstallSidecarInfo? sidecar, IdentityValue<string> buildChannel)
+    private IdentityValue<string> ResolveChannelCore(InstallSidecarInfo? sidecar)
     {
         if (TryGetEnv(ChannelEnvVar, out var env))
         {
@@ -132,11 +127,6 @@ internal sealed class IdentityResolver : IIdentityResolver
             return new IdentityValue<string>(sidecarValue, IdentitySource.Sidecar);
         }
 
-        return buildChannel;
-    }
-
-    private IdentityValue<string> ResolveBuildChannelCore()
-    {
         var assemblyValue = LoadAssemblyChannel();
         if (!string.IsNullOrEmpty(assemblyValue))
         {
@@ -370,7 +360,6 @@ internal sealed class IdentityResolver : IIdentityResolver
     // behind the single _identity Lazy.
     private readonly record struct ResolvedIdentity(
         IdentityValue<string> Channel,
-        IdentityValue<string> BuildChannel,
         IdentityValue<string> Version,
         IdentityValue<string> Commit,
         IdentityValue<string?> NuGetServiceIndexOverride,

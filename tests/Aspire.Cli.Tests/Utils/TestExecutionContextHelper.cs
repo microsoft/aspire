@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Acquisition;
-
 namespace Aspire.Cli.Tests.Utils;
 
 /// <summary>
@@ -21,8 +19,6 @@ internal static class TestExecutionContextHelper
     public static CliExecutionContext CreateExecutionContext(
         this TemporaryWorkspace workspace,
         string identityChannel = "local",
-        string? buildChannel = null,
-        IdentitySource identityChannelSource = IdentitySource.AssemblyFallback,
         string? logFilePath = null,
         string? identityVersion = null,
         string? identityCommit = null,
@@ -33,8 +29,6 @@ internal static class TestExecutionContextHelper
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
             identityChannel: identityChannel,
-            buildChannel: buildChannel,
-            identityChannelSource: identityChannelSource,
             logFilePath: logFilePath,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
@@ -51,8 +45,6 @@ internal static class TestExecutionContextHelper
     public static CliExecutionContext CreateExecutionContext(
         DirectoryInfo rootDirectory,
         string identityChannel = "local",
-        string? buildChannel = null,
-        IdentitySource identityChannelSource = IdentitySource.AssemblyFallback,
         DirectoryInfo? homeDirectory = null,
         DirectoryInfo? hivesDirectory = null,
         DirectoryInfo? packagesDirectory = null,
@@ -81,8 +73,6 @@ internal static class TestExecutionContextHelper
             logsDirectory,
             logFilePath,
             identityChannel: identityChannel,
-            buildChannel: buildChannel ?? identityChannel,
-            identityChannelSource: identityChannelSource,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
             nugetServiceIndexOverride: null,

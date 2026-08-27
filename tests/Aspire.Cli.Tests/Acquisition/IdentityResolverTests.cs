@@ -418,8 +418,6 @@ public class IdentityResolverTests(ITestOutputHelper outputHelper)
         Assert.True(context.IdentityOverridden);
         Assert.False(context.IdentityOverrideNoticeRequired);
         Assert.Equal("staging", context.IdentityChannel);
-        Assert.Equal(IdentitySource.Sidecar, context.IdentityChannelSource);
-        Assert.Equal("stable", context.BuildChannel);
         Assert.Equal("13.5.0", context.IdentityVersion);
         Assert.Equal("abcdef01", context.IdentityCommit);
     }

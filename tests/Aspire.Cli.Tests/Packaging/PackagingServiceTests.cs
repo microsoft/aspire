@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
-using Aspire.Cli.Acquisition;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
@@ -82,75 +81,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
         Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
-    }
-
-    [Fact]
-    public async Task GetChannelsAsync_WhenStagingRouteServesStableBuild_UsesPinnedNuGetOrgPackages()
-    {
-        // The staging download route can temporarily serve a stable-stamped release binary. The
-        // sidecar must retain staging for the next self-update, but the replacement binary's package
-        // graph is the stable graph on nuget.org rather than a staging darc feed.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var tempDir = workspace.WorkspaceRoot;
-        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
-            tempDir,
-            hivesDirectory: hivesDir,
-            identityChannel: PackageChannelNames.Staging,
-            buildChannel: PackageChannelNames.Stable,
-            identityChannelSource: IdentitySource.Sidecar,
-            identityVersion: "13.5.3",
-            identityCommit: "b5f143315ffb6968ea939a9978797a5b20e4c688");
-
-        var packagingService = new PackagingService(
-            executionContext,
-            new FakeNuGetPackageCache(),
-            new TestFeatures(),
-            new ConfigurationBuilder().Build(),
-            NullLogger<PackagingService>.Instance);
-
-        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
-
-        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
-        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
-        Assert.Equal("13.5.3", stagingChannel.PinnedVersion);
-        Assert.False(stagingChannel.ConfigureGlobalPackagesFolder);
-        Assert.True(stagingChannel.ShouldPersistChannelName());
-        Assert.False(stagingChannel.ShouldCreateNuGetConfig());
-        var mapping = Assert.Single(stagingChannel.Mappings!);
-        Assert.Equal(PackageMapping.AllPackages, mapping.PackageFilter);
-        Assert.Equal(PackageSources.NuGetOrg, mapping.Source);
-    }
-
-    [Fact]
-    public async Task GetChannelsAsync_WhenStableSidecarOverridesLocalBuild_AllowsExplicitStagingSelection()
-    {
-        // Local-hive E2E tests model a script-installed stable CLI by adding a stable sidecar next
-        // to the local binary. That installed identity must remain authoritative until self-update
-        // replaces the binary, otherwise an explicit switch to staging is rejected as a local build.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var tempDir = workspace.WorkspaceRoot;
-        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
-            tempDir,
-            hivesDirectory: hivesDir,
-            identityChannel: PackageChannelNames.Stable,
-            buildChannel: PackageChannelNames.Local,
-            identityChannelSource: IdentitySource.Sidecar,
-            identityVersion: "13.6.0-local");
-
-        var packagingService = new PackagingService(
-            executionContext,
-            new FakeNuGetPackageCache(),
-            new TestFeatures(),
-            new ConfigurationBuilder().Build(),
-            NullLogger<PackagingService>.Instance);
-
-        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
-
-        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
-        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
-        Assert.Equal("https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json", aspireMapping.Source);
     }
 
     [Fact]
@@ -400,7 +330,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Override,
     }
 
-    // Locks the full staging-package-source decision table in one place: feed PROVENANCE is
+    // Locks the full ShouldUseSharedStagingFeed decision table in one place: feed PROVENANCE is
     // identity-driven (staging identity and the Stable-quality feature-flag path -> SHA-specific
     // darc feed), while a non-staging identity that opts into staging with Both quality keeps the
     // shared dotnet9 daily feed, an explicit override always wins, and an identity with no staging
@@ -488,7 +418,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // Full local-validation recipe: a 'local' identity CLI is told (via config overrides) to behave
         // like a prerelease-shaped staging build. Both overrides are required — the identity override
-        // makes GetStagingPackageSource pick the darc feed, and the version override supplies the
+        // makes ShouldUseSharedStagingFeed pick the darc feed, and the version override supplies the
         // '+<commit>' the darc URL is derived from.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;

@@ -852,28 +852,6 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ShouldCreateNuGetConfig_StagingChannelBackedOnlyByNuGetOrg_ReturnsFalse()
-    {
-        var cache = new FakeNuGetPackageCache();
-        var mappings = new[]
-        {
-            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        };
-
-        var channel = PackageChannel.CreateExplicitChannel(
-            PackageChannelNames.Staging,
-            PackageChannelQuality.Both,
-            mappings,
-            cache,
-            new TestFeatures(),
-            NullLogger.Instance,
-            pinnedVersion: "13.5.3");
-
-        Assert.True(channel.ShouldPersistChannelName());
-        Assert.False(channel.ShouldCreateNuGetConfig());
-    }
-
-    [Fact]
     public void ShouldCreateNuGetConfig_PrChannel_ReturnsTrue()
     {
         var cache = new FakeNuGetPackageCache();

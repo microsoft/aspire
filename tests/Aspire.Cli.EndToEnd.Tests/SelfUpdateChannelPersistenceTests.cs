@@ -70,7 +70,7 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             "nohup python3 -m http.server \"$port\" --directory \"$feed_root\" >/tmp/aspire-self-update-feed.log 2>&1 & " +
             "for attempt in $(seq 1 20); do curl --fail --silent \"http://127.0.0.1:$port/$(basename \"$archive\").sha512\" >/dev/null && break; sleep 0.1; done; " +
             "curl --fail --silent \"http://127.0.0.1:$port/$(basename \"$archive\").sha512\" >/dev/null; " +
-            "aspire config set overrideStagingCliDownloadBaseUrl \"http://127.0.0.1:$port\" -g",
+            "export ASPIRE_CLI_STAGING_DOWNLOAD_BASE_URL=\"http://127.0.0.1:$port\"",
             counter);
 
         // Copy the current build into a dedicated get-aspire-cli.sh-style prefix. This gives the
