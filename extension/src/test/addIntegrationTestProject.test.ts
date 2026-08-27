@@ -88,12 +88,14 @@ suite('addIntegrationTestProject', () => {
     test('does not invoke a CLI that does not advertise support', async () => {
         getCapabilityStatusStub.resolves('unsupported');
 
-        await addIntegrationTestProject(
-            terminalProvider,
-            configInfoProvider,
-            path.join('repo', 'AppHost.csproj'),
-            windowCliPathTarget,
-            '/selected/aspire');
+        await assert.rejects(
+            () => addIntegrationTestProject(
+                terminalProvider,
+                configInfoProvider,
+                path.join('repo', 'AppHost.csproj'),
+                windowCliPathTarget,
+                '/selected/aspire'),
+            error => error instanceof vscode.CancellationError);
 
         assert.ok(showErrorMessageStub.calledOnceWith(addIntegrationTestProjectUnsupported));
         assert.strictEqual(sendCommandStub.called, false);
@@ -102,24 +104,28 @@ suite('addIntegrationTestProject', () => {
     test('reports when selected CLI support cannot be verified', async () => {
         getCapabilityStatusStub.resolves('unavailable');
 
-        await addIntegrationTestProject(
-            terminalProvider,
-            configInfoProvider,
-            path.join('repo', 'AppHost.csproj'),
-            windowCliPathTarget,
-            '/selected/aspire');
+        await assert.rejects(
+            () => addIntegrationTestProject(
+                terminalProvider,
+                configInfoProvider,
+                path.join('repo', 'AppHost.csproj'),
+                windowCliPathTarget,
+                '/selected/aspire'),
+            error => error instanceof vscode.CancellationError);
 
         assert.ok(showErrorMessageStub.calledOnceWith(addIntegrationTestProjectCapabilityCouldNotBeVerified));
         assert.strictEqual(sendCommandStub.called, false);
     });
 
     test('rejects a CSharp single-file AppHost before checking the capability', async () => {
-        await addIntegrationTestProject(
-            terminalProvider,
-            configInfoProvider,
-            path.join('repo', 'apphost.cs'),
-            windowCliPathTarget,
-            '/selected/aspire');
+        await assert.rejects(
+            () => addIntegrationTestProject(
+                terminalProvider,
+                configInfoProvider,
+                path.join('repo', 'apphost.cs'),
+                windowCliPathTarget,
+                '/selected/aspire'),
+            error => error instanceof vscode.CancellationError);
 
         assert.ok(showErrorMessageStub.calledOnceWith(addIntegrationTestProjectRequiresCSharpAppHost));
         assert.strictEqual(hasCapabilityStub.called, false);

@@ -73,7 +73,9 @@ export async function addIntegrationTestProject(
 ): Promise<void> {
     if (path.extname(appHostPath).toLowerCase() !== '.csproj') {
         await vscode.window.showErrorMessage(addIntegrationTestProjectRequiresCSharpAppHost);
-        return;
+        // The targeted message is already displayed. Cancellation records a non-success telemetry outcome
+        // without causing tryExecuteCommand to show another error.
+        throw new vscode.CancellationError();
     }
 
     const supportStatus = await configInfoProvider.getCapabilityStatus(
@@ -88,7 +90,9 @@ export async function addIntegrationTestProject(
         await vscode.window.showErrorMessage(supportStatus === 'unsupported'
             ? addIntegrationTestProjectUnsupported
             : addIntegrationTestProjectCapabilityCouldNotBeVerified);
-        return;
+        // The targeted message is already displayed. Cancellation records a non-success telemetry outcome
+        // without causing tryExecuteCommand to show another error.
+        throw new vscode.CancellationError();
     }
 
     await terminalProvider.sendAspireCommandToAspireTerminal(
