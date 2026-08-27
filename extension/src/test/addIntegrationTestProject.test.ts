@@ -80,7 +80,7 @@ suite('addIntegrationTestProject', () => {
                 cliPath: '/selected/aspire',
                 target,
                 environmentVariables: {
-                    FEATURES__SHOWALLTEMPLATES: 'true',
+                    ASPIRE_CLI_SHOW_ALL_TEMPLATES: 'true',
                 },
             }));
     });
