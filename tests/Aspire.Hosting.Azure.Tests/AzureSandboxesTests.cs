@@ -1376,7 +1376,7 @@ public class AzureSandboxesTests
     {
         var runtime = new FakeContainerRuntime
         {
-            InspectedImageDigest = "sha256:linux-amd64",
+            InspectedImageDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             InspectedImageOperatingSystem = "linux",
             InspectedImageArchitecture = "amd64"
         };
@@ -1388,7 +1388,9 @@ public class AzureSandboxesTests
 
         Assert.True(runtime.WasInspectImageManifestCalled);
         Assert.Equal(["example.azurecr.io/site@sha256:index"], runtime.InspectImageManifestCalls);
-        Assert.Equal("example.azurecr.io/site@sha256:linux-amd64", reference);
+        Assert.Equal(
+            "example.azurecr.io/site@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            reference);
     }
 
     [Fact]

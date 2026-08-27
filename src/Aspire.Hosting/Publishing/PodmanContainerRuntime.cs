@@ -404,10 +404,16 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
                 manifestAccessor: null);
         }
+        catch (InvalidOperationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
+                manifestAccessor: null);
+        }
 
-        if (string.IsNullOrWhiteSpace(digest) ||
-            !digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ||
-            digest.Length == "sha256:".Length)
+        if (digest is null || !ContainerImageManifest.IsValidDigest(digest))
         {
             return new ContainerImageManifestInspectionResult(
                 ContainerImageInspectionStatus.Failed,

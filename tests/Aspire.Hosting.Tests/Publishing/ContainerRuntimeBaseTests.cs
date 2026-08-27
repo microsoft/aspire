@@ -78,7 +78,7 @@ public class ContainerRuntimeBaseTests
                 [
                   {
                     "Descriptor": {
-                      "digest": "sha256:linux-amd64",
+                      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                       "platform": { "os": "linux", "architecture": "amd64" }
                     }
                   }
@@ -102,7 +102,7 @@ public class ContainerRuntimeBaseTests
         Assert.Equal("/app", config.WorkingDirectory);
         Assert.Equal(ContainerImageInspectionStatus.Succeeded, manifestResult.Status);
         Assert.True(manifestResult.TryGetManifest("linux", "amd64", out var manifest));
-        Assert.Equal("sha256:linux-amd64", manifest.Digest);
+        Assert.Equal("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", manifest.Digest);
     }
 
     [Fact]
@@ -129,7 +129,10 @@ public class ContainerRuntimeBaseTests
         var config = new ContainerImageConfig(["dotnet"], ["app.dll"], "/app");
         var configResult = ContainerImageConfigInspectionResult.Success(config, """{"config":true}""");
         var configFailure = ContainerImageConfigInspectionResult.Failure("config failed", """{"error":true}""");
-        var manifest = new ContainerImageManifest("sha256:digest", "linux", "amd64");
+        var manifest = new ContainerImageManifest(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "linux",
+            "amd64");
         var manifestResult = ContainerImageManifestInspectionResult.Success([manifest], """{"manifest":true}""");
         var manifestFailure = ContainerImageManifestInspectionResult.Failure("manifest failed", """{"error":true}""");
 
@@ -152,6 +155,49 @@ public class ContainerRuntimeBaseTests
         Assert.Equal("""{"error":true}""", manifestFailure.RawJson);
         Assert.False(manifestFailure.TryGetManifest("linux", "amd64", out _));
         Assert.Equal(ContainerImageInspectionStatus.Unsupported, ContainerImageManifestInspectionResult.Unsupported.Status);
+    }
+
+    [Theory]
+    [InlineData("latest")]
+    [InlineData("sha256:")]
+    [InlineData("sha256:not-a-hex-digest")]
+    [InlineData("sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public void ContainerImageManifestRejectsInvalidDigests(string digest)
+    {
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new ContainerImageManifest(digest, "linux", "amd64"));
+
+        Assert.Equal("digest", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task DockerIgnoresManifestsWithInvalidDigests()
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """
+                [
+                  {
+                    "Descriptor": {
+                      "digest": "sha256:not-a-hex-digest",
+                      "platform": { "os": "linux", "architecture": "amd64" }
+                    }
+                  }
+                ]
+                """
+            ])
+        ]);
+        var runtime = new TestContainerRuntime(processRunner);
+
+        var result = await runtime.InspectImageManifestAsync(
+            "example/image:tag",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContainerImageInspectionStatus.Succeeded, result.Status);
+        Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
     [Fact]
@@ -181,11 +227,11 @@ public class ContainerRuntimeBaseTests
                 {
                   "manifests": [
                     {
-                      "digest": "sha256:linux-amd64",
+                      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                       "platform": { "os": "linux", "architecture": "amd64" }
                     },
                     {
-                      "digest": "sha256:linux-arm64",
+                      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                       "platform": { "os": "linux", "architecture": "arm64" }
                     }
                   ]
@@ -201,7 +247,7 @@ public class ContainerRuntimeBaseTests
 
         Assert.Equal(ContainerImageInspectionStatus.Succeeded, result.Status);
         Assert.True(result.TryGetManifest("linux", "amd64", out var manifest));
-        Assert.Equal("sha256:linux-amd64", manifest.Digest);
+        Assert.Equal("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", manifest.Digest);
         Assert.False(result.TryGetManifest("windows", "amd64", out _));
         Assert.Contains("\"manifests\"", result.RawJson);
     }
@@ -213,12 +259,12 @@ public class ContainerRuntimeBaseTests
         [
             new ProcessResult(0,
             [
-                """{ "schemaVersion": 2, "config": { "digest": "sha256:config" }, "layers": [] }"""
+                """{ "schemaVersion": 2, "config": { "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "layers": [] }"""
             ]),
             new ProcessResult(0),
             new ProcessResult(0,
             [
-                """{ "Digest": "sha256:linux-amd64", "Os": "linux", "Architecture": "amd64" }"""
+                """{ "Digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Os": "linux", "Architecture": "amd64" }"""
             ])
         ]);
         var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
@@ -230,7 +276,7 @@ public class ContainerRuntimeBaseTests
 
         Assert.Equal(ContainerImageInspectionStatus.Succeeded, result.Status);
         Assert.True(result.TryGetManifest("linux", "amd64", out var manifest));
-        Assert.Equal("sha256:linux-amd64", manifest.Digest);
+        Assert.Equal("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", manifest.Digest);
         Assert.Equal("linux", manifest.OperatingSystem);
         Assert.Equal("amd64", manifest.Architecture);
         Assert.Collection(
@@ -246,6 +292,57 @@ public class ContainerRuntimeBaseTests
                     maliciousImageName
                 ],
                 arguments));
+    }
+
+    [Fact]
+    public async Task PodmanFailsInspectionWhenImageMetadataHasInvalidDigest()
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """{ "schemaVersion": 2, "config": { "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "layers": [] }"""
+            ]),
+            new ProcessResult(0),
+            new ProcessResult(0,
+            [
+                """{ "Digest": "sha256:not-a-hex-digest", "Os": "linux", "Architecture": "amd64" }"""
+            ])
+        ]);
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+
+        var result = await runtime.InspectImageManifestAsync(
+            "registry/image:tag",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContainerImageInspectionStatus.Failed, result.Status);
+        Assert.Equal("Podman did not return an immutable digest for image 'registry/image:tag'.", result.ErrorMessage);
+        Assert.False(result.TryGetManifest("linux", "amd64", out _));
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("""{ "Digest": 123, "Os": "linux", "Architecture": "amd64" }""")]
+    public async Task PodmanFailsInspectionWhenImageMetadataIsMalformed(string imageMetadata)
+    {
+        var processRunner = new CapturingProcessRunner(
+        [
+            new ProcessResult(0,
+            [
+                """{ "schemaVersion": 2, "config": { "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "layers": [] }"""
+            ]),
+            new ProcessResult(0),
+            new ProcessResult(0, [imageMetadata])
+        ]);
+        var runtime = new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, processRunner);
+
+        var result = await runtime.InspectImageManifestAsync(
+            "registry/image:tag",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ContainerImageInspectionStatus.Failed, result.Status);
+        Assert.StartsWith("Podman returned invalid image metadata for 'registry/image:tag':", result.ErrorMessage);
+        Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
