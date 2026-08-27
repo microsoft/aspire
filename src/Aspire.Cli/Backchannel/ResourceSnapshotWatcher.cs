@@ -67,54 +67,72 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
     {
         try
         {
-            // Start the watch before fetching the initial snapshot. The AppHost subscribes before replaying
-            // its current snapshots, so the watch establishes a replay point even though the two JSON-RPC
-            // calls are not ordered. Version-aware connections retain the newest observed snapshot; for older
-            // connections, the GET snapshot replaces the replay to preserve the original GET-first behavior.
-            using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var watchTask = WatchChangesAsync(watchCts.Token);
-            List<ResourceSnapshot> snapshots;
-            try
+            if (!_connection.SupportsResourceSnapshotVersionsV1)
             {
-                snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Cleanup failures must not replace the initial GET failure.
-                try
+                // Legacy peers always report version 0, so concurrent GET/watch results cannot be reconciled.
+                // Preserve their original ordering by seeding the GET snapshot before starting the watch.
+                var snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+                lock (_resourcesLock)
                 {
-                    watchCts.Cancel();
-                }
-                catch (Exception)
-                {
-                }
-
-                try
-                {
-                    await watchTask.ConfigureAwait(false);
-                }
-                catch (Exception)
-                {
-                }
-
-                throw;
-            }
-
-            lock (_resourcesLock)
-            {
-                foreach (var snapshot in snapshots)
-                {
-                    if (!_connection.SupportsResourceSnapshotVersionsV1 ||
-                        !_resources.TryGetValue(snapshot.Name, out var currentSnapshot) ||
-                        snapshot.Version > currentSnapshot.Version)
+                    foreach (var snapshot in snapshots)
                     {
                         _resources[snapshot.Name] = snapshot;
                     }
                 }
+
+                _initialLoadTcs.TrySetResult();
+                await WatchChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                // Start the watch before fetching the initial snapshot. The AppHost subscribes before replaying
+                // its current snapshots, so the watch establishes a replay point even though the two JSON-RPC
+                // calls are not ordered. Version reconciliation retains the newest observed snapshot.
+                using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                var watchTask = WatchChangesAsync(watchCts.Token);
+                List<ResourceSnapshot> snapshots;
+                try
+                {
+                    snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Cleanup failures must not replace the initial GET failure.
+                    try
+                    {
+                        watchCts.Cancel();
+                    }
+                    catch (Exception)
+                    {
+                    }
+
+                    try
+                    {
+                        await watchTask.ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                    }
+
+                    throw;
+                }
+
+                lock (_resourcesLock)
+                {
+                    foreach (var snapshot in snapshots)
+                    {
+                        if (!_resources.TryGetValue(snapshot.Name, out var currentSnapshot) ||
+                            snapshot.Version > currentSnapshot.Version)
+                        {
+                            _resources[snapshot.Name] = snapshot;
+                        }
+                    }
+                }
+
+                _initialLoadTcs.TrySetResult();
+                await watchTask.ConfigureAwait(false);
             }
 
-            _initialLoadTcs.TrySetResult();
-            await watchTask.ConfigureAwait(false);
             _updateSignal?.Writer.TryComplete();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

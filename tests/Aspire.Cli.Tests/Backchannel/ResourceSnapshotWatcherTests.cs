@@ -26,6 +26,7 @@ public class ResourceSnapshotWatcherTests
         var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsResourceSnapshotVersionsV1 = true,
             GetResourceSnapshotsHandler = async cancellationToken =>
             {
                 using var registration = cancellationToken.Register(() => getCancellationRequested.TrySetResult());
@@ -57,6 +58,7 @@ public class ResourceSnapshotWatcherTests
         var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsResourceSnapshotVersionsV1 = true,
             GetResourceSnapshotsHandler = async cancellationToken =>
             {
                 await watchStarted.Task.WaitAsync(cancellationToken);
@@ -79,6 +81,7 @@ public class ResourceSnapshotWatcherTests
         var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            SupportsResourceSnapshotVersionsV1 = true,
             GetResourceSnapshotsHandler = async cancellationToken =>
             {
                 await watchStarted.Task.WaitAsync(cancellationToken);
@@ -96,26 +99,23 @@ public class ResourceSnapshotWatcherTests
     }
 
     [Fact]
-    public async Task ResourceSnapshotWatcher_PrefersGetSnapshotWithoutVersionCapability()
+    public async Task ResourceSnapshotWatcher_LoadsInitialSnapshotsBeforeWatchingWithoutVersionCapability()
     {
-        var replayObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchSnapshotApplied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
-            GetResourceSnapshotsHandler = async cancellationToken =>
-            {
-                await replayObserved.Task.WaitAsync(cancellationToken);
-                return
-                [
+            GetResourceSnapshotsHandler = _ => Task.FromResult(
+                new List<ResourceSnapshot>
+                {
                     new ResourceSnapshot
                     {
                         Name = "api",
                         DisplayName = "api",
                         ResourceType = "Project",
-                        State = "Running",
+                        State = "Starting",
                         Version = 0
                     }
-                ];
-            },
+                }),
             WatchResourceSnapshotsHandler = (_, cancellationToken) =>
                 YieldSnapshotAndWait(
                     Task.CompletedTask,
@@ -124,15 +124,16 @@ public class ResourceSnapshotWatcherTests
                         Name = "api",
                         DisplayName = "api",
                         ResourceType = "Project",
-                        State = "Starting",
+                        State = "Running",
                         Version = 0
                     },
-                    replayObserved,
+                    watchSnapshotApplied,
                     cancellationToken)
         };
         using var watcher = new ResourceSnapshotWatcher(connection, NullLogger<ResourceSnapshotWatcher>.Instance);
 
         await watcher.WaitForInitialLoadAsync().DefaultTimeout();
+        await watchSnapshotApplied.Task.DefaultTimeout();
 
         var snapshot = Assert.Single(watcher.CaptureAllResources().Resources);
         Assert.Equal("Running", snapshot.State);
