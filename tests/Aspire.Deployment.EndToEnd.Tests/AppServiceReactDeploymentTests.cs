@@ -13,8 +13,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
 {
     private const string TestConnectionStringName = "deployment-test";
-    private const string TestPortableConnectionStringName = "deployment_test";
-    private const string TestConnectionStringValue = "portable-alias-value";
+    private const string TestConnectionStringValue = "https://portable-alias-test.vault.azure.net/";
 
     // This test deploys both the initial slot-enabled site and its VNet-integration upgrade.
     // Two 30-minute provisioning operations plus bounded verification waits leave time for
@@ -108,6 +107,12 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForAspireAddCompletionAsync(counter);
 
+            // Step 6a: Add the current Key Vault client integration to the deployed server.
+            output.WriteLine("Step 6a: Adding Key Vault client package...");
+            await auto.TypeAsync($"dotnet add {projectName}.Server package Aspire.Azure.Security.KeyVault --prerelease");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+
             // Step 7: Configure the first deployment with a staging slot but without VNet integration.
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
@@ -172,20 +177,30 @@ var initialAppHostConfiguration = $"""
 
             var serverFilePath = Path.Combine(projectDir, $"{projectName}.Server", "Program.cs");
             content = File.ReadAllText(serverFilePath);
+            const string serviceDefaultsPattern = "builder.AddServiceDefaults();";
             const string defaultEndpointsPattern = "app.MapDefaultEndpoints();";
-            if (!content.Contains(defaultEndpointsPattern, StringComparison.Ordinal))
+            if (!content.Contains(serviceDefaultsPattern, StringComparison.Ordinal) ||
+                !content.Contains(defaultEndpointsPattern, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException("Could not find the default endpoint mapping in the generated server.");
+                throw new InvalidOperationException("Could not find the service registration or default endpoint mapping in the generated server.");
             }
 
-            content = content.Replace(
-                defaultEndpointsPattern,
-                $$"""
-                api.MapGet("connection-string", () => builder.Configuration.GetConnectionString("{{TestPortableConnectionStringName}}"));
+            content = content
+                .Replace(
+                    serviceDefaultsPattern,
+                    $$"""
+                    {{serviceDefaultsPattern}}
+                    builder.AddAzureKeyVaultClient("{{TestConnectionStringName}}", settings => settings.DisableHealthChecks = true);
+                    """,
+                    StringComparison.Ordinal)
+                .Replace(
+                    defaultEndpointsPattern,
+                    """
+                    api.MapGet("connection-string", (Azure.Security.KeyVault.Secrets.SecretClient client) => client.VaultUri.AbsoluteUri);
 
-                {{defaultEndpointsPattern}}
-                """,
-                StringComparison.Ordinal);
+                    app.MapDefaultEndpoints();
+                    """,
+                    StringComparison.Ordinal);
             File.WriteAllText(serverFilePath, content);
 
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");

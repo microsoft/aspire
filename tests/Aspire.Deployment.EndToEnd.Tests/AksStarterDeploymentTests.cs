@@ -13,8 +13,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
 {
     private const string TestConnectionStringName = "deployment-test";
-    private const string TestPortableConnectionStringName = "deployment_test";
-    private const string TestConnectionStringValue = "portable-alias-value";
+    private const string TestConnectionStringValue = "https://portable-alias-test.vault.azure.net/";
 
     // Timeout set to 45 minutes to allow for AKS provisioning (~10-15 min) plus deployment.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
@@ -179,6 +178,12 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             // aspire add may show a version selection prompt
             await auto.WaitForAspireAddCompletionAsync(counter);
 
+            // Step 13a: Add the current Key Vault client integration to the deployed API.
+            output.WriteLine("Step 13a: Adding Key Vault client package...");
+            await auto.TypeAsync($"dotnet add {projectName}.ApiService package Aspire.Azure.Security.KeyVault --prerelease");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+
             // Step 14: Modify AppHost.cs to add Kubernetes environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
@@ -233,20 +238,30 @@ builder.Build().Run();
 
             var apiServiceFilePath = Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs");
             content = File.ReadAllText(apiServiceFilePath);
+            const string serviceDefaultsPattern = "builder.AddServiceDefaults();";
             const string defaultEndpointsPattern = "app.MapDefaultEndpoints();";
-            if (!content.Contains(defaultEndpointsPattern, StringComparison.Ordinal))
+            if (!content.Contains(serviceDefaultsPattern, StringComparison.Ordinal) ||
+                !content.Contains(defaultEndpointsPattern, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException("Could not find the default endpoint mapping in the generated API service.");
+                throw new InvalidOperationException("Could not find the service registration or default endpoint mapping in the generated API service.");
             }
 
-            content = content.Replace(
-                defaultEndpointsPattern,
-                $$"""
-                app.MapGet("/connection-string", () => builder.Configuration.GetConnectionString("{{TestPortableConnectionStringName}}"));
+            content = content
+                .Replace(
+                    serviceDefaultsPattern,
+                    $$"""
+                    {{serviceDefaultsPattern}}
+                    builder.AddAzureKeyVaultClient("{{TestConnectionStringName}}", settings => settings.DisableHealthChecks = true);
+                    """,
+                    StringComparison.Ordinal)
+                .Replace(
+                    defaultEndpointsPattern,
+                    """
+                    app.MapGet("/connection-string", (Azure.Security.KeyVault.Secrets.SecretClient client) => client.VaultUri.AbsoluteUri);
 
-                {{defaultEndpointsPattern}}
-                """,
-                StringComparison.Ordinal);
+                    app.MapDefaultEndpoints();
+                    """,
+                    StringComparison.Ordinal);
             File.WriteAllText(apiServiceFilePath, content);
 
             output.WriteLine("Modified AppHost.cs with AddKubernetesEnvironment");
