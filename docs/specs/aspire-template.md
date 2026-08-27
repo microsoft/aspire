@@ -181,9 +181,15 @@ aspire template sources add \
   --allow-unverified
 ```
 
-Adding a source writes the source record first, then offers to download and cache it.
-`--no-update` skips that prompt. In non-interactive use, the caller must choose
-explicitly.
+Adding a public GitHub source offers to download and verify a candidate immediately.
+After verification, the CLI extracts the certificate identity and signed-statement
+constraints, displays the exact observed values and the checks it proposes to retain,
+and asks the user whether to trust them. Trust and content are activated only after
+confirmation.
+
+`--no-update` skips enrollment and leaves the source configured but unusable until an
+interactive update completes it. First-time enrollment of a third-party attested
+source is not available non-interactively.
 
 ### Inspect sources
 
@@ -220,7 +226,7 @@ explicit trust command.
 Updating all sources continues past an individual source failure and reports an
 aggregate result. A source failure never deletes its last-known-good content.
 
-### Change trust explicitly
+### Enroll or change trust explicitly
 
 ```bash
 aspire template sources trust contoso
@@ -230,18 +236,14 @@ The command downloads and verifies a candidate, displays the old and new identit
 side by side, and requires confirmation before replacing policy. It is separate from
 `update` so that routine refresh cannot normalize unexpected identity drift.
 
-For automation, the first version accepts a reviewed trust-policy document:
+The same flow runs during the first update of an unenrolled source. It first verifies
+the bundle cryptographically and confirms that its source repository matches
+`--repo`; only then does it display the extracted values and ask for trust.
 
-```bash
-aspire template sources add \
-  --name contoso \
-  --repo https://github.com/contoso/aspire-templates \
-  --trust-policy ./contoso-template-policy.json
-```
-
-The document contains every expected certificate identity and signed-statement
-constraint described below. Enrollment fails if observed evidence differs. A bare
-`--yes` is not sufficient for first-time or replacement trust.
+There is no user-authored trust-policy file, expected-value argument set, or
+non-interactive `--yes` bypass. Automation may update a source only after trust has
+already been established interactively on that machine. The built-in official source
+is the exception because its expected identity is compiled into the CLI.
 
 ### Remove a source
 
@@ -330,7 +332,7 @@ A conceptual source record is:
     "archive": "aspire-templates.tar.gz",
     "bundle": "aspire-templates.sigstore.json"
   },
-  "trustPolicy": {
+  "trustedIdentity": {
     "sourceRepositoryUri": "https://github.com/contoso/aspire-templates",
     "sourceRepositoryId": "123456789",
     "sourceOwnerUri": "https://github.com/contoso",
@@ -577,7 +579,7 @@ Observed signed statement:
   Predicate type:       https://slsa.dev/provenance/v1
   Subject digest:       sha256:...
 
-Proposed policy for later updates:
+Checks retained for later updates:
   Source refs:          refs/tags/v2.*
   Build signer:         contoso/aspire-templates:
                         .github/workflows/release.yml@refs/tags/v2.*
@@ -596,8 +598,9 @@ claims to come from.
 Observed concrete refs and proposed future rules are separate. The CLI does not
 silently turn one observed tag into `refs/tags/*`. It derives at most a narrow
 major-specific candidate such as `refs/tags/v2.*`, displays the broadening, and
-requires explicit approval. A user may instead supply an exact ref or reviewed policy
-file. Branch wildcards are not proposed automatically.
+requires explicit approval. Confirmation accepts exactly the displayed checks;
+declining leaves the source unenrolled. Branch wildcards are not proposed
+automatically.
 
 ### Stable policy and per-release evidence
 
@@ -1249,16 +1252,14 @@ documented `dotnet new` surface cannot provide isolation.
 5. **Private repositories:** Is generic authenticated Git sufficient, given that
    attested acquisition is scoped to public templates using Sigstore's public-good
    instance?
-6. **Trust-policy schema:** What is the versioned schema for the non-interactive
-   `--trust-policy` document?
-7. **Official identity:** What are the final repository ID, owner ID, source-ref rule,
+6. **Official identity:** What are the final repository ID, owner ID, source-ref rule,
    build-signer identity, build-config identity, runner policy, and ref policies?
-8. **Size limits:** What compressed bytes, expanded bytes, file count, path length,
+7. **Size limits:** What compressed bytes, expanded bytes, file count, path length,
    and per-file limits support realistic templates without enabling archive abuse?
-9. **Template SDK floor:** Which .NET SDK versions must Git-sourced templates support
+8. **Template SDK floor:** Which .NET SDK versions must Git-sourced templates support
    in the next major Aspire release?
-10. **Source metadata:** Can standard template constraints cover compatibility, or is
-    a small signed source-level manifest required?
+9. **Source metadata:** Can standard template constraints cover compatibility, or is
+   a small signed source-level manifest required?
 
 ## Security review guide
 
