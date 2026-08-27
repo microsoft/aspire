@@ -10,6 +10,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
@@ -397,6 +398,7 @@ public class DotNetTemplateFactoryTests
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
         var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
+        var appHostInfoResolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
 
         return new DotNetTemplateFactory(
             interactionService,
@@ -409,6 +411,7 @@ public class DotNetTemplateFactoryTests
             telemetry,
             hostEnvironment,
             templateNuGetConfigService,
+            appHostInfoResolver,
             environment ?? new TestEnvironment());
     }
 
