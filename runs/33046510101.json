@@ -1,0 +1,73 @@
+{
+  "run_id": 33046510101,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33046510101",
+  "analyzed_at": "2026-08-27T07:10:53Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19709,
+    "title": "Isolate source AppHost deployment state",
+    "author": "spboyer",
+    "state": "closed",
+    "head_branch": "spboyer/apphost-state-isolation",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19709"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
+      "id": 98431708436,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33046510101/job/98431708436",
+      "classification": "transient-infra",
+      "reason": "GitHub Actions runner failed to parse actions/checkout's action.yml manifest (YAML tokenizer error, corrupted download), unrelated to any PR change. Not caused by repo content.",
+      "failed_steps": ["Set up job"]
+    },
+    {
+      "name": "Tests / Hosting.Radius / Hosting.Radius (windows-latest)",
+      "id": 98432075881,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33046510101/job/98432075881",
+      "classification": "flaky-test",
+      "reason": "SealedSecretApplyStepTests timing-sensitive wait/timeout test failed; matches known flaky test cause hosting-radius-sealedsecretapply-timeout-flaky. PR does not touch Radius test/source files.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "id": 98432086538,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33046510101/job/98432086538",
+      "classification": "flaky-test",
+      "reason": "MauiBuildQueueTests.ThreeResources_ExecuteInSequence timed out; matches known flaky MauiBuildQueue timeout pattern (mauibuildqueue-releasesemaphoreafterlaunchasync). PR does not touch Maui files.",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, azure-functions)",
+      "id": 98434083759,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33046510101/job/98434083759",
+      "classification": "flaky-test",
+      "reason": "Generic exit code 1 failure matching prior recurring flaky cause vscode-e2e-linux-azure-functions-flaky (5 prior occurrences). PR does not touch VS Code extension code.",
+      "failed_steps": ["Run extension E2E tests"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ThreeResources_ExecuteInSequence",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ThreeResources_ExecuteInSequence() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 305",
+      "classification": "flaky",
+      "reason": "Timeout in MauiBuildQueue test matches a recurring known-flaky timing pattern in this test class; PR did not modify any Maui hosting files."
+    },
+    {
+      "name": "Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut",
+      "job": "Tests / Hosting.Radius / Hosting.Radius (windows-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Hosting.Radius.Tests.Secrets.SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Radius.Tests\\Secrets\\SealedSecretApplyStepTests.cs:line 513",
+      "classification": "flaky",
+      "reason": "Matches prior recorded flaky-test cause for this exact test (timing-sensitive wait/timeout assertion); PR does not touch Radius files."
+    }
+  ],
+  "causes": ["macos-checkout-action-manifest-corrupt", "hosting-radius-sealedsecretapply-timeout-flaky", "mauibuildqueue-releasesemaphoreafterlaunchasync", "vscode-e2e-linux-azure-functions-flaky"]
+}

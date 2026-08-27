@@ -39,6 +39,13 @@
       "job": "Tests / Azure.Npgsql / Azure.Npgsql (windows-latest)",
       "pr_number": 19716,
       "observed_at": "2026-08-26T19:09:26Z"
+    },
+    {
+      "run_id": 33046510101,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33046510101",
+      "job": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
+      "pr_number": 19709,
+      "observed_at": "2026-08-27T07:10:53Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19639"
