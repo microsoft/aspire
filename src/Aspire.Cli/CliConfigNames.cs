@@ -8,4 +8,5 @@ internal static class CliConfigNames
 {
     public const string NoLogo = "ASPIRE_CLI_NOLOGO";
     public const string AppHostStartupTimeout = "ASPIRE_CLI_START_TIMEOUT";
+    public const string ShowAllTemplates = "ASPIRE_CLI_SHOW_ALL_TEMPLATES";
 }

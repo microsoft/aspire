@@ -63,8 +63,7 @@ internal class DotNetTemplateFactory(
             return [];
         }
 
-        var showAllTemplates = features.IsFeatureEnabled(KnownFeatures.ShowAllTemplates, false);
-        return GetTemplatesCore(showAllTemplates);
+        return GetTemplatesCore(ShouldShowAllTemplates());
     }
 
     public async Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default)
@@ -74,8 +73,7 @@ internal class DotNetTemplateFactory(
             return [];
         }
 
-        var showAllTemplates = features.IsFeatureEnabled(KnownFeatures.ShowAllTemplates, false);
-        return GetTemplatesCore(showAllTemplates);
+        return GetTemplatesCore(ShouldShowAllTemplates());
     }
 
     public async Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default)
@@ -130,6 +128,15 @@ internal class DotNetTemplateFactory(
         }
 
         return false;
+    }
+
+    private bool ShouldShowAllTemplates()
+    {
+        // This process-scoped switch lets tooling expose gated templates for one CLI invocation
+        // without rewriting user settings or changing configuration-provider precedence.
+        return features.IsFeatureEnabled(KnownFeatures.ShowAllTemplates, false) ||
+            bool.TryParse(environment.GetEnvironmentVariable(CliConfigNames.ShowAllTemplates), out var showAllTemplates) &&
+            showAllTemplates;
     }
 
     private IEnumerable<ITemplate> GetTemplatesCore(bool showAllTemplates)
