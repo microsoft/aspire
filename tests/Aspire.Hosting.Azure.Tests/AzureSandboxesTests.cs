@@ -1243,6 +1243,82 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task ExistingDeploymentDeletesDiskImageAfterPortRemovalFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var client = new FailingPortRemovalClient();
+        var state = new DeploymentStateSection("sandbox", new JsonObject
+        {
+            ["SandboxId"] = "sandbox-1",
+            ["DiskImageId"] = "disk-1",
+            ["Ports"] = new JsonArray(new JsonObject { ["Port"] = 8080 })
+        }, version: 0);
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            AzureSandboxContainerDeployment.DeleteExistingDeploymentAsync(
+                stepContext,
+                client,
+                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
+                state,
+                throwOnError: true));
+
+        Assert.Equal("port removal failed", exception.Message);
+        Assert.True(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
+    }
+
+    [Fact]
+    public async Task ExistingDeploymentContinuesCleanupAfterRequestTimeout()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var app = builder.Build();
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+        var client = new FailingPortRemovalClient(new TaskCanceledException("request timed out"));
+        var state = new DeploymentStateSection("sandbox", new JsonObject
+        {
+            ["SandboxId"] = "sandbox-1",
+            ["DiskImageId"] = "disk-1",
+            ["Ports"] = new JsonArray(new JsonObject { ["Port"] = 8080 })
+        }, version: 0);
+
+        var exception = await Assert.ThrowsAsync<TaskCanceledException>(() =>
+            AzureSandboxContainerDeployment.DeleteExistingDeploymentAsync(
+                stepContext,
+                client,
+                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
+                state,
+                throwOnError: true));
+
+        Assert.Equal("request timed out", exception.Message);
+        Assert.True(client.DeleteSandboxCalled);
+        Assert.True(client.DeleteDiskImageCalled);
+    }
+
+    [Fact]
     public async Task SandboxDestroyPropagatesFallbackCleanupFailure()
     {
         var stateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
@@ -2698,6 +2774,92 @@ public class AzureSandboxesTests
         Assert.True(AzureSandboxContainerDeployment.HasModeledCommandConfiguration(container.Resource));
     }
 
+    [Fact]
+    public async Task SandboxCommandEndpointReferencesAreIncludedInEgressPolicy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var api = builder.AddContainer("api", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+        var worker = builder.AddContainer("worker", "image")
+            .WithArgs(api.GetEndpoint("http"))
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var apiSandbox = Assert.IsType<AzureSandboxContainerResource>(
+            api.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var stateManager = app.Services.GetRequiredService<IDeploymentStateManager>();
+        var state = await stateManager.AcquireSectionAsync(
+            AzureSandboxContainerDeployment.GetStateSectionName(apiSandbox),
+            CancellationToken.None);
+        state.Data["Ports"] = new JsonArray(new JsonObject
+        {
+            ["Name"] = "http",
+            ["Url"] = "https://api.example.test"
+        });
+        await stateManager.SaveSectionAsync(state, CancellationToken.None);
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = reportingStep
+        };
+
+        var (_, command) = await AzureSandboxContainerDeployment.ResolveModeledCommandAsync(stepContext, worker.Resource);
+        var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(
+            environmentValues: [],
+            commandValues: Assert.IsAssignableFrom<IEnumerable<string>>(command));
+
+        var hostRule = Assert.Single(egressPolicy.HostRules);
+        Assert.Equal("api.example.test", hostRule.Pattern);
+    }
+
+    [Fact]
+    public async Task SandboxDeploymentLeaseSerializesTheSameResourceAcrossStateMigration()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var firstManager = new TestDeploymentStateManager(Path.Combine(tempDirectory.FullName, "legacy", "state.json"));
+            var secondManager = new TestDeploymentStateManager(Path.Combine(tempDirectory.FullName, "canonical", "state.json"));
+            var firstLease = await AzureSandboxContainerDeployment.AcquireDeploymentLeaseAsync(
+                firstManager,
+                "app-host",
+                "Development",
+                "Azure:Sandboxes:web",
+                CancellationToken.None);
+            Assert.NotNull(firstLease);
+            using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var secondLeaseTask = AzureSandboxContainerDeployment.AcquireDeploymentLeaseAsync(
+                secondManager,
+                "app-host",
+                "development",
+                "Azure:Sandboxes:web",
+                cancellationTokenSource.Token);
+
+            await Task.Delay(100, cancellationTokenSource.Token);
+            Assert.False(secondLeaseTask.IsCompleted);
+
+            firstLease.Dispose();
+            using var secondLease = await secondLeaseTask;
+            Assert.NotNull(secondLease);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
     private static async Task<List<PipelineStep>> CreateStepsAsync(
         DistributedApplication app,
         IResource resource,
@@ -2939,9 +3101,12 @@ public class AzureSandboxesTests
         public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class FailingPortRemovalClient : IAzureDevComputeClient
+    private sealed class FailingPortRemovalClient(Exception? portRemovalException = null) : IAzureDevComputeClient
     {
+        private readonly Exception _portRemovalException = portRemovalException ?? new HttpRequestException("port removal failed");
+
         public bool DeleteSandboxCalled { get; private set; }
+        public bool DeleteDiskImageCalled { get; private set; }
 
         public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(
             AzureDevComputeResourceScope scope,
@@ -2949,7 +3114,7 @@ public class AzureSandboxesTests
             AzureDevComputeRemovePortRequest request,
             CancellationToken cancellationToken)
         {
-            throw new HttpRequestException("port removal failed");
+            return Task.FromException<List<AzureDevComputeSandboxPort>>(_portRemovalException);
         }
 
         public Task DeleteSandboxAsync(
@@ -2965,10 +3130,24 @@ public class AzureSandboxesTests
         public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(AzureDevComputeResourceScope scope, string? labels, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken)
+        {
+            DeleteDiskImageCalled = true;
+            return Task.CompletedTask;
+        }
         public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class TestDeploymentStateManager(string stateFilePath) : IDeploymentStateManager
+    {
+        public string StateFilePath { get; } = stateFilePath;
+
+        public Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class RecordingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler

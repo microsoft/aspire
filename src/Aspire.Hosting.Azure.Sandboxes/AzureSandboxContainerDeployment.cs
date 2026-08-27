@@ -19,6 +19,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -221,13 +222,24 @@ internal static class AzureSandboxContainerDeployment
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
         var dataPlaneScope = CreateDataPlaneScope(resource.Parent);
         var client = CreateAzureDevComputeClient(context);
+        var configuration = context.Services.GetRequiredService<IConfiguration>();
+        var environmentName = context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName;
+        var appHostIdentity = GetStableAppHostIdentity(configuration);
 
+        // Creating, committing, and pruning form one reconciliation transaction. The deployment-state
+        // manager serializes state writes, but remote ADC operations happen outside those writes, so
+        // concurrent processes must hold a resource-scoped lease across the complete transaction.
+        using var deploymentLease = await AcquireDeploymentLeaseAsync(
+            deploymentStateManager,
+            appHostIdentity,
+            environmentName,
+            GetStateSectionName(resource),
+            context.CancellationToken).ConfigureAwait(false);
         var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
         ValidateDeploymentScope(stateSection, dataPlaneScope);
         var previousStateSection = CloneStateSection(stateSection);
-        var environmentName = context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName;
         var ownerId = CreateStableOwnerId(
-            GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
+            appHostIdentity,
             environmentName,
             dataPlaneScope,
             resource.Name);
@@ -235,7 +247,7 @@ internal static class AzureSandboxContainerDeployment
         var ownerChanged = !string.IsNullOrWhiteSpace(previousOwnerId) &&
             !string.Equals(previousOwnerId, ownerId, StringComparison.Ordinal);
         var legacyOwnerId = CreateLegacyStableOwnerId(
-            GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
+            appHostIdentity,
             dataPlaneScope,
             resource.Name);
         var pendingOwnerCleanupIds = GetPendingOwnerCleanupIds(previousStateSection, ownerId, legacyOwnerId);
@@ -289,7 +301,7 @@ internal static class AzureSandboxContainerDeployment
             }
             AddManagedIdentityEnvironmentVariables(targetResource, environmentVariables);
             var identitySettings = ResolveIdentitySettings(targetResource);
-            var egressPolicy = CreateEgressPolicy(environmentVariables.Values);
+            var egressPolicy = CreateEgressPolicy(environmentVariables.Values, imageMetadata.Command);
 
             var createTask = await context.ReportingStep.CreateTaskAsync($"Creating sandbox for {targetResource.Name}", context.CancellationToken).ConfigureAwait(false);
             await using (createTask.ConfigureAwait(false))
@@ -792,8 +804,14 @@ internal static class AzureSandboxContainerDeployment
     }
 
     internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(IEnumerable<string> environmentValues)
+        => CreateEgressPolicy(environmentValues, commandValues: null);
+
+    internal static AzureDevComputeSandboxEgressPolicy CreateEgressPolicy(
+        IEnumerable<string> environmentValues,
+        IEnumerable<string>? commandValues)
     {
         var allowedHosts = environmentValues
+            .Concat(commandValues ?? [])
             .SelectMany(GetOutboundHttpHosts)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
@@ -812,6 +830,31 @@ internal static class AzureSandboxContainerDeployment
                 })
             ]
         };
+    }
+
+    internal static async Task<FileLock?> AcquireDeploymentLeaseAsync(
+        IDeploymentStateManager deploymentStateManager,
+        string appHostIdentity,
+        string environmentName,
+        string stateSectionName,
+        CancellationToken cancellationToken)
+    {
+        if (deploymentStateManager.StateFilePath is not { Length: > 0 } stateFilePath)
+        {
+            return null;
+        }
+
+        var stateDirectory = Path.GetDirectoryName(Path.GetFullPath(stateFilePath))
+            ?? throw new InvalidOperationException("The deployment state file must have a parent directory.");
+        var deploymentsDirectory = Path.GetDirectoryName(stateDirectory) ?? stateDirectory;
+        var lockIdentity = $"{appHostIdentity}\0{environmentName.ToLowerInvariant()}\0{stateSectionName}";
+        var lockName = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(lockIdentity)).ToString("x16", CultureInfo.InvariantCulture);
+        var lockPath = Path.Combine(
+            deploymentsDirectory,
+            ".locks",
+            $"azure-sandbox-{lockName}.lock");
+
+        return await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
     }
 
     private static IEnumerable<string> GetOutboundHttpHosts(string value)
@@ -1196,10 +1239,16 @@ internal static class AzureSandboxContainerDeployment
     internal static async Task DestroyAsync(PipelineStepContext context, AzureSandboxContainerResource resource)
     {
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
-        var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
-        var ownerId = stateSection.Data["OwnerId"]?.GetValue<string>();
         var appHostIdentity = GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>());
         var environmentName = context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName;
+        using var deploymentLease = await AcquireDeploymentLeaseAsync(
+            deploymentStateManager,
+            appHostIdentity,
+            environmentName,
+            GetStateSectionName(resource),
+            context.CancellationToken).ConfigureAwait(false);
+        var stateSection = await deploymentStateManager.AcquireSectionAsync(GetStateSectionName(resource), context.CancellationToken).ConfigureAwait(false);
+        var ownerId = stateSection.Data["OwnerId"]?.GetValue<string>();
         if (!HasRemoteDeploymentState(stateSection))
         {
             AzureDevComputeResourceScope fallbackScope;
@@ -1286,6 +1335,12 @@ internal static class AzureSandboxContainerDeployment
 
         foreach (var sectionName in staleResourceNames)
         {
+            using var deploymentLease = await AcquireDeploymentLeaseAsync(
+                deploymentStateManager,
+                GetStableAppHostIdentity(context.Services.GetRequiredService<IConfiguration>()),
+                context.Services.GetRequiredService<IHostEnvironment>().EnvironmentName,
+                sectionName,
+                context.CancellationToken).ConfigureAwait(false);
             var stateSection = await deploymentStateManager.AcquireSectionAsync(sectionName, context.CancellationToken).ConfigureAwait(false);
             if (!HasRemoteDeploymentState(stateSection))
             {
@@ -1440,23 +1495,47 @@ internal static class AzureSandboxContainerDeployment
         };
     }
 
-    private static async Task DeleteExistingDeploymentAsync(
+    internal static async Task DeleteExistingDeploymentAsync(
         PipelineStepContext context,
         IAzureDevComputeClient client,
         AzureDevComputeResourceScope scope,
         DeploymentStateSection stateSection,
         bool throwOnError)
     {
+        List<Exception>? failures = throwOnError ? [] : null;
         var sandboxId = stateSection.Data["SandboxId"]?.GetValue<string>();
         if (!string.IsNullOrWhiteSpace(sandboxId))
         {
-            await DeleteSandboxAsync(context, client, scope, sandboxId, GetStatePorts(stateSection), throwOnError).ConfigureAwait(false);
+            try
+            {
+                await DeleteSandboxAsync(context, client, scope, sandboxId, GetStatePorts(stateSection), throwOnError).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !context.CancellationToken.IsCancellationRequested)
+            {
+                failures!.Add(ex);
+            }
         }
 
         var diskImageId = stateSection.Data["DiskImageId"]?.GetValue<string>();
         if (!string.IsNullOrWhiteSpace(diskImageId))
         {
-            await DeleteDiskImageAsync(context, client, scope, diskImageId, throwOnError).ConfigureAwait(false);
+            try
+            {
+                await DeleteDiskImageAsync(context, client, scope, diskImageId, throwOnError).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !context.CancellationToken.IsCancellationRequested)
+            {
+                failures!.Add(ex);
+            }
+        }
+
+        if (failures is [var failure])
+        {
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+        else if (failures is [_, _, ..])
+        {
+            throw new AggregateException("Multiple failures occurred while deleting the previous Azure sandbox deployment.", failures);
         }
     }
 
@@ -2109,7 +2188,7 @@ internal static class AzureSandboxContainerDeployment
         CancellationToken? cancellationToken = null)
     {
         var effectiveCancellationToken = cancellationToken ?? context.CancellationToken;
-        Exception? portRemovalException = null;
+        List<Exception>? failures = throwOnError ? [] : null;
 
         foreach (var port in ports.Distinct())
         {
@@ -2121,11 +2200,11 @@ internal static class AzureSandboxContainerDeployment
                     new AzureDevComputeRemovePortRequest { Port = port },
                     effectiveCancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException || !effectiveCancellationToken.IsCancellationRequested)
             {
                 if (throwOnError)
                 {
-                    portRemovalException ??= ex;
+                    failures!.Add(ex);
                 }
                 else
                 {
@@ -2138,25 +2217,25 @@ internal static class AzureSandboxContainerDeployment
         {
             await client.DeleteSandboxAsync(scope, sandboxId, effectiveCancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !effectiveCancellationToken.IsCancellationRequested)
         {
             if (!throwOnError)
             {
                 context.Logger.LogWarning(ex, "Failed to delete sandbox '{SandboxId}'.", sandboxId);
             }
-            else if (portRemovalException is null)
-            {
-                throw;
-            }
             else
             {
-                context.Logger.LogWarning(ex, "Failed to delete sandbox '{SandboxId}' after a port removal failure.", sandboxId);
+                failures!.Add(ex);
             }
         }
 
-        if (portRemovalException is not null)
+        if (failures is [var failure])
         {
-            ExceptionDispatchInfo.Capture(portRemovalException).Throw();
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+        else if (failures is [_, _, ..])
+        {
+            throw new AggregateException($"Multiple failures occurred while deleting Azure sandbox '{sandboxId}'.", failures);
         }
     }
 
@@ -2168,11 +2247,13 @@ internal static class AzureSandboxContainerDeployment
         bool throwOnError,
         CancellationToken? cancellationToken = null)
     {
+        var effectiveCancellationToken = cancellationToken ?? context.CancellationToken;
         try
         {
-            await client.DeleteDiskImageAsync(scope, diskImageId, cancellationToken ?? context.CancellationToken).ConfigureAwait(false);
+            await client.DeleteDiskImageAsync(scope, diskImageId, effectiveCancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (!throwOnError && ex is not OperationCanceledException)
+        catch (Exception ex) when (!throwOnError &&
+            (ex is not OperationCanceledException || !effectiveCancellationToken.IsCancellationRequested))
         {
             context.Logger.LogWarning(ex, "Failed to delete sandbox disk image '{DiskImageId}'.", diskImageId);
         }
