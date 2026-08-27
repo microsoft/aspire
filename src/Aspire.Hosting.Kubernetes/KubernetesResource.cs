@@ -452,8 +452,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             }
 
             // Kubernetes projects environment values through normalized Helm paths. Keeping both generated
-            // aliases would map them to the same values key, so deploy only the portable physical name.
-            environmentVariables.Remove(names.LegacyName);
+            // aliases would map them to the same values key, so deploy only the portable physical name. The
+            // exact logical name wins when both aliases are present, so retain any later override of its value.
+            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            {
+                environmentVariables[names.PortableName] = legacyValue;
+            }
         }
     }
 

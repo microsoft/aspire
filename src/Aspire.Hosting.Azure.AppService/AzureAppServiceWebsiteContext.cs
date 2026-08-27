@@ -98,7 +98,12 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         foreach (var alias in aliases)
         {
-            EnvironmentVariables.Remove(alias.LegacyName);
+            if (EnvironmentVariables.Remove(alias.LegacyName, out var legacyValue))
+            {
+                // The exact logical name wins when both aliases are present in the same configuration
+                // provider. Preserve that precedence when App Service can only receive the portable alias.
+                EnvironmentVariables[alias.PortableName] = legacyValue;
+            }
         }
     }
 

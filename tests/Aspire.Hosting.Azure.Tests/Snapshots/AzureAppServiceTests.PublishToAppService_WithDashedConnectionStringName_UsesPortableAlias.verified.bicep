@@ -60,7 +60,7 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
         }
         {
           name: 'ConnectionStrings__my_db'
-          value: 'Host=example'
+          value: 'Host=override'
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'

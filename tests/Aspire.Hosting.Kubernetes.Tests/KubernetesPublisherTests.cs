@@ -267,6 +267,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment("param3", param3)
             .WithReference(cs)
             .WithReference(csPlain)
+            .WithEnvironment("ConnectionStrings__api-cs2", "override")
             .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionProperties)
             .WithReference(manualAlias)
             .WithEnvironment("ConnectionStrings__manual-db", "manual");

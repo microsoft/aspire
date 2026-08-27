@@ -208,6 +208,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
             .WithReference(cs)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override")
             .PublishAsAzureAppServiceWebsite(configure: (_, _) => { });
 
         using var app = builder.Build();
