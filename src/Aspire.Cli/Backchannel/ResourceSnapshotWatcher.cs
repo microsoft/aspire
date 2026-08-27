@@ -27,8 +27,6 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
     private int _updateConsumerClaimed;
     private long _updateSequence;
     private bool _resyncPending;
-    private volatile Exception? _watchException;
-
     public ResourceSnapshotWatcher(
         IAppHostAuxiliaryBackchannel connection,
         ILogger<ResourceSnapshotWatcher> logger,
@@ -74,35 +72,7 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
             // calls are not ordered. Version-aware connections retain the newest observed snapshot; for older
             // connections, the GET snapshot replaces the replay to preserve the original GET-first behavior.
             using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var cancellationArbitrationLock = new object();
-            var cleanupCancellationStarted = false;
-            OperationCanceledException? preCleanupWatchCancellation = null;
-
-            async Task WatchWithCancellationAttributionAsync()
-            {
-                try
-                {
-                    await WatchChangesAsync(watchCts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException ex) when (
-                    ex.CancellationToken == watchCts.Token ||
-                    ex.CancellationToken == default)
-                {
-                    // The lock is the cleanup linearization point. Outer cancellation can cancel
-                    // the linked token before cleanup starts, so that cancellation is not independent.
-                    lock (cancellationArbitrationLock)
-                    {
-                        if (!cleanupCancellationStarted && !watchCts.IsCancellationRequested)
-                        {
-                            preCleanupWatchCancellation = ex;
-                        }
-                    }
-
-                    throw;
-                }
-            }
-
-            var watchTask = WatchWithCancellationAttributionAsync();
+            var watchTask = WatchChangesAsync(watchCts.Token);
             List<ResourceSnapshot> snapshots;
             try
             {
@@ -110,47 +80,23 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
             }
             catch
             {
-                Exception? cancellationException = null;
+                // Cleanup failures must not replace the initial GET failure.
                 try
                 {
-                    lock (cancellationArbitrationLock)
-                    {
-                        cleanupCancellationStarted = true;
-                    }
-
                     watchCts.Cancel();
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    // Preserve the initial-load exception while retaining a cancellation callback
-                    // failure for diagnostics after the already-started watch has been observed.
-                    cancellationException = ex;
                 }
 
                 try
                 {
                     await watchTask.ConfigureAwait(false);
                 }
-                catch (OperationCanceledException watchException) when (
-                    watchException.CancellationToken == watchCts.Token ||
-                    watchException.CancellationToken == default)
+                catch (Exception)
                 {
-                    lock (cancellationArbitrationLock)
-                    {
-                        if (preCleanupWatchCancellation is not null)
-                        {
-                            _watchException = preCleanupWatchCancellation;
-                        }
-                    }
-                }
-                catch (Exception watchException)
-                {
-                    // Preserve the initial-load exception for callers while still observing any
-                    // independent failure raised as the already-started watch is canceled.
-                    _watchException = watchException;
                 }
 
-                _watchException ??= cancellationException;
                 throw;
             }
 
@@ -178,11 +124,7 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
         }
         catch (Exception ex)
         {
-            if (!_initialLoadTcs.TrySetException(ex))
-            {
-                // Initial load already completed; store for callers to detect.
-                _watchException = ex;
-            }
+            _initialLoadTcs.TrySetException(ex);
             _updateSignal?.Writer.TryComplete(ex);
         }
     }
@@ -298,11 +240,6 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
             }
         }
     }
-
-    /// <summary>
-    /// Gets an independent exception that terminated the watch loop, or <see langword="null"/> if no watch failure was observed.
-    /// </summary>
-    public Exception? WatchException => _watchException;
 
     private void EnsureInitialLoadComplete()
     {
