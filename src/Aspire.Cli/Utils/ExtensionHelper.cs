@@ -36,7 +36,6 @@ internal static class KnownCapabilities
     public const string Baseline = "baseline.v1";
     public const string SecretPrompts = "secret-prompts.v1";
     public const string FilePickers = "file-pickers.v1";
-    public const string ErrorNotificationLogAction = "error-notification-log-action.v1";
     public const string Pipelines = "pipelines";
     public const string PipelineStepListJson = "pipeline-step-list-json.v1";
 

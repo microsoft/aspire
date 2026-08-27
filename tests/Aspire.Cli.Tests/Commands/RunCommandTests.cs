@@ -907,9 +907,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line == MissingSdkBuildError);
         Assert.Contains(InteractionServiceStrings.ProjectCouldNotBeBuilt, interactionService.DisplayedErrors);
-        var displayedError = Assert.Single(interactionService.DisplayedErrorsWithLogFiles);
-        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, displayedError.ErrorMessage);
-        Assert.Equal(provider.GetRequiredService<CliExecutionContext>().LogFilePath, displayedError.LogFilePath);
     }
 
     [Fact]
@@ -940,9 +937,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line == MissingSdkBuildError);
         Assert.Contains(InteractionServiceStrings.ProjectCouldNotBeBuilt, interactionService.DisplayedErrors);
-        var displayedError = Assert.Single(interactionService.DisplayedErrorsWithLogFiles);
-        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, displayedError.ErrorMessage);
-        Assert.Equal(provider.GetRequiredService<CliExecutionContext>().LogFilePath, displayedError.LogFilePath);
     }
 
     [Fact]

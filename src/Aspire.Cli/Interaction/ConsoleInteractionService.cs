@@ -499,16 +499,6 @@ internal class ConsoleInteractionService : IInteractionService
         WriteEmojiMessage(_errorConsole, _stderrLogger, KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
-    public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false)
-    {
-        DisplayError(errorMessage, allowMarkup);
-        DisplayMessage(
-            KnownEmojis.PageFacingUp,
-            string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(this, logFilePath)),
-            allowMarkup: true,
-            consoleOverride: ConsoleOutput.Error);
-    }
-
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
         WriteEmojiMessage(GetConsoleOutput(consoleOverride), GetLogger(consoleOverride), emoji, message, allowMarkup);

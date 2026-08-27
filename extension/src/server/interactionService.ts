@@ -16,6 +16,7 @@ import type { AppHostSelectionOrigin } from '../debugger/AspireDebugConfiguratio
 import { isDirectory } from '../utils/io';
 import { sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
+import { getAbsolutePathSuffix } from '../utils/diagnosticLogPath';
 
 export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
@@ -27,7 +28,7 @@ export interface IInteractionService extends vscode.Disposable {
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
     promptForSelections: (promptText: string, choices: string[]) => Promise<string[] | null>;
     displayIncompatibleVersionError: (requiredCapability: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) => Promise<void>;
-    displayError: (errorMessage: string, logFilePath?: string) => void;
+    displayError: (errorMessage: string) => void;
     displayMessage: (emoji: string, message: string) => void;
     displaySuccess: (message: string) => void;
     displaySubtleMessage: (message: string) => void;
@@ -166,11 +167,20 @@ type DebugSessionOptions = {
     appHostSelectionOrigin?: AppHostSelectionOrigin;
 };
 
+const cliLogMessageEmoji = 'page_facing_up';
+const errorNotificationCoalesceDelayMs = 500;
+
+interface PendingErrorNotification {
+    readonly message: string;
+    readonly timeout: ReturnType<typeof setTimeout>;
+}
+
 export class InteractionService implements IInteractionService {
     private _getAspireDebugSession: () => AspireDebugSession | null;
 
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
+    private _pendingErrorNotification: PendingErrorNotification | undefined;
     private _isDisposed = false;
 
     constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
@@ -342,27 +352,30 @@ export class InteractionService implements IInteractionService {
         });
     }
 
-    displayError(errorMessage: string, logFilePath?: string) {
+    displayError(errorMessage: string) {
         if (errorMessage.length === 0) {
             extensionLogOutputChannel.warn('Attempted to display an empty error message.');
             return;
         }
 
         extensionLogOutputChannel.error(`Displaying error: ${errorMessage}`);
-        const formattedMessage = formatText(errorMessage);
-        if (logFilePath) {
-            void (async () => {
-                const selected = await vscode.window.showErrorMessage(formattedMessage, resourceCommandOpenCliLog);
-                if (selected === resourceCommandOpenCliLog) {
-                    await vscode.commands.executeCommand('aspire-vscode.viewAppHostLogFile', logFilePath);
-                }
-            })().catch(error => {
-                extensionLogOutputChannel.error(`Failed to handle the CLI log notification action: ${error}`);
-            });
-        }
-        else {
-            void vscode.window.showErrorMessage(formattedMessage);
-        }
+        this._flushPendingErrorNotification();
+
+        // A command failure is sent as two sequential RPC requests:
+        //   displayError("The project could not be built.")
+        //   displayMessage("page_facing_up", "See logs at C:\\...\\cli_....log")
+        // Keep the error briefly so the second request can turn both into one actionable
+        // notification. Standalone errors still appear when the window elapses.
+        const message = formatText(errorMessage);
+        let pendingError: PendingErrorNotification;
+        const timeout = setTimeout(() => {
+            if (this._pendingErrorNotification === pendingError) {
+                this._pendingErrorNotification = undefined;
+                this._showErrorNotification(pendingError.message);
+            }
+        }, errorNotificationCoalesceDelayMs);
+        pendingError = { message, timeout };
+        this._pendingErrorNotification = pendingError;
         this.clearProgressNotification();
     }
 
@@ -374,7 +387,18 @@ export class InteractionService implements IInteractionService {
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
         this.clearProgressNotification();
-        vscode.window.showInformationMessage(formatText(message));
+
+        const logFilePath = emoji === cliLogMessageEmoji
+            ? getAbsolutePathSuffix(message)
+            : undefined;
+        if (logFilePath && this._pendingErrorNotification) {
+            const errorMessage = this._takePendingErrorNotification();
+            this._showErrorNotification(errorMessage, logFilePath);
+            return;
+        }
+
+        this._flushPendingErrorNotification();
+        void vscode.window.showInformationMessage(formatText(message));
     }
 
     // There is no need for a different success message handler, as a general informative message ~= success
@@ -386,6 +410,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying success message: ${message}`);
+        this._flushPendingErrorNotification();
         this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
@@ -402,6 +427,7 @@ export class InteractionService implements IInteractionService {
 
     displayPlainText(message: string) {
         extensionLogOutputChannel.info(`Displaying plain text: ${message}`);
+        this._flushPendingErrorNotification();
         this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
@@ -723,8 +749,41 @@ export class InteractionService implements IInteractionService {
         // The RPC connection owning this service is going away, so tear down any progress it
         // still has on screen. Otherwise a CLI that dies with the extension leaves a permanent
         // "Building..." indicator that nothing is left alive to clear.
+        this._flushPendingErrorNotification();
         this._isDisposed = true;
         this._progressNotifier.clear();
+    }
+
+    private _takePendingErrorNotification(): string {
+        const pendingError = this._pendingErrorNotification;
+        if (!pendingError) {
+            throw new Error('No pending error notification is available.');
+        }
+
+        clearTimeout(pendingError.timeout);
+        this._pendingErrorNotification = undefined;
+        return pendingError.message;
+    }
+
+    private _flushPendingErrorNotification(): void {
+        if (this._pendingErrorNotification) {
+            this._showErrorNotification(this._takePendingErrorNotification());
+        }
+    }
+
+    private _showErrorNotification(message: string, logFilePath?: string): void {
+        if (!logFilePath) {
+            void vscode.window.showErrorMessage(message);
+            return;
+        }
+
+        void Promise.resolve(vscode.window.showErrorMessage(message, resourceCommandOpenCliLog)).then(async selected => {
+            if (selected === resourceCommandOpenCliLog) {
+                await vscode.commands.executeCommand('aspire-vscode.viewAppHostLogFile', logFilePath);
+            }
+        }).catch((error: unknown) => {
+            extensionLogOutputChannel.error(`Failed to handle the CLI log notification action: ${error}`);
+        });
     }
 
     /**

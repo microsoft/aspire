@@ -196,20 +196,10 @@ internal abstract class BaseCommand : Command
         }
 
         var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
-        var shouldDisplayErrorLogs = isErrorExitCode
-            && !result.ShouldDisplayHelp
-            && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode);
 
         if (result.ErrorMessage is not null)
         {
-            if (shouldDisplayErrorLogs)
-            {
-                InteractionService.DisplayErrorWithLogFile(result.ErrorMessage, _executionContext.LogFilePath);
-            }
-            else
-            {
-                InteractionService.DisplayError(result.ErrorMessage);
-            }
+            InteractionService.DisplayError(result.ErrorMessage);
         }
 
         if (result.ShouldDisplayHelp)
@@ -226,16 +216,13 @@ internal abstract class BaseCommand : Command
         // Display the CLI log file path on non-zero exit codes so the user knows
         // where to find diagnostic details. Suppress for user-input errors where
         // the log wouldn't contain useful context (e.g., missing required arguments).
-        if (shouldDisplayErrorLogs)
+        if (isErrorExitCode && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode))
         {
-            if (result.ErrorMessage is null)
-            {
-                InteractionService.DisplayMessage(
-                    KnownEmojis.PageFacingUp,
-                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, _executionContext.LogFilePath)),
-                    allowMarkup: true,
-                    consoleOverride: ConsoleOutput.Error);
-            }
+            InteractionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, _executionContext.LogFilePath)),
+                allowMarkup: true,
+                consoleOverride: ConsoleOutput.Error);
 
             // If we connected to a running app host, also display the log file path of
             // the CLI process that launched it so users can diagnose issues in both processes.

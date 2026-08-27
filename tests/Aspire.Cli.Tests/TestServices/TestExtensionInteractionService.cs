@@ -114,11 +114,6 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         DisplayErrorCallback?.Invoke(errorMessage);
     }
 
-    public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false)
-    {
-        DisplayErrorCallback?.Invoke(errorMessage);
-    }
-
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
     }

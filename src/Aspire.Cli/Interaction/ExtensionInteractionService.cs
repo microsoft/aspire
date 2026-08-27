@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Globalization;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Resources;
@@ -397,41 +396,6 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         {
             await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(errorMessage), _cancellationToken);
             _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
-        });
-        Debug.Assert(result);
-    }
-
-    public void DisplayErrorWithLogFile(string errorMessage, string logFilePath, bool allowMarkup = false)
-    {
-        var logMessage = string.Format(
-            CultureInfo.CurrentCulture,
-            InteractionServiceStrings.SeeLogsAt,
-            MarkupHelpers.SafeFileLink(this, logFilePath));
-        var plainErrorMessage = StringUtils.RemoveMarkup(errorMessage);
-        var plainLogMessage = StringUtils.RemoveMarkup(logMessage);
-
-        var result = _extensionTaskChannel.Writer.TryWrite(async () =>
-        {
-            // The extra RPC argument is capability-gated so an older extension keeps receiving
-            // the original error and log notifications instead of an unsupported request shape.
-            if (await Backchannel.HasCapabilityAsync(KnownCapabilities.ErrorNotificationLogAction, _cancellationToken).ConfigureAwait(false))
-            {
-                await Backchannel.DisplayErrorWithLogFileAsync(plainErrorMessage, logFilePath, _cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                await Backchannel.DisplayErrorAsync(plainErrorMessage, _cancellationToken).ConfigureAwait(false);
-                await Backchannel.DisplayMessageAsync(KnownEmojis.PageFacingUp.Name, plainLogMessage, _cancellationToken).ConfigureAwait(false);
-            }
-
-            // Keep both lines in the CLI streams because the extension mirrors them into the
-            // Debug Console, where the complete build diagnostics remain available.
-            _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
-            _consoleInteractionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                logMessage,
-                allowMarkup: true,
-                consoleOverride: ConsoleOutput.Error);
         });
         Debug.Assert(result);
     }

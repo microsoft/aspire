@@ -410,12 +410,8 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var expectedErrorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, "Something went wrong");
         Assert.Contains(expectedErrorMessage, testInteractionService.DisplayedErrors);
 
-        var executionContext = provider.GetRequiredService<CliExecutionContext>();
-        var displayedErrorWithLogFile = Assert.Single(testInteractionService.DisplayedErrorsWithLogFiles);
-        Assert.Equal(expectedErrorMessage, displayedErrorWithLogFile.ErrorMessage);
-        Assert.Equal(executionContext.LogFilePath, displayedErrorWithLogFile.LogFilePath);
-
         // Verify log file path was displayed on stderr
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
         var expectedLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, executionContext.LogFilePath);
         var logMessage = Assert.Single(testInteractionService.DisplayedMessages, m => m.Message == expectedLogMessage);
         Assert.Equal(ConsoleOutput.Error, logMessage.ConsoleOverride);

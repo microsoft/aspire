@@ -386,30 +386,82 @@ suite('InteractionService endpoints', () => {
 
 	test('displayError endpoint', async () => {
 		const testInfo = await createTestRpcServer();
-		const showErrorMessageSpy = sinon.spy(vscode.window, 'showErrorMessage');
-		testInfo.interactionService.displayError('Test error message');
-		assert.ok(showErrorMessageSpy.calledWith('Test error message'));
-		showErrorMessageSpy.restore();
+		const sandbox = sinon.createSandbox();
+		const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+		try {
+			const showErrorMessageSpy = sandbox.spy(vscode.window, 'showErrorMessage');
+			testInfo.interactionService.displayError('Test error message');
+
+			assert.strictEqual(showErrorMessageSpy.called, false);
+			await clock.runAllAsync();
+			assert.ok(showErrorMessageSpy.calledWith('Test error message'));
+		}
+		finally {
+			clock.restore();
+			sandbox.restore();
+		}
 	});
 
-	test('displayError endpoint opens an associated CLI log from its action', async () => {
+	test('displayError and CLI log message endpoints coalesce into one actionable error', async () => {
 		const testInfo = await createTestRpcServer();
 		const sandbox = sinon.createSandbox();
-		const logFilePath = path.join(os.tmpdir(), 'aspire.cli.log');
+		const logFilePath = path.join(path.parse(process.cwd()).root, 'logs with spaces', 'aspire.cli.log');
 
 		try {
 			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(resourceCommandOpenCliLog as any);
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage');
 			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
 
-			testInfo.interactionService.displayError('Test error message', logFilePath);
+			testInfo.interactionService.displayError('Test error message');
+			testInfo.interactionService.displayMessage('page_facing_up', `Diagnoseprotokoll: ${logFilePath}`);
 			await new Promise<void>(resolve => setImmediate(resolve));
 
 			assert.strictEqual(showErrorMessageStub.callCount, 1);
 			assert.deepStrictEqual(showErrorMessageStub.firstCall.args, ['Test error message', resourceCommandOpenCliLog]);
+			assert.strictEqual(showInformationMessageStub.called, false);
 			assert.ok(executeCommandStub.calledOnceWith('aspire-vscode.viewAppHostLogFile', logFilePath));
 		}
 		finally {
 			sandbox.restore();
+		}
+	});
+
+	test('displayError preserves separate notifications for a non-log message', () => {
+		const testInfo = new TestCliRpcClient(null, () => null);
+		const sandbox = sinon.createSandbox();
+		const logFilePath = path.join(path.parse(process.cwd()).root, 'logs', 'aspire.cli.log');
+
+		try {
+			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage');
+
+			testInfo.interactionService.displayError('Test error message');
+			testInfo.interactionService.displayMessage('information', `Output written to ${logFilePath}`);
+
+			assert.ok(showErrorMessageStub.calledOnceWith('Test error message'));
+			assert.ok(showInformationMessageStub.calledOnceWith(`Output written to ${logFilePath}`));
+		}
+		finally {
+			testInfo.dispose();
+			sandbox.restore();
+		}
+	});
+
+	test('disposing the interaction service flushes a pending error', () => {
+		const testInfo = new TestCliRpcClient(null, () => null);
+		const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage');
+
+		try {
+			testInfo.interactionService.displayError('Test error message');
+			assert.strictEqual(showErrorMessageStub.called, false);
+
+			testInfo.dispose();
+
+			assert.ok(showErrorMessageStub.calledOnceWith('Test error message'));
+		}
+		finally {
+			showErrorMessageStub.restore();
 		}
 	});
 

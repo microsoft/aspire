@@ -25,7 +25,6 @@ internal interface IExtensionBackchannel
     Task DisplaySuccessAsync(string message, CancellationToken cancellationToken);
     Task DisplaySubtleMessageAsync(string message, CancellationToken cancellationToken);
     Task DisplayErrorAsync(string error, CancellationToken cancellationToken);
-    Task DisplayErrorWithLogFileAsync(string error, string logFilePath, CancellationToken cancellationToken);
     Task DisplayEmptyLineAsync(CancellationToken cancellationToken);
     Task DisplayIncompatibleVersionErrorAsync(string requiredCapability, string appHostHostingSdkVersion, CancellationToken cancellationToken);
     Task DisplayCancellationMessageAsync(CancellationToken cancellationToken);
@@ -398,22 +397,6 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         await rpc.InvokeWithCancellationAsync(
             "displayError",
             [_token, error],
-            cancellationToken);
-    }
-
-    public async Task DisplayErrorWithLogFileAsync(string error, string logFilePath, CancellationToken cancellationToken)
-    {
-        await ConnectAsync(cancellationToken);
-
-        using var activity = _activitySource.StartActivity();
-
-        var rpc = await _rpcTaskCompletionSource.Task;
-
-        _logger.LogDebug("Sent error message with a log file action");
-
-        await rpc.InvokeWithCancellationAsync(
-            "displayError",
-            [_token, error, logFilePath],
             cancellationToken);
     }
 
