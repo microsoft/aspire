@@ -72,9 +72,9 @@ export interface CliVersionStatusOptions {
     timeoutMs?: number;
 }
 
-export interface CliUpdateRecommendationOptions extends CliVersionStatusOptions {
+export type CliUpdateRecommendationOptions = Omit<CliVersionStatusOptions, 'timeoutMs'> & {
     identityChannelOverride?: string;
-}
+};
 
 export interface CliVersionInfo {
     cliPath: string;
