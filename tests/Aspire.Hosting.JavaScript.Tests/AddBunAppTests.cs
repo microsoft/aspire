@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -366,7 +365,7 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
 
         var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts");
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(bunApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(bunApp.Resource);
 
         Assert.Equal("bun", launchConfig.Type);
         Assert.Equal("bun", launchConfig.RuntimeExecutable);
@@ -387,25 +386,18 @@ public class AddBunAppTests(ITestOutputHelper outputHelper)
         var bunApp = builder.AddBunApp("bunapp", workspace.Path, "server.ts")
             .WithRunScript("dev");
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(bunApp.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(bunApp.Resource);
 
         Assert.Equal("bun", launchConfig.Type);
         Assert.Equal("bun", launchConfig.RuntimeExecutable);
         Assert.Equal("package-manager", launchConfig.LaunchMethod);
     }
 
-    private static async Task<JavaScriptLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    private static async Task<JavaScriptLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
-
-        var exe = Executable.Create("test", "bun");
         var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<JavaScriptLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigs));
-        return Assert.Single(launchConfigs);
+        return Assert.IsType<JavaScriptLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
     }
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only

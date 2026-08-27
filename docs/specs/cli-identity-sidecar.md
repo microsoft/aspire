@@ -6,13 +6,14 @@
 
 Tracked in PR [#18087](https://github.com/microsoft/aspire/pull/18087). The resolver and the full call-site migration have **landed together** as the spec requires.
 
-- **Resolver + `CliExecutionContext`.** `IIdentityResolver` (`IdentityResolver`) composes env var → sidecar → assembly fallback per field. `CliExecutionContext` exposes `IdentityChannel`, `IdentityVersion`, `IdentityCommit`, plus two derived members beyond the original shape below: `IdentitySdkVersion` (`IdentityVersion` with `+build` metadata stripped — absorbs the old `VersionHelper.GetDefaultSdkVersion()` logic) and `IdentityOverridden` (true when any field came from env or sidecar, used to drive the startup notice).
+- **Resolver + `CliExecutionContext`.** `IIdentityResolver` (`IdentityResolver`) composes env var → sidecar → assembly fallback per field. `CliExecutionContext` exposes `IdentityChannel`, `IdentityVersion`, `IdentityCommit`, plus three derived members beyond the original shape below: `IdentitySdkVersion` (`IdentityVersion` with `+build` metadata stripped — absorbs the old `VersionHelper.GetDefaultSdkVersion()` logic), `IdentityOverridden` (true when any field came from the environment or sidecar), and `IdentityOverrideNoticeRequired` (true for environment overrides and developer-only package/source sidecar overrides).
 - **Call-site migration — complete.** Every identity-conditional decision now reads `CliExecutionContext` (`PackagingService` staging feed/version, `PackageChannel` template filter, `New`/`Add`/`Update` commands, `TemplateNuGetConfigService`, `InitCommand`/`ScaffoldingService` version stamping, `GuestAppHostProject` skew warning, `ExtensionRpcTarget`, SDK/skills generation). Physical-binary reads stay on the assembly and are annotated `// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md)`.
 - **Identity-conditional reads — documented convention.** Physical-binary reads are annotated `// physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md)` at each site, and `VersionHelper` documents that its `GetDefault*Version` helpers bypass identity. The invariant ("identity-sensitive version decisions read `CliExecutionContext`") is enforced by review rather than an automated guardrail. An earlier grep-based test that scanned `src/Aspire.Cli/` for stray physical reads was removed as too brittle (regex over source plus a file-level allow-list).
 - **Telemetry split — done.** Binary `cli.version` / `cli.build_id` are kept; `identity.version` / `identity.channel` (and `identity.commit` when non-empty) are emitted alongside.
 - **`--version` — overridden.** A custom version action (`Commands/IdentityVersionAction.cs`) prints `IdentityVersion` with the optional `IdentityCommit` appended as build metadata (e.g., `13.4.5+73114e86c64aeb9f3f3c7da8e37df1ae4281b27e`), so emulated runs report the emulated version and commit. The non-override output is byte-identical to the System.CommandLine default.
-- **Startup override notice — added.** When `IdentityOverridden` and output is human-readable, a yellow notice on stderr makes a diagnostic run impossible to mistake for a real one.
+- **Startup override notice — added.** When `IdentityOverrideNoticeRequired` and output is human-readable, a yellow notice on stderr makes a diagnostic run impossible to mistake for a real one. Installer-authored sidecar channel/version/commit fields describe the real installed identity and do not trigger this notice.
 - **`aspire doctor` — physical by design.** Doctor reports the *physical* install truth (like `--self`); emulation is surfaced by the startup notice rather than rewiring doctor's assembly-backed channel read (which `DoctorCommandTests` pin). `InstallationDiscovery` and `AspireVersionCheck.TryReadIdentityChannel` are annotated accordingly.
+- **Install-route channel persistence — added.** `get-aspire-cli.{sh,ps1}` writes the channel selected by `--quality`, and `aspire update --self` atomically updates an existing sidecar's channel after a successful executable replacement. Self-update removes existing sidecar `version` and `commit` fields so those executable-specific values resolve from the replacement binary. Explicit-version script installs retain the archive's baked identity because a version alone does not identify its channel.
 - **`ASPIRE_CLI_PACKAGES` packages-directory override — landed.** Resolves (env → sidecar → null) to `CliExecutionContext.IdentityPackagesDirectory`. When set, `PackagingService.GetChannelsAsync` registers a synthesized channel (named after the identity channel) that routes `Aspire*` to the directory and replaces any same-named channel; a fail-fast guardrail rejects a missing directory or duplicate `Aspire*` versions. Documented for repro workflows by the `cli-channel-debugging` skill.
   - **Resolution honors the override under any emulated channel name — fixed.** `aspire new` template resolution (`TemplateNuGetConfigService`) and `aspire add` package search/version-match (`IntegrationPackageSearchService`, `AddCommand`) previously only searched the synthesized local channel when its name looked like a local build (`local`/`pr-<N>`/`run-<N>` via `VersionHelper.IsLocalBuildChannel`). Emulating `stable`/`staging`/`daily` with `ASPIRE_CLI_PACKAGES` therefore fell back to nuget.org. Resolution now recognizes a channel as locally backed by its **mappings** (`PackageChannel.IsBackedByLocalPackageDirectory` — an `Aspire*` mapping pointing at an existing directory) and treats a set `IdentityPackagesDirectory` as a hive signal, so the override works under every emulated identity.
   - **Buildability caveat (all-local "future release").** A `stable` channel deliberately drops no per-project `NuGet.config`. When the emulated local version is not also on nuget.org, the apphost still cannot **build** until the directory is registered as an *ambient* NuGet source, because MSBuild resolves `Aspire.AppHost.Sdk` before restore and reads only `NuGet.config` sources (it ignores `RestoreAdditionalProjectSources`/`ASPIRE_CLI_PACKAGES`). This mirrors how a real `stable` build relies on nuget.org being ambient; see the `cli-channel-debugging` skill (Scenario 7c).
@@ -107,6 +108,47 @@ Each identity field is resolved **independently** so you can override one and in
    - `packages` → `null` (no override; the CLI uses its normal channel/hive package sources).
 
 The resolver distinguishes four outcomes per field, each surfaced in `aspire doctor --self`: `from-env`, `from-sidecar`, `from-assembly-fallback`, `defaulted-to-local`. This makes "is my override actually taking effect?" trivially debuggable and prevents the soft-fallback class of bug the critique flagged (a missing installer write silently looking healthy because the resolver fell back to a baked value).
+
+### Installed identity versus diagnostic emulation
+
+The sidecar has two responsibilities that must not be conflated:
+
+1. `channel`, `version`, and `commit` record the identity assigned by an install route.
+2. `nugetServiceIndexOverride` and `packages` redirect package behavior for development and testing.
+
+The startup warning answers "is this process intentionally behaving differently from a standard
+installation?", not merely "did a value come from outside the assembly?". The warning policy is:
+
+| Effective source | Field or fields | Interpretation | Show warning |
+|---|---|---|---|
+| Assembly fallback or terminal default | Any | Normal physical-build or legacy fallback behavior | No |
+| Sidecar | Any combination of `channel`, `version`, and `commit` | Canonical identity assigned by the installer or updater | No |
+| Environment | Any of `channel`, `version`, or `commit` | Process-local diagnostic emulation of another build | Yes |
+| Sidecar or environment | `nugetServiceIndexOverride` or `packages` | Developer redirection away from standard package sources | Yes |
+| Mixed | Any combination containing a warning-producing row above | Installed identity plus at least one diagnostic override | Yes |
+
+A stable-shaped staging build is the motivating example. The staging archive can deliberately
+contain the same promotable binary that is stamped `stable`, while the script installer or
+`aspire update --self --channel staging` records `channel: "staging"` in the sidecar. That
+sidecar value is the real identity of the installation route, not an emulation, so displaying
+an override warning would be misleading. Version and commit can continue to fall back to the
+new binary until installers persist those fields too.
+
+A legacy sidecar containing only `source` contributes no identity fields, so the resolver falls
+back to the assembly without showing an emulation warning. A missing installer-authored identity
+is a diagnosis concern for `aspire doctor`, not evidence that the current process is emulating
+another build.
+
+`CliExecutionContext.IdentityOverridden` remains deliberately broad: it is true when any field
+comes from the environment or sidecar, because internal behavior must avoid source-tree-only
+assumptions for installed and emulated identities alike. `IdentityOverrideNoticeRequired` is
+the narrower user-facing decision described by the table above. Startup UI must use the latter;
+using `IdentityOverridden` would incorrectly warn for every correctly installed staging build.
+
+There is an unavoidable provenance tradeoff: a manually edited sidecar `channel`, `version`, or
+`commit` is indistinguishable from installer-authored metadata and therefore does not show the
+warning. Environment variables are the preferred mechanism for visible diagnostic emulation.
+The sidecar and environment variables are convenience inputs, not security boundaries.
 
 ### Env-var scope: process-local, not inherited
 
@@ -312,7 +354,7 @@ The sidecar is read from `<binaryDir>/.aspire-install.json` — **never from the
 
 - The resolver tags each field with its source (`from-env` / `from-sidecar` / `from-assembly-fallback` / `defaulted-to-local`).
 - `aspire doctor --self` shows the source per field.
-- A non-fatal banner is emitted at CLI startup whenever any identity field resolves `from-env` and the resolved channel differs from the sidecar/fallback channel. This is a single line, suppressible via the standard CLI verbosity controls, and is the answer to "why is my CLI behaving like staging when I installed stable?".
+- A non-fatal banner follows the source-and-field policy in [Installed identity versus diagnostic emulation](#installed-identity-versus-diagnostic-emulation).
 
 The "is env-override gated for stable builds?" question is left as an open question (see below) — the spec leans against gating, but flags the call.
 
@@ -392,6 +434,8 @@ The resolver and call-site migration land together; the test plan reflects that.
 
 - `CliBootstrapTests`: a `ASPIRE_CLI_CHANNEL=staging` run produces `CliExecutionContext.IdentityChannel == "staging"` and `IdentityChannelSource == "env"`.
 - `CliExecutionContextTests`: per-field construction with overridden values and source tags.
+- `IdentityResolverTests`: a source × field matrix pins the distinction between canonical sidecar identity and diagnostic overrides, including every identity field, all three canonical sidecar fields together, legacy source-only sidecars, and mixed installed/diagnostic inputs.
+- `RootCommandTests`: both rows keep `IdentityOverridden == true` while varying `IdentityOverrideNoticeRequired`, proving the actual stderr warning is gated by the narrow user-facing policy rather than generic override state.
 
 **Packaging tests** (`PackagingServiceTests`):
 

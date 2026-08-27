@@ -47,8 +47,4 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="Aspire.Cli.Tests"/>
-  </ItemGroup>
-
 </Project>

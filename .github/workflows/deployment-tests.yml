@@ -205,6 +205,10 @@ jobs:
     env:
       ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: ./.github/actions/preload-azure-cli-requests
+
       - name: Azure Login (OIDC)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -504,6 +508,8 @@ jobs:
           "$ASPIRE_HOME/bin/aspire" --version
           echo "Extracted bundle layout:"
           ls -la "$ASPIRE_HOME/versions/"*/ 2>/dev/null || { echo "❌ No extracted bundle under $ASPIRE_HOME/versions/"; exit 1; }
+
+      - uses: ./.github/actions/preload-azure-cli-requests
 
       - name: Azure Login (OIDC)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

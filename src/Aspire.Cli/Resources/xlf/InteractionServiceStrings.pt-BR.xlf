@@ -97,6 +97,11 @@
         <target state="needs-review-translation">Não há suporte para entrada interativa neste ambiente. Use o sinalizador --não-interativo ou verifique se a CLI está em execução em um terminal interativo.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[dim]Para obter mais informações, consulte: [link]{0}[/][/]</target>

@@ -358,6 +358,10 @@ internal sealed class NewCommand : BaseCommand
             {
                 var configuredChannelName = parseResult.GetValue(_channelOption);
                 var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
+                var isUnqualifiedLocalResolution =
+                    string.IsNullOrWhiteSpace(configuredChannelName) &&
+                    string.IsNullOrWhiteSpace(source) &&
+                    string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Local, StringComparisons.ChannelName);
 
                 // When no --channel was passed, prefer the channel whose name matches the running
                 // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,
@@ -376,22 +380,31 @@ internal sealed class NewCommand : BaseCommand
                 // command stays useful while surfacing a deterministic version.
                 PackageChannel? identityChannelMatch = null;
                 if (string.IsNullOrWhiteSpace(configuredChannelName) &&
+                    string.IsNullOrWhiteSpace(source) &&
                     !string.IsNullOrWhiteSpace(ExecutionContext.IdentityChannel))
                 {
                     identityChannelMatch = channels.FirstOrDefault(c =>
                         string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparisons.ChannelName));
                 }
 
-                var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
-                    ? identityChannelMatch
-                        ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
-                        ?? channels.FirstOrDefault()
-                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName));
+                var selectedChannel = isUnqualifiedLocalResolution
+                    ? channels.FirstOrDefault(c =>
+                        c.IsBackedByLocalPackageDirectory &&
+                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparisons.ChannelName))
+                    : string.IsNullOrWhiteSpace(configuredChannelName)
+                        ? identityChannelMatch
+                            ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                            ?? channels.FirstOrDefault()
+                        : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName));
 
                 if (selectedChannel is null)
                 {
                     string errorMessage;
-                    if (string.IsNullOrWhiteSpace(configuredChannelName))
+                    if (isUnqualifiedLocalResolution)
+                    {
+                        errorMessage = GetMissingLocalTemplatePackageMessage();
+                    }
+                    else if (string.IsNullOrWhiteSpace(configuredChannelName))
                     {
                         errorMessage = NewCommandStrings.NoPackageChannelsAvailable;
                     }
@@ -416,28 +429,44 @@ internal sealed class NewCommand : BaseCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                // Apply the source override after selection so it cannot change implicit/explicit channel selection.
-                // Pass the adjusted mappings directly so the original channel remains authoritative for persistence.
+                // An explicit source without an explicit channel resolves through the implicit channel above,
+                // so the identity channel cannot constrain package discovery or be persisted into the project.
+                // When both options are explicit, the channel still owns version policy and persistence.
                 var templateDiscoveryMappings = string.IsNullOrWhiteSpace(source)
                     ? selectedChannel.Mappings
                     : PackageSourceOverrideMappings.CreateForTemplateOperations(source);
 
                 try
                 {
-                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, templateDiscoveryMappings, cancellationToken))
+                    var packages = (await selectedChannel.GetTemplatePackagesAsync(
+                        ExecutionContext.WorkingDirectory,
+                        templateDiscoveryMappings,
+                        filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
+                        cancellationToken))
                         .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
-                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives, ExecutionContext.IdentitySdkVersion);
+                    var package = isUnqualifiedLocalResolution
+                        ? packages.FirstOrDefault(p => string.Equals(p.Version, ExecutionContext.IdentitySdkVersion, StringComparison.OrdinalIgnoreCase))
+                        : TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives, ExecutionContext.IdentitySdkVersion);
 
-                    package ??= packages
-                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                        .FirstOrDefault();
+                    if (!isUnqualifiedLocalResolution)
+                    {
+                        package ??= packages
+                            .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                            .FirstOrDefault();
+                    }
 
                     if (package is null)
                     {
-                        return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                        var errorMessage = isUnqualifiedLocalResolution
+                            ? GetMissingLocalTemplatePackageMessage()
+                            : string.Format(
+                                CultureInfo.CurrentCulture,
+                                NewCommandStrings.NoTemplateVersionsFoundInChannel,
+                                selectedChannel.Name);
+                        return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                     }
 
                     // Only persist channel names that should be pinned (e.g. local, daily,
@@ -454,6 +483,12 @@ internal sealed class NewCommand : BaseCommand
                 }
             });
     }
+
+    private string GetMissingLocalTemplatePackageMessage() =>
+        string.Format(
+            CultureInfo.CurrentCulture,
+            NewCommandStrings.NoMatchingLocalTemplatePackage,
+            ExecutionContext.IdentitySdkVersion);
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -496,6 +531,8 @@ internal sealed class NewCommand : BaseCommand
         }
 
         var version = parseResult.GetValue(s_versionOption);
+        var hasExplicitVersion = !string.IsNullOrWhiteSpace(version);
+        var requestedChannelName = parseResult.GetValue(_channelOption);
         // Precedence for the channel written into TemplateInputs.Channel:
         //   1. Explicit --channel argument (user override always wins).
         //   2. Channel returned by ResolveCliTemplateVersionAsync (CLI-runtime templates).
@@ -519,22 +556,25 @@ internal sealed class NewCommand : BaseCommand
             resolvedChannelName = resolveResult.ChannelName;
         }
 
-        // Apply the channel precedence as a single coalesce. The identity fallback lives
-        // here, not inside ResolveCliTemplateVersionAsync, because that resolver only runs
-        // on the CLI-runtime / no-explicit-version branch above. The two paths that need
-        // the identity hint are precisely the ones the resolver does NOT visit:
-        //   * TemplateRuntime.DotNet templates (aspire-starter family) — the bug this fix
-        //     addresses; without forwarding, DotNetTemplateFactory searches only the
-        //     Implicit (nuget.org) channel regardless of CLI identity.
-        //   * CLI-runtime templates invoked with --version, which short-circuits the
-        //     resolver and would otherwise leave inputs.Channel null.
-        // Keeping the fallback out of the resolver also keeps the resolver's role narrow:
-        // it performs version negotiation across channels and reports the channel that won;
-        // the identity hint is a different policy ("label the project with the CLI's own
-        // channel") that should not influence version selection.
-        resolvedChannelName = parseResult.GetValue(_channelOption)
-            ?? resolvedChannelName
-            ?? await ResolveIdentityChannelNameAsync(cancellationToken);
+        // An explicit source owns package resolution and must not inherit the CLI identity channel.
+        // Unqualified local DotNet templates and explicit versions similarly defer local channel
+        // selection. Forwarding "local" would persist mappings to a directory that may not contain
+        // the requested version; callers that need those mappings can pass `--channel local`.
+        var hasLocalIdentity = string.Equals(
+            ExecutionContext.IdentityChannel,
+            PackageChannelNames.Local,
+            StringComparisons.ChannelName);
+        var deferIdentityChannelResolution =
+            string.IsNullOrWhiteSpace(requestedChannelName) &&
+            (!string.IsNullOrWhiteSpace(source) ||
+                hasLocalIdentity &&
+                (template.Runtime is TemplateRuntime.DotNet || hasExplicitVersion));
+
+        resolvedChannelName = requestedChannelName ?? resolvedChannelName;
+        if (resolvedChannelName is null && !deferIdentityChannelResolution)
+        {
+            resolvedChannelName = await ResolveIdentityChannelNameAsync(cancellationToken);
+        }
 
         var inputs = new TemplateInputs
         {
@@ -738,6 +778,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
             validator: resolvedValidator,
             binding: PromptBinding.Create(parseResult, NewCommand.s_outputOption, path),
             directory: true,
+            retryOnValidationFailure: true,
             cancellationToken: cancellationToken
             );
 

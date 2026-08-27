@@ -2,9 +2,13 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions, waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit } from './helpers/fixtures';
+import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit, waitForRunningAppHostPid } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, chooseActiveQuickPickAtIndex, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
+import { cancelActiveInput, chooseActiveQuickPick, chooseActiveQuickPickAtIndex, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
+
+// Dynamic launch output is emitted before the selected single-file AppHost finishes its cold build.
+// Hosted Windows exceeded the old 60-second process-state wait while the build was still running.
+const appHostProcessStateTimeoutMs = 120000;
 
 suite('Aspire dynamic debug configuration E2E', function () {
     this.timeout(240000);
@@ -14,22 +18,27 @@ suite('Aspire dynamic debug configuration E2E', function () {
     const secondFolderPath = path.join(fixtureRoot, 'second');
     const firstAppHostPath = path.join(firstFolderPath, 'apphost.cs');
     const appHostPath = path.join(secondFolderPath, 'apphost.cs');
-    let appHostPidBeforeStop: number | undefined;
+    const ambiguousWorkspacePath = path.join(fixtureRoot, 'ambiguous');
+    const ambiguousFirstAppHostPath = path.join(ambiguousWorkspacePath, 'first', 'apphost.cs');
+    const ambiguousSecondAppHostPath = path.join(ambiguousWorkspacePath, 'second', 'apphost.cs');
+    const fixtureAppHostPaths = [appHostPath, firstAppHostPath, ambiguousFirstAppHostPath, ambiguousSecondAppHostPath];
+    let appHostPidsBeforeStop: number[];
 
     setup(() => {
-        appHostPidBeforeStop = undefined;
+        appHostPidsBeforeStop = [];
     });
 
     teardown(async () => {
         await runE2eTeardown([
-            () => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath),
-            () => appHostPidBeforeStop ??= getRunningAppHostPid(firstAppHostPath),
+            () => {
+                appHostPidsBeforeStop = fixtureAppHostPaths
+                    .map(getRunningAppHostPid)
+                    .filter(pid => pid !== undefined);
+            },
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
-            () => stopAppHostIfRunning(appHostPath),
-            () => stopAppHostIfRunning(firstAppHostPath),
-            () => appHostPidBeforeStop === undefined
-                ? undefined
-                : waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000),
+            ...fixtureAppHostPaths.map(appHostPath => () => fs.existsSync(appHostPath) ? stopAppHostIfRunning(appHostPath) : undefined),
+            () => Promise.all(appHostPidsBeforeStop.map(appHostPid =>
+                waitForKnownProcessExit(appHostPid, 'a dynamic debug configuration AppHost process', 30000))),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => restoreWorkspaceFoldersForE2E(),
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
@@ -86,6 +95,58 @@ suite('Aspire dynamic debug configuration E2E', function () {
         assert.ok(isSamePath(secondLaunch.appHostPath, appHostPath));
     });
 
+    test('launches the selected AppHost from an ambiguous single-folder workspace', async function () {
+        this.timeout(300000);
+        createAmbiguousWorkspaceFixture();
+        await openAmbiguousWorkspace();
+
+        const beforeLaunch = getDebugConsoleOutputCount();
+        await invokeDefaultAspireDebugConfiguration();
+        const quickPickLabels = await waitForAmbiguousAppHostQuickPick();
+        await chooseActiveQuickPick(path.relative(ambiguousWorkspacePath, ambiguousSecondAppHostPath));
+
+        const launch = await waitForLaunchOutput(beforeLaunch);
+        assert.ok(launch.appHostPath);
+        assert.ok(isSamePath(launch.appHostPath, ambiguousSecondAppHostPath));
+        const appHostPid = await waitForRunningAppHostPid(
+            ambiguousSecondAppHostPath,
+            appHostProcessStateTimeoutMs);
+        assert.ok(appHostPid > 0);
+        assert.strictEqual(getRunningAppHostPid(ambiguousFirstAppHostPath), undefined);
+        assert.deepStrictEqual(
+            quickPickLabels,
+            [
+                path.relative(ambiguousWorkspacePath, ambiguousFirstAppHostPath),
+                path.relative(ambiguousWorkspacePath, ambiguousSecondAppHostPath),
+            ]);
+    });
+
+    test('does not launch an AppHost when the ambiguous AppHost picker is dismissed', async () => {
+        createAmbiguousWorkspaceFixture();
+        await openAmbiguousWorkspace();
+
+        const beforeLaunch = getDebugConsoleOutputCount();
+        const startDebugging = executeE2eControlCommand({
+            name: 'startDebugging',
+            configurationName: 'Aspire: Launch default AppHost',
+        });
+        await waitForAmbiguousAppHostQuickPick();
+        await cancelActiveInput();
+        const startStatus = await startDebugging;
+        const stateFile = await waitForNoDebugSessions();
+
+        assert.strictEqual(startStatus.result, false);
+        assert.strictEqual(
+            stateFile.debugConsoleOutputs.some(event =>
+                event.sequence > beforeLaunch &&
+                event.appHostPath !== undefined &&
+                (isSamePath(event.appHostPath, ambiguousFirstAppHostPath) ||
+                    isSamePath(event.appHostPath, ambiguousSecondAppHostPath))),
+            false);
+        assert.strictEqual(getRunningAppHostPid(ambiguousFirstAppHostPath), undefined);
+        assert.strictEqual(getRunningAppHostPid(ambiguousSecondAppHostPath), undefined);
+    });
+
     function createWorkspaceFixture(): void {
         removePath(fixtureRoot, { recursive: true, force: true });
         fs.mkdirSync(firstFolderPath, { recursive: true });
@@ -100,6 +161,55 @@ builder.Build().Run();
 `;
         fs.writeFileSync(firstAppHostPath, appHostSource);
         fs.writeFileSync(appHostPath, appHostSource);
+    }
+
+    function createAmbiguousWorkspaceFixture(): void {
+        removePath(fixtureRoot, { recursive: true, force: true });
+        fs.mkdirSync(path.dirname(ambiguousFirstAppHostPath), { recursive: true });
+        fs.mkdirSync(path.dirname(ambiguousSecondAppHostPath), { recursive: true });
+        const appHostSdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
+        assert.ok(appHostSdkVersion);
+        const appHostSource = `#:sdk Aspire.AppHost.Sdk@${appHostSdkVersion}
+
+var builder = DistributedApplication.CreateBuilder(args);
+
+builder.Build().Run();
+`;
+        fs.writeFileSync(ambiguousFirstAppHostPath, appHostSource);
+        fs.writeFileSync(ambiguousSecondAppHostPath, appHostSource);
+    }
+
+    async function openAmbiguousWorkspace(): Promise<void> {
+        await openAspireView();
+        await setWorkspaceFoldersForE2E([{ folderPath: ambiguousWorkspacePath }]);
+        await waitForExtensionState(
+            stateFile =>
+                stateFile.state.isWorkspaceAppHostDiscoveryComplete &&
+                !stateFile.state.isRepositoryLoading &&
+                stateFile.state.workspaceAppHostCandidatePaths.length === 2 &&
+                stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, ambiguousFirstAppHostPath)) &&
+                stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, ambiguousSecondAppHostPath)),
+            'both ambiguous AppHost candidates',
+            120000);
+    }
+
+    async function invokeDefaultAspireDebugConfiguration(): Promise<void> {
+        await executeCommandFromPalette('Debug: Select and Start Debugging');
+        let quickPickLabels = await getActiveQuickPickLabels();
+        const aspireDebugger = quickPickLabels.find(label =>
+            label.trimStart().startsWith('Aspire') && !label.trimStart().startsWith('Aspire: Launch default AppHost'));
+        if (aspireDebugger) {
+            await chooseActiveQuickPick(aspireDebugger);
+            quickPickLabels = await waitForQuickPickLabels('Aspire: Launch default AppHost');
+        }
+
+        const configurations = quickPickLabels.filter(label => label.trimStart().startsWith('Aspire: Launch default AppHost'));
+        assert.strictEqual(configurations.length, 1, `Expected one Aspire dynamic configuration. Visible labels: ${JSON.stringify(quickPickLabels)}`);
+        await chooseActiveQuickPick(configurations[0]);
+    }
+
+    async function waitForAmbiguousAppHostQuickPick(): Promise<string[]> {
+        return await waitForQuickPickLabels(path.relative(ambiguousWorkspacePath, ambiguousFirstAppHostPath));
     }
 });
 

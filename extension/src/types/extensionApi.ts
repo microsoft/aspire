@@ -157,6 +157,12 @@ export interface AspireExtensionE2ETaskProcessEvent extends AspireExtensionE2ESe
     exitCode?: number;
 }
 
+export interface AspireExtensionE2ECodeLensProbeResult {
+    filePath: string;
+    languageId: string;
+    commandTitles: readonly string[];
+}
+
 export interface AspireDebugConsoleOutputEvent {
     debugSessionId: string;
     appHostPath: string | undefined;
@@ -200,6 +206,10 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openDashboard'; appHostPath?: string }
     | { name: 'debugAppHost'; appHostPath?: string }
     | { name: 'publishAppHost'; appHostPath?: string }
+    | { name: 'deployAppHostAction'; appHostPath: string }
+    | { name: 'publishAppHostAction'; appHostPath: string }
+    | { name: 'runPipelineStepAppHostAction'; appHostPath: string }
+    | { name: 'debugPipelineStepAppHostAction'; appHostPath: string }
     | { name: 'openAppHostSource'; appHostPath?: string }
     | { name: 'viewAppHostSource'; appHostPath?: string }
     | { name: 'copyAppHostPath'; appHostPath?: string }
@@ -231,6 +241,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
+    | { name: 'getCodeLenses'; filePath: string }
     | { name: 'snapshotClipboard' }
     | { name: 'restoreClipboardSnapshot' }
     | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
@@ -238,6 +249,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'setWorkspaceFolders'; folders: readonly { folderPath: string; name?: string }[] }
+    | { name: 'setWorkspaceFolderCliPath'; folderPath: string; cliPath: string }
+    | { name: 'clearWorkspaceFolderCliPaths' }
     | { name: 'stopOwnedDebugSessionProcesses'; appHostPath?: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'addWorkspaceFolder'; folderPath: string }

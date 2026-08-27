@@ -19,6 +19,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
@@ -1049,6 +1050,88 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "NO_PORT_NO_TARGET_PORT").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Equal(allocatedPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task ProxylessPortAllocatorOnlyAllocatesPortsForDcpWorkloads()
+    {
+        var (rangeStart, rangeEnd) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        var compute = builder.AddExecutable("compute", "compute", Environment.CurrentDirectory)
+            .WithEndpoint(name: "tcp", isProxied: false);
+        var target = builder.AddExecutable("target", "target", Environment.CurrentDirectory)
+            .WithHttpEndpoint(targetPort: 8000, name: "http");
+        builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = rangeStart,
+            ProxylessEndpointPortRangeEnd = rangeEnd
+        };
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var tunnelPort = Assert.Single(distributedAppModel.Resources.OfType<DevTunnelPortResource>());
+        var computeEndpoint = compute.GetEndpoint("tcp").EndpointAnnotation;
+        var tunnelEndpoint = Assert.Single(tunnelPort.Annotations.OfType<EndpointAnnotation>());
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.NotNull(computeEndpoint.AllocatedEndpoint);
+        var computePort = Assert.IsType<int>(computeEndpoint.Port);
+        Assert.InRange(computePort, rangeStart, rangeEnd);
+        Assert.Equal(computePort, computeEndpoint.TargetPort);
+        Assert.Null(tunnelEndpoint.Port);
+        Assert.Null(tunnelEndpoint.TargetPort);
+        Assert.Null(tunnelEndpoint.AllocatedEndpoint);
+    }
+
+    [Fact]
+    public async Task ProxylessPortAllocatorAllocatesPortForNonComputeContainerResource()
+    {
+        const int targetPort = 10000;
+        var (allocatedPort, _) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        var emulator = builder.AddResource(new TestContainerResource("emulator"))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "image" })
+            .WithAnnotation(new ContainerLifetimeAnnotation { Lifetime = ContainerLifetime.Persistent })
+            .WithHttpEndpoint(targetPort: targetPort, name: "http");
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+            })
+            .Build();
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = allocatedPort,
+            ProxylessEndpointPortRangeEnd = allocatedPort
+        };
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var endpoint = emulator.GetEndpoint("http").EndpointAnnotation;
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            configuration: configuration,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.IsNotAssignableFrom<IComputeResource>(emulator.Resource);
+        Assert.True(emulator.Resource.IsContainer());
+        Assert.Equal(allocatedPort, endpoint.Port);
+        Assert.Equal(targetPort, endpoint.TargetPort);
+        Assert.Equal(allocatedPort, endpoint.AllocatedEndpoint?.Port);
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == emulator.Resource.Name);
     }
 
     [Fact]
@@ -4611,11 +4694,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var debuggableExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "TestExecutable");
         Assert.Equal(ExecutionType.IDE, debuggableExe.Spec.ExecutionType);
-        // A non-"project" debuggable executable runs its own ExecutablePath + Spec.Args directly, so DCP can
-        // fall back to Process execution when the IDE can't launch it. (A "project" launch, by contrast, gets no
-        // Process fallback because DCP cannot reconstruct `dotnet run` from the launch config's project_path.)
-        Assert.NotNull(debuggableExe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(debuggableExe.Spec.FallbackExecutionTypes));
+        Assert.Null(debuggableExe.Spec.FallbackExecutionTypes);
         Assert.True(debuggableExe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs1));
         var config1 = Assert.Single(launchConfigs1);
         Assert.Equal(ExecutableLaunchMode.Debug, config1.Mode);
@@ -4752,12 +4831,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_WithLaunchToolArgsDebugSupport_DoesNotOfferProcessFallback_InDebugSession()
+    public async Task ProjectResource_WithLaunchToolArgsDebugSupport_WithholdsOwnedPrefix_InDebugSession()
     {
         // A ProjectResource can, via the generic WithLaunchToolArgs API, declare a tool
-        // invocation prefix (ProjectResource implements IResourceWithArgs). That prefix is withheld from Spec.Args
-        // for the IDE, so DCP must NOT advertise a Process fallback that would later run a broken command. This
-        // mirrors the guard already applied to plain executables in PreparePlainExecutables.
+        // invocation prefix (ProjectResource implements IResourceWithArgs). The matching IDE launch configuration
+        // owns that prefix, so it is withheld from Spec.Args.
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
 
@@ -4796,7 +4874,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_EmptyOwnedLaunchToolArgs_KeepsRunnableProcessFallback()
+    public async Task ProjectResource_EmptyOwnedLaunchToolArgs_DoesNotConfigureRuntimeFallback()
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -4832,12 +4910,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetes, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        AssertDefaultProjectProcessArgs(exe.Spec.Args, "app-arg");
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
-    public async Task ProjectResource_CustomIdeLaunchWithoutProcessInvocation_DoesNotOfferProcessFallback()
+    public async Task ProjectResource_CustomIdeLaunchWithoutProcessInvocation_UsesApplicationArgumentsOnly()
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -4928,7 +5006,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_EmptyOwnedLaunchToolArgs_LaunchConfigurationFailureFallsBackToProcess()
+    public async Task ProjectResource_EmptyOwnedLaunchToolArgs_LaunchConfigurationFailureFailsResource()
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -4948,6 +5026,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var kubernetes = new TestKubernetesService();
+        var failedResources = new List<IResource>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Add(context.Resource);
+            return Task.CompletedTask;
+        });
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -4959,14 +5044,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var executor = CreateAppExecutor(
             model,
             configuration: configuration,
-            kubernetesService: kubernetes);
+            kubernetesService: kubernetes,
+            events: events);
 
         await executor.RunApplicationAsync();
 
-        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
-        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
-        AssertDefaultProjectProcessArgs(exe.Spec.Args, "app-arg");
-        Assert.Null(exe.Spec.FallbackExecutionTypes);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetes, "proj"));
+        Assert.Same(projectBuilder.Resource, Assert.Single(failedResources));
 
         static ExecutableLaunchConfiguration ThrowingLaunchConfiguration(string mode)
         {
@@ -4975,11 +5059,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectResource_WithoutLaunchToolArgs_OffersProcessFallback_InDebugSession()
+    public async Task ProjectResource_WithoutLaunchToolArgs_DoesNotConfigureRuntimeFallback_InDebugSession()
     {
-        // The common case: a default AddProject ("project" launch type, no launch tool arguments) keeps the
-        // Process fallback so an IDE launch rejection can still start the project. Guards against the
-        // launch-tool-argument guard accidentally dropping the fallback for ordinary projects.
         var builder = DistributedApplication.CreateBuilder();
         builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
 
@@ -5003,8 +5084,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetes, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
@@ -5441,6 +5521,51 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "CoolProgram"));
         Assert.True(exe.Spec.Start);
+    }
+
+    [Fact]
+    public async Task PlainExecutable_MultipleLaunchRecipes_ReportsLaunchPlanFailure()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("app", "tool", Environment.CurrentDirectory)
+            .WithExplicitStart();
+        resource.Resource.Annotations.Add(
+            new ExecutableLaunchRecipeAnnotation(DirectExecutableLaunchRecipe.Instance));
+
+        var kubernetesService = new TestKubernetesService();
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            events: events);
+
+        await appExecutor.RunApplicationAsync();
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
+            () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
+
+        const string innerMessage =
+            "Resource 'app' must have exactly one executable launch recipe, but 2 were found.";
+        const string expectedMessage =
+            "Failed to create executable launch plan for resource 'app'. " + innerMessage;
+        Assert.Equal(expectedMessage, exception.Message);
+        var innerException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Equal(innerMessage, innerException.Message);
+
+        var failure = Assert.Single(failures);
+        Assert.Same(resource.Resource, failure.Resource);
+        Assert.Equal(expectedMessage, failure.ErrorMessage);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "app"));
     }
 
     [Fact]
@@ -5905,7 +6030,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectExecutable_DebugSessionInfoWithoutProjectFallsBackToProcess()
+    public async Task ProjectExecutable_DebugSessionInfoWithoutProject_SelectsProcess()
     {
         // When the IDE explicitly advertises a SupportedLaunchConfigurations list that does NOT
         // include "project", honor it: the IDE cannot launch project resources, so we must run
@@ -5946,7 +6071,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithNonProjectAnnotation_DebugSessionWithoutInfo_UsesProjectIdeExecutionWithoutProcessFallback()
+    public async Task ProjectWithNonProjectAnnotation_DebugSessionWithoutInfo_UsesProjectIdeExecution()
     {
         // Bug #15378: Simulates the Visual Studio scenario for projects with custom debug types.
         // VS sets DEBUG_SESSION_PORT but does NOT send DEBUG_SESSION_INFO. A project resource
@@ -6028,7 +6153,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
     }
 
-    public static TheoryData<string, string[]> MauiProjectLaunchConfigurationsThatFallbackToProcess => new()
+    public static TheoryData<string, string[]> MauiProjectLaunchConfigurationsForProcessExecution => new()
     {
         { "maui", ["run", "-f", "net10.0-windows10.0.19041.0"] },
         { "maui", ["run", "-f", "net10.0-maccatalyst", "-p:OpenArguments=-W"] },
@@ -6039,7 +6164,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     };
 
     [Theory]
-    [MemberData(nameof(MauiProjectLaunchConfigurationsThatFallbackToProcess))]
+    [MemberData(nameof(MauiProjectLaunchConfigurationsForProcessExecution))]
     public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_VSCodeExplicitlyUnsupported_RunsInProcessWithResourceArgs(string launchConfigurationType, string[] resourceArgs)
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -6099,7 +6224,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [MemberData(nameof(MauiProjectLaunchConfigurationsThatFallbackToProcess))]
+    [MemberData(nameof(MauiProjectLaunchConfigurationsForProcessExecution))]
     public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_NoDebugSessionInfo_RunsInProcessWithResourceArgs(string launchConfigurationType, string[] resourceArgs)
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -6151,7 +6276,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [MemberData(nameof(MauiProjectLaunchConfigurationsThatFallbackToProcess))]
+    [MemberData(nameof(MauiProjectLaunchConfigurationsForProcessExecution))]
     public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_NoDebugSession_RunsInProcessWithResourceArgs(string launchConfigurationType, string[] resourceArgs)
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -6255,8 +6380,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal("dotnet", exe.Spec.ExecutablePath);
         Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
         var expectedArgs = new List<string> { "run" };
         if (!string.IsNullOrEmpty(expectedConfiguration))
         {
@@ -6433,6 +6557,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 #pragma warning restore ASPIREPROJECTS001
 
         var producerInvocationCount = 0;
+        var producerFailureMessage = useContextOverload
+            ? "Test exception from async launch configuration producer"
+            : "Test exception from launch configuration producer";
         if (useContextOverload)
         {
             projectBuilder.WithDebugSupport(
@@ -6440,7 +6567,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 {
                     Interlocked.Increment(ref producerInvocationCount);
                     await Task.Yield();
-                    throw new InvalidOperationException("Test exception from async launch configuration producer");
+                    throw new InvalidOperationException(producerFailureMessage);
                 },
                 "maui");
         }
@@ -6450,7 +6577,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
                 TestMauiLaunchConfiguration (mode) =>
                 {
                     Interlocked.Increment(ref producerInvocationCount);
-                    throw new InvalidOperationException("Test exception from launch configuration producer");
+                    throw new InvalidOperationException(producerFailureMessage);
                 },
                 "maui");
         }
@@ -6477,19 +6604,30 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .Build();
 
         var kubernetesService = new TestKubernetesService();
+        using var resourceLoggerService = new ResourceLoggerService();
+        var failedResources = new ConcurrentQueue<IResource>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Enqueue(context.Resource);
+            return Task.CompletedTask;
+        });
         using var app = builder.Build();
         var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
         var appExecutor = CreateAppExecutor(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
             kubernetesService: kubernetesService,
             configuration: configuration,
-            distributedApplicationOptions: distributedApplicationOptions);
+            distributedApplicationOptions: distributedApplicationOptions,
+            resourceLoggerService: resourceLoggerService,
+            events: events);
 
         await appExecutor.RunApplicationAsync();
 
         var executable = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.Process, executable.Spec.ExecutionType);
         Assert.Equal(1, Volatile.Read(ref producerInvocationCount));
+        Assert.Empty(failedResources);
 
         var expectedArgs = new List<string>
         {
@@ -6505,6 +6643,27 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
         expectedArgs.AddRange(["-f", "net10.0-android"]);
         Assert.Equal(expectedArgs, executable.Spec.Args);
+
+        Assert.True(executable.TryGetAnnotationAsObjectList<JsonElement>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigurations));
+        var projectLaunchConfiguration = Assert.Single(launchConfigurations);
+        Assert.Equal(
+            KnownLaunchConfigurationTypes.Project,
+            projectLaunchConfiguration.GetProperty("type").GetString());
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(projectBuilder.Resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            !line.IsErrorMessage &&
+            line.Content.Contains(
+                "Failed to apply optional launch configuration metadata of type 'maui' for Process resource 'proj'. Continuing with Process execution.",
+                StringComparison.Ordinal) &&
+            line.Content.Contains(producerFailureMessage, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -6665,7 +6824,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
 
         Assert.Equal(expectedArgs, exe.Spec.Args);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs));
         var expectedDisplayArgs = new List<string>();
@@ -6699,7 +6858,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [InlineData("watch", false, false, "[env:ASPIRE_PREFIX_PROBE=1]")]
     [InlineData("run", false, false, "@options.rsp")]
     [InlineData("watch", false, false, "@options.rsp")]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationDoesNotOfferInvalidProcessFallback(
+    public async Task ProjectResource_CustomIdeLaunch_PreservesOpaqueDotnetApplicationArguments(
         string nonLeadingLaunchVerb,
         bool useExec,
         bool useRuntimeOptions,
@@ -6768,9 +6927,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [InlineData(new string[] { "exec", "app.dll", "run" }, true)]
     [InlineData(new string[] { "app.dll", "run" }, true)]
     [InlineData(new string[] { "[env:ASPIRE_PREFIX_PROBE=1]", "watch" }, false)]
-    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationWithoutLaunchProfileArgsSetsExpectedProcessFallback(
+    public async Task ProjectResource_CustomIdeLaunch_ExecutableAnnotatedDotnetApplicationDoesNotConfigureRuntimeFallback(
         string[] resourceArgs,
-        bool offersProcessFallback)
+        bool _)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -6809,14 +6968,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(resourceArgs, exe.Spec.Args);
-        if (offersProcessFallback)
-        {
-            Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
-        }
-        else
-        {
-            Assert.Null(exe.Spec.FallbackExecutionTypes);
-        }
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
@@ -7054,7 +7206,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithNonProjectAnnotation_VSFallback_DoesNotOfferIncompleteProcessFallback()
+    public async Task ProjectWithNonProjectAnnotation_VSCompatibilityLaunch_UsesApplicationArgumentsOnly()
     {
         // VS falls back to a project launch configuration for custom project types without DEBUG_SESSION_INFO.
         // Ordinary resource arguments are application arguments, so `dotnet app-arg` is not a runnable fallback.
@@ -7167,12 +7319,45 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
         Assert.Single(launchConfigs);
         Assert.Equal("project", launchConfigs[0].Type);
+    }
+
+    [Fact]
+    public async Task FileBasedProjectResource_InDebugSession_UsesIdeWithoutProcessFallback()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectPath = Path.Combine("src", "app.cs");
+        builder.AddResource(new ProjectResource("file-project"))
+            .WithAnnotation(new TestFileBasedProject(projectPath));
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "file-project");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        // File-based projects used to keep a `dotnet run --file` candidate for Process fallback.
+        // IDE-only launch is now intentional, so no second command remains in the rendered spec.
+        Assert.Null(exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var launchConfiguration));
+        Assert.Equal(projectPath, launchConfiguration.ProjectPath);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfiguration.Type);
     }
 
     [Fact]
@@ -7261,10 +7446,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_AsyncLaunchConfigurationProducerFaults_FallsBackToProcess()
+    public async Task PlainExecutable_AsyncLaunchConfigurationProducerFaults_FailsResource()
     {
-        // An async producer that faults after suspending surfaces the exception through the awaited task
-        // rather than synchronously from the delegate invocation. The Process fallback must still kick in.
+        // An async producer that faults after suspending must surface through the resource-start failure path.
         var builder = DistributedApplication.CreateBuilder();
 
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
@@ -7285,14 +7469,25 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
         var kubernetesService = new TestKubernetesService();
+        var failedResources = new List<IResource>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Add(context.Resource);
+            return Task.CompletedTask;
+        });
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration,
+            events: events);
 
         await appExecutor.RunApplicationAsync();
 
-        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
-        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
+        Assert.Same(debuggableExecutable, Assert.Single(failedResources));
     }
 
     [Fact]
@@ -7327,15 +7522,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         Assert.Null(exe.Spec.FallbackExecutionTypes);
 
-        Assert.True(exe.TryGetAnnotationAsObjectList<string>(CustomResource.ResourceProjectArgsAnnotation, out var projectArgs));
         Assert.Collection(
-            projectArgs,
+            exe.Spec.Args!,
             arg => Assert.Equal("build", arg),
             arg => Assert.Equal("/t:Run", arg),
             arg => Assert.EndsWith("ServiceA.csproj", arg, StringComparison.Ordinal),
             arg => Assert.Equal("--configuration", arg),
             arg => Assert.Equal(GetTestAssemblyConfiguration(), arg));
-        Assert.DoesNotContain("--no-launch-profile", projectArgs);
     }
 
     [Fact]
@@ -7528,9 +7721,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.True(exe.Spec.Persistent);
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
 
-        Assert.True(exe.TryGetAnnotationAsObjectList<string>(CustomResource.ResourceProjectArgsAnnotation, out var projectArgs));
         Assert.Collection(
-            projectArgs,
+            exe.Spec.Args!,
             arg => Assert.Equal("build", arg),
             arg => Assert.Equal("/t:Run", arg),
             arg => Assert.EndsWith("ServiceA.csproj", arg, StringComparison.Ordinal),
@@ -7599,17 +7791,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "TestFunction");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
         Assert.Single(launchConfigs);
         Assert.Equal("Aspire_TestFunction", launchConfigs[0].LaunchProfile);
 
-        // Project args should be empty — the Executable profile's command line args are NOT
-        // injected into project args (that was the old Process fallback behavior).
-        Assert.True(exe.TryGetAnnotationAsObjectList<string>(CustomResource.ResourceProjectArgsAnnotation, out var projectArgs));
-        Assert.Empty(projectArgs);
+        Assert.Null(exe.Spec.Args);
     }
 
     [Fact]
@@ -7643,8 +7831,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         // Should be IDE, because it's a normal Project profile
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
@@ -7678,10 +7865,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "TestDotnetProject");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        // A "project" launch must NOT advertise a Process fallback: DCP's process runner executes
-        // Spec.ExecutablePath + Spec.Args and cannot reconstruct `dotnet run --project <path>` from the launch
-        // config's project_path, so a fallback would only run a bare `dotnet` and fail. IDEs that cannot launch
-        // the resource fail fast instead of silently mis-launching.
         Assert.Null(exe.Spec.FallbackExecutionTypes);
 
         Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
@@ -7783,7 +7966,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DotnetProjectExecutable_ProjectLaunchConfigurationFailure_FailsWithoutProcessFallback()
+    public async Task DotnetProjectExecutable_ProjectLaunchConfigurationFailure_FailsResource()
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -7839,12 +8022,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_LaunchToolArgsDebugSupport_WithholdsPrefixAndOmitsProcessFallback()
+    public async Task PlainExecutable_ExtensionMode_LaunchToolArgsDebugSupport_WithholdsOwnedPrefix()
     {
         // A non-"project" debuggable executable that declares launch tool arguments (e.g. Go/Python, where the IDE
         // debugger owns the `go run <pkg>` / `python -m <mod>` tool invocation) must not pass the prefix to the
-        // launched program. Because the DCP Executable spec has a single args field, the resulting Spec.Args cannot
-        // also serve a Process fallback, so no fallback is advertised even though the launch type is not "project".
+        // launched program.
         var builder = DistributedApplication.CreateBuilder();
 
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
@@ -8002,11 +8184,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_EmptyLaunchToolArgs_OffersProcessFallback()
+    public async Task PlainExecutable_ExtensionMode_EmptyLaunchToolArgs_DoesNotConfigureRuntimeFallback()
     {
-        // Declaring launch tool arguments does not always produce a prefix — a Python "Executable" entrypoint
-        // contributes nothing, for example. Nothing is withheld from Spec.Args in that case, so the Process
-        // fallback remains usable and must be advertised.
         var builder = DistributedApplication.CreateBuilder();
 
         var debuggableExecutable = new TestExecutableResource("test-working-directory");
@@ -8036,8 +8215,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(["app-arg"], exe.Spec.Args);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
@@ -8084,7 +8262,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     {
         // Launch tool arguments that name no owning launch configuration type are not a debugging concern, so an
         // active launch configuration must not withhold them — otherwise the launched program would lose a prefix
-        // no debugger ever performs. The Process fallback stays available for the same reason.
+        // no debugger ever performs.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestExecutableResource("test-working-directory");
@@ -8114,15 +8292,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(["run", "app-arg"], exe.Spec.Args);
-        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_LaunchToolArgsDebugSupport_LaunchConfigFailure_FallsBackWithFullCommandLine()
+    public async Task PlainExecutable_ExtensionMode_LaunchToolArgsDebugSupport_LaunchConfigFailure_FailsResource()
     {
-        // When the launch configuration producer throws, the resource switches to Process execution before its
-        // command line is composed, so the tool-invocation prefix is emitted and the fallback runs the real command.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestExecutableResource("test-working-directory");
@@ -8156,12 +8331,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         await appExecutor.RunApplicationAsync();
 
-        Assert.Empty(failedResources);
-
-        var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
-        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
-        Assert.Equal(["run", "app-arg"], exe.Spec.Args);
-        Assert.Null(exe.Spec.FallbackExecutionTypes);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
+        Assert.Same(resource, Assert.Single(failedResources));
 
         static Task<ExecutableLaunchConfiguration> ThrowingLaunchConfiguration(string mode, CancellationToken cancellationToken)
         {
@@ -8252,15 +8423,14 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var exe = GetCreatedExecutableForResource(kubernetesService, "TestExecutable");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(["app-arg"], exe.Spec.Args);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
 
     [Fact]
-    public async Task DotnetProjectExecutable_EmptyOwnedLaunchToolArgs_DoesNotOfferBrokenProcessFallback()
+    public async Task DotnetProjectExecutable_EmptyOwnedLaunchToolArgs_UsesApplicationArgumentsOnly()
     {
         // DotnetProjectResource suppresses its `dotnet run` scaffold when a custom launch configuration owns the
-        // tool invocation. An empty prefix therefore leaves an IDE-only `dotnet <app-args>` command, not a runnable
-        // Process fallback.
+        // tool invocation. An empty prefix therefore leaves only the application arguments for the IDE.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestDotnetProjectExecutableResource("test-working-directory");
@@ -8341,7 +8511,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Same(resource, failure.Resource);
         Assert.NotNull(failure.ErrorMessage);
         Assert.Contains("Failed to apply launch configuration", failure.ErrorMessage);
-        Assert.Contains("Process fallback is unavailable", failure.ErrorMessage);
+        Assert.Contains("does not retry launch configuration failures using DCP process fallback", failure.ErrorMessage);
 
         var logLines = new List<LogLine>();
         await foreach (var lines in resourceLoggerService.GetAllAsync(resource).DefaultTimeout())
@@ -8352,7 +8522,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Contains(logLines, line =>
             line.IsErrorMessage &&
             line.Content.Contains("Launch configuration failed.", StringComparison.Ordinal) &&
-            line.Content.Contains("Process fallback is unavailable", StringComparison.Ordinal));
+            line.Content.Contains("does not retry launch configuration failures using DCP process fallback", StringComparison.Ordinal));
 
         static ExecutableLaunchConfiguration ThrowingLaunchConfiguration(string mode)
         {
@@ -8419,7 +8589,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
 
         Assert.Contains("Failed to apply launch configuration", exception.Message);
-        Assert.Contains("Process fallback is unavailable", exception.Message);
+        Assert.Contains("does not retry launch configuration failures using DCP process fallback", exception.Message);
         Assert.Equal(2, launchConfigurationCallCount);
         Assert.Equal([executable.Metadata.Name], kubernetesService.DeletedResources);
         Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestDotnetProject"));
@@ -8428,7 +8598,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Same(resource, failure.Resource);
         Assert.NotNull(failure.ErrorMessage);
         Assert.Contains("Failed to apply launch configuration", failure.ErrorMessage);
-        Assert.Contains("Process fallback is unavailable", failure.ErrorMessage);
+        Assert.Contains("does not retry launch configuration failures using DCP process fallback", failure.ErrorMessage);
 
         var logLines = new List<LogLine>();
         await foreach (var lines in resourceLoggerService.GetAllAsync(resource).DefaultTimeout())
@@ -8439,14 +8609,14 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Contains(logLines, line =>
             line.IsErrorMessage &&
             line.Content.Contains("Launch configuration failed.", StringComparison.Ordinal) &&
-            line.Content.Contains("Process fallback is unavailable", StringComparison.Ordinal));
+            line.Content.Contains("does not retry launch configuration failures using DCP process fallback", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_ProcessFallbackIsRecomputedOnRestart()
+    public async Task PlainExecutable_ExtensionMode_LaunchToolArgumentsAreRecomputedOnRestart()
     {
-        // Restart invalidates launch tool callback caches without rerunning preparation. Vary the prefix across
-        // creations to prove fallback metadata follows the newly resolved command rather than stale prepared state.
+        // Restart invalidates launch tool callback caches without rerunning preparation. Vary the owned prefix
+        // across creations to prove each launch plan and dashboard projection use the newly resolved arguments.
         var builder = DistributedApplication.CreateBuilder();
         var callbackCount = 0;
 
@@ -8482,7 +8652,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync();
 
         var exe1 = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe1.Spec.FallbackExecutionTypes!));
+        Assert.Null(exe1.Spec.FallbackExecutionTypes);
+        Assert.True(exe1.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs1));
+        Assert.Equal(["app-arg"], displayArgs1.Select(static argument => argument.Argument));
 
         var reference = appExecutor.GetResource(exe1.Metadata.Name);
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
@@ -8491,18 +8663,22 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, executables.Count);
         var exe2 = executables[1];
         Assert.Null(exe2.Spec.FallbackExecutionTypes);
+        Assert.True(exe2.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs2));
+        Assert.Equal(["run", "app-arg"], displayArgs2.Select(static argument => argument.Argument));
 
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         executables = GetCreatedExecutablesForResource(kubernetesService, "TestExecutable");
         Assert.Equal(3, executables.Count);
         var exe3 = executables[2];
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe3.Spec.FallbackExecutionTypes!));
+        Assert.Null(exe3.Spec.FallbackExecutionTypes);
+        Assert.True(exe3.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var displayArgs3));
+        Assert.Equal(["app-arg"], displayArgs3.Select(static argument => argument.Argument));
         Assert.Equal(3, callbackCount);
     }
 
     [Fact]
-    public async Task PlainExecutable_ExtensionMode_ExecutionTypeIsRecomputedOnRestart()
+    public async Task PlainExecutable_ExtensionMode_LaunchConfigurationFailureDoesNotReusePriorPlanOnRestart()
     {
         var builder = DistributedApplication.CreateBuilder();
         var callbackCount = 0;
@@ -8539,35 +8715,34 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe1 = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
         Assert.Equal(ExecutionType.IDE, exe1.Spec.ExecutionType);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe1.Spec.FallbackExecutionTypes!));
+        Assert.Null(exe1.Spec.FallbackExecutionTypes);
 
         var reference = appExecutor.GetResource(exe1.Metadata.Name);
-        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
+        var exception = await Assert.ThrowsAsync<FailedToApplyEnvironmentException>(
+            () => appExecutor.StartResourceAsync(reference, CancellationToken.None));
+        Assert.Contains("Failed to apply launch configuration", exception.Message);
+        Assert.Contains("does not retry launch configuration failures using DCP process fallback", exception.Message);
 
         var executables = GetCreatedExecutablesForResource(kubernetesService, "TestExecutable");
-        Assert.Equal(2, executables.Count);
-        var exe2 = executables[1];
-        Assert.Equal(ExecutionType.Process, exe2.Spec.ExecutionType);
-        Assert.Null(exe2.Spec.FallbackExecutionTypes);
+        Assert.Single(executables);
+        Assert.Equal(ExecutionType.IDE, exe1.Spec.ExecutionType);
+        Assert.Null(exe1.Spec.FallbackExecutionTypes);
 
         await appExecutor.StartResourceAsync(reference, CancellationToken.None);
 
         executables = GetCreatedExecutablesForResource(kubernetesService, "TestExecutable");
-        Assert.Equal(3, executables.Count);
-        var exe3 = executables[2];
-        Assert.Equal(ExecutionType.IDE, exe3.Spec.ExecutionType);
-        Assert.Equal(ExecutionType.Process, Assert.Single(exe3.Spec.FallbackExecutionTypes!));
+        Assert.Equal(2, executables.Count);
+        var exe2 = executables[1];
+        Assert.Equal(ExecutionType.IDE, exe2.Spec.ExecutionType);
+        Assert.Null(exe2.Spec.FallbackExecutionTypes);
         Assert.Equal(3, callbackCount);
     }
 
     [Fact]
     public async Task PlainExecutable_ProjectDebugSupportWithoutProjectMetadata_FailsToStart()
     {
-        // "project" is a reserved launch configuration type for .NET project resources: it needs IProjectMetadata
-        // to build the launch configuration and gets no Process fallback. A plain executable that declares
-        // "project" debug support without project metadata can neither be launched by the IDE (no launch config is
-        // applied) nor fall back to Process, so it must fail fast with an actionable message instead of silently
-        // getting stuck.
+        // "project" is reserved for resources carrying IProjectMetadata, so a plain executable must fail with an
+        // actionable message instead of sending an incomplete launch configuration to the IDE.
         var builder = DistributedApplication.CreateBuilder();
 
         var resource = new TestExecutableResource("test-working-directory");
@@ -9460,7 +9635,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         (Attribute.GetCustomAttribute(typeof(DcpExecutorTests).Assembly, typeof(System.Reflection.AssemblyConfigurationAttribute)) as System.Reflection.AssemblyConfigurationAttribute)?.Configuration;
 
     [Fact]
-    public async Task PlainExecutable_LaunchConfigurationProducerThrows_FallsBackToProcess()
+    public async Task PlainExecutable_LaunchConfigurationProducerThrows_FailsResource()
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -9485,24 +9660,25 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
         var kubernetesService = new TestKubernetesService();
+        var failedResources = new List<IResource>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Add(context.Resource);
+            return Task.CompletedTask;
+        });
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration,
+            events: events);
 
         await appExecutor.RunApplicationAsync();
 
-        List<Executable> dcpExes = [];
-        var haveExes = RetryTillTrueOrTimeout(() =>
-        {
-            dcpExes.Clear();
-            dcpExes.AddRange(kubernetesService.CreatedResources.OfType<Executable>());
-            return dcpExes.Count == 1;
-        }, TestConstants.DefaultOrchestratorTestTimeout);
-        Assert.True(haveExes, $"Expected one executable but instead got {dcpExes.Count}");
-
-        var exe = Assert.Single(dcpExes, e => e.AppModelResourceName == "TestExecutable");
-        // Should fall back to Process execution when the launch configuration producer throws
-        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "TestExecutable"));
+        Assert.Same(debuggableExecutable, Assert.Single(failedResources));
     }
 
     [Fact]
@@ -9551,7 +9727,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Project_NonProjectLaunchConfig_AnnotatorThrows_FailsWithoutProcessFallback()
+    public async Task Project_NonProjectLaunchConfig_AnnotatorThrows_FailsResource()
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -9933,17 +10109,19 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var appResources = new DcpAppResourceStore();
         var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
+        var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
+        var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
+        var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
 
         var executableCreator = new ExecutableCreator(
-            configuration,
             nameGenerator,
             distributedAppModel,
-            distributedApplicationOptions ?? new DistributedApplicationOptions(),
-            executionContext,
-            locations,
-            aspireStore,
-            NullLogger<ExecutableCreator>.Instance,
-            appResources);
+            appResources,
+            executableConfigurationResolver,
+            configuration,
+            applicationOptions,
+            executableLaunchPolicy,
+            NullLogger<ExecutableCreator>.Instance);
 
         var containerCreator = new ContainerCreator(
             configuration,
@@ -10113,6 +10291,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
     private sealed class TestExecutableResource(string directory) : ExecutableResource("TestExecutable", "test", directory);
     private sealed class TestOtherExecutableResource(string directory) : ExecutableResource("TestOtherExecutable", "test-other", directory);
+    private sealed class TestContainerResource(string name) : Resource(name), IResourceWithEndpoints;
 
     private sealed class NullValueProvider : IValueProvider
     {
@@ -10140,6 +10319,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "TestProject";
+        public LaunchSettings LaunchSettings { get; } = new();
+    }
+
+    private sealed class TestFileBasedProject(string projectPath) : IProjectMetadata
+    {
+        public string ProjectPath { get; } = projectPath;
         public LaunchSettings LaunchSettings { get; } = new();
     }
 

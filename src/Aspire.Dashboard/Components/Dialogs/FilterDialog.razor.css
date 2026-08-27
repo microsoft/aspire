@@ -1,3 +1,18 @@
 ::deep [data-filtercount]::before {
     content: attr(data-filtercount);
 }
+
+.input-line-container {
+    display: flex;
+    column-gap: 12px;
+    align-items: center;
+}
+
+.input-line-container > div,
+.input-line-container ::deep fluent-select,
+.input-line-container ::deep fluent-number-field,
+.input-line-container ::deep fluent-text-field,
+.input-line-container ::deep fluent-combobox {
+    flex: 1;
+    min-width: 0;
+}

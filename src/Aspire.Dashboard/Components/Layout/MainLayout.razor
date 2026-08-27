@@ -24,6 +24,14 @@
                 <SectionOutlet SectionName="@DashboardUIHelpers.PageTitleTopBarSection" />
             </div>
             <div class="flex-filler"></div>
+            @if (RunStore.SupportsRunSelection)
+            {
+                var selectedRun = RunSelection.SelectedRun;
+                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
+                                    SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+            }
             <FluentAnchor Class="header-button"
                           Appearance="Appearance.Stealth"
                           Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
@@ -91,7 +99,14 @@
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
-
+            @if (RunStore.SupportsRunSelection)
+            {
+                var selectedRun = RunSelection.SelectedRun;
+                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
+                                    SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+            }
             <UserProfile/>
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"
@@ -119,7 +134,13 @@
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @Body
+            @if (!_isSwitchingRuns)
+            {
+                var selectedRun = RunSelection.SelectedRun;
+                <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
+                    @Body
+                </CascadingValue>
+            }
         </FluentBodyContent>
     </div>
 

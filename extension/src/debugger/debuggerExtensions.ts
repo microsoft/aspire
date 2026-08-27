@@ -1,7 +1,7 @@
 import path from "path";
 import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
-import { getEnvironmentWithoutE2EBridgeVariables, mergeEnvs } from "../utils/environment";
+import { getEnvironmentForChildProcess, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
 import { projectDebuggerExtension } from "./languages/dotnet";
 import { isAzureFunctionsExtensionInstalled, isBunInstalled, isCsharpInstalled, isGoInstalled, isJavaInstalled, isMauiInstalled, isPythonInstalled, isRustInstalled } from '../capabilities';
@@ -57,7 +57,7 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
         program: projectPath,
         args: args,
         cwd: await isDirectory(projectPath) ? projectPath : path.dirname(projectPath),
-        env: mergeEnvs(getEnvironmentWithoutE2EBridgeVariables(), env),
+        env: mergeEnvs(getEnvironmentForChildProcess(), env),
         justMyCode: false,
         stopAtEntry: false,
         noDebug: !launchOptions.debug,

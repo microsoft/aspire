@@ -53,6 +53,7 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardErrorCallback { get; set; }
 
     public bool NoLaunchProfile { get; set; }
+    public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
 
@@ -150,6 +151,7 @@ internal sealed class ProcessInvocationOptions
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
         NoLaunchProfile = NoLaunchProfile,
+        LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
         SuppressLogging = SuppressLogging,
@@ -908,6 +910,10 @@ internal sealed class DotNetCliRunner(
         var noBuildSwitch = noBuild ? "--no-build" : string.Empty;
         var noRestoreSwitch = noRestore && !noBuild ? "--no-restore" : string.Empty; // --no-build implies --no-restore
         var noProfileSwitch = options.NoLaunchProfile ? "--no-launch-profile" : string.Empty;
+        var launchProfile = options.NoLaunchProfile ? null : options.LaunchProfile;
+        string[] launchProfileSwitch = !string.IsNullOrEmpty(launchProfile)
+            ? [$"--launch-profile={launchProfile}"]
+            : [];
         var suppressCliRunHookProperty = $"/p:{KnownConfigNames.SuppressCliRunHook}=true";
         // Add --non-interactive flag when using watch to prevent interactive prompts during automation
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
@@ -916,11 +922,11 @@ internal sealed class DotNetCliRunner(
 
         string[] cliOptions = isSingleFile switch
         {
-            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName],
+            false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, "--project", projectFile.FullName],
             // File-based dotnet run only recomputes RunCommand during build. Omit --no-build
             // for single-file AppHosts so the suppression property is applied before launch
             // and a CLI-launched AppHost cannot recursively enter the run hook.
-            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName]
+            true => ["run", noRestoreSwitch, noProfileSwitch, .. launchProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName]
         };
 
         // Empty extension-owned entries represent omitted optional switches, while empty or

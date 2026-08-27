@@ -12,11 +12,13 @@ internal sealed class SdkCommand : ParentCommand
     public SdkCommand(
         SdkGenerateCommand generateCommand,
         SdkDumpCommand dumpCommand,
+        SdkExportCommand exportCommand,
         CommonCommandServices services)
         : base("sdk", "Commands for generating SDKs for building Aspire integrations in other languages.", services)
     {
         Hidden = true;
         Subcommands.Add(generateCommand);
         Subcommands.Add(dumpCommand);
+        Subcommands.Add(exportCommand);
     }
 }

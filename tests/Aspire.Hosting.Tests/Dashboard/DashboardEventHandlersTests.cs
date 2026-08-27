@@ -309,6 +309,102 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData(null, null, "Run", false)]
+    [InlineData("", null, "Run", false)]
+    [InlineData("   ", null, "Run", false)]
+    [InlineData(null, "   ", "Run", false)]
+    [InlineData(null, "None", "None", false)]
+    [InlineData("Run", "None", "None", false)]
+    [InlineData("Run", "None", "None", true)]
+    public async Task ConfigureEnvironmentVariables_ConfiguresDashboardApplicationNameAndPersistenceMode(
+        string? configuredPersistenceMode,
+        string? configuredPersistenceModeEnvironmentAlias,
+        string expectedPersistenceMode,
+        bool configureExplicitAliases)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var explicitApplicationName = "Explicit Dashboard";
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Aspire:Store:Path"] = workspace.Path,
+                ["AppHost:DashboardApplicationName"] = "My App.AppHost",
+                ["Aspire:Dashboard:PersistenceMode"] = configuredPersistenceMode,
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = configuredPersistenceModeEnvironmentAlias,
+                [DashboardConfigNames.DashboardApplicationName.EnvVarName] = configureExplicitAliases ? explicitApplicationName : null
+            })
+            .Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+        var environmentVariables = new Dictionary<string, object>();
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: environmentVariables, resource: dashboardResource));
+
+        Assert.Equal(
+            configureExplicitAliases ? explicitApplicationName : "My App",
+            environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
+        Assert.Equal(expectedPersistenceMode, environmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName]);
+    }
+
+    [Theory]
+    [InlineData(null, null, null)]
+    [InlineData("configured-dashboard", null, "configured-dashboard")]
+    [InlineData("configured-dashboard", "environment-dashboard", "environment-dashboard")]
+    public async Task ConfigureEnvironmentVariables_ConfiguresExplicitDashboardDataDirectoryWithoutDefault(
+        string? configuredDataDirectory,
+        string? configuredDataDirectoryEnvironmentAlias,
+        string? expectedDataDirectory)
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardDataDirectoryName.ConfigKey] = configuredDataDirectory,
+                [DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = configuredDataDirectoryEnvironmentAlias
+            })
+            .Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+        var environmentVariables = new Dictionary<string, object>();
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: environmentVariables, resource: dashboardResource));
+
+        if (expectedDataDirectory is null)
+        {
+            Assert.False(environmentVariables.ContainsKey(DashboardConfigNames.DashboardDataDirectoryName.EnvVarName));
+        }
+        else
+        {
+            Assert.Equal(expectedDataDirectory, environmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName]);
+        }
+    }
+
+    [Theory]
     [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
     [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]
     [InlineData("http://myapp.localhost:8080", "myapp.localhost", 5555, "http", "localhost")]

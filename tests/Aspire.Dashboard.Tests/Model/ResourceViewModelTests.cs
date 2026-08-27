@@ -4,7 +4,6 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
-using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -156,56 +155,6 @@ public sealed class ResourceViewModelTests
                 Assert.True(p.Value.IsValueMasked);
                 Assert.True(p.Value.IsValueSensitive);
             });
-    }
-
-    [Fact]
-    public void WithStateFrom_ClonesProjectedStateOwnedProperties()
-    {
-        var replicaStateProperty = new ResourcePropertyViewModel(
-            KnownProperties.Resource.State,
-            Value.ForString(KnownResourceState.Running.ToString()),
-            isValueSensitive: true,
-            knownProperty: null,
-            sortOrder: 0,
-            displayName: "State",
-            isHighlighted: true)
-        {
-            IsValueMasked = false
-        };
-
-        var parent = ModelTestHelpers.CreateResource(
-            resourceName: "api",
-            state: KnownResourceState.Starting,
-            properties: new Dictionary<string, ResourcePropertyViewModel>
-            {
-                [KnownProperties.Resource.State] = new(
-                    KnownProperties.Resource.State,
-                    Value.ForString(KnownResourceState.Starting.ToString()),
-                    isValueSensitive: true,
-                    knownProperty: null,
-                    sortOrder: 0,
-                    displayName: "State",
-                    isHighlighted: true)
-            });
-
-        var replica = ModelTestHelpers.CreateResource(
-            resourceName: "api-a1b2c3",
-            displayName: "api",
-            state: KnownResourceState.Running,
-            properties: new Dictionary<string, ResourcePropertyViewModel>
-            {
-                [KnownProperties.Resource.State] = replicaStateProperty
-            });
-
-        var projectedParent = parent.WithStateFrom(replica);
-        var projectedStateProperty = projectedParent.Properties[KnownProperties.Resource.State];
-
-        Assert.NotSame(replicaStateProperty, projectedStateProperty);
-        Assert.False(projectedStateProperty.IsValueMasked);
-
-        replicaStateProperty.IsValueMasked = true;
-
-        Assert.False(projectedStateProperty.IsValueMasked);
     }
 
     [Fact]

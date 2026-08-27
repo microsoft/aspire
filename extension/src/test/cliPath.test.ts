@@ -19,6 +19,7 @@ import {
 } from '../utils/cliPath';
 import {
     getCliExecutableCandidates,
+    getCliPathTargetKey,
     windowCliPathTarget,
     workspaceFolderCliPathTarget,
 } from '../utils/cliPathVariables';
@@ -261,10 +262,13 @@ suite('utils/cliPath tests', () => {
 
     suite('resolveCliPath', () => {
         let originalE2eCliPath: string | undefined;
+        let originalScopedE2eCliPaths: string | undefined;
 
         setup(() => {
             originalE2eCliPath = process.env.ASPIRE_EXTENSION_E2E_CLI_PATH;
+            originalScopedE2eCliPaths = process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
             delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATH;
+            delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
         });
 
         teardown(() => {
@@ -273,6 +277,12 @@ suite('utils/cliPath tests', () => {
             }
             else {
                 process.env.ASPIRE_EXTENSION_E2E_CLI_PATH = originalE2eCliPath;
+            }
+            if (originalScopedE2eCliPaths === undefined) {
+                delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+            }
+            else {
+                process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS = originalScopedE2eCliPaths;
             }
         });
 
@@ -294,6 +304,25 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.source, 'configured');
             assert.strictEqual(result.cliPath, e2ePath);
             assert.ok(setConfiguredPath.notCalled, 'should not rewrite settings for the E2E override path');
+        });
+
+        test('prefers the target-scoped E2E CLI path for a workspace folder', async () => {
+            const folder = createWorkspaceFolder('secondary', '/repo/secondary');
+            const target = workspaceFolderCliPathTarget(folder);
+            const scopedPath = '/repo/secondary/tools/aspire';
+            process.env.ASPIRE_EXTENSION_E2E_CLI_PATH = '/repo/primary/tools/aspire';
+            process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS = JSON.stringify({
+                [getCliPathTargetKey(target)]: scopedPath,
+            });
+            const resolver = new CliPathResolver(createMockDeps({
+                tryExecute: async path => path === scopedPath,
+            }));
+
+            const result = await resolver.resolve(target);
+
+            assert.strictEqual(result.available, true);
+            assert.strictEqual(result.source, 'configured');
+            assert.strictEqual(result.cliPath, scopedPath);
         });
 
         test('falls back to default install path when CLI is not on PATH', async () => {

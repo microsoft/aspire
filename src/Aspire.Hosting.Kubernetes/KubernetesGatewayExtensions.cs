@@ -89,9 +89,10 @@ public static class KubernetesGatewayExtensions
     }
 
     /// <summary>
-    /// Adds a path-based routing rule to the gateway. The rule matches all hosts and routes
-    /// traffic matching the specified path to the given endpoint's backing Kubernetes service.
-    /// This generates an <c>HTTPRoute</c> resource attached to the Gateway.
+    /// Adds a path-based routing rule to the gateway. The rule matches each hostname configured
+    /// with <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>, or all
+    /// hosts when no hostname is configured, and routes matching traffic to the endpoint's backing
+    /// Kubernetes service. This generates an <c>HTTPRoute</c> resource attached to the Gateway.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="path">The URL path to match (e.g., <c>"/"</c> or <c>"/api"</c>). Must start with <c>/</c>.</param>
@@ -165,8 +166,9 @@ public static class KubernetesGatewayExtensions
 
     /// <summary>
     /// Adds a hostname that this gateway's routes match. Multiple hostnames can be added by calling
-    /// this method repeatedly. Hostnames are used as <c>hostnames</c> in generated <c>HTTPRoute</c>
-    /// resources and as HTTPS listener hostnames when TLS is configured.
+    /// this method repeatedly. Routes without an explicit host apply to each configured hostname.
+    /// Hostnames are used as <c>hostnames</c> in generated <c>HTTPRoute</c> resources and as HTTPS
+    /// listener hostnames when TLS is configured.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
