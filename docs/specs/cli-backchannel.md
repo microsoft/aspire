@@ -95,6 +95,7 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V1 = "aux.v1";  // 13.1 baseline
     public const string V2 = "aux.v2";  // 13.2+ with request objects
     public const string V3 = "aux.v3";  // 13.4+ with batched console log streaming
+    public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
 }
 ```
 
@@ -109,6 +110,12 @@ internal static class AuxiliaryBackchannelCapabilities
 ### Console Log Request Compatibility
 
 `GetConsoleLogsRequest.ResourceName` was required when the v2 console log methods shipped. In v3 it is optional: a `null` resource name requests logs for all resources. V2 callers that need all-resource logs should continue to use the legacy `GetResourceLogsAsync` method rather than sending a null `ResourceName` to v2 console log methods.
+
+### Resource Snapshot Version Compatibility
+
+When both sides advertise `resource-snapshot-versions.v1`, `ResourceSnapshot.Version` is monotonic and can order the initial GET against watch updates. The CLI starts the watch before the GET and retains the newest snapshot when the calls overlap.
+
+Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Without the capability, the CLI treats snapshot ordering as unknown and preserves the legacy GET-first behavior. A version of `0` must not participate in stale-snapshot comparisons.
 
 ### Compatibility Matrix
 
