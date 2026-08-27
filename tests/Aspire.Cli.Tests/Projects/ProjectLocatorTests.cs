@@ -1437,7 +1437,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(onDiskProjectFile.FullName, "Not a real project file.");
 
         var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "LinkedAppHost");
-        TryCreateSymlink(linkDirectory, realDirectory.FullName, isDirectory: true);
+        TestSymlinkHelper.TryCreateSymlink(linkDirectory, realDirectory.FullName);
 
         var linkedProjectFile = new FileInfo(Path.Combine(linkDirectory, onDiskProjectFile.Name));
         Assert.True(linkedProjectFile.Exists);
@@ -4217,26 +4217,4 @@ builder.Build().Run();");
             configuration ?? new ConfigurationBuilder().Build());
     }
 
-    private static void TryCreateSymlink(string linkPath, string targetPath, bool isDirectory)
-    {
-        try
-        {
-            if (isDirectory)
-            {
-                Directory.CreateSymbolicLink(linkPath, targetPath);
-            }
-            else
-            {
-                File.CreateSymbolicLink(linkPath, targetPath);
-            }
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
-        }
-        catch (IOException ex)
-        {
-            Assert.Skip($"Symbolic link creation failed in this environment: {ex.Message}");
-        }
-    }
 }
