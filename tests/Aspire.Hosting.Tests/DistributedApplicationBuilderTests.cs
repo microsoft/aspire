@@ -508,6 +508,34 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
+    public void SourceAppHostWithInvalidEnvironmentNameDoesNotThrowInPublishMode()
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-invalid-env-");
+        try
+        {
+            // An environment name outside [a-zA-Z0-9_-] makes deployment-state path resolution throw
+            // ArgumentException. Best-effort state loading must swallow that so publish-mode builder
+            // construction succeeds instead of failing outright.
+            var options = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+                Args = ["--publisher", "manifest", "--environment", "Invalid.Env"]
+            };
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.True(builder.ExecutionContext.IsPublishMode);
+            Assert.Equal("Invalid.Env", builder.Environment.EnvironmentName);
+        }
+        finally
+        {
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void PolyglotAppHostDoesNotLoadLegacyDeploymentConfigurationAfterClear()
     {
         var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");

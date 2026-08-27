@@ -1026,19 +1026,23 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
-            _innerBuilder.Configuration,
-            appHostSha,
-            environment)!;
-        var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
-            ? null
-            : FileDeploymentStateManager.GetStatePath(
-                _innerBuilder.Configuration,
-                legacyAppHostSha,
-                environment);
 
         try
         {
+            // GetStatePath validates the environment name and throws ArgumentException for names
+            // outside [a-zA-Z0-9_-]. Compute the paths inside the try so an unusual environment name
+            // degrades to skipping this best-effort load instead of failing builder construction.
+            var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
+                _innerBuilder.Configuration,
+                appHostSha,
+                environment)!;
+            var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
+                ? null
+                : FileDeploymentStateManager.GetStatePath(
+                    _innerBuilder.Configuration,
+                    legacyAppHostSha,
+                    environment);
+
             var effectiveState = FileDeploymentStateManager.LoadEffectiveState(
                 deploymentStatePath,
                 legacyDeploymentStatePath);
@@ -1049,9 +1053,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Configuration.AddJsonStream(stream);
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
         {
-            Debug.WriteLine($"Failed to load deployment state from '{deploymentStatePath}': {ex}");
+            Debug.WriteLine($"Failed to load deployment state for environment '{environment}': {ex}");
         }
     }
 
