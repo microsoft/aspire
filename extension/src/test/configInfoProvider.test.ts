@@ -1,10 +1,13 @@
 import * as assert from 'assert';
 import nodeChildProcess = require('child_process');
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
-import { ConfigInfoProvider, getConfigInfo, parseConfigInfoOutput } from '../utils/configInfoProvider';
+import { ConfigInfoProvider, getConfigInfo, parseCliUpdateRecommendationOutput, parseConfigInfoOutput } from '../utils/configInfoProvider';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../utils/process/cliProcess';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
@@ -22,6 +25,31 @@ function emitConfigInfo(options: cliModule.SpawnProcessOptions | undefined, capa
         capabilities,
     }));
     options?.exitCallback?.(0);
+}
+
+function createDoctorVersionOutput(
+    currentVersion: string,
+    latestVersion?: string,
+    updateCheckError?: string,
+    identityChannel: string | null = 'stable',
+    latestVersionChannel: string | null = latestVersion
+        ? (latestVersion.includes('-') ? 'prerelease' : 'stable')
+        : null,
+): string {
+    return JSON.stringify({
+        checks: [{
+            name: 'cli-version',
+            metadata: {
+                currentVersion,
+                latestVersion,
+                updateCheckError,
+                ...(identityChannel === null ? {} : { identityChannel }),
+                ...(latestVersionChannel === null ? {} : { latestVersionChannel }),
+            },
+        }],
+        summary: { passed: 0, warnings: 0, failed: 0 },
+        installations: [],
+    });
 }
 
 suite('configInfoProvider tests', () => {
@@ -267,56 +295,228 @@ suite('configInfoProvider tests', () => {
         assert.deepStrictEqual(spawnStub.secondCall.args[2], ['config', 'info', '--json']);
     });
 
-    test('getCliVersionStatus enforces the 13.5 stable boundary without running config info', async () => {
+    test('parseCliUpdateRecommendationOutput accepts stable and prerelease recommendations', () => {
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.5.0', '13.6.0')),
+            { status: 'available', currentVersion: '13.5.0', version: '13.6.0' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0-preview.2', '13.7.0-preview.1', undefined, 'daily')),
+            { status: 'available', currentVersion: '13.6.0-preview.2', version: '13.7.0-preview.1' });
+        // Doctor reports only one stable-first recommendation. Ignore that cross-lane result for a
+        // prerelease install even though a simultaneously newer prerelease is not observable.
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0-preview.2', '13.6.0', undefined, 'daily')),
+            { status: 'none', currentVersion: '13.6.0-preview.2' });
+        // The CLI's stable update rule cannot produce this payload, but reject it defensively so a
+        // stable installation is never nudged onto a prerelease channel.
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0', '13.7.0-preview.1')),
+            { status: 'none', currentVersion: '13.6.0' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0')),
+            { status: 'none', currentVersion: '13.6.0' });
+        for (const identityChannel of ['local', 'pr-19670', 'run-42', 'default', 'future']) {
+            assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+                createDoctorVersionOutput('13.6.0-dev', '13.7.0-preview.1', undefined, identityChannel)),
+                { status: 'ineligible', currentVersion: '13.6.0-dev' });
+        }
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0-preview.1', '13.7.0-preview.1', undefined, null)),
+            { status: 'ineligible', currentVersion: '13.6.0-preview.1' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0-preview.1', '13.7.0-preview.1', undefined, 'daily', null)),
+            { status: 'available', currentVersion: '13.6.0-preview.1', version: '13.7.0-preview.1' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0-dev', '13.7.0', undefined, 'local'), 'stable'),
+            { status: 'ineligible', currentVersion: '13.6.0-dev' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.6.0-dev', undefined, 'offline', 'local')),
+            { status: 'ineligible', currentVersion: '13.6.0-dev' });
+        assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
+            createDoctorVersionOutput('13.5.0', undefined, 'offline')),
+            { status: 'unavailable' });
+    });
+
+    test('parseCliUpdateRecommendationOutput accepts captured Aspire doctor payloads', () => {
+        // Captured from the repo-built 13.6.0-dev CLI. Doctor writes progress to stderr and emits
+        // this check inside its stdout JSON response.
+        const prereleaseUpdateOutput = JSON.stringify({
+            checks: [{
+                category: 'aspire',
+                name: 'cli-version',
+                status: 'warning',
+                message: 'Aspire CLI version 13.6.0-dev (channel: local) is out of date. Latest version is 13.6.0-preview.1.26426.1 (channel: prerelease)',
+                fix: "Run 'aspire update' to update Aspire CLI.",
+                metadata: {
+                    currentVersion: '13.6.0-dev',
+                    latestVersion: '13.6.0-preview.1.26426.1',
+                    updateCommand: 'aspire update',
+                    identityChannel: 'local',
+                    latestVersionChannel: 'prerelease',
+                },
+            }],
+            summary: { passed: 6, warnings: 1, failed: 0 },
+            installations: [],
+        });
+        assert.deepStrictEqual(
+            parseCliUpdateRecommendationOutput(prereleaseUpdateOutput),
+            { status: 'ineligible', currentVersion: '13.6.0-dev' });
+
+        // Captured from an up-to-date installed 13.5.2 stable CLI.
+        const currentStableOutput = JSON.stringify({
+            checks: [{
+                category: 'aspire',
+                name: 'cli-version',
+                status: 'pass',
+                message: 'Aspire CLI version 13.5.2 (channel: stable)',
+                metadata: {
+                    currentVersion: '13.5.2',
+                    identityChannel: 'stable',
+                },
+            }],
+            summary: { passed: 7, warnings: 0, failed: 0 },
+            installations: [],
+        });
+        assert.deepStrictEqual(
+            parseCliUpdateRecommendationOutput(currentStableOutput),
+            { status: 'none', currentVersion: '13.5.2' });
+    });
+
+    test('getCliIdentity follows environment then install-sidecar channel precedence', async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-identity-'));
+        const cliPath = path.join(directory, process.platform === 'win32' ? 'aspire.exe' : 'aspire');
+        fs.writeFileSync(path.join(directory, '.aspire-install.json'), JSON.stringify({
+            source: 'script',
+            channel: 'staging',
+        }));
+        let environmentChannel: string | undefined = 'daily';
         const terminalProvider = {
-            getAspireCliExecutablePath: async () => '/unused/aspire',
-            createEnvironment: () => ({}),
+            getAspireCliExecutablePath: async () => cliPath,
+            createEnvironment: () => environmentChannel ? { ASPIRE_CLI_CHANNEL: environmentChannel } : {},
         } as unknown as AspireTerminalProvider;
-        const versions = [
-            ['13.4.99', 'unsupported'],
-            ['13.5.0-preview.1.12345.6', 'unsupported'],
-            ['13.5.0', 'supported'],
-            ['13.5.1+abcdef', 'supported'],
-            ['14.0.0-preview.1', 'supported'],
-        ] as const;
-        let versionIndex = 0;
-        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
-            assert.strictEqual(command, '/exact/aspire');
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, cliPath);
             assert.deepStrictEqual(args, ['--version']);
-            options?.stdoutCallback?.(`${versions[versionIndex++][0]}\n`);
+            options?.stdoutCallback?.('13.6.0-preview.1');
             options?.exitCallback?.(0);
             return {} as ChildProcessWithoutNullStreams;
         });
         const provider = new ConfigInfoProvider(terminalProvider);
 
-        for (const [version, expectedStatus] of versions) {
+        try {
             assert.deepStrictEqual(
-                await provider.getCliVersionStatus('13.5.0', { cliPath: '/exact/aspire' }),
-                {
-                    cliPath: '/exact/aspire',
-                    version,
-                    status: expectedStatus,
-                });
-        }
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: 'daily' });
 
-        assert.strictEqual(spawnStub.callCount, versions.length);
-        for (const call of spawnStub.getCalls()) {
-            assert.strictEqual(call.args[3]?.createProcessGroup, true);
-            assert.strictEqual(call.args[3]?.noExtensionVariables, true);
+            environmentChannel = ' stable ';
+            assert.deepStrictEqual(
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: ' stable ' });
+            assert.deepStrictEqual(
+                parseCliUpdateRecommendationOutput(
+                    createDoctorVersionOutput('13.6.0-preview.1', '13.6.0', undefined, 'stable'),
+                    ' stable '),
+                { status: 'ineligible', currentVersion: '13.6.0-preview.1' });
+
+            environmentChannel = '   ';
+            assert.deepStrictEqual(
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: '   ' });
+
+            environmentChannel = undefined;
+            assert.deepStrictEqual(
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: 'staging' });
+
+            fs.writeFileSync(path.join(directory, '.aspire-install.json'), JSON.stringify({
+                source: 'script',
+                channel: ' daily ',
+            }));
+            assert.deepStrictEqual(
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: ' daily ' });
+
+            fs.writeFileSync(path.join(directory, '.aspire-install.json'), 'x'.repeat(64 * 1024 + 1));
+            assert.deepStrictEqual(
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: undefined });
+        }
+        finally {
+            fs.rmSync(directory, { recursive: true, force: true });
         }
     });
 
-    test('getCliVersionStatus keeps failed and malformed probes silent', async () => {
+    test('getCliIdentity reads the sidecar beside a symlink target', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-cli-symlink-'));
+        const targetDirectory = path.join(root, 'target');
+        const linkedDirectory = path.join(root, 'link');
+        fs.mkdirSync(targetDirectory);
+        fs.writeFileSync(path.join(targetDirectory, '.aspire-install.json'), JSON.stringify({
+            source: 'script',
+            channel: 'daily',
+        }));
+        const executableName = process.platform === 'win32' ? 'aspire.exe' : 'aspire';
+        fs.writeFileSync(path.join(targetDirectory, executableName), '');
+        fs.symlinkSync(targetDirectory, linkedDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+        const cliPath = path.join(linkedDirectory, executableName);
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => cliPath,
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, cliPath);
+            assert.deepStrictEqual(args, ['--version']);
+            options?.stdoutCallback?.('13.6.0-preview.1');
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            assert.deepStrictEqual(
+                await provider.getCliIdentity({ cliPath }),
+                { cliPath, version: '13.6.0-preview.1', identityChannelOverride: 'daily' });
+        }
+        finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test('getCliUpdateRecommendation accepts structured doctor output on a nonzero exit', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, '/exact/aspire');
+            assert.deepStrictEqual(args, ['doctor', '--format', 'json', '--nologo']);
+            assert.deepStrictEqual(options?.env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
+            options?.stdoutCallback?.(createDoctorVersionOutput('13.5.0', '13.6.0'));
+            // `aspire doctor` exits nonzero when an unrelated prerequisite check fails, but its
+            // structured CLI update metadata is still valid.
+            options?.exitCallback?.(1);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        assert.deepStrictEqual(
+            await provider.getCliUpdateRecommendation({ cliPath: '/exact/aspire' }),
+            { status: 'available', currentVersion: '13.5.0', version: '13.6.0' });
+        assert.strictEqual(spawnStub.callCount, 1);
+    });
+
+    test('getCliUpdateRecommendation retries without nologo and keeps unavailable checks silent', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
         let attempt = 0;
-        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
             if (attempt++ === 0) {
+                options?.stderrCallback?.("Unrecognized command or argument '--nologo'.");
                 options?.exitCallback?.(1);
             } else {
-                options?.stdoutCallback?.('Aspire CLI 13.4.0');
+                options?.stdoutCallback?.('not json');
                 options?.exitCallback?.(0);
             }
             return {} as ChildProcessWithoutNullStreams;
@@ -324,9 +524,73 @@ suite('configInfoProvider tests', () => {
         const showErrorMessage = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
         const provider = new ConfigInfoProvider(terminalProvider);
 
-        assert.strictEqual(await provider.getCliVersionStatus('13.5.0', { cliPath: '/exact/aspire' }), null);
-        assert.strictEqual(await provider.getCliVersionStatus('13.5.0', { cliPath: '/exact/aspire' }), null);
+        assert.deepStrictEqual(
+            await provider.getCliUpdateRecommendation({ cliPath: '/exact/aspire' }),
+            { status: 'unavailable' });
+        assert.deepStrictEqual(spawnStub.getCalls().map(call => call.args[2]), [
+            ['doctor', '--format', 'json', '--nologo'],
+            ['doctor', '--format', 'json'],
+        ]);
         assert.strictEqual(showErrorMessage.callCount, 0);
+    });
+
+    test('getCliUpdateRecommendation cancels and terminates an in-flight doctor probe', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        sinon.stub(cliModule, 'spawnCliProcess').returns(childProcess);
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
+        const cancellation = new vscode.CancellationTokenSource();
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const probe = provider.getCliUpdateRecommendation({
+            cliPath: '/exact/aspire',
+            cancellationToken: cancellation.token,
+        });
+        cancellation.cancel();
+
+        assert.deepStrictEqual(await probe, { status: 'unavailable' });
+        sinon.assert.calledOnceWithExactly(terminateStub, childProcess, 'cancelled Aspire CLI update probe');
+    });
+
+    test('version and update probes do not settle before cancellation termination completes', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const childProcess = { kill: () => true } as unknown as ChildProcessWithoutNullStreams;
+        sinon.stub(cliModule, 'spawnCliProcess').returns(childProcess);
+        const terminations: Array<() => void> = [];
+        sinon.stub(cliModule, 'terminateCliProcess').callsFake(() =>
+            new Promise<void>(resolve => terminations.push(resolve)));
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        for (const startProbe of [
+            (cancellation: vscode.CancellationTokenSource) => provider.getCliVersion({
+                cliPath: '/exact/aspire',
+                cancellationToken: cancellation.token,
+            }),
+            (cancellation: vscode.CancellationTokenSource) => provider.getCliUpdateRecommendation({
+                cliPath: '/exact/aspire',
+                cancellationToken: cancellation.token,
+            }),
+        ]) {
+            const cancellation = new vscode.CancellationTokenSource();
+            const probe = startProbe(cancellation);
+            let settled = false;
+            void probe.then(() => settled = true);
+
+            cancellation.cancel();
+            await Promise.resolve();
+            assert.strictEqual(settled, false);
+
+            terminations.shift()?.();
+            await probe;
+            assert.strictEqual(settled, true);
+            cancellation.dispose();
+        }
     });
 
     test('getCapabilityStatus uses advertised capabilities before the minimum-version fallback', async () => {

@@ -20,7 +20,6 @@ import { createLsStreamCandidateHandler, parseCandidateOutput, parseLegacyGetApp
 import { discoverProjectAppHostsFromWorkspaceFiles, findConfiguredAppHostPaths, formatErrorMessage } from './appHostProjectFiles';
 import { findCandidateForEditorFile, findWorkspaceDefaultCandidate, getDebugTargetForCandidate, sortCandidatesByPath } from './appHostCandidateSelection';
 import type { CandidateAppHostDisplayInfo, IncrementalCandidateCallback } from './appHostCandidateTypes';
-import { reportCliResolvedForOperation } from './cliOperationResolution';
 
 export { isSamePath };
 export { isSameFileSystemEntry };
@@ -48,8 +47,12 @@ interface CachedAppHostDiscovery {
     completed: boolean;
     started: boolean;
     stale: boolean;
-    reportCliResolution: boolean;
     resolvedCliPath?: string;
+}
+
+export interface AppHostDiscoveryCliResolution {
+    workspaceFolder: vscode.WorkspaceFolder;
+    cliPath: string;
 }
 
 interface CliProcessResult {
@@ -63,6 +66,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _streamingDiscoveryMaxRuntimeMs = 5 * 60 * 1000;
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+    private readonly _onDidResolveCli = new vscode.EventEmitter<AppHostDiscoveryCliResolution>();
     private readonly _cache = new Map<string, CachedAppHostDiscovery>();
     private readonly _activeDiscoveries = new Set<CachedAppHostDiscovery>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
@@ -72,6 +76,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _configInfoProvider: ConfigInfoProvider;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
+    readonly onDidResolveCli = this._onDidResolveCli.event;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
@@ -82,7 +87,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         forceRefresh = false,
         cancellationToken?: vscode.CancellationToken,
         onIncrementalCandidate: IncrementalCandidateCallback = () => { },
-        reportCliResolution = false,
     ): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
@@ -105,13 +109,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         if (!cachedDiscovery) {
             cachedDiscovery = this._createCachedDiscovery(workspaceFolder, key, forceRefresh);
         }
-        if (reportCliResolution) {
-            cachedDiscovery.reportCliResolution = true;
-            if (cachedDiscovery.resolvedCliPath) {
-                reportCliResolvedForOperation(workspaceFolderCliPathTarget(workspaceFolder), cachedDiscovery.resolvedCliPath);
-            }
-        }
-
         const candidateProgressCallback = (candidate: CandidateAppHostDisplayInfo): void => {
             if (!cancellationToken?.isCancellationRequested) {
                 notifyCandidateProgressCallback(onIncrementalCandidate, candidate);
@@ -134,16 +131,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
     }
 
-    reportResolvedCliForWorkspace(workspaceFolder: vscode.WorkspaceFolder): void {
-        const cachedDiscovery = this._cache.get(path.resolve(workspaceFolder.uri.fsPath));
-        if (!cachedDiscovery) {
-            return;
-        }
-
-        cachedDiscovery.reportCliResolution = true;
-        if (cachedDiscovery.resolvedCliPath) {
-            reportCliResolvedForOperation(workspaceFolderCliPathTarget(workspaceFolder), cachedDiscovery.resolvedCliPath);
-        }
+    getResolvedCliPath(workspaceFolder: vscode.WorkspaceFolder): string | undefined {
+        return this._cache.get(path.resolve(workspaceFolder.uri.fsPath))?.resolvedCliPath;
     }
 
     private _createCachedDiscovery(
@@ -162,7 +151,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             completed: false,
             started: false,
             stale: false,
-            reportCliResolution: false,
         };
         const reportCandidateProgress = (candidate: CandidateAppHostDisplayInfo) => {
             if (isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path))) {
@@ -183,9 +171,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 cancellationSource.token,
                 forceRefresh,
                 cliPath => {
-                    cachedDiscovery.resolvedCliPath = cliPath;
-                    if (cachedDiscovery.reportCliResolution && this._cache.get(key) === cachedDiscovery) {
-                        reportCliResolvedForOperation(workspaceFolderCliPathTarget(workspaceFolder), cliPath);
+                    if (this._cache.get(key) === cachedDiscovery) {
+                        cachedDiscovery.resolvedCliPath = cliPath;
+                        this._onDidResolveCli.fire({ workspaceFolder, cliPath });
                     }
                 })
                 .then(async discovery => {
@@ -311,6 +299,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._cancelActiveCliProcesses.clear();
         this._activeCliProcesses.clear();
         this._onDidChangeCandidates.dispose();
+        this._onDidResolveCli.dispose();
     }
 
     private async _discoverCore(

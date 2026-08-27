@@ -8,6 +8,7 @@ import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from 
 import { AspireCliFailedError, AspireCliNotInstalledError } from './appHostCliContracts';
 import { normalizeResourceCommandStatusLine } from './resourceCommandStatusOutput';
 import { CliPathResolutionTarget, windowCliPathTarget } from '../utils/cliPathVariables';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export const oneShotOutputBufferLimit = 64 * 1024;
 
@@ -18,6 +19,7 @@ export interface RunCliCommandOptions {
     env?: { name: string; value: string }[];
     target?: CliPathResolutionTarget;
     cliPath?: string;
+    reportCliResolution?: boolean;
 }
 
 export class AppHostCliRunner implements vscode.Disposable {
@@ -78,13 +80,17 @@ export class AppHostCliRunner implements vscode.Disposable {
     }
 
     async runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
+        const target = options.target ?? windowCliPathTarget;
         const cliPath = options.cliPath
-            ?? await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
+            ?? await this._terminalProvider.getAspireCliExecutablePath(target).catch(error => {
                 throw new AspireCliNotInstalledError(String(error));
             });
 
         if (options.cancellationToken?.isCancellationRequested) {
             throw new vscode.CancellationError();
+        }
+        if (options.reportCliResolution) {
+            reportCliResolvedForOperation(target, cliPath);
         }
         const invocationArgs = this.normalizeNoLogoArgs(cliPath, args);
 
@@ -144,7 +150,12 @@ export class AppHostCliRunner implements vscode.Disposable {
                     const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
                     if (retryArgs) {
                         settle(() => {
-                            this.runCliCommand(command, retryArgs, options).then(resolve, reject);
+                            this.runCliCommand(command, retryArgs, {
+                                ...options,
+                                cliPath,
+                                target,
+                                reportCliResolution: false,
+                            }).then(resolve, reject);
                         });
                         return;
                     }

@@ -11,6 +11,7 @@ import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableRes
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
 import path from 'path';
 import { assertNoTerminalControlCharacters } from './cmdShim';
+import { reportCliResolvedForOperation } from './cliOperationResolution';
 
 // Re-exported so existing importers keep a single implementation of the guard.
 export { assertNoTerminalControlCharacters };
@@ -32,6 +33,7 @@ export interface SendAspireCommandOptions {
     terminalTarget?: 'shared' | 'editor';
     target: CliPathResolutionTarget;
     cliPath?: string;
+    reportCliResolution?: boolean;
 }
 
 // String parts are fixed CLI syntax and are validated before interpolation.
@@ -168,7 +170,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     async sendAspireCommandToAspireTerminal(subcommand: AspireSubcommand, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
         const target = options?.target ?? windowCliPathTarget;
+        const resolvedForThisCommand = options?.cliPath === undefined;
         const cliPath = options?.cliPath ?? await this.getAspireCliExecutablePath(target);
+        if (resolvedForThisCommand && options?.reportCliResolution !== false) {
+            reportCliResolvedForOperation(target, cliPath);
+        }
         const subcommandLine = formatSubcommand(subcommand);
         assertNoTerminalControlCharacters(cliPath);
 

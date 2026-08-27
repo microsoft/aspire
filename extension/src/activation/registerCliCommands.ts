@@ -31,6 +31,10 @@ interface CommandInvocation {
   readonly cliPath?: string;
 }
 
+interface RequiredAppHostCommandInvocation extends CommandInvocation {
+  readonly appHost: AppHostCommandTarget & { appHostPath: string };
+}
+
 type CommandSource = 'command_palette' | 'tree';
 
 export function registerCliCommands(
@@ -45,15 +49,15 @@ export function registerCliCommands(
   // through tryExecuteCommand itself — the delegated-to command owns its own CLI
   // availability check and telemetry.
   const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', createWithAspireCommand);
-  const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand(
+  const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand<RequiredAppHostCommandInvocation>(
     'aspire-vscode.deploy',
     terminalProvider,
-    (_tp, invocation, cliPath) => deployCommand(editorCommandProvider, getRequiredAppHostPath(invocation), invocation.target, cliPath),
+    (_tp, invocation, cliPath) => deployCommand(editorCommandProvider, invocation.appHost.appHostPath, invocation.target, cliPath),
     () => selectAppHostCommandInvocation(editorCommandProvider, true)));
-  const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand(
+  const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand<RequiredAppHostCommandInvocation>(
     'aspire-vscode.publish',
     terminalProvider,
-    (_tp, invocation, cliPath) => publishCommand(editorCommandProvider, getRequiredAppHostPath(invocation), invocation.target, cliPath),
+    (_tp, invocation, cliPath) => publishCommand(editorCommandProvider, invocation.appHost.appHostPath, invocation.target, cliPath),
     () => selectAppHostCommandInvocation(editorCommandProvider, true)));
   const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (_tp, invocation, cliPath) => doCommand(configInfoProvider, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
   const cliUpdateCommandRegistration = vscode.commands.registerCommand('aspire-vscode.update', () => tryExecuteCommand('aspire-vscode.update', terminalProvider, (tp, invocation, cliPath) => updateCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
@@ -64,10 +68,10 @@ export function registerCliCommands(
       (tp, invocation, resolvedCliPath) => updateSelfCommand(tp, invocation.target, resolvedCliPath || undefined),
       async () => ({ target, cliPath })));
   const openTerminalCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openTerminal', () => tryExecuteCommand('aspire-vscode.openTerminal', terminalProvider, (tp, invocation, cliPath) => openTerminalCommand(tp, invocation.target, cliPath), selectCommandInvocation));
-  const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, configureLaunchJsonCommand));
-  const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand));
+  const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, configureLaunchJsonCommand, selectWindowCommandInvocation));
+  const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand, selectWindowCommandInvocation));
   const openLocalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openLocalSettings', () => tryExecuteCommand('aspire-vscode.openLocalSettings', terminalProvider, (tp, invocation, cliPath) => openLocalSettingsCommand(tp, invocation.target, cliPath), selectCommandInvocation));
-  const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
+  const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand, selectWindowCommandInvocation));
   const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(true, resource));
   const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(false, resource));
   const runAppHostFromExplorerRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostFromExplorer', 'editor', (resource?: vscode.Uri) => editorCommandProvider.tryExecuteRunAppHost(true, resource, false));
@@ -133,11 +137,25 @@ async function selectCommandInvocation(): Promise<CommandInvocation> {
   return { target: await selectCommandTarget() };
 }
 
+async function selectWindowCommandInvocation(): Promise<CommandInvocation> {
+  return { target: windowCliPathTarget };
+}
+
+function selectAppHostCommandInvocation(editorCommandProvider: AspireEditorCommandProvider, requireAppHost: true): Promise<RequiredAppHostCommandInvocation>;
+function selectAppHostCommandInvocation(editorCommandProvider: AspireEditorCommandProvider, requireAppHost?: false): Promise<CommandInvocation>;
 async function selectAppHostCommandInvocation(editorCommandProvider: AspireEditorCommandProvider, requireAppHost = false): Promise<CommandInvocation> {
   const appHost = await getAppHostArgs(editorCommandProvider);
-  if (!appHost.appHostPath && requireAppHost) {
-    vscode.window.showErrorMessage(noAppHostInWorkspace);
-    throw new vscode.CancellationError();
+  if (requireAppHost) {
+    const appHostPath = appHost.appHostPath;
+    if (!appHostPath) {
+      vscode.window.showErrorMessage(noAppHostInWorkspace);
+      throw new vscode.CancellationError();
+    }
+
+    return {
+      target: getCliPathTargetForUri(vscode.Uri.file(appHostPath)),
+      appHost: { ...appHost, appHostPath },
+    };
   }
 
   const target = appHost.appHostPath
@@ -146,20 +164,11 @@ async function selectAppHostCommandInvocation(editorCommandProvider: AspireEdito
   return { target, appHost };
 }
 
-function getRequiredAppHostPath(invocation: CommandInvocation): string {
-  const appHostPath = invocation.appHost?.appHostPath;
-  if (!appHostPath) {
-    throw new Error(noAppHostInWorkspace);
-  }
-
-  return appHostPath;
-}
-
-async function tryExecuteCommand(
+async function tryExecuteCommand<TInvocation extends CommandInvocation>(
   commandName: string,
   terminalProvider: AspireTerminalProvider,
-  command: (terminalProvider: AspireTerminalProvider, invocation: CommandInvocation, cliPath: string) => Promise<void>,
-  prepareInvocation: () => Promise<CommandInvocation> = async () => ({ target: windowCliPathTarget }),
+  command: (terminalProvider: AspireTerminalProvider, invocation: TInvocation, cliPath: string) => Promise<void>,
+  prepareInvocation: () => Promise<TInvocation>,
   source: CommandSource = 'command_palette',
 ): Promise<HandledCommandOutcome | undefined> {
   try {

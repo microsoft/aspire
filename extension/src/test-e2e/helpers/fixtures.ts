@@ -442,10 +442,12 @@ export function writeTrackedStreamingDiscoveryCliWrapper(delayMs = 4_000, initia
     return { cliPath, invocationLogPath };
 }
 
-export function writeOutdatedCliWarningWrapper(version = '13.4.9'): { cliPath: string; cleanup: () => void } {
-    const name = 'aspire-outdated-cli-warning';
+export function writeCliUpdateWarningWrapper(version = '13.5.0', recommendedVersion = '13.6.0'): { cliPath: string; cleanup: () => void } {
+    const name = 'aspire-cli-update-warning';
     const cliPath = writeCliWrapper(name, {
         versionOutput: version,
+        recommendedVersion,
+        identityChannel: version.includes('-') ? 'daily' : 'stable',
     });
     const scriptPath = path.join(path.dirname(cliPath), `${name}.js`);
 
@@ -973,6 +975,8 @@ function writeCliWrapper(
         psSnapshotAppHostPath?: string;
         psSnapshotAppHostPid?: number;
         versionOutput?: string;
+        recommendedVersion?: string;
+        identityChannel?: string;
     },
     wrapperDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers'),
 ): string {
@@ -1005,6 +1009,26 @@ ${options.versionOutput === undefined
         ? ''
         : `if (args.length === 1 && args[0] === '--version') {
   console.log(${JSON.stringify(options.versionOutput)});
+  process.exit(0);
+}
+
+`}
+${options.recommendedVersion === undefined
+        ? ''
+        : `if (args[0] === 'doctor' && args.includes('--format') && args[args.indexOf('--format') + 1] === 'json') {
+  console.log(JSON.stringify({
+    checks: [{
+      name: 'cli-version',
+      metadata: {
+        currentVersion: ${JSON.stringify(options.versionOutput)},
+        latestVersion: ${JSON.stringify(options.recommendedVersion)},
+        identityChannel: ${JSON.stringify(options.identityChannel)},
+        latestVersionChannel: ${JSON.stringify(options.recommendedVersion.includes('-') ? 'prerelease' : 'stable')},
+      },
+    }],
+    summary: { passed: 0, warnings: 1, failed: 0 },
+    installations: [],
+  }));
   process.exit(0);
 }
 

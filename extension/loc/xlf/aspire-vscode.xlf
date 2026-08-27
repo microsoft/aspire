@@ -59,7 +59,7 @@
       <source xml:lang="en">Aspire CLI is not available on PATH. Please install it and restart VS Code.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.outdatedAspireCliWarning">
-      <source xml:lang="en">Aspire CLI {0} at {1} is older than {2}. Update the CLI and the AppHost&apos;s Aspire packages to {2} or later to avoid a known startup failure in VS Code.</source>
+      <source xml:lang="en">Aspire CLI {0} at {1} has a newer version available for its current channel: {2}.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireOutputChannelName">
       <source xml:lang="en">Aspire Extension</source>

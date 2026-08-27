@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import { readFile, realpath, stat } from 'fs/promises';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess, terminateCliProcess } from './process/cliProcess';
@@ -7,10 +9,14 @@ import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 import { CliPathResolutionTarget, windowCliPathTarget } from './cliPathVariables';
+import { nonInteractiveCliEnvironment } from './environment';
 
 const configInfoTimeoutMs = 30_000;
 const cliVersionProbeTimeoutMs = 30_000;
+const cliUpdateProbeTimeoutMs = 130_000;
 const maxCliVersionOutputLength = 128;
+const maxCliUpdateOutputLength = 1024 * 1024;
+const maxCliIdentitySidecarLength = 64 * 1024;
 const cliVersionPattern = /^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
@@ -66,9 +72,26 @@ export interface CliVersionStatusOptions {
     timeoutMs?: number;
 }
 
-export interface CliVersionStatus {
+export interface CliUpdateRecommendationOptions extends CliVersionStatusOptions {
+    identityChannelOverride?: string;
+}
+
+export interface CliVersionInfo {
     cliPath: string;
     version: string;
+}
+
+export interface CliIdentityInfo extends CliVersionInfo {
+    identityChannelOverride?: string;
+}
+
+export type CliUpdateRecommendation =
+    | { status: 'available'; currentVersion: string; version: string }
+    | { status: 'none'; currentVersion: string }
+    | { status: 'ineligible'; currentVersion: string }
+    | { status: 'unavailable' };
+
+interface CliVersionStatus extends CliVersionInfo {
     status: Exclude<CapabilityStatus, 'unavailable'>;
 }
 
@@ -78,6 +101,7 @@ interface CliVersion {
     minor: number;
     patch: number;
     isPrerelease: boolean;
+    prereleaseIdentifiers: string[];
 }
 
 /**
@@ -204,18 +228,10 @@ export class ConfigInfoProvider {
     }
 
     /**
-     * Compares the exact resolved Aspire CLI against a minimum stable version. The bounded
-     * `aspire --version` probe is locale-independent and intentionally uncached so replacing an
-     * executable in place is observed on the next check. Probe failures return `null` without
-     * showing an error notification.
+     * Probes the exact resolved Aspire CLI version. The result is intentionally uncached so callers
+     * observe an executable replaced in place.
      */
-    async getCliVersionStatus(minimumVersion: string, options?: CliVersionStatusOptions): Promise<CliVersionStatus | null> {
-        const parsedMinimumVersion = parseCliVersion(minimumVersion);
-        if (!parsedMinimumVersion) {
-            extensionLogOutputChannel.warn(`Unable to probe Aspire CLI version: invalid minimum version '${minimumVersion}'.`);
-            return null;
-        }
-
+    async getCliVersion(options?: CliVersionStatusOptions): Promise<CliVersionInfo | null> {
         const target = options?.target ?? windowCliPathTarget;
         const startTime = Date.now();
         const timeoutMs = Math.min(options?.timeoutMs ?? cliVersionProbeTimeoutMs, cliVersionProbeTimeoutMs);
@@ -229,7 +245,47 @@ export class ConfigInfoProvider {
             return null;
         }
 
-        return await this._getCliVersionStatus(cliPath, parsedMinimumVersion, remainingTimeoutMs, options?.cancellationToken);
+        const version = await this._probeCliVersion(cliPath, remainingTimeoutMs, options?.cancellationToken);
+        return version ? { cliPath, version: version.value } : null;
+    }
+
+    /**
+     * Probes the effective CLI version and samples any channel override that the CLI resolves ahead
+     * of its assembly identity: inherited environment first, then the install sidecar.
+     */
+    async getCliIdentity(options?: CliVersionStatusOptions): Promise<CliIdentityInfo | null> {
+        const cli = await this.getCliVersion(options);
+        if (!cli || options?.cancellationToken?.isCancellationRequested) {
+            return null;
+        }
+
+        return {
+            ...cli,
+            identityChannelOverride: await this._getIdentityChannelOverride(cli.cliPath),
+        };
+    }
+
+    /**
+     * Returns a same-lane update recommended by the resolved CLI's structured update check. Stable
+     * installations follow stable releases and prerelease installations follow prerelease
+     * recommendations. Failures, cross-lane recommendations, and no-update results are silent.
+     */
+    async getCliUpdateRecommendation(options?: CliUpdateRecommendationOptions): Promise<CliUpdateRecommendation> {
+        if (options?.cancellationToken?.isCancellationRequested) {
+            return { status: 'unavailable' };
+        }
+
+        const target = options?.target ?? windowCliPathTarget;
+        const cliPath = options?.cliPath ?? await this._resolveCliPath(true, target, options?.cancellationToken);
+        if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
+            return { status: 'unavailable' };
+        }
+
+        return await this._fetchCliUpdateRecommendation(
+            cliPath,
+            target,
+            options?.identityChannelOverride,
+            options?.cancellationToken);
     }
 
     /**
@@ -280,20 +336,73 @@ export class ConfigInfoProvider {
             ?? 'unavailable';
     }
 
-    private _getCliVersionStatus(
+    private async _getIdentityChannelOverride(cliPath: string): Promise<string | undefined> {
+        const environment = this._terminalProvider.createEnvironment(undefined, undefined, true, cliPath) as Record<string, string | undefined>;
+        const environmentChannel = getEnvironmentValue(environment, 'ASPIRE_CLI_CHANNEL');
+        if (environmentChannel) {
+            return environmentChannel.toLowerCase();
+        }
+
+        try {
+            // Install routes write:
+            //   <binaryDir>/.aspire-install.json
+            //   { "source": "script", "channel": "stable", ... }
+            // Identity resolution uses this channel after the environment and before assembly
+            // metadata. Unknown or malformed sidecars fall back to the physical doctor identity.
+            let physicalCliPath = cliPath;
+            try {
+                physicalCliPath = await realpath(cliPath);
+            }
+            catch {
+                // Keep the invocation path when it cannot be canonicalized. The CLI itself uses
+                // the same fallback when resolving its process path.
+            }
+            const sidecarPath = path.join(path.dirname(physicalCliPath), '.aspire-install.json');
+            if ((await stat(sidecarPath)).size > maxCliIdentitySidecarLength) {
+                return undefined;
+            }
+            const sidecar = JSON.parse(await readFile(sidecarPath, 'utf8')) as { channel?: unknown };
+            return typeof sidecar.channel === 'string' && sidecar.channel.length > 0
+                ? sidecar.channel.toLowerCase()
+                : undefined;
+        }
+        catch {
+            return undefined;
+        }
+    }
+
+    private async _getCliVersionStatus(
         cliPath: string,
         minimumVersion: CliVersion,
         timeoutMs: number,
         cancellationToken?: vscode.CancellationToken,
     ): Promise<CliVersionStatus | null> {
-        return new Promise<CliVersionStatus | null>((resolve) => {
+        const version = await this._probeCliVersion(cliPath, timeoutMs, cancellationToken);
+        if (!version) {
+            return null;
+        }
+
+        return {
+            cliPath,
+            version: version.value,
+            status: compareCliVersions(version, minimumVersion) >= 0 ? 'supported' : 'unsupported',
+        };
+    }
+
+    private _probeCliVersion(
+        cliPath: string,
+        timeoutMs: number,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<CliVersion | null> {
+        return new Promise<CliVersion | null>((resolve) => {
             let childProcess: ChildProcessWithoutNullStreams | undefined;
+            let termination: Promise<void> | undefined;
             let output = '';
             let outputTooLong = false;
             let settled = false;
             let timeout: ReturnType<typeof setTimeout> | undefined;
             let cancellation: vscode.Disposable | undefined;
-            const settle = (result: CliVersionStatus | null) => {
+            const settle = (result: CliVersion | null) => {
                 if (settled) {
                     return;
                 }
@@ -306,12 +415,25 @@ export class ConfigInfoProvider {
                 resolve(result);
             };
             const reportUnavailable = (error: unknown) => {
-                if (settled) {
+                if (settled || termination) {
                     return;
                 }
 
                 extensionLogOutputChannel.warn(`Unable to probe Aspire CLI version: ${String(error)}`);
                 settle(null);
+            };
+            const terminateAndSettle = (description: string) => {
+                if (settled || termination) {
+                    return;
+                }
+                if (!childProcess) {
+                    settle(null);
+                    return;
+                }
+
+                termination = terminateCliProcess(childProcess, description)
+                    .catch(error => extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`))
+                    .then(() => settle(null));
             };
             if (cancellationToken?.isCancellationRequested) {
                 settle(null);
@@ -319,20 +441,10 @@ export class ConfigInfoProvider {
             }
 
             timeout = setTimeout(() => {
-                settle(null);
-                if (childProcess) {
-                    void terminateCliProcess(childProcess, 'timed-out Aspire CLI version probe').catch(error => {
-                        extensionLogOutputChannel.error(`Failed to terminate timed-out Aspire CLI version probe: ${String(error)}`);
-                    });
-                }
+                terminateAndSettle('timed-out Aspire CLI version probe');
             }, Math.min(timeoutMs, cliVersionProbeTimeoutMs));
             cancellation = cancellationToken?.onCancellationRequested(() => {
-                settle(null);
-                if (childProcess) {
-                    void terminateCliProcess(childProcess, 'cancelled Aspire CLI version probe').catch(error => {
-                        extensionLogOutputChannel.error(`Failed to terminate cancelled Aspire CLI version probe: ${String(error)}`);
-                    });
-                }
+                terminateAndSettle('cancelled Aspire CLI version probe');
             });
 
             try {
@@ -347,6 +459,9 @@ export class ConfigInfoProvider {
                         output += value;
                     },
                     exitCallback: code => {
+                        if (termination) {
+                            return;
+                        }
                         if (code !== 0 || outputTooLong) {
                             settle(null);
                             return;
@@ -358,18 +473,7 @@ export class ConfigInfoProvider {
                             return;
                         }
 
-                        const comparison = compareCliVersions(version, minimumVersion);
-                        // A prerelease at the exact minimum core predates the stable version that
-                        // introduced the option, so treat it as known unsupported. Prerelease/dev
-                        // builds with a higher numeric core remain supported because the feature
-                        // already exists on that later release line.
-                        settle({
-                            cliPath,
-                            version: version.value,
-                            status: comparison > 0 || (comparison === 0 && (!version.isPrerelease || minimumVersion.isPrerelease))
-                                ? 'supported'
-                                : 'unsupported',
-                        });
+                        settle(version);
                     },
                     errorCallback: reportUnavailable,
                     noExtensionVariables: true,
@@ -378,6 +482,118 @@ export class ConfigInfoProvider {
             catch (error) {
                 reportUnavailable(error);
             }
+        });
+    }
+
+    private _fetchCliUpdateRecommendation(
+        cliPath: string,
+        target: CliPathResolutionTarget,
+        identityChannelOverride: string | undefined,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<CliUpdateRecommendation> {
+        return new Promise<CliUpdateRecommendation>(resolve => {
+            let childProcess: ChildProcessWithoutNullStreams | undefined;
+            let termination: Promise<void> | undefined;
+            let settled = false;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let cancellation: vscode.Disposable | undefined;
+            const settle = (result: CliUpdateRecommendation) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                cancellation?.dispose();
+                resolve(result);
+            };
+            const reportUnavailable = (error: unknown) => {
+                if (settled || termination) {
+                    return;
+                }
+
+                extensionLogOutputChannel.warn(`Unable to check for Aspire CLI updates: ${String(error)}`);
+                settle({ status: 'unavailable' });
+            };
+            const terminateAndSettle = (description: string) => {
+                if (settled || termination) {
+                    return;
+                }
+                if (!childProcess) {
+                    settle({ status: 'unavailable' });
+                    return;
+                }
+
+                termination = terminateCliProcess(childProcess, description)
+                    .catch(error => extensionLogOutputChannel.error(`Failed to terminate ${description}: ${String(error)}`))
+                    .then(() => settle({ status: 'unavailable' }));
+            };
+            if (cancellationToken?.isCancellationRequested) {
+                settle({ status: 'unavailable' });
+                return;
+            }
+
+            timeout = setTimeout(() => {
+                terminateAndSettle('timed-out Aspire CLI update probe');
+            }, cliUpdateProbeTimeoutMs);
+            cancellation = cancellationToken?.onCancellationRequested(() => {
+                terminateAndSettle('cancelled Aspire CLI update probe');
+            });
+
+            const runDoctor = (args: string[], allowNoLogoRetry: boolean) => {
+                let output = '';
+                let stderr = '';
+                let outputTooLong = false;
+                try {
+                    childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                        createProcessGroup: true,
+                        workingDirectory: resolveConfigInfoWorkingDirectory(target),
+                        noExtensionVariables: true,
+                        env: nonInteractiveCliEnvironment,
+                        stdoutCallback: value => {
+                            if (output.length + value.length > maxCliUpdateOutputLength) {
+                                outputTooLong = true;
+                                return;
+                            }
+                            output += value;
+                        },
+                        stderrCallback: value => {
+                            if (stderr.length < maxCliUpdateOutputLength) {
+                                stderr += value.slice(0, maxCliUpdateOutputLength - stderr.length);
+                            }
+                        },
+                        exitCallback: () => {
+                            if (settled || termination) {
+                                return;
+                            }
+                            if (allowNoLogoRetry && isNoLogoUnsupportedOutput(args, output, stderr)) {
+                                runDoctor(removeRootNoLogoOption(args), false);
+                                return;
+                            }
+                            if (outputTooLong) {
+                                settle({ status: 'unavailable' });
+                                return;
+                            }
+
+                            try {
+                                settle(parseCliUpdateRecommendationOutput(output, identityChannelOverride));
+                            }
+                            catch (error) {
+                                extensionLogOutputChannel.warn(`Unable to parse Aspire CLI update status: ${String(error)}`);
+                                settle({ status: 'unavailable' });
+                            }
+                        },
+                        errorCallback: reportUnavailable,
+                    });
+                }
+                catch (error) {
+                    reportUnavailable(error);
+                }
+            };
+
+            runDoctor(['doctor', '--format', 'json', noLogoOption], true);
         });
     }
 
@@ -638,7 +854,8 @@ function parseCliVersion(value: string): CliVersion | undefined {
     // `aspire --version` emits a bare semver-like value, for example:
     //   13.2.0
     //   13.2.0-preview.1.12345.6+abcdef
-    // Only the bounded numeric core participates in comparison; any other output is unavailable.
+    // Comparison follows SemVer precedence, including prerelease identifiers, while build metadata
+    // remains informational. Any other output is unavailable.
     const normalized = value.trim();
     if (normalized.length === 0 || normalized.length > maxCliVersionOutputLength) {
         return undefined;
@@ -655,13 +872,174 @@ function parseCliVersion(value: string): CliVersion | undefined {
         minor: Number.parseInt(match[2], 10),
         patch: Number.parseInt(match[3], 10),
         isPrerelease: match[4] !== undefined,
+        prereleaseIdentifiers: match[4]?.split('.') ?? [],
     };
 }
 
 function compareCliVersions(left: CliVersion, right: CliVersion): number {
-    return left.major - right.major ||
+    const coreComparison = left.major - right.major ||
         left.minor - right.minor ||
         left.patch - right.patch;
+    if (coreComparison !== 0) {
+        return coreComparison;
+    }
+    if (left.isPrerelease !== right.isPrerelease) {
+        return left.isPrerelease ? -1 : 1;
+    }
+
+    for (let index = 0; index < Math.max(left.prereleaseIdentifiers.length, right.prereleaseIdentifiers.length); index++) {
+        const leftIdentifier = left.prereleaseIdentifiers[index];
+        const rightIdentifier = right.prereleaseIdentifiers[index];
+        if (leftIdentifier === undefined || rightIdentifier === undefined) {
+            return leftIdentifier === undefined ? -1 : 1;
+        }
+        if (leftIdentifier === rightIdentifier) {
+            continue;
+        }
+
+        const leftIsNumeric = /^\d+$/.test(leftIdentifier);
+        const rightIsNumeric = /^\d+$/.test(rightIdentifier);
+        if (leftIsNumeric !== rightIsNumeric) {
+            return leftIsNumeric ? -1 : 1;
+        }
+        if (leftIsNumeric) {
+            const lengthComparison = leftIdentifier.length - rightIdentifier.length;
+            if (lengthComparison !== 0) {
+                return lengthComparison;
+            }
+        }
+
+        return leftIdentifier < rightIdentifier ? -1 : 1;
+    }
+
+    return 0;
+}
+
+export function compareCliVersionValues(left: string, right: string): number | undefined {
+    const leftVersion = parseCliVersion(left);
+    const rightVersion = parseCliVersion(right);
+    return leftVersion && rightVersion ? compareCliVersions(leftVersion, rightVersion) : undefined;
+}
+
+export function parseCliUpdateRecommendationOutput(
+    output: string,
+    identityChannelOverride?: string,
+): CliUpdateRecommendation {
+    // `aspire doctor --format json` emits:
+    //   { "checks": [{ "name": "cli-version", "metadata": {
+    //       "currentVersion": "13.5.0", "latestVersion": "13.6.0",
+    //       "latestVersionChannel": "stable" } }] }
+    // Doctor reports the physical assembly channel. The optional override follows the CLI's own
+    // environment/sidecar precedence, but it is applied only after the physical binary is proven to
+    // be a published build. This keeps local/PR/run builds silent even when they emulate stable.
+    const response = JSON.parse(output.trim()) as { checks?: unknown };
+    if (!Array.isArray(response.checks)) {
+        return { status: 'unavailable' };
+    }
+
+    const check = response.checks.find(value =>
+        typeof value === 'object' &&
+        value !== null &&
+        (value as { name?: unknown }).name === 'cli-version') as { metadata?: unknown } | undefined;
+    if (typeof check?.metadata !== 'object' || check.metadata === null) {
+        return { status: 'unavailable' };
+    }
+
+    const metadata = check.metadata as {
+        currentVersion?: unknown;
+        latestVersion?: unknown;
+        identityChannel?: unknown;
+        latestVersionChannel?: unknown;
+        updateCheckError?: unknown;
+    };
+    if (typeof metadata.currentVersion !== 'string') {
+        return { status: 'unavailable' };
+    }
+
+    const currentVersion = parseCliVersion(metadata.currentVersion);
+    if (!currentVersion) {
+        return { status: 'unavailable' };
+    }
+
+    const physicalChannel = normalizePublishedCliChannel(metadata.identityChannel);
+    if (!physicalChannel) {
+        return { status: 'ineligible', currentVersion: currentVersion.value };
+    }
+    const identityChannel = identityChannelOverride
+        ? normalizePublishedCliChannel(identityChannelOverride)
+        : physicalChannel;
+    if (!identityChannel) {
+        return { status: 'ineligible', currentVersion: currentVersion.value };
+    }
+    if (typeof metadata.updateCheckError === 'string' && metadata.updateCheckError.length > 0) {
+        return { status: 'unavailable' };
+    }
+
+    if (metadata.latestVersion === undefined || metadata.latestVersion === null) {
+        return { status: 'none', currentVersion: currentVersion.value };
+    }
+    if (typeof metadata.latestVersion !== 'string') {
+        return { status: 'unavailable' };
+    }
+
+    const latestVersion = parseCliVersion(metadata.latestVersion);
+    if (!latestVersion) {
+        return { status: 'unavailable' };
+    }
+
+    const latestVersionChannel = metadata.latestVersionChannel === undefined
+        ? (latestVersion.isPrerelease ? 'prerelease' : 'stable')
+        : normalizeRecommendationChannel(metadata.latestVersionChannel);
+    if (!latestVersionChannel) {
+        return { status: 'unavailable' };
+    }
+
+    const expectedRecommendationChannel = identityChannel === 'stable' ? 'stable' : 'prerelease';
+    return latestVersionChannel === expectedRecommendationChannel
+        ? { status: 'available', currentVersion: currentVersion.value, version: latestVersion.value }
+        : { status: 'none', currentVersion: currentVersion.value };
+}
+
+function normalizePublishedCliChannel(value: unknown): 'stable' | 'daily' | 'staging' | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    if (value.length === 0 || value !== value.trim()) {
+        return undefined;
+    }
+
+    const channel = value.toLowerCase();
+    return channel === 'stable' || channel === 'daily' || channel === 'staging'
+        ? channel
+        : undefined;
+}
+
+function normalizeRecommendationChannel(value: unknown): 'stable' | 'prerelease' | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    if (value.length === 0 || value !== value.trim()) {
+        return undefined;
+    }
+
+    const channel = value.toLowerCase();
+    return channel === 'stable' || channel === 'prerelease'
+        ? channel
+        : undefined;
+}
+
+function getEnvironmentValue(
+    environment: Record<string, string | undefined>,
+    name: string,
+): string | undefined {
+    if (process.platform !== 'win32') {
+        return environment[name];
+    }
+
+    const key = Object.keys(environment).find(candidate => candidate.toUpperCase() === name);
+    return key ? environment[key] : undefined;
 }
 
 export function parseConfigInfoOutput(output: string): ConfigInfo {

@@ -391,11 +391,22 @@ suite('registerCliCommands', () => {
 
     test('update self remains window scoped without a CLI availability gate', async () => {
         workspaceFoldersStub.value([createWorkspaceFolder('a', '/repo/a')]);
+        const resolutions: unknown[] = [];
+        const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
 
-        await callbacks.get('aspire-vscode.updateSelf')!();
+        try {
+            await callbacks.get('aspire-vscode.updateSelf')!();
+        }
+        finally {
+            subscription.dispose();
+        }
 
         assert.strictEqual(resolveCliPathStub.called, false);
-        assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, { target: windowCliPathTarget }));
+        assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
+            target: windowCliPathTarget,
+            reportCliResolution: false,
+        }));
+        assert.deepStrictEqual(resolutions, []);
     });
 
     test('update self uses the pre-resolved workspace CLI supplied by the warning action', async () => {
@@ -408,6 +419,7 @@ suite('registerCliCommands', () => {
         assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
             target,
             cliPath: '/repo/a/.aspire/bin/aspire',
+            reportCliResolution: false,
         }));
     });
 });

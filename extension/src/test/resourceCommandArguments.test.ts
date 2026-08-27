@@ -16,6 +16,7 @@ import { createResourceCommandArgumentLoader } from '../views/ResourceCommandArg
 import { ResourceCommandArgumentInputJson } from '../data/AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 function makeInput(overrides: Partial<ResourceCommandArgumentInputJson> = {}): ResourceCommandArgumentInputJson {
     return {
@@ -457,6 +458,8 @@ suite('ResourceCommandArguments', () => {
 
             return { stdin: { end: () => { } } } as any;
         });
+        const resolutions: string[] = [];
+        const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
 
         try {
             const loader = createResourceCommandArgumentLoader({
@@ -469,8 +472,10 @@ suite('ResourceCommandArguments', () => {
             await loader([]);
 
             assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+            assert.deepStrictEqual(resolutions, ['/repo/bin/aspire']);
         }
         finally {
+            subscription.dispose();
             spawnStub.restore();
             withProgressStub.restore();
             getWorkspaceFolderStub.restore();

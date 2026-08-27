@@ -86,7 +86,7 @@
   "aspire-vscode.strings.aspireCliPathEnvironmentDescription": "Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.",
   "aspire-vscode.strings.configuredCliPathRejected": "The configured Aspire CLI path could not be used, so a different Aspire CLI is running instead: {0}. Check that aspire.aspireCliExecutablePath points to the aspire executable itself and that it runs.",
   "aspire-vscode.strings.configuredCliPathRejectedOpenSetting": "Open Setting",
-  "aspire-vscode.strings.outdatedAspireCliWarning": "Aspire CLI {0} at {1} is older than {2}. Update the CLI and the AppHost's Aspire packages to {2} or later to avoid a known startup failure in VS Code.",
+  "aspire-vscode.strings.outdatedAspireCliWarning": "Aspire CLI {0} at {1} has a newer version available for its current channel: {2}.",
   "aspire-vscode.strings.updateAspireCliAction": "Update Aspire CLI",
   "aspire-vscode.strings.installCliPlaceholder": "Select how to install the Aspire CLI",
   "aspire-vscode.strings.installCliViewAllOptions": "View all installation options",

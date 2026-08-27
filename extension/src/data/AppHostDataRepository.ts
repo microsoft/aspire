@@ -12,12 +12,12 @@ import { nonInteractiveCliEnvironment } from '../utils/environment';
 import { getComparisonKey, isAppHostPathUnderFolder, isSameAppHostPath } from '../utils/paths/comparison';
 import { FileSystemEntryDescriptor, FileSystemEntryDescriptorIndex, getFileSystemEntryDescriptor } from '../utils/paths/fileSystemIdentity';
 import { shortenPath, shortenPaths } from '../utils/paths/shortening';
-import { AppHostDisplayInfo, AspireCliFailedError, AspireCliNotInstalledError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
+import { AppHostDisplayInfo, AspireCliFailedError, AspireCliParseError, DescribeSnapshotJson, ResourceCommandExecutionOutput, ResourceJson, ViewMode } from './appHostCliContracts';
 import { AppHostCliRunner, isDescribeUnsupportedOutput, isIncludeDisabledCommandsUnsupportedOutput, oneShotOutputBufferLimit, parseCliJsonOutput, RunCliCommandOptions } from './appHostCliRunner';
 import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } from './appHostPathMatching';
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
-import { getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
+import { getCliPathTargetForUri } from '../utils/cliPathVariables';
 import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export * from './appHostCliContracts';
@@ -128,6 +128,7 @@ export class AppHostDataRepository {
     private _workspaceAppHostDiscoveryProgressResolve: (() => void) | undefined;
     private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
+    private readonly _appHostDiscoveryCliResolutionDisposable: vscode.Disposable;
     private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
     private readonly _appHostDiscoveryService: AppHostDiscoveryService;
     private readonly _ownsAppHostDiscoveryService: boolean;
@@ -172,6 +173,13 @@ export class AppHostDataRepository {
                 this._fetchWorkspaceAppHost();
             }
         });
+        this._appHostDiscoveryCliResolutionDisposable = this._appHostDiscoveryService.onDidResolveCli
+            ? this._appHostDiscoveryService.onDidResolveCli(({ workspaceFolder, cliPath }) => {
+                if (this._dataActive) {
+                    reportCliResolvedForOperation(getCliPathTargetForUri(workspaceFolder.uri), cliPath);
+                }
+            })
+            : vscode.Disposable.from();
         this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(event => {
             this._removeWorkspaceFolderCandidates(event.removed);
             for (const workspaceFolder of event.removed) {
@@ -187,9 +195,10 @@ export class AppHostDataRepository {
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
             const cliPathChanged = e.affectsConfiguration('aspire.aspireCliExecutablePath');
             if (cliPathChanged) {
+                this._cancelWorkspaceAppHostDiscovery();
                 this._markWorkspaceAppHostDiscoveryPending({ preserveCandidates: true });
-                this._fetchWorkspaceAppHost({ forceRefresh: true });
                 if (this._dataActive) {
+                    this._fetchWorkspaceAppHost({ forceRefresh: true });
                     this._psPoller.startPsPolling();
                     this._stopAllDescribes();
                     this._reconcileDescribes();
@@ -300,7 +309,7 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         if (becameDataActive) {
-            this._reportWorkspaceDiscoveryCliResolutions();
+            this._handleDataSourcesActivated();
         }
         this._syncPolling(resumedFromInactive);
     }
@@ -316,7 +325,7 @@ export class AppHostDataRepository {
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         this._hasEverBeenDataActive = true;
         if (becameDataActive) {
-            this._reportWorkspaceDiscoveryCliResolutions();
+            this._handleDataSourcesActivated();
         }
         this._syncPolling(resumedFromInactive);
 
@@ -358,7 +367,7 @@ export class AppHostDataRepository {
             this._hasEverBeenDataActive = true;
         }
         if (becameDataActive) {
-            this._reportWorkspaceDiscoveryCliResolutions();
+            this._handleDataSourcesActivated();
         }
         // Re-scope the displayed AppHosts against the new open-tab set right away.
         this._handlePsSnapshot(this._appHosts, { force: true });
@@ -551,14 +560,14 @@ export class AppHostDataRepository {
         }
 
         try {
-            const options = await this._resolveOneShotCli({
+            const output = await this._cliRunner.runCliCommand(`aspire resource ${commandName}`, args, {
                 timeoutMs: null,
                 stdoutBufferLimit: AppHostDataRepository._oneShotOutputBufferLimit,
                 cancellationToken,
                 env: nonInteractiveCliEnvironment,
                 target,
+                reportCliResolution: true,
             });
-            const output = await this._cliRunner.runCliCommand(`aspire resource ${commandName}`, args, options);
             return {
                 stdout: filterResourceCommandStatusOutput(output.stdout, resourceName, commandName),
                 stderr: output.stderr,
@@ -587,6 +596,7 @@ export class AppHostDataRepository {
         this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
+        this._appHostDiscoveryCliResolutionDisposable.dispose();
         this._workspaceFoldersChangeDisposable.dispose();
         this._psPollerDisposable.dispose();
         this._psPoller.dispose();
@@ -598,8 +608,19 @@ export class AppHostDataRepository {
 
     private _reportWorkspaceDiscoveryCliResolutions(): void {
         for (const workspaceFolder of vscode.workspace.workspaceFolders ?? []) {
-            this._appHostDiscoveryService.reportResolvedCliForWorkspace?.(workspaceFolder);
+            const cliPath = this._appHostDiscoveryService.getResolvedCliPath?.(workspaceFolder);
+            if (cliPath) {
+                reportCliResolvedForOperation(getCliPathTargetForUri(workspaceFolder.uri), cliPath);
+            }
         }
+    }
+
+    private _handleDataSourcesActivated(): void {
+        if (!this._workspaceAppHostDiscoveryComplete && !this._workspaceAppHostDiscoveryInProgress) {
+            this._fetchWorkspaceAppHost({ forceRefresh: true });
+            return;
+        }
+        this._reportWorkspaceDiscoveryCliResolutions();
     }
 
     // ── PS polling lifecycle ──
@@ -732,8 +753,7 @@ export class AppHostDataRepository {
                             folderCandidates.workspaceFolder,
                             options?.forceRefresh,
                             cancellationSource.token,
-                            candidate => onIncrementalCandidate(folderCandidates, candidate),
-                            this._dataActive);
+                            candidate => onIncrementalCandidate(folderCandidates, candidate));
                     } catch (error) {
                         folderCandidates.candidates = [];
                         errors[workspaceFolderIndex] = {
@@ -1347,28 +1367,16 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const resolvedOptions = await this._resolveOneShotCli(options);
-        const { stdout } = await this._cliRunner.runCliCommand(command, args, resolvedOptions);
+        const { stdout } = await this._cliRunner.runCliCommand(command, args, {
+            ...options,
+            reportCliResolution: true,
+        });
 
         try {
             return parseCliJsonOutput<T>(stdout);
         } catch (error) {
             throw new AspireCliParseError(command, stdout, error);
         }
-    }
-
-    private async _resolveOneShotCli(options: RunCliCommandOptions): Promise<RunCliCommandOptions> {
-        const target = options.target ?? windowCliPathTarget;
-        const cliPath = options.cliPath
-            ?? await this._terminalProvider.getAspireCliExecutablePath(target).catch(error => {
-                throw new AspireCliNotInstalledError(String(error));
-            });
-        if (options.cancellationToken?.isCancellationRequested) {
-            throw new vscode.CancellationError();
-        }
-
-        reportCliResolvedForOperation(target, cliPath);
-        return { ...options, target, cliPath };
     }
 
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {

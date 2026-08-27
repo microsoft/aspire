@@ -15,6 +15,7 @@ import {
 } from './ResourceCommandArguments';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export interface ResourceCommandArgumentLoaderContext {
     cliExecutionProvider: AspireTerminalProvider;
@@ -47,7 +48,9 @@ async function loadResourceCommandArgumentInputs(
         { location: vscode.ProgressLocation.Window, title: resourceCommandLoadingDynamicInputs },
         async () => {
             try {
-                const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath(getCliPathTargetForUri(vscode.Uri.file(context.appHostPath!)));
+                const target = getCliPathTargetForUri(vscode.Uri.file(context.appHostPath!));
+                const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath(target);
+                reportCliResolvedForOperation(target, cliPath);
                 const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--non-interactive', '--apphost', context.appHostPath!, noLogoOption];
                 args.push(...buildResourceCommandCliArgs(values));
 

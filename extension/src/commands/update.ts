@@ -18,6 +18,8 @@ export async function updateSelfCommand(
     target: CliPathResolutionTarget = windowCliPathTarget,
     cliPath?: string,
 ) {
-    const options = cliPath ? { target, cliPath } : { target };
+    const options = cliPath
+        ? { target, cliPath, reportCliResolution: false }
+        : { target, reportCliResolution: false };
     await terminalProvider.sendAspireCommandToAspireTerminal('update --self', true, undefined, options);
 }

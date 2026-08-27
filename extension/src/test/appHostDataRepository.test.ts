@@ -6267,39 +6267,48 @@ suite('AppHostDataRepository global polling', () => {
         };
         const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
         const candidateChange = new vscode.EventEmitter<vscode.WorkspaceFolder>();
-        const reportResolvedCliForWorkspace = sinon.stub();
+        const cliResolution = new vscode.EventEmitter<{ workspaceFolder: vscode.WorkspaceFolder; cliPath: string }>();
+        const getResolvedCliPath = sinon.stub().returns('/workspace/aspire');
         const discoveryService = {
             discover: sinon.stub().resolves([]),
-            reportResolvedCliForWorkspace,
+            getResolvedCliPath,
+            onDidResolveCli: cliResolution.event,
             onDidChangeCandidates: candidateChange.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
         const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+        const resolutions: string[] = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
 
         try {
             repository.activate();
             await waitForMicrotasks();
-            assert.strictEqual(reportResolvedCliForWorkspace.callCount, 0);
+            assert.deepStrictEqual(resolutions, []);
 
             repository.setPanelVisible(true);
-            assert.ok(reportResolvedCliForWorkspace.calledOnceWithExactly(workspaceFolder));
+            assert.deepStrictEqual(resolutions, ['/workspace/aspire']);
+
+            cliResolution.fire({ workspaceFolder, cliPath: '/workspace/aspire-next' });
+            assert.deepStrictEqual(resolutions, ['/workspace/aspire', '/workspace/aspire-next']);
 
             repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
-            assert.strictEqual(reportResolvedCliForWorkspace.callCount, 1);
+            assert.strictEqual(resolutions.length, 2);
 
             repository.setPanelVisible(false);
             repository.setAppHostFilesOpen([]);
             repository.setPanelVisible(true);
-            assert.strictEqual(reportResolvedCliForWorkspace.callCount, 2);
+            assert.strictEqual(resolutions.length, 3);
         }
         finally {
+            resolutionSubscription.dispose();
             repository.dispose();
             candidateChange.dispose();
+            cliResolution.dispose();
             workspaceFoldersStub.restore();
         }
     });
 
-    test('an active scoped CLI path change forces discovery to report the new exact path', async () => {
+    test('a scoped CLI path change refreshes discovery only after data becomes active', async () => {
         const workspaceFolder: vscode.WorkspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -6310,32 +6319,48 @@ suite('AppHostDataRepository global polling', () => {
         const onDidChangeConfigurationStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration')
             .callsFake(listener => configurationChange.event(listener));
         const candidateChange = new vscode.EventEmitter<vscode.WorkspaceFolder>();
-        const discover = sinon.stub().resolves([]);
+        const cliResolution = new vscode.EventEmitter<{ workspaceFolder: vscode.WorkspaceFolder; cliPath: string }>();
+        const discover = sinon.stub().callsFake(async (_workspaceFolder, forceRefresh) => {
+            cliResolution.fire({
+                workspaceFolder,
+                cliPath: forceRefresh ? '/cli/second/aspire' : '/cli/first/aspire',
+            });
+            return [];
+        });
         const discoveryService = {
             discover,
-            reportResolvedCliForWorkspace: sinon.stub(),
+            getResolvedCliPath: sinon.stub().returns('/cli/first/aspire'),
+            onDidResolveCli: cliResolution.event,
             onDidChangeCandidates: candidateChange.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
         const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+        const resolutions: string[] = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
 
         try {
             repository.activate();
-            repository.setPanelVisible(true);
             await waitForCondition(() => discover.callCount > 0, 'initial workspace discovery did not complete');
             discover.resetHistory();
+            resolutions.length = 0;
 
             configurationChange.fire({
                 affectsConfiguration: section => section === 'aspire.aspireCliExecutablePath',
             });
+            await waitForMicrotasks();
+            assert.strictEqual(discover.callCount, 0);
+
+            repository.setPanelVisible(true);
             await waitForCondition(() => discover.callCount > 0, 'CLI path change did not refresh workspace discovery');
 
             assert.strictEqual(discover.lastCall.args[1], true);
-            assert.strictEqual(discover.lastCall.args[4], true);
+            assert.ok(resolutions.includes('/cli/second/aspire'));
         }
         finally {
+            resolutionSubscription.dispose();
             repository.dispose();
             candidateChange.dispose();
+            cliResolution.dispose();
             configurationChange.dispose();
             onDidChangeConfigurationStub.restore();
             workspaceFoldersStub.restore();
