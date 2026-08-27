@@ -67,7 +67,7 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             "archive=\"$feed_root/aspire-cli-linux-$arch.tar.gz\"; " +
             "tar -czf \"$archive\" -C \"$(dirname \"$(command -v aspire)\")\" aspire; " +
             "sha512sum \"$archive\" | cut -d' ' -f1 > \"$archive.sha512\"; " +
-            "nohup python3 -m http.server \"$port\" --directory \"$feed_root\" >/tmp/aspire-self-update-feed.log 2>&1 & " +
+            "nohup python3 -m http.server \"$port\" --bind 127.0.0.1 --directory \"$feed_root\" >/tmp/aspire-self-update-feed.log 2>&1 & " +
             "for attempt in $(seq 1 20); do curl --fail --silent \"http://127.0.0.1:$port/$(basename \"$archive\").sha512\" >/dev/null && break; sleep 0.1; done; " +
             "curl --fail --silent \"http://127.0.0.1:$port/$(basename \"$archive\").sha512\" >/dev/null; " +
             "export ASPIRE_CLI_STAGING_DOWNLOAD_BASE_URL=\"http://127.0.0.1:$port\"",
