@@ -289,6 +289,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                 var deviceIdTask = _machineInformationProvider.GetOrCreateDeviceId();
 
                 Task<InternalMicrosoftDetectionResult>? internalMicrosoftTask = null;
+                var internalMicrosoftStartTimestamp = 0L;
                 if (_telemetryConfiguration.ReportedTelemetryEnabled)
                 {
                     // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
@@ -301,6 +302,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                         internalMicrosoftTimeoutSource = new(timeout);
                         detectorCancellationToken = internalMicrosoftTimeoutSource.Token;
                     }
+                    internalMicrosoftStartTimestamp = Stopwatch.GetTimestamp();
                     internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(detectorCancellationToken);
                 }
 
@@ -338,7 +340,7 @@ internal sealed class AspireCliTelemetry : IHostedService
                             Domain: null,
                             Outcome: InternalMicrosoftDetectorOutcome.Failed,
                             CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                            Duration: TimeSpan.Zero,
+                            Duration: Stopwatch.GetElapsedTime(internalMicrosoftStartTimestamp),
                             ProbeDiagnostics: []);
                     }
                 }

@@ -487,6 +487,25 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public async Task Initialize_RecordsElapsedDurationWhenInternalMicrosoftDetectorFails()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            DetectionCallback = async cancellationToken =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+                throw new NotSupportedException("Unexpected probe failure.");
+            }
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+        await fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+
+        var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
+        Assert.True((long?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs) > 0);
+    }
+
+    [Fact]
     public void CompleteInternalMicrosoftDiagnosticsAsync_ReusesOneCompletionWait()
     {
         using var fixture = new TelemetryFixture();

@@ -244,17 +244,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         // Probes that may involve more extensive process execution/network calls or are a weaker signal, run last
         // to avoid delaying detection when faster/better quality signals are available. CI environments can expose
         // GitHub tokens that identify automation rather than a human, so skip token-membership probes there.
-        var stage3 = new List<InternalMicrosoftProbe>();
+        var stage2 = new List<InternalMicrosoftProbe>();
         if (!IsCIEnvironment())
         {
             // Is there a GitHub token in the environment that has an active membership in the Microsoft GitHub org?
-            stage3.Add(new("Environment GitHub token membership", CheckEnvironmentGitHubTokenAsync));
+            stage2.Add(new("Environment GitHub token membership", CheckEnvironmentGitHubTokenAsync));
 
             // Is there a GitHub token from the gh CLI that has an active membership in the Microsoft GitHub org?
-            stage3.Add(new("gh CLI GitHub org membership", CheckGhCliAsync));
+            stage2.Add(new("gh CLI GitHub org membership", CheckGhCliAsync));
 
             // Is there a GitHub token from the Copilot CLI that has an active membership in the Microsoft GitHub org?
-            stage3.Add(new("Copilot CLI GitHub org membership", CheckCopilotCliAsync));
+            stage2.Add(new("Copilot CLI GitHub org membership", CheckCopilotCliAsync));
         }
 
         if (_environment.IsWindows())
@@ -269,11 +269,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             // This is also relatively fast and doesn't require admin privileges, so we check it in stage 1.
             stage1.Add(new(VisualStudioMicrosoftTenantProbeName, CheckVisualStudioMicrosoftTenantAsync));
 
-            // Stage 3
+            // Stage 2
 
             // Check if the machine is workplace joined to the Microsoft tenant, which is a strong signal of being on a Microsoft corporate machine,
-            // but can be slower to evaluate so we check it in stage 3.
-            stage3.Add(new("Windows workplace join", CheckWindowsWorkplaceJoinAsync));
+            // but can be slower to evaluate so we check it in stage 2.
+            stage2.Add(new("Windows workplace join", CheckWindowsWorkplaceJoinAsync));
         }
         else if (IsWsl())
         {
@@ -287,15 +287,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             // This is also relatively fast and doesn't require admin privileges, so we check it in stage 1.
             stage1.Add(new(WslVisualStudioMicrosoftTenantProbeName, CheckWslVisualStudioMicrosoftTenantAsync));
 
-            // Stage 3
+            // Stage 2
 
             // Check if the Windows host machine is workplace joined to the Microsoft tenant, which is a strong signal of being on a Microsoft corporate machine,
-            // but can be slower to evaluate so we check it in stage 3.
-            stage3.Add(new("WSL Windows workplace join", CheckWslWindowsWorkplaceJoinAsync));
-            stage3.Add(new("WSL Windows gh.exe GitHub org membership", CheckWslWindowsGhCliAsync));
+            // but can be slower to evaluate so we check it in stage 2.
+            stage2.Add(new("WSL Windows workplace join", CheckWslWindowsWorkplaceJoinAsync));
+            stage2.Add(new("WSL Windows gh.exe GitHub org membership", CheckWslWindowsGhCliAsync));
         }
 
-        return [stage1, stage3];
+        return [stage1, stage2];
     }
 
     private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(
@@ -582,6 +582,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             entry = NormalizeCacheEntry(entry);
             var normalizedVsCodeAlias = NormalizeAlias(vsCodeMicrosoftAccount.Alias);
             var isVsCodeCacheEntry = entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true;
+
+            // A connected extension gives us live account state. Invalidate the cache when its alias
+            // differs from the account observed during detection, even if another probe won, or when
+            // a VS Code-sourced result is now signed out. An unavailable provider is intentionally not
+            // stale so standalone CLI invocations can still use a cache created through VS Code.
             if (vsCodeMicrosoftAccount.IsAvailable &&
                 ((normalizedVsCodeAlias is not null &&
                   !string.Equals(entry.VsCodeAlias, normalizedVsCodeAlias, StringComparison.Ordinal)) ||
