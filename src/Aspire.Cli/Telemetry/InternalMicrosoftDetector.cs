@@ -100,6 +100,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _logger = logger;
         _ciEnvironmentDetector = ciEnvironmentDetector;
         _probeStageTimeout = probeStageTimeout ?? s_probeStageTimeout;
+        _macPlatformSsoPath = macPlatformSsoPath;
         _probeStages = probeStages;
     }
 
@@ -664,16 +665,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         // hide Platform SSO registration from non-interactive CLI invocations.
         if (!File.Exists(_macPlatformSsoPath))
         {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.CommandMissing);
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.CommandMissing, InternalMicrosoftProbeFailureStage.PlatformSso);
         }
 
         var result = await RunProcessAsync(_macPlatformSsoPath, ["platform", "-s"], cancellationToken).ConfigureAwait(false);
-        if (result.TimedOut)
-        {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.TimedOut);
-        }
-
-        var result = await RunProcessAsync("app-sso", ["platform", "-s"], cancellationToken).ConfigureAwait(false);
         if (GetProcessFailure(result, treatNonZeroExitAsFailure: true) is { } processFailure)
         {
             return processFailure;
@@ -700,44 +695,75 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var userConfiguration = TryParseMacPlatformSsoSection(output, "User Configuration");
         if (deviceConfiguration is null || loginConfiguration is null || userConfiguration is null)
         {
-            return InternalMicrosoftProbeResult.Failed(new(
-                InternalMicrosoftProbeFailureCode.JsonParse,
-                InternalMicrosoftProbeFailureStage.PlatformSso,
-                ExceptionType: InternalMicrosoftProbeExceptionType.Json));
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonParse, InternalMicrosoftProbeFailureStage.PlatformSso);
         }
 
         if (!TryGetBoolean(deviceConfiguration, "registrationCompleted", out var registrationCompleted))
         {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.MalformedOutput);
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonShape, InternalMicrosoftProbeFailureStage.PlatformSsoRegistration);
         }
 
         if (!registrationCompleted)
         {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.IncompleteRegistration);
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.RegistrationIncomplete, InternalMicrosoftProbeFailureStage.PlatformSsoRegistration);
         }
 
         var issuer = TryGetAbsoluteUri(loginConfiguration, "issuer");
+        if (issuer is null)
+        {
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonShape, InternalMicrosoftProbeFailureStage.PlatformSsoIssuer);
+        }
+
+        if (!IsMicrosoftTenantEndpoint(issuer, "/v2.0"))
+        {
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.TenantMismatch, InternalMicrosoftProbeFailureStage.PlatformSsoIssuer);
+        }
+
         var keyEndpoint = TryGetAbsoluteUri(loginConfiguration, "keyEndpointURL");
+        if (keyEndpoint is null)
+        {
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonShape, InternalMicrosoftProbeFailureStage.PlatformSsoKeyEndpoint);
+        }
+
+        if (!IsMicrosoftTenantEndpoint(keyEndpoint, "/getkeydata"))
+        {
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.TenantMismatch, InternalMicrosoftProbeFailureStage.PlatformSsoKeyEndpoint);
+        }
+
         var tokenEndpoint = TryGetAbsoluteUri(loginConfiguration, "tokenEndpointURL");
-        if (issuer is null || keyEndpoint is null || tokenEndpoint is null)
+        if (tokenEndpoint is null)
         {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.MalformedOutput);
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonShape, InternalMicrosoftProbeFailureStage.PlatformSsoTokenEndpoint);
         }
 
-        if (!IsMicrosoftTenantEndpoint(issuer, "/v2.0") ||
-            !IsMicrosoftTenantEndpoint(keyEndpoint, "/getkeydata") ||
-            !IsMicrosoftTenantEndpoint(tokenEndpoint, "/oauth2/v2.0/token"))
+        if (!IsMicrosoftTenantEndpoint(tokenEndpoint, "/oauth2/v2.0/token"))
         {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.WrongTenant);
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.TenantMismatch, InternalMicrosoftProbeFailureStage.PlatformSsoTokenEndpoint);
         }
 
-        if (userConfiguration["kerberosStatus"] is not JsonArray kerberosStatuses)
+        if (!userConfiguration.TryGetPropertyValue("kerberosStatus", out var kerberosStatusNode) ||
+            kerberosStatusNode is null)
         {
-            return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.IncompleteRegistration);
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.RegistrationIncomplete, InternalMicrosoftProbeFailureStage.PlatformSsoIdentity);
         }
 
-        foreach (var kerberosStatus in kerberosStatuses.OfType<JsonObject>())
+        if (kerberosStatusNode is not JsonArray kerberosStatuses)
         {
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonShape, InternalMicrosoftProbeFailureStage.PlatformSsoIdentity);
+        }
+
+        if (kerberosStatuses.Count == 0)
+        {
+            return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.RegistrationIncomplete, InternalMicrosoftProbeFailureStage.PlatformSsoIdentity);
+        }
+
+        foreach (var kerberosStatusNodeEntry in kerberosStatuses)
+        {
+            if (kerberosStatusNodeEntry is not JsonObject kerberosStatus)
+            {
+                return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.JsonShape, InternalMicrosoftProbeFailureStage.PlatformSsoIdentity);
+            }
+
             var upn = TryGetString(kerberosStatus, "upn");
             var realmDomain = ExtractAdDomainNameFromCorpDnsName(TryGetString(kerberosStatus, "realm"));
             var upnDomain = ExtractAdDomainNameFromAccountIdentifier(upn);
@@ -749,7 +775,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
         }
 
-        return InternalMicrosoftProbeResult.NotDetectedWithOutcome(InternalMicrosoftProbeOutcome.NoCorporateIdentity);
+        return PlatformSsoFailure(InternalMicrosoftProbeFailureCode.IdentityMismatch, InternalMicrosoftProbeFailureStage.PlatformSsoIdentity);
     }
 
     internal async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
@@ -1122,7 +1148,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
             started = true;
             var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString(), TimedOut: false);
+            return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -1820,7 +1846,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             : null;
     }
 
-    private static bool HasJsonStringProperty(JsonObject json, string propertyName, string expectedValue)
+    private static bool TryGetBoolean(JsonObject json, string propertyName, out bool value)
     {
         value = false;
         return json.TryGetPropertyValue(propertyName, out var node) &&
@@ -1885,8 +1911,6 @@ internal sealed record InternalMicrosoftProbe(
 
 internal readonly record struct InternalMicrosoftProbeResult(bool IsInternalMicrosoft, string? Alias, string? Domain, InternalMicrosoftProbeFailure? Failure = null)
 {
-    public string? DiagnosticOutcome { get; init; }
-
     public static InternalMicrosoftProbeResult NotDetected { get; } = new(IsInternalMicrosoft: false, Alias: null, Domain: null);
 
     public static InternalMicrosoftProbeResult Failed(InternalMicrosoftProbeFailure failure)
@@ -1915,12 +1939,6 @@ internal static class InternalMicrosoftProbeOutcome
     public const string Failed = "failed";
     public const string Cancelled = "cancelled";
     public const string TimedOut = "timed_out";
-    public const string CommandMissing = "command_missing";
-    public const string ProcessFailed = "process_failed";
-    public const string MalformedOutput = "malformed_output";
-    public const string WrongTenant = "wrong_tenant";
-    public const string IncompleteRegistration = "incomplete_registration";
-    public const string NoCorporateIdentity = "no_corporate_identity";
 }
 
 internal sealed record InternalMicrosoftProbeDiagnostic(string Source, string Outcome, TimeSpan Duration, bool HasAlias, bool HasDomain, InternalMicrosoftProbeFailure? Failure = null);
@@ -1934,15 +1952,19 @@ internal sealed record InternalMicrosoftProbeFailure(
 
 internal static class InternalMicrosoftProbeFailureCode
 {
+    public const string CommandMissing = "command_missing";
     public const string Exception = "exception";
     public const string FileUnreadable = "file_unreadable";
     public const string HttpStatus = "http_status";
+    public const string IdentityMismatch = "identity_mismatch";
     public const string JsonParse = "json_parse";
     public const string JsonShape = "json_shape";
     public const string ProcessExit = "process_exit";
     public const string ProcessStart = "process_start";
     public const string ProcessTimeout = "process_timeout";
+    public const string RegistrationIncomplete = "registration_incomplete";
     public const string RequestFailed = "request_failed";
+    public const string TenantMismatch = "tenant_mismatch";
 }
 
 internal static class InternalMicrosoftProbeFailureStage
@@ -1962,6 +1984,11 @@ internal static class InternalMicrosoftProbeFailureStage
     public const string IdTokenTenant = "id_token_payload.tid";
     public const string IdTokenUsername = "id_token_payload.preferred_username";
     public const string PlatformSso = "platform_sso";
+    public const string PlatformSsoIdentity = "platform_sso.identity";
+    public const string PlatformSsoIssuer = "platform_sso.issuer";
+    public const string PlatformSsoKeyEndpoint = "platform_sso.key_endpoint";
+    public const string PlatformSsoRegistration = "platform_sso.registration";
+    public const string PlatformSsoTokenEndpoint = "platform_sso.token_endpoint";
     public const string ProcessExit = "process_exit";
     public const string ProcessStart = "process_start";
     public const string Probe = "probe";

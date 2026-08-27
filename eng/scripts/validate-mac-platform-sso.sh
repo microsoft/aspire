@@ -2,7 +2,7 @@
 
 # Runs the opt-in live Platform SSO parser test against the current macOS user.
 # The test keeps app-sso output in memory and reports only detection booleans and
-# bounded outcome codes, never aliases, domains, tokens, or raw command output.
+# bounded failure codes/stages, never aliases, domains, tokens, or raw command output.
 
 set -euo pipefail
 
