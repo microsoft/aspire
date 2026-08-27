@@ -1078,8 +1078,9 @@ suite('E2E launch profile', () => {
         assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
 
         const edgeCases = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
-        assert.ok(edgeCases.includes("executeE2eControlCommand({ name: 'getCodeLenses', filePath: appHostPath })"));
-        assert.ok(edgeCases.includes("title.includes('Set up Python debugger')"));
+        assert.ok(edgeCases.includes("waitForNotificationMessage("));
+        assert.ok(edgeCases.includes("'Set up Python debugging support to debug resources in this app.'"));
+        assert.ok(!edgeCases.includes("name: 'getCodeLenses'"));
         assert.ok(!edgeCases.includes("waitForCodeLensText("));
         assert.ok(!edgeCases.includes("name: 'openFile'"));
         assert.ok(!edgeCases.includes("waitForWorkbenchText('Set up Python debugger'"));
