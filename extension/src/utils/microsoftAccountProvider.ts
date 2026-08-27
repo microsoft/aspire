@@ -11,6 +11,8 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
     private _authenticationChangeRegistration: vscode.Disposable | undefined;
     private _refreshGeneration = 0;
     private _refreshTask: Promise<void> | undefined;
+    private _refreshChanged: Promise<void>;
+    private _resolveRefreshChanged: () => void = () => { };
     private _alias: string | undefined;
     private _latestRefreshSucceeded = false;
     private _disposed = false;
@@ -23,27 +25,40 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
         private readonly _authentication: AuthenticationApi = vscode.authentication,
         private readonly _logWarning: (message: string) => void = message => extensionLogOutputChannel.warn(message),
     ) {
+        this._refreshChanged = this.createRefreshChangedPromise();
     }
 
     private initialize(): void {
         if (this._authenticationChangeRegistration) {
-            this._refreshTask ??= this.refresh();
+            if (!this._refreshTask && !this._latestRefreshSucceeded) {
+                this.setRefreshTask(this.refresh());
+            }
             return;
         }
 
         this._authenticationChangeRegistration = this._authentication.onDidChangeSessions(event => {
             if (event.provider.id === microsoftAuthenticationProviderId) {
-                this._refreshTask = this.refresh();
+                this.setRefreshTask(this.refresh());
             }
         });
-        this._refreshTask ??= this.refresh();
+        if (!this._refreshTask && !this._latestRefreshSucceeded) {
+            this.setRefreshTask(this.refresh());
+        }
     }
 
     async getAliasAsync(): Promise<string | undefined> {
         while (true) {
             this.initialize();
             const refreshTask = this._refreshTask;
-            await refreshTask;
+            if (!refreshTask) {
+                if (!this._latestRefreshSucceeded) {
+                    throw new Error('VS Code Microsoft accounts are unavailable.');
+                }
+
+                return this._alias;
+            }
+            const refreshChanged = this._refreshChanged;
+            await Promise.race([refreshTask, refreshChanged]);
 
             if (refreshTask !== this._refreshTask) {
                 if (!this._latestRefreshSucceeded && this._refreshTask === undefined) {
@@ -71,7 +86,7 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
         catch {
             if (!this._disposed && generation === this._refreshGeneration) {
                 this._latestRefreshSucceeded = false;
-                this._refreshTask = undefined;
+                this.setRefreshTask(undefined);
                 this._logWarning('Unable to query VS Code Microsoft accounts.');
             }
             return;
@@ -80,18 +95,37 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
         if (this._disposed || generation !== this._refreshGeneration || alias === this._alias) {
             if (!this._disposed && generation === this._refreshGeneration) {
                 this._latestRefreshSucceeded = true;
+                this.setRefreshTask(undefined);
             }
             return;
         }
 
         this._latestRefreshSucceeded = true;
         this._alias = alias;
+        this.setRefreshTask(undefined);
     }
 
     dispose(): void {
         this._disposed = true;
         this._refreshGeneration++;
+        this.setRefreshTask(undefined);
         this._authenticationChangeRegistration?.dispose();
+    }
+
+    private setRefreshTask(refreshTask: Promise<void> | undefined): void {
+        if (refreshTask === this._refreshTask) {
+            return;
+        }
+
+        this._refreshTask = refreshTask;
+        this._resolveRefreshChanged();
+        this._refreshChanged = this.createRefreshChangedPromise();
+    }
+
+    private createRefreshChangedPromise(): Promise<void> {
+        return new Promise(resolve => {
+            this._resolveRefreshChanged = resolve;
+        });
     }
 }
 

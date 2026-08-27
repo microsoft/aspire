@@ -407,6 +407,44 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public async Task Initialize_BoundsInternalMicrosoftDetectorForAgentTelemetryInvocation()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            DetectionCallback = async cancellationToken =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new UnreachableException();
+            }
+        };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            new TelemetryFixture.TestMachineInformationProvider(),
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            internalMicrosoftDetector,
+            new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = true,
+                EmitInternalMicrosoftDiagnostics = false,
+                InternalMicrosoftDetectionTimeout = TimeSpan.FromMilliseconds(25)
+            },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
+
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
+
+        Assert.Equal(1, internalMicrosoftDetector.InvocationCount);
+        Assert.Contains(
+            await telemetry.GetDefaultTagsAsync(),
+            tag => tag.Key == TelemetryConstants.Tags.InternalMicrosoft && (bool?)tag.Value == false);
+    }
+
+    [Fact]
     public async Task Initialize_AddsDefaultTags_WhenInternalMicrosoftDetectorFails()
     {
         var provider = new TelemetryFixture.TestMachineInformationProvider

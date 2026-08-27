@@ -39,7 +39,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string VsCodeMicrosoftTenantProbeName = "VS Code Microsoft tenant";
     private const string VisualStudioMicrosoftTenantProbeName = "Visual Studio Microsoft tenant";
     private const string WslVisualStudioMicrosoftTenantProbeName = "WSL Visual Studio Microsoft tenant";
-    private const int CacheVersion = 4;
+    private const int CacheVersion = 5;
     private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
@@ -109,9 +109,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     public async Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
     {
+        var stopwatch = Stopwatch.StartNew();
         try
         {
-            var stopwatch = Stopwatch.StartNew();
             var vsCodeMicrosoftAccount = VsCodeMicrosoftAccountState.Unavailable;
             InternalMicrosoftProbeDiagnostic? vsCodeProbeDiagnostic = null;
             var vsCodeQueryStopwatch = Stopwatch.StartNew();
@@ -184,7 +184,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, vsCodeMicrosoftAccount, vsCodeProbeDiagnostic, cancellationToken).ConfigureAwait(false);
             if (result.Outcome is InternalMicrosoftDetectorOutcome.Detected or InternalMicrosoftDetectorOutcome.NotDetected)
             {
-                await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
+                await TryWriteCacheAsync(result, vsCodeMicrosoftAccount.Alias, cancellationToken).ConfigureAwait(false);
             }
 
             return result;
@@ -195,6 +195,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
         catch (Exception ex)
         {
+            stopwatch.Stop();
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug(ex, "Internal Microsoft detection failed.");
@@ -207,7 +208,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 Domain: null,
                 Outcome: InternalMicrosoftDetectorOutcome.Failed,
                 CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
-                Duration: TimeSpan.Zero,
+                Duration: stopwatch.Elapsed,
                 ProbeDiagnostics: []);
         }
     }
@@ -560,16 +561,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var isCIEnvironment = IsCIEnvironment();
             if (entry.Version == 0)
             {
-                // Legacy entries do not record whether the probe set ran in CI mode. A positive
-                // signal remains useful across modes, except for account-store entries produced by
-                // the removed VS Code parser or the superseded Visual Studio raw-text scanner.
-                // Reusing an ambiguous negative could also hide the GitHub probes that are
-                // intentionally skipped only in CI.
-                if (!entry.IsInternalMicrosoft ||
-                    IsHardenedLegacyStoreProbe(entry.Source))
-                {
-                    return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
-                }
+                // Legacy entries do not record whether the probe set ran in CI mode. Treat every
+                // legacy result as stale so CI automation identity can never be reused as local
+                // identity and the current probe/privacy rules always run before values are emitted.
+                return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
             }
             else if (entry.Version != CacheVersion || entry.IsCIEnvironment != isCIEnvironment)
             {
@@ -581,7 +576,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             var isVsCodeCacheEntry = entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true;
             if (vsCodeMicrosoftAccount.IsAvailable &&
                 ((normalizedVsCodeAlias is not null &&
-                  !string.Equals(entry.Alias, normalizedVsCodeAlias, StringComparison.Ordinal)) ||
+                  !string.Equals(entry.VsCodeAlias, normalizedVsCodeAlias, StringComparison.Ordinal)) ||
                  (isVsCodeCacheEntry && normalizedVsCodeAlias is null)))
             {
                 return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
@@ -606,24 +601,18 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private static InternalMicrosoftDetectorCacheEntry NormalizeCacheEntry(InternalMicrosoftDetectorCacheEntry entry)
     {
         var alias = NormalizeAlias(entry.Alias);
+        var vsCodeAlias = NormalizeAlias(entry.VsCodeAlias);
         var domain = NormalizeAdDomainName(entry.Domain);
 
         return entry with
         {
             Alias = alias,
+            VsCodeAlias = vsCodeAlias,
             Domain = domain
         };
     }
 
-    private static bool IsHardenedLegacyStoreProbe(string? source)
-    {
-        return source is not null &&
-            (source.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) ||
-             source.Equals(VisualStudioMicrosoftTenantProbeName, StringComparison.Ordinal) ||
-             source.Equals(WslVisualStudioMicrosoftTenantProbeName, StringComparison.Ordinal));
-    }
-
-    private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, CancellationToken cancellationToken)
+    private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, string? vsCodeAlias, CancellationToken cancellationToken)
     {
         var directory = Path.GetDirectoryName(_cacheFilePath);
         if (string.IsNullOrEmpty(directory))
@@ -642,6 +631,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 IsInternalMicrosoft = result.IsInternalMicrosoft,
                 Source = result.Source,
                 Alias = result.Alias,
+                VsCodeAlias = NormalizeAlias(vsCodeAlias),
                 Domain = result.Domain,
                 IsCIEnvironment = IsCIEnvironment(),
                 LastRunUtc = _timeProvider.GetUtcNow()
@@ -1056,9 +1046,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         using var userResponse = await http.SendAsync(userRequest, cancellationToken).ConfigureAwait(false);
         if (!userResponse.IsSuccessStatusCode)
         {
-            return IsOperationalHttpFailure(userResponse.StatusCode)
-                ? HttpFailure(userResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubUser)
-                : GitHubMembershipCheckResult.NotMember;
+            return HttpFailure(userResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubUser);
         }
 
         string? login;
@@ -1092,7 +1080,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 return JsonFailure(InternalMicrosoftProbeFailureStage.GitHubMembership, parseFailure: true);
             }
         }
-        if (IsOperationalHttpFailure(membershipResponse.StatusCode))
+        if (membershipResponse.StatusCode != HttpStatusCode.NotFound)
         {
             return HttpFailure(membershipResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubMembership);
         }
@@ -1101,9 +1089,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         using var publicMemberResponse = await http.SendAsync(publicMemberRequest, cancellationToken).ConfigureAwait(false);
         return publicMemberResponse.StatusCode == HttpStatusCode.NoContent
             ? new GitHubMembershipCheckResult(IsMember: true)
-            : IsOperationalHttpFailure(publicMemberResponse.StatusCode)
-                ? HttpFailure(publicMemberResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubPublicMembership)
-                : GitHubMembershipCheckResult.NotMember;
+            : publicMemberResponse.StatusCode == HttpStatusCode.NotFound
+                ? GitHubMembershipCheckResult.NotMember
+                : HttpFailure(publicMemberResponse.StatusCode, InternalMicrosoftProbeFailureStage.GitHubPublicMembership);
     }
 
     private static InternalMicrosoftProbeResult ToProbeResult(GitHubMembershipCheckResult result)
@@ -1112,9 +1100,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             : result.Failure is not null
                 ? InternalMicrosoftProbeResult.Failed(result.Failure)
                 : InternalMicrosoftProbeResult.NotDetected;
-
-    private static bool IsOperationalHttpFailure(HttpStatusCode statusCode)
-        => statusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
 
     private static GitHubMembershipCheckResult HttpFailure(HttpStatusCode statusCode, string stage)
         => new(
@@ -1720,7 +1705,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
 
         var match = MicrosoftAccountRegex().Match(value);
-        return match.Success ? NormalizeAlias(match.Groups["alias"].Value) : null;
+        return match.Success && match.Index == 0 && match.Length == value.Length
+            ? NormalizeAlias(match.Groups["alias"].Value)
+            : null;
     }
 
     private static string? ExtractAdDomainNameFromAccountIdentifier(string? value)
@@ -1905,6 +1892,7 @@ internal sealed record InternalMicrosoftDetectorCacheEntry
     public bool IsInternalMicrosoft { get; init; }
     public string? Source { get; init; }
     public string? Alias { get; init; }
+    public string? VsCodeAlias { get; init; }
     public string? Domain { get; init; }
     public bool IsCIEnvironment { get; init; }
     public DateTimeOffset LastRunUtc { get; init; }

@@ -157,6 +157,7 @@ public class TelemetryConfigurationTests
 
         Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
         Assert.False(telemetryConfiguration.EmitInternalMicrosoftDiagnostics);
+        Assert.Equal(TimeSpan.FromSeconds(5), telemetryConfiguration.InternalMicrosoftDetectionTimeout);
     }
 
     [Fact]

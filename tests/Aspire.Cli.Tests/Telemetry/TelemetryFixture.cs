@@ -152,6 +152,7 @@ internal sealed class TelemetryFixture : IDisposable
         public string? Domain { get; set; }
         public IReadOnlyList<InternalMicrosoftProbeDiagnostic> ProbeDiagnostics { get; set; } = [];
         public Exception? ExceptionToThrow { get; set; }
+        public Func<CancellationToken, Task<InternalMicrosoftDetectionResult>>? DetectionCallback { get; set; }
         public int InvocationCount { get; private set; }
 
         public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
@@ -160,6 +161,10 @@ internal sealed class TelemetryFixture : IDisposable
             if (ExceptionToThrow is not null)
             {
                 return Task.FromException<InternalMicrosoftDetectionResult>(ExceptionToThrow);
+            }
+            if (DetectionCallback is not null)
+            {
+                return DetectionCallback(cancellationToken);
             }
 
             return Task.FromResult(new InternalMicrosoftDetectionResult(

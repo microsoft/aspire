@@ -280,6 +280,7 @@ internal sealed class AspireCliTelemetry : IHostedService
         _tagsSource.StartCalculation(async () =>
         {
             InternalMicrosoftDetectionResult? internalMicrosoftResult = null;
+            CancellationTokenSource? internalMicrosoftTimeoutSource = null;
             try
             {
                 var tagsList = new List<KeyValuePair<string, object?>>();
@@ -291,8 +292,16 @@ internal sealed class AspireCliTelemetry : IHostedService
                 if (_telemetryConfiguration.ReportedTelemetryEnabled)
                 {
                     // The internal Microsoft check can be slow and can perform multiple async operations in parallel, so only run it if reported
-                    // telemetry is enabled. Use CancellationToken.None because background tag calculation should not be interrupted by app shutdown.
-                    internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(CancellationToken.None);
+                    // telemetry is enabled. Ordinary commands are not interrupted by app shutdown. The
+                    // high-frequency agent hook has its own 10-second process deadline, so it uses a
+                    // shorter detector budget to leave time for activity export and process teardown.
+                    var detectorCancellationToken = CancellationToken.None;
+                    if (_telemetryConfiguration.InternalMicrosoftDetectionTimeout is { } timeout)
+                    {
+                        internalMicrosoftTimeoutSource = new(timeout);
+                        detectorCancellationToken = internalMicrosoftTimeoutSource.Token;
+                    }
+                    internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(detectorCancellationToken);
                 }
 
                 await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
@@ -302,6 +311,18 @@ internal sealed class AspireCliTelemetry : IHostedService
                     try
                     {
                         internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (internalMicrosoftTimeoutSource?.IsCancellationRequested == true)
+                    {
+                        internalMicrosoftResult = new InternalMicrosoftDetectionResult(
+                            IsInternalMicrosoft: false,
+                            Source: null,
+                            Alias: null,
+                            Domain: null,
+                            Outcome: InternalMicrosoftDetectorOutcome.TimedOut,
+                            CacheStatus: InternalMicrosoftDetectorCacheStatus.Miss,
+                            Duration: _telemetryConfiguration.InternalMicrosoftDetectionTimeout.GetValueOrDefault(),
+                            ProbeDiagnostics: []);
                     }
                     catch (Exception ex)
                     {
@@ -381,6 +402,7 @@ internal sealed class AspireCliTelemetry : IHostedService
             }
             finally
             {
+                internalMicrosoftTimeoutSource?.Dispose();
                 internalMicrosoftResultSource.TrySetResult(internalMicrosoftResult);
             }
         });

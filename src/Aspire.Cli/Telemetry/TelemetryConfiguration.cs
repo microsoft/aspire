@@ -21,6 +21,11 @@ internal sealed record TelemetryConfiguration
     public bool EmitInternalMicrosoftDiagnostics { get; init; } = true;
 
     /// <summary>
+    /// Gets the optional overall detector budget for latency-sensitive invocations.
+    /// </summary>
+    public TimeSpan? InternalMicrosoftDetectionTimeout { get; init; }
+
+    /// <summary>
     /// Gets whether profiling telemetry was requested.
     /// </summary>
     public bool ProfilingEnabled { get; init; }
@@ -58,10 +63,12 @@ internal sealed record TelemetryConfiguration
         ConsoleExporterLevel? consoleExporterLevel = null;
 #endif
 
+        var isAgentTelemetryInvocation = AgentTelemetryInvocation.Matches(args ?? []);
         return new TelemetryConfiguration
         {
             ReportedTelemetryEnabled = !telemetryOptOut,
-            EmitInternalMicrosoftDiagnostics = !AgentTelemetryInvocation.Matches(args ?? []),
+            EmitInternalMicrosoftDiagnostics = !isAgentTelemetryInvocation,
+            InternalMicrosoftDetectionTimeout = isAgentTelemetryInvocation ? TimeSpan.FromSeconds(5) : null,
             ProfilingEnabled = profilingEnabled,
             RequestedOtlpExporter = requestedOtlpExporter,
             ConsoleExporterLevel = consoleExporterLevel

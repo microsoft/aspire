@@ -146,6 +146,68 @@ suite('MicrosoftAccountProvider tests', () => {
             sessionChanges.dispose();
         }
     });
+
+    test('switches to a superseding refresh without waiting for the stale refresh to finish', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let getAccountsCallCount = 0;
+        let resolveFirst!: (accounts: readonly vscode.AuthenticationSessionAccountInformation[]) => void;
+        let resolveSecond!: (accounts: readonly vscode.AuthenticationSessionAccountInformation[]) => void;
+        const provider = new MicrosoftAccountProvider({
+            getAccounts: async () => {
+                getAccountsCallCount++;
+                return await new Promise<readonly vscode.AuthenticationSessionAccountInformation[]>(resolve => {
+                    if (getAccountsCallCount === 1) {
+                        resolveFirst = resolve;
+                    }
+                    else {
+                        resolveSecond = resolve;
+                    }
+                });
+            },
+            onDidChangeSessions: sessionChanges.event,
+        });
+
+        try {
+            const aliasTask = provider.getAliasAsync();
+            await waitFor(() => getAccountsCallCount === 1);
+
+            sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
+            await waitFor(() => getAccountsCallCount === 2);
+            resolveSecond([]);
+
+            assert.strictEqual(await aliasTask, undefined);
+        }
+        finally {
+            resolveFirst([]);
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
+
+    test('returns cached state without retaining refresh-change waiters', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let getAccountsCallCount = 0;
+        const provider = new MicrosoftAccountProvider({
+            getAccounts: async () => {
+                getAccountsCallCount++;
+                return [createAccount(`internal-user.${microsoftTenantId}`, 'User@microsoft.com')];
+            },
+            onDidChangeSessions: sessionChanges.event,
+        });
+
+        try {
+            assert.strictEqual(await provider.getAliasAsync(), 'user');
+            for (let index = 0; index < 100; index++) {
+                assert.strictEqual(await provider.getAliasAsync(), 'user');
+            }
+
+            assert.strictEqual(getAccountsCallCount, 1);
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
 });
 
 function createAccount(id: string, label: string): vscode.AuthenticationSessionAccountInformation {

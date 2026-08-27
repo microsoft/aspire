@@ -1070,9 +1070,15 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
+        TelemetryManager telemetryManager;
         try
         {
             app = await BuildApplicationAsync(args, startupContext);
+            // Create telemetry providers before hosted services start. AspireCliTelemetry starts
+            // background tag calculation as a hosted service and can complete a cache-hit detector
+            // immediately; resolving the manager first guarantees its listener is attached before
+            // the detector-health activity is created.
+            telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
             await app.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -1087,9 +1093,8 @@ public class Program
         // Ensure dispose of app when Main exits.
         using var _ = app;
 
-        // Immediately get telemetry and telemetry manager so they are created by DI and telemetry is configured.
+        // Immediately get telemetry so background tag calculation is available to command activities.
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
-        var telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
         var profilingTelemetry = app.Services.GetRequiredService<ProfilingTelemetry>();
         var profileCaptureState = app.Services.GetRequiredService<ProfileCaptureState>();
 
@@ -1259,8 +1264,8 @@ public class Program
 
             // The agent telemetry command runs fire-and-forget from an agent hook and the process
             // exits immediately after. The short Release shutdown flush window is not enough to
-            // reliably export its just-created spans, so flush only after the asynchronously-created
-            // detector-health activity has also been submitted to the reported provider.
+            // reliably export its just-created activity, so flush after telemetry tag calculation
+            // has completed and the agent activity has been submitted to the reported provider.
             if (isAgentTelemetryInvocation)
             {
                 try
