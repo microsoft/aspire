@@ -2476,17 +2476,28 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task PublishAsync_SingleFileAppHostWithNoBuildLetsRunnerBuildSafely()
+    public async Task PublishAsync_SingleFileAppHostWithNoBuildPrebuildsBeforeRunner()
     {
         var appHostFile = CreateSingleFileAppHost();
-        var runner = new TestDotNetCliRunner();
+        var built = false;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFile, noRestore, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                Assert.False(noRestore);
+                built = true;
+                return 0;
+            }
+        };
         var project = CreateDotNetAppHostProject(runner);
 
         runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, options, _) =>
         {
+            Assert.True(built);
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.False(watch);
-            Assert.False(noBuild);
+            Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish"], args);

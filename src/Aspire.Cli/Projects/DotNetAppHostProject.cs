@@ -2409,8 +2409,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var builtByCli = false;
 
-        // Build the apphost (unless --no-build is specified)
-        if (!context.NoBuild)
+        // Project AppHosts honor --no-build. File-based AppHosts always require a CLI-owned safety
+        // build before local or extension launch so run-api metadata cannot be missing or stale.
+        if (!context.NoBuild || isSingleFileAppHost)
         {
             var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
@@ -2459,8 +2460,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ConfigureSingleFilePublishEnvironment(effectiveAppHostFile, env, args: context.Arguments);
         }
 
-        // Single-file RunCommand metadata is safe to reuse only when this invocation generated it
-        // with run-hook suppression. Otherwise preserve the rebuilding fallback used by run.
+        // Single-file RunCommand metadata is safe to reuse because the CLI-owned build above
+        // generated it with run-hook suppression.
         var noBuild = !isSingleFileAppHost || builtByCli;
 
         return await _runner.RunAsync(
