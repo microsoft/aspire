@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Packaging;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -86,29 +88,35 @@ public class CliDownloaderTests(ITestOutputHelper outputHelper)
     public async Task DownloadFileAsync_LoopbackOverrideDoesNotFollowRedirect()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var responseTask = Task.Run(async () =>
-        {
-            using var client = await listener.AcceptTcpClientAsync();
-            await using var stream = client.GetStream();
-            var buffer = new byte[1024];
-            _ = await stream.ReadAsync(buffer);
-            var response = Encoding.ASCII.GetBytes(
-                "HTTP/1.1 302 Found\r\n" +
-                "Location: https://example.com/aspire-cli.tar.gz\r\n" +
-                "Content-Length: 0\r\n" +
-                "Connection: close\r\n\r\n");
-            await stream.WriteAsync(response);
-        });
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => CliDownloader.DownloadFileAsync(
-            $"http://127.0.0.1:{port}/aspire-cli.tar.gz",
-            Path.Combine(workspace.Path, "aspire-cli.tar.gz"),
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+
+        // Port 0 lets Kestrel bind a free port. After StartAsync the addresses feature (exposed
+        // via app.Urls) is rewritten with the resolved address, so we can read the real port.
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+        await using var app = builder.Build();
+
+        // The redirect target is a working endpoint on this same loopback server, so following the
+        // redirect would produce a successful download. That is what makes this test discriminating:
+        // if AllowAutoRedirect were ever re-enabled the download would succeed and this test fails.
+        // Pointing at an unreachable host instead would pass either way, because the failed follow-up
+        // request also surfaces as HttpRequestException.
+        app.MapGet("/aspire-cli.tar.gz", () => Results.Redirect("/redirected.tar.gz"));
+        app.MapGet("/redirected.tar.gz", () => Results.Text("redirected-payload"));
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var outputPath = Path.Combine(workspace.Path, "aspire-cli.tar.gz");
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => CliDownloader.DownloadFileAsync(
+            $"{app.Urls.First()}/aspire-cli.tar.gz",
+            outputPath,
             timeoutSeconds: 10,
             TestContext.Current.CancellationToken,
             requireLoopback: true));
-        await responseTask;
+
+        Assert.Equal(HttpStatusCode.Found, exception.StatusCode);
+        Assert.False(File.Exists(outputPath));
     }
 }

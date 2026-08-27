@@ -17,6 +17,12 @@
     <Using Include="Aspire.Tests.Utils" />
   </ItemGroup>
 
+  <!-- CliDownloaderTests hosts a real Kestrel endpoint to prove the loopback-only staging download
+       hook rejects an off-loopback redirect instead of following it. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <!-- The CLI bootstrap reads AspireCliChannel from typeof(Aspire.Cli.Program).Assembly — the
        production DLL — via IdentityChannelReader, registered as IIdentityChannelReader in Program.cs.
        Mirror that metadata here so any test resolving CliExecutionContext from the real bootstrap
