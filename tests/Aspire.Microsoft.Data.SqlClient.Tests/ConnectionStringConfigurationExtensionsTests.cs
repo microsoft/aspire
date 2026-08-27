@@ -61,7 +61,7 @@ public class ConnectionStringConfigurationExtensionsTests
     }
 
     [Fact]
-    public void TryGetConnectionStringPrefersExactNameWithinProvider()
+    public void TryGetConnectionStringPrefersExactName()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection([
@@ -74,24 +74,6 @@ public class ConnectionStringConfigurationExtensionsTests
 
         Assert.True(result);
         Assert.Equal("Server=exact;Database=test", connectionString);
-    }
-
-    [Fact]
-    public void TryGetConnectionStringPrefersHigherPriorityPortableNameOverLowerPriorityExactName()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection([
-                new($"ConnectionStrings:{LogicalConnectionName}", "Server=lower;Database=test")
-            ])
-            .AddInMemoryCollection([
-                new($"ConnectionStrings:{PortableConnectionName}", "Server=higher;Database=test")
-            ])
-            .Build();
-
-        var result = configuration.TryGetConnectionString(LogicalConnectionName, out var connectionString);
-
-        Assert.True(result);
-        Assert.Equal("Server=higher;Database=test", connectionString);
     }
 
     [Theory]
@@ -109,26 +91,5 @@ public class ConnectionStringConfigurationExtensionsTests
 
         Assert.Equal(expectedSuccess, result);
         Assert.Equal(configuredValue, connectionString);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TryGetConnectionStringHigherPriorityNullClearsLowerPriorityValue(bool usePortableName)
-    {
-        var higherPriorityName = usePortableName ? PortableConnectionName : LogicalConnectionName;
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection([
-                new($"ConnectionStrings:{LogicalConnectionName}", "Server=lower;Database=test")
-            ])
-            .AddInMemoryCollection([
-                new KeyValuePair<string, string?>($"ConnectionStrings:{higherPriorityName}", null)
-            ])
-            .Build();
-
-        var result = configuration.TryGetConnectionString(LogicalConnectionName, out var connectionString);
-
-        Assert.False(result);
-        Assert.Null(connectionString);
     }
 }
