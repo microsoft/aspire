@@ -85,6 +85,10 @@ export interface CliIdentityInfo extends CliVersionInfo {
     identityChannelOverride?: string;
 }
 
+type CliIdentityChannelOverrideResult =
+    | { status: 'available'; value?: string }
+    | { status: 'unavailable' };
+
 export type CliUpdateRecommendation =
     | { status: 'available'; currentVersion: string; version: string }
     | { status: 'none'; currentVersion: string }
@@ -254,14 +258,29 @@ export class ConfigInfoProvider {
      * of its assembly identity: inherited environment first, then the install sidecar.
      */
     async getCliIdentity(options?: CliVersionStatusOptions): Promise<CliIdentityInfo | null> {
-        const cli = await this.getCliVersion(options);
+        const startTime = Date.now();
+        const timeoutMs = Math.min(options?.timeoutMs ?? cliVersionProbeTimeoutMs, cliVersionProbeTimeoutMs);
+        const cli = await this.getCliVersion({ ...options, timeoutMs });
         if (!cli || options?.cancellationToken?.isCancellationRequested) {
+            return null;
+        }
+
+        const remainingTimeoutMs = timeoutMs - (Date.now() - startTime);
+        if (remainingTimeoutMs <= 0) {
+            return null;
+        }
+
+        const channelOverride = await this._getIdentityChannelOverride(
+            cli.cliPath,
+            remainingTimeoutMs,
+            options?.cancellationToken);
+        if (channelOverride.status === 'unavailable') {
             return null;
         }
 
         return {
             ...cli,
-            identityChannelOverride: await this._getIdentityChannelOverride(cli.cliPath),
+            identityChannelOverride: channelOverride.value,
         };
     }
 
@@ -336,14 +355,37 @@ export class ConfigInfoProvider {
             ?? 'unavailable';
     }
 
-    private async _getIdentityChannelOverride(cliPath: string): Promise<string | undefined> {
+    private async _getIdentityChannelOverride(
+        cliPath: string,
+        timeoutMs: number,
+        cancellationToken?: vscode.CancellationToken,
+    ): Promise<CliIdentityChannelOverrideResult> {
+        if (cancellationToken?.isCancellationRequested) {
+            return { status: 'unavailable' };
+        }
+
         const environment = this._terminalProvider.createEnvironment(undefined, undefined, true, cliPath) as Record<string, string | undefined>;
         const environmentChannel = getEnvironmentValue(environment, 'ASPIRE_CLI_CHANNEL');
         if (environmentChannel) {
-            return environmentChannel.toLowerCase();
+            return { status: 'available', value: environmentChannel.toLowerCase() };
         }
 
-        try {
+        const abortController = new AbortController();
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        let cancellation: vscode.Disposable | undefined;
+        let completeUnavailable!: () => void;
+        const unavailable = new Promise<CliIdentityChannelOverrideResult>(resolve => {
+            completeUnavailable = () => resolve({ status: 'unavailable' });
+        });
+        const abort = () => {
+            abortController.abort();
+            completeUnavailable();
+        };
+        timeout = setTimeout(abort, timeoutMs);
+        cancellation = cancellationToken?.onCancellationRequested(abort);
+
+        const readOverride = async (): Promise<CliIdentityChannelOverrideResult> => {
+            try {
             // Install routes write:
             //   <binaryDir>/.aspire-install.json
             //   { "source": "script", "channel": "stable", ... }
@@ -357,17 +399,44 @@ export class ConfigInfoProvider {
                 // Keep the invocation path when it cannot be canonicalized. The CLI itself uses
                 // the same fallback when resolving its process path.
             }
+            if (abortController.signal.aborted) {
+                return { status: 'unavailable' };
+            }
+
             const sidecarPath = path.join(path.dirname(physicalCliPath), '.aspire-install.json');
             if ((await stat(sidecarPath)).size > maxCliIdentitySidecarLength) {
-                return undefined;
+                return { status: 'available' };
             }
-            const sidecar = JSON.parse(await readFile(sidecarPath, 'utf8')) as { channel?: unknown };
-            return typeof sidecar.channel === 'string' && sidecar.channel.length > 0
-                ? sidecar.channel.toLowerCase()
-                : undefined;
+            if (abortController.signal.aborted) {
+                return { status: 'unavailable' };
+            }
+
+            const sidecar = JSON.parse(await readFile(sidecarPath, {
+                encoding: 'utf8',
+                signal: abortController.signal,
+            })) as { channel?: unknown };
+            return {
+                status: 'available',
+                value: typeof sidecar.channel === 'string' && sidecar.channel.length > 0
+                    ? sidecar.channel.toLowerCase()
+                    : undefined,
+            };
+            }
+            catch {
+                return abortController.signal.aborted
+                    ? { status: 'unavailable' }
+                    : { status: 'available' };
+            }
+        };
+
+        try {
+            return await Promise.race([readOverride(), unavailable]);
         }
-        catch {
-            return undefined;
+        finally {
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+            cancellation?.dispose();
         }
     }
 

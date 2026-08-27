@@ -485,6 +485,64 @@ suite('configInfoProvider tests', () => {
         }
     });
 
+    test('getCliIdentity applies its remaining timeout to sidecar sampling', async () => {
+        const clock = sinon.useFakeTimers();
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            assert.deepStrictEqual(args, ['--version']);
+            options?.stdoutCallback?.('13.6.0');
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        sinon.stub(fs.promises, 'realpath').returns(new Promise(() => { }));
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        try {
+            const identity = provider.getCliIdentity({
+                cliPath: '/network/aspire',
+                timeoutMs: 1_000,
+            });
+            await clock.tickAsync(1_000);
+
+            assert.strictEqual(await identity, null);
+        }
+        finally {
+            clock.restore();
+        }
+    });
+
+    test('getCliIdentity cancels sidecar sampling after the version probe', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            assert.deepStrictEqual(args, ['--version']);
+            options?.stdoutCallback?.('13.6.0');
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const realpathStub = sinon.stub(fs.promises, 'realpath').returns(new Promise(() => { }));
+        const cancellation = new vscode.CancellationTokenSource();
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        const identity = provider.getCliIdentity({
+            cliPath: '/network/aspire',
+            cancellationToken: cancellation.token,
+        });
+        while (!realpathStub.called) {
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        cancellation.cancel();
+
+        assert.strictEqual(await identity, null);
+        assert.strictEqual(realpathStub.calledOnceWith('/network/aspire'), true);
+        cancellation.dispose();
+    });
+
     test('getCliUpdateRecommendation accepts structured doctor output on a nonzero exit', async () => {
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/unused/aspire',
