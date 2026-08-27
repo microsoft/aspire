@@ -303,7 +303,8 @@ internal sealed class AspireCliTelemetry : IHostedService
                         detectorCancellationToken = internalMicrosoftTimeoutSource.Token;
                     }
                     internalMicrosoftStartTimestamp = Stopwatch.GetTimestamp();
-                    internalMicrosoftTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(detectorCancellationToken);
+                    var detectionTask = _internalMicrosoftDetector.IsInternalMicrosoftMachineAsync(detectorCancellationToken);
+                    internalMicrosoftTask = detectionTask.WaitAsync(detectorCancellationToken);
                 }
 
                 await Task.WhenAll(new Task[] { macAddressHashTask, deviceIdTask }).ConfigureAwait(false);
