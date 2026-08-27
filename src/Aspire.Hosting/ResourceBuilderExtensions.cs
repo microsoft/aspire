@@ -1128,7 +1128,7 @@ public static class ResourceBuilderExtensions
                 resource,
                 environmentVariableNames,
                 optional,
-                resource.ConnectionStringExpression.ValueExpression);
+                nameof(IResourceWithConnectionString.ConnectionStringExpression));
             ValidateConnectionStringReference(builder.Resource, referenceAnnotation);
             builder.Resource.Annotations.Add(referenceAnnotation);
         }
@@ -1194,9 +1194,9 @@ public static class ResourceBuilderExtensions
         ConnectionStringReferenceAnnotation left,
         ConnectionStringReferenceAnnotation right)
     {
-        return string.Equals(left.Source.Name, right.Source.Name, StringComparison.OrdinalIgnoreCase) &&
+        return ReferenceEquals(left.Source, right.Source) &&
             left.Optional == right.Optional &&
-            string.Equals(left.ValueExpression, right.ValueExpression, StringComparison.Ordinal) &&
+            string.Equals(left.ValueName, right.ValueName, StringComparison.Ordinal) &&
             left.EnvironmentVariableNames == right.EnvironmentVariableNames;
     }
 

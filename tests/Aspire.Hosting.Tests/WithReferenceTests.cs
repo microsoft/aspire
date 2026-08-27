@@ -909,6 +909,30 @@ public class WithReferenceTests
         Assert.Equal("Host=localhost", config["ConnectionStrings__my_db"]);
     }
 
+    [Fact]
+    public async Task RepeatedConnectionStringReferencesRemainValidWhenExpressionChanges()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new TestResource("my-db")
+        {
+            ConnectionString = "Host=before"
+        });
+        var project = builder.AddProject<ProjectB>("project")
+            .WithReference(resource);
+
+        resource.Resource.ConnectionString = "Host=after";
+        project.WithReference(resource);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal("Host=after", config["ConnectionStrings__my-db"]);
+        Assert.Equal("Host=after", config["ConnectionStrings__my_db"]);
+    }
+
     private sealed class TestResourceWithProperties(string name) : Resource(name), IResourceWithConnectionString
     {
         public string? ConnectionString { get; set; }

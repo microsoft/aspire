@@ -186,7 +186,7 @@ public static class QdrantBuilderExtensions
             resource,
             httpConnectionStringNames,
             optional: false,
-            httpConnectionStringExpression.ValueExpression);
+            nameof(QdrantServerResource.HttpConnectionStringExpression));
 
         // Determine what to inject based on the annotation on the destination resource
         var injectionAnnotation = builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var annotation) ? annotation : null;
@@ -219,9 +219,9 @@ public static class QdrantBuilderExtensions
     {
         foreach (var existing in destination.Annotations.OfType<ConnectionStringReferenceAnnotation>())
         {
-            if (string.Equals(existing.Source.Name, candidate.Source.Name, StringComparison.OrdinalIgnoreCase) &&
+            if (ReferenceEquals(existing.Source, candidate.Source) &&
                 existing.Optional == candidate.Optional &&
-                string.Equals(existing.ValueExpression, candidate.ValueExpression, StringComparison.Ordinal) &&
+                string.Equals(existing.ValueName, candidate.ValueName, StringComparison.Ordinal) &&
                 existing.EnvironmentVariableNames == candidate.EnvironmentVariableNames)
             {
                 continue;

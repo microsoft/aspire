@@ -11,13 +11,13 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="source">The resource that provides the connection-string value.</param>
 /// <param name="environmentVariableNames">The logical and physical names for the reference.</param>
 /// <param name="optional">Whether the connection string may be absent.</param>
-/// <param name="valueExpression">The manifest expression that identifies the referenced value.</param>
+/// <param name="valueName">The stable name identifying the connection-string value on the source resource.</param>
 [Experimental("ASPIRECONNECTIONSTRINGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ConnectionStringReferenceAnnotation(
     IResourceWithConnectionString source,
     ConnectionStringEnvironmentVariableNames environmentVariableNames,
     bool optional,
-    string valueExpression) : IResourceAnnotation
+    string valueName) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the referenced connection-string resource.
@@ -35,7 +35,7 @@ public sealed class ConnectionStringReferenceAnnotation(
     public bool Optional { get; } = optional;
 
     /// <summary>
-    /// Gets the manifest expression that identifies the referenced connection-string value.
+    /// Gets the stable name identifying the connection-string value on the source resource.
     /// </summary>
-    public string ValueExpression { get; } = valueExpression ?? throw new ArgumentNullException(nameof(valueExpression));
+    public string ValueName { get; } = valueName ?? throw new ArgumentNullException(nameof(valueName));
 }
