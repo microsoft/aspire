@@ -25,7 +25,7 @@
 | `my--db` | `ConnectionStrings__my--db` | `ConnectionStrings__my_db` |
 | `my__db` | `ConnectionStrings__my__db` | `ConnectionStrings__my_db` |
 
-Aspire emits both physical aliases when they differ and the target supports both. Deployment targets with stricter naming rules, including Azure App Service and Kubernetes, emit only the portable alias. Connection properties continue to use their existing normalized prefixes.
+Aspire emits both physical aliases when they differ and the target supports both. Deployment targets with stricter naming rules, including Azure App Service, Kubernetes-based publishers (Kubernetes, AKS, and Radius), and Foundry Hosted Agents, emit only the portable alias. Connection properties continue to use their existing normalized prefixes.
 
 Portable suffixes must be derived with `EnvironmentVariableNameEncoder.EncodeConnectionStringName`; it also collapses underscore runs so `__` is not interpreted as another .NET configuration path delimiter. Publishers and integrations must consume `ConnectionStringReferenceAnnotation` instead of reconstructing names. Different logical names that map to the same physical name fail during model construction. Choose unique explicit aliases with `WithReference(resource, connectionName: "...")` to resolve a collision.
 
