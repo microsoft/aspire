@@ -1826,7 +1826,8 @@ internal sealed class PythonModuleBuilder
                 app_host_file_path (str): The path to the AppHost source file. By default, this will use the ASPIRE_APPHOST_FILEPATH
                     environment variable if set.
                 container_registry_override (str): When containers are used, use this value to override the container registry.
-                disable_dashboard (bool): Determines whether the dashboard is disabled.
+                disable_dashboard (bool): Determines whether dashboard auto-start is disabled.
+                    In run mode, the dashboard resource is still added and can be started explicitly later.
                 dashboard_application_name (str): The application name to display in the dashboard.
                 allow_unsecured_transport (bool): Allows the use of HTTP urls for the AppHost resource endpoint.
                 enable_resource_logging (bool): Enables resource logging.

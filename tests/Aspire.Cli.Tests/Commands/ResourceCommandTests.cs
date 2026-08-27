@@ -1655,6 +1655,36 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_NamedHiddenResourceExecutesCommandWithoutIncludeHidden()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "hidden-worker",
+                    "Hidden",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("message")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource hidden-worker configure -- --message \"from named hidden resource\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("message", "from named hidden resource"));
+    }
+
+    [Fact]
     public async Task ResourceCommand_DoesNotForwardCommandOptionWithoutDelimiterWhenNameCollidesWithCliOption()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

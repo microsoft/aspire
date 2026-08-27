@@ -31,9 +31,8 @@ internal static class DashboardUrlsHelper
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        // Check whether the dashboard resource is registered at all. If it isn't (e.g. the user
-        // called DisableDashboard()), return immediately rather than waiting forever for a resource
-        // event that will never arrive.
+        // Check whether the dashboard resource is registered at all. If it isn't, return
+        // immediately rather than waiting forever for a resource event that will never arrive.
         var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         var dashboardResource = appModel?.Resources.SingleOrDefault(
             r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
@@ -47,6 +46,26 @@ internal static class DashboardUrlsHelper
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
         using var activity = profilingTelemetry.StartDashboardGetConnectionInfo();
         var resourceNotificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
+
+        if (dashboardResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+        {
+            if (!resourceNotificationService.TryGetCurrentState(KnownResourceNames.AspireDashboard, out var dashboardEvent))
+            {
+                logger.LogDebug("Dashboard resource is explicit-start and has no current state. Returning unavailable state.");
+                activity.SetDashboardHealthy(false);
+                return DashboardConnectionInfo.Unhealthy;
+            }
+
+            var state = dashboardEvent.Snapshot.State?.Text;
+            var isStarting = state == KnownResourceStates.Starting || state == KnownResourceStates.Building;
+            var isRunning = state == KnownResourceStates.Running;
+            if (!isStarting && !isRunning)
+            {
+                logger.LogDebug("Dashboard resource is explicit-start and in state '{State}'. Returning unavailable state.", state ?? "(null)");
+                activity.SetDashboardHealthy(false);
+                return DashboardConnectionInfo.Unhealthy;
+            }
+        }
 
         // Wait for the dashboard to be healthy
         using (var waitActivity = profilingTelemetry.StartDashboardWaitHealthy())
