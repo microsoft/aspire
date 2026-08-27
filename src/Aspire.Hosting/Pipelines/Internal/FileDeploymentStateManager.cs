@@ -97,19 +97,20 @@ internal sealed partial class FileDeploymentStateManager(
         MigrationState migrationState;
         using (await AcquireStateLockAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false))
         {
-            currentState = await LoadStateFileAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false);
             try
             {
                 migrationState = await LoadMigrationStateFileAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or InvalidDataException)
             {
-                return currentState;
+                return await LoadStateFileAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false);
             }
+
+            currentState = migrationState.CurrentState ??
+                await LoadStateFileAsync(canonicalStatePath, cancellationToken).ConfigureAwait(false);
         }
 
-        var (legacyFallbackDisabled, legacyStateSnapshot, claimedSectionNames, authoritativeCurrentState) = migrationState;
-        currentState = authoritativeCurrentState ?? currentState;
+        var (legacyFallbackDisabled, legacyStateSnapshot, claimedSectionNames, _) = migrationState;
         if (legacyFallbackDisabled)
         {
             return currentState;
@@ -149,19 +150,19 @@ internal sealed partial class FileDeploymentStateManager(
         MigrationState migrationState;
         using (AcquireStateLock(canonicalStatePath))
         {
-            currentState = LoadStateFile(canonicalStatePath);
             try
             {
                 migrationState = LoadMigrationStateFile(canonicalStatePath);
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or InvalidDataException)
             {
-                return currentState;
+                return LoadStateFile(canonicalStatePath);
             }
+
+            currentState = migrationState.CurrentState ?? LoadStateFile(canonicalStatePath);
         }
 
-        var (legacyFallbackDisabled, legacyStateSnapshot, claimedSectionNames, authoritativeCurrentState) = migrationState;
-        currentState = authoritativeCurrentState ?? currentState;
+        var (legacyFallbackDisabled, legacyStateSnapshot, claimedSectionNames, _) = migrationState;
         if (legacyFallbackDisabled)
         {
             return currentState;
@@ -235,8 +236,10 @@ internal sealed partial class FileDeploymentStateManager(
         {
             using (await AcquireStateLockAsync(currentStatePath, cancellationToken).ConfigureAwait(false))
             {
-                _currentState = await LoadStateFileAsync(currentStatePath, cancellationToken).ConfigureAwait(false);
-                await LoadMigrationStateAsync(currentStatePath, cancellationToken).ConfigureAwait(false);
+                if (!await LoadMigrationStateAsync(currentStatePath, cancellationToken).ConfigureAwait(false))
+                {
+                    _currentState = await LoadStateFileAsync(currentStatePath, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
@@ -339,8 +342,10 @@ internal sealed partial class FileDeploymentStateManager(
                 {
                     // Reload while holding the cross-process lock so repeated or concurrent
                     // process starts cannot overwrite sections saved by another instance.
-                    _currentState = await LoadStateFileAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false);
-                    await LoadMigrationStateAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false);
+                    if (!await LoadMigrationStateAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false))
+                    {
+                        _currentState = await LoadStateFileAsync(deploymentStatePath, cancellationToken).ConfigureAwait(false);
+                    }
                     var sectionData = TryGetNestedPropertyValue(state, sectionName) as JsonObject;
                     var legacySectionData = TryGetNestedPropertyValue(GetLegacyFallbackState(), sectionName);
                     var latestEffectiveState = MergeState(GetLegacyFallbackState(), _currentState);
@@ -683,14 +688,14 @@ internal sealed partial class FileDeploymentStateManager(
         }
     }
 
-    private async Task LoadMigrationStateAsync(string? canonicalStatePath, CancellationToken cancellationToken)
+    private async Task<bool> LoadMigrationStateAsync(string? canonicalStatePath, CancellationToken cancellationToken)
     {
         _claimedSectionNames.Clear();
         _legacyStateSnapshot = [];
         _legacyFallbackDisabled = false;
         if (canonicalStatePath is null)
         {
-            return;
+            return false;
         }
 
         try
@@ -703,6 +708,7 @@ internal sealed partial class FileDeploymentStateManager(
             if (migrationState.CurrentState is not null)
             {
                 _currentState = migrationState.CurrentState;
+                return true;
             }
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or InvalidDataException)
@@ -711,6 +717,8 @@ internal sealed partial class FileDeploymentStateManager(
             // If it is malformed, fail closed rather than reviving legacy deployment state.
             _legacyFallbackDisabled = true;
         }
+
+        return false;
     }
 
     private static async Task<MigrationState> LoadMigrationStateFileAsync(
