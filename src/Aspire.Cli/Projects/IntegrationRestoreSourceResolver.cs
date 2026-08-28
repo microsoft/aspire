@@ -19,15 +19,11 @@ internal sealed class IntegrationRestoreSourceResolver(
         ThrowIfStagingUnavailable(requestedChannel);
 
         var additionalSources = new List<string>();
-        var safePackageSourceOverride = !string.IsNullOrWhiteSpace(packageSourceOverride) &&
-            !PackageSourceOverrideMappings.HasCredentialMaterial(packageSourceOverride)
-                ? packageSourceOverride
-                : null;
-        var hasOverride = !string.IsNullOrWhiteSpace(safePackageSourceOverride);
+        var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
 
-        if (safePackageSourceOverride is not null)
+        if (hasOverride)
         {
-            additionalSources.Add(safePackageSourceOverride);
+            additionalSources.Add(packageSourceOverride!);
         }
 
         PackageChannel? matchedChannel = null;
@@ -88,9 +84,9 @@ internal sealed class IntegrationRestoreSourceResolver(
 
         if (hasOverride)
         {
-            packageSourceMappings = PackageSourceOverrideMappings.Create(safePackageSourceOverride!, matchedChannel, nugetServiceIndexOverride);
+            packageSourceMappings = PackageSourceOverrideMappings.Create(packageSourceOverride!, matchedChannel, nugetServiceIndexOverride);
             configureGlobalPackagesFolder = matchedChannel?.ConfigureGlobalPackagesFolder == true;
-            globalPackagesFolderSource = configureGlobalPackagesFolder ? safePackageSourceOverride : null;
+            globalPackagesFolderSource = configureGlobalPackagesFolder ? packageSourceOverride : null;
 
             foreach (var mapping in packageSourceMappings.Where(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
             {

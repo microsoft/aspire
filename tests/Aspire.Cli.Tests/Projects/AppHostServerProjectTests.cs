@@ -469,6 +469,42 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_WithoutConfiguredChannel_UsesExplicitChannelSources()
+    {
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            new TestProcessExecutionFactory(),
+            new TestEnvironment(),
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var (projectFilePath, channelName) = await project.CreateProjectFilesAsync(
+            [IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")]).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.Equal(channelFeed, restoreSources);
+        Assert.Equal("daily", channelName);
+    }
+
+    [Fact]
     public async Task CreateProjectFiles_WithoutPackageSourceOverride_DoesNotInjectExtraSource()
     {
         // Negative companion to the override regression: ensure the no-override path still emits

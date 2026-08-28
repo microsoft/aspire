@@ -270,22 +270,21 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
         var channelSources = new List<string>();
-        if (!string.IsNullOrEmpty(configuredChannelName))
-        {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
-            var matchedChannels = channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
+        var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
+            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
+            : channels.Where(c => c.Type == PackageChannelType.Explicit);
 
-            foreach (var ch in matchedChannels)
+        foreach (var ch in matchedChannels)
+        {
+            channelName ??= ch.Name;
+            if (ch.Mappings is not null)
             {
-                channelName ??= ch.Name;
-                if (ch.Mappings is not null)
+                foreach (var mapping in ch.Mappings)
                 {
-                    foreach (var mapping in ch.Mappings)
+                    if (!channelSources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
                     {
-                        if (!channelSources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
-                        {
-                            channelSources.Add(mapping.Source);
-                        }
+                        channelSources.Add(mapping.Source);
                     }
                 }
             }
