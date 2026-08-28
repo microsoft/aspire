@@ -2279,8 +2279,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // this AppHost. (Covers layouts where multiple AppHosts share a directory.)
         if (!string.IsNullOrEmpty(config.AppHost?.Path))
         {
-            var resolvedAppHostPath = Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path));
-            if (!string.Equals(resolvedAppHostPath, appHostFile.FullName, StringComparison.OrdinalIgnoreCase))
+            var configuredAppHostPath = PathNormalizer.ResolveToFilesystemPath(
+                Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path)));
+            var selectedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
+            if (!string.Equals(configuredAppHostPath, selectedAppHostPath, StringComparisons.FileSystemPath))
             {
                 return false;
             }

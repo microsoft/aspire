@@ -28,9 +28,8 @@ internal static class PathNormalizer
     }
 
     /// <summary>
-    /// Resolves a path to its filesystem-canonical form. On Windows, this queries the OS for
-    /// the actual casing of each path component. On Unix-like platforms, this resolves symbolic
-    /// links and macOS APFS firmlinks.
+    /// Resolves a path to its filesystem-canonical form by resolving symbolic links and querying
+    /// the OS for the actual casing of each path component on Windows and macOS.
     /// </summary>
     /// <remarks>
     /// Use this when aliases on a case-insensitive filesystem must produce the same identity while
@@ -45,19 +44,28 @@ internal static class PathNormalizer
     /// </returns>
     public static string ResolveToFilesystemPath(string path)
     {
-        var resolvedPath = ResolveSymlinks(path);
+        return ResolvePathCasing(ResolveSymlinks(path));
+    }
+
+    /// <summary>
+    /// Resolves the casing of each path component without resolving symbolic links.
+    /// </summary>
+    /// <param name="path">An absolute path whose casing should be resolved.</param>
+    /// <returns>The path with filesystem casing, or <paramref name="path"/> if it cannot be resolved.</returns>
+    public static string ResolvePathCasing(string path)
+    {
         if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
         {
-            return resolvedPath;
+            return path;
         }
 
-        var root = Path.GetPathRoot(resolvedPath);
+        var root = Path.GetPathRoot(path);
         if (string.IsNullOrEmpty(root))
         {
-            return resolvedPath;
+            return path;
         }
 
-        var segments = resolvedPath[root.Length..].Split(
+        var segments = path[root.Length..].Split(
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries);
 
@@ -72,7 +80,7 @@ internal static class PathNormalizer
             var candidate = Path.Combine(current, segment);
             if (!File.Exists(candidate) && !Directory.Exists(candidate))
             {
-                return resolvedPath;
+                return path;
             }
 
             try
@@ -99,11 +107,11 @@ internal static class PathNormalizer
             }
             catch (IOException)
             {
-                return resolvedPath;
+                return path;
             }
             catch (UnauthorizedAccessException)
             {
-                return resolvedPath;
+                return path;
             }
         }
 

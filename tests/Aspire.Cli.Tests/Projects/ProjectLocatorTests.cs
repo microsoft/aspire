@@ -357,14 +357,22 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void PersistedAppHostPathComparisonIsCaseInsensitiveOnlyOnWindows()
+    public void PersistedAppHostPathComparisonUsesFilesystemSemantics()
     {
-        const string configuredPath = "/workspace/Foo/AppHost.csproj";
-        const string selectedPath = "/workspace/foo/AppHost.csproj";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configuredPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        File.WriteAllText(configuredPath, "<Project />");
+        var differentlyCasedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj");
 
-        Assert.True(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, selectedPath, TestEnvironment.CreateWindows()));
-        Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, selectedPath, TestEnvironment.CreateLinux()));
-        Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, selectedPath, TestEnvironment.CreateMacOS()));
+        if (File.Exists(differentlyCasedPath))
+        {
+            Assert.True(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
+        }
+        else
+        {
+            File.WriteAllText(differentlyCasedPath, "<Project />");
+            Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
+        }
     }
 
     [Theory]
@@ -2577,14 +2585,34 @@ builder.Build().Run();");
     }
 
     [Fact]
-    public void IsUnderDirectoryTreatsMacOSPathsAsCaseSensitive()
+    public void IsUnderDirectoryTreatsPathsAsCaseSensitiveOffWindows()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows filesystem paths are compared case-insensitively.");
+
         var directory = new DirectoryInfo(Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "repo", "Apps"));
         var file = new FileInfo(Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "repo", "apps", "AppHost.csproj"));
 
-        var result = ProjectLocator.IsUnderDirectory(file, directory, TestEnvironment.CreateMacOS());
+        var result = ProjectLocator.IsUnderDirectory(file, directory);
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public void IsUnderDirectoryMatchesFilesystemAliases()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var realDirectory = workspace.CreateDirectory("real");
+        var appHostFile = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TestSymlinkHelper.TryCreateSymlink(symlinkDirectory, realDirectory.FullName);
+
+        Assert.True(ProjectLocator.IsUnderDirectory(appHostFile, new DirectoryInfo(symlinkDirectory)));
     }
 
     [Fact]
