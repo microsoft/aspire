@@ -481,7 +481,8 @@ public static class AzureApiManagementExtensions
         string? namedValueName = null,
         string[]? tags = null)
     {
-        ArgumentException.ThrowIfNullOrEmpty(value);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        ValidateMaximumLength(value, 4096, "The named value", nameof(value));
         return AddNamedValueCore(builder, name, value, secret: false, displayName, namedValueName, tags);
     }
 

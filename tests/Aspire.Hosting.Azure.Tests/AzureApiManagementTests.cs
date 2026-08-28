@@ -778,6 +778,8 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Throws<ArgumentException>(() => apim.AddPolicyFragment("invalid-fragment", "<base />", fragmentName: "-invalid"));
         Assert.Throws<ArgumentException>(() => apim.AddSecretNamedValue("secret", nonSecretParameter));
         Assert.Throws<ArgumentException>(() => apim.AddNamedValue("invalid-value", "value", displayName: "invalid value"));
+        Assert.Throws<ArgumentException>(() => apim.AddNamedValue("empty-value", " "));
+        Assert.Throws<ArgumentException>(() => apim.AddNamedValue("long-value", new string('v', 4097)));
         Assert.Throws<ArgumentException>(() => apim.AddNamedValue("empty-display-name", "value", displayName: ""));
         Assert.Throws<ArgumentException>(() =>
             apim.WithCustomDomain(
