@@ -11,9 +11,8 @@ import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvid
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
-import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { CommandInvocationEvent, onDidInvokeCommand } from '../utils/telemetry';
-import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 suite('registerCliCommands', () => {
     let sandbox: sinon.SinonSandbox;
@@ -21,6 +20,7 @@ suite('registerCliCommands', () => {
     let terminalProvider: AspireTerminalProvider;
     let sendCommandStub: sinon.SinonStub;
     let getTerminalStub: sinon.SinonStub;
+    let getAspireCliExecutablePathStub: sinon.SinonStub;
     let resolveCliPathStub: sinon.SinonStub;
     let showWorkspaceFolderPickStub: sinon.SinonStub;
     let workspaceFoldersStub: sinon.SinonStub;
@@ -47,9 +47,11 @@ suite('registerCliCommands', () => {
             terminal: { show: sinon.stub() },
             dispose: () => { },
         });
+        getAspireCliExecutablePathStub = sinon.stub().resolves('/resolved/aspire');
         terminalProvider = {
             sendAspireCommandToAspireTerminal: sendCommandStub,
             getAspireTerminal: getTerminalStub,
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
         } as unknown as AspireTerminalProvider;
         resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
             cliPath: '/resolved/aspire',
@@ -295,48 +297,13 @@ suite('registerCliCommands', () => {
         assert.ok(tryExecuteDoAppHostStub.calledOnceWith(false, undefined, appHostPath, target, '/resolved/aspire'));
     });
 
-    test('deploy and publish warn for the same multi-root CLI they launch', async () => {
-        const folderA = createWorkspaceFolder('a', '/repo/a');
-        const folderB = createWorkspaceFolder('b', '/repo/b');
-        const appHostPath = '/repo/b/AppHost/AppHost.csproj';
-        const target = workspaceFolderCliPathTarget(folderB);
-        workspaceFoldersStub.value([folderA, folderB]);
-        getAppHostPathStub.resolves(appHostPath);
-        getWorkspaceFolderStub.returns(folderB);
-        resolveCliPathStub.callsFake(async resolvedTarget => ({
-            cliPath: resolvedTarget.kind === 'workspaceFolder' &&
-                resolvedTarget.workspaceFolder.uri.toString() === folderB.uri.toString()
-                ? '/repo/b/.aspire/bin/aspire'
-                : '/global/aspire',
-            available: true,
-            source: 'configured',
-        }));
-        const resolutions: Array<{ target: CliPathResolutionTarget; cliPath: string }> = [];
-        const resolutionSubscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
+    test('deploy and publish defer CLI resolution to the AppHost launch', async () => {
+        await callbacks.get('aspire-vscode.deploy')!();
+        await callbacks.get('aspire-vscode.publish')!();
 
-        try {
-            await callbacks.get('aspire-vscode.deploy')!();
-            await callbacks.get('aspire-vscode.publish')!();
-        }
-        finally {
-            resolutionSubscription.dispose();
-        }
-
-        assert.deepStrictEqual(resolutions, [
-            { target, cliPath: '/repo/b/.aspire/bin/aspire' },
-            { target, cliPath: '/repo/b/.aspire/bin/aspire' },
-        ]);
-        assert.ok(tryExecuteDeployAppHostStub.calledOnceWith(
-            false,
-            appHostPath,
-            target,
-            '/repo/b/.aspire/bin/aspire'));
-        assert.ok(tryExecutePublishAppHostStub.calledOnceWith(
-            false,
-            appHostPath,
-            target,
-            '/repo/b/.aspire/bin/aspire'));
-        assert.strictEqual(resolveCliPathStub.neverCalledWith(windowCliPathTarget), true);
+        assert.ok(tryExecuteDeployAppHostStub.calledOnceWithExactly(false));
+        assert.ok(tryExecutePublishAppHostStub.calledOnceWithExactly(false));
+        assert.strictEqual(resolveCliPathStub.called, false);
     });
 
     test('do rejects a missing AppHost before probing the CLI', async () => {
@@ -391,22 +358,15 @@ suite('registerCliCommands', () => {
 
     test('update self remains window scoped without a CLI availability gate', async () => {
         workspaceFoldersStub.value([createWorkspaceFolder('a', '/repo/a')]);
-        const resolutions: unknown[] = [];
-        const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
 
-        try {
-            await callbacks.get('aspire-vscode.updateSelf')!();
-        }
-        finally {
-            subscription.dispose();
-        }
+        await callbacks.get('aspire-vscode.updateSelf')!();
 
         assert.strictEqual(resolveCliPathStub.called, false);
+        assert.ok(getAspireCliExecutablePathStub.calledOnceWith(windowCliPathTarget));
         assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
             target: windowCliPathTarget,
-            reportCliResolution: false,
+            cliPath: '/resolved/aspire',
         }));
-        assert.deepStrictEqual(resolutions, []);
     });
 
     test('update self uses the pre-resolved workspace CLI supplied by the warning action', async () => {
@@ -416,10 +376,10 @@ suite('registerCliCommands', () => {
         await callbacks.get('aspire-vscode.updateSelf')!(target, '/repo/a/.aspire/bin/aspire');
 
         assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(getAspireCliExecutablePathStub.called, false);
         assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
             target,
             cliPath: '/repo/a/.aspire/bin/aspire',
-            reportCliResolution: false,
         }));
     });
 });

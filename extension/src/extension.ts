@@ -40,7 +40,6 @@ import { registerCodeLensCommands } from './activation/registerCodeLensCommands'
 import { initializeHotReloadAdvisory } from './debugger/hotReload';
 import { OutdatedCliNotifier } from './utils/outdatedCliNotifier';
 import { onDidResolveCliForOperation } from './utils/cliOperationResolution';
-import { FileSystemOutdatedCliSuppressionStore } from './utils/outdatedCliSuppressionStore';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -108,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
     configInfoProvider,
     undefined,
     Date.now,
-    new FileSystemOutdatedCliSuppressionStore(context.globalStorageUri.fsPath));
+    context.globalState);
   context.subscriptions.push(outdatedCliNotifier);
   context.subscriptions.push(onDidResolveCliForOperation(({ target, cliPath }) => {
     void outdatedCliNotifier.notifyIfOutdated(target, cliPath).catch(error => {

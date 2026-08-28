@@ -33,7 +33,6 @@ export interface SendAspireCommandOptions {
     terminalTarget?: 'shared' | 'editor';
     target: CliPathResolutionTarget;
     cliPath?: string;
-    reportCliResolution?: boolean;
 }
 
 // String parts are fixed CLI syntax and are validated before interpolation.
@@ -172,7 +171,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         const target = options?.target ?? windowCliPathTarget;
         const resolvedForThisCommand = options?.cliPath === undefined;
         const cliPath = options?.cliPath ?? await this.getAspireCliExecutablePath(target);
-        if (resolvedForThisCommand && options?.reportCliResolution !== false) {
+        if (resolvedForThisCommand) {
             reportCliResolvedForOperation(target, cliPath);
         }
         const subcommandLine = formatSubcommand(subcommand);

@@ -47,12 +47,6 @@ interface CachedAppHostDiscovery {
     completed: boolean;
     started: boolean;
     stale: boolean;
-    resolvedCliPath?: string;
-}
-
-export interface AppHostDiscoveryCliResolution {
-    workspaceFolder: vscode.WorkspaceFolder;
-    cliPath: string;
 }
 
 interface CliProcessResult {
@@ -66,7 +60,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _streamingDiscoveryMaxRuntimeMs = 5 * 60 * 1000;
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
-    private readonly _onDidResolveCli = new vscode.EventEmitter<AppHostDiscoveryCliResolution>();
     private readonly _cache = new Map<string, CachedAppHostDiscovery>();
     private readonly _activeDiscoveries = new Set<CachedAppHostDiscovery>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
@@ -76,18 +69,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _configInfoProvider: ConfigInfoProvider;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
-    readonly onDidResolveCli = this._onDidResolveCli.event;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
     }
 
-    async discover(
-        workspaceFolder: vscode.WorkspaceFolder,
-        forceRefresh = false,
-        cancellationToken?: vscode.CancellationToken,
-        onIncrementalCandidate: IncrementalCandidateCallback = () => { },
-    ): Promise<CandidateAppHostDisplayInfo[]> {
+    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onIncrementalCandidate: IncrementalCandidateCallback = () => { }): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
 
@@ -109,6 +96,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         if (!cachedDiscovery) {
             cachedDiscovery = this._createCachedDiscovery(workspaceFolder, key, forceRefresh);
         }
+
         const candidateProgressCallback = (candidate: CandidateAppHostDisplayInfo): void => {
             if (!cancellationToken?.isCancellationRequested) {
                 notifyCandidateProgressCallback(onIncrementalCandidate, candidate);
@@ -129,10 +117,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         finally {
             cachedDiscovery.candidateProgressCallbacks.delete(candidateProgressCallback);
         }
-    }
-
-    getResolvedCliPath(workspaceFolder: vscode.WorkspaceFolder): string | undefined {
-        return this._cache.get(path.resolve(workspaceFolder.uri.fsPath))?.resolvedCliPath;
     }
 
     private _createCachedDiscovery(
@@ -165,17 +149,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         const startDiscovery = () => {
             cachedDiscovery.started = true;
             const startTime = Date.now();
-            return this._discoverCore(
-                workspaceFolder,
-                reportCandidateProgress,
-                cancellationSource.token,
-                forceRefresh,
-                cliPath => {
-                    if (this._cache.get(key) === cachedDiscovery) {
-                        cachedDiscovery.resolvedCliPath = cliPath;
-                        this._onDidResolveCli.fire({ workspaceFolder, cliPath });
-                    }
-                })
+            return this._discoverCore(workspaceFolder, reportCandidateProgress, cancellationSource.token, forceRefresh)
                 .then(async discovery => {
                     let candidates = discovery.candidates;
                     try {
@@ -299,20 +273,12 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._cancelActiveCliProcesses.clear();
         this._activeCliProcesses.clear();
         this._onDidChangeCandidates.dispose();
-        this._onDidResolveCli.dispose();
     }
 
-    private async _discoverCore(
-        workspaceFolder: vscode.WorkspaceFolder,
-        reportCandidateProgress: IncrementalCandidateCallback,
-        cancellationToken: vscode.CancellationToken,
-        forceRefresh: boolean,
-        reportResolvedCliPath: (cliPath: string) => void,
-    ): Promise<AppHostDiscoveryResult> {
+    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, reportCandidateProgress: IncrementalCandidateCallback, cancellationToken: vscode.CancellationToken, forceRefresh: boolean): Promise<AppHostDiscoveryResult> {
         let cliPath: string | undefined;
         try {
             cliPath = await this._getAspireCliExecutablePath(workspaceFolder, cancellationToken);
-            reportResolvedCliPath(cliPath);
             const lsJsonStreamSupported = await this._resolveLsStreamCapability(cliPath, workspaceFolder, forceRefresh);
             let appHosts: CandidateAppHostDisplayInfo[];
             if (lsJsonStreamSupported) {

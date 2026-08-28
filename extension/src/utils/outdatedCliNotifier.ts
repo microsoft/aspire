@@ -2,7 +2,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as strings from '../loc/strings';
 import {
-    CliIdentityInfo,
     CliUpdateRecommendation,
     CliVersionInfo,
     compareCliVersionValues,
@@ -10,10 +9,6 @@ import {
     resolveConfigInfoWorkingDirectory,
 } from './configInfoProvider';
 import { CliPathResolutionTarget, getCliPathTargetKey } from './cliPathVariables';
-import {
-    OutdatedCliSuppressionStore,
-    PersistedCliSuppression,
-} from './outdatedCliSuppressionStore';
 import { extensionLogOutputChannel } from './logging';
 import { getComparisonKey } from './paths/comparison';
 
@@ -24,9 +19,9 @@ const completedUpdateRefreshIntervalMs = 6 * 60 * 60 * 1_000;
 const unavailableRetryBaseMs = 60 * 1_000;
 const unavailableRetryMaximumMs = 30 * 60 * 1_000;
 const maximumUnavailableAttemptsPerIdentity = 3;
-const maximumPersistedSuppressions = 100;
+const persistedSuppressionKey = 'outdatedCliNotification.suppressedCliVersions';
 
-type CliVersionProvider = Pick<ConfigInfoProvider, 'getCliIdentity' | 'getCliVersion' | 'getCliUpdateRecommendation'>;
+type CliVersionProvider = Pick<ConfigInfoProvider, 'getCliVersion' | 'getCliUpdateRecommendation'>;
 
 export interface OutdatedCliNotificationSurface {
     showWarning(message: string, ...actions: string[]): Thenable<string | undefined>;
@@ -34,17 +29,16 @@ export interface OutdatedCliNotificationSurface {
 }
 
 interface CliCheckState {
-    identity: CliIdentityInfo | undefined;
+    identity: CliVersionInfo | undefined;
     versionValidUntil: number;
-    updateStatus: 'complete' | 'ineligible' | 'suppressed' | 'unavailable' | undefined;
+    updateStatus: 'complete' | 'ineligible' | 'unavailable' | undefined;
     updateValidUntil: number;
     failureCount: number;
 }
 
 interface PendingNotification {
-    checkKey: string;
     target: CliPathResolutionTarget;
-    cli: CliIdentityInfo;
+    cli: CliVersionInfo;
     recommendedVersion: string;
 }
 
@@ -63,19 +57,16 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     private readonly _persistentlySuppressedCliVersions: Set<string>;
     private readonly _inFlightByCheckKey = new Map<string, Promise<PendingNotification | undefined>>();
     private readonly _cancellationSource = new vscode.CancellationTokenSource();
-    private readonly _versionLimiter = new AsyncLimiter(4);
-    private readonly _doctorLimiter = new AsyncLimiter(1);
-    private _sharedSuppressionRefresh: Promise<boolean> | undefined;
-    private _suppressionReadRetryAfter = 0;
+    private _doctorTail: Promise<void> = Promise.resolve();
     private _disposed = false;
 
     constructor(
         private readonly _versionProvider: CliVersionProvider,
         private readonly _surface: OutdatedCliNotificationSurface = defaultSurface,
         private readonly _now: () => number = Date.now,
-        private readonly _suppressionStore?: OutdatedCliSuppressionStore,
+        private readonly _globalState?: vscode.Memento,
     ) {
-        this._persistentlySuppressedCliVersions = new Set();
+        this._persistentlySuppressedCliVersions = new Set(readPersistedSuppressions(_globalState));
     }
 
     async notifyIfOutdated(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
@@ -88,10 +79,6 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         if ((this._stateByCheckKey.get(checkKey)?.versionValidUntil ?? 0) > this._now()) {
             return;
         }
-        if (!await this._refreshPersistedSuppressions(true) || this._disposed) {
-            return;
-        }
-
         const existingProbe = this._inFlightByCheckKey.get(checkKey);
         if (existingProbe) {
             await existingProbe;
@@ -116,15 +103,6 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
 
-        // Another VS Code window can persist suppression while this window's probes are in flight.
-        const suppressionRefreshSucceeded = await this._refreshPersistedSuppressions(false);
-        if (this._disposed) {
-            return;
-        }
-        if (!suppressionRefreshSucceeded) {
-            this._invalidateRecommendationAfterSuppressionReadFailure(notification);
-            return;
-        }
         const notificationKey = getNotificationKey(notification.cli.cliPath, notification.cli.version);
         if (this._notifiedCliVersions.has(notificationKey) ||
             this._persistentlySuppressedCliVersions.has(notificationKey)) {
@@ -143,9 +121,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
         if (selection === strings.dontShowAgainLabel) {
-            await this._suppressNotification(
-                notificationKey,
-                notification.checkKey);
+            await this._suppressNotification(notificationKey);
             return;
         }
         if (selection !== strings.updateAspireCliAction) {
@@ -153,81 +129,19 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         }
 
         // This user-initiated guard intentionally bypasses the five-minute cache.
-        const currentVersionProbe = await this._versionLimiter.run(() =>
-            this._versionProvider.getCliVersion({
-                target: notification.target,
-                cliPath: notification.cli.cliPath,
-                cancellationToken: this._cancellationSource.token,
-            }));
-        if (!currentVersionProbe.executed || this._disposed) {
+        const currentVersionProbe = await this._versionProvider.getCliVersion({
+            target: notification.target,
+            cliPath: notification.cli.cliPath,
+            cancellationToken: this._cancellationSource.token,
+        });
+        if (this._disposed) {
             return;
         }
-        if (!currentVersionProbe.value || currentVersionProbe.value.version !== notification.cli.version) {
+        if (!currentVersionProbe || currentVersionProbe.version !== notification.cli.version) {
             return;
         }
 
         await this._surface.executeCommand(updateAspireCliCommand, notification.target, notification.cli.cliPath);
-    }
-
-    private _invalidateRecommendationAfterSuppressionReadFailure(notification: PendingNotification): void {
-        const state = this._stateByCheckKey.get(notification.checkKey);
-        if (!state?.identity ||
-            !areCliIdentitiesEqual(state.identity, notification.cli)) {
-            return;
-        }
-
-        // The update is known to be available, but UI cannot be shown safely until all persisted
-        // suppressions are readable. Retry after the storage backoff instead of hiding it behind the
-        // normal six-hour successful-update cache.
-        state.versionValidUntil = this._suppressionReadRetryAfter;
-        state.updateStatus = undefined;
-        state.updateValidUntil = 0;
-        state.failureCount = 0;
-    }
-
-    private async _refreshPersistedSuppressions(useSharedRefresh: boolean): Promise<boolean> {
-        if (!this._suppressionStore) {
-            return true;
-        }
-        if (this._suppressionReadRetryAfter > this._now()) {
-            return false;
-        }
-        if (useSharedRefresh && this._sharedSuppressionRefresh) {
-            return await this._sharedSuppressionRefresh;
-        }
-
-        const suppressionStore = this._suppressionStore;
-        let refresh!: Promise<boolean>;
-        refresh = this._readPersistedSuppressions(suppressionStore).finally(() => {
-            if (this._sharedSuppressionRefresh === refresh) {
-                this._sharedSuppressionRefresh = undefined;
-            }
-        });
-        if (useSharedRefresh) {
-            this._sharedSuppressionRefresh = refresh;
-        }
-        return await refresh;
-    }
-
-    private async _readPersistedSuppressions(
-        suppressionStore: OutdatedCliSuppressionStore,
-    ): Promise<boolean> {
-        try {
-            for (const persistedSuppression of await suppressionStore.readAll()) {
-                this._persistentlySuppressedCliVersions.add(persistedSuppression.notificationKey);
-            }
-            this._suppressionReadRetryAfter = 0;
-            return true;
-        }
-        catch (error) {
-            this._recordSuppressionReadFailure('Unable to read Aspire CLI warning suppressions', error);
-            return false;
-        }
-    }
-
-    private _recordSuppressionReadFailure(message: string, error: unknown): void {
-        this._suppressionReadRetryAfter = this._now() + versionFailureRetryMs;
-        extensionLogOutputChannel.warn(`${message}: ${String(error)}`);
     }
 
     private async _checkForUpdate(
@@ -237,19 +151,18 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         workingDirectory: string,
         checkStartedAt: number,
     ): Promise<PendingNotification | undefined> {
-        const versionProbe = await this._versionLimiter.run(() =>
-            this._versionProvider.getCliIdentity({
-                target,
-                cliPath,
-                cancellationToken: this._cancellationSource.token,
-            }));
-        if (!versionProbe.executed || this._disposed) {
+        const versionProbe = await this._versionProvider.getCliVersion({
+            target,
+            cliPath,
+            cancellationToken: this._cancellationSource.token,
+        });
+        if (this._disposed) {
             return undefined;
         }
 
         const now = this._now();
         const previous = this._stateByCheckKey.get(checkKey);
-        const identity = versionProbe.value;
+        const identity = versionProbe;
         if (!identity) {
             this._stateByCheckKey.set(checkKey, {
                 identity: previous?.identity,
@@ -281,36 +194,26 @@ export class OutdatedCliNotifier implements vscode.Disposable {
 
         const notificationKey = getNotificationKey(identity.cliPath, identity.version);
         if (this._persistentlySuppressedCliVersions.has(notificationKey)) {
-            state.updateStatus = 'suppressed';
-            state.updateValidUntil = Number.POSITIVE_INFINITY;
-            state.failureCount = 0;
             return undefined;
         }
 
         if (!identityChanged &&
             (state.updateStatus === 'ineligible' ||
-                state.updateStatus === 'suppressed' ||
                 (state.updateStatus !== undefined && state.updateValidUntil > now))) {
             return undefined;
         }
 
-        const serializedRecommendationProbe = await this._doctorLimiter.run(() =>
-            this._versionLimiter.run(() =>
-                this._versionProvider.getCliUpdateRecommendation({
-                    target,
-                    cliPath,
-                    identityChannelOverride: identity.identityChannelOverride,
-                    workingDirectory,
-                    cancellationToken: this._cancellationSource.token,
-                })));
-        const recommendationProbe = serializedRecommendationProbe.executed
-            ? serializedRecommendationProbe.value
-            : undefined;
-        if (!recommendationProbe?.executed || this._disposed) {
+        const recommendation = await this._runDoctor(() =>
+            this._versionProvider.getCliUpdateRecommendation({
+                target,
+                cliPath,
+                workingDirectory,
+                cancellationToken: this._cancellationSource.token,
+            }));
+        if (recommendation === undefined || this._disposed) {
             return undefined;
         }
 
-        const recommendation = recommendationProbe.value;
         if (recommendation.status === 'ineligible') {
             state.updateStatus = 'ineligible';
             state.updateValidUntil = Number.POSITIVE_INFINITY;
@@ -332,8 +235,24 @@ export class OutdatedCliNotifier implements vscode.Disposable {
 
         const comparison = compareCliVersionValues(identity.version, recommendation.version);
         return comparison !== undefined && comparison < 0
-            ? { checkKey, target, cli: identity, recommendedVersion: recommendation.version }
+            ? { target, cli: identity, recommendedVersion: recommendation.version }
             : undefined;
+    }
+
+    private async _runDoctor(
+        action: () => Promise<CliUpdateRecommendation>,
+    ): Promise<CliUpdateRecommendation | undefined> {
+        const previous = this._doctorTail;
+        let release!: () => void;
+        this._doctorTail = new Promise(resolve => release = resolve);
+        await previous;
+
+        try {
+            return this._disposed ? undefined : await action();
+        }
+        finally {
+            release();
+        }
     }
 
     private _recordUnavailable(state: CliCheckState): void {
@@ -351,76 +270,16 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             unavailableRetryMaximumMs);
     }
 
-    private async _suppressNotification(
-        notificationKey: string,
-        checkKey: string,
-    ): Promise<void> {
+    private async _suppressNotification(notificationKey: string): Promise<void> {
         this._persistentlySuppressedCliVersions.add(notificationKey);
 
-        const state = this._stateByCheckKey.get(checkKey);
-        if (state?.identity &&
-            getNotificationKey(state.identity.cliPath, state.identity.version) === notificationKey) {
-            state.updateStatus = 'suppressed';
-            state.updateValidUntil = Number.POSITIVE_INFINITY;
-            state.failureCount = 0;
-        }
-
-        if (!this._suppressionStore) {
-            return;
-        }
-
-        // Each VS Code window owns a notifier. Immutable generations in global storage let windows
-        // coordinate without relying on asynchronously synchronized Memento snapshots.
-        const suppressedAt = this._now();
         try {
-            await this._suppressionStore.write(notificationKey, suppressedAt);
+            await this._globalState?.update(
+                persistedSuppressionKey,
+                [...this._persistentlySuppressedCliVersions]);
         }
         catch (error) {
             extensionLogOutputChannel.warn(`Unable to persist Aspire CLI warning suppression: ${String(error)}`);
-            return;
-        }
-
-        let persistedSuppressions: PersistedCliSuppression[];
-        try {
-            persistedSuppressions = await this._suppressionStore.readAll();
-        }
-        catch (error) {
-            this._recordSuppressionReadFailure('Unable to compact Aspire CLI warning suppressions', error);
-            return;
-        }
-        for (const persistedSuppression of persistedSuppressions) {
-            this._persistentlySuppressedCliVersions.add(persistedSuppression.notificationKey);
-        }
-
-        const latestSuppressionByNotification = new Map<string, PersistedCliSuppression>();
-        const staleSuppressions: PersistedCliSuppression[] = [];
-        for (const suppression of persistedSuppressions) {
-            const previous = latestSuppressionByNotification.get(suppression.notificationKey);
-            if (!previous || comparePersistedSuppressions(previous, suppression) < 0) {
-                if (previous) {
-                    staleSuppressions.push(previous);
-                }
-                latestSuppressionByNotification.set(suppression.notificationKey, suppression);
-            } else {
-                staleSuppressions.push(suppression);
-            }
-        }
-
-        const excessCount = latestSuppressionByNotification.size - maximumPersistedSuppressions;
-        const cappedSuppressions = [...latestSuppressionByNotification.values()]
-            .filter(suppression => suppression.notificationKey !== notificationKey)
-            .sort(comparePersistedSuppressions)
-            .slice(0, Math.max(0, excessCount));
-        for (const suppression of [...staleSuppressions, ...cappedSuppressions]) {
-            // Storage keys identify immutable generations. Deleting an observed generation cannot
-            // remove a newer suppression written concurrently by another VS Code window.
-            try {
-                await this._suppressionStore.delete(suppression.storageKey);
-            }
-            catch (error) {
-                extensionLogOutputChannel.warn(
-                    `Unable to delete stale Aspire CLI warning suppression '${suppression.storageKey}': ${String(error)}`);
-            }
         }
     }
 
@@ -432,8 +291,6 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         this._disposed = true;
         this._cancellationSource.cancel();
         this._cancellationSource.dispose();
-        this._doctorLimiter.dispose();
-        this._versionLimiter.dispose();
         this._inFlightByCheckKey.clear();
         this._stateByCheckKey.clear();
         this._notifiedCliVersions.clear();
@@ -452,71 +309,13 @@ function getCliCheckKey(
     return `${getCliPathTargetKey(target)}\u0000${getComparisonKey(path.normalize(cliPath))}\u0000${getComparisonKey(path.normalize(workingDirectory))}`;
 }
 
-function comparePersistedSuppressions(left: PersistedCliSuppression, right: PersistedCliSuppression): number {
-    return left.suppressedAt - right.suppressedAt ||
-        (left.storageKey < right.storageKey ? -1 : left.storageKey > right.storageKey ? 1 : 0);
+function readPersistedSuppressions(globalState: vscode.Memento | undefined): string[] {
+    const values = globalState?.get<unknown>(persistedSuppressionKey);
+    return Array.isArray(values)
+        ? values.filter((value): value is string => typeof value === 'string')
+        : [];
 }
 
-function areCliIdentitiesEqual(left: CliIdentityInfo | undefined, right: CliIdentityInfo): boolean {
-    return left?.version === right.version &&
-        left.identityChannelOverride === right.identityChannelOverride;
-}
-
-type LimiterResult<T> =
-    | { executed: true; value: T }
-    | { executed: false };
-
-class AsyncLimiter implements vscode.Disposable {
-    private readonly _waiters: Array<(acquired: boolean) => void> = [];
-    private _activeCount = 0;
-    private _disposed = false;
-
-    constructor(private readonly _maximumConcurrency: number) {
-    }
-
-    async run<T>(action: () => Promise<T>): Promise<LimiterResult<T>> {
-        if (!await this._acquire()) {
-            return { executed: false };
-        }
-        if (this._disposed) {
-            this._release();
-            return { executed: false };
-        }
-
-        try {
-            return { executed: true, value: await action() };
-        }
-        finally {
-            this._release();
-        }
-    }
-
-    private async _acquire(): Promise<boolean> {
-        if (this._disposed) {
-            return false;
-        }
-        if (this._activeCount < this._maximumConcurrency) {
-            this._activeCount++;
-            return true;
-        }
-
-        return await new Promise<boolean>(resolve => this._waiters.push(resolve));
-    }
-
-    private _release(): void {
-        const waiter = this._waiters.shift();
-        if (waiter) {
-            waiter(true);
-            return;
-        }
-
-        this._activeCount--;
-    }
-
-    dispose(): void {
-        this._disposed = true;
-        while (this._waiters.length > 0) {
-            this._waiters.shift()?.(false);
-        }
-    }
+function areCliIdentitiesEqual(left: CliVersionInfo | undefined, right: CliVersionInfo): boolean {
+    return left?.version === right.version;
 }

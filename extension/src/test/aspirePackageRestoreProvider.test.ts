@@ -8,7 +8,6 @@ import { AspirePackageRestoreProvider } from '../utils/AspirePackageRestoreProvi
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as cliProcessModule from '../utils/process/cliProcess';
-import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 suite('AspirePackageRestoreProvider', () => {
     let sandbox: sinon.SinonSandbox;
@@ -33,8 +32,6 @@ suite('AspirePackageRestoreProvider', () => {
             });
             return childProcess as unknown as ChildProcessWithoutNullStreams;
         });
-        const resolutions: string[] = [];
-        const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
 
         try {
             await (provider as any)._runRestore(configUri, folder.uri.fsPath, 'aspire.config.json');
@@ -45,9 +42,7 @@ suite('AspirePackageRestoreProvider', () => {
                 '/repo/workspace/bin/aspire',
                 ['restore'],
                 sinon.match({ workingDirectory: folder.uri.fsPath })));
-            assert.deepStrictEqual(resolutions, ['/repo/workspace/bin/aspire']);
         } finally {
-            subscription.dispose();
             provider.dispose();
         }
     });

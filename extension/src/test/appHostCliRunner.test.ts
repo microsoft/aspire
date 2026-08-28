@@ -151,6 +151,8 @@ suite('data/appHostCliRunner tests', () => {
             });
 
             const runner = new AppHostCliRunner(terminalProvider);
+            const resolutions: string[] = [];
+            const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
             try {
                 await runner.runCliCommand('list pipeline steps', ['do', '--list-steps'], {
                     cliPath: '/repo/tools/aspire',
@@ -158,32 +160,7 @@ suite('data/appHostCliRunner tests', () => {
 
                 assert.strictEqual(getCliPathStub.called, false);
                 assert.strictEqual(spawnStub.firstCall.args[1], '/repo/tools/aspire');
-            } finally {
-                runner.dispose();
-            }
-        });
-
-        test('reports an exact CLI only when the caller marks it as an operation', async () => {
-            const cliProcess = new TestChildProcess();
-            spawnStub.callsFake((_provider: unknown, _cliPath: string, _args: string[], options: cliModule.SpawnProcessOptions) => {
-                cliProcess.exitCode = 0;
-                options.processExitCallback?.(0);
-                return cliProcess;
-            });
-            const resolutions: string[] = [];
-            const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
-            const runner = new AppHostCliRunner(terminalProvider);
-
-            try {
-                await runner.runCliCommand('pipeline steps', ['do', '--list-steps'], {
-                    cliPath: '/cli/aspire',
-                });
-                await runner.runCliCommand('describe', ['describe'], {
-                    cliPath: '/cli/aspire',
-                    reportCliResolution: true,
-                });
-
-                assert.deepStrictEqual(resolutions, ['/cli/aspire']);
+                assert.deepStrictEqual(resolutions, ['/repo/tools/aspire']);
             }
             finally {
                 subscription.dispose();

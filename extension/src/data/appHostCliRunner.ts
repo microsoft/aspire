@@ -19,7 +19,6 @@ export interface RunCliCommandOptions {
     env?: { name: string; value: string }[];
     target?: CliPathResolutionTarget;
     cliPath?: string;
-    reportCliResolution?: boolean;
 }
 
 export class AppHostCliRunner implements vscode.Disposable {
@@ -89,9 +88,7 @@ export class AppHostCliRunner implements vscode.Disposable {
         if (options.cancellationToken?.isCancellationRequested) {
             throw new vscode.CancellationError();
         }
-        if (options.reportCliResolution) {
-            reportCliResolvedForOperation(target, cliPath);
-        }
+        reportCliResolvedForOperation(target, cliPath);
         const invocationArgs = this.normalizeNoLogoArgs(cliPath, args);
 
         return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -150,12 +147,7 @@ export class AppHostCliRunner implements vscode.Disposable {
                     const retryArgs = this.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout.value, stderr.value, command);
                     if (retryArgs) {
                         settle(() => {
-                            this.runCliCommand(command, retryArgs, {
-                                ...options,
-                                cliPath,
-                                target,
-                                reportCliResolution: false,
-                            }).then(resolve, reject);
+                            this.runCliCommand(command, retryArgs, options).then(resolve, reject);
                         });
                         return;
                     }

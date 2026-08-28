@@ -18,7 +18,7 @@ import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } f
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
-import { reportCliResolvedForOperation, startCliOperationResolutionHeartbeat } from '../utils/cliOperationResolution';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
@@ -48,7 +48,6 @@ interface DescribeStream {
     nonJsonLines: string[];
     stderr: string;
     restartTimer: ReturnType<typeof setTimeout> | undefined;
-    cliResolutionHeartbeat: vscode.Disposable | undefined;
     restartDelay: number;
     version: number;
 }
@@ -129,7 +128,6 @@ export class AppHostDataRepository {
     private _workspaceAppHostDiscoveryProgressResolve: (() => void) | undefined;
     private _workspaceAppHostDiscoveryCancellationSource: vscode.CancellationTokenSource | undefined;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
-    private readonly _appHostDiscoveryCliResolutionDisposable: vscode.Disposable;
     private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
     private readonly _appHostDiscoveryService: AppHostDiscoveryService;
     private readonly _ownsAppHostDiscoveryService: boolean;
@@ -174,13 +172,6 @@ export class AppHostDataRepository {
                 this._fetchWorkspaceAppHost();
             }
         });
-        this._appHostDiscoveryCliResolutionDisposable = this._appHostDiscoveryService.onDidResolveCli
-            ? this._appHostDiscoveryService.onDidResolveCli(({ workspaceFolder, cliPath }) => {
-                if (this._dataActive) {
-                    reportCliResolvedForOperation(getCliPathTargetForUri(workspaceFolder.uri), cliPath);
-                }
-            })
-            : vscode.Disposable.from();
         this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(event => {
             this._removeWorkspaceFolderCandidates(event.removed);
             for (const workspaceFolder of event.removed) {
@@ -194,20 +185,7 @@ export class AppHostDataRepository {
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
-            const cliPathChanged = e.affectsConfiguration('aspire.aspireCliExecutablePath');
-            if (cliPathChanged) {
-                this._cancelWorkspaceAppHostDiscovery();
-                this._markWorkspaceAppHostDiscoveryPending({ preserveCandidates: true });
-                if (this._dataActive) {
-                    this._fetchWorkspaceAppHost({ forceRefresh: true });
-                    this._psPoller.startPsPolling();
-                    this._stopAllDescribes();
-                    this._reconcileDescribes();
-                }
-            }
-            if (!cliPathChanged &&
-                (e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) &&
-                this._dataActive) {
+            if ((e.affectsConfiguration('aspire.appHostsPollingInterval') || e.affectsConfiguration('aspire.globalAppHostsPollingInterval')) && this._dataActive) {
                 this._psPoller.startPsPolling();
             }
         });
@@ -309,9 +287,6 @@ export class AppHostDataRepository {
         if (this._dataActive) {
             this._hasEverBeenDataActive = true;
         }
-        if (becameDataActive) {
-            this._handleDataSourcesActivated();
-        }
         this._syncPolling(resumedFromInactive);
     }
 
@@ -325,9 +300,6 @@ export class AppHostDataRepository {
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         this._hasEverBeenDataActive = true;
-        if (becameDataActive) {
-            this._handleDataSourcesActivated();
-        }
         this._syncPolling(resumedFromInactive);
 
         let disposed = false;
@@ -366,9 +338,6 @@ export class AppHostDataRepository {
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
             this._hasEverBeenDataActive = true;
-        }
-        if (becameDataActive) {
-            this._handleDataSourcesActivated();
         }
         // Re-scope the displayed AppHosts against the new open-tab set right away.
         this._handlePsSnapshot(this._appHosts, { force: true });
@@ -567,7 +536,6 @@ export class AppHostDataRepository {
                 cancellationToken,
                 env: nonInteractiveCliEnvironment,
                 target,
-                reportCliResolution: true,
             });
             return {
                 stdout: filterResourceCommandStatusOutput(output.stdout, resourceName, commandName),
@@ -597,7 +565,6 @@ export class AppHostDataRepository {
         this._cancelWorkspaceAppHostDiscovery();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
-        this._appHostDiscoveryCliResolutionDisposable.dispose();
         this._workspaceFoldersChangeDisposable.dispose();
         this._psPollerDisposable.dispose();
         this._psPoller.dispose();
@@ -605,23 +572,6 @@ export class AppHostDataRepository {
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
         }
-    }
-
-    private _reportWorkspaceDiscoveryCliResolutions(): void {
-        for (const workspaceFolder of vscode.workspace.workspaceFolders ?? []) {
-            const cliPath = this._appHostDiscoveryService.getResolvedCliPath?.(workspaceFolder);
-            if (cliPath) {
-                reportCliResolvedForOperation(getCliPathTargetForUri(workspaceFolder.uri), cliPath);
-            }
-        }
-    }
-
-    private _handleDataSourcesActivated(): void {
-        if (!this._workspaceAppHostDiscoveryComplete && !this._workspaceAppHostDiscoveryInProgress) {
-            this._fetchWorkspaceAppHost({ forceRefresh: true });
-            return;
-        }
-        this._reportWorkspaceDiscoveryCliResolutions();
     }
 
     // ── PS polling lifecycle ──
@@ -1049,7 +999,6 @@ export class AppHostDataRepository {
             nonJsonLines: [],
             stderr: '',
             restartTimer: undefined,
-            cliResolutionHeartbeat: undefined,
             // A fresh stream restarts after 5s; a restart carries the backed-off delay forward via
             // `initialRestartDelay` so repeated no-data exits grow the interval (5s -> 10s -> 20s ...)
             // instead of hammering the CLI every 5s. Each stream is single-use, so the backoff has to
@@ -1145,8 +1094,6 @@ export class AppHostDataRepository {
                 }
 
                 extensionLogOutputChannel.info(`aspire describe --follow (--apphost ${appHostPath}) exited with code ${code}`);
-                stream.cliResolutionHeartbeat?.dispose();
-                stream.cliResolutionHeartbeat = undefined;
                 stream.process = undefined;
 
                 if (this._disposed) {
@@ -1215,8 +1162,6 @@ export class AppHostDataRepository {
                 // surfaces it through the shared describe banner; a non-selected peer is logged only so it
                 // can't masquerade as the selected host's error.
                 extensionLogOutputChannel.warn(`aspire describe --follow --apphost ${appHostPath} error: ${error.message}`);
-                stream.cliResolutionHeartbeat?.dispose();
-                stream.cliResolutionHeartbeat = undefined;
                 stream.process = undefined;
                 stream.resources.clear();
                 if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
@@ -1238,11 +1183,6 @@ export class AppHostDataRepository {
             }
         });
         stream.process = describeProcess;
-        const target = getCliPathTargetForUri(vscode.Uri.file(appHostPath));
-        stream.cliResolutionHeartbeat = startCliOperationResolutionHeartbeat(
-            target,
-            cliPath,
-            () => this._describeStreams.get(appHostPath) === stream && stream.process === describeProcess);
     }
 
     private _scheduleDescribeRestart(appHostPath: string, stream: DescribeStream): void {
@@ -1378,10 +1318,7 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const { stdout } = await this._cliRunner.runCliCommand(command, args, {
-            ...options,
-            reportCliResolution: true,
-        });
+        const { stdout } = await this._cliRunner.runCliCommand(command, args, options);
 
         try {
             return parseCliJsonOutput<T>(stdout);
@@ -1409,8 +1346,6 @@ export class AppHostDataRepository {
             clearTimeout(stream.restartTimer);
             stream.restartTimer = undefined;
         }
-        stream.cliResolutionHeartbeat?.dispose();
-        stream.cliResolutionHeartbeat = undefined;
         if (stream.process) {
             const childProcess = stream.process;
             stream.process = undefined;

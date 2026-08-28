@@ -6,7 +6,6 @@ import { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from './process/cliProcess';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { getCliPathTargetForUri } from './cliPathVariables';
-import { reportCliResolvedForOperation } from './cliOperationResolution';
 import { extensionLogOutputChannel } from './logging';
 import { getEnableAutoRestore } from './settings';
 import { runningAspireRestore, runningAspireRestoreProgress, aspireRestoreCompleted, aspireRestoreAllCompleted, aspireRestoreFailed, aspireRestoreFailedStatusBar } from '../loc/strings';
@@ -196,12 +195,10 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
         this._showProgress();
 
         try {
-            const target = getCliPathTargetForUri(uri);
-            const cliPath = await this._terminalProvider.getAspireCliExecutablePath(target);
+            const cliPath = await this._terminalProvider.getAspireCliExecutablePath(getCliPathTargetForUri(uri));
             if (this._disposed) {
                 return;
             }
-            reportCliResolvedForOperation(target, cliPath);
             await new Promise<void>((resolve, reject) => {
                 let settled = false;
                 const proc = spawnCliProcess(this._terminalProvider, cliPath, ['restore'], {

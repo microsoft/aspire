@@ -1,18 +1,15 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, getTerminalCommandCount, waitForCommandOutcome, waitForRepositoryIdle, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
 import {
-    executeE2eControlCommand,
     getCliWrapperInvocationCount,
     restoreE2eCliPathForE2E,
     restoreWorkspaceCliPath,
     runE2eTeardown,
     setE2eCliPathForE2E,
-    setTerminalCommandExecutionSuppressedForE2E,
     touchPrimaryAppHostProject,
     waitForCliWrapperInvocation,
-    writeCliUpdateWarningWrapper,
     writeTrackedStreamingDiscoveryCliWrapper,
     writeWorkspaceCliPath,
 } from './helpers/fixtures';
@@ -23,24 +20,15 @@ import { openAspireView, waitForNotificationMessage, waitForWorkbenchText } from
 // Mirrors configuredCliPathRejected in src/loc/strings.ts.
 const rejectionNotificationText = 'The configured Aspire CLI path could not be used';
 const openSettingActionText = 'Open Setting';
-const cliUpdateWarningText = 'Aspire CLI 13.5.0 at ';
-const cliUpdateGuidanceText = 'has a newer version available for its current channel: 13.6.0';
-const updateCliActionText = 'Update Aspire CLI';
 
 suite('Configured CLI path rejection E2E', function () {
     this.timeout(300000);
 
-    let cleanupOutdatedCliWrapper: (() => void) | undefined;
-
     teardown(async () => {
         await runE2eTeardown([
-            () => executeE2eControlCommand({ name: 'closeAllEditors' }),
-            () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceCliPath(),
-            () => cleanupOutdatedCliWrapper?.(),
         ], 'Configured CLI path rejection E2E teardown failed.');
-        cleanupOutdatedCliWrapper = undefined;
     });
 
     test('resolves a configured directory that contains the aspire executable', async () => {
@@ -103,42 +91,5 @@ suite('Configured CLI path rejection E2E', function () {
         await VSBrowser.instance.takeScreenshot('cli-path-rejection-open-setting').catch(() => undefined);
 
         assert.ok(settingsText.length > 0, 'The Aspire CLI executable path setting was not shown.');
-    });
-
-    test('warns when active Aspire use resolves an outdated CLI and routes the update action', async () => {
-        await openAspireView();
-        await waitForRepositoryIdle();
-        const wrapper = writeCliUpdateWarningWrapper();
-        cleanupOutdatedCliWrapper = wrapper.cleanup;
-        await setE2eCliPathForE2E(wrapper.cliPath);
-        await setTerminalCommandExecutionSuppressedForE2E(true);
-
-        await openAspireView();
-        const beforeOpenTerminal = getCommandInvocationCount('aspire-vscode.openTerminal');
-        await executeE2eControlCommand({
-            name: 'executeAspireCommand',
-            commandId: 'aspire-vscode.openTerminal',
-        });
-        await waitForCommandOutcome('aspire-vscode.openTerminal', 'success', 60_000, beforeOpenTerminal);
-
-        const notification = await waitForNotificationMessage(cliUpdateWarningText, 60_000);
-        const message = await notification.getMessage();
-        await VSBrowser.instance.takeScreenshot('outdated-aspire-cli-warning').catch(() => undefined);
-        assert.ok(message.includes(cliUpdateWarningText), `Unexpected warning message: ${message}`);
-        assert.ok(message.includes(wrapper.cliPath), `Warning did not identify the exact CLI '${wrapper.cliPath}': ${message}`);
-        assert.ok(message.includes(cliUpdateGuidanceText), `Warning did not include the expected update guidance: ${message}`);
-
-        const beforeTerminalCommand = getTerminalCommandCount();
-        await notification.takeAction(updateCliActionText);
-        const terminalCommand = await waitForTerminalCommand(
-            event => event.executionSuppressed && event.subcommand === 'update --self',
-            'outdated CLI update action',
-            60_000,
-            beforeTerminalCommand);
-
-        assert.strictEqual(terminalCommand.executionSuppressed, true);
-        assert.ok(
-            terminalCommand.commandLine.includes(wrapper.cliPath),
-            `Expected update command to use the warned CLI '${wrapper.cliPath}': ${terminalCommand.commandLine}`);
     });
 });

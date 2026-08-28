@@ -208,38 +208,6 @@ suite('AppHost discovery', () => {
             sandbox.restore();
         });
 
-        test('publishes resolved CLI data and observes a scoped path change', async () => {
-            stubFileSystemWatchers(sandbox);
-            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
-            let cliPath = buildPath('cli', 'first', 'aspire');
-            const terminalProvider = {
-                getAspireCliExecutablePath: async () => cliPath,
-                createEnvironment: () => ({}),
-            } as unknown as AspireTerminalProvider;
-            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                emitLsOutput(options, []);
-                return { kill: () => { } } as any;
-            });
-            const resolutions: string[] = [];
-            const service = new AppHostDiscoveryService(terminalProvider);
-            const resolutionSubscription = service.onDidResolveCli(resolution => resolutions.push(resolution.cliPath));
-
-            try {
-                await service.discover(workspaceFolder);
-                assert.deepStrictEqual(resolutions, [cliPath]);
-                assert.strictEqual(service.getResolvedCliPath(workspaceFolder), cliPath);
-
-                cliPath = buildPath('cli', 'second', 'aspire');
-                await service.discover(workspaceFolder, true);
-                assert.strictEqual(resolutions.at(-1), cliPath);
-                assert.strictEqual(service.getResolvedCliPath(workspaceFolder), cliPath);
-            }
-            finally {
-                resolutionSubscription.dispose();
-                service.dispose();
-            }
-        });
-
         test('does not force refresh discovery after cached negative editor lookup', async () => {
             stubFileSystemWatchers(sandbox);
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
