@@ -316,15 +316,15 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
     {
-        var storedRun = GetRunById(run.RunId);
-        if (storedRun is null)
-        {
-            return null;
-        }
-
-        var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
         lock (_runStateLock)
         {
+            var storedRun = GetRunById(run.RunId);
+            if (storedRun is null)
+            {
+                return null;
+            }
+
+            var runDirectory = Path.GetDirectoryName(storedRun.DatabasePath)!;
             var runLock = TryOpenRunLock(runDirectory);
             if (runLock is null)
             {

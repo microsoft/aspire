@@ -659,6 +659,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var runLease = currentRunStore.TryAcquireRunLease(historicalRun))
         {
             Assert.NotNull(runLease);
+            Assert.True(historicalRun.IsLeased);
 
             var metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
             metadata[nameof(DashboardRunDescriptor.EndedAtUtc)] = JsonValue.Create(updatedEndedAtUtc);
@@ -667,6 +668,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
             var leasedRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
             Assert.Same(historicalRun, leasedRun);
+            Assert.True(leasedRun.IsLeased);
         }
 
         var refreshedRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
