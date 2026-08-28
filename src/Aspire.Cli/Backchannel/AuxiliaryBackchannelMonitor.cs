@@ -330,7 +330,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // Find new sockets (files that exist now but weren't known before), plus previously
             // unreachable sockets whose backoff has expired.
             var newSockets = currentSockets
-                .Where(socket => !_knownSocketPaths.Contains(socket.SocketPath) || IsDueForRetry(socket.SocketPath))
+                .Where(socket => !_knownSocketPaths.Contains(socket.SocketPath) || TryClaimRetry(socket.SocketPath))
                 .ToList();
             connectTasks.EnsureCapacity(newSockets.Count);
             foreach (var newSocket in newSockets)
@@ -563,8 +563,37 @@ internal sealed class AuxiliaryBackchannelMonitor(
     private bool IsAppHostInScope(string? appHostPath)
         => IsAppHostInScopeOfDirectory(appHostPath, executionContext.WorkingDirectory.FullName);
 
-    private bool IsDueForRetry(string socketPath)
-        => _unreachableSockets.TryGetValue(socketPath, out var state) && _timeProvider.GetUtcNow() >= state.RetryAfter;
+    /// <summary>
+    /// Claims a due retry for <paramref name="socketPath"/>, deferring it again so that only one scan
+    /// retries a given socket at a time.
+    /// </summary>
+    /// <remarks>
+    /// Sockets are selected under <see cref="_scanLock"/>, but the connect attempts are awaited after it
+    /// is released and the backoff is only escalated once the retry budget is exhausted. A scan that
+    /// overlaps that window would otherwise re-select the same socket and start a second connect loop,
+    /// so a single stale socket could still fan out concurrent retries and defeat the backoff. New
+    /// sockets need no equivalent claim because <see cref="_knownSocketPaths"/> is repopulated before
+    /// the lock is released.
+    /// <para>
+    /// The delay is carried forward unchanged so that <see cref="MarkUnreachable"/> keeps doubling from
+    /// the same point, and the compare-and-swap makes the claim safe even for callers outside the lock.
+    /// </para>
+    /// </remarks>
+    private bool TryClaimRetry(string socketPath)
+    {
+        if (!_unreachableSockets.TryGetValue(socketPath, out var state))
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        if (now < state.RetryAfter)
+        {
+            return false;
+        }
+
+        return _unreachableSockets.TryUpdate(socketPath, new UnreachableSocket(now + state.Delay, state.Delay), state);
+    }
 
     /// <summary>
     /// Schedules a backed-off retry for a socket that refused connections for the entire retry budget

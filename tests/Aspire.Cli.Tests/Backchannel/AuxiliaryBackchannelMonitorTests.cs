@@ -199,6 +199,67 @@ public class AuxiliaryBackchannelMonitorTests
         }
     }
 
+    [Fact]
+    public async Task ScanAsync_ConcurrentScansDoNotFanOutRetriesForTheSameSocket()
+    {
+        // Retry candidates are selected under _scanLock, but the connect attempts are awaited after the
+        // lock is released and the backoff is only escalated once the retry budget is exhausted. That
+        // leaves a window, as wide as the whole retry budget, in which another scan re-selects the same
+        // socket and starts its own connect loop. MCP tools scan frequently enough to overlap, so a
+        // single stale socket could still fan out concurrent retries and undo the backoff.
+        var homeDirectory = Directory.CreateTempSubdirectory("aspire-abm-");
+        try
+        {
+            var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
+            Directory.CreateDirectory(backchannelsDirectory);
+
+            var appHostId = BackchannelConstants.ComputeAppHostId(Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            var socketPath = Path.Combine(backchannelsDirectory, $"{appHostId}a1b2C3d4.{Environment.ProcessId}");
+            Assert.SkipWhen(
+                BackchannelConstants.GetSocketPathByteCountIncludingNull(socketPath) > BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+                $"The temp directory is too long to host an AF_UNIX socket on this platform: '{socketPath}'.");
+
+            using var unreachableSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            unreachableSocket.Bind(new UnixDomainSocketEndPoint(socketPath));
+
+            var logger = new CapturingLogger<AuxiliaryBackchannelMonitor>();
+            var timeProvider = new FakeTimeProvider();
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(logger, CreateExecutionContext(homeDirectory), timeProvider, profilingTelemetry);
+
+            await PumpUntilCompletedAsync(monitor.ScanAsync(), timeProvider).DefaultTimeout();
+            Assert.Equal(1, CountConnectAttempts(logger, socketPath));
+
+            timeProvider.Advance(TimeSpan.FromMinutes(1));
+
+            // The first scan claims the due retry and parks in its connect loop waiting on the fake clock.
+            // Deliberately left unpumped so the claim is still in flight for the whole of the second scan.
+            var claimingScan = monitor.ScanAsync();
+            await WaitForConnectAttemptsAsync(logger, socketPath, expectedAttempts: 2).DefaultTimeout();
+
+            // The overlapping scan must find nothing to do. Were it to re-select the claimed socket it
+            // would start a second connect loop and this await would hang, because those retry delays
+            // also run on the fake clock and nothing is advancing it.
+            await monitor.ScanAsync().DefaultTimeout();
+            Assert.Equal(2, CountConnectAttempts(logger, socketPath));
+
+            await PumpUntilCompletedAsync(claimingScan, timeProvider).DefaultTimeout();
+            Assert.Equal(2, CountConnectAttempts(logger, socketPath));
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    private static async Task WaitForConnectAttemptsAsync(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath, int expectedAttempts)
+    {
+        while (CountConnectAttempts(logger, socketPath) < expectedAttempts)
+        {
+            await Task.Delay(1).ConfigureAwait(false);
+        }
+    }
+
     private static int CountConnectAttempts(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath)
         => logger.Entries.Count(entry => entry.Message == $"Connecting to auxiliary socket: {socketPath}");
 
