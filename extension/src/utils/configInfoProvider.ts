@@ -640,22 +640,30 @@ export class ConfigInfoProvider {
                             if (settled || termination) {
                                 return;
                             }
-                            if (allowNoLogoRetry && isNoLogoUnsupportedOutput(args, output, stderr)) {
-                                runDoctor(removeRootNoLogoOption(args), false);
-                                return;
-                            }
                             if (outputTooLong) {
                                 settle({ status: 'unavailable' });
                                 return;
                             }
 
                             try {
-                                settle(parseCliUpdateRecommendationOutput(output, identityChannelOverride));
+                                const recommendation = parseCliUpdateRecommendationOutput(output, identityChannelOverride);
+                                if (recommendation.status !== 'unavailable' ||
+                                    isStructuredDoctorOutput(output) ||
+                                    !allowNoLogoRetry ||
+                                    !isNoLogoUnsupportedOutput(args, output, stderr)) {
+                                    settle(recommendation);
+                                    return;
+                                }
                             }
                             catch (error) {
-                                extensionLogOutputChannel.warn(`Unable to parse Aspire CLI update status: ${String(error)}`);
-                                settle({ status: 'unavailable' });
+                                if (!allowNoLogoRetry || !isNoLogoUnsupportedOutput(args, output, stderr)) {
+                                    extensionLogOutputChannel.warn(`Unable to parse Aspire CLI update status: ${String(error)}`);
+                                    settle({ status: 'unavailable' });
+                                    return;
+                                }
                             }
+
+                            runDoctor(removeRootNoLogoOption(args), false);
                         },
                         errorCallback: reportUnavailable,
                     });
@@ -1067,9 +1075,24 @@ export function parseCliUpdateRecommendationOutput(
     }
 
     const expectedRecommendationChannel = identityChannel === 'stable' ? 'stable' : 'prerelease';
-    return latestVersionChannel === expectedRecommendationChannel
-        ? { status: 'available', currentVersion: currentVersion.value, version: latestVersion.value }
-        : { status: 'none', currentVersion: currentVersion.value };
+    if (latestVersionChannel !== expectedRecommendationChannel) {
+        // Doctor returns its stable recommendation before considering prerelease updates. For an
+        // unchanged identity that cross-lane result cannot become actionable, so classify it as
+        // ineligible and avoid rerunning the full Doctor battery on the normal refresh interval.
+        return { status: 'ineligible', currentVersion: currentVersion.value };
+    }
+
+    return { status: 'available', currentVersion: currentVersion.value, version: latestVersion.value };
+}
+
+function isStructuredDoctorOutput(output: string): boolean {
+    try {
+        const response = JSON.parse(output.trim()) as { checks?: unknown };
+        return Array.isArray(response.checks);
+    }
+    catch {
+        return false;
+    }
 }
 
 function normalizePublishedCliChannel(value: unknown): 'stable' | 'daily' | 'staging' | undefined {

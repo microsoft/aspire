@@ -81,8 +81,7 @@ suite('outdatedCliNotifier', () => {
         };
     }
 
-    function createMemento(): vscode.Memento {
-        const values = new Map<string, unknown>();
+    function createMemento(values = new Map<string, unknown>()): vscode.Memento {
         return {
             keys: () => [...values.keys()],
             get: <T>(key: string, defaultValue?: T): T | undefined =>
@@ -174,8 +173,39 @@ suite('outdatedCliNotifier', () => {
         third.notifier.dispose();
     });
 
-    test("Don't Show Again merges suppressions from concurrently open windows", async () => {
-        const globalState = createMemento();
+    test("Don't Show Again evicts the oldest persisted suppression", async () => {
+        let now = 0;
+        const values = new Map<string, unknown>();
+        const globalState = createMemento(values);
+        const { notifier, versionProvider, surface } = createNotifier(() => now, globalState);
+        surface.selection = strings.dontShowAgainLabel;
+
+        for (let index = 0; index <= 100; index++) {
+            const cliPath = `/cli/${index}/aspire`;
+            versionProvider.identity = {
+                cliPath,
+                version: '13.5.0',
+            };
+            await notifier.notifyIfOutdated(windowCliPathTarget, cliPath);
+            now++;
+        }
+
+        assert.strictEqual(values.size, 100);
+        assert.strictEqual([...values.values()].includes(0), false);
+        assert.strictEqual([...values.values()].includes(100), true);
+        notifier.dispose();
+    });
+
+    test("Don't Show Again persists concurrent suppressions independently across windows", async () => {
+        const values = new Map<string, unknown>();
+        const pendingUpdates: Array<{ key: string; value: unknown; complete: () => void }> = [];
+        const globalState: vscode.Memento = {
+            keys: () => [...values.keys()],
+            get: <T>(key: string, defaultValue?: T): T | undefined =>
+                values.has(key) ? values.get(key) as T : defaultValue,
+            update: (key: string, value: unknown): Thenable<void> =>
+                new Promise(resolve => pendingUpdates.push({ key, value, complete: resolve })),
+        };
         const first = createNotifier(Date.now, globalState);
         const second = createNotifier(Date.now, globalState);
         first.surface.selection = strings.dontShowAgainLabel;
@@ -185,8 +215,20 @@ suite('outdatedCliNotifier', () => {
             version: '13.5.0',
         };
 
-        await first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
-        await second.notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire');
+        const suppressions = [
+            first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire'),
+            second.notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire'),
+        ];
+        await waitFor(() => pendingUpdates.length === 2, 'Expected independent suppression writes.');
+        for (const update of pendingUpdates.splice(0)) {
+            if (update.value === undefined) {
+                values.delete(update.key);
+            } else {
+                values.set(update.key, update.value);
+            }
+            update.complete();
+        }
+        await Promise.all(suppressions);
         first.notifier.dispose();
         second.notifier.dispose();
 
@@ -442,8 +484,7 @@ suite('outdatedCliNotifier', () => {
         notifier.dispose();
     });
 
-    test('coalesces same-path checks and does not queue behind the active doctor', async () => {
-        let now = 0;
+    test('coalesces same-path checks and serializes distinct doctors', async () => {
         const versionProvider = new FakeVersionProvider();
         versionProvider.getCliIdentity = async options => {
             versionProvider.identityCalls.push(options);
@@ -469,27 +510,18 @@ suite('outdatedCliNotifier', () => {
                 });
             });
         };
-        const notifier = new OutdatedCliNotifier(versionProvider, new FakeSurface(), () => now);
+        const notifier = new OutdatedCliNotifier(versionProvider, new FakeSurface());
 
         const shared = Array.from({ length: 10 }, () =>
             notifier.notifyIfOutdated(windowCliPathTarget, '/shared/aspire'));
         const distinct = notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire');
         await waitFor(() => releaseDoctors.length === 1, 'Expected first serialized doctor.');
         releaseDoctors.shift()?.();
+        await waitFor(() => releaseDoctors.length === 1, 'Expected second serialized doctor.');
+        releaseDoctors.shift()?.();
         await Promise.all([...shared, distinct]);
 
         assert.strictEqual(versionProvider.identityCalls.length, 2);
-        assert.strictEqual(versionProvider.recommendationCalls.length, 1);
-        assert.strictEqual(maximumActiveDoctors, 1);
-
-        const checkedPath = versionProvider.recommendationCalls[0]?.cliPath;
-        const skippedPath = checkedPath === '/shared/aspire' ? '/other/aspire' : '/shared/aspire';
-        now = 5 * 60 * 1_000;
-        const retry = notifier.notifyIfOutdated(windowCliPathTarget, skippedPath);
-        await waitFor(() => releaseDoctors.length === 1, 'Expected skipped path to retry doctor.');
-        releaseDoctors.shift()?.();
-        await retry;
-
         assert.strictEqual(versionProvider.recommendationCalls.length, 2);
         assert.strictEqual(maximumActiveDoctors, 1);
         notifier.dispose();

@@ -305,16 +305,16 @@ suite('configInfoProvider tests', () => {
         assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
             createDoctorVersionOutput('13.6.0-preview.2', '13.7.0-preview.1', undefined, 'daily')),
             { status: 'available', currentVersion: '13.6.0-preview.2', version: '13.7.0-preview.1' });
-        // Doctor reports only one stable-first recommendation. Ignore that cross-lane result for a
-        // prerelease install even though a simultaneously newer prerelease is not observable.
+        // Doctor reports only one stable-first recommendation. Mark that cross-lane result
+        // ineligible because an unchanged prerelease identity cannot make it actionable.
         assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
             createDoctorVersionOutput('13.6.0-preview.2', '13.6.0', undefined, 'daily')),
-            { status: 'none', currentVersion: '13.6.0-preview.2' });
+            { status: 'ineligible', currentVersion: '13.6.0-preview.2' });
         // The CLI's stable update rule cannot produce this payload, but reject it defensively so a
         // stable installation is never nudged onto a prerelease channel.
         assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
             createDoctorVersionOutput('13.6.0', '13.7.0-preview.1')),
-            { status: 'none', currentVersion: '13.6.0' });
+            { status: 'ineligible', currentVersion: '13.6.0' });
         assert.deepStrictEqual(parseCliUpdateRecommendationOutput(
             createDoctorVersionOutput('13.6.0')),
             { status: 'none', currentVersion: '13.6.0' });
@@ -552,9 +552,15 @@ suite('configInfoProvider tests', () => {
             assert.strictEqual(command, '/exact/aspire');
             assert.deepStrictEqual(args, ['doctor', '--format', 'json', '--nologo']);
             assert.deepStrictEqual(options?.env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
-            options?.stdoutCallback?.(createDoctorVersionOutput('13.5.0', '13.6.0'));
+            const output = JSON.parse(createDoctorVersionOutput('13.5.0', '13.6.0'));
+            output.checks.push({
+                name: 'unrelated-check',
+                details: 'A nested command used --nologo.',
+            });
+            options?.stdoutCallback?.(JSON.stringify(output));
             // `aspire doctor` exits nonzero when an unrelated prerequisite check fails, but its
-            // structured CLI update metadata is still valid.
+            // structured CLI update metadata is still valid. Text from another check must not be
+            // mistaken for the root command rejecting --nologo.
             options?.exitCallback?.(1);
             return {} as ChildProcessWithoutNullStreams;
         });
@@ -563,6 +569,28 @@ suite('configInfoProvider tests', () => {
         assert.deepStrictEqual(
             await provider.getCliUpdateRecommendation({ cliPath: '/exact/aspire' }),
             { status: 'available', currentVersion: '13.5.0', version: '13.6.0' });
+        assert.strictEqual(spawnStub.callCount, 1);
+    });
+
+    test('getCliUpdateRecommendation does not retry a structured unavailable result containing nologo', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/unused/aspire',
+            createEnvironment: () => ({}),
+        } as unknown as AspireTerminalProvider;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
+            assert.strictEqual(command, '/exact/aspire');
+            assert.deepStrictEqual(args, ['doctor', '--format', 'json', '--nologo']);
+            const output = JSON.parse(createDoctorVersionOutput('13.5.0', undefined, 'offline'));
+            output.checks[0].details = 'A nested command used --nologo.';
+            options?.stdoutCallback?.(JSON.stringify(output));
+            options?.exitCallback?.(0);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+        const provider = new ConfigInfoProvider(terminalProvider);
+
+        assert.deepStrictEqual(
+            await provider.getCliUpdateRecommendation({ cliPath: '/exact/aspire' }),
+            { status: 'unavailable' });
         assert.strictEqual(spawnStub.callCount, 1);
     });
 
