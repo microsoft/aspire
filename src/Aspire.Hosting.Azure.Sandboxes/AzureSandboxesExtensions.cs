@@ -799,10 +799,15 @@ public static class AzureSandboxesExtensions
     }
 
     /// <summary>
-    /// Configures the Azure sandbox group to use no managed identity.
+    /// Clears the managed identities explicitly configured for sandbox workloads.
     /// </summary>
     /// <param name="builder">The sandbox group resource builder.</param>
     /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// Workload identities requested by individual compute resources are added to the sandbox group during
+    /// deployment preparation. Image pulls require a separate user-assigned identity. Aspire creates one by
+    /// default for new groups; callers can select one with <c>WithAcrPullIdentity</c> and must do so for existing groups.
+    /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -810,16 +815,21 @@ public static class AzureSandboxesExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Resource.ManagedIdentityType = ManagedServiceIdentityType.None;
-        builder.Resource.UserAssignedIdentities.Clear();
+        builder.Resource.WorkloadManagedIdentityType = ManagedServiceIdentityType.None;
+        builder.Resource.WorkloadUserAssignedIdentities.Clear();
         return builder;
     }
 
     /// <summary>
-    /// Configures the Azure sandbox group to use a system-assigned managed identity.
+    /// Configures a system-assigned managed identity for sandbox workloads.
     /// </summary>
     /// <param name="builder">The sandbox group resource builder.</param>
     /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// Image pulls require a separate user-assigned identity. Aspire creates one by default for new groups;
+    /// callers can select one with <c>WithAcrPullIdentity</c> and must do so for existing groups. Workload identities
+    /// requested by individual compute resources may add more user-assigned identities.
+    /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -827,17 +837,21 @@ public static class AzureSandboxesExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Resource.ManagedIdentityType = ManagedServiceIdentityType.SystemAssigned;
-        builder.Resource.UserAssignedIdentities.Clear();
+        builder.Resource.WorkloadManagedIdentityType = ManagedServiceIdentityType.SystemAssigned;
+        builder.Resource.WorkloadUserAssignedIdentities.Clear();
         return builder;
     }
 
     /// <summary>
-    /// Configures the Azure sandbox group to use a user-assigned managed identity.
+    /// Adds a user-assigned managed identity for sandbox workloads.
     /// </summary>
     /// <param name="builder">The sandbox group resource builder.</param>
     /// <param name="identity">The user-assigned managed identity resource.</param>
     /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// Image pulls require a separate user-assigned identity. Aspire creates one by default for new groups;
+    /// callers can select one with <c>WithAcrPullIdentity</c> and must do so for existing groups.
+    /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -848,11 +862,7 @@ public static class AzureSandboxesExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(identity);
 
-        builder.Resource.ManagedIdentityType = ManagedServiceIdentityType.UserAssigned;
-        if (!builder.Resource.UserAssignedIdentities.Contains(identity.Resource))
-        {
-            builder.Resource.UserAssignedIdentities.Add(identity.Resource);
-        }
+        builder.Resource.AddWorkloadUserAssignedIdentity(identity.Resource);
         return builder;
     }
 
@@ -1122,16 +1132,16 @@ public static class AzureSandboxesExtensions
         BicepValue<string> imagePullIdentityId,
         AzureResourceInfrastructure infrastructure)
     {
-        identity.ManagedServiceIdentityType = resource.ManagedIdentityType switch
+        identity.ManagedServiceIdentityType = resource.WorkloadManagedIdentityType switch
         {
             ManagedServiceIdentityType.None => ManagedServiceIdentityType.UserAssigned,
             ManagedServiceIdentityType.SystemAssigned => ManagedServiceIdentityType.SystemAssignedUserAssigned,
-            _ => resource.ManagedIdentityType
+            _ => resource.WorkloadManagedIdentityType
         };
         var imagePullIdentityKey = BicepFunction.Interpolate($"{imagePullIdentityId}").Compile().ToString();
         identity.UserAssignedIdentities[imagePullIdentityKey] = new UserAssignedIdentityDetails();
 
-        foreach (var userAssignedIdentity in resource.UserAssignedIdentities)
+        foreach (var userAssignedIdentity in resource.WorkloadUserAssignedIdentities)
         {
             var userAssignedIdentityIdParameter = userAssignedIdentity.Id.AsProvisioningParameter(infrastructure);
             var userAssignedIdentityId = BicepFunction.Interpolate($"{userAssignedIdentityIdParameter}").Compile().ToString();
