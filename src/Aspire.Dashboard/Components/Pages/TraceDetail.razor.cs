@@ -33,6 +33,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly CancellationTokenSource _cts = new();
     private OtlpTrace? _trace;
     private long _detailViewUpdateVersion;
+    private long _filterMatchUpdateVersion;
     private Subscription? _tracesSubscription;
     private int _maxDepth;
     private int _resourceCount;
@@ -596,22 +597,28 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await RefreshAfterFilterChangeAsync();
     }
 
-    private async Task RefreshAfterFilterChangeAsync()
+    internal async Task<bool> RefreshAfterFilterChangeAsync()
     {
-        await UpdateFilterMatchesAsync();
+        if (!await UpdateFilterMatchesAsync())
+        {
+            return false;
+        }
+
         ClearSelectedDataIfNotVisible();
         await InvokeAsync(StateHasChanged);
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        return true;
     }
 
-    private async Task UpdateFilterMatchesAsync()
+    internal async Task<bool> UpdateFilterMatchesAsync()
     {
+        var updateVersion = Interlocked.Increment(ref _filterMatchUpdateVersion);
         var traceId = _trace?.TraceId;
         if (traceId is null)
         {
             PageViewModel.ContextFilterMatches = null;
             PageViewModel.DurationFilterMatches = null;
-            return;
+            return true;
         }
 
         var contextFilters = PageViewModel.Filters
@@ -627,19 +634,25 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             contextFilters.Add(typeFilter);
         }
 
-        // An older filter query could finish after a newer query and apply stale matches. Each query is
-        // constrained to the current trace and filter changes are user-driven, so this is unlikely and not
-        // worth the additional state and coordination required to guard against it.
-        var hasTextFilter = !string.IsNullOrWhiteSpace(PageViewModel.Filter);
+        var filterText = PageViewModel.Filter;
+        var hasTextFilter = !string.IsNullOrWhiteSpace(filterText);
         var contextMatches = contextFilters.Count > 0 || hasTextFilter
-            ? await GetMatchingSpanIdsAsync(contextFilters, hasTextFilter ? [PageViewModel.Filter] : null)
+            ? await GetMatchingSpanIdsAsync(contextFilters, hasTextFilter ? [filterText] : null)
             : null;
         var durationMatches = durationFilters.Count > 0
             ? await GetMatchingSpanIdsAsync(durationFilters, textFragments: null)
             : null;
 
+        // A superseded filter or trace query must not publish stale matches or clear the selection from the
+        // newer view. The caller also skips its refresh when this result is no longer current.
+        if (updateVersion != Volatile.Read(ref _filterMatchUpdateVersion) || traceId != _trace?.TraceId)
+        {
+            return false;
+        }
+
         PageViewModel.ContextFilterMatches = contextMatches;
         PageViewModel.DurationFilterMatches = durationMatches;
+        return true;
 
         async Task<HashSet<string>> GetMatchingSpanIdsAsync(List<TelemetryFilter> filters, string[]? textFragments)
         {
@@ -730,6 +743,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public void Dispose()
     {
         Interlocked.Increment(ref _detailViewUpdateVersion);
+        Interlocked.Increment(ref _filterMatchUpdateVersion);
         _cts.Cancel();
         _tracesSubscription?.Dispose();
         TelemetryContext.Dispose();
