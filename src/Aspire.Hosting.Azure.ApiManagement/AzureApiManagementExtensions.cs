@@ -774,6 +774,11 @@ public static class AzureApiManagementExtensions
         {
             throw new InvalidOperationException($"The custom hostname '{hostname}' has already been configured for endpoint type '{type}'.");
         }
+        if (type != AzureApiManagementHostnameType.Proxy &&
+            builder.Resource.CustomDomains.Any(domain => domain.Type == type))
+        {
+            throw new InvalidOperationException($"Only one custom hostname can be configured for endpoint type '{type}'.");
+        }
 
         builder.Resource.CustomDomains.Add(new(
             hostname,
@@ -1357,7 +1362,8 @@ public static class AzureApiManagementExtensions
     /// <returns>The resource builder.</returns>
     /// <remarks>
     /// This API models classic VNet injection only. Standard v2 outbound integration and Premium v2 injection have
-    /// different subnet delegations and lifecycle constraints and can be configured with <c>ConfigureInfrastructure</c>.
+    /// different subnet delegations and lifecycle constraints. Use <see cref="WithVirtualNetworkIntegration"/> for
+    /// Standard v2 outbound integration or <see cref="WithVirtualNetworkInjection"/> for Premium v2 injection.
     /// See <see href="https://learn.microsoft.com/azure/api-management/virtual-network-concepts">APIM virtual networking</see>.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the selected SKU does not support classic VNet injection or the subnet is delegated.</exception>

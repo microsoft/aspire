@@ -985,6 +985,35 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Equal(2, apim.Resource.CustomDomains.Count);
     }
 
+    [Theory]
+    [InlineData(AzureApiManagementHostnameType.ConfigurationApi)]
+    [InlineData(AzureApiManagementHostnameType.DeveloperPortal)]
+    [InlineData(AzureApiManagementHostnameType.Portal)]
+    [InlineData(AzureApiManagementHostnameType.Management)]
+    [InlineData(AzureApiManagementHostnameType.Scm)]
+    public void NonGatewayEndpointsRejectMultipleCustomDomains(AzureApiManagementHostnameType type)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            Sku = AzureApiManagementSku.Developer,
+        });
+        apim.WithCustomDomain(
+            "endpoint.contoso.example",
+            vault.GetSecret("certificate"),
+            type);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain(
+                "endpoint2.contoso.example",
+                vault.GetSecret("certificate-2"),
+                type));
+
+        Assert.Contains($"Only one custom hostname can be configured for endpoint type '{type}'", exception.Message);
+    }
+
     [Fact]
     public void ProductRejectsSubscriptionLimitWhenSubscriptionsAreDisabled()
     {
