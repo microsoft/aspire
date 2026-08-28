@@ -7,6 +7,7 @@ using System.Globalization;
 using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -339,7 +340,7 @@ internal static class BackchannelConstants
             results.AddRange(FindLegacySocketsByPrefix(legacyDir, $"aux.sock.{legacyHash}"));
         }
 
-        return results.Distinct(StringComparer.Ordinal).ToArray();
+        return results.Distinct(StringComparers.FileSystemPath).ToArray();
     }
 
     /// <summary>
@@ -425,59 +426,6 @@ internal static class BackchannelConstants
             // Process has exited
             return false;
         }
-    }
-
-    /// <summary>
-    /// Cleans up orphaned socket files for a specific AppHost identifier or legacy hash.
-    /// </summary>
-    /// <remarks>
-    /// This method only cleans up sockets that include a PID because old format sockets
-    /// do not have a PID for orphan detection.
-    /// </remarks>
-    /// <param name="backchannelsDirectory">The backchannels directory path.</param>
-    /// <param name="hash">The AppHost identifier or legacy hash to match.</param>
-    /// <param name="currentPid">The current process ID (to avoid deleting own socket).</param>
-    /// <param name="prefixedFilesOnly">If true, only delete files that start with the expected prefix (e.g., "auxi.sock.{hash}"). This speeds up file detection, but the prefix is only used by legacy sockets.</param>
-    /// <returns>The number of orphaned sockets deleted.</returns>
-    public static int CleanupOrphanedSockets(string backchannelsDirectory, string hash, int currentPid, bool prefixedFilesOnly = false)
-    {
-        var deleted = 0;
-
-        if (!Directory.Exists(backchannelsDirectory))
-        {
-            return deleted;
-        }
-
-        var files = prefixedFilesOnly
-            ? Directory.GetFiles(backchannelsDirectory, $"{SocketPrefix}.{hash}*")
-            : Directory.GetFiles(backchannelsDirectory);
-        foreach (var socketPath in files)
-        {
-            if (!string.Equals(ExtractHash(socketPath), hash, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var pid = ExtractPid(socketPath);
-            if (pid.HasValue && pid.Value != currentPid && !ProcessExists(pid.Value))
-            {
-                try
-                {
-                    // Double-check before delete to minimize TOCTOU race window
-                    // (A new process could theoretically start with the same PID between our checks)
-                    if (!ProcessExists(pid.Value))
-                    {
-                        File.Delete(socketPath);
-                        deleted++;
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                }
-            }
-        }
-
-        return deleted;
     }
 
     /// <summary>

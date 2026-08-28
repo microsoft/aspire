@@ -8,7 +8,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -212,7 +212,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket-other", new TestAppHostAuxiliaryBackchannel { IsInScope = false });
+        monitor.AddConnection("socket-other", new TestAppHostAuxiliaryBackchannel { IsInScope = false });
 
         var resolver = new AppHostConnectionResolver(
             monitor,
@@ -242,8 +242,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket-one", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
-        monitor.AddConnection("hash2", "socket-two", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
+        monitor.AddConnection("socket-one", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
+        monitor.AddConnection("socket-two", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
 
         var resolver = new AppHostConnectionResolver(
             monitor,
@@ -383,7 +383,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
         var connection = CreateOutOfScopeConnection(appHostPath);
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket-sibling", connection);
+        monitor.AddConnection("socket-sibling", connection);
         var interactionService = new TestInteractionService();
 
         var resolver = new AppHostConnectionResolver(
@@ -416,7 +416,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket-worktree", CreateOutOfScopeConnection(appHostPath));
+        monitor.AddConnection("socket-worktree", CreateOutOfScopeConnection(appHostPath));
         var interactionService = new TestInteractionService
         {
             PromptForSelectionCallback = (_, _, _, _) =>
@@ -457,7 +457,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
         var connection = CreateOutOfScopeConnection(appHostPath);
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket-worktree", connection);
+        monitor.AddConnection("socket-worktree", connection);
 
         var resolver = new AppHostConnectionResolver(
             monitor,
@@ -493,7 +493,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj");
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket-sibling", CreateOutOfScopeConnection(appHostPath));
+        monitor.AddConnection("socket-sibling", CreateOutOfScopeConnection(appHostPath));
 
         var resolver = new AppHostConnectionResolver(
             monitor,
@@ -572,7 +572,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var backchannelsDir = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(socketKeyPath, homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

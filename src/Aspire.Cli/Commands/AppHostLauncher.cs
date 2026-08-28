@@ -16,6 +16,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -208,22 +209,6 @@ internal sealed class AppHostLauncher(
         executionContext.AppHostCliLogFilePath = childLogFile;
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolatedOption, globalArgs, additionalArgs);
 
-        // Compute the expected socket prefix from the same filesystem-canonical path used by the
-        // AppHost, while retaining earlier key forms as fallbacks (see ComputeDetachedMatchHashes).
-        var socketKeyPath = PathNormalizer.ResolveToFilesystemPath(effectiveAppHostFile.FullName);
-        var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
-            socketKeyPath,
-            executionContext.HomeDirectory.FullName);
-        var (expectedHash, legacyHashes) = ComputeDetachedMatchHashes(
-            effectiveAppHostFile.FullName,
-            executionContext.HomeDirectory.FullName);
-
-        logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
-        if (legacyHashes.Length > 0)
-        {
-            logger.LogDebug("Also searching for legacy hash(es): {LegacyHashes}", string.Join(", ", legacyHashes));
-        }
-
         // If --wait-for-debugger is active, show a message so the user knows the AppHost
         // is paused. In detached mode we don't have the AppHost PID (stdout is suppressed),
         // so we show a generic message without a PID.
@@ -240,7 +225,7 @@ internal sealed class AppHostLauncher(
         {
             launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, effectiveAppHostFile.FullName, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -317,51 +302,17 @@ internal sealed class AppHostLauncher(
         }
     }
 
-    /// <summary>
-    /// Computes the primary and fallback auxiliary-backchannel socket hashes used to match 
-    /// a detached AppHost's backchannel connection during launch.
-    /// </summary>
-    /// <param name="appHostPath">The AppHost project file or assembly path as supplied to the CLI.</param>
-    /// <param name="homeDirectory">The user's home directory.</param>
-    /// <returns>
-    /// The primary expected hash (the compact AppHost id of the filesystem-canonical path) and the
-    /// de-duplicated fallback hashes to also search: compact AppHost ids and legacy hex hashes for
-    /// the previous symlink-only path and the raw path.
-    /// </returns>
-    internal static (string ExpectedHash, string[] FallbackHashes) ComputeDetachedMatchHashes(string appHostPath, string homeDirectory)
-    {
-        var previousSocketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var socketKeyPath = PathNormalizer.ResolveToFilesystemPath(previousSocketKeyPath);
-
-        var expectedHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory))!;
-
-        // Compact ids and legacy hashes occupy different hash spaces, so retain both forms for
-        // the symlink-only key used by the previous producer and the raw key used before that.
-        var fallbackHashes = new[] { previousSocketKeyPath, appHostPath }
-            .Select(path => AppHostHelper.ExtractHashFromSocketPath(
-                AppHostHelper.ComputeAuxiliarySocketPrefix(path, homeDirectory))!)
-            .Concat(AppHostHelper.ComputeLegacyHashes(socketKeyPath))
-            .Concat(AppHostHelper.ComputeLegacyHashes(previousSocketKeyPath))
-            .Concat(AppHostHelper.ComputeLegacyHashes(appHostPath))
-            .Where(h => !string.Equals(h, expectedHash, StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        return (expectedHash, fallbackHashes);
-    }
-
     private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
     {
-        var existingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+        var existingSockets = AppHostSocketManager.FindSockets(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName,
             Environment.ProcessId,
             logger);
 
-        if (existingSockets.Length > 0)
+        if (existingSockets.Count > 0)
         {
-            logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Length);
+            logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Count);
             var manager = new RunningInstanceManager(logger, interactionService, timeProvider, profilingTelemetry);
             var stopTasks = existingSockets.Select(socket =>
                 manager.StopRunningInstanceAsync(socket, cancellationToken));
@@ -475,8 +426,7 @@ internal sealed class AppHostLauncher(
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
         List<string> childArgs,
-        string expectedHash,
-        IReadOnlyList<string> legacyHashes,
+        string appHostPath,
         string? appHostSelectionOrigin,
         TimeSpan timeout,
         Action<string> updateStatus,
@@ -527,7 +477,8 @@ internal sealed class AppHostLauncher(
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
         var startTime = timeProvider.GetUtcNow();
-        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId, expectedHash, legacyHashes.Count > 0);
+        var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId);
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
@@ -552,8 +503,14 @@ internal sealed class AppHostLauncher(
                 await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
                 scanCount++;
 
-                connection ??= backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
-                    ?? legacyHashes.SelectMany(backchannelMonitor.GetConnectionsByHash).FirstOrDefault();
+                connection ??= backchannelMonitor.Connections.FirstOrDefault(
+                    candidate => candidate.AppHostInfo?.CliProcessId == childProcess.ProcessId);
+                connection ??= backchannelMonitor.Connections.FirstOrDefault(
+                    candidate =>
+                        candidate.AppHostInfo?.AppHostPath is { } candidateAppHostPath &&
+                        StringComparers.FileSystemPath.Equals(
+                            PathNormalizer.ResolveToFilesystemPath(candidateAppHostPath),
+                            canonicalAppHostPath));
                 if (connection is not null)
                 {
                     waitForBackchannelActivity.SetBackchannelScanCount(scanCount);

@@ -13,7 +13,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Tests;
-using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
@@ -67,57 +66,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
         Assert.Matches("^cli_20260212T180000000_detach-child_[0-9a-f]{32}\\.log$", fileName);
-    }
-
-    [Fact]
-    public void ComputeDetachedMatchHashes_ResolvesSymlinkForPrimaryHash_AndKeepsRawHashInFallback()
-    {
-        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
-            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
-
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var homeDirectory = workspace.WorkspaceRoot.FullName;
-
-        // Reference the same AppHost through a directory symlink ("link" -> "real"). This mirrors the
-        // macOS temp-path shape (/var/folders/... is a symlink to /private/var/folders/...) that made
-        // detached `aspire start` wait on a hash the AppHost never used.
-        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
-        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
-        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
-
-        var realProjectPath = Path.Combine(realDirectory.FullName, "AppHost.csproj");
-        File.WriteAllText(realProjectPath, "<Project />");
-        var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "AppHost.csproj");
-
-        var resolvedPath = PathNormalizer.ResolveToFilesystemPath(appHostPathViaSymlink);
-        // The test is only meaningful when resolution actually rewrites the path.
-        Assert.NotEqual(appHostPathViaSymlink, resolvedPath);
-
-        var resolvedPathHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedPath, homeDirectory))!;
-        var rawPathHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPathViaSymlink, homeDirectory))!;
-        var rawFallbackHashes = AppHostHelper.ComputeLegacyHashes(appHostPathViaSymlink);
-        var resolvedFallbackHashes = AppHostHelper.ComputeLegacyHashes(resolvedPath);
-
-        var (expectedHash, fallbackHashes) = AppHostLauncher.ComputeDetachedMatchHashes(appHostPathViaSymlink, homeDirectory);
-
-        // The primary hash is computed from the resolved path — the value the AppHost actually keys
-        // its socket on — and therefore differs from the raw-path hash the buggy code waited on.
-        Assert.Equal(resolvedPathHash, expectedHash);
-        Assert.NotEqual(rawPathHash, expectedHash);
-
-        // The fallback set keeps the raw path's compact hash so an AppHost still keyed on the
-        // unresolved path continues to match, plus the legacy hex hashes of both paths.
-        Assert.Contains(rawPathHash, fallbackHashes);
-        Assert.Contains(rawFallbackHashes[0], fallbackHashes);
-        Assert.Contains(resolvedFallbackHashes[0], fallbackHashes);
-
-        // Cross-side agreement: the AppHost builds its socket file name with the same shared code,
-        // keyed on the resolved path (AuxiliaryBackchannelService canonicalizes before naming the
-        // socket via ComputeSocketPath, which embeds ComputeAppHostId(resolvedPath)). The CLI's
-        // primary hash must equal that embedded id so it waits on exactly the AppHost's socket.
-        Assert.Equal(BackchannelConstants.ComputeAppHostId(resolvedPath), expectedHash);
     }
 
     [Fact]
@@ -1224,9 +1172,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public void AddConnection(TestAppHostAuxiliaryBackchannel connection)
         {
-            var socketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(AppHostFile.FullName, _homeDirectory.FullName);
-            var hash = AppHostHelper.ExtractHashFromSocketPath(socketPrefix) ?? throw new InvalidOperationException("Expected socket hash.");
-            connection.Hash = hash;
+            var socketPath = CreateMatchingSocketFile(Environment.ProcessId);
             connection.AppHostInfo ??= new AppHostInformation
             {
                 AppHostPath = AppHostFile.FullName,
@@ -1234,7 +1180,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 StartedAt = DateTimeOffset.UtcNow
             };
 
-            Monitor.AddConnection(hash, $"{socketPrefix}.sock", connection);
+            Monitor.AddConnection(socketPath, connection);
         }
 
         public void SetLinkedWorktree()
@@ -1249,8 +1195,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var backchannelsDir = Path.Combine(_homeDirectory.FullName, ".aspire", "cli", "bch");
             Directory.CreateDirectory(backchannelsDir);
 
-            var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(AppHostFile.FullName);
-            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _homeDirectory.FullName);
+            var resolvedAppHostPath = PathNormalizer.ResolveToFilesystemPath(AppHostFile.FullName);
+            var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, _homeDirectory.FullName);
             var appHostId = Path.GetFileName(prefix);
             var socketPath = Path.Combine(
                 backchannelsDir,

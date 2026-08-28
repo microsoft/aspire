@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -283,30 +284,17 @@ internal sealed class StopCommand : BaseCommand
 
     private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, bool displayNotRunningMessage, CancellationToken cancellationToken)
     {
-        var matchingSocketPaths = AppHostHelper.FindMatchingNonOrphanedSockets(
-            appHostFile.FullName,
-            ExecutionContext.HomeDirectory.FullName,
-            Environment.ProcessId,
-            _logger);
-
-        if (matchingSocketPaths.Length == 0)
-        {
-            if (displayNotRunningMessage)
-            {
-                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
-            }
-
-            return new StopAppHostResult(CliExitCodes.Success, null);
-        }
-
-        var matchingSocketPathSet = matchingSocketPaths.ToHashSet(GetSocketPathComparer());
         var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
             SharedCommandStrings.ScanningForRunningAppHosts,
             cancellationToken).ConfigureAwait(false);
+        var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
 
         var matchingConnections = allConnections
-            .Where(result => result.Success && result.Connection is not null && matchingSocketPathSet.Contains(result.Connection.SocketPath))
+            .Where(result =>
+                result is { Success: true, Connection.AppHostInfo.AppHostPath: { } connectionAppHostPath } &&
+                StringComparers.FileSystemPath.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(connectionAppHostPath),
+                    canonicalAppHostPath))
             .Select(result => result.Connection!)
             .ToArray();
 
@@ -513,7 +501,7 @@ internal sealed class StopCommand : BaseCommand
             // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
             // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
             // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
-            AppHostHelper.TryDeleteSocketFile(connection.SocketPath, _logger);
+            connection.Socket.TryDelete();
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
             return CompleteStopActivity(activity, CliExitCodes.Success);
         }
@@ -574,13 +562,6 @@ internal sealed class StopCommand : BaseCommand
     }
 
     private StringComparer GetAppHostPathComparer()
-    {
-        return _environment.IsWindows()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-    }
-
-    private StringComparer GetSocketPathComparer()
     {
         return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase

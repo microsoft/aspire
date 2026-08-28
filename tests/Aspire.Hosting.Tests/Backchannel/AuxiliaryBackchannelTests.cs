@@ -8,7 +8,6 @@ using System.Text.Json;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -614,7 +613,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GetSocketKeyAppHostPath_ResolvesFilesystemAliasesSoSocketKeyMatchesCli()
+    public void CreateSocket_ResolvesFilesystemAliases()
     {
         // The CLI resolves filesystem aliases before searching for an AppHost's backchannel socket
         // (AppHostHelper.FindMatchingNonOrphanedSockets), so the AppHost must key its socket off the same
@@ -634,18 +633,17 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             var appHostFileViaSymlink = Path.Combine(symlinkDirectory, "apphost.cs");
             File.WriteAllText(appHostFileViaSymlink, "// apphost");
 
-            var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["AppHost:FilePath"] = appHostFileViaSymlink,
-                })
-                .Build();
+            using var socket = AppHostSocketManager.CreateSocket(
+                appHostFileViaSymlink,
+                GetSocketSafeHomeDirectory(),
+                Environment.ProcessId,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+            var socketAppHostId = Path.GetFileName(socket.SocketPath)[..BackchannelConstants.CompactAppHostIdLength];
+            var canonicalPath = PathNormalizer.ResolveToFilesystemPath(appHostFileViaSymlink);
 
-            var socketKeyPath = AuxiliaryBackchannelService.GetSocketKeyAppHostPath(configuration);
-
-            Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFileViaSymlink), socketKeyPath);
+            Assert.Equal(BackchannelConstants.ComputeAppHostId(canonicalPath), socketAppHostId);
             // Guards against the symlink not actually being unwrapped (otherwise the assertion above is vacuous).
-            Assert.NotEqual(appHostFileViaSymlink, socketKeyPath);
+            Assert.NotEqual(appHostFileViaSymlink, canonicalPath);
         }
         finally
         {
@@ -654,7 +652,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GetSocketKeyAppHostPath_NormalizesCasingOnCaseInsensitiveFilesystems()
+    public void CreateSocket_NormalizesCasingOnCaseInsensitiveFilesystems()
     {
         Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
             "Filesystem casing normalization only applies on Windows and macOS.");
@@ -668,21 +666,71 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             Assert.SkipWhen(!File.Exists(differentlyCasedPath),
                 "This test requires a case-insensitive filesystem.");
 
-            var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["AppHost:FilePath"] = differentlyCasedPath,
-                })
-                .Build();
+            using var socket = AppHostSocketManager.CreateSocket(
+                differentlyCasedPath,
+                GetSocketSafeHomeDirectory(),
+                Environment.ProcessId,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+            var socketAppHostId = Path.GetFileName(socket.SocketPath)[..BackchannelConstants.CompactAppHostIdLength];
+            var canonicalPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
 
-            var socketKeyPath = AuxiliaryBackchannelService.GetSocketKeyAppHostPath(configuration);
-
-            Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), socketKeyPath);
-            Assert.NotEqual(differentlyCasedPath, socketKeyPath);
+            Assert.Equal(BackchannelConstants.ComputeAppHostId(canonicalPath), socketAppHostId);
+            Assert.NotEqual(differentlyCasedPath, canonicalPath);
         }
         finally
         {
             tempRoot.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public void CreateSocket_DisposeRemovesSocketFile()
+    {
+        // The listener owns the socket file's lifetime: an AppHost never recreates a socket file it
+        // already bound, so a file left behind on shutdown is discovered by every later CLI
+        // invocation and can only be reclaimed by the PID-liveness sweep. Disposal must remove it.
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-auxbch-dispose-");
+        try
+        {
+            var appHostFile = Path.Combine(tempRoot.FullName, "apphost.cs");
+            File.WriteAllText(appHostFile, "// apphost");
+
+            var socket = AppHostSocketManager.CreateSocket(
+                appHostFile,
+                GetSocketSafeHomeDirectory(),
+                Environment.ProcessId,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+            var socketPath = socket.SocketPath;
+            Assert.True(File.Exists(socketPath));
+
+            socket.Dispose();
+            Assert.False(File.Exists(socketPath));
+
+            // Disposal is reentrant: the AppHost disposes the listener on shutdown and the same
+            // instance can be disposed again by a using scope or a host container.
+            socket.Dispose();
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Gets a home directory whose generated socket paths fit the platform's AF_UNIX byte limit.
+    /// </summary>
+    /// <remarks>
+    /// A backchannel socket path is <c>{home}/.aspire/cli/bch/{19 chars}.{pid}</c>, which adds
+    /// roughly 45 bytes to the home directory. macOS allows only 104 bytes for the whole path and
+    /// its per-user temp root (<c>/var/folders/&lt;2&gt;/&lt;30&gt;/T/</c>) already consumes about
+    /// 50, so a temp directory cannot stand in for the home directory here. Production reads the
+    /// same location, so this also keeps the test on the real code path.
+    /// </remarks>
+    private static string GetSocketSafeHomeDirectory()
+    {
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.SkipWhen(string.IsNullOrEmpty(homeDirectory), "No user profile directory is available.");
+
+        return homeDirectory;
     }
 }

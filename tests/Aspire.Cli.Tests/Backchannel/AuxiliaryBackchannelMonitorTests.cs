@@ -1,8 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Backchannel;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -132,4 +138,95 @@ public class AuxiliaryBackchannelMonitorTests
             tempRoot.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public async Task ScanAsync_UnreachableSocketWithLiveProcess_IsNotRetriedUntilBackoffExpires()
+    {
+        // A socket file whose PID is alive but that refuses connections is the PID-reuse shape:
+        // the AppHost is gone, yet its PID was recycled by an unrelated process, so the monitor is
+        // not allowed to delete the file (deleting a socket whose AppHost is actually alive makes
+        // that AppHost undiscoverable for the rest of its lifetime). Before the backoff was added,
+        // such a socket was pushed back onto the "new sockets" list on every scan, so every single
+        // scan paid the full connect retry budget. MCP tools scan frequently, so that was seconds
+        // of dead time per call, forever.
+        var homeDirectory = Directory.CreateTempSubdirectory("aspire-abm-");
+        try
+        {
+            var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
+            Directory.CreateDirectory(backchannelsDirectory);
+
+            // The socket must be a real bound AF_UNIX socket: connecting to a regular file fails
+            // with ENOTSOCK rather than ECONNREFUSED and would take a different code path. The name
+            // is composed by hand rather than through ComputeSocketPathFromAppHostId because that
+            // helper throws on an over-long path, and whether the path fits is exactly what decides
+            // if this test can run here.
+            var appHostId = BackchannelConstants.ComputeAppHostId(Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            var socketPath = Path.Combine(backchannelsDirectory, $"{appHostId}a1b2C3d4.{Environment.ProcessId}");
+            Assert.SkipWhen(
+                BackchannelConstants.GetSocketPathByteCountIncludingNull(socketPath) > BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+                $"The temp directory is too long to host an AF_UNIX socket on this platform: '{socketPath}'.");
+
+            // Bound but never listening, so every connect attempt is refused while the file stays on disk.
+            using var unreachableSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            unreachableSocket.Bind(new UnixDomainSocketEndPoint(socketPath));
+
+            var logger = new CapturingLogger<AuxiliaryBackchannelMonitor>();
+            var timeProvider = new FakeTimeProvider();
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(logger, CreateExecutionContext(homeDirectory), timeProvider, profilingTelemetry);
+
+            // The socket is discovered and the connect retry budget is burned down once.
+            await PumpUntilCompletedAsync(monitor.ScanAsync(), timeProvider).DefaultTimeout();
+            Assert.Equal(1, CountConnectAttempts(logger, socketPath));
+
+            // The file must survive: its PID is alive, so the monitor cannot prove the socket is dead.
+            Assert.True(File.Exists(socketPath));
+
+            // The regression: a second scan inside the backoff window must not touch the socket at all.
+            // If it did, this await would hang because the retry loop's delays run on the fake clock.
+            await monitor.ScanAsync().DefaultTimeout();
+            Assert.Equal(1, CountConnectAttempts(logger, socketPath));
+
+            // Once the backoff expires the socket is reconsidered, so a genuinely restarted AppHost
+            // reusing the same socket path is still picked up.
+            timeProvider.Advance(TimeSpan.FromMinutes(1));
+            await PumpUntilCompletedAsync(monitor.ScanAsync(), timeProvider).DefaultTimeout();
+            Assert.Equal(2, CountConnectAttempts(logger, socketPath));
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    private static int CountConnectAttempts(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath)
+        => logger.Entries.Count(entry => entry.Message == $"Connecting to auxiliary socket: {socketPath}");
+
+    /// <summary>
+    /// Drives <paramref name="task"/> to completion while advancing <paramref name="timeProvider"/>,
+    /// which the monitor's connect retry loop uses for both its elapsed-time budget and its delays.
+    /// </summary>
+    private static async Task PumpUntilCompletedAsync(Task task, FakeTimeProvider timeProvider)
+    {
+        while (!task.IsCompleted)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(1));
+
+            // Yield on the real clock so the retry loop can observe the advance and register its next delay.
+            await Task.Delay(1).ConfigureAwait(false);
+        }
+
+        await task.ConfigureAwait(false);
+    }
+
+    private static CliExecutionContext CreateExecutionContext(DirectoryInfo homeDirectory)
+        => new(
+            workingDirectory: homeDirectory,
+            hivesDirectory: homeDirectory,
+            cacheDirectory: homeDirectory,
+            sdksDirectory: homeDirectory,
+            logsDirectory: homeDirectory,
+            logFilePath: Path.Combine(homeDirectory.FullName, "test.log"),
+            identityChannel: "local",
+            homeDirectory: homeDirectory);
 }

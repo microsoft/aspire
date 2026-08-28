@@ -47,7 +47,7 @@ public class RunningInstanceManagerTests
 
             var manager = new RunningInstanceManager(NullLogger.Instance, new TestInteractionService(), TimeProvider.System, new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
-            var stopped = await manager.StopRunningInstanceAsync(socketPath, CancellationToken.None).DefaultTimeout();
+            var stopped = await manager.StopRunningInstanceAsync(new TestAppHostSocket(socketPath), CancellationToken.None).DefaultTimeout();
 
             Assert.True(stopped);
             Assert.True(server.Target.StopRequested);

@@ -25,8 +25,8 @@ public class AppHostConnectionSelectionLogicTests
         var inScope = CreateConnection("hash1", appHostPath: "C:/repo/AppHost1", isInScope: true, processId: 1);
         var outOfScope = CreateConnection("hash2", appHostPath: "C:/other/AppHost2", isInScope: false, processId: 2);
 
-        monitor.AddConnection("hash1", "socket.hash1", inScope);
-        monitor.AddConnection("hash2", "socket.hash2", outOfScope);
+        monitor.AddConnection("socket.hash1", inScope);
+        monitor.AddConnection("socket.hash2", outOfScope);
 
         monitor.SelectedAppHostPath = "C:/other/AppHost2";
 
@@ -40,7 +40,7 @@ public class AppHostConnectionSelectionLogicTests
 
         var inScope = CreateConnection("hash1", appHostPath: "C:/repo/AppHost1", isInScope: true, processId: 1);
 
-        monitor.AddConnection("hash1", "socket.hash1", inScope);
+        monitor.AddConnection("socket.hash1", inScope);
         monitor.SelectedAppHostPath = "C:/missing/AppHost";
 
         var selected = monitor.SelectedConnection;
@@ -57,8 +57,8 @@ public class AppHostConnectionSelectionLogicTests
         var inScope = CreateConnection("hash1", appHostPath: "C:/repo/AppHost1", isInScope: true, processId: 1);
         var outOfScope = CreateConnection("hash2", appHostPath: "C:/other/AppHost2", isInScope: false, processId: 2);
 
-        monitor.AddConnection("hash1", "socket.hash1", inScope);
-        monitor.AddConnection("hash2", "socket.hash2", outOfScope);
+        monitor.AddConnection("socket.hash1", inScope);
+        monitor.AddConnection("socket.hash2", outOfScope);
 
         Assert.Same(inScope, monitor.SelectedConnection);
     }
@@ -83,8 +83,8 @@ public class AppHostConnectionSelectionLogicTests
             var firstConnection = CreateConnection("hash1", firstPath, isInScope: true, processId: 1);
             var secondConnection = CreateConnection("hash2", secondPath, isInScope: true, processId: 2);
             var monitor = new TestAuxiliaryBackchannelMonitor();
-            monitor.AddConnection("hash1", "socket.hash1", firstConnection);
-            monitor.AddConnection("hash2", "socket.hash2", secondConnection);
+            monitor.AddConnection("socket.hash1", firstConnection);
+            monitor.AddConnection("socket.hash2", secondConnection);
             monitor.SelectedAppHostPath = secondPath;
 
             Assert.Same(secondConnection, monitor.SelectedConnection);
@@ -97,11 +97,11 @@ public class AppHostConnectionSelectionLogicTests
 
     private static AppHostAuxiliaryBackchannel CreateConnection(string hash, string appHostPath, bool isInScope, int processId)
     {
+        _ = hash;
         var rpc = new JsonRpc(Stream.Null);
 
         return new AppHostAuxiliaryBackchannel(
-            hash,
-            socketPath: "/tmp/socket",
+            new TestAppHostSocket("/tmp/socket"),
             rpc,
             appHostInfo: new AppHostInformation { AppHostPath = appHostPath, ProcessId = processId, CliProcessId = null },
             isInScope);

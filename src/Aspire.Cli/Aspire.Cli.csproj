@@ -164,6 +164,7 @@
     <Compile Include="$(SharedDir)PackageUpdateHelpers.cs" Link="Utils\PackageUpdateHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
+    <Compile Include="$(SharedDir)AppHostSocketManager.cs" Link="Backchannel\AppHostSocketManager.cs" />
     <Compile Include="$(SharedDir)Mcp\McpIconHelper.cs" Link="Mcp\McpIconHelper.cs" />
     <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
     <Compile Include="$(SharedDir)Model\Serialization\ResourceJson.cs" Link="Model\Serialization\ResourceJson.cs" />

@@ -37,7 +37,6 @@ public class SelectAppHostToolTests(ITestOutputHelper outputHelper)
         if (hasMatchingConnection)
         {
             monitor.AddConnection(
-                "hash",
                 "socket",
                 new TestAppHostAuxiliaryBackchannel
                 {

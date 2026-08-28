@@ -17,6 +17,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -1438,7 +1439,7 @@ public class GuestAppHostProjectTests : IDisposable
         Directory.CreateDirectory(backchannelsDir);
 
         var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

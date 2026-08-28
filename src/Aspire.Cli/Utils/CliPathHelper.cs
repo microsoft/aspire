@@ -305,11 +305,11 @@ internal static class CliPathHelper
     /// <see cref="CleanupStaleCliSockets(string, TimeSpan, TimeProvider)"/>.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="BackchannelConstants.CleanupOrphanedSockets"/>,
-    /// CLI sockets don't encode the process ID in their filename — they're created with a random
-    /// GUID-style suffix — so the only reliable signal we have for "this is stale" is the file's
-    /// mtime. We pick a generous default threshold so an in-flight long-running run never has its
-    /// socket pruned out from under it.
+    /// Unlike auxiliary backchannel sockets, which encode the owning process ID in their filename so
+    /// <see cref="AppHostSocketManager"/> can prune them by liveness, CLI sockets are created with a
+    /// random GUID-style suffix. The only reliable "this is stale" signal we have is the file's mtime,
+    /// so we pick a generous default threshold and an in-flight long-running run never has its socket
+    /// pruned out from under it.
     /// </remarks>
     internal static int CleanupStaleCliSockets(string socketDirectory, TimeSpan maxAge, TimeProvider? timeProvider = null)
     {

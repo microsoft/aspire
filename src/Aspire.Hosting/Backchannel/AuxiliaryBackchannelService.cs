@@ -4,7 +4,6 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,7 +22,7 @@ internal sealed class AuxiliaryBackchannelService(
     IServiceProvider serviceProvider)
     : BackgroundService
 {
-    private Socket? _serverSocket;
+    private AppHostSocketManager.AppHostSocketListener? _appHostSocket;
     private readonly TaskCompletionSource _listeningTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
@@ -43,52 +42,14 @@ internal sealed class AuxiliaryBackchannelService(
     {
         try
         {
-            // Create the socket path
-            SocketPath = GetAuxiliaryBackchannelSocketPath(configuration);
+            _appHostSocket = AppHostSocketManager.CreateSocket(
+                GetAppHostPath(configuration),
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Environment.ProcessId,
+                logger);
+            SocketPath = _appHostSocket.SocketPath;
 
             logger.LogDebug("Starting auxiliary backchannel service on socket path: {SocketPath}", SocketPath);
-
-            // Ensure the directory exists
-            var directory = Path.GetDirectoryName(SocketPath);
-            if (directory != null && !Directory.Exists(directory))
-            {
-                logger.LogDebug("Creating backchannels directory: {Directory}", directory);
-                Directory.CreateDirectory(directory);
-            }
-
-            // Clean up orphaned sockets from crashed instances of this same AppHost
-            var appHostPath = GetSocketKeyAppHostPath(configuration);
-            if (!string.IsNullOrEmpty(appHostPath))
-            {
-                var appHostId = BackchannelConstants.ComputeAppHostId(appHostPath);
-                var orphansDeleted = BackchannelConstants.CleanupOrphanedSockets(directory!, appHostId, Environment.ProcessId);
-
-                var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory);
-                foreach (var legacyHash in BackchannelConstants.ComputeLegacyHashes(appHostPath))
-                {
-                    orphansDeleted += BackchannelConstants.CleanupOrphanedSockets(legacyDirectory, legacyHash, Environment.ProcessId, prefixedFilesOnly: true);
-                }
-
-                if (orphansDeleted > 0)
-                {
-                    logger.LogDebug("Cleaned up {Count} orphaned socket(s) from previous instances.", orphansDeleted);
-                }
-            }
-
-            // Clean up any existing socket file (shouldn't exist with PID in name, but just in case)
-            if (File.Exists(SocketPath))
-            {
-                logger.LogDebug("Deleting existing socket file: {SocketPath}", SocketPath);
-                File.Delete(SocketPath);
-            }
-
-            // Create and bind the server socket
-            logger.LogDebug("Creating and binding server socket...");
-            _serverSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(SocketPath);
-            _serverSocket.Bind(endpoint);
-            _serverSocket.Listen(backlog: 10); // Allow multiple pending connections
 
             logger.LogDebug("Auxiliary backchannel listening on {SocketPath}", SocketPath);
             _listeningTcs.TrySetResult();
@@ -98,7 +59,7 @@ internal sealed class AuxiliaryBackchannelService(
             {
                 try
                 {
-                    var clientSocket = await _serverSocket.AcceptAsync(stoppingToken).ConfigureAwait(false);
+                    var clientSocket = await _appHostSocket.Socket.AcceptAsync(stoppingToken).ConfigureAwait(false);
 
                     // Handle each connection on a separate task
                     _ = Task.Run(async () => await HandleClientConnectionAsync(clientSocket, stoppingToken).ConfigureAwait(false), stoppingToken);
@@ -124,19 +85,7 @@ internal sealed class AuxiliaryBackchannelService(
         }
         finally
         {
-            // Clean up the socket
-            _serverSocket?.Dispose();
-            if (SocketPath != null && File.Exists(SocketPath))
-            {
-                try
-                {
-                    File.Delete(SocketPath);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to delete socket file: {SocketPath}", SocketPath);
-                }
-            }
+            _appHostSocket?.Dispose();
         }
     }
 
@@ -201,33 +150,6 @@ internal sealed class AuxiliaryBackchannelService(
         }
     }
 
-    /// <summary>
-    /// Generates the Unix socket path for the auxiliary backchannel.
-    /// </summary>
-    private static string GetAuxiliaryBackchannelSocketPath(IConfiguration configuration)
-    {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        // Use the filesystem-canonical AppHost:FilePath or AppHost:Path from configuration for consistent hashing.
-        var appHostPath = GetSocketKeyAppHostPath(configuration);
-
-        if (!string.IsNullOrEmpty(appHostPath))
-        {
-            // Use shared helper for consistent socket naming with PID
-            return BackchannelConstants.ComputeSocketPath(appHostPath, homeDirectory, Environment.ProcessId);
-        }
-
-        // Fallback: Generate socket path using process ID as the AppHost ID seed (rare edge case)
-        var fallbackAppHostId = BackchannelConstants.ComputeAppHostId(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        return BackchannelConstants.ComputeSocketPathFromAppHostId(fallbackAppHostId, homeDirectory, Environment.ProcessId);
-    }
-
-    /// <summary>
-    /// Reads and filesystem-canonicalizes the AppHost path used to key its auxiliary backchannel socket.
-    /// </summary>
-    internal static string? GetSocketKeyAppHostPath(IConfiguration configuration)
-    {
-        var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
-        return string.IsNullOrEmpty(appHostPath) ? appHostPath : PathNormalizer.ResolveToFilesystemPath(appHostPath);
-    }
+    private static string? GetAppHostPath(IConfiguration configuration) =>
+        configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
 }

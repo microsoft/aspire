@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -126,7 +127,7 @@ public class AppHostAuxiliaryBackchannelTests
             _disposables.Add(messageHandler);
             _disposables.Add(serverStream);
 
-            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
+            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(new TestAppHostSocket("socket.hash1"), isInScope: true, NullLogger.Instance, new ProfilingTelemetry(new ConfigurationBuilder().Build()), clientSocket, CancellationToken.None).DefaultTimeout();
         }
 
         public void Dispose()

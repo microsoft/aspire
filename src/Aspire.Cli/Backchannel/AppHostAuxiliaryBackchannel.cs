@@ -6,7 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
@@ -38,8 +38,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// Private constructor - use factory methods to create instances.
     /// </summary>
     private AppHostAuxiliaryBackchannel(
-        string hash,
-        string socketPath,
+        IAppHostSocket appHostSocket,
         JsonRpc rpc,
         AppHostInformation? appHostInfo,
         bool isInScope,
@@ -47,8 +46,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         ILogger logger,
         ProfilingTelemetry? profilingTelemetry)
     {
-        Hash = hash;
-        SocketPath = socketPath;
+        Socket = appHostSocket;
         _rpc = rpc;
         AppHostInfo = appHostInfo;
         IsInScope = isInScope;
@@ -62,20 +60,19 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// Internal constructor for testing purposes.
     /// </summary>
     internal AppHostAuxiliaryBackchannel(
-        string hash,
-        string socketPath,
+        IAppHostSocket appHostSocket,
         JsonRpc rpc,
         AppHostInformation? appHostInfo,
         bool isInScope)
-        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, NullLogger.Instance, null)
+        : this(appHostSocket, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, NullLogger.Instance, null)
     {
     }
 
     /// <inheritdoc />
-    public string Hash { get; private set; }
+    public IAppHostSocket Socket { get; }
 
     /// <inheritdoc />
-    public string SocketPath { get; }
+    public string SocketPath => Socket.SocketPath;
 
     /// <inheritdoc />
     public AppHostInformation? AppHostInfo { get; private set; }
@@ -124,32 +121,31 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <summary>
-    /// Creates and connects a new auxiliary backchannel to the specified socket path.
+    /// Creates and connects a new auxiliary backchannel to the specified socket.
     /// </summary>
-    /// <param name="socketPath">The path to the Unix domain socket.</param>
+    /// <param name="appHostSocket">The AppHost socket to connect to.</param>
     /// <param name="logger">Logger for diagnostic messages.</param>
     /// <param name="profilingTelemetry">Profiling service.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
-        string socketPath,
+        IAppHostSocket appHostSocket,
         ILogger logger,
         ProfilingTelemetry profilingTelemetry,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(appHostSocket);
 
-        var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath) ?? string.Empty;
-        return CreateFromSocketAsync(hash, socketPath, isInScope: true, logger, profilingTelemetry, socket: null, cancellationToken);
+        return CreateFromSocketAsync(appHostSocket, isInScope: true, logger, profilingTelemetry, socket: null, cancellationToken);
     }
 
     /// <summary>
-    /// Creates an AppHostAuxiliaryBackchannel by connecting to the specified socket path,
+    /// Creates an AppHostAuxiliaryBackchannel by connecting to the specified AppHost socket,
     /// or using an already-connected socket if provided.
     /// This is the single path for all connection creation, ensuring capabilities are always fetched.
     /// </summary>
-    /// <param name="hash">The AppHost hash identifier.</param>
-    /// <param name="socketPath">The socket path.</param>
+    /// <param name="appHostSocket">The AppHost socket.</param>
     /// <param name="isInScope">Whether this AppHost is within the scope of the working directory.</param>
     /// <param name="logger">Logger.</param>
     /// <param name="profilingTelemetry">Profiling service.</param>
@@ -157,8 +153,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
-        string hash,
-        string socketPath,
+        IAppHostSocket appHostSocket,
         bool isInScope,
         ILogger logger,
         ProfilingTelemetry profilingTelemetry,
@@ -166,15 +161,13 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(appHostSocket);
 
         // Connect if no socket provided
         if (socket is null)
         {
-            logger.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", socketPath);
-
-            socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(socketPath);
-            await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+            logger.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", appHostSocket.SocketPath);
+            socket = await appHostSocket.ConnectAsync(cancellationToken).ConfigureAwait(false);
         }
 
         // Create JSON-RPC connection with proper formatter
@@ -185,7 +178,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         };
         rpc.StartListening();
 
-        logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
+        logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", appHostSocket.SocketPath);
 
         // Fetch all connection info
         var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
@@ -198,7 +191,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
 
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+        return new AppHostAuxiliaryBackchannel(appHostSocket, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
     }
 
     /// <summary>

@@ -11,15 +11,11 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMonitor
 {
-    // Outer key: hash, Inner key: socketPath
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, IAppHostAuxiliaryBackchannel>> _connectionsByHash = new();
+    private readonly ConcurrentDictionary<string, IAppHostAuxiliaryBackchannel> _connectionsBySocketPath = new(StringComparers.FileSystemPath);
     private readonly Channel<bool> _connectionChanges = Channel.CreateUnbounded<bool>();
 
     public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
-        _connectionsByHash.Values.SelectMany(d => d.Values);
-
-    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
-        _connectionsByHash.TryGetValue(hash, out var connections) ? connections.Values : [];
+        _connectionsBySocketPath.Values;
 
     public string? SelectedAppHostPath { get; set; }
 
@@ -122,26 +118,18 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
     }
 
-    public void AddConnection(string hash, string socketPath, IAppHostAuxiliaryBackchannel connection)
+    public void AddConnection(string socketPath, IAppHostAuxiliaryBackchannel connection)
     {
-        var connectionsDict = _connectionsByHash.GetOrAdd(hash, _ => new ConcurrentDictionary<string, IAppHostAuxiliaryBackchannel>());
-        connectionsDict[socketPath] = connection;
+        _connectionsBySocketPath[socketPath] = connection;
     }
 
-    public void RemoveConnection(string hash, string socketPath)
+    public void RemoveConnection(string socketPath)
     {
-        if (_connectionsByHash.TryGetValue(hash, out var connectionsDict))
-        {
-            connectionsDict.TryRemove(socketPath, out _);
-            if (connectionsDict.IsEmpty)
-            {
-                _connectionsByHash.TryRemove(hash, out _);
-            }
-        }
+        _connectionsBySocketPath.TryRemove(socketPath, out _);
     }
 
     public void ClearConnections()
     {
-        _connectionsByHash.Clear();
+        _connectionsBySocketPath.Clear();
     }
 }
