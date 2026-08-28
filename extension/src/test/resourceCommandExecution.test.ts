@@ -128,8 +128,8 @@ suite('executeResourceCommand', () => {
             '',
             [
                 "❌ Ressource 'app-id' konnte nicht neu gestartet werden.",
-                `📄 Diagnoseprotokoll: ${cliLogPath}`,
-                `🔍 AppHost-Protokoll: ${appHostLogPath}`,
+                `📄 Protokolle unter ${cliLogPath} anzeigen.`,
+                `🔍 ${appHostLogPath}에서 로그 보기`,
             ].join('\n')));
 
         await executeResourceCommand(

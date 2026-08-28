@@ -16,7 +16,7 @@ import type { AppHostSelectionOrigin } from '../debugger/AspireDebugConfiguratio
 import { isDirectory } from '../utils/io';
 import { sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
-import { getAbsolutePathSuffix } from '../utils/diagnosticLogPath';
+import { getAbsoluteLogFilePath } from '../utils/diagnosticLogPath';
 
 export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
@@ -389,7 +389,7 @@ export class InteractionService implements IInteractionService {
         this.clearProgressNotification();
 
         const logFilePath = emoji === cliLogMessageEmoji
-            ? getAbsolutePathSuffix(message)
+            ? getAbsoluteLogFilePath(message)
             : undefined;
         if (logFilePath && this._pendingErrorNotification) {
             const errorMessage = this._takePendingErrorNotification();

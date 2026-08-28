@@ -414,7 +414,7 @@ suite('InteractionService endpoints', () => {
 			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
 
 			testInfo.interactionService.displayError('Test error message');
-			testInfo.interactionService.displayMessage('page_facing_up', `Diagnoseprotokoll: ${logFilePath}`);
+			testInfo.interactionService.displayMessage('page_facing_up', `Protokolle unter ${logFilePath} anzeigen.`);
 			await new Promise<void>(resolve => setImmediate(resolve));
 
 			assert.strictEqual(showErrorMessageStub.callCount, 1);
@@ -444,6 +444,32 @@ suite('InteractionService endpoints', () => {
 		}
 		finally {
 			testInfo.dispose();
+			sandbox.restore();
+		}
+	});
+
+	test('displayError preserves a CLI log message that arrives after the coalescing window', async () => {
+		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
+		const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		const logFilePath = path.join(path.parse(process.cwd()).root, 'logs', 'aspire.cli.log');
+
+		try {
+			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage');
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand');
+			const logMessage = `Protokolle unter ${logFilePath} anzeigen.`;
+
+			testInfo.interactionService.displayError('Test error message');
+			await clock.runAllAsync();
+			testInfo.interactionService.displayMessage('page_facing_up', logMessage);
+
+			assert.ok(showErrorMessageStub.calledOnceWith('Test error message'));
+			assert.ok(showInformationMessageStub.calledOnceWith(logMessage));
+			assert.strictEqual(executeCommandStub.called, false);
+		}
+		finally {
+			clock.restore();
 			sandbox.restore();
 		}
 	});
