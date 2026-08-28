@@ -721,7 +721,10 @@ internal sealed class ResourceCommand : BaseCommand
         private static bool IsMatchingAppHostPath(string? appHostPath, string targetPath)
         {
             return !string.IsNullOrEmpty(appHostPath) &&
-                string.Equals(PathNormalizer.ResolveToFilesystemPath(appHostPath), targetPath, StringComparison.OrdinalIgnoreCase);
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(appHostPath),
+                    targetPath,
+                    StringComparisons.FileSystemPath);
         }
 
         private static bool TryGetResourceOnlyHelp(ParseResult parseResult, [NotNullWhen(true)] out string? resourceName)

@@ -63,12 +63,9 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
-        // Key the socket off the symlink-resolved path, matching how a running AppHost computes
-        // its socket id (its working directory is reported physically by the OS). On macOS the
-        // temp workspace lives under /var -> /private/var, so the unresolved and resolved paths
-        // differ and the resolver must resolve symlinks to find this socket.
-        var resolvedProjectPath = PathNormalizer.ResolveSymlinks(projectFile.FullName);
-        var socketPath = CreateMatchingSocketFile(resolvedProjectPath, workspace.WorkspaceRoot, int.MaxValue - 1);
+        // Key the socket exactly as a running AppHost does. On macOS the temp workspace lives
+        // under /var -> /private/var, so the unresolved and canonical paths differ.
+        var socketPath = CreateMatchingSocketFile(projectFile.FullName, workspace.WorkspaceRoot, int.MaxValue - 1);
         var resolver = new AppHostConnectionResolver(
             new TestAuxiliaryBackchannelMonitor(),
             new TestInteractionService(),
@@ -274,7 +271,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     public async Task ResolveConnectionAsync_WithSymlinkedProjectPath_ResolvesToCanonicalSocketKey()
     {
         // Regression test for https://github.com/microsoft/aspire/issues/17618.
-        // A running AppHost keys its backchannel socket off the symlink-resolved path
+        // A running AppHost keys its backchannel socket off the filesystem-canonical path
         // (its process working directory is already physical, e.g. /tmp -> /private/tmp
         // on macOS). The explicit --apphost lookup must resolve symlinks the same way or
         // it computes a different appHostId and reports "no running AppHost" even though
@@ -296,10 +293,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
         var projectFileViaSymlink = new FileInfo(Path.Combine(symlinkDirectory, "TestAppHost.csproj"));
 
-        // The producer keys its socket off the canonical (symlink-resolved) path, so create
-        // the orphaned socket using that same canonical path with a dead PID.
-        var canonicalPath = PathNormalizer.ResolveSymlinks(projectFileViaSymlink.FullName);
-        var socketPath = CreateMatchingSocketFile(canonicalPath, workspace.WorkspaceRoot, int.MaxValue - 1);
+        // Create the orphaned socket using the producer's canonical path with a dead PID.
+        var socketPath = CreateMatchingSocketFile(projectFileViaSymlink.FullName, workspace.WorkspaceRoot, int.MaxValue - 1);
 
         var resolver = new AppHostConnectionResolver(
             new TestAuxiliaryBackchannelMonitor(),
@@ -318,9 +313,57 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
 
         Assert.False(result.Success);
-        // The socket was located via the symlink-resolved key and pruned because its PID is dead.
+        // The socket was located via the filesystem-canonical key and pruned because its PID is dead.
         // Before the fix the resolver hashed the unresolved symlink path, never matched this
         // socket, and left it on disk.
+        Assert.False(File.Exists(socketPath));
+    }
+
+    [Fact]
+    public async Task ResolveConnectionAsync_WithPreviousMacOSCasingKey_FindsSocket()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsMacOS(),
+            "This compatibility scenario is specific to case-insensitive macOS filesystems.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var projectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "TestAppHost.csproj"));
+        File.WriteAllText(projectFile.FullName, "<Project />");
+
+        var differentlyCasedProjectPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "apphost",
+            "testapphost.csproj");
+        Assert.SkipWhen(!File.Exists(differentlyCasedProjectPath),
+            "This test requires a case-insensitive filesystem.");
+
+        // Previous AppHosts resolved symlinks but preserved caller-supplied casing. The current
+        // resolver must search that compact key as a fallback after computing the canonical key.
+        var previousSocketKeyPath = PathNormalizer.ResolveSymlinks(differentlyCasedProjectPath);
+        Assert.NotEqual(PathNormalizer.ResolveToFilesystemPath(differentlyCasedProjectPath), previousSocketKeyPath);
+        var socketPath = CreateSocketFileForKey(
+            previousSocketKeyPath,
+            workspace.WorkspaceRoot,
+            int.MaxValue - 1);
+
+        var resolver = new AppHostConnectionResolver(
+            new TestAuxiliaryBackchannelMonitor(),
+            new TestInteractionService(),
+            new TestProjectLocator(),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLogger<AppHostConnectionResolver>.Instance,
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+
+        var result = await resolver.ResolveConnectionAsync(
+            new FileInfo(differentlyCasedProjectPath),
+            "Scanning",
+            "Select",
+            SharedCommandStrings.AppHostNotRunning,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
         Assert.False(File.Exists(socketPath));
     }
 
@@ -518,10 +561,18 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
     private static string CreateMatchingSocketFile(string appHostPath, DirectoryInfo homeDirectory, int pid)
     {
+        return CreateSocketFileForKey(
+            PathNormalizer.ResolveToFilesystemPath(appHostPath),
+            homeDirectory,
+            pid);
+    }
+
+    private static string CreateSocketFileForKey(string socketKeyPath, DirectoryInfo homeDirectory, int pid)
+    {
         var backchannelsDir = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(PathNormalizer.ResolveToFilesystemPath(appHostPath), homeDirectory.FullName);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,

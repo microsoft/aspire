@@ -614,11 +614,11 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GetSocketKeyAppHostPath_ResolvesSymlinksSoSocketKeyMatchesCli()
+    public void GetSocketKeyAppHostPath_ResolvesFilesystemAliasesSoSocketKeyMatchesCli()
     {
-        // The CLI resolves symlinks before searching for an AppHost's backchannel socket
+        // The CLI resolves filesystem aliases before searching for an AppHost's backchannel socket
         // (AppHostHelper.FindMatchingNonOrphanedSockets), so the AppHost must key its socket off the same
-        // symlink-resolved physical path. File-based AppHosts otherwise report AppHost:FilePath as
+        // canonical physical path. File-based AppHosts otherwise report AppHost:FilePath as
         // Path.GetFullPath(EntryPointFilePath), which leaves intermediate symlinks unresolved and made
         // 'aspire describe/stop --apphost' miss the AppHost. See https://github.com/microsoft/aspire/issues/17618.
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
@@ -643,9 +643,42 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
             var socketKeyPath = AuxiliaryBackchannelService.GetSocketKeyAppHostPath(configuration);
 
-            Assert.Equal(PathNormalizer.ResolveSymlinks(appHostFileViaSymlink), socketKeyPath);
+            Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFileViaSymlink), socketKeyPath);
             // Guards against the symlink not actually being unwrapped (otherwise the assertion above is vacuous).
             Assert.NotEqual(appHostFileViaSymlink, socketKeyPath);
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetSocketKeyAppHostPath_NormalizesCasingOnCaseInsensitiveFilesystems()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(),
+            "Filesystem casing normalization only applies on Windows and macOS.");
+
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-auxbch-casing-");
+        try
+        {
+            var appHostFile = new FileInfo(Path.Combine(tempRoot.FullName, "AppHost.cs"));
+            File.WriteAllText(appHostFile.FullName, "// apphost");
+            var differentlyCasedPath = Path.Combine(tempRoot.FullName, "APPHOST.CS");
+            Assert.SkipWhen(!File.Exists(differentlyCasedPath),
+                "This test requires a case-insensitive filesystem.");
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AppHost:FilePath"] = differentlyCasedPath,
+                })
+                .Build();
+
+            var socketKeyPath = AuxiliaryBackchannelService.GetSocketKeyAppHostPath(configuration);
+
+            Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), socketKeyPath);
+            Assert.NotEqual(differentlyCasedPath, socketKeyPath);
         }
         finally
         {

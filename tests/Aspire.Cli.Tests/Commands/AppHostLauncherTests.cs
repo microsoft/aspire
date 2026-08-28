@@ -89,7 +89,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         File.WriteAllText(realProjectPath, "<Project />");
         var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "AppHost.csproj");
 
-        var resolvedPath = PathNormalizer.ResolveSymlinks(appHostPathViaSymlink);
+        var resolvedPath = PathNormalizer.ResolveToFilesystemPath(appHostPathViaSymlink);
         // The test is only meaningful when resolution actually rewrites the path.
         Assert.NotEqual(appHostPathViaSymlink, resolvedPath);
 
@@ -114,7 +114,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Contains(resolvedFallbackHashes[0], fallbackHashes);
 
         // Cross-side agreement: the AppHost builds its socket file name with the same shared code,
-        // keyed on the resolved path (AuxiliaryBackchannelService resolves symlinks before naming the
+        // keyed on the resolved path (AuxiliaryBackchannelService canonicalizes before naming the
         // socket via ComputeSocketPath, which embeds ComputeAppHostId(resolvedPath)). The CLI's
         // primary hash must equal that embedded id so it waits on exactly the AppHost's socket.
         Assert.Equal(BackchannelConstants.ComputeAppHostId(resolvedPath), expectedHash);

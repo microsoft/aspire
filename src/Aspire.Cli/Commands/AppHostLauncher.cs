@@ -208,10 +208,9 @@ internal sealed class AppHostLauncher(
         executionContext.AppHostCliLogFilePath = childLogFile;
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolatedOption, globalArgs, additionalArgs);
 
-        // Compute the expected socket prefix for backchannel detection. The AppHost keys its
-        // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
-        // hash we wait on must also be computed from the resolved path (see ComputeDetachedMatchHashes).
-        var socketKeyPath = PathNormalizer.ResolveSymlinks(effectiveAppHostFile.FullName);
+        // Compute the expected socket prefix from the same filesystem-canonical path used by the
+        // AppHost, while retaining earlier key forms as fallbacks (see ComputeDetachedMatchHashes).
+        var socketKeyPath = PathNormalizer.ResolveToFilesystemPath(effectiveAppHostFile.FullName);
         var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
             socketKeyPath,
             executionContext.HomeDirectory.FullName);
@@ -325,26 +324,25 @@ internal sealed class AppHostLauncher(
     /// <param name="appHostPath">The AppHost project file or assembly path as supplied to the CLI.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <returns>
-    /// The primary expected hash (the compact AppHost id of the resolved path) and the de-duplicated
-    /// fallback hashes to also search: the compact AppHost id of the raw path plus the legacy hex
-    /// hashes of both the resolved and raw paths (including any Windows drive-letter casing variants).
+    /// The primary expected hash (the compact AppHost id of the filesystem-canonical path) and the
+    /// de-duplicated fallback hashes to also search: compact AppHost ids and legacy hex hashes for
+    /// the previous symlink-only path and the raw path.
     /// </returns>
     internal static (string ExpectedHash, string[] FallbackHashes) ComputeDetachedMatchHashes(string appHostPath, string homeDirectory)
     {
-        var socketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var previousSocketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var socketKeyPath = PathNormalizer.ResolveToFilesystemPath(previousSocketKeyPath);
 
         var expectedHash = AppHostHelper.ExtractHashFromSocketPath(
             AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory))!;
 
-        // Current socket file names embed the compact AppHost id (a different hash space than the
-        // legacy hex hashes below), so include the raw path's compact id explicitly. 
-        // This is what matches a still-running AppHost that keyed its socket on the unresolved path before the
-        // AppHost side started resolving symlinks.
-        var rawCompactHash = AppHostHelper.ExtractHashFromSocketPath(
-            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory))!;
-
-        var fallbackHashes = new[] { rawCompactHash }
+        // Compact ids and legacy hashes occupy different hash spaces, so retain both forms for
+        // the symlink-only key used by the previous producer and the raw key used before that.
+        var fallbackHashes = new[] { previousSocketKeyPath, appHostPath }
+            .Select(path => AppHostHelper.ExtractHashFromSocketPath(
+                AppHostHelper.ComputeAuxiliarySocketPrefix(path, homeDirectory))!)
             .Concat(AppHostHelper.ComputeLegacyHashes(socketKeyPath))
+            .Concat(AppHostHelper.ComputeLegacyHashes(previousSocketKeyPath))
             .Concat(AppHostHelper.ComputeLegacyHashes(appHostPath))
             .Where(h => !string.Equals(h, expectedHash, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)

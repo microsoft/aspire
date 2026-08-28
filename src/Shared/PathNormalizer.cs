@@ -38,10 +38,10 @@ internal static class PathNormalizer
     /// <c>--apphost c:\FOO\bar.csproj</c> will get back <c>C:\foo\bar.csproj</c>
     /// if that is the on-disk casing.
     /// </remarks>
-    /// <param name="path">An absolute path to a file that exists on disk.</param>
+    /// <param name="path">An absolute path to canonicalize.</param>
     /// <returns>
-    /// The filesystem-canonical path, or <paramref name="path"/> unchanged if it cannot be
-    /// resolved (file does not exist, UNC path, etc.).
+    /// The filesystem-canonical path. If the path cannot be fully resolved, returns a best-effort
+    /// result containing any canonicalized prefix followed by the remaining unresolved segments.
     /// </returns>
     public static string ResolveToFilesystemPath(string path)
     {

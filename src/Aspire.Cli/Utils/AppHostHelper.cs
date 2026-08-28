@@ -140,10 +140,17 @@ internal static class AppHostHelper
         int currentPid,
         ILogger logger)
     {
-        // Resolve symlinks so callers that provide "/tmp/..." can still match sockets keyed
-        // off the physical path (for example "/private/tmp/..." on macOS).
-        var resolvedPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var matchingSockets = BackchannelConstants.FindMatchingSockets(resolvedPath, homeDirectory);
+        var previousSocketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var socketKeyPath = PathNormalizer.ResolveToFilesystemPath(previousSocketKeyPath);
+
+        // Current AppHosts key sockets with the filesystem-canonical path. Also search the
+        // symlink-only path used by earlier AppHosts so a CLI update can still find a process
+        // that was already running, including one started with non-disk casing on macOS.
+        var matchingSockets = new[] { socketKeyPath, previousSocketKeyPath }
+            .Distinct(StringComparer.Ordinal)
+            .SelectMany(path => BackchannelConstants.FindMatchingSockets(path, homeDirectory))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         var remainingSockets = PruneOrphanedSockets(matchingSockets, currentPid, logger, out var deletedCount);
         if (deletedCount > 0)
         {

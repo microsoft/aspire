@@ -63,6 +63,38 @@ public class AppHostConnectionSelectionLogicTests
         Assert.Same(inScope, monitor.SelectedConnection);
     }
 
+    [Fact]
+    public void SelectedConnectionDistinguishesCaseDistinctAppHosts()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-apphost-selection-casing-");
+        try
+        {
+            var firstDirectory = Directory.CreateDirectory(Path.Combine(tempRoot.FullName, "AppHost"));
+            var secondDirectoryPath = Path.Combine(tempRoot.FullName, "apphost");
+            Assert.SkipWhen(Directory.Exists(secondDirectoryPath),
+                "This test requires a case-sensitive filesystem.");
+
+            var secondDirectory = Directory.CreateDirectory(secondDirectoryPath);
+            var firstPath = Path.Combine(firstDirectory.FullName, "AppHost.csproj");
+            var secondPath = Path.Combine(secondDirectory.FullName, "AppHost.csproj");
+            File.WriteAllText(firstPath, "<Project />");
+            File.WriteAllText(secondPath, "<Project />");
+
+            var firstConnection = CreateConnection("hash1", firstPath, isInScope: true, processId: 1);
+            var secondConnection = CreateConnection("hash2", secondPath, isInScope: true, processId: 2);
+            var monitor = new TestAuxiliaryBackchannelMonitor();
+            monitor.AddConnection("hash1", "socket.hash1", firstConnection);
+            monitor.AddConnection("hash2", "socket.hash2", secondConnection);
+            monitor.SelectedAppHostPath = secondPath;
+
+            Assert.Same(secondConnection, monitor.SelectedConnection);
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
+    }
+
     private static AppHostAuxiliaryBackchannel CreateConnection(string hash, string appHostPath, bool isInScope, int processId)
     {
         var rpc = new JsonRpc(Stream.Null);
@@ -75,4 +107,3 @@ public class AppHostConnectionSelectionLogicTests
             isInScope);
     }
 }
-

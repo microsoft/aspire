@@ -142,9 +142,8 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var targetPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
             var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
-                targetPath,
+                projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);

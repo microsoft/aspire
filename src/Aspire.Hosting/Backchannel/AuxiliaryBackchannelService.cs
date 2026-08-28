@@ -208,7 +208,7 @@ internal sealed class AuxiliaryBackchannelService(
     {
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        // Use the symlink-resolved AppHost:FilePath or AppHost:Path from configuration for consistent hashing.
+        // Use the filesystem-canonical AppHost:FilePath or AppHost:Path from configuration for consistent hashing.
         var appHostPath = GetSocketKeyAppHostPath(configuration);
 
         if (!string.IsNullOrEmpty(appHostPath))
@@ -223,11 +223,11 @@ internal sealed class AuxiliaryBackchannelService(
     }
 
     /// <summary>
-    /// Reads the AppHost path used to key this AppHost's auxiliary backchannel socket and canonicalizes it by resolving symlinks.
+    /// Reads and filesystem-canonicalizes the AppHost path used to key its auxiliary backchannel socket.
     /// </summary>
     internal static string? GetSocketKeyAppHostPath(IConfiguration configuration)
     {
         var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
-        return string.IsNullOrEmpty(appHostPath) ? appHostPath : PathNormalizer.ResolveSymlinks(appHostPath);
+        return string.IsNullOrEmpty(appHostPath) ? appHostPath : PathNormalizer.ResolveToFilesystemPath(appHostPath);
     }
 }

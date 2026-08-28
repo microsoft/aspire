@@ -461,10 +461,10 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         File.WriteAllText(realProjectPath, "<Project />");
         var projectFileViaSymlink = Path.Combine(symlinkDirectory, "TestAppHost.csproj");
 
-        // The AppHost keys its auxiliary backchannel socket on the symlink-resolved path, so the CLI
+        // The AppHost keys its auxiliary backchannel socket on the filesystem-canonical path, so the CLI
         // must resolve the symlinked path to arrive at the same socket prefix as the real target.
-        var resolvedViaSymlink = PathNormalizer.ResolveSymlinks(projectFileViaSymlink);
-        var resolvedRealTarget = PathNormalizer.ResolveSymlinks(realProjectPath);
+        var resolvedViaSymlink = PathNormalizer.ResolveToFilesystemPath(projectFileViaSymlink);
+        var resolvedRealTarget = PathNormalizer.ResolveToFilesystemPath(realProjectPath);
         Assert.Equal(resolvedRealTarget, resolvedViaSymlink);
 
         var prefixViaResolvedSymlink = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedViaSymlink, homeDirectory);

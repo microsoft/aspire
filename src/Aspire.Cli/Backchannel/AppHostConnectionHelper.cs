@@ -47,7 +47,10 @@ internal static class AppHostConnectionHelper
         {
             var selectedConnection = connections.FirstOrDefault(c =>
                 c.AppHostInfo?.AppHostPath != null &&
-                string.Equals(PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath), PathNormalizer.ResolveToFilesystemPath(selectedPath), StringComparison.OrdinalIgnoreCase));
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
+                    PathNormalizer.ResolveToFilesystemPath(selectedPath),
+                    StringComparisons.FileSystemPath));
 
             if (selectedConnection != null)
             {

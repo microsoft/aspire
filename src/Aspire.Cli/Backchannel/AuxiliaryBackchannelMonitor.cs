@@ -156,7 +156,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
             {
                 var selectedConnection = connections.FirstOrDefault(c =>
                     c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath), PathNormalizer.ResolveToFilesystemPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
+                    string.Equals(
+                        PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
+                        PathNormalizer.ResolveToFilesystemPath(SelectedAppHostPath),
+                        StringComparisons.FileSystemPath));
 
                 if (selectedConnection != null)
                 {
