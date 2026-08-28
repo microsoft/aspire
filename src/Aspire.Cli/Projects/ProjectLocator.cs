@@ -987,14 +987,15 @@ internal sealed class ProjectLocator(
             {
                 // A project file was directly specified.
                 //
-                // Resolve to the filesystem-canonical path so the path used for backchannel socket
-                // hash computation matches.
-                var resolvedProjectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+                // Preserve symlinks because single-file AppHosts load apphost.run.json and
+                // aspire.config.json beside the selected path. Backchannel and comparison call
+                // sites canonicalize their own identity keys.
+                var resolvedProjectPath = PathNormalizer.ResolvePathCasing(projectFile.FullName);
 
                 if (!string.Equals(resolvedProjectPath, projectFile.FullName, StringComparison.Ordinal))
                 {
                     logger.LogDebug(
-                        "Canonicalized explicit AppHost path from '{OriginalPath}' to '{ResolvedPath}'.",
+                        "Normalized explicit AppHost path casing from '{OriginalPath}' to '{ResolvedPath}'.",
                         projectFile.FullName,
                         resolvedProjectPath);
 

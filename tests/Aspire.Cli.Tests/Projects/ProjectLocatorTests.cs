@@ -338,7 +338,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(
             appHostProjectFiles.Select(appHostProjectFile => PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName)),
-            results.Select(result => result.SelectedProjectFile?.FullName));
+            results.Select(result => PathNormalizer.ResolveToFilesystemPath(result.SelectedProjectFile!.FullName)));
 
         var recordedDefault = ReadConfiguredAppHostPath(configPath);
         Assert.Contains(
@@ -537,7 +537,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         AssertSameFileSystemPath(projectFile.FullName, result.SelectedProjectFile?.FullName);
-        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(projectFile.FullName), Assert.Single(result.AllProjectFileCandidates).FullName);
+        AssertSameFileSystemPath(projectFile.FullName, Assert.Single(result.AllProjectFileCandidates).FullName);
 
         // Never persist a candidate that was never confirmed to be an AppHost: a later ambient
         // invocation would silently reuse the unverified guess.
@@ -1441,9 +1441,10 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UseOrFindAppHostProjectFileResultUsesFilesystemPathForExplicitSymlinkedPath()
+    public async Task UseOrFindAppHostProjectFilePreservesExplicitSymlinkedPathForExecution()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("RealAppHost");
@@ -1466,7 +1467,12 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.NotNull(result.SelectedProjectFile);
-        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(onDiskProjectFile.FullName), result.SelectedProjectFile!.FullName);
+        Assert.Equal(
+            PathNormalizer.ResolvePathCasing(linkedProjectFile.FullName),
+            result.SelectedProjectFile!.FullName);
+        Assert.NotEqual(
+            PathNormalizer.ResolveToFilesystemPath(linkedProjectFile.FullName),
+            result.SelectedProjectFile.FullName);
     }
 
     [Fact]
@@ -2003,7 +2009,7 @@ builder.Build().Run();");
 
         var result = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), result!.FullName);
+        Assert.Equal(PathNormalizer.ResolvePathCasing(appHostFile.FullName), result!.FullName);
     }
 
     [Fact]
