@@ -24,3 +24,9 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 **/*.js.map
+
+# Keep legacy Marketplace README image URLs valid without shipping unused screenshots.
+resources/aspire-dashboard-dark.png
+resources/editor-indicators-dark.png
+resources/vscode-extension-apphost-view.png
+resources/vscode-extension-debug-session.png
