@@ -637,6 +637,91 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task GetRuns_PreservesLeasedDescriptorUntilLeaseEnds()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        string historicalRunId;
+        string metadataPath;
+
+        using (var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1))))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            metadataPath = Path.Combine(historicalRunStore.RunDirectory, "run.json");
+            await InitializeAndPublishRunAsync(historicalRunStore);
+        }
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+        var historicalRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
+        var updatedEndedAtUtc = startedAt.AddMinutes(-2);
+
+        using (var runLease = currentRunStore.TryAcquireRunLease(historicalRun))
+        {
+            Assert.NotNull(runLease);
+
+            var metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+            metadata[nameof(DashboardRunDescriptor.EndedAtUtc)] = JsonValue.Create(updatedEndedAtUtc);
+            metadata[nameof(DashboardRunDescriptor.CleanShutdown)] = false;
+            File.WriteAllText(metadataPath, metadata.ToJsonString());
+
+            var leasedRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
+            Assert.Same(historicalRun, leasedRun);
+        }
+
+        var refreshedRun = currentRunStore.GetRuns().Single(run => string.Equals(run.RunId, historicalRunId, StringComparison.Ordinal));
+        Assert.NotSame(historicalRun, refreshedRun);
+        Assert.Equal(updatedEndedAtUtc, refreshedRun.EndedAtUtc);
+        Assert.False(refreshedRun.CleanShutdown);
+    }
+
+    [Fact]
+    public async Task GetRuns_IgnoresNullAndDuplicateRunIds()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        var startedAt = new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
+        string validRunId;
+        string duplicateMetadataPath;
+        string nullMetadataPath;
+
+        using (var validRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-3))))
+        {
+            validRunId = validRunStore.RunId;
+            await InitializeAndPublishRunAsync(validRunStore);
+        }
+
+        using (var duplicateRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-2))))
+        {
+            duplicateMetadataPath = Path.Combine(duplicateRunStore.RunDirectory, "run.json");
+            await InitializeAndPublishRunAsync(duplicateRunStore);
+        }
+
+        using (var nullRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddMinutes(-1))))
+        {
+            nullMetadataPath = Path.Combine(nullRunStore.RunDirectory, "run.json");
+            await InitializeAndPublishRunAsync(nullRunStore);
+        }
+
+        var duplicateMetadata = JsonNode.Parse(File.ReadAllText(duplicateMetadataPath))!.AsObject();
+        duplicateMetadata[nameof(DashboardRunDescriptor.RunId)] = validRunId;
+        File.WriteAllText(duplicateMetadataPath, duplicateMetadata.ToJsonString());
+
+        var nullMetadata = JsonNode.Parse(File.ReadAllText(nullMetadataPath))!.AsObject();
+        nullMetadata[nameof(DashboardRunDescriptor.RunId)] = null;
+        File.WriteAllText(nullMetadataPath, nullMetadata.ToJsonString());
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt));
+        foreach (var runs in new[] { currentRunStore.GetRuns(), currentRunStore.GetRuns() })
+        {
+            Assert.Collection(
+                runs,
+                currentRun => Assert.True(currentRun.IsCurrent),
+                historicalRun => Assert.Equal(validRunId, historicalRun.RunId));
+        }
+    }
+
+    [Fact]
     public async Task RunMode_DeletesOldestRunWhenLimitIsExceeded()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

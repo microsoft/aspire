@@ -339,6 +339,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private IReadOnlyList<DashboardRunDescriptor> LoadRuns()
     {
         var existingRuns = _runs.ToDictionary(run => run.RunId, StringComparer.Ordinal);
+        var discoveredRunIds = new HashSet<string>(StringComparer.Ordinal) { RunId };
         var currentRun = existingRuns.GetValueOrDefault(RunId) ?? CreateDescriptor(_metadata, RunDirectory, isCurrent: true);
         currentRun.IsPinned = _metadata.IsPinned;
         currentRun.IsSelectable = true;
@@ -360,11 +361,15 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 try
                 {
                     var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-                    if (metadata is { SchemaVersion: SchemaVersion })
+                    if (metadata is { SchemaVersion: SchemaVersion } &&
+                        !string.IsNullOrEmpty(metadata.RunId) &&
+                        discoveredRunIds.Add(metadata.RunId))
                     {
                         var discoveredRun = CreateDescriptor(metadata, directory, isCurrent: false);
                         var run = existingRuns.TryGetValue(metadata.RunId, out var existingRun) &&
-                            HasSameMetadata(existingRun, discoveredRun)
+                            // A lease owns the run lock through its descriptor. Preserve that descriptor if metadata
+                            // changed between discovery reading run.json and acquiring the lock.
+                            (existingRun.IsLeased || HasSameMetadata(existingRun, discoveredRun))
                                 ? existingRun
                                 : discoveredRun;
                         run.IsPinned = metadata.IsPinned;
