@@ -144,6 +144,8 @@ This separation keeps 90% of the logic platform-agnostic while allowing each CI 
 
 ### Phase 5: Test Execution
 
+Pull requests run `.github/actions/select-tests` before enumeration to select the affected .NET tests and non-.NET jobs. Non-PR events force an `ALL` selection, so rolling builds retain the complete test graph. Extension release metadata follows the same path: changes to `extension/package.json` and `extension/CHANGELOG.md` select extension unit and E2E validation without creating a .NET matrix.
+
 In `.github/workflows/tests.yml`, the workflow:
 
 1. Receives the OS-expanded `all_tests` matrix from the `enumerate-tests` action

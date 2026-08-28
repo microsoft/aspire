@@ -6,7 +6,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
-public sealed class ExtensionReleaseFastPathWorkflowTests
+public sealed class ExtensionWorkflowTests
 {
     private static readonly YamlMappingNode s_testsWorkflow = LoadWorkflow("tests.yml");
     private static readonly YamlMappingNode s_testJobs = Mapping(s_testsWorkflow, "jobs");
@@ -14,6 +14,18 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     private static readonly YamlMappingNode s_extensionUnitJobs = Mapping(s_extensionUnitWorkflow, "jobs");
     private static readonly YamlMappingNode s_ciWorkflow = LoadWorkflow("ci.yml");
     private static readonly YamlMappingNode s_ciJobs = Mapping(s_ciWorkflow, "jobs");
+
+    [Fact]
+    public void CiUsesSelectiveTestsInsteadOfDedicatedExtensionReleasePath()
+    {
+        Assert.False(s_ciJobs.Children.ContainsKey(new YamlScalarNode("extension_release_tests")));
+
+        var prepareForCi = Mapping(s_ciJobs, "prepare_for_ci");
+        Assert.False(Mapping(prepareForCi, "outputs").Children.ContainsKey(new YamlScalarNode("is_trusted_extension_release_pr")));
+        Assert.DoesNotContain(Steps(prepareForCi), step => Scalar(step, "id") == "classify_release_pr");
+        Assert.False(File.Exists(RepoPath(".github", "actions", "is-trusted-extension-release-pr", "action.yml")));
+        Assert.False(File.Exists(RepoPath(".github", "actions", "is-trusted-extension-release-pr", "validate.ps1")));
+    }
 
     [Fact]
     public void FocusedExtensionWorkflowSupportsOptionalPackaging()
@@ -79,7 +91,7 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void NormalAndReleaseCallersShareFocusedWorkflowWithDifferentPackaging()
+    public void NormalTestsUseFocusedExtensionWorkflowWithPackaging()
     {
         var normalExtensionTests = Mapping(s_testJobs, "extension_tests_win");
         Assert.Equal("./.github/workflows/extension-unit-tests.yml", Scalar(normalExtensionTests, "uses"));
@@ -91,10 +103,6 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         var normalInputs = Mapping(normalExtensionTests, "with");
         Assert.Equal("true", Scalar(normalInputs, "packageVsix"));
         Assert.Equal("${{ inputs.extensionVersionOverride }}", Scalar(normalInputs, "extensionVersionOverride"));
-
-        var releaseExtensionTests = Mapping(s_ciJobs, "extension_release_tests");
-        Assert.Equal("./.github/workflows/extension-unit-tests.yml", Scalar(releaseExtensionTests, "uses"));
-        Assert.Equal("false", Scalar(Mapping(releaseExtensionTests, "with"), "packageVsix"));
     }
 
     [Fact]
@@ -190,15 +198,12 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void ReleaseCallerGrantsOnlyFocusedWorkflowPermissions()
+    public void FocusedWorkflowUsesReadOnlyContentsPermission()
     {
         var workflowPermissions = Mapping(s_extensionUnitWorkflow, "permissions");
-        var releasePermissions = Mapping(Mapping(s_ciJobs, "extension_release_tests"), "permissions");
 
         Assert.Equal(["contents"], workflowPermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
-        Assert.Equal(["contents"], releasePermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
         Assert.Equal("read", Scalar(workflowPermissions, "contents"));
-        Assert.Equal("read", Scalar(releasePermissions, "contents"));
     }
 
     [Fact]
@@ -222,15 +227,6 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void ClassifierDescriptionDoesNotReferenceDeletedCopilotDispatcher()
-    {
-        var action = File.ReadAllText(
-            RepoPath(".github", "actions", "is-trusted-extension-release-pr", "action.yml"));
-
-        Assert.DoesNotContain("copilot-review-dispatch.yml", action, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void GenericReviewChecksOnlyStableNonExperimentalAtsBreaks()
     {
         var skill = File.ReadAllText(RepoPath(".agents", "skills", "code-review", "SKILL.md"));
@@ -250,123 +246,32 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void ClassifierRunsFromAdjacentTrustedBaseCheckout()
-    {
-        var steps = Steps(Mapping(s_ciJobs, "prepare_for_ci"));
-        var classifierIndex = steps.FindIndex(step => Scalar(step, "id") == "classify_release_pr");
-        var changedFilesIndex = steps.FindIndex(step => Scalar(step, "id") == "check_for_changes");
-
-        Assert.True(classifierIndex > 0);
-        Assert.True(changedFilesIndex > classifierIndex);
-
-        var trustedCheckout = steps[classifierIndex - 1];
-        Assert.Equal("Checkout trusted extension release classifier", Scalar(trustedCheckout, "name"));
-        Assert.Equal("${{ github.event_name == 'pull_request' }}", Scalar(trustedCheckout, "if"));
-        Assert.Equal("true", Scalar(trustedCheckout, "continue-on-error"));
-        Assert.Equal(
-            "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
-            Scalar(trustedCheckout, "uses"));
-
-        var checkoutInputs = Mapping(trustedCheckout, "with");
-        Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(checkoutInputs, "ref"));
-        Assert.Equal(".trusted-extension-release-classifier", Scalar(checkoutInputs, "path"));
-        Assert.Equal("false", Scalar(checkoutInputs, "persist-credentials"));
-
-        var classifier = steps[classifierIndex];
-        Assert.Equal("true", Scalar(classifier, "continue-on-error"));
-        Assert.Equal(
-            "./.trusted-extension-release-classifier/.github/actions/is-trusted-extension-release-pr",
-            Scalar(classifier, "uses"));
-    }
-
-    [Fact]
-    public void ClassifierReceivesAllIdentityAndRevisionInputs()
-    {
-        var prepareForCi = Mapping(s_ciJobs, "prepare_for_ci");
-        var classifier = Assert.Single(Steps(prepareForCi), step => Scalar(step, "id") == "classify_release_pr");
-        var inputs = Mapping(classifier, "with");
-
-        Assert.Equal(
-            [
-                "author",
-                "base_ref",
-                "base_sha",
-                "head_ref",
-                "head_repo",
-                "head_sha",
-                "repository",
-            ],
-            inputs.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value).Order());
-        Assert.Equal("${{ github.repository }}", Scalar(inputs, "repository"));
-        Assert.Equal("${{ github.event.pull_request.base.ref }}", Scalar(inputs, "base_ref"));
-        Assert.Equal("${{ github.event.pull_request.head.repo.full_name }}", Scalar(inputs, "head_repo"));
-        Assert.Equal("${{ github.event.pull_request.head.ref }}", Scalar(inputs, "head_ref"));
-        Assert.Equal("${{ github.event.pull_request.user.login }}", Scalar(inputs, "author"));
-        Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(inputs, "base_sha"));
-        Assert.Equal("${{ github.event.pull_request.head.sha }}", Scalar(inputs, "head_sha"));
-    }
-
-    [Fact]
-    public void ClassifierFailureOrEmptyOutputRoutesToNormalCi()
-    {
-        var prepareForCi = Mapping(s_ciJobs, "prepare_for_ci");
-        var classifier = Assert.Single(Steps(prepareForCi), step => Scalar(step, "id") == "classify_release_pr");
-
-        Assert.Equal("true", Scalar(classifier, "continue-on-error"));
-        Assert.Equal(
-            "${{ github.event_name == 'pull_request' && steps.classify_release_pr.outputs.is_trusted == 'true' && 'true' || 'false' }}",
-            Scalar(Mapping(prepareForCi, "outputs"), "is_trusted_extension_release_pr"));
-        Assert.Contains(
-            "needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true'",
-            Scalar(Mapping(s_ciJobs, "tests"), "if"),
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true'",
-            Scalar(Mapping(s_ciJobs, "stabilization_check"), "if"),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void NormalAndTrustedReleaseTestJobsAreMutuallyExclusive()
+    public void CiRunsSelectorDrivenTestsAndStabilizationForEveryRequiredPr()
     {
         var normalTests = Mapping(s_ciJobs, "tests");
         Assert.Equal("./.github/workflows/tests.yml", Scalar(normalTests, "uses"));
         Assert.Equal(
-            "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' }}",
+            "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}",
             Scalar(normalTests, "if"));
 
-        var releaseTests = Mapping(s_ciJobs, "extension_release_tests");
-        Assert.Equal("./.github/workflows/extension-unit-tests.yml", Scalar(releaseTests, "uses"));
         Assert.Equal(
-            "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' }}",
-            Scalar(releaseTests, "if"));
-        Assert.Equal("false", Scalar(Mapping(releaseTests, "with"), "packageVsix"));
-    }
-
-    [Fact]
-    public void StabilizationRunsOnlyOnNormalCiGraph()
-    {
-        Assert.Equal(
-            "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' }}",
+            "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}",
             Scalar(Mapping(s_ciJobs, "stabilization_check"), "if"));
     }
 
     [Fact]
-    public void FinalResultsEnforcesExactlyTheTrustedOrNormalGraph()
+    public void FinalResultsRequireSelectorDrivenTestsAndStabilization()
     {
         var results = Mapping(s_ciJobs, "results");
         Assert.Equal(
-            ["prepare_for_ci", "tests", "stabilization_check", "extension_release_tests"],
+            ["prepare_for_ci", "tests", "stabilization_check"],
             SequenceScalars(results, "needs"));
 
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any of the dependent jobs failed");
         Assert.Equal(
             "${{ always() && needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
             "(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || " +
-            "(needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' && " +
-            "(needs.tests.result != 'skipped' || needs.stabilization_check.result != 'skipped' || needs.extension_release_tests.result != 'success')) || " +
-            "(needs.prepare_for_ci.outputs.is_trusted_extension_release_pr != 'true' && " +
-            "(needs.tests.result != 'success' || needs.stabilization_check.result != 'success' || needs.extension_release_tests.result != 'skipped'))) }}",
+            "needs.tests.result != 'success' || needs.stabilization_check.result != 'success') }}",
             CollapseWhitespace(Scalar(failureStep, "if")));
     }
 
