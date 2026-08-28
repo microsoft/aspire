@@ -932,6 +932,22 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetNuGetSources_WithCredentialBearingPackageSourceOverride_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string packageSourceOverride = "https://user:password@feed.example.com/v3/index.json";
+        var server = CreatePrebuiltAppHostServer(workspace);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => server.GetNuGetSourcesAsync(
+                requestedChannel: null,
+                packageSourceOverride,
+                CancellationToken.None));
+
+        Assert.Equal("packageSourceOverride", exception.ParamName);
+    }
+
+    [Fact]
     public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -2234,6 +2250,77 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Contains(packageElements, e =>
                 e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" &&
                 e.Attribute("Version")?.Value == "13.4.0-pr.17141.gf142085f");
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithCredentialBearingChannelSource_KeepsRestoreConfigTemporary()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
+        string? restoreConfigFile = null;
+        string? restoreConfigContent = null;
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            {
+                var generatedProject = XDocument.Load(projectFilePath.FullName);
+                var ns = generatedProject.Root!.GetDefaultNamespace();
+                restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+                Assert.False(string.IsNullOrEmpty(restoreConfigFile));
+                Assert.True(File.Exists(restoreConfigFile));
+                restoreConfigContent = File.ReadAllText(restoreConfigFile);
+                WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
+                return 0;
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            dotNetCliRunner: dotNetCliRunner,
+            packagingService: packagingService);
+        var workingDirectory = GetWorkingDirectory(server);
+        var restoreStampFile = Path.Combine(workingDirectory, "integration-restore", "obj", "aspire-restore.stamp");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(restoreStampFile)!);
+            await File.WriteAllTextAsync(restoreStampFile, "stale-fingerprint");
+
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ],
+                requestedChannel: "daily");
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreConfigFile);
+            Assert.NotNull(restoreConfigContent);
+            Assert.Contains(channelSource, restoreConfigContent);
+            Assert.False(File.Exists(restoreConfigFile));
+            Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
+            Assert.False(File.Exists(restoreStampFile));
         }
         finally
         {

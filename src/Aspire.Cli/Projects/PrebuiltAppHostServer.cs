@@ -746,10 +746,45 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         Directory.CreateDirectory(restoreDir);
 
         var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        var restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
-        var restoreConfigContent = restoreConfigFile is null
-            ? null
-            : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        var hasCredentialBearingRestoreSource = restoreSources.PackageSourceMappings?.Any(
+            static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)) == true;
+        if (hasCredentialBearingRestoreSource)
+        {
+            var persistentRestoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
+            if (persistentRestoreConfigFile.Exists)
+            {
+                persistentRestoreConfigFile.Delete();
+            }
+
+            var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
+            if (restoreStampFile.Exists)
+            {
+                restoreStampFile.Delete();
+            }
+        }
+
+        using var temporaryRestoreConfig = hasCredentialBearingRestoreSource
+            ? await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false)
+            : null;
+
+        FileInfo? restoreConfigFile;
+        string? restoreConfigContent;
+        if (hasCredentialBearingRestoreSource)
+        {
+            // Credential-bearing channel URLs must exist only for the duration of this build.
+            // Persisting the generated config under .aspire/integrations would retain credentials
+            // from sources such as overrideStagingFeed after the command exits.
+            restoreConfigFile = temporaryRestoreConfig!.ConfigFile;
+            restoreConfigContent = null;
+        }
+        else
+        {
+            restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
+            restoreConfigContent = restoreConfigFile is null
+                ? null
+                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        }
+
         var channelSources = restoreConfigFile is null
             ? GetNuGetSources(restoreSources)
             : null;
@@ -794,8 +829,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
         // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
         // restore rather than reported.
-        var restoreInputs = await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, restoreConfigContent, cancellationToken).ConfigureAwait(false);
-        var restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
+        string? restoreFingerprint = null;
+        if (!hasCredentialBearingRestoreSource)
+        {
+            var restoreInputs = await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, restoreConfigContent, cancellationToken).ConfigureAwait(false);
+            restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
+        }
+
         var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
 
         _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
@@ -862,7 +902,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         if (!string.IsNullOrWhiteSpace(restoreConfigFile))
         {
             // RestoreAdditionalProjectSources can add feeds, but it cannot carry package source
-            // mappings. Use the temp NuGet.config so Aspire* packages stay pinned to the
+            // mappings. Use the generated NuGet.config so Aspire* packages stay pinned to the
             // explicit source while non-Aspire dependencies can use fallback sources.
             restoreAdditionalSources = null;
         }
