@@ -122,8 +122,9 @@ public sealed partial class SqliteTelemetryRepository
         EnsureCachePopulated();
         lock (_cacheLock)
         {
-            // Trace Detail formats source names against instrumented resources only. Use the same resource set
-            // and helper here so replica suffixes and shortened GUID instance IDs cannot drift from the UI.
+            // Trace Detail determines replica suffixes from instrumented resources, but it also formats
+            // uninstrumented peers against that set. Keep all resources as alias candidates so peer labels use
+            // the same suffix and shortened GUID behavior as the UI.
             var resources = _cachedResourcesByKey.Values
                 .Select(resource => resource.Resource)
                 .Where(resource => !resource.UninstrumentedPeer)
@@ -132,16 +133,16 @@ public sealed partial class SqliteTelemetryRepository
                 .GroupBy(resource => resource.ResourceName, StringComparers.ResourceName)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparers.ResourceName);
 
-            return _cachedResourcesByKey.Values
-                .Where(resource => !resource.Resource.UninstrumentedPeer)
-                .Where(resource =>
+            return _cachedResourcesByKey.Values.Where(resource =>
                 {
                     // The SQL query already matches the base resource name. Return only aliases that add a
                     // replica suffix match so common searches don't expand into large resource ID lists.
+                    var includeInstanceId = resourceNameCounts.TryGetValue(resource.Resource.ResourceName, out var resourceNameCount) &&
+                        resourceNameCount > 1;
                     return !resource.Resource.ResourceName.Contains(text, StringComparison.CurrentCultureIgnoreCase) &&
                         OtlpHelpers.GetResourceName(
                             resource.Resource,
-                            includeInstanceId: resourceNameCounts[resource.Resource.ResourceName] > 1).Contains(text, StringComparison.CurrentCultureIgnoreCase);
+                            includeInstanceId).Contains(text, StringComparison.CurrentCultureIgnoreCase);
                 })
                 .Select(resource => resource.ResourceId)
                 .ToArray();

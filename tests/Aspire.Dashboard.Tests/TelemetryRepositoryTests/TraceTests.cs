@@ -3659,7 +3659,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetSpans_FilterByTextFragments_MatchesPeerResourceDisplayName()
     {
-        var peerResource = ModelTestHelpers.CreateResource(resourceName: "service-replica-2", displayName: "service");
+        var peerResource = ModelTestHelpers.CreateResource(resourceName: "service-replica-3", displayName: "service");
         using var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => (peerResource.Name, peerResource));
         using var repositoryContext = await CreateRepositoryAsync(outgoingPeerResolvers: [outgoingPeerResolver]);
 
@@ -3726,6 +3726,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         ]);
 
+        var persistedPeer = Assert.Single(
+            repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true),
+            resource => resource.ResourceKey == new ResourceKey("service", "replica-3"));
+        Assert.True(persistedPeer.UninstrumentedPeer);
+
         var result = await repositoryContext.Repository.GetSpansAsync(new GetSpansRequest
         {
             ResourceKeys = [],
@@ -3733,7 +3738,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             Count = int.MaxValue,
             Filters = [],
             TraceId = GetHexId("1"),
-            TextFragments = ["service-replica-2"]
+            TextFragments = ["service-replica-3"]
         }, cancellationToken: CancellationToken.None);
 
         Assert.Equal(1, result.PagedResult.TotalItemCount);
