@@ -8,13 +8,8 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
 using Aspire.Hosting.Pipelines;
-using Azure;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure;
 
@@ -68,17 +63,26 @@ public sealed class AzureConnectorGatewayTriggerConfigResource : AzureProvisioni
         // AzureProvisioningResource inherits AzureBicepResource, which adds a normal
         // provision-infrastructure step in its constructor. Trigger configs depend on a
         // sandbox callback URL that only exists after the sandbox data-plane deploy step
-        // persists endpoint state, so remove the early step and add a late deploy step below.
-        foreach (var annotation in Annotations.Where(static annotation => annotation is PipelineStepAnnotation or PipelineConfigurationAnnotation).ToArray())
-        {
-            Annotations.Remove(annotation);
-        }
+        // persists endpoint state, so wrap that step factory and move its generated step
+        // after the sandbox deployment without duplicating the Azure provisioning logic.
+        var provisioningStepAnnotation = Annotations.OfType<PipelineStepAnnotation>().Single();
+        var provisioningConfigurationAnnotation = Annotations.OfType<PipelineConfigurationAnnotation>().Single();
+        Annotations.Remove(provisioningStepAnnotation);
+        Annotations.Remove(provisioningConfigurationAnnotation);
 
         // This resource is deploy-time wiring rather than part of the first-pass Azure
         // infrastructure artifact. Keeping it out of generic publish/run provisioning avoids
         // creating a trigger with an empty callback URL before the sandbox exists.
         Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
-        Annotations.Add(new PipelineStepAnnotation(CreatePipelineSteps));
+        Annotations.Add(new PipelineStepAnnotation(
+            factoryContext => CreatePipelineStepsAsync(factoryContext, provisioningStepAnnotation)));
+        Annotations.Add(new PipelineConfigurationAnnotation(async context =>
+        {
+            if (GetCallbackSandboxContainerOrDefault() is not null)
+            {
+                await provisioningConfigurationAnnotation.Callback(context).ConfigureAwait(false);
+            }
+        }));
     }
 
     /// <summary>
@@ -199,7 +203,9 @@ public sealed class AzureConnectorGatewayTriggerConfigResource : AzureProvisioni
         infrastructure.Add(trigger);
     }
 
-    private IEnumerable<PipelineStep> CreatePipelineSteps(PipelineStepFactoryContext factoryContext)
+    private async Task<IEnumerable<PipelineStep>> CreatePipelineStepsAsync(
+        PipelineStepFactoryContext factoryContext,
+        PipelineStepAnnotation provisioningStepAnnotation)
     {
         if (!factoryContext.PipelineContext.ExecutionContext.IsPublishMode)
         {
@@ -217,25 +223,15 @@ public sealed class AzureConnectorGatewayTriggerConfigResource : AzureProvisioni
             return [];
         }
 
-        ProvisioningTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var steps = (await provisioningStepAnnotation.CreateStepsAsync(factoryContext).ConfigureAwait(false)).ToArray();
+        foreach (var step in steps)
+        {
+            step.DependsOn(AzureSandboxContainerDeployment.GetDeployStepName(sandboxContainer));
+            step.RequiredBySteps.Remove(AzureEnvironmentResource.ProvisionInfrastructureStepName);
+            step.RequiredBy(WellKnownPipelineSteps.Deploy);
+        }
 
-        return
-        [
-            new PipelineStep
-            {
-                Name = $"provision-{Name}",
-                Description = $"Provisions connector trigger config '{TriggerName}' after sandbox deployment.",
-                Action = ProvisionTriggerConfigAsync,
-                Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
-                DependsOnSteps =
-                [
-                    AzureEnvironmentResource.CreateProvisioningContextStepName,
-                    AzureSandboxContainerDeployment.GetDeployStepName(sandboxContainer)
-                ],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy],
-                Resource = this
-            }
-        ];
+        return steps;
     }
 
     private AzureSandboxContainerResource? GetCallbackSandboxContainerOrDefault()
@@ -252,64 +248,5 @@ public sealed class AzureConnectorGatewayTriggerConfigResource : AzureProvisioni
         }
 
         return null;
-    }
-
-    private async Task ProvisionTriggerConfigAsync(PipelineStepContext context)
-    {
-        if (ProvisioningTaskCompletionSource?.Task.IsCompleted == true)
-        {
-            context.Logger.LogDebug("Connector trigger config {ResourceName} is already provisioned. Skipping provisioning.", Name);
-            return;
-        }
-
-        var options = context.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
-        ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions;
-
-        var bicepProvisioner = context.Services.GetRequiredService<IBicepProvisioner>();
-        var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault() ??
-            throw new InvalidOperationException("AzureEnvironmentResource must be present in the application model.");
-        var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
-
-        var resourceTask = await context.ReportingStep
-            .CreateTaskAsync(new MarkdownString($"Deploying connector trigger **{Name}**"), context.CancellationToken)
-            .ConfigureAwait(false);
-
-        await using (resourceTask.ConfigureAwait(false))
-        {
-            try
-            {
-                if (await bicepProvisioner.ConfigureResourceAsync(this, context.CancellationToken).ConfigureAwait(false))
-                {
-                    ProvisioningTaskCompletionSource?.TrySetResult();
-                    await resourceTask.CompleteAsync(
-                        new MarkdownString($"Using existing deployment for connector trigger **{Name}**"),
-                        CompletionState.Completed,
-                        context.CancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    await bicepProvisioner.GetOrCreateResourceAsync(this, provisioningContext, context.CancellationToken).ConfigureAwait(false);
-                    ProvisioningTaskCompletionSource?.TrySetResult();
-                    await resourceTask.CompleteAsync(
-                        new MarkdownString($"Successfully provisioned connector trigger **{Name}**"),
-                        CompletionState.Completed,
-                        context.CancellationToken).ConfigureAwait(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                var errorMessage = ex switch
-                {
-                    RequestFailedException requestEx => $"Deployment failed: {AzureBicepResource.ExtractDetailedErrorMessage(requestEx)}",
-                    _ => $"Deployment failed: {ex.Message}"
-                };
-                ProvisioningTaskCompletionSource?.TrySetException(ex);
-                await resourceTask.CompleteAsync(
-                    new MarkdownString($"Failed to provision connector trigger **{Name}**: {errorMessage}"),
-                    CompletionState.CompletedWithError,
-                    context.CancellationToken).ConfigureAwait(false);
-                throw new ProvisioningFailedException(errorMessage, ex);
-            }
-        }
     }
 }

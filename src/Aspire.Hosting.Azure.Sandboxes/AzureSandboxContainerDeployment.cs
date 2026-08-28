@@ -1455,7 +1455,7 @@ internal static class AzureSandboxContainerDeployment
                     resolvedEndpoint.Endpoint.Name,
                     StringComparison.Ordinal))
                 .Select(static annotation => annotation.ConnectorGateway)
-                .DistinctBy(static gateway => gateway.Name, StringComparers.ResourceName)
+                .DistinctBy(static gateway => gateway.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             if (resolvedEndpointOptions?.Anonymous == true && authorizedConnectorGateways.Length > 0)
             {
@@ -1490,7 +1490,7 @@ internal static class AzureSandboxContainerDeployment
                     IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp,
                     AuthorizedConnectorGateways = existingEndpoint.AuthorizedConnectorGateways
                         .Concat(endpoint.AuthorizedConnectorGateways)
-                        .DistinctBy(static gateway => gateway.Name, StringComparers.ResourceName)
+                        .DistinctBy(static gateway => gateway.Name, StringComparer.OrdinalIgnoreCase)
                         .ToArray()
                 };
             }
