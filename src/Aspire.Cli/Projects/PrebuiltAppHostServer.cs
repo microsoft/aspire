@@ -303,8 +303,9 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var packages = packageRefs
             .Select(r => (r.Name, Version: GetRestoreVersion(r.Name, r.Version!, useExactPackageVersions)))
             .ToList();
-        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
-        var sources = await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
+        using var temporaryNuGetConfig = await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
+        var sources = GetNuGetSources(restoreSources);
 
         return await _nugetService.RestorePackagesAsync(
             packages,
@@ -732,17 +733,66 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        // Only synthesize a temp NuGet.config (replacing nuget.config discovery via
-        // RestoreConfigFile) when an explicit --source or auto-discovered local channel source
-        // is in play. The explicit-channel-no-override path keeps the user's ambient
-        // nuget.config in place and contributes channel mappings additively via
-        // RestoreAdditionalProjectSources so private/internal feeds the user has configured
-        // remain reachable for non-Aspire transitives during project-ref restore.
-        using var temporaryNuGetConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
-            ? await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken)
+        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
+        var usesAmbientNuGetConfiguration = string.IsNullOrWhiteSpace(packageSourceOverride);
+        var hasMappedRestoreSources = restoreSources.PackageSourceMappings is not null;
+        var useComposedRestoreConfig = usesAmbientNuGetConfiguration && hasMappedRestoreSources;
+        var usePersistentRestoreConfig = !usesAmbientNuGetConfiguration && hasMappedRestoreSources;
+        var hasCredentialBearingMappedSource = hasMappedRestoreSources &&
+            restoreSources.PackageSourceMappings!.Any(
+                static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source));
+        var hasCredentialBearingAdditionalSource = !hasMappedRestoreSources &&
+            restoreSources.AdditionalSources.Any(
+                static source => PackageSourceOverrideMappings.HasCredentialMaterial(source));
+
+        if (!usePersistentRestoreConfig || hasCredentialBearingMappedSource)
+        {
+            var persistentRestoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
+            if (persistentRestoreConfigFile.Exists)
+            {
+                persistentRestoreConfigFile.Delete();
+            }
+        }
+
+        using var temporaryRestoreConfig = useComposedRestoreConfig
+            ? await CreateComposedNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false)
+            : hasCredentialBearingMappedSource
+                ? await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false)
+                : null;
+        using var temporaryRestoreSourcesProps = hasCredentialBearingAdditionalSource
+            ? await TemporaryRestoreSourcesProps.CreateAsync(restoreSources.AdditionalSources, cancellationToken).ConfigureAwait(false)
             : null;
-        var channelSources = temporaryNuGetConfig is null
-            ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride: null, cancellationToken)
+        var hasCredentialBearingRestoreSource =
+            hasCredentialBearingMappedSource ||
+            hasCredentialBearingAdditionalSource ||
+            temporaryRestoreConfig?.ContainsCredentialMaterial == true;
+
+        FileInfo? restoreConfigFile;
+        string? restoreConfigContent;
+        if (temporaryRestoreConfig is not null)
+        {
+            restoreConfigFile = temporaryRestoreConfig.ConfigFile;
+            restoreConfigContent = hasCredentialBearingRestoreSource
+                ? null
+                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        }
+        else if (!usePersistentRestoreConfig)
+        {
+            // With no single requested channel there is no unambiguous mapping to apply. Preserve
+            // ambient discovery and add every explicit channel source, matching the existing fallback.
+            restoreConfigFile = null;
+            restoreConfigContent = null;
+        }
+        else
+        {
+            restoreConfigFile = await WriteRestoreNuGetConfigAsync(restoreDir, restoreSources, cancellationToken).ConfigureAwait(false);
+            restoreConfigContent = restoreConfigFile is null
+                ? null
+                : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        }
+
+        var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
+            ? GetNuGetSources(restoreSources)
             : null;
         var projectContent = GenerateIntegrationProjectFile(
             packageRefs,
@@ -750,9 +800,19 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreDir,
             channelSources,
             useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-            restoreConfigFile: temporaryNuGetConfig?.ConfigFile.FullName);
+            restoreConfigFile: temporaryRestoreConfig?.ConfigFile.FullName);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
+        var fingerprintProjectContent = temporaryRestoreConfig is null
+            ? projectContent
+            : GenerateIntegrationProjectFile(
+                packageRefs,
+                projectRefs,
+                restoreDir,
+                channelSources,
+                useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
+                restoreConfigFile: "__temporary_nuget_config__",
+                restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
 
         // Write a Directory.Packages.props to opt out of Central Package Management
         var directoryPackagesProps = """
@@ -785,8 +845,31 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         // compiled. And because a stale or partially cleaned obj/ directory is the one thing the
         // fingerprint cannot see, a no-restore build that fails on the assets file is retried with
         // restore rather than reported.
-        var restoreInputs = await ComputeRestoreInputsAsync(projectContent, packageRefs, projectRefs, cancellationToken).ConfigureAwait(false);
-        var restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
+        string? restoreFingerprint = null;
+        var hasCompleteNuGetConfigurationFingerprint =
+            !usesAmbientNuGetConfiguration || useComposedRestoreConfig;
+        if (!hasCredentialBearingRestoreSource && hasCompleteNuGetConfigurationFingerprint)
+        {
+            var restoreInputs = await ComputeRestoreInputsAsync(
+                fingerprintProjectContent,
+                packageRefs,
+                projectRefs,
+                restoreConfigContent,
+                cancellationToken).ConfigureAwait(false);
+            restoreFingerprint = restoreInputs.IsEligibleForSkip ? restoreInputs.Fingerprint : null;
+        }
+
+        if (restoreFingerprint is null)
+        {
+            // A restore that cannot prove all of its inputs must invalidate any stamp from a
+            // previous source configuration before it replaces the assets file.
+            var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
+            if (restoreStampFile.Exists)
+            {
+                restoreStampFile.Delete();
+            }
+        }
+
         var skipRestore = restoreFingerprint is not null && CanSkipIntegrationRestore(restoreDir, restoreFingerprint, _logger);
 
         _logger.LogDebug("Building integration project with {PackageCount} packages and {ProjectCount} project references (restore {RestoreState})",
@@ -903,271 +986,88 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     }
 
     /// <summary>
-    /// Throws when the caller asked for the staging channel but the running CLI's packaging
-    /// service refuses to synthesize one (daily/local/pr-<c>N</c> identity without
-    /// <c>overrideStagingFeed</c> or the <c>StagingChannelEnabled</c> feature flag). Surfaces
-    /// the same actionable reason the <c>update</c> and <c>new</c> commands display so the
-    /// bundled AppHost restore path doesn't silently downgrade to the daily feed.
-    /// </summary>
-    private void ThrowIfStagingUnavailable(string? requestedChannel)
-    {
-        if (!string.Equals(requestedChannel, PackageChannelNames.Staging, StringComparisons.ChannelName))
-        {
-            return;
-        }
-
-        var reason = _packagingService.GetStagingChannelUnavailableReason();
-        if (reason is not null)
-        {
-            throw new InvalidOperationException(reason);
-        }
-    }
-
-    /// <summary>
     /// Gets NuGet sources from the resolved channel for bundled restore.
     /// </summary>
     internal async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        // Refuse to silently downgrade staging restores to the shared daily feed when the running
-        // CLI cannot synthesize a real staging channel (daily/local/pr-<N>). PackagingService omits
-        // the staging channel in that case; without this check the lookup below falls through to
-        // "all explicit channels" — which on a daily CLI is the shared daily feed — and restore
-        // silently succeeds against the wrong feed. Surfacing the actionable
-        // GetStagingChannelUnavailableReason() mirrors UpdateCommand/NewCommand and closes the
-        // bundled-AppHost arm of https://github.com/microsoft/aspire/issues/16652.
-        ThrowIfStagingUnavailable(requestedChannel);
-
-        var sources = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(packageSourceOverride))
-        {
-            sources.Add(packageSourceOverride);
-        }
-
-        try
-        {
-            // When --source is set without a specific channel, do NOT fold in every explicit
-            // channel's sources: each built-in channel contributes its own Aspire* feed, and
-            // letting all of them through would give NuGet multiple co-eligible sources for
-            // Aspire packages and silently defeat the override. The temp NuGet.config below
-            // emits PSM that constrains Aspire packages to the override; this list only needs
-            // the override (plus a NuGet.org fallback) for non-Aspire transitives.
-            var channels = !string.IsNullOrWhiteSpace(packageSourceOverride) && string.IsNullOrEmpty(requestedChannel)
-                ? []
-                : await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken);
-            var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
-            var matchedChannelHasAllPackagesMapping = false;
-            foreach (var channel in channels)
-            {
-                if (channel.Mappings is null)
-                {
-                    continue;
-                }
-
-                foreach (var mapping in channel.Mappings)
-                {
-                    // Stay consistent with TryCreateTemporaryNuGetConfigAsync, which drops the
-                    // matched channel's Aspire* mapping in the override branch: the bundled
-                    // restore tool treats `--source` CLI args as co-eligible with config
-                    // mappings, so re-adding the channel's Aspire feed here would silently
-                    // defeat the override even though the temp NuGet.config's PSM tries to
-                    // pin Aspire* to the override exclusively.
-                    if (hasOverride && mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (mapping.PackageFilter == PackageMapping.AllPackages)
-                    {
-                        matchedChannelHasAllPackagesMapping = true;
-                    }
-
-                    if (!sources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
-                    {
-                        sources.Add(mapping.Source);
-                    }
-                }
-            }
-
-            // Mirror the temp NuGet.config's catch-all decision: it adds `* -> NuGet.org`
-            // only when the matched channel did not supply its own AllPackages mapping. The
-            // --source argument list must agree so non-Aspire transitives have the same
-            // catch-all source in both views. Honor the runtime nuget service-index
-            // override here too — see docs/specs/cli-identity-sidecar.md.
-            var nugetOrg = _executionContext.NuGetServiceIndexOverride ?? PackageSources.NuGetOrg;
-            if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(nugetOrg, StringComparer.OrdinalIgnoreCase))
-            {
-                sources.Add(nugetOrg);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get package channels, relying on nuget.config and nuget.org fallback");
-        }
-
-        return sources.Count > 0 ? sources : null;
+        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
+        return GetNuGetSources(restoreSources);
     }
 
     internal async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        // Keep staging refusal consistent across both temp-config branches. The project-reference
-        // restore path skips GetNuGetSourcesAsync when a temp config exists, so this method must
-        // surface the actionable staging-unavailable reason before building any override config.
-        ThrowIfStagingUnavailable(requestedChannel);
+        var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
+        return await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
+    }
 
-        if (!string.IsNullOrWhiteSpace(packageSourceOverride))
-        {
-            // Treat an explicit --source value as the preferred source for Aspire packages.
-            // Build a temporary NuGet.config that routes Aspire* there, optionally preserves
-            // non-Aspire channel mappings, and leaves a fallback source for non-Aspire deps.
-            PackageChannel? matchedChannel = null;
-            var configureGlobalPackagesFolder = false;
+    private Task<IntegrationRestoreSources> ResolveIntegrationRestoreSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
+        => new IntegrationRestoreSourceResolver(_packagingService, _logger, _executionContext.NuGetServiceIndexOverride)
+            .ResolveAsync(requestedChannel, packageSourceOverride, cancellationToken);
 
-            try
-            {
-                // Only fold in mappings from an explicitly-requested, matched channel. Falling
-                // back to "all explicit channels" here would pull in every built-in channel's
-                // Aspire* mapping pointing at its own feed; NuGet would treat all of them as
-                // co-eligible sources for Aspire packages and silently defeat the override.
-                if (!string.IsNullOrEmpty(requestedChannel))
-                {
-                    var packageChannels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-                    matchedChannel = packageChannels.FirstOrDefault(c =>
-                        string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-                    if (matchedChannel is not null)
-                    {
-                        configureGlobalPackagesFolder |= matchedChannel.ConfigureGlobalPackagesFolder;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to get package channels while creating source override NuGet.config");
-            }
+    private static IEnumerable<string>? GetNuGetSources(IntegrationRestoreSources restoreSources)
+        => restoreSources.AdditionalSources.Count > 0 ? restoreSources.AdditionalSources : null;
 
-            return await TemporaryNuGetConfig.CreateAsync(
-                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel, _executionContext.NuGetServiceIndexOverride),
-                configureGlobalPackagesFolder,
-                configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(packageSourceOverride) : null);
-        }
-
-        if (string.IsNullOrEmpty(requestedChannel))
+    private async Task<TemporaryNuGetConfig?> CreateTemporaryNuGetConfigAsync(IntegrationRestoreSources restoreSources)
+    {
+        if (restoreSources.PackageSourceMappings is null)
         {
             return null;
         }
 
-        PackageChannel? channel;
-        try
-        {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-            channel = channels.FirstOrDefault(c =>
-                c.Type == PackageChannelType.Explicit &&
-                c.Mappings is { Length: > 0 } &&
-                string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // Mirror the defensive catch in the override branch above and in
-            // ResolveLocalPackageSourceOverrideAsync / GetNuGetSourcesAsync: a transient
-            // packaging-service failure must degrade to the ambient nuget.config + the
-            // caller's separately resolved channel-source list, rather than failing the
-            // whole PrepareAsync. Returning null skips the PSM-bearing temp config; for
-            // non-staging channels the caller still gets channel sources via
-            // GetNuGetSourcesAsync (which catches), and for staging the unavailable-reason
-            // refusal above has already short-circuited before we reach this point.
-            _logger.LogWarning(ex, "Failed to get package channels while creating channel NuGet.config for '{Channel}'.", requestedChannel);
-            return null;
-        }
-
-        if (channel?.Mappings is null)
-        {
-            return null;
-        }
-
-        // Skip PSM only when the resolved channel is the local hive — that hive is a transient
-        // dev-build artifact with no real package mappings, so emitting PSM for it would just
-        // constrain restore to an empty source set. For every other channel (stable, staging,
-        // daily, pr-*) PSM must emit so restore honours the channel's package source mappings —
-        // regardless of which CLI identity (CliExecutionContext.IdentityChannel) is running.
-        // Keying on the resolved channel.Name (rather than the input requestedChannel) is robust
-        // to alias/normalization in the channel lookup above.
-        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
-        {
-            return null;
-        }
-
-        // Materializing the temp config is required for explicit channels so that
-        // restore honors the channel's package source mappings. Let IO/XML failures
-        // surface instead of silently falling back to the caller's unmapped sources,
-        // which could otherwise restore from an unintended feed.
         return await TemporaryNuGetConfig.CreateAsync(
-            channel.Mappings,
-            channel.ConfigureGlobalPackagesFolder,
-            channel.ConfigureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(GetPrimaryFeedUrl(channel.Mappings)) : null);
+            restoreSources.PackageSourceMappings,
+            restoreSources.ConfigureGlobalPackagesFolder,
+            restoreSources.ConfigureGlobalPackagesFolder
+                ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
+                : null).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Returns the absolute <c>globalPackagesFolder</c> path to write into a temporary NuGet.config
-    /// when the resolved channel asks for per-build cache isolation (today: <c>staging</c>).
-    /// </summary>
-    /// <remarks>
-    /// The default <see cref="NuGetConfigMerger.DefaultGlobalPackagesFolderValue"/> is a relative
-    /// <c>.nugetpackages</c> path that NuGet resolves next to the nuget.config it came from. For
-    /// the <see cref="NuGetConfigMerger"/> workspace-merge flow that's fine — the merged config is
-    /// persistent. For <see cref="PrebuiltAppHostServer"/>'s <see cref="TemporaryNuGetConfig"/>
-    /// the config file lives in a Directory.CreateTempSubdirectory("aspire-nuget-config") folder
-    /// that <see cref="TemporaryNuGetConfig.Dispose"/> recursively deletes after restore. NuGet
-    /// would have just populated <c>&lt;temp&gt;/.nugetpackages/&lt;id&gt;/&lt;version&gt;/</c>
-    /// with the staging assemblies, <see cref="NuGet.BundleNuGetService"/> would have baked those
-    /// paths into <c>integration-package-probe-manifest.json</c>, and aspire-managed would then
-    /// try to load assemblies the dispose just removed — observed as a hang during DI / assembly
-    /// loading on macOS osx-arm64 polyglot staging builds. Anchoring the override at a stable
-    /// per-build location keeps the cached packages alive for as long as any manifest references
-    /// them.
-    ///
-    /// The cache lives under <see cref="CliExecutionContext.AspireHomeDirectory"/> (i.e. the
-    /// <c>ASPIRE_HOME</c> override when set, otherwise <c>~/.aspire</c>) rather than under
-    /// <see cref="_workingDirectory"/> so that two AppHosts running on the same machine against
-    /// the same staging build can share a single restore — the unit of cache isolation here is
-    /// the staging build, not the individual restore command.
-    ///
-    /// The cache subdirectory is keyed by a truncated hash of the resolved feed URL (first 8
-    /// hex chars of <see cref="System.IO.Hashing.XxHash3"/> over the trimmed/lower-cased URL).
-    /// Two staging builds of the same release branch — which share the same stable-shaped semver
-    /// (e.g. <c>13.4.0</c>) but ship from different darc feeds — therefore each get their own
-    /// cache. A user pointing the same CLI at multiple <c>overrideStagingFeed</c> values during
-    /// dev/test also gets a distinct cache per feed, instead of one bucket silently shared across
-    /// feeds. NuGet identifies packages by <c>(id, version)</c> only, so without that per-feed
-    /// key the second feed's restore would silently reuse the first feed's now-stale
-    /// <c>13.4.0</c> assemblies. When <paramref name="feedUrl"/> is null or empty (defensive —
-    /// both call sites currently always pass a real URL) the key falls back to <c>"default"</c>
-    /// so the path is still well-formed.
-    /// </remarks>
-    private string ResolveStableGlobalPackagesFolder(string? feedUrl)
+    private async Task<TemporaryNuGetConfig> CreateComposedNuGetConfigAsync(
+        string restoreDir,
+        IntegrationRestoreSources restoreSources,
+        CancellationToken cancellationToken)
     {
-        var cacheKey = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl) ?? "default";
-        return Path.Combine(
-            CliPathHelper.GetStagingNuGetPackagesDirectory(_executionContext.AspireHomeDirectory),
-            cacheKey);
+        var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
+            new DirectoryInfo(restoreDir),
+            new ProcessInvocationOptions { SuppressLogging = true },
+            cancellationToken).ConfigureAwait(false);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException($"Unable to discover the NuGet configuration hierarchy for '{restoreDir}'.");
+        }
+
+        return await TemporaryNuGetConfig.CreateComposedAsync(
+            configPaths,
+            restoreSources.PackageSourceMappings!,
+            restoreSources.ConfigureGlobalPackagesFolder,
+            restoreSources.ConfigureGlobalPackagesFolder
+                ? CliPathHelper.GetStagingNuGetPackagesFeedDirectory(_executionContext.AspireHomeDirectory, restoreSources.GlobalPackagesFolderSource)
+                : null,
+            cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Returns the URL we use as the cache-key input when materializing a temp nuget.config from
-    /// a <see cref="PackageChannel"/>. Prefers the explicit <c>Aspire*</c> mapping (the staging
-    /// channel's primary feed and the one whose restored assemblies actually need cache
-    /// isolation), falling back to the first mapping for forward compatibility with channel
-    /// shapes we don't yet emit.
-    /// </summary>
-    private static string GetPrimaryFeedUrl(PackageMapping[] mappings)
+    private async Task<FileInfo?> WriteRestoreNuGetConfigAsync(string restoreDir, IntegrationRestoreSources restoreSources, CancellationToken cancellationToken)
     {
-        var aspire = mappings.FirstOrDefault(m =>
-            string.Equals(m.PackageFilter, "Aspire*", StringComparison.OrdinalIgnoreCase));
-        return aspire?.Source ?? mappings[0].Source;
+        var restoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
+        if (restoreSources.PackageSourceMappings is null)
+        {
+            if (restoreConfigFile.Exists)
+            {
+                restoreConfigFile.Delete();
+            }
+
+            return null;
+        }
+
+        using var temporaryConfig = await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false);
+        if (temporaryConfig is null)
+        {
+            return null;
+        }
+
+        var content = await File.ReadAllTextAsync(temporaryConfig.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
+        await WriteIfChangedAsync(restoreConfigFile.FullName, content, cancellationToken).ConfigureAwait(false);
+        return restoreConfigFile;
     }
 
     private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
@@ -1235,21 +1135,6 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private static bool IsAspireSpecificMapping(PackageMapping mapping) =>
         mapping.PackageFilter != PackageMapping.AllPackages &&
         mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
-
-    private async Task<IEnumerable<PackageChannel>> GetExplicitRestoreChannelsAsync(string? requestedChannel, CancellationToken cancellationToken)
-    {
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-        if (!string.IsNullOrEmpty(requestedChannel))
-        {
-            var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-            if (matchingChannel is not null)
-            {
-                return [matchingChannel];
-            }
-        }
-
-        return channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
-    }
 
     private static string GetRestoreVersion(string packageName, string version, bool useExactPackageVersions)
     {

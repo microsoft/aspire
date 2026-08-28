@@ -2,12 +2,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Packaging;
 
 namespace Aspire.Cli.Tests.Packaging;
 
 public class TemporaryNuGetConfigTests
 {
+    private readonly ITestOutputHelper _outputHelper;
+
+    public TemporaryNuGetConfigTests(ITestOutputHelper outputHelper)
+    {
+        _outputHelper = outputHelper;
+    }
+
     [Fact]
     public async Task CreateAsync_IncludesAllPackageSourceMappings()
     {
@@ -218,5 +226,101 @@ public class TemporaryNuGetConfigTests
 
         // The mapping for our source must be present and exactly equal the input source.
         Assert.Contains(source, mappingKeys);
+    }
+
+    [Fact]
+    public async Task CreateComposedAsync_MergesAmbientHierarchyAndAppliesMappings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var userConfigDirectory = workspace.CreateDirectory("user");
+        var userConfigPath = Path.Combine(userConfigDirectory.FullName, "NuGet.Config");
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        await File.WriteAllTextAsync(userConfigPath, $$"""
+            <configuration>
+              <packageSources>
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                <add key="private" value="./packages" />
+                <add key="daily" value="{{channelSource}}" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="daily" value="true" />
+              </disabledPackageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="secret" />
+                </private>
+              </packageSourceCredentials>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="Contoso.*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var workspaceConfigDirectory = workspace.CreateDirectory("repo");
+        var workspaceConfigPath = Path.Combine(workspaceConfigDirectory.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(workspaceConfigPath, """
+            <configuration>
+              <packageSources>
+                <add key="workspace" value="https://packages.example.com/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [workspaceConfigPath, userConfigPath],
+            [new PackageMapping("Aspire*", channelSource)]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var packageSources = document.Descendants("packageSources").Elements("add").ToArray();
+        Assert.Contains(packageSources, element =>
+            element.Attribute("key")?.Value == "private" &&
+            element.Attribute("value")?.Value == Path.Combine(userConfigDirectory.FullName, "packages"));
+        Assert.Contains(packageSources, element => element.Attribute("key")?.Value == "workspace");
+        Assert.Contains(packageSources, element => element.Attribute("value")?.Value == channelSource);
+        Assert.NotNull(document.Descendants("packageSourceCredentials").Single().Element("private"));
+
+        var mappings = document.Descendants("packageSourceMapping").Elements("packageSource").ToArray();
+        Assert.Contains(mappings, element =>
+            element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "Aspire*") &&
+            element.Attribute("key")?.Value == "daily");
+        Assert.Contains(mappings, element =>
+            element.Elements("package").Any(package => package.Attribute("pattern")?.Value == "Contoso.*") &&
+            element.Attribute("key")?.Value == "private");
+        Assert.Empty(document.Descendants("disabledPackageSources").Elements("add"));
+        Assert.True(config.ContainsCredentialMaterial);
+    }
+
+    [Fact]
+    public async Task CreateComposedAsync_MoreLocalClearRemovesInheritedSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var userConfigPath = Path.Combine(workspace.CreateDirectory("user").FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(userConfigPath, """
+            <configuration>
+              <packageSources>
+                <add key="inherited" value="https://inherited.example.com/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        var workspaceConfigPath = Path.Combine(workspace.CreateDirectory("repo").FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(workspaceConfigPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="workspace" value="https://workspace.example.com/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+
+        using var config = await TemporaryNuGetConfig.CreateComposedAsync(
+            [workspaceConfigPath, userConfigPath],
+            [new PackageMapping("Aspire*", "https://channel.example.com/v3/index.json")]);
+
+        var document = XDocument.Load(config.ConfigFile.FullName);
+        var packageSources = document.Descendants("packageSources").Elements("add").ToArray();
+        Assert.Equal(
+            ["https://workspace.example.com/v3/index.json", "https://channel.example.com/v3/index.json"],
+            packageSources.Select(element => element.Attribute("value")!.Value).ToArray());
     }
 }
