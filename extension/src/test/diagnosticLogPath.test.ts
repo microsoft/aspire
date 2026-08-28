@@ -9,10 +9,11 @@ function absolutePath(...segments: string[]): string {
 suite('diagnostic log paths', () => {
     test('extracts paths from shipped translations with text after the placeholder', () => {
         const logFilePath = absolutePath('logs with spaces', 'cli.log');
+        const unicodeLogFilePath = absolutePath('İstanbul logs', 'cli.LOG');
 
         assert.strictEqual(getAbsoluteLogFilePath(`Protokolle unter ${logFilePath} anzeigen.`), logFilePath);
         assert.strictEqual(getAbsoluteLogFilePath(`${logFilePath} adresinde günlüklere bakın`), logFilePath);
-        assert.strictEqual(getAbsoluteLogFilePath(`${logFilePath}에서 로그 보기`), logFilePath);
+        assert.strictEqual(getAbsoluteLogFilePath(`${unicodeLogFilePath}에서 로그 보기`), unicodeLogFilePath);
     });
 
     test('extracts status-icon and English diagnostic log paths', () => {

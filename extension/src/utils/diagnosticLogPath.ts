@@ -1,9 +1,10 @@
 import * as path from 'path';
 
-const logFileExtension = '.log';
+const logFileExtensionPattern = /\.log/gi;
+const logFileExtensionLength = '.log'.length;
 
 export function getAbsoluteLogFilePath(text: string): string | undefined {
-    const lowerText = text.toLowerCase();
+    const extensionIndices = Array.from(text.matchAll(logFileExtensionPattern), match => match.index);
 
     for (let index = 0; index < text.length; index++) {
         if (index > 0 && !/\s/u.test(text[index - 1])) {
@@ -16,14 +17,16 @@ export function getAbsoluteLogFilePath(text: string): string | undefined {
         //   Protokolle unter C:\...\cli.log anzeigen.
         //   C:\...\cli.log에서 로그 보기
         // Use the extension as the end boundary instead of treating the localized suffix as path text.
-        let extensionIndex = lowerText.lastIndexOf(logFileExtension);
-        while (extensionIndex >= index) {
-            const candidate = text.slice(index, extensionIndex + logFileExtension.length).trim();
+        for (let extensionOffset = extensionIndices.length - 1; extensionOffset >= 0; extensionOffset--) {
+            const extensionIndex = extensionIndices[extensionOffset];
+            if (extensionIndex < index) {
+                break;
+            }
+
+            const candidate = text.slice(index, extensionIndex + logFileExtensionLength).trim();
             if (path.isAbsolute(candidate)) {
                 return candidate;
             }
-
-            extensionIndex = lowerText.lastIndexOf(logFileExtension, extensionIndex - 1);
         }
     }
 
