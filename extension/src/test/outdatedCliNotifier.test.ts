@@ -12,6 +12,10 @@ import {
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { OutdatedCliNotificationSurface, OutdatedCliNotifier } from '../utils/outdatedCliNotifier';
 import { onDidResolveCliForOperation, startCliOperationResolutionHeartbeat } from '../utils/cliOperationResolution';
+import {
+    OutdatedCliSuppressionStore,
+    PersistedCliSuppression,
+} from '../utils/outdatedCliSuppressionStore';
 
 suite('outdatedCliNotifier', () => {
     class FakeVersionProvider {
@@ -67,7 +71,7 @@ suite('outdatedCliNotifier', () => {
         }
     }
 
-    function createNotifier(now: () => number = Date.now, globalState?: vscode.Memento): {
+    function createNotifier(now: () => number = Date.now, suppressionStore?: OutdatedCliSuppressionStore): {
         notifier: OutdatedCliNotifier;
         versionProvider: FakeVersionProvider;
         surface: FakeSurface;
@@ -75,24 +79,27 @@ suite('outdatedCliNotifier', () => {
         const versionProvider = new FakeVersionProvider();
         const surface = new FakeSurface();
         return {
-            notifier: new OutdatedCliNotifier(versionProvider, surface, now, globalState),
+            notifier: new OutdatedCliNotifier(versionProvider, surface, now, suppressionStore),
             versionProvider,
             surface,
         };
     }
 
-    function createMemento(values = new Map<string, unknown>()): vscode.Memento {
+    type StoredSuppression = Omit<PersistedCliSuppression, 'storageKey'>;
+    let inMemoryStorageSequence = 0;
+
+    function createSuppressionStore(
+        values = new Map<string, StoredSuppression>(),
+    ): OutdatedCliSuppressionStore {
         return {
-            keys: () => [...values.keys()],
-            get: <T>(key: string, defaultValue?: T): T | undefined =>
-                values.has(key) ? values.get(key) as T : defaultValue,
-            update: async (key: string, value: unknown): Promise<void> => {
-                if (value === undefined) {
-                    values.delete(key);
-                } else {
-                    values.set(key, value);
-                }
+            readAll: async () => [...values].map(([storageKey, value]) => ({ storageKey, ...value })),
+            write: async (notificationKey, suppressedAt) => {
+                const storageKey = `suppression-${inMemoryStorageSequence++}`;
+                const suppression = { notificationKey, storageKey, suppressedAt };
+                values.set(storageKey, { notificationKey, suppressedAt });
+                return suppression;
             },
+            delete: async storageKey => void values.delete(storageKey),
         };
     }
 
@@ -139,8 +146,8 @@ suite('outdatedCliNotifier', () => {
     });
 
     test("Don't Show Again persists for the exact CLI path and version", async () => {
-        const globalState = createMemento();
-        const first = createNotifier(Date.now, globalState);
+        const values = new Map<string, StoredSuppression>();
+        const first = createNotifier(Date.now, createSuppressionStore(values));
         first.surface.selection = strings.dontShowAgainLabel;
 
         await first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
@@ -149,7 +156,7 @@ suite('outdatedCliNotifier', () => {
         assert.deepStrictEqual(first.surface.commands, []);
         first.notifier.dispose();
 
-        const second = createNotifier(Date.now, globalState);
+        const second = createNotifier(Date.now, createSuppressionStore(values));
         await second.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
 
         assert.deepStrictEqual(second.surface.warnings, []);
@@ -157,7 +164,7 @@ suite('outdatedCliNotifier', () => {
         assert.deepStrictEqual(second.versionProvider.recommendationCalls, []);
         second.notifier.dispose();
 
-        const third = createNotifier(Date.now, globalState);
+        const third = createNotifier(Date.now, createSuppressionStore(values));
         third.versionProvider.identity = {
             cliPath: '/cli/aspire',
             version: '13.5.1',
@@ -173,11 +180,126 @@ suite('outdatedCliNotifier', () => {
         third.notifier.dispose();
     });
 
+    test("Don't Show Again is observed by an already-open window before it shows UI", async () => {
+        const values = new Map<string, StoredSuppression>();
+        const first = createNotifier(Date.now, createSuppressionStore(values));
+        const second = createNotifier(Date.now, createSuppressionStore(values));
+        first.surface.selection = strings.dontShowAgainLabel;
+        let completeSecondRecommendation!: (recommendation: CliUpdateRecommendation) => void;
+        second.versionProvider.recommendationPromise = new Promise(
+            resolve => completeSecondRecommendation = resolve);
+
+        const secondNotification = second.notifier.notifyIfOutdated(
+            windowCliPathTarget,
+            '/cli/aspire');
+        await waitFor(
+            () => second.versionProvider.recommendationCalls.length === 1,
+            'Expected second window update probe to start.');
+        await first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        completeSecondRecommendation({
+            status: 'available',
+            currentVersion: '13.5.0',
+            version: '13.6.0',
+        });
+        await secondNotification;
+
+        assert.strictEqual(first.surface.warnings.length, 1);
+        assert.deepStrictEqual(second.surface.warnings, []);
+        first.notifier.dispose();
+        second.notifier.dispose();
+    });
+
+    test('suppression read failures stay silent and use a bounded retry', async () => {
+        let now = 0;
+        let readCount = 0;
+        const suppressionStore: OutdatedCliSuppressionStore = {
+            readAll: async () => {
+                readCount++;
+                throw new Error('storage unavailable');
+            },
+            write: async () => {
+                throw new Error('Unexpected write.');
+            },
+            delete: async () => {
+                throw new Error('Unexpected delete.');
+            },
+        };
+        const { notifier, versionProvider, surface } = createNotifier(() => now, suppressionStore);
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        now = 30 * 1_000;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        now = 60 * 1_000;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(readCount, 2);
+        assert.deepStrictEqual(versionProvider.identityCalls, []);
+        assert.deepStrictEqual(surface.warnings, []);
+        notifier.dispose();
+    });
+
+    test('final suppression read failure retries an available update after storage backoff', async () => {
+        let now = 0;
+        let readCount = 0;
+        const suppressionStore: OutdatedCliSuppressionStore = {
+            readAll: async () => {
+                readCount++;
+                if (readCount === 2) {
+                    throw new Error('storage unavailable');
+                }
+                return [];
+            },
+            write: async () => {
+                throw new Error('Unexpected write.');
+            },
+            delete: async () => {
+                throw new Error('Unexpected delete.');
+            },
+        };
+        const { notifier, versionProvider, surface } = createNotifier(() => now, suppressionStore);
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        assert.deepStrictEqual(surface.warnings, []);
+        now = 30 * 1_000;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        now = 60 * 1_000;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(readCount, 4);
+        assert.strictEqual(versionProvider.recommendationCalls.length, 2);
+        assert.strictEqual(surface.warnings.length, 1);
+        notifier.dispose();
+    });
+
+    test("Don't Show Again remains effective for the session when persistence fails", async () => {
+        let now = 0;
+        const suppressionStore: OutdatedCliSuppressionStore = {
+            readAll: async () => [],
+            write: async () => {
+                throw new Error('storage unavailable');
+            },
+            delete: async () => {
+                throw new Error('Unexpected delete.');
+            },
+        };
+        const { notifier, versionProvider, surface } = createNotifier(() => now, suppressionStore);
+        surface.selection = strings.dontShowAgainLabel;
+
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        now = 5 * 60 * 1_000;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(surface.warnings.length, 1);
+        assert.strictEqual(versionProvider.recommendationCalls.length, 1);
+        notifier.dispose();
+    });
+
     test("Don't Show Again evicts the oldest persisted suppression", async () => {
         let now = 0;
-        const values = new Map<string, unknown>();
-        const globalState = createMemento(values);
-        const { notifier, versionProvider, surface } = createNotifier(() => now, globalState);
+        const values = new Map<string, StoredSuppression>();
+        const { notifier, versionProvider, surface } = createNotifier(
+            () => now,
+            createSuppressionStore(values));
         surface.selection = strings.dontShowAgainLabel;
 
         for (let index = 0; index <= 100; index++) {
@@ -191,24 +313,30 @@ suite('outdatedCliNotifier', () => {
         }
 
         assert.strictEqual(values.size, 100);
-        const persistedValues = [...values.values()] as Array<{ suppressedAt: number }>;
-        assert.strictEqual(persistedValues.some(value => value.suppressedAt === 0), false);
-        assert.strictEqual(persistedValues.some(value => value.suppressedAt === 100), true);
+        assert.strictEqual([...values.values()].some(value => value.suppressedAt === 0), false);
+        assert.strictEqual([...values.values()].some(value => value.suppressedAt === 100), true);
         notifier.dispose();
     });
 
     test("Don't Show Again persists concurrent suppressions independently across windows", async () => {
-        const values = new Map<string, unknown>();
-        const pendingUpdates: Array<{ key: string; value: unknown; complete: () => void }> = [];
-        const globalState: vscode.Memento = {
-            keys: () => [...values.keys()],
-            get: <T>(key: string, defaultValue?: T): T | undefined =>
-                values.has(key) ? values.get(key) as T : defaultValue,
-            update: (key: string, value: unknown): Thenable<void> =>
-                new Promise(resolve => pendingUpdates.push({ key, value, complete: resolve })),
-        };
-        const first = createNotifier(Date.now, globalState);
-        const second = createNotifier(Date.now, globalState);
+        const values = new Map<string, StoredSuppression>();
+        const pendingWrites: Array<{ complete: () => void }> = [];
+        const createDelayedStore = (): OutdatedCliSuppressionStore => ({
+            readAll: async () => [...values].map(([storageKey, value]) => ({ storageKey, ...value })),
+            write: (notificationKey, suppressedAt) => {
+                const storageKey = `suppression-${inMemoryStorageSequence++}`;
+                const suppression = { notificationKey, storageKey, suppressedAt };
+                return new Promise(resolve => pendingWrites.push({
+                    complete: () => {
+                        values.set(storageKey, { notificationKey, suppressedAt });
+                        resolve(suppression);
+                    },
+                }));
+            },
+            delete: async storageKey => void values.delete(storageKey),
+        });
+        const first = createNotifier(Date.now, createDelayedStore());
+        const second = createNotifier(Date.now, createDelayedStore());
         first.surface.selection = strings.dontShowAgainLabel;
         second.surface.selection = strings.dontShowAgainLabel;
         second.versionProvider.identity = {
@@ -220,20 +348,15 @@ suite('outdatedCliNotifier', () => {
             first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire'),
             second.notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire'),
         ];
-        await waitFor(() => pendingUpdates.length === 2, 'Expected independent suppression writes.');
-        for (const update of pendingUpdates.splice(0)) {
-            if (update.value === undefined) {
-                values.delete(update.key);
-            } else {
-                values.set(update.key, update.value);
-            }
-            update.complete();
+        await waitFor(() => pendingWrites.length === 2, 'Expected independent suppression writes.');
+        for (const write of pendingWrites.splice(0)) {
+            write.complete();
         }
         await Promise.all(suppressions);
         first.notifier.dispose();
         second.notifier.dispose();
 
-        const third = createNotifier(Date.now, globalState);
+        const third = createNotifier(Date.now, createSuppressionStore(values));
         await third.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
         third.versionProvider.identity = {
             cliPath: '/other/aspire',
@@ -248,36 +371,36 @@ suite('outdatedCliNotifier', () => {
 
     test("Don't Show Again compaction cannot delete a concurrent refresh", async () => {
         let now = 0;
-        const values = new Map<string, unknown>();
+        const values = new Map<string, StoredSuppression>();
         let blockNextDeletion = false;
         let blockedDeletion: { complete: () => void } | undefined;
-        const globalState: vscode.Memento = {
-            keys: () => [...values.keys()],
-            get: <T>(key: string, defaultValue?: T): T | undefined =>
-                values.has(key) ? values.get(key) as T : defaultValue,
-            update: (key: string, value: unknown): Thenable<void> => {
-                if (value === undefined && blockNextDeletion) {
+        const createBlockingStore = (): OutdatedCliSuppressionStore => ({
+            readAll: async () => [...values].map(([storageKey, value]) => ({ storageKey, ...value })),
+            write: async (notificationKey, suppressedAt) => {
+                const storageKey = `suppression-${inMemoryStorageSequence++}`;
+                const suppression = { notificationKey, storageKey, suppressedAt };
+                values.set(storageKey, { notificationKey, suppressedAt });
+                return suppression;
+            },
+            delete: storageKey => {
+                if (blockNextDeletion) {
                     blockNextDeletion = false;
                     return new Promise(resolve => {
                         blockedDeletion = {
                             complete: () => {
-                                values.delete(key);
+                                values.delete(storageKey);
                                 resolve();
                             },
                         };
                     });
                 }
 
-                if (value === undefined) {
-                    values.delete(key);
-                } else {
-                    values.set(key, value);
-                }
+                values.delete(storageKey);
                 return Promise.resolve();
             },
-        };
+        });
 
-        const staleWindow = createNotifier(() => now, globalState);
+        const staleWindow = createNotifier(() => now, createBlockingStore());
         staleWindow.versionProvider.identity = {
             cliPath: '/cli/0/aspire',
             version: '13.5.0',
@@ -291,7 +414,7 @@ suite('outdatedCliNotifier', () => {
             () => staleWindow.surface.warnings.length === 1,
             'Expected stale window warning to open.');
 
-        const seeder = createNotifier(() => now, globalState);
+        const seeder = createNotifier(() => now, createBlockingStore());
         seeder.surface.selection = strings.dontShowAgainLabel;
         for (let index = 0; index < 100; index++) {
             const cliPath = `/cli/${index}/aspire`;
@@ -305,7 +428,7 @@ suite('outdatedCliNotifier', () => {
         seeder.notifier.dispose();
 
         blockNextDeletion = true;
-        const compactor = createNotifier(() => now, globalState);
+        const compactor = createNotifier(() => now, createBlockingStore());
         compactor.surface.selection = strings.dontShowAgainLabel;
         compactor.versionProvider.identity = {
             cliPath: '/cli/new/aspire',
@@ -322,7 +445,7 @@ suite('outdatedCliNotifier', () => {
         blockedDeletion?.complete();
         await compaction;
 
-        const freshWindow = createNotifier(() => now, globalState);
+        const freshWindow = createNotifier(() => now, createBlockingStore());
         freshWindow.versionProvider.identity = {
             cliPath: '/cli/0/aspire',
             version: '13.5.0',
@@ -339,8 +462,9 @@ suite('outdatedCliNotifier', () => {
 
     test("Don't Show Again on a stale warning does not suppress the replacement version", async () => {
         let now = 0;
-        const globalState = createMemento();
-        const { notifier, versionProvider, surface } = createNotifier(() => now, globalState);
+        const { notifier, versionProvider, surface } = createNotifier(
+            () => now,
+            createSuppressionStore());
         let resolveOldSelection!: (selection: string | undefined) => void;
         surface.selectionPromise = new Promise(resolve => resolveOldSelection = resolve);
 

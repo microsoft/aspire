@@ -10,6 +10,11 @@ import {
     resolveConfigInfoWorkingDirectory,
 } from './configInfoProvider';
 import { CliPathResolutionTarget, getCliPathTargetKey } from './cliPathVariables';
+import {
+    OutdatedCliSuppressionStore,
+    PersistedCliSuppression,
+} from './outdatedCliSuppressionStore';
+import { extensionLogOutputChannel } from './logging';
 import { getComparisonKey } from './paths/comparison';
 
 const updateAspireCliCommand = 'aspire-vscode.updateSelf';
@@ -19,9 +24,7 @@ const completedUpdateRefreshIntervalMs = 6 * 60 * 60 * 1_000;
 const unavailableRetryBaseMs = 60 * 1_000;
 const unavailableRetryMaximumMs = 30 * 60 * 1_000;
 const maximumUnavailableAttemptsPerIdentity = 3;
-const persistedSuppressionKeyPrefix = 'outdatedCliNotification.suppressedCliVersion.';
 const maximumPersistedSuppressions = 100;
-let persistedSuppressionSequence = 0;
 
 type CliVersionProvider = Pick<ConfigInfoProvider, 'getCliIdentity' | 'getCliVersion' | 'getCliUpdateRecommendation'>;
 
@@ -45,12 +48,6 @@ interface PendingNotification {
     recommendedVersion: string;
 }
 
-interface PersistedSuppression {
-    notificationKey: string;
-    storageKey: string;
-    suppressedAt: number;
-}
-
 const defaultSurface: OutdatedCliNotificationSurface = {
     showWarning: (message, ...actions) => vscode.window.showWarningMessage(message, ...actions),
     executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
@@ -68,16 +65,17 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     private readonly _cancellationSource = new vscode.CancellationTokenSource();
     private readonly _versionLimiter = new AsyncLimiter(4);
     private readonly _doctorLimiter = new AsyncLimiter(1);
+    private _sharedSuppressionRefresh: Promise<boolean> | undefined;
+    private _suppressionReadRetryAfter = 0;
     private _disposed = false;
 
     constructor(
         private readonly _versionProvider: CliVersionProvider,
         private readonly _surface: OutdatedCliNotificationSurface = defaultSurface,
         private readonly _now: () => number = Date.now,
-        private readonly _globalState?: vscode.Memento,
+        private readonly _suppressionStore?: OutdatedCliSuppressionStore,
     ) {
-        this._persistentlySuppressedCliVersions = new Set(
-            readPersistedSuppressions(_globalState).map(suppression => suppression.notificationKey));
+        this._persistentlySuppressedCliVersions = new Set();
     }
 
     async notifyIfOutdated(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
@@ -88,6 +86,9 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         const workingDirectory = resolveConfigInfoWorkingDirectory(target);
         const checkKey = getCliCheckKey(target, cliPath, workingDirectory);
         if ((this._stateByCheckKey.get(checkKey)?.versionValidUntil ?? 0) > this._now()) {
+            return;
+        }
+        if (!await this._refreshPersistedSuppressions(true) || this._disposed) {
             return;
         }
 
@@ -115,6 +116,15 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
 
+        // Another VS Code window can persist suppression while this window's probes are in flight.
+        const suppressionRefreshSucceeded = await this._refreshPersistedSuppressions(false);
+        if (this._disposed) {
+            return;
+        }
+        if (!suppressionRefreshSucceeded) {
+            this._invalidateRecommendationAfterSuppressionReadFailure(notification);
+            return;
+        }
         const notificationKey = getNotificationKey(notification.cli.cliPath, notification.cli.version);
         if (this._notifiedCliVersions.has(notificationKey) ||
             this._persistentlySuppressedCliVersions.has(notificationKey)) {
@@ -157,6 +167,67 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         }
 
         await this._surface.executeCommand(updateAspireCliCommand, notification.target, notification.cli.cliPath);
+    }
+
+    private _invalidateRecommendationAfterSuppressionReadFailure(notification: PendingNotification): void {
+        const state = this._stateByCheckKey.get(notification.checkKey);
+        if (!state?.identity ||
+            !areCliIdentitiesEqual(state.identity, notification.cli)) {
+            return;
+        }
+
+        // The update is known to be available, but UI cannot be shown safely until all persisted
+        // suppressions are readable. Retry after the storage backoff instead of hiding it behind the
+        // normal six-hour successful-update cache.
+        state.versionValidUntil = this._suppressionReadRetryAfter;
+        state.updateStatus = undefined;
+        state.updateValidUntil = 0;
+        state.failureCount = 0;
+    }
+
+    private async _refreshPersistedSuppressions(useSharedRefresh: boolean): Promise<boolean> {
+        if (!this._suppressionStore) {
+            return true;
+        }
+        if (this._suppressionReadRetryAfter > this._now()) {
+            return false;
+        }
+        if (useSharedRefresh && this._sharedSuppressionRefresh) {
+            return await this._sharedSuppressionRefresh;
+        }
+
+        const suppressionStore = this._suppressionStore;
+        let refresh!: Promise<boolean>;
+        refresh = this._readPersistedSuppressions(suppressionStore).finally(() => {
+            if (this._sharedSuppressionRefresh === refresh) {
+                this._sharedSuppressionRefresh = undefined;
+            }
+        });
+        if (useSharedRefresh) {
+            this._sharedSuppressionRefresh = refresh;
+        }
+        return await refresh;
+    }
+
+    private async _readPersistedSuppressions(
+        suppressionStore: OutdatedCliSuppressionStore,
+    ): Promise<boolean> {
+        try {
+            for (const persistedSuppression of await suppressionStore.readAll()) {
+                this._persistentlySuppressedCliVersions.add(persistedSuppression.notificationKey);
+            }
+            this._suppressionReadRetryAfter = 0;
+            return true;
+        }
+        catch (error) {
+            this._recordSuppressionReadFailure('Unable to read Aspire CLI warning suppressions', error);
+            return false;
+        }
+    }
+
+    private _recordSuppressionReadFailure(message: string, error: unknown): void {
+        this._suppressionReadRetryAfter = this._now() + versionFailureRetryMs;
+        extensionLogOutputChannel.warn(`${message}: ${String(error)}`);
     }
 
     private async _checkForUpdate(
@@ -294,29 +365,35 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             state.failureCount = 0;
         }
 
-        if (!this._globalState) {
+        if (!this._suppressionStore) {
             return;
         }
 
-        // Each VS Code window owns a notifier, while globalState is shared by the profile. Store
-        // suppressions under independent keys so concurrent choices cannot overwrite one another.
+        // Each VS Code window owns a notifier. Immutable generations in global storage let windows
+        // coordinate without relying on asynchronously synchronized Memento snapshots.
         const suppressedAt = this._now();
-        const persistedSuppression = {
-            notificationKey,
-            storageKey: getPersistedSuppressionStorageKey(suppressedAt),
-            suppressedAt,
-        };
-        await this._globalState.update(persistedSuppression.storageKey, {
-            notificationKey,
-            suppressedAt,
-        });
-        const persistedSuppressions = readPersistedSuppressions(this._globalState);
+        try {
+            await this._suppressionStore.write(notificationKey, suppressedAt);
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Unable to persist Aspire CLI warning suppression: ${String(error)}`);
+            return;
+        }
+
+        let persistedSuppressions: PersistedCliSuppression[];
+        try {
+            persistedSuppressions = await this._suppressionStore.readAll();
+        }
+        catch (error) {
+            this._recordSuppressionReadFailure('Unable to compact Aspire CLI warning suppressions', error);
+            return;
+        }
         for (const persistedSuppression of persistedSuppressions) {
             this._persistentlySuppressedCliVersions.add(persistedSuppression.notificationKey);
         }
 
-        const latestSuppressionByNotification = new Map<string, PersistedSuppression>();
-        const staleSuppressions: PersistedSuppression[] = [];
+        const latestSuppressionByNotification = new Map<string, PersistedCliSuppression>();
+        const staleSuppressions: PersistedCliSuppression[] = [];
         for (const suppression of persistedSuppressions) {
             const previous = latestSuppressionByNotification.get(suppression.notificationKey);
             if (!previous || comparePersistedSuppressions(previous, suppression) < 0) {
@@ -337,7 +414,13 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         for (const suppression of [...staleSuppressions, ...cappedSuppressions]) {
             // Storage keys identify immutable generations. Deleting an observed generation cannot
             // remove a newer suppression written concurrently by another VS Code window.
-            await this._globalState.update(suppression.storageKey, undefined);
+            try {
+                await this._suppressionStore.delete(suppression.storageKey);
+            }
+            catch (error) {
+                extensionLogOutputChannel.warn(
+                    `Unable to delete stale Aspire CLI warning suppression '${suppression.storageKey}': ${String(error)}`);
+            }
         }
     }
 
@@ -369,45 +452,9 @@ function getCliCheckKey(
     return `${getCliPathTargetKey(target)}\u0000${getComparisonKey(path.normalize(cliPath))}\u0000${getComparisonKey(path.normalize(workingDirectory))}`;
 }
 
-function getPersistedSuppressionStorageKey(suppressedAt: number): string {
-    return `${persistedSuppressionKeyPrefix}${suppressedAt}.${process.pid}.${persistedSuppressionSequence++}`;
-}
-
-function comparePersistedSuppressions(left: PersistedSuppression, right: PersistedSuppression): number {
+function comparePersistedSuppressions(left: PersistedCliSuppression, right: PersistedCliSuppression): number {
     return left.suppressedAt - right.suppressedAt ||
         (left.storageKey < right.storageKey ? -1 : left.storageKey > right.storageKey ? 1 : 0);
-}
-
-function readPersistedSuppressions(globalState: vscode.Memento | undefined): PersistedSuppression[] {
-    if (!globalState) {
-        return [];
-    }
-
-    const suppressions: PersistedSuppression[] = [];
-    for (const storageKey of globalState.keys()) {
-        if (!storageKey.startsWith(persistedSuppressionKeyPrefix)) {
-            continue;
-        }
-
-        const value = globalState.get<unknown>(storageKey);
-        if (typeof value !== 'object' || value === null) {
-            continue;
-        }
-
-        const { notificationKey, suppressedAt } = value as {
-            notificationKey?: unknown;
-            suppressedAt?: unknown;
-        };
-        if (typeof notificationKey !== 'string' ||
-            typeof suppressedAt !== 'number' ||
-            !Number.isFinite(suppressedAt)) {
-            continue;
-        }
-
-        suppressions.push({ notificationKey, storageKey, suppressedAt });
-    }
-
-    return suppressions;
 }
 
 function areCliIdentitiesEqual(left: CliIdentityInfo | undefined, right: CliIdentityInfo): boolean {
