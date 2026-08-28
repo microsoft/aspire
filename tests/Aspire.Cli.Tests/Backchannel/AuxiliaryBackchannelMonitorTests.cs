@@ -149,22 +149,10 @@ public class AuxiliaryBackchannelMonitorTests
         // such a socket was pushed back onto the "new sockets" list on every scan, so every single
         // scan paid the full connect retry budget. MCP tools scan frequently, so that was seconds
         // of dead time per call, forever.
-        var homeDirectory = Directory.CreateTempSubdirectory("aspire-abm-");
+        var homeDirectory = CreateSocketSafeHomeDirectory();
         try
         {
-            var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
-            Directory.CreateDirectory(backchannelsDirectory);
-
-            // The socket must be a real bound AF_UNIX socket: connecting to a regular file fails
-            // with ENOTSOCK rather than ECONNREFUSED and would take a different code path. The name
-            // is composed by hand rather than through ComputeSocketPathFromAppHostId because that
-            // helper throws on an over-long path, and whether the path fits is exactly what decides
-            // if this test can run here.
-            var appHostId = BackchannelConstants.ComputeAppHostId(Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
-            var socketPath = Path.Combine(backchannelsDirectory, $"{appHostId}a1b2C3d4.{Environment.ProcessId}");
-            Assert.SkipWhen(
-                BackchannelConstants.GetSocketPathByteCountIncludingNull(socketPath) > BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
-                $"The temp directory is too long to host an AF_UNIX socket on this platform: '{socketPath}'.");
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
 
             // Bound but never listening, so every connect attempt is refused while the file stays on disk.
             using var unreachableSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -207,17 +195,10 @@ public class AuxiliaryBackchannelMonitorTests
         // leaves a window, as wide as the whole retry budget, in which another scan re-selects the same
         // socket and starts its own connect loop. MCP tools scan frequently enough to overlap, so a
         // single stale socket could still fan out concurrent retries and undo the backoff.
-        var homeDirectory = Directory.CreateTempSubdirectory("aspire-abm-");
+        var homeDirectory = CreateSocketSafeHomeDirectory();
         try
         {
-            var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
-            Directory.CreateDirectory(backchannelsDirectory);
-
-            var appHostId = BackchannelConstants.ComputeAppHostId(Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
-            var socketPath = Path.Combine(backchannelsDirectory, $"{appHostId}a1b2C3d4.{Environment.ProcessId}");
-            Assert.SkipWhen(
-                BackchannelConstants.GetSocketPathByteCountIncludingNull(socketPath) > BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
-                $"The temp directory is too long to host an AF_UNIX socket on this platform: '{socketPath}'.");
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
 
             using var unreachableSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             unreachableSocket.Bind(new UnixDomainSocketEndPoint(socketPath));
@@ -252,16 +233,67 @@ public class AuxiliaryBackchannelMonitorTests
         }
     }
 
+    /// <summary>
+    /// Waits until <paramref name="expectedAttempts"/> connect attempts have been made against
+    /// <paramref name="socketPath"/>, failing with the captured log rather than hanging if they never arrive.
+    /// </summary>
     private static async Task WaitForConnectAttemptsAsync(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath, int expectedAttempts)
     {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
         while (CountConnectAttempts(logger, socketPath) < expectedAttempts)
         {
+            if (DateTime.UtcNow > deadline)
+            {
+                Assert.Fail(
+                    $"Timed out waiting for {expectedAttempts} connect attempt(s) on '{socketPath}'. " +
+                    $"Saw {CountConnectAttempts(logger, socketPath)}. Captured log:{Environment.NewLine}" +
+                    string.Join(Environment.NewLine, logger.Entries.Select(entry => $"  [{entry.Level}/{entry.EventId}] {entry.Message}")));
+            }
+
             await Task.Delay(1).ConfigureAwait(false);
         }
     }
 
     private static int CountConnectAttempts(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath)
-        => logger.Entries.Count(entry => entry.Message == $"Connecting to auxiliary socket: {socketPath}");
+        => logger.Entries.Count(entry =>
+            entry.EventId == AuxiliaryBackchannelMonitor.ConnectingToSocketEvent &&
+            entry.Message.Contains(socketPath, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Creates a stand-in home directory whose generated socket paths fit the platform's AF_UNIX byte limit.
+    /// </summary>
+    /// <remarks>
+    /// The path the monitor ends up binding against is <c>{home}/.aspire/cli/bch/{19 chars}.{pid}</c>,
+    /// which adds a fixed ~45 bytes on top of the home directory. macOS allows only 104 bytes for the
+    /// whole path and its per-user temp root (<c>/var/folders/&lt;2&gt;/&lt;30&gt;/T</c>) already spends 48,
+    /// so the prefix here is kept to a single character to stay inside the budget. Lengthening it puts
+    /// the generated path over the limit on macOS and silently skips every test that calls this.
+    /// </remarks>
+    private static DirectoryInfo CreateSocketSafeHomeDirectory() => Directory.CreateTempSubdirectory("a");
+
+    /// <summary>
+    /// Builds a socket path under <paramref name="homeDirectory"/> whose embedded PID belongs to a
+    /// process that is definitely alive, so the monitor is never permitted to delete the file.
+    /// </summary>
+    /// <remarks>
+    /// The name is composed by hand rather than through <c>ComputeSocketPathFromAppHostId</c> because
+    /// that helper throws on an over-long path, and whether the path fits is exactly what the skip below
+    /// needs to decide. Callers bind a real AF_UNIX socket here: connecting to a regular file fails with
+    /// ENOTSOCK rather than ECONNREFUSED and would take a different code path entirely.
+    /// </remarks>
+    private static string CreateLiveOwnerSocketPath(DirectoryInfo homeDirectory)
+    {
+        var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
+        Directory.CreateDirectory(backchannelsDirectory);
+
+        var appHostId = BackchannelConstants.ComputeAppHostId(Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+        var socketPath = Path.Combine(backchannelsDirectory, $"{appHostId}a1b2C3d4.{Environment.ProcessId}");
+        Assert.SkipWhen(
+            BackchannelConstants.GetSocketPathByteCountIncludingNull(socketPath) > BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+            $"The temp directory is too long to host an AF_UNIX socket on this platform: '{socketPath}'.");
+
+        return socketPath;
+    }
 
     /// <summary>
     /// Drives <paramref name="task"/> to completion while advancing <paramref name="timeProvider"/>,

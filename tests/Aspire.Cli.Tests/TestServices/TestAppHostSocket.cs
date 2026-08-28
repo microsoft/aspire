@@ -10,7 +10,7 @@ internal sealed class TestAppHostSocket(string socketPath) : IAppHostSocket
 {
     public string SocketPath { get; } = socketPath;
 
-    public int? ProcessId { get; init; }
+    public int? ProcessId { get; init; } = BackchannelConstants.ExtractPid(socketPath);
 
     public async ValueTask<Socket> ConnectAsync(CancellationToken cancellationToken)
     {

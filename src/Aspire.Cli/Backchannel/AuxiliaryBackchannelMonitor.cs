@@ -27,6 +27,12 @@ internal sealed class AuxiliaryBackchannelMonitor(
     TimeProvider timeProvider,
     ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor
 {
+    /// <summary>
+    /// Identifies the log written on each connect attempt, so tests can observe attempts without
+    /// depending on the wording of the message.
+    /// </summary>
+    internal static EventId ConnectingToSocketEvent { get; } = new(1, nameof(ConnectingToSocketEvent));
+
     private static readonly TimeSpan s_maxRetryElapsed = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan s_initialUnreachableRetryDelay = TimeSpan.FromSeconds(30);
@@ -126,43 +132,72 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         get
         {
-            var connections = Connections.ToList();
+            var selectedAppHostPath = SelectedAppHostPath;
+            var connection = SelectConnection(Connections, ref selectedAppHostPath);
 
-            if (connections.Count == 0)
-            {
-                return null;
-            }
-
-            // Check if a specific AppHost was selected
-            if (!string.IsNullOrEmpty(SelectedAppHostPath))
-            {
-                var selectedConnection = connections.FirstOrDefault(c =>
-                    c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(
-                        PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
-                        PathNormalizer.ResolveToFilesystemPath(SelectedAppHostPath),
-                        StringComparisons.FileSystemPath));
-
-                if (selectedConnection != null)
-                {
-                    return selectedConnection;
-                }
-
-                // Clear the selection since the AppHost is no longer available
-                SelectedAppHostPath = null;
-            }
-
-            // Look for in-scope connections
-            var inScopeConnections = connections.Where(c => c.IsInScope).ToList();
-
-            if (inScopeConnections.Count == 1)
-            {
-                return inScopeConnections[0];
-            }
-
-            // Fall back to the first available connection
-            return connections.FirstOrDefault();
+            // SelectConnection clears the selection when the chosen AppHost is gone.
+            SelectedAppHostPath = selectedAppHostPath;
+            return connection;
         }
+    }
+
+    /// <summary>
+    /// Applies the AppHost selection policy: an explicit selection wins, then a single in-scope
+    /// connection, then whatever is available.
+    /// </summary>
+    /// <remarks>
+    /// Kept separate from the property so test doubles can reuse the real policy instead of carrying
+    /// their own copy of it, which would let the two drift and make selection tests vacuous.
+    /// </remarks>
+    /// <param name="connections">The currently established connections.</param>
+    /// <param name="selectedAppHostPath">
+    /// The explicitly selected AppHost path. Set to <see langword="null"/> when it no longer matches
+    /// any connection, so the caller stops trying to honor a selection that has gone away.
+    /// </param>
+    internal static IAppHostAuxiliaryBackchannel? SelectConnection(
+        IEnumerable<IAppHostAuxiliaryBackchannel> connections,
+        ref string? selectedAppHostPath)
+    {
+        var candidates = connections.ToList();
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        // Check if a specific AppHost was selected
+        if (!string.IsNullOrEmpty(selectedAppHostPath))
+        {
+            // Hoisted out of the predicate because canonicalization walks the filesystem per
+            // path segment, and every writer of SelectedAppHostPath already stores a canonical
+            // path, so this normally resolves to itself.
+            var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedAppHostPath);
+            var selectedConnection = candidates.FirstOrDefault(c =>
+                c.AppHostInfo?.AppHostPath != null &&
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
+                    selectedCanonicalPath,
+                    StringComparisons.FileSystemPath));
+
+            if (selectedConnection != null)
+            {
+                return selectedConnection;
+            }
+
+            // Clear the selection since the AppHost is no longer available
+            selectedAppHostPath = null;
+        }
+
+        // Look for in-scope connections
+        var inScopeConnections = candidates.Where(c => c.IsInScope).ToList();
+
+        if (inScopeConnections.Count == 1)
+        {
+            return inScopeConnections[0];
+        }
+
+        // Fall back to the first available connection
+        return candidates[0];
     }
 
     /// <summary>
@@ -290,14 +325,25 @@ internal sealed class AuxiliaryBackchannelMonitor(
     private List<PhysicalFileProvider> CreateFileProviders()
     {
         var fileProviders = new List<PhysicalFileProvider>(_socketDirectories.Count);
-        foreach (var socketDirectory in _socketDirectories)
+        try
         {
-            Directory.CreateDirectory(socketDirectory.DirectoryPath);
-            fileProviders.Add(new PhysicalFileProvider(socketDirectory.DirectoryPath)
+            foreach (var socketDirectory in _socketDirectories)
             {
-                UsePollingFileWatcher = true,
-                UseActivePolling = true
-            });
+                Directory.CreateDirectory(socketDirectory.DirectoryPath);
+                fileProviders.Add(new PhysicalFileProvider(socketDirectory.DirectoryPath)
+                {
+                    UsePollingFileWatcher = true,
+                    UseActivePolling = true
+                });
+            }
+        }
+        catch
+        {
+            // Each provider already constructed owns an active polling timer, and the caller's
+            // finally only runs once this method returns a list to assign, so a failure partway
+            // through the loop would leak every provider created before it.
+            DisposeFileProviders(fileProviders);
+            throw;
         }
 
         return fileProviders;
@@ -430,7 +476,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
                 if (isFirstAttempt)
                 {
-                    logger.LogInformation("Connecting to auxiliary socket: {SocketPath}", socketPath);
+                    logger.LogInformation(ConnectingToSocketEvent, "Connecting to auxiliary socket: {SocketPath}", socketPath);
                 }
                 else
                 {
@@ -553,10 +599,21 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 await DisconnectAsync(connection).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown, not a property of this socket. Leave it known and unpenalized so the next
+            // run starts clean.
+            logger.LogDebug("Cancelled while establishing the backchannel for socket: {SocketPath}", socketPath);
+        }
         catch (Exception ex)
         {
+            // The connect succeeded, so the AppHost is listening; only the RPC handshake failed.
+            // Back off rather than adding to failedSockets: that would drop the socket from
+            // _knownSocketPaths and make it look new again, so every later scan would pay a full
+            // connect plus handshake, which is the unbounded-cost shape MarkUnreachable exists to
+            // prevent. An AppHost that was merely mid-startup still recovers once the delay expires.
             logger.LogError(ex, "Failed to connect to socket: {SocketPath}", socketPath);
-            failedSockets.Add(socketPath);
+            MarkUnreachable(socketPath);
         }
     }
 
@@ -596,8 +653,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
     }
 
     /// <summary>
-    /// Schedules a backed-off retry for a socket that refused connections for the entire retry budget
-    /// but that we are not permitted to delete.
+    /// Schedules a backed-off retry for a socket we cannot establish a backchannel over but that we
+    /// are not permitted to delete.
     /// </summary>
     /// <remarks>
     /// A connect that fails with <see cref="SocketError.ConnectionRefused"/> cannot distinguish an

@@ -11,7 +11,7 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class CapturingLogger<T> : ILogger<T>
 {
-    private readonly List<(LogLevel Level, string Message)> _entries = new();
+    private readonly List<(LogLevel Level, EventId EventId, string Message)> _entries = new();
 
     /// <summary>
     /// Gets a snapshot of the log entries recorded so far.
@@ -21,7 +21,7 @@ internal sealed class CapturingLogger<T> : ILogger<T>
     /// under test log from concurrent work (for example fan-out connection attempts). A snapshot
     /// is returned so callers can enumerate without racing a concurrent write.
     /// </remarks>
-    public List<(LogLevel Level, string Message)> Entries
+    public List<(LogLevel Level, EventId EventId, string Message)> Entries
     {
         get
         {
@@ -38,7 +38,7 @@ internal sealed class CapturingLogger<T> : ILogger<T>
     {
         lock (_entries)
         {
-            _entries.Add((logLevel, formatter(state, exception)));
+            _entries.Add((logLevel, eventId, formatter(state, exception)));
         }
     }
 

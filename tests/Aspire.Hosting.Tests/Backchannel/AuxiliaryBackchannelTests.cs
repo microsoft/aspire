@@ -695,7 +695,9 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             var appHostFile = Path.Combine(tempRoot.FullName, "apphost.cs");
             File.WriteAllText(appHostFile, "// apphost");
 
-            var socket = AppHostSocketManager.CreateSocket(
+            // Held under 'using' so a failed assertion below cannot orphan a bound, listening socket
+            // in the real ~/.aspire/cli/bch that the finally block never cleans up.
+            using var socket = AppHostSocketManager.CreateSocket(
                 appHostFile,
                 GetSocketSafeHomeDirectory(),
                 Environment.ProcessId,

@@ -210,17 +210,15 @@ internal static class AppHostSocketManager
         {
             var appHostSocket = new AppHostSocket(socketPath, logger);
             var pid = BackchannelConstants.ExtractPid(socketPath);
+            // A dead PID is a durable verdict: the owning AppHost cannot come back, and it never
+            // recreates a socket file it already bound. PID reuse can only produce a false "alive",
+            // which just costs a wasted connect attempt, so no recheck is warranted here.
             if (pid is { } pidValue &&
                 pidValue != currentProcessId &&
                 !BackchannelConstants.ProcessExists(pidValue))
             {
-                // Recheck immediately before deleting because the operating system may reuse a PID
-                // between enumeration and cleanup.
-                if (!BackchannelConstants.ProcessExists(pidValue))
-                {
-                    appHostSocket.TryDelete();
-                    continue;
-                }
+                appHostSocket.TryDelete();
+                continue;
             }
 
             sockets.Add(appHostSocket);

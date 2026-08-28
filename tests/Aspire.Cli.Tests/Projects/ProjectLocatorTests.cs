@@ -357,22 +357,34 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void PersistedAppHostPathComparisonUsesFilesystemSemantics()
+    public void PersistedAppHostPathComparisonMatchesDifferentCasingOnCaseInsensitiveVolume()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var configuredPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
         File.WriteAllText(configuredPath, "<Project />");
         var differentlyCasedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj");
 
-        if (File.Exists(differentlyCasedPath))
-        {
-            Assert.True(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
-        }
-        else
-        {
-            File.WriteAllText(differentlyCasedPath, "<Project />");
-            Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
-        }
+        // Writing one file and finding the other spelling on disk is what makes the volume
+        // case-insensitive; there is no API that reports it per-directory. Split into two tests with
+        // explicit skips so the run report shows which semantics were actually exercised rather than
+        // silently taking whichever branch the host filesystem dictates.
+        Assert.SkipUnless(File.Exists(differentlyCasedPath), "This test requires a case-insensitive filesystem.");
+
+        Assert.True(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
+    }
+
+    [Fact]
+    public void PersistedAppHostPathComparisonDistinguishesCasingOnCaseSensitiveVolume()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configuredPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        File.WriteAllText(configuredPath, "<Project />");
+        var differentlyCasedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj");
+
+        Assert.SkipWhen(File.Exists(differentlyCasedPath), "This test requires a case-sensitive filesystem.");
+
+        File.WriteAllText(differentlyCasedPath, "<Project />");
+        Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
     }
 
     [Theory]

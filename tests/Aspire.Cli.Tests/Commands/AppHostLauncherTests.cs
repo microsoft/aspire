@@ -260,6 +260,44 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LaunchDetachedAsync_AppHostLocatedThroughSymlink_AdoptsConnectionReportingRealPath()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Creating symlinks on Windows requires elevation or developer mode.");
+
+        // The launcher matches the AppHost it spawned by path. The located path and the path the
+        // AppHost reports are produced independently, so a symlinked checkout only matches if both
+        // sides are canonicalized. Without that, the launcher never adopts its own AppHost and falls
+        // through to the launch-timeout path.
+        using var harness = AppHostLauncherHarness.CreateWithSymlinkedAppHostPath(outputHelper);
+        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsV3 = true,
+            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
+            WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
+        });
+
+        Assert.NotEqual(
+            harness.LocatedAppHostFile.FullName,
+            PathNormalizer.ResolveToFilesystemPath(harness.LocatedAppHostFile.FullName));
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.LocatedAppHostFile,
+            format: null,
+            isolated: null,
+            launchProfile: null,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 15,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None).DefaultTimeout(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+    }
+
+    [Fact]
     public async Task LaunchDetachedAsync_ExplicitTrue_ForwardsFlag()
     {
         using var harness = AppHostLauncherHarness.Create(outputHelper);
@@ -1068,6 +1106,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             FileLoggerProvider fileLoggerProvider,
             AppHostLauncher launcher,
             FileInfo appHostFile,
+            FileInfo locatedAppHostFile,
             TestInteractionService interactionService,
             TestAuxiliaryBackchannelMonitor monitor,
             TestDetachedProcessFactory processFactory)
@@ -1077,6 +1116,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             _fileLoggerProvider = fileLoggerProvider;
             Launcher = launcher;
             AppHostFile = appHostFile;
+            LocatedAppHostFile = locatedAppHostFile;
             InteractionService = interactionService;
             Monitor = monitor;
             ProcessFactory = processFactory;
@@ -1084,7 +1124,16 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public AppHostLauncher Launcher { get; }
 
+        /// <summary>
+        /// Gets the AppHost file as it exists on disk after symlink resolution.
+        /// </summary>
         public FileInfo AppHostFile { get; }
+
+        /// <summary>
+        /// Gets the spelling of the AppHost file that project location hands to the launcher. This
+        /// differs from <see cref="AppHostFile"/> only for the symlinked harness variant.
+        /// </summary>
+        public FileInfo LocatedAppHostFile { get; }
 
         public TestInteractionService InteractionService { get; }
 
@@ -1100,10 +1149,25 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             return Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted: false);
         }
 
+        /// <summary>
+        /// Creates a harness where project location resolves the AppHost through a directory symlink
+        /// while the running AppHost reports its real path, which is how the launcher sees an AppHost
+        /// started from a symlinked checkout.
+        /// </summary>
+        public static AppHostLauncherHarness CreateWithSymlinkedAppHostPath(ITestOutputHelper outputHelper) =>
+            Create(outputHelper, appHostSelectionOrigin: null, selectionWasPrompted: false, locateThroughSymlink: true);
+
         public static AppHostLauncherHarness Create(
             ITestOutputHelper outputHelper,
             string? appHostSelectionOrigin,
-            bool selectionWasPrompted)
+            bool selectionWasPrompted) =>
+            Create(outputHelper, appHostSelectionOrigin, selectionWasPrompted, locateThroughSymlink: false);
+
+        private static AppHostLauncherHarness Create(
+            ITestOutputHelper outputHelper,
+            string? appHostSelectionOrigin,
+            bool selectionWasPrompted,
+            bool locateThroughSymlink)
         {
             var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
@@ -1111,8 +1175,19 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var cacheDirectory = workspace.WorkspaceRoot.CreateSubdirectory("cache");
             var sdkDirectory = workspace.WorkspaceRoot.CreateSubdirectory("sdks");
             var logsDirectory = workspace.WorkspaceRoot.CreateSubdirectory("logs");
-            var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+            var appHostDirectory = locateThroughSymlink
+                ? workspace.WorkspaceRoot.CreateSubdirectory("real")
+                : workspace.WorkspaceRoot;
+            var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
             File.WriteAllText(appHostFile.FullName, "<Project />");
+
+            var locatedAppHostFile = appHostFile;
+            if (locateThroughSymlink)
+            {
+                var linkPath = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+                Directory.CreateSymbolicLink(linkPath, appHostDirectory.FullName);
+                locatedAppHostFile = new FileInfo(Path.Combine(linkPath, "AppHost.csproj"));
+            }
 
             var executionContext = new CliExecutionContext(
                 workspace.WorkspaceRoot,
@@ -1137,7 +1212,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var projectLocator = new TestProjectLocator
             {
                 UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile])
+                    Task.FromResult(new AppHostProjectSearchResult(locatedAppHostFile, [locatedAppHostFile])
                     {
                         WasExplicitDirectorySelectionPrompted = selectionWasPrompted
                     })
@@ -1165,6 +1240,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 fileLoggerProvider,
                 launcher,
                 appHostFile,
+                locatedAppHostFile,
                 interactionService,
                 monitor,
                 processFactory);

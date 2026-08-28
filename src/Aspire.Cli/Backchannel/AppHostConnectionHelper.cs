@@ -45,11 +45,15 @@ internal static class AppHostConnectionHelper
         var selectedPath = auxiliaryBackchannelMonitor.SelectedAppHostPath;
         if (!string.IsNullOrEmpty(selectedPath))
         {
+            // Hoisted out of the predicate because canonicalization walks the filesystem per path
+            // segment, and every writer of SelectedAppHostPath already stores a canonical path, so
+            // this normally resolves to itself.
+            var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedPath);
             var selectedConnection = connections.FirstOrDefault(c =>
                 c.AppHostInfo?.AppHostPath != null &&
                 string.Equals(
                     PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
-                    PathNormalizer.ResolveToFilesystemPath(selectedPath),
+                    selectedCanonicalPath,
                     StringComparisons.FileSystemPath));
 
             if (selectedConnection != null)

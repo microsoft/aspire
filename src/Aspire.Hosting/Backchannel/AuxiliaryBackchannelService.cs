@@ -78,13 +78,25 @@ internal sealed class AuxiliaryBackchannelService(
         catch (TaskCanceledException ex)
         {
             logger.LogDebug("Auxiliary backchannel service was cancelled: {Message}", ex.Message);
+            _listeningTcs.TrySetCanceled(stoppingToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error in auxiliary backchannel service.");
+            _listeningTcs.TrySetException(ex);
         }
         finally
         {
+            // Creating the socket can fail (bind failure, an AF_UNIX path over the platform byte
+            // limit, permissions) and the accept loop only completes the source once it is already
+            // listening, so guarantee completion on every exit path. Waiters would otherwise block
+            // until their own timeout instead of observing the failure.
+            _listeningTcs.TrySetCanceled(stoppingToken);
+
+            // Nothing outside tests awaits ListeningTask, so read the fault here to mark it observed
+            // and keep it from resurfacing as an UnobservedTaskException when the task is finalized.
+            _ = _listeningTcs.Task.Exception;
+
             _appHostSocket?.Dispose();
         }
     }
