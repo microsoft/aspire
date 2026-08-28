@@ -122,6 +122,8 @@ public class AzureApiManagementResource(
     /// </summary>
     internal AzureApiManagementVirtualNetworkConfiguration? VirtualNetworkConfiguration { get; set; }
 
+    internal AzureApiManagementPublicNetworkAccessStateResource? PublicNetworkAccessState { get; set; }
+
     internal AzureApiManagementPublicNetworkAccessUpdateResource? PublicNetworkAccessUpdate { get; set; }
 
     internal bool ExistingSystemAssignedIdentityConfirmed { get; set; }
@@ -181,10 +183,16 @@ public class AzureApiManagementResource(
             return;
         }
 
-        PublicNetworkAccessUpdate = new AzureApiManagementPublicNetworkAccessUpdateResource(
-            AzureApiManagementExtensions.CreateBoundedIdentifier($"{Name}-disable-public-access", 64),
+        PublicNetworkAccessState = new AzureApiManagementPublicNetworkAccessStateResource(
+            AzureApiManagementExtensions.CreateBoundedIdentifier($"{Name}-capture-network-state", 64),
             this,
             privateEndpoint.Resource);
+        PublicNetworkAccessUpdate = new AzureApiManagementPublicNetworkAccessUpdateResource(
+            AzureApiManagementExtensions.CreateBoundedIdentifier($"{Name}-disable-public-access", 64),
+            PublicNetworkAccessState);
+        privateEndpoint.ApplicationBuilder.AddResource(PublicNetworkAccessState)
+            .WithRelationship(this, "Captures service state")
+            .WithRelationship(privateEndpoint.Resource, "Private endpoint");
         privateEndpoint.ApplicationBuilder.AddResource(PublicNetworkAccessUpdate)
             .WithRelationship(this, "Disables public access")
             .WithRelationship(privateEndpoint.Resource, "Private endpoint");

@@ -1,120 +1,110 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable AZPROVISION001 // Azure.Provisioning is experimental.
-#pragma warning disable ASPIREAZURE003 // Azure provisioning APIs are experimental.
-
-using Aspire.Hosting.Azure.ApiManagement.Provisioning;
-using Azure.Provisioning;
-using Azure.Provisioning.Authorization;
-using Azure.Provisioning.Expressions;
-using Azure.Provisioning.Resources;
-using Azure.Provisioning.Roles;
-
 namespace Aspire.Hosting.Azure;
 
-internal sealed class AzureApiManagementPublicNetworkAccessUpdateResource(
-    string name,
-    AzureApiManagementResource apiManagement,
-    AzurePrivateEndpointResource privateEndpoint)
-    : AzureProvisioningResource(name, BuildInfrastructure)
+internal sealed class AzureApiManagementPublicNetworkAccessStateResource : AzureBicepResource
 {
-    private const string ApiManagementServiceOperatorRoleId = "e022efe7-f5ba-4159-bbe4-b44f577e9b61";
+    private const string Template =
+        """
+        param apimName string
 
-    public AzureApiManagementResource ApiManagement { get; } = apiManagement;
+        resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' existing = {
+          name: apimName
+        }
 
-    public AzurePrivateEndpointResource PrivateEndpoint { get; } = privateEndpoint;
+        #disable-next-line use-resource-symbol-reference
+        var current = reference(apim.id, '2025-03-01-preview', 'Full')
+        var customHostnameConfigurations = map(
+          filter(
+            current.properties.?hostnameConfigurations ?? [],
+            configuration => configuration.certificateSource != 'BuiltIn'),
+          configuration => {
+            type: configuration.type
+            hostName: configuration.hostName
+            keyVaultId: configuration.?keyVaultId
+            identityClientId: configuration.?identityClientId
+            defaultSslBinding: configuration.defaultSslBinding
+            negotiateClientCertificate: configuration.negotiateClientCertificate
+          })
 
-    private static void BuildInfrastructure(AzureResourceInfrastructure infrastructure)
+        output state string = string({
+          name: last(split(apim.id, '/'))
+          location: current.location
+          sku: current.sku
+          tags: current.?tags ?? {}
+          identity: contains(current, 'identity') ? union(
+            {
+              type: current.identity.type
+            },
+            contains(current.identity.type, 'UserAssigned') ? {
+              userAssignedIdentities: toObject(
+                items(current.identity.?userAssignedIdentities ?? {}),
+                identity => identity.key,
+                identity => {})
+            } : {}) : null
+          properties: {
+            publisherEmail: current.properties.publisherEmail
+            publisherName: current.properties.publisherName
+            notificationSenderEmail: current.properties.notificationSenderEmail
+            hostnameConfigurations: customHostnameConfigurations
+            virtualNetworkType: current.properties.virtualNetworkType
+            virtualNetworkConfiguration: current.properties.virtualNetworkConfiguration
+            customProperties: current.properties.customProperties
+          }
+        })
+        """;
+
+    public AzureApiManagementPublicNetworkAccessStateResource(
+        string name,
+        AzureApiManagementResource apiManagement,
+        AzurePrivateEndpointResource privateEndpoint)
+        : base(name, templateString: Template)
     {
-        var resource = (AzureApiManagementPublicNetworkAccessUpdateResource)infrastructure.AspireResource;
-        var apiManagement =
-            (ApiManagementServiceProvisioningResource)resource.ApiManagement.AddAsExistingResource(infrastructure);
-        var privateEndpoint = resource.PrivateEndpoint.AddAsExistingResource(infrastructure);
+        ApiManagement = apiManagement;
+        PrivateEndpoint = privateEndpoint;
+        Parameters["apimName"] = apiManagement.NameOutputReference;
 
-        var identity = new UserAssignedIdentity("_apim_disablePublicAccessIdentity")
-        {
-            Name = BicepFunction.Take(
-                BicepFunction.Interpolate($"apim-network-id-{BicepFunction.GetUniqueString(apiManagement.Id)}"),
-                128),
-        };
-        infrastructure.Add(identity);
-
-        var roleDefinitionId = BicepFunction.GetSubscriptionResourceId(
-            "Microsoft.Authorization/roleDefinitions",
-            ApiManagementServiceOperatorRoleId);
-        var roleAssignment = new RoleAssignment("_apim_disablePublicAccessRole")
-        {
-            Name = BicepFunction.CreateGuid(apiManagement.Id, identity.Id, roleDefinitionId),
-            Scope = new IdentifierExpression(apiManagement.BicepIdentifier),
-            PrincipalType = RoleManagementPrincipalType.ServicePrincipal,
-            PrincipalId = identity.PrincipalId,
-            RoleDefinitionId = roleDefinitionId,
-        };
-        infrastructure.Add(roleAssignment);
-
-        var forceUpdateTag = new ProvisioningParameter("_apim_forceUpdateTag", typeof(string))
-        {
-            // utcNow() is valid only as a parameter default and is reevaluated for every deployment.
-            Value = new BicepValue<string>(
-                new FunctionCallExpression(new IdentifierExpression("utcNow"))),
-        };
-        infrastructure.Add(forceUpdateTag);
-
-        var script = new AzureCliScript("_apim_disablePublicAccess", "2023-08-01")
-        {
-            Name = BicepFunction.Take(
-                BicepFunction.Interpolate($"apim-network-update-{BicepFunction.GetUniqueString(apiManagement.Id)}"),
-                64),
-            AzCliVersion = "2.64.0",
-            ForceUpdateTag = forceUpdateTag,
-            RetentionInterval = TimeSpan.FromHours(1),
-            Timeout = TimeSpan.FromMinutes(20),
-            ScriptContent =
-                """
-                updated=false
-                for attempt in $(seq 1 30); do
-                  if az resource update \
-                    --ids "${APIM_ID}" \
-                    --api-version 2025-03-01-preview \
-                    --set properties.publicNetworkAccess=Disabled; then
-                    updated=true
-                    break
-                  fi
-                  sleep 10
-                done
-
-                if [ "${updated}" != "true" ]; then
-                  echo "Failed to start the public network access update." >&2
-                  exit 1
-                fi
-
-                for attempt in $(seq 1 60); do
-                  public_access=$(az resource show \
-                    --ids "${APIM_ID}" \
-                    --api-version 2025-03-01-preview \
-                    --query properties.publicNetworkAccess \
-                    --output tsv)
-                  if [ "${public_access}" = "Disabled" ]; then
-                    exit 0
-                  fi
-                  sleep 10
-                done
-
-                echo "Failed to disable public network access after the private endpoint was created." >&2
-                exit 1
-                """.ReplaceLineEndings("\n"),
-        };
-        script.EnvironmentVariables.Add(new ScriptEnvironmentVariable
-        {
-            Name = "APIM_ID",
-            Value = apiManagement.Id,
-        });
-        script.Identity.IdentityType = ArmDeploymentScriptManagedIdentityType.UserAssigned;
-        script.Identity.UserAssignedIdentities[
-            BicepFunction.Interpolate($"{identity.Id}").Compile().ToString()] = new UserAssignedIdentityDetails();
-        script.DependsOn.Add(roleAssignment);
-        script.DependsOn.Add(privateEndpoint);
-        infrastructure.Add(script);
+        // Capturing state after the private endpoint is approved prevents the following update
+        // from disabling public access before the private route is available.
+        References.Add(privateEndpoint);
     }
+
+    public AzureApiManagementResource ApiManagement { get; }
+
+    public AzurePrivateEndpointResource PrivateEndpoint { get; }
+
+    public BicepOutputReference State => new("state", this);
+}
+
+internal sealed class AzureApiManagementPublicNetworkAccessUpdateResource : AzureBicepResource
+{
+    private const string Template =
+        """
+        param state string
+
+        var current = json(state)
+
+        resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
+          name: current.name
+          location: current.location
+          tags: current.tags
+          sku: current.sku
+          identity: current.identity
+          properties: union(current.properties, {
+            publicNetworkAccess: 'Disabled'
+          })
+        }
+        """;
+
+    public AzureApiManagementPublicNetworkAccessUpdateResource(
+        string name,
+        AzureApiManagementPublicNetworkAccessStateResource state)
+        : base(name, templateString: Template)
+    {
+        State = state;
+        Parameters["state"] = state.State;
+    }
+
+    public AzureApiManagementPublicNetworkAccessStateResource State { get; }
 }
