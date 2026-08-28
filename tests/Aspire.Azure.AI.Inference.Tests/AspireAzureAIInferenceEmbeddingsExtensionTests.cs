@@ -149,6 +149,10 @@ public class AspireAzureAIInferenceEmbeddingsExtensionTests
     [InlineData("https://account.openai.azure.cn/openai/deployments/model", false)]
     [InlineData("https://account.openai.azure.de/openai/deployments/model", false)]
     [InlineData("https://account.services.ai.azure.com/OpenAI/v1", false)]
+    [InlineData("http://127.0.0.1:50920/", false)]         // Foundry Local (IPv4 loopback)
+    [InlineData("http://127.0.0.1:50920/v1", false)]       // Foundry Local with /v1 path
+    [InlineData("http://[::1]:50920/", false)]             // Foundry Local (IPv6 loopback)
+    [InlineData("http://localhost:11434/v1", false)]       // Ollama-style local server
     public void HealthCheckRegistrationMatchesEndpointSupport(string endpoint, bool expected)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
