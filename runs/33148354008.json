@@ -1,0 +1,29 @@
+{
+  "run_id": 33148354008,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33148354008",
+  "analyzed_at": "2026-08-28T07:06:16Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19661,
+    "title": "Use SQLite for dashboard telemetry filtering",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "sqlite-telemetry-filtering",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19661"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / RabbitMQ.Client / RabbitMQ.Client (windows-latest)",
+      "id": 98774686706,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33148354008/job/98774686706",
+      "classification": "transient-infra",
+      "reason": "All failed steps show 'Process completed with exit code -1073741502' (0xC0000142 / STATUS_DLL_INIT_FAILED), a known transient Windows runner process-initialization failure occurring in post-test steps (hang dump check, upload logs/results, cleanup). No test failures were extracted from TRX artifacts, and the failure is unrelated to the RabbitMQ.Client test area or any PR-changed files (which are all in Aspire.Dashboard).",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}
