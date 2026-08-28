@@ -174,6 +174,35 @@ suite('outdatedCliNotifier', () => {
         third.notifier.dispose();
     });
 
+    test("Don't Show Again merges suppressions from concurrently open windows", async () => {
+        const globalState = createMemento();
+        const first = createNotifier(Date.now, globalState);
+        const second = createNotifier(Date.now, globalState);
+        first.surface.selection = strings.dontShowAgainLabel;
+        second.surface.selection = strings.dontShowAgainLabel;
+        second.versionProvider.identity = {
+            cliPath: '/other/aspire',
+            version: '13.5.0',
+        };
+
+        await first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await second.notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire');
+        first.notifier.dispose();
+        second.notifier.dispose();
+
+        const third = createNotifier(Date.now, globalState);
+        await third.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        third.versionProvider.identity = {
+            cliPath: '/other/aspire',
+            version: '13.5.0',
+        };
+        await third.notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire');
+
+        assert.deepStrictEqual(third.surface.warnings, []);
+        assert.deepStrictEqual(third.versionProvider.recommendationCalls, []);
+        third.notifier.dispose();
+    });
+
     test("Don't Show Again on a stale warning does not suppress the replacement version", async () => {
         let now = 0;
         const globalState = createMemento();
@@ -298,20 +327,57 @@ suite('outdatedCliNotifier', () => {
         }
     });
 
-    test('samples version independently while unavailable doctor checks back off', async () => {
+    test('active-operation heartbeat stops itself when the operation becomes inactive', async () => {
+        const clock = sinon.useFakeTimers();
+        let active = true;
+        const resolutions: string[] = [];
+        const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
+        const heartbeat = startCliOperationResolutionHeartbeat(
+            windowCliPathTarget,
+            '/cli/aspire',
+            () => active);
+
+        try {
+            clock.tick(5 * 60 * 1_000);
+            assert.deepStrictEqual(resolutions, ['/cli/aspire']);
+
+            active = false;
+            clock.tick(5 * 60 * 1_000);
+            assert.deepStrictEqual(resolutions, ['/cli/aspire']);
+            assert.strictEqual(clock.countTimers(), 0);
+        }
+        finally {
+            heartbeat.dispose();
+            subscription.dispose();
+            clock.restore();
+        }
+    });
+
+    test('samples version independently and caps unavailable doctor attempts per identity', async () => {
         let now = 0;
         const { notifier, versionProvider } = createNotifier(() => now);
         versionProvider.recommendation = { status: 'unavailable' };
 
         await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
-        for (const minute of [5, 10, 15, 20]) {
+        for (const minute of [5, 10, 15, 20, 25]) {
             now = minute * 60 * 1_000;
             await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
         }
 
-        assert.strictEqual(versionProvider.identityCalls.length, 5);
-        // Retries at 0, 5, 10 and 15 minutes establish 1/2/4/8-minute backoff. The 20-minute
-        // version sample remains independent but does not run doctor before minute 23.
+        assert.strictEqual(versionProvider.identityCalls.length, 6);
+        assert.strictEqual(versionProvider.recommendationCalls.length, 3);
+
+        now = 30 * 60 * 1_000;
+        versionProvider.identity = {
+            cliPath: '/cli/aspire',
+            version: '13.5.1',
+        };
+        versionProvider.recommendation = {
+            status: 'none',
+            currentVersion: '13.5.1',
+        };
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
         assert.strictEqual(versionProvider.recommendationCalls.length, 4);
         notifier.dispose();
     });

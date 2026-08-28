@@ -17,6 +17,7 @@ const versionFailureRetryMs = 60 * 1_000;
 const completedUpdateRefreshIntervalMs = 6 * 60 * 60 * 1_000;
 const unavailableRetryBaseMs = 60 * 1_000;
 const unavailableRetryMaximumMs = 30 * 60 * 1_000;
+const maximumUnavailableAttemptsPerIdentity = 3;
 const persistedSuppressionKey = 'outdatedCliNotification.suppressedCliVersions';
 const maximumPersistedSuppressions = 100;
 
@@ -66,11 +67,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         private readonly _now: () => number = Date.now,
         private readonly _globalState?: vscode.Memento,
     ) {
-        const persistedSuppressions = _globalState?.get<unknown>(persistedSuppressionKey);
-        this._persistentlySuppressedCliVersions = new Set(
-            Array.isArray(persistedSuppressions)
-                ? persistedSuppressions.filter((value): value is string => typeof value === 'string')
-                : []);
+        this._persistentlySuppressedCliVersions = new Set(readPersistedSuppressions(_globalState));
     }
 
     async notifyIfOutdated(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
@@ -208,7 +205,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         }
 
         // Do not queue paths behind a potentially slow doctor. The skipped path keeps its
-        // five-minute version clock and can try again after the active doctor completes.
+        // five-minute version clock and can try again on its next active-operation heartbeat.
         if (this._doctorActive) {
             return undefined;
         }
@@ -260,12 +257,25 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     private _recordUnavailable(state: CliCheckState): void {
         state.failureCount = state.updateStatus === 'unavailable' ? state.failureCount + 1 : 1;
         state.updateStatus = 'unavailable';
+        if (state.failureCount >= maximumUnavailableAttemptsPerIdentity) {
+            // Doctor runs the full environment-check battery. Stop retrying an unchanged identity
+            // for this session after a few silent failures; five-minute version sampling continues,
+            // so replacing the CLI resets the state and permits a fresh update check.
+            state.updateValidUntil = Number.POSITIVE_INFINITY;
+            return;
+        }
         state.updateValidUntil = this._now() + Math.min(
             unavailableRetryBaseMs * 2 ** (state.failureCount - 1),
             unavailableRetryMaximumMs);
     }
 
     private async _suppressNotification(notificationKey: string, cliPath: string): Promise<void> {
+        // Each VS Code window owns a notifier, while globalState is shared by the profile. Merge
+        // again immediately before writing so suppressions chosen in another open window are not
+        // lost to a stale constructor-time snapshot.
+        for (const persistedSuppression of readPersistedSuppressions(this._globalState)) {
+            this._persistentlySuppressedCliVersions.add(persistedSuppression);
+        }
         this._persistentlySuppressedCliVersions.delete(notificationKey);
         this._persistentlySuppressedCliVersions.add(notificationKey);
         while (this._persistentlySuppressedCliVersions.size > maximumPersistedSuppressions) {
@@ -307,6 +317,13 @@ export class OutdatedCliNotifier implements vscode.Disposable {
 
 function getNotificationKey(cliPath: string, version: string): string {
     return `${getComparisonKey(path.normalize(cliPath))}\u0000${version}`;
+}
+
+function readPersistedSuppressions(globalState: vscode.Memento | undefined): string[] {
+    const persistedSuppressions = globalState?.get<unknown>(persistedSuppressionKey);
+    return Array.isArray(persistedSuppressions)
+        ? persistedSuppressions.filter((value): value is string => typeof value === 'string')
+        : [];
 }
 
 function areCliIdentitiesEqual(left: CliIdentityInfo | undefined, right: CliIdentityInfo): boolean {

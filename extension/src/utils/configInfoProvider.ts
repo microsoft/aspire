@@ -13,6 +13,9 @@ import { nonInteractiveCliEnvironment } from './environment';
 
 const configInfoTimeoutMs = 30_000;
 const cliVersionProbeTimeoutMs = 30_000;
+// The only available structured update status is part of `aspire doctor`, whose complete
+// environment-check budget is two minutes. Keep enough time for that transport; a future narrow
+// update-status command should use a substantially smaller bound.
 const cliUpdateProbeTimeoutMs = 130_000;
 const maxCliVersionOutputLength = 128;
 const maxCliUpdateOutputLength = 1024 * 1024;

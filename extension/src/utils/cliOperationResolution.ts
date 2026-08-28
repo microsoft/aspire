@@ -28,10 +28,19 @@ export function startCliOperationResolutionHeartbeat(
     cliPath: string,
     isActive: () => boolean,
 ): vscode.Disposable {
-    const timer = setInterval(() => {
-        if (isActive()) {
-            reportCliResolvedForOperation(target, cliPath);
+    let stopped = false;
+    const stop = () => {
+        if (!stopped) {
+            stopped = true;
+            clearInterval(timer);
         }
+    };
+    const timer = setInterval(() => {
+        if (!isActive()) {
+            stop();
+            return;
+        }
+        reportCliResolvedForOperation(target, cliPath);
     }, cliOperationResolutionRefreshIntervalMs);
-    return new vscode.Disposable(() => clearInterval(timer));
+    return new vscode.Disposable(stop);
 }
