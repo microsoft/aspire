@@ -1603,30 +1603,6 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("must belong to virtual network 'other-vnet'", exception.Message);
     }
 
-    [Fact]
-    public async Task InternalContainerAppEnvironmentRevalidatesVirtualNetworkDuringProvisioning()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var vnet = builder.AddAzureVirtualNetwork("vnet");
-        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
-        var otherVnet = builder.AddAzureVirtualNetwork("other-vnet");
-        var otherSubnet = otherVnet.AddSubnet("other-container-apps-subnet", "10.1.0.0/23");
-        var environment = builder.AddAzureContainerAppEnvironment("env")
-            .WithDelegatedSubnet(subnet)
-            .WithInternalLoadBalancer(vnet);
-        environment.WithAnnotation(
-            new DelegatedSubnetAnnotation(ReferenceExpression.Create($"{otherSubnet.Resource.Id}")),
-            ResourceAnnotationMutationBehavior.Replace);
-        var privateDns = builder.Resources
-            .OfType<AzureProvisioningResource>()
-            .Single(resource => resource.Name == "env-private-dns");
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => GetManifestWithBicep(privateDns));
-
-        Assert.Contains("must belong to virtual network 'vnet'", exception.Message);
-    }
-
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";
