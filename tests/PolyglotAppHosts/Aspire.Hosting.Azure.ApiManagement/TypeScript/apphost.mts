@@ -1,4 +1,4 @@
-import { createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
+import { AzureApiManagementSku, createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -34,7 +34,10 @@ const blobApi = await apim.addApiWithoutTarget("blob-api", "blobs");
 await blobApi.withApiBackend(blobBackend);
 
 const api = await apim.addApi("backend-api", backend, "backend");
-await api.withOpenApiEndpoint("/openapi/v1.json", "http");
+await api.withOpenApiEndpoint({
+    documentPath: "/openapi/v1.json",
+    endpointName: "http",
+});
 const primaryBackend = await apim.addBackend(
     "primary-backend",
     refExpr`https://primary.example.com`,
@@ -87,12 +90,12 @@ const integrationSubnet = await vnet.addSubnet("apim-integration-subnet", "10.0.
 const injectionSubnet = await vnet.addSubnet("apim-injection-subnet", "10.0.1.0/24");
 const integratedApim = await builder.addAzureApiManagement("integrated-apim", {
     publisherEmail: "api-owners@example.com",
-    sku: "StandardV2",
+    sku: AzureApiManagementSku.StandardV2,
 });
 await integratedApim.withVirtualNetworkIntegration(integrationSubnet);
 const injectedApim = await builder.addAzureApiManagement("injected-apim", {
     publisherEmail: "api-owners@example.com",
-    sku: "PremiumV2",
+    sku: AzureApiManagementSku.PremiumV2,
 });
 await injectedApim.withVirtualNetworkInjection(injectionSubnet);
 

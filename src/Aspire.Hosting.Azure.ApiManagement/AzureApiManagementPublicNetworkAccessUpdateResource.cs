@@ -103,7 +103,7 @@ internal sealed class AzureApiManagementPublicNetworkAccessUpdateResource(
 
                 echo "Failed to disable public network access after the private endpoint was created." >&2
                 exit 1
-                """,
+                """.ReplaceLineEndings("\n"),
         };
         script.EnvironmentVariables.Add(new ScriptEnvironmentVariable
         {
