@@ -1532,6 +1532,88 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public bool IsBundleModeAvailable(string? projectDirectory = null) => false;
     }
 
+    [Fact]
+    public void IsLaunchedByChildCli_StableStartTimeMatches_ReturnsTrue()
+    {
+        var childPid = Environment.ProcessId;
+        var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childPid);
+        Assert.NotNull(childStableStartedAt);
+
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = childPid,
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt.Value),
+            },
+        };
+
+        Assert.True(AppHostLauncher.IsLaunchedByChildCli(candidate, childPid, childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsLaunchedByChildCli_StableStartTimeMismatch_ReturnsFalse()
+    {
+        // An AppHost outlives the CLI that launched it and keeps reporting that CLI's PID. Once the OS
+        // recycles the PID onto our freshly launched child, the PID alone matches a completely unrelated
+        // orphan, so the launcher would adopt it and report its dashboard URLs.
+        var childPid = Environment.ProcessId;
+        var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childPid);
+        Assert.NotNull(childStableStartedAt);
+
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/OtherAppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = childPid,
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt.Value - 60_000),
+            },
+        };
+
+        Assert.False(AppHostLauncher.IsLaunchedByChildCli(candidate, childPid, childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsLaunchedByChildCli_OlderAppHostWithoutStableStartTime_ReturnsTrue()
+    {
+        // AppHosts launched by older CLIs never report CliStableStartedAt. Falling back to the PID-only
+        // match keeps them discoverable rather than making every pre-upgrade AppHost unreachable.
+        var childPid = Environment.ProcessId;
+
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = childPid,
+                CliStableStartedAt = null,
+            },
+        };
+
+        Assert.True(AppHostLauncher.IsLaunchedByChildCli(candidate, childPid, ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childPid)));
+    }
+
+    [Fact]
+    public void IsLaunchedByChildCli_DifferentCliProcessId_ReturnsFalse()
+    {
+        var candidate = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId + 1,
+            },
+        };
+
+        Assert.False(AppHostLauncher.IsLaunchedByChildCli(candidate, Environment.ProcessId, childStableStartedAt: null));
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;

@@ -474,6 +474,11 @@ internal sealed class AppHostLauncher(
         }
 
         var childStartedAt = childProcess.StartTime;
+
+        // Captured in the stable PID-identity clock domain so it can be compared against the
+        // CliStableStartedAt an AppHost reports. Not interchangeable with childStartedAt above,
+        // which comes from Process.StartTime and drifts across processes on Linux.
+        var childStableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(childProcess.ProcessId);
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
         var startTime = timeProvider.GetUtcNow();
@@ -504,7 +509,7 @@ internal sealed class AppHostLauncher(
                 scanCount++;
 
                 connection ??= backchannelMonitor.Connections.FirstOrDefault(
-                    candidate => candidate.AppHostInfo?.CliProcessId == childProcess.ProcessId);
+                    candidate => IsLaunchedByChildCli(candidate, childProcess.ProcessId, childStableStartedAt));
                 connection ??= backchannelMonitor.Connections.FirstOrDefault(
                     candidate =>
                         candidate.AppHostInfo?.AppHostPath is { } candidateAppHostPath &&
@@ -643,6 +648,32 @@ internal sealed class AppHostLauncher(
             childStartedAt,
             includeStartTimeForDcp: true,
             CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="candidate"/> is the AppHost launched by the child CLI we just started.
+    /// </summary>
+    /// <remarks>
+    /// A PID on its own is not an identity. An AppHost outlives the CLI that launched it and keeps
+    /// reporting that CLI's PID, so once the OS recycles the PID onto our child, a stale orphan would
+    /// match and we would adopt an unrelated AppHost. <c>CliStableStartedAt</c> is stamped from the
+    /// same stable clock domain as <see cref="ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(int)"/>,
+    /// so the two are directly comparable and a recycled PID is rejected. AppHosts launched by older
+    /// CLIs do not report it; those keep the PID-only match rather than becoming undiscoverable.
+    /// </remarks>
+    internal static bool IsLaunchedByChildCli(IAppHostAuxiliaryBackchannel candidate, int childProcessId, long? childStableStartedAt)
+    {
+        if (candidate.AppHostInfo is not { CliProcessId: int cliProcessId } appHostInfo || cliProcessId != childProcessId)
+        {
+            return false;
+        }
+
+        if (appHostInfo.CliStableStartedAt is not { } cliStableStartedAt || childStableStartedAt is not { } childStableStarted)
+        {
+            return true;
+        }
+
+        return ProcessStartTimeHelper.AreCloseMilliseconds(cliStableStartedAt.ToUnixTimeMilliseconds(), childStableStarted);
     }
 
     private LaunchResult CreateChildExitedLaunchResult(IProcessExecution childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)

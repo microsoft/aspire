@@ -373,12 +373,25 @@ internal sealed class AuxiliaryBackchannelMonitor(
             await Task.WhenAll(connectTasks).ConfigureAwait(false);
         }
 
-        // Remove failed sockets from known files so they can be retried on next scan
-        foreach (var failedSocket in failedSockets)
+        // Remove failed sockets from known files so they can be retried on next scan.
+        // This reacquires the lock because _knownSocketPaths is a plain HashSet and a concurrent scan
+        // (the public ScanAsync or either directory watcher) clears and repopulates it inside the lock.
+        if (!failedSockets.IsEmpty)
         {
-            if (_knownSocketPaths.Remove(failedSocket))
+            await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                logger.LogDebug("Marked failed socket for retry on next scan: {SocketPath}", failedSocket);
+                foreach (var failedSocket in failedSockets)
+                {
+                    if (_knownSocketPaths.Remove(failedSocket))
+                    {
+                        logger.LogDebug("Marked failed socket for retry on next scan: {SocketPath}", failedSocket);
+                    }
+                }
+            }
+            finally
+            {
+                _scanLock.Release();
             }
         }
 
