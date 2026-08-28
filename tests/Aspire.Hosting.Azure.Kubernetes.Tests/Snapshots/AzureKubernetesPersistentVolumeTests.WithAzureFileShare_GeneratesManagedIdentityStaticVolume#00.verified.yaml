@@ -13,7 +13,8 @@ spec:
       storageAccount: "{{ .Values.config.media_volume.storage_outputs_name }}"
       shareName: "media"
       protocol: "smb"
-      mountWithManagedIdentity: "true"
+      clientID: "{{ .Values.config.media_volume.media_volume_identity_outputs_clientId }}"
+      mountWithWorkloadIdentityToken: "true"
   accessModes:
     - "ReadWriteMany"
   mountOptions:

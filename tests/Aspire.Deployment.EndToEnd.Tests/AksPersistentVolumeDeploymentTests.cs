@@ -120,7 +120,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
                 TimeSpan.FromMinutes(2));
 
             await WaitForStatefulSetAndVolumesAsync(auto, counter);
-            await VerifyAzureFilesManagedIdentityAsync(auto, counter, resourceGroupName);
+            await VerifyAzureFilesWorkloadIdentityAsync(auto, counter, resourceGroupName);
 
             await VerifyFileSystemGroupAsync(auto, counter, expectedFsGroup: 2000);
 
@@ -397,9 +397,11 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             "PV_NAME=$(kubectl get persistentvolumeclaim shared-volume --namespace \"$NS\" -o jsonpath='{.spec.volumeName}') && " +
             "test \"$PV_NAME\" = \"shared-volume-pv\" && " +
             "test \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.driver}')\" = \"file.csi.azure.com\" && " +
-            "test \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.volumeAttributes.mountWithManagedIdentity}')\" = \"true\" && " +
+            "test \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.volumeAttributes.mountWithWorkloadIdentityToken}')\" = \"true\" && " +
+            "PV_CLIENT_ID=$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.volumeAttributes.clientID}') && " +
+            "test -n \"$PV_CLIENT_ID\" && " +
             "test -z \"$(kubectl get persistentvolume \"$PV_NAME\" -o jsonpath='{.spec.csi.nodeStageSecretRef.name}')\" && " +
-            "echo \"PVC shared-volume is Bound to managed-identity Azure Files PV $PV_NAME\"",
+            "echo \"PVC shared-volume is Bound to workload-identity Azure Files PV $PV_NAME\"",
             counter,
             TimeSpan.FromMinutes(6));
         await auto.RunCommandAsync(
@@ -408,7 +410,7 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             TimeSpan.FromMinutes(6));
     }
 
-    private static async Task VerifyAzureFilesManagedIdentityAsync(
+    private static async Task VerifyAzureFilesWorkloadIdentityAsync(
         Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         string resourceGroupName)
@@ -422,16 +424,34 @@ public sealed class AksPersistentVolumeDeploymentTests(ITestOutputHelper output)
             $"SHARED_KEY=$(az storage account show --resource-group {resourceGroupName} --name \"$STORAGE_ACCOUNT\" " +
             "--query 'allowSharedKeyAccess' --output tsv) && " +
             "test \"$SMB_OAUTH\" = \"true\" && test \"$SHARED_KEY\" = \"false\" && " +
-            "KUBELET_OBJECT_ID=$(az aks show --resource-group " + resourceGroupName + " --name \"$AKS_NAME\" " +
-            "--query 'identityProfile.kubeletidentity.objectId' --output tsv) && " +
+            $"PV_IDENTITY_NAME=$(az identity list --resource-group {resourceGroupName} " +
+            "--query \"[?contains(name, 'shared_volume_identity')].name | [0]\" --output tsv) && " +
+            "test -n \"$PV_IDENTITY_NAME\" && " +
+            $"PV_IDENTITY_CLIENT_ID=$(az identity show --resource-group {resourceGroupName} --name \"$PV_IDENTITY_NAME\" " +
+            "--query clientId --output tsv) && " +
+            $"PV_IDENTITY_PRINCIPAL_ID=$(az identity show --resource-group {resourceGroupName} --name \"$PV_IDENTITY_NAME\" " +
+            "--query principalId --output tsv) && " +
+            "test \"$PV_IDENTITY_CLIENT_ID\" = \"$PV_CLIENT_ID\" && " +
             $"STORAGE_ID=$(az storage account show --resource-group {resourceGroupName} --name \"$STORAGE_ACCOUNT\" --query id --output tsv) && " +
-            "ROLE_COUNT=$(az role assignment list --assignee-object-id \"$KUBELET_OBJECT_ID\" --scope \"$STORAGE_ID\" " +
+            "ROLE_COUNT=$(az role assignment list --assignee-object-id \"$PV_IDENTITY_PRINCIPAL_ID\" --scope \"$STORAGE_ID\" " +
             "--query \"[?roleDefinitionName=='Storage File Data SMB MI Admin'] | length(@)\" --output tsv) && " +
             "test \"$ROLE_COUNT\" = \"1\" && " +
+            "KUBELET_OBJECT_ID=$(az aks show --resource-group " + resourceGroupName + " --name \"$AKS_NAME\" " +
+            "--query 'identityProfile.kubeletidentity.objectId' --output tsv) && " +
+            "KUBELET_ROLE_COUNT=$(az role assignment list --assignee-object-id \"$KUBELET_OBJECT_ID\" --scope \"$STORAGE_ID\" " +
+            "--query \"[?roleDefinitionName=='Storage File Data SMB MI Admin'] | length(@)\" --output tsv) && " +
+            "test \"$KUBELET_ROLE_COUNT\" = \"0\" && " +
+            "SERVICE_ACCOUNT=$(kubectl get statefulset apiservice-statefulset --namespace \"$NS\" " +
+            "-o jsonpath='{.spec.template.spec.serviceAccountName}') && " +
+            "test \"$SERVICE_ACCOUNT\" = \"apiservice-sa\" && " +
+            $"FEDERATED_SUBJECT=$(az identity federated-credential list --resource-group {resourceGroupName} " +
+            "--identity-name \"$PV_IDENTITY_NAME\" --query \"[?name=='apiservice-fedcred'].subject | [0]\" --output tsv) && " +
+            "test \"$FEDERATED_SUBJECT\" = \"system:serviceaccount:$NS:$SERVICE_ACCOUNT\" && " +
+            "test \"$(kubectl get csidriver file.csi.azure.com -o jsonpath='{.spec.tokenRequests[0].audience}')\" = \"api://AzureADTokenExchange\" && " +
             "MOUNT_LINE=$(kubectl exec pod/apiservice-statefulset-0 --namespace \"$NS\" -- " +
             "sh -c \"grep ' /srv/shared cifs ' /proc/mounts\") && " +
             "printf '%s' \"$MOUNT_LINE\" | grep --fixed-strings --quiet 'sec=krb5' && " +
-            "echo \"Azure Files uses SMB OAuth with shared keys disabled; kubelet role and Kerberos mount verified\"",
+            "echo \"Azure Files uses SMB OAuth with shared keys disabled; per-volume workload identity, account-scoped data role, federation, and Kerberos mount verified\"",
             counter,
             TimeSpan.FromMinutes(5));
     }

@@ -1,83 +1,67 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param acrName string
+param azureFilesIdentityPrincipalId_media_volume string
 
-resource aks 'Microsoft.ContainerService/managedClusters@2026-01-01' = {
-  name: take('aks-${uniqueString(resourceGroup().id)}', 63)
-  tags: {
-    'aspire-resource-name': 'aks'
-  }
+resource storage 'Microsoft.Storage/storageAccounts@2025-06-01' = {
+  name: take('storage${uniqueString(resourceGroup().id)}', 24)
+  kind: 'StorageV2'
   location: location
-  properties: {
-    dnsPrefix: 'aks-dns'
-    agentPoolProfiles: [
-      {
-        name: 'system'
-        count: 1
-        vmSize: 'Standard_D2s_v5'
-        osType: 'Linux'
-        maxCount: 3
-        minCount: 1
-        enableAutoScaling: true
-        mode: 'System'
-      }
-      {
-        name: 'workload'
-        count: 1
-        vmSize: 'Standard_D2s_v5'
-        osType: 'Linux'
-        maxCount: 3
-        minCount: 1
-        enableAutoScaling: true
-        mode: 'User'
-      }
-    ]
-    oidcIssuerProfile: {
-      enabled: true
-    }
-    securityProfile: {
-      workloadIdentity: {
-        enabled: true
-      }
-    }
-    storageProfile: {
-      fileCSIDriver: {
-        enabled: true
-      }
-    }
-  }
   sku: {
-    name: 'Base'
-    tier: 'Free'
+    name: 'Standard_GRS'
   }
-  identity: {
-    type: 'SystemAssigned'
-  }
-}
-
-resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
-  name: acrName
-}
-
-resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acr.id, aks.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))
   properties: {
-    principalId: aks.properties.identityProfile.kubeletidentity.objectId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    accessTier: 'Hot'
+    allowSharedKeyAccess: false
+    azureFilesIdentityBasedAuthentication: {
+      directoryServiceOptions: 'None'
+      smbOAuthSettings: {
+        isSmbOAuthEnabled: true
+      }
+    }
+    isHnsEnabled: false
+    minimumTlsVersion: 'TLS1_2'
+    networkAcls: {
+      defaultAction: 'Allow'
+    }
+  }
+  tags: {
+    'aspire-resource-name': 'storage'
+  }
+}
+
+resource files 'Microsoft.Storage/storageAccounts/fileServices@2025-06-01' = {
+  name: 'default'
+  parent: storage
+}
+
+resource media_share 'Microsoft.Storage/storageAccounts/fileServices/shares@2025-06-01' = {
+  name: 'media'
+  parent: files
+}
+
+resource azureFilesRole_media_volume 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, azureFilesIdentityPrincipalId_media_volume, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a235d3ee-5935-4cfb-8cc5-a3303ad5995e'))
+  properties: {
+    principalId: azureFilesIdentityPrincipalId_media_volume
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a235d3ee-5935-4cfb-8cc5-a3303ad5995e')
     principalType: 'ServicePrincipal'
   }
-  scope: acr
+  scope: storage
 }
 
-output id string = aks.id
+output blobEndpoint string = storage.properties.primaryEndpoints.blob
 
-output name string = aks.name
+output dataLakeEndpoint string = storage.properties.primaryEndpoints.dfs
 
-output clusterFqdn string = aks.properties.fqdn
+output queueEndpoint string = storage.properties.primaryEndpoints.queue
 
-output oidcIssuerUrl string = aks.properties.oidcIssuerProfile.issuerURL
+output tableEndpoint string = storage.properties.primaryEndpoints.table
 
-output kubeletIdentityObjectId string = aks.properties.identityProfile.kubeletidentity.objectId
+output fileEndpoint string = storage.properties.primaryEndpoints.file
 
-output nodeResourceGroup string = aks.properties.nodeResourceGroup
+output name string = storage.name
+
+output resourceGroupName string = resourceGroup().name
+
+output id string = storage.id

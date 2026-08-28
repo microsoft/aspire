@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -23,6 +26,8 @@ public static class AzureKubernetesPersistentVolumeExtensions
 {
     private const string AzureFileCsiDriver = "file.csi.azure.com";
     private const string StorageFileDataSmbMiAdminRoleId = "a235d3ee-5935-4cfb-8cc5-a3303ad5995e";
+    private const int MaxAspireResourceNameLength = 64;
+    private static readonly TimeSpan s_workloadIdentityHelmTimeout = TimeSpan.FromMinutes(15);
 
     /// <summary>
     /// Adds a Kubernetes PersistentVolumeClaim resource to the application model for the
@@ -81,15 +86,24 @@ public static class AzureKubernetesPersistentVolumeExtensions
     /// <remarks>
     /// <para>
     /// The generated Kubernetes persistent volume uses the Azure Files CSI driver and
-    /// authenticates with the AKS kubelet managed identity. No Kubernetes Secret or
-    /// storage account key is generated.
+    /// authenticates with a user-assigned managed identity created for the persistent volume.
+    /// Each workload that mounts the volume is federated to that identity through its Kubernetes
+    /// service account. No Kubernetes Secret or storage account key is generated.
     /// </para>
     /// <para>
-    /// The AKS cluster must use Kubernetes 1.34 or later on Linux nodes. Aspire grants
-    /// the kubelet identity the <c>Storage File Data SMB MI Admin</c> role on the storage
-    /// account. Storage accounts provisioned by Aspire enable SMB OAuth and disable shared
-    /// key authentication when Azure Files is added. Existing storage accounts must already
-    /// have those settings configured.
+    /// The AKS cluster must use Azure Files CSI driver version 1.35.0 or later on Linux nodes.
+    /// Aspire grants the persistent volume identity the <c>Storage File Data SMB MI Admin</c>
+    /// data-plane role scoped to the storage account. This role does not grant Azure Resource
+    /// Manager control-plane permissions, but it applies to every file share in the account.
+    /// Storage accounts provisioned by Aspire enable SMB OAuth and disable shared key
+    /// authentication when Azure Files is added. Existing storage accounts must already have
+    /// those settings configured.
+    /// </para>
+    /// <para>
+    /// Azure infrastructure deployments are incremental. Removing the persistent volume or
+    /// retargeting it to another storage account does not delete the previously provisioned
+    /// identity or role assignment. Remove those resources explicitly, or use
+    /// <c>aspire destroy</c> when the deployment resource group is owned by the application.
     /// </para>
     /// </remarks>
     /// <example>
@@ -122,12 +136,44 @@ public static class AzureKubernetesPersistentVolumeExtensions
         }
 
         var storage = share.Resource.Parent.Parent;
-        if (aks.AzureFileStorageAccounts.TryAdd(storage.Name, storage))
+        aks.AzureFileStorageAccounts.TryAdd(storage.Name, storage);
+        if (aks.KubernetesEnvironment.HelmDeploymentTimeout is not { } timeout ||
+            timeout < s_workloadIdentityHelmTimeout)
         {
-            ConfigureKubeletIdentityRoleAssignment(
-                share.ApplicationBuilder.CreateResourceBuilder(storage),
-                aks);
+            // A newly created federated credential can take longer than Helm's five-minute
+            // default to propagate. The pod cannot become ready until CSI can mount the share.
+            aks.KubernetesEnvironment.HelmDeploymentTimeout = s_workloadIdentityHelmTimeout;
         }
+
+        AzureUserAssignedIdentityResource identity;
+        if (builder.Resource.TryGetLastAnnotation<AzureFileSharePersistentVolumeAnnotation>(out var existing))
+        {
+            if (!ReferenceEquals(existing.Share, share.Resource))
+            {
+                throw new InvalidOperationException(
+                    $"Persistent volume '{builder.Resource.Name}' is already configured to use Azure file share '{existing.Share.Name}'.");
+            }
+
+            identity = existing.Identity;
+        }
+        else
+        {
+            var identityBuilder = builder.ApplicationBuilder.AddAzureUserAssignedIdentity(GetIdentityResourceName(builder.Resource.Name));
+            identity = identityBuilder.Resource;
+            identity.Scope = aks.ResolveWorkloadIdentityScope();
+            builder.WithAnnotation(
+                new AzureFileSharePersistentVolumeAnnotation(share.Resource, identity),
+                ResourceAnnotationMutationBehavior.Replace);
+
+            ConfigurePersistentVolumeIdentityRoleAssignment(
+                share.ApplicationBuilder.CreateResourceBuilder(storage),
+                identity,
+                builder.Resource.Name);
+        }
+
+        // Dependency discovery can run before workload consumers are converted into FIC
+        // bindings, so record the PV identity relationship eagerly.
+        aks.References.Add(identity);
 
         var volumeHandle = ReferenceExpression.Create(
             $"{storage.ResourceGroupName}#{storage.NameOutputReference}#{share.Resource.FileShareName}");
@@ -137,7 +183,8 @@ public static class AzureKubernetesPersistentVolumeExtensions
             ["storageAccount"] = ReferenceExpression.Create($"{storage.NameOutputReference}"),
             ["shareName"] = ReferenceExpression.Create($"{share.Resource.FileShareName}"),
             ["protocol"] = ReferenceExpression.Create($"smb"),
-            ["mountWithManagedIdentity"] = ReferenceExpression.Create($"true"),
+            ["clientID"] = ReferenceExpression.Create($"{identity.ClientId}"),
+            ["mountWithWorkloadIdentityToken"] = ReferenceExpression.Create($"true"),
         };
 
         builder.WithAnnotation(
@@ -164,24 +211,45 @@ public static class AzureKubernetesPersistentVolumeExtensions
         return builder;
     }
 
-    private static void ConfigureKubeletIdentityRoleAssignment(
-        IResourceBuilder<AzureStorageResource> storage,
-        AzureKubernetesEnvironmentResource aks)
+    private static string GetIdentityResourceName(string volumeName)
     {
-        var normalizedAksName = Infrastructure.NormalizeBicepIdentifier(aks.Name);
-        var principalIdParameterName = $"aksKubeletPrincipalId_{normalizedAksName}";
-        storage.Resource.Parameters[principalIdParameterName] = aks.KubeletIdentityObjectId;
+        const string suffix = "-identity";
+        var identityName = $"{volumeName}{suffix}";
+        if (identityName.Length <= MaxAspireResourceNameLength)
+        {
+            return identityName;
+        }
+
+        // Keep derived resource names deterministic and globally distinguishable when the PV
+        // already uses the full Aspire resource-name budget.
+        var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(volumeName))
+            .ToString("x16", CultureInfo.InvariantCulture)[..8];
+        var prefixLength = MaxAspireResourceNameLength - suffix.Length - hash.Length - 1;
+        var prefix = volumeName[..prefixLength].TrimEnd('-');
+        return $"{prefix}-{hash}{suffix}";
+    }
+
+    private static void ConfigurePersistentVolumeIdentityRoleAssignment(
+        IResourceBuilder<AzureStorageResource> storage,
+        AzureUserAssignedIdentityResource identity,
+        string volumeName)
+    {
+        var normalizedVolumeName = Infrastructure.NormalizeBicepIdentifier(volumeName);
+        var principalIdParameterName = $"azureFilesIdentityPrincipalId_{normalizedVolumeName}";
+        storage.Resource.Parameters[principalIdParameterName] = identity.PrincipalId;
 
         storage.ConfigureInfrastructure(infrastructure =>
         {
-            var storageAccount = infrastructure.GetProvisionableResources().OfType<StorageAccount>().Single();
+            var storageAccount = infrastructure.GetProvisionableResources()
+                .OfType<StorageAccount>()
+                .Single();
             var principalId = new ProvisioningParameter(principalIdParameterName, typeof(string));
             infrastructure.Add(principalId);
 
             var roleDefinitionId = BicepFunction.GetSubscriptionResourceId(
                 "Microsoft.Authorization/roleDefinitions",
                 StorageFileDataSmbMiAdminRoleId);
-            var roleAssignment = new RoleAssignment($"aksFilesRole_{normalizedAksName}")
+            var roleAssignment = new RoleAssignment($"azureFilesRole_{normalizedVolumeName}")
             {
                 Name = BicepFunction.CreateGuid(storageAccount.Id, principalId, roleDefinitionId),
                 Scope = new IdentifierExpression(storageAccount.BicepIdentifier),

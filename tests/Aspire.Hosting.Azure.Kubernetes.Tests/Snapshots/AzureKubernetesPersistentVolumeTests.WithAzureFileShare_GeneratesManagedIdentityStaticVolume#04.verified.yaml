@@ -1,0 +1,7 @@
+﻿parameters: {}
+secrets: {}
+config:
+  media_volume:
+    storage_outputs_resourceGroupName: ""
+    storage_outputs_name: ""
+    media_volume_identity_outputs_clientId: ""

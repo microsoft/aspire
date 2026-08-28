@@ -69,6 +69,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     internal string HelmChartDescription { get; set; } = "Aspire Helm Chart";
 
     /// <summary>
+    /// Gets or sets an optional timeout for Helm deployment readiness.
+    /// </summary>
+    internal TimeSpan? HelmDeploymentTimeout { get; set; }
+
+    /// <summary>
     /// Determines whether to include an Aspire dashboard for telemetry visualization in this environment.
     /// </summary>
     public bool DashboardEnabled { get; set; } = true;

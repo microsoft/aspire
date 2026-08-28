@@ -1891,6 +1891,34 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task HelmDeploy_UsesConfiguredTimeout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner();
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Deploy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IDeploymentStateManager, InMemoryDeploymentStateManager>();
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+
+        var environment = builder.AddKubernetesEnvironment("env").Resource;
+        environment.HelmDeploymentTimeout = TimeSpan.FromMinutes(15);
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.StartsWith("upgrade --install", fakeHelm.LastArguments);
+        Assert.Contains("--timeout 900s", fakeHelm.LastArguments);
+    }
+
+    [Fact]
     public async Task DestroyHelm_WithState_RunsHelmUninstall()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
