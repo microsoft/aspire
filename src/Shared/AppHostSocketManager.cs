@@ -171,6 +171,22 @@ internal static class AppHostSocketManager
         _ = FindSockets(appHostPath, homeDirectory, currentProcessId, logger);
     }
 
+    /// <summary>
+    /// Gets the socket keys to search for an AppHost, in order of preference.
+    /// </summary>
+    /// <remarks>
+    /// A socket is keyed off the path spelling its producer was given, so an AppHost started before
+    /// a CLI upgrade can be keyed off a spelling the current CLI no longer computes. Searching the
+    /// canonical path, the symlink-resolved path, and the raw path covers the spellings previous
+    /// releases produced.
+    /// <para>
+    /// Every key is derived from the caller's spelling, so this cannot match a socket whose producer
+    /// used a different casing than the caller does on a case-insensitive filesystem. Closing that
+    /// gap would mean connecting to every running AppHost and comparing the path each one reports,
+    /// which defeats the purpose of addressing an AppHost by path. Restarting the AppHost keys its
+    /// socket canonically and resolves it permanently.
+    /// </para>
+    /// </remarks>
     private static string[] GetSocketKeyPaths(string appHostPath)
     {
         return
