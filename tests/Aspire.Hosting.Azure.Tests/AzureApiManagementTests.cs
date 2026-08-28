@@ -4,9 +4,11 @@
 #pragma warning disable ASPIREAPIM001
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIRECOMPUTE002
+#pragma warning disable ASPIREPIPELINES001
 
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
@@ -727,6 +729,55 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("catalog-backend", manifest.ToJsonString());
         Assert.Contains("/openapi/v1.json", manifest.ToJsonString());
         await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentReplacesEndpointDeploymentDependency()
+    {
+        using var temporaryWorkspace = TemporaryWorkspace.Create(output);
+        var documentPath = Path.Combine(temporaryWorkspace.Path, "catalog.json");
+        await File.WriteAllTextAsync(
+            documentPath,
+            """{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}""",
+            TestContext.Current.CancellationToken);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var backend = builder.AddProject<Project>("catalog-backend", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithComputeEnvironment(environment)
+            .WithExternalHttpEndpoints();
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddApi("catalog-api", backend, "catalog")
+            .WithOpenApiEndpoint()
+            .WithOpenApiDocument(documentPath);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var provisionStep = new PipelineStep
+        {
+            Name = "provision-apim",
+            Action = static _ => Task.CompletedTask,
+            Resource = apim.Resource,
+            Tags = [WellKnownPipelineTags.ProvisionInfrastructure],
+        };
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var context = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Model = model,
+            Steps = [provisionStep],
+        };
+        foreach (var annotation in apim.Resource.Annotations.OfType<PipelineConfigurationAnnotation>())
+        {
+            await annotation.Callback(context);
+        }
+
+        Assert.Empty(provisionStep.DependsOnSteps);
     }
 
     [Fact]

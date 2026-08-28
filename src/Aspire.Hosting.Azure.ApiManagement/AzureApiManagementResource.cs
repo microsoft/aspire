@@ -69,8 +69,6 @@ public class AzureApiManagementResource(
     /// </summary>
     internal List<AzureApiManagementCustomDomain> CustomDomains { get; } = [];
 
-    internal HashSet<IResource> OpenApiDeploymentTargets { get; } = [];
-
     /// <summary>
     /// Gets or sets the service-level Application Insights diagnostic.
     /// </summary>

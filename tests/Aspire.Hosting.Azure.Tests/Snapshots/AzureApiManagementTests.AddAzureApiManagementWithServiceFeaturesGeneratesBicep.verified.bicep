@@ -70,16 +70,6 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   ]
 }
 
-resource correlation 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = {
-  name: 'correlation'
-  properties: {
-    format: 'rawxml'
-    value: '<fragment>\n  <set-header name="x-correlation-id" exists-action="skip"><value>@(context.RequestId.ToString())</value></set-header>\n</fragment>'
-    description: 'Adds a correlation ID.'
-  }
-  parent: apim
-}
-
 resource backend_region 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
   name: 'backend-region'
   properties: {
@@ -134,6 +124,21 @@ resource upstream_secret 'Microsoft.ApiManagement/service/namedValues@2024-05-01
   ]
 }
 
+resource correlation 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = {
+  name: 'correlation'
+  properties: {
+    format: 'rawxml'
+    value: '<fragment>\n  <set-header name="x-correlation-id" exists-action="skip"><value>@(context.RequestId.ToString())</value></set-header>\n</fragment>'
+    description: 'Adds a correlation ID.'
+  }
+  parent: apim
+  dependsOn: [
+    backend_region
+    api_key_value
+    upstream_secret
+  ]
+}
+
 resource _apim_servicePolicy_apim 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
   name: 'policy'
   properties: {
@@ -143,6 +148,9 @@ resource _apim_servicePolicy_apim 'Microsoft.ApiManagement/service/policies@2024
   parent: apim
   dependsOn: [
     correlation
+    backend_region
+    api_key_value
+    upstream_secret
   ]
 }
 
@@ -211,6 +219,9 @@ resource _apim_operationPolicy_get_product 'Microsoft.ApiManagement/service/apis
   parent: get_product
   dependsOn: [
     correlation
+    backend_region
+    api_key_value
+    upstream_secret
   ]
 }
 
@@ -224,6 +235,9 @@ resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/polic
   dependsOn: [
     _apim_computeBackend_catalog_api
     correlation
+    backend_region
+    api_key_value
+    upstream_secret
   ]
 }
 

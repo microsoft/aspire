@@ -74,7 +74,12 @@ public static class AzureApiManagementExtensions
         resource.Annotations.Add(new PipelineConfigurationAnnotation(context =>
         {
             var provisionSteps = context.GetSteps(resource, WellKnownPipelineTags.ProvisionInfrastructure);
-            foreach (var target in resource.OpenApiDeploymentTargets)
+            var openApiDeploymentTargets = resource.Apis
+                .Where(api => api.OpenApiSource is AzureApiManagementOpenApiEndpoint)
+                .Select(api => api.Target)
+                .OfType<IResource>()
+                .Distinct();
+            foreach (var target in openApiDeploymentTargets)
             {
                 if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(target, out var computeEnvironment) ||
                     target.GetDeploymentTargetAnnotation(computeEnvironment)?.DeploymentTarget is not { } deploymentTarget)
@@ -267,7 +272,6 @@ public static class AzureApiManagementExtensions
             documentPath,
             endpointName,
             format ?? InferOpenApiFormat(documentPath));
-        builder.Resource.Parent.OpenApiDeploymentTargets.Add(builder.Resource.Target);
         return builder;
     }
 
@@ -1687,8 +1691,7 @@ public static class AzureApiManagementExtensions
             infrastructure.Add(service);
         }
 
-        var policyFragments = AddPolicyFragments(infrastructure, azureResource, service);
-        AddNamedValues(
+        var namedValues = AddNamedValues(
             infrastructure,
             azureResource,
             service,
@@ -1696,7 +1699,8 @@ public static class AzureApiManagementExtensions
             keyVaultRoleAssignmentIdentity,
             keyVaultIdentityClientId,
             keyVaultRoleAssignments);
-        AddServicePolicy(infrastructure, azureResource, service, policyFragments);
+        var policyFragments = AddPolicyFragments(infrastructure, azureResource, service, namedValues);
+        AddServicePolicy(infrastructure, azureResource, service, policyFragments, namedValues);
 
         var provisionedBackends = AddBackends(infrastructure, azureResource, service);
         var provisionedBackendPools = AddBackendPools(infrastructure, azureResource, service, provisionedBackends);
@@ -1713,7 +1717,8 @@ public static class AzureApiManagementExtensions
                     service,
                     provisionedBackends,
                     provisionedBackendPools,
-                    policyFragments));
+                    policyFragments,
+                    namedValues));
         }
 
         AddProducts(infrastructure, azureResource, service, provisionedApis);
@@ -1744,7 +1749,8 @@ public static class AzureApiManagementExtensions
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
         ApiManagementServiceProvisioningResource service,
-        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments)
+        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments,
+        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
     {
         var policyXml = azureResource.PolicyXml ??
             CreatePolicyDocument(azureResource.InboundPolicyStatements, inheritParentPolicy: false);
@@ -1766,13 +1772,18 @@ public static class AzureApiManagementExtensions
         {
             policy.DependsOn.Add(policyFragment);
         }
+        foreach (var namedValue in namedValues)
+        {
+            policy.DependsOn.Add(namedValue);
+        }
         infrastructure.Add(policy);
     }
 
     private static IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> AddPolicyFragments(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
-        ApiManagementServiceProvisioningResource service)
+        ApiManagementServiceProvisioningResource service,
+        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
     {
         var provisionedFragments = new List<ApiManagementPolicyFragmentProvisioningResource>();
         foreach (var fragmentResource in azureResource.PolicyFragments)
@@ -1789,6 +1800,10 @@ public static class AzureApiManagementExtensions
             {
                 fragment.Description = fragmentResource.Description;
             }
+            foreach (var namedValue in namedValues)
+            {
+                fragment.DependsOn.Add(namedValue);
+            }
 
             infrastructure.Add(fragment);
             provisionedFragments.Add(fragment);
@@ -1797,7 +1812,7 @@ public static class AzureApiManagementExtensions
         return provisionedFragments;
     }
 
-    private static void AddNamedValues(
+    private static IReadOnlyList<ApiManagementNamedValueProvisioningResource> AddNamedValues(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
         ApiManagementServiceProvisioningResource service,
@@ -1806,6 +1821,7 @@ public static class AzureApiManagementExtensions
         BicepValue<string>? keyVaultIdentityClientId,
         Dictionary<string, RoleAssignment> keyVaultRoleAssignments)
     {
+        var provisionedNamedValues = new List<ApiManagementNamedValueProvisioningResource>();
         foreach (var namedValueResource in azureResource.NamedValues)
         {
             var namedValue = new ApiManagementNamedValueProvisioningResource(
@@ -1856,7 +1872,10 @@ public static class AzureApiManagementExtensions
             }
 
             infrastructure.Add(namedValue);
+            provisionedNamedValues.Add(namedValue);
         }
+
+        return provisionedNamedValues;
     }
 
     private static void AddProducts(
@@ -2106,7 +2125,8 @@ public static class AzureApiManagementExtensions
         ApiManagementServiceProvisioningResource service,
         IReadOnlyDictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource> provisionedBackends,
         IReadOnlyDictionary<AzureApiManagementBackendPoolResource, ApiManagementBackendProvisioningResource> provisionedBackendPools,
-        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments)
+        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments,
+        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
     {
         var apiIdentifier = Infrastructure.NormalizeBicepIdentifier(apiResource.Name);
         var (backendIdentifier, backend, managedIdentityResource) = apiResource.Target is not null
@@ -2160,7 +2180,7 @@ public static class AzureApiManagementExtensions
 
         foreach (var operationResource in apiResource.Operations)
         {
-            AddOperation(infrastructure, operationResource, api, policyFragments);
+            AddOperation(infrastructure, operationResource, api, policyFragments, namedValues);
         }
 
         var policyXml = apiResource.PolicyXml ??
@@ -2181,6 +2201,10 @@ public static class AzureApiManagementExtensions
         foreach (var policyFragment in policyFragments)
         {
             policy.DependsOn.Add(policyFragment);
+        }
+        foreach (var namedValue in namedValues)
+        {
+            policy.DependsOn.Add(namedValue);
         }
         infrastructure.Add(policy);
 
@@ -2519,7 +2543,8 @@ public static class AzureApiManagementExtensions
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementOperationResource operationResource,
         ApiManagementApiProvisioningResource api,
-        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments)
+        IReadOnlyList<ApiManagementPolicyFragmentProvisioningResource> policyFragments,
+        IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
     {
         var operationIdentifier = Infrastructure.NormalizeBicepIdentifier(operationResource.Name);
         var operation = new ApiManagementOperationProvisioningResource(
@@ -2563,6 +2588,10 @@ public static class AzureApiManagementExtensions
         foreach (var policyFragment in policyFragments)
         {
             policy.DependsOn.Add(policyFragment);
+        }
+        foreach (var namedValue in namedValues)
+        {
+            policy.DependsOn.Add(namedValue);
         }
         infrastructure.Add(policy);
     }
