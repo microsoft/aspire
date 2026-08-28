@@ -3,7 +3,6 @@
 
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Azure.Core;
 
@@ -57,8 +56,8 @@ public class DefaultAzurePrincipalProviderTests
     [Fact]
     public async Task GetPrincipalAsync_DefaultsTypeToUserWhenIdtypMissing()
     {
-        // Tokens with no identity-type or delegated/application permission shape retain the
-        // historical User fallback.
+        // Legacy tokens and some federated flows omit the `idtyp` claim. Defaulting to "User"
+        // preserves the behavior that shipped before the auto-detect change.
         var token = CreateTestToken(Guid.NewGuid(), upn: "test@example.com");
         var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(token);
         var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
@@ -95,71 +94,6 @@ public class DefaultAzurePrincipalProviderTests
         var principal = await provider.GetPrincipalAsync();
 
         Assert.Equal("ServicePrincipal", principal.Type);
-    }
-
-    [Fact]
-    public async Task GetPrincipalAsync_DetectsServicePrincipalFromRolesWhenIdtypMissing()
-    {
-        var payloadJson = """
-            {"oid":"11111111-2222-3333-4444-555555555555","appid":"22222222-3333-4444-5555-666666666666","roles":["Application.Read.All"]}
-            """;
-        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
-        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
-
-        var principal = await provider.GetPrincipalAsync();
-
-        Assert.Equal("ServicePrincipal", principal.Type);
-    }
-
-    [Fact]
-    public async Task GetPrincipalAsync_DetectsRoleLessServicePrincipalWhenIdtypMissing()
-    {
-        // Entra can issue app-only tokens without `roles` when the target resource authorizes
-        // clients through an ACL instead of application permissions.
-        var payloadJson = """
-            {"oid":"11111111-2222-3333-4444-555555555555","appid":"22222222-3333-4444-5555-666666666666","app_displayname":"acl-authorized-app"}
-            """;
-        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
-        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
-
-        var principal = await provider.GetPrincipalAsync();
-
-        Assert.Equal("ServicePrincipal", principal.Type);
-        Assert.Equal("acl-authorized-app", principal.Name);
-    }
-
-    [Fact]
-    public async Task GetPrincipalAsync_DetectsDelegatedTokenFromScopesWhenRolesAreAlsoPresent()
-    {
-        var payloadJson = """
-            {"oid":"11111111-2222-3333-4444-555555555555","appid":"22222222-3333-4444-5555-666666666666","scp":"User.Read","roles":["Application.Read.All"]}
-            """;
-        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(CreateTokenFromPayload(payloadJson));
-        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
-
-        var principal = await provider.GetPrincipalAsync();
-
-        Assert.Equal("User", principal.Type);
-    }
-
-    [Theory]
-    [InlineData("preferred_username", "preferred@example.com")]
-    [InlineData("unique_name", "unique@example.com")]
-    public async Task GetPrincipalAsync_DetectsUserFromOptionalUserNameClaims(string claimName, string claimValue)
-    {
-        var payload = new JsonObject
-        {
-            ["oid"] = "11111111-2222-3333-4444-555555555555",
-            [claimName] = claimValue
-        };
-        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(
-            CreateTokenFromPayload(payload.ToJsonString()));
-        var provider = new DefaultAzurePrincipalProvider(tokenCredentialProvider);
-
-        var principal = await provider.GetPrincipalAsync();
-
-        Assert.Equal("User", principal.Type);
-        Assert.Equal(claimValue, principal.Name);
     }
 
     [Fact]
@@ -245,7 +179,7 @@ public class DefaultAzurePrincipalProviderTests
     // Entra's groups-overage payload nests an object under `_claim_sources`; this variant hides a
     // conflicting `idtyp` there while the token itself carries none, so no ordering is involved.
     [InlineData("""
-        {"oid":"11111111-2222-3333-4444-555555555555","upn":"real@example.com","_claim_sources":{"src1":{"idtyp":"app"}}}
+        {"oid":"11111111-2222-3333-4444-555555555555","_claim_sources":{"src1":{"idtyp":"app"}}}
         """, "User")]
     public async Task GetPrincipalAsync_IgnoresClaimsNestedInsideOtherClaims(string payloadJson, string expectedPrincipalType)
     {

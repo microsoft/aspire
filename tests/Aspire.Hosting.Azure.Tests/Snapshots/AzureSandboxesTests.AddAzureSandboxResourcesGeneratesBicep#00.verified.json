@@ -3,7 +3,7 @@
   "path": "hostgroup.module.bicep",
   "params": {
     "hostmi_outputs_id": "{hostmi.outputs.id}",
-    "userPrincipalId": "",
-    "principalType": ""
+    "hostgroup_acr_outputs_name": "{hostgroup-acr.outputs.name}",
+    "principalId": ""
   }
 }

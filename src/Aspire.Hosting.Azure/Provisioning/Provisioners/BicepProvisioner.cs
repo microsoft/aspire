@@ -64,8 +64,7 @@ internal sealed class BicepProvisioner(
             return false;
         }
 
-        var valueProviderContext = new ValueProviderContext { ExecutionContext = executionContext, Caller = resource };
-        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, logger, cancellationToken, valueProviderContext).ConfigureAwait(false);
+        var currentCheckSum = await BicepUtilities.GetCurrentChecksumAsync(resource, stateSection, logger, cancellationToken).ConfigureAwait(false);
         var configCheckSum = stateSection.Data[BicepUtilities.DeploymentStateChecksumKey]?.GetValue<string>();
 
         if (string.IsNullOrEmpty(configCheckSum))
@@ -567,11 +566,10 @@ internal sealed class BicepProvisioner(
         logger.LogDebug("Setting parameters and scope for resource {ResourceName}", resource.Name);
         // Convert the parameters to a JSON object
         var parameters = new JsonObject();
-        var valueProviderContext = new ValueProviderContext { ExecutionContext = executionContext, Caller = resource };
-        await BicepUtilities.SetParametersAsync(parameters, resource, cancellationToken: cancellationToken, valueProviderContext: valueProviderContext).ConfigureAwait(false);
+        await BicepUtilities.SetParametersAsync(parameters, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var scope = new JsonObject();
-        await BicepUtilities.SetScopeAsync(scope, resource, cancellationToken: cancellationToken, valueProviderContext: valueProviderContext).ConfigureAwait(false);
+        await BicepUtilities.SetScopeAsync(scope, resource, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         var deployments = isTenantScoped
             ? context.Tenant.GetArmDeployments()
@@ -1395,15 +1393,6 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
-        if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) && userPrincipalId is null)
-        {
-            // userPrincipalId is the Azure environment's deployment-principal parameter.
-            // Published artifacts bind it from the outer main.bicep principalId parameter;
-            // direct `aspire deploy` has no outer template, so bind it from the current
-            // authenticated principal even though deploy runs with a publish execution context.
-            resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = context.Principal.Id;
-        }
-
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalName, out var principalName) && principalName is null)
         {
             ValidateUnknownPrincipalParameter(context);
@@ -1413,10 +1402,7 @@ internal sealed class BicepProvisioner(
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
-            if (!resource.Parameters.ContainsKey(AzureBicepResource.KnownParameters.UserPrincipalId))
-            {
-                ValidateUnknownPrincipalParameter(context);
-            }
+            ValidateUnknownPrincipalParameter(context);
 
             // Use the principal type detected from the credential's access token (the `idtyp`
             // claim) instead of hardcoding "User". A hardcoded "User" caused the role-assignment

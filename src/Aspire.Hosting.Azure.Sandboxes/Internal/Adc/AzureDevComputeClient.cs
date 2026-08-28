@@ -62,7 +62,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         return SendCreateAsync<AzureDevComputeDiskImage>(
             scope,
             HttpMethod.Put,
-            $"{GetSandboxGroupPath(scope)}/diskimages",
+            $"{GetSandboxGroupPath(scope)}/diskimages/v2",
             request,
             cancellationToken);
     }
@@ -520,21 +520,16 @@ internal sealed class AzureDevComputeCreateDiskImageRequest
 
     public Dictionary<string, string> Labels { get; init; } = [];
 
-    public required AzureDevComputeDiskImageSpec Image { get; init; }
-
-    public AzureDevComputeRegistryCredentials? RegistryCredentials { get; init; }
+    public required AzureDevComputeDiskImageSource Source { get; init; }
 }
 
-internal sealed class AzureDevComputeDiskImageSpec
+internal sealed class AzureDevComputeDiskImageSource
 {
-    public required string Base { get; init; }
-}
+    public string Kind { get; init; } = "registry";
 
-internal sealed class AzureDevComputeRegistryCredentials
-{
-    public required string Username { get; init; }
+    public required string ImageUrl { get; init; }
 
-    public required string Token { get; init; }
+    public required string ManagedIdentityClientId { get; init; }
 }
 
 internal sealed class AzureDevComputeDiskImage
