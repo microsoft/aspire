@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Xunit;
 
 namespace Aspire.Templates.Tests;
@@ -16,6 +17,7 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
         string? error,
         string? appHostDirectoryNamePrefix = null,
         bool withAppHostReference = true,
+        bool useAppHostTargetFramework = true,
         bool runTests = false)
     {
         var id = GetNewProjectId(prefix: $"new_build_{FixupSymbolName(templateName)}");
@@ -64,7 +66,8 @@ public abstract class NewUpAndBuildSupportProjectTemplatesBase(ITestOutputHelper
                                         buildEnvironment: buildEnvToUse,
                                         extraArgs: extraTestCreationArgs,
                                         overrideRootDir: topLevelDir,
-                                        withAppHostReference: withAppHostReference);
+                                        withAppHostReference: withAppHostReference,
+                                        useAppHostTargetFramework: useAppHostTargetFramework);
 
             await project.BuildAsync(extraBuildArgs: [$"-c {config}"], workingDirectory: testProjectDir);
             if (runTests)
@@ -103,6 +106,77 @@ public class Wired_NewUpAndTestSupportProjectTemplatesTests(ITestOutputHelper te
             TestTargetFramework.Net10,
             error: null,
             runTests: true);
+    }
+
+    [Fact]
+    public Task AppHostTargetFrameworkOverridesExplicitFramework()
+    {
+        return CanNewAndBuildActual(
+            "aspire-mstest",
+            "--framework net11.0",
+            TestSdk.Net10,
+            TestTargetFramework.Net10,
+            error: null,
+            runTests: true);
+    }
+
+    [Fact]
+    public Task MissingAppHostTargetFrameworkFallsBackToExplicitFramework()
+    {
+        return CanNewAndBuildActual(
+            "aspire-mstest",
+            "",
+            TestSdk.Net10,
+            TestTargetFramework.Net10,
+            error: null,
+            useAppHostTargetFramework: false,
+            runTests: true);
+    }
+
+    [Theory]
+    [InlineData("aspire-mstest")]
+    [InlineData("aspire-nunit")]
+    [InlineData("aspire-xunit")]
+    public async Task AppHostTargetFrameworkAcceptsPlatformQualifiedFramework(string templateName)
+    {
+        var buildEnvironment = BuildEnvironment.ForNet10SdkOnly;
+        var id = GetNewProjectId(prefix: $"platform_tfm_{FixupSymbolName(templateName)}");
+        var topLevelDir = Path.Combine(BuildEnvironment.TestRootPath, id + "_root");
+        var testProjectName = $"{id}.Tests";
+        var testProjectDir = Path.Combine(topLevelDir, testProjectName);
+
+        if (Directory.Exists(topLevelDir))
+        {
+            Directory.Delete(topLevelDir, recursive: true);
+        }
+        Directory.CreateDirectory(topLevelDir);
+
+        try
+        {
+            using var newTestCmd = new DotNetNewCommand(
+                _testOutput,
+                label: $"platform-tfm-{templateName}",
+                buildEnv: buildEnvironment)
+                .WithWorkingDirectory(topLevelDir);
+
+            var appHostProjectPath = Path.Combine("..", "AppHost", "AppHost.csproj");
+            var result = await newTestCmd.ExecuteAsync(
+                $"{templateName} -o \"{testProjectName}\" --no-restore " +
+                $"--WithAppHostReference true --AppHostProjectPath \"{appHostProjectPath}\" " +
+                "--AppHostProjectName AppHost --AppHostTargetFramework net10.0-windows");
+            result.EnsureSuccessful();
+
+            var testProjectPath = Assert.Single(Directory.EnumerateFiles(testProjectDir, "*.csproj"));
+            var testProject = XDocument.Load(testProjectPath);
+            Assert.Equal("net10.0-windows", Assert.Single(testProject.Descendants("TargetFramework")).Value);
+        }
+        finally
+        {
+            if (Directory.Exists(topLevelDir))
+            {
+                Directory.Delete(topLevelDir, recursive: true);
+            }
+        }
     }
 }
 

@@ -85,8 +85,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData(0, "net11.0", null, "net11.0")]
+    [InlineData(0, "net10.0-windows", null, "net10.0-windows")]
     [InlineData(0, null, "net10.0;net11.0", "net10.0")]
     [InlineData(0, null, " net11.0 ; net10.0 ", "net11.0")]
+    [InlineData(0, "   ", null, null)]
     [InlineData(0, null, null, null)]
     [InlineData(1, null, null, null)]
     public async Task NewCommand_IntegrationTestTemplateUsesAppHostTargetFrameworkWhenAvailable(
@@ -171,7 +173,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         };
         if (expectedTargetFramework is not null)
         {
-            expectedExtraArgs.Add("--framework");
+            expectedExtraArgs.Add("--AppHostTargetFramework");
             expectedExtraArgs.Add(expectedTargetFramework);
         }
 
