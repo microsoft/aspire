@@ -381,20 +381,15 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.NotNull(apim.Resource.PublicNetworkAccessState);
         Assert.NotNull(apim.Resource.PublicNetworkAccessUpdate);
         var (_, serviceBicep) = await GetManifestWithBicep(apim.Resource);
-        var (_, stateBicep) = await GetManifestWithBicep(apim.Resource.PublicNetworkAccessState);
         var (_, updateBicep) = await GetManifestWithBicep(apim.Resource.PublicNetworkAccessUpdate);
 
         Assert.DoesNotContain("publicNetworkAccess:", serviceBicep);
-        Assert.DoesNotContain("Microsoft.Resources/deploymentScripts", stateBicep);
-        Assert.Contains("reference(apim.id", stateBicep);
-        Assert.Contains("param state string", updateBicep);
+        Assert.Contains("Microsoft.Resources/deploymentScripts@2023-08-01", updateBicep);
         Assert.Contains("publicNetworkAccess", updateBicep);
         Assert.Contains("Disabled", updateBicep);
-        await Verify(stateBicep, extension: "bicep")
-            .AppendContentAsFile(updateBicep, "bicep", "update");
+        await Verify(updateBicep, "bicep");
     }
 
     [Fact]
