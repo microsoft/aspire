@@ -56,8 +56,10 @@ export class OutdatedCliNotifier implements vscode.Disposable {
     private readonly _notifiedCliVersions = new Set<string>();
     private readonly _persistentlySuppressedCliVersions: Set<string>;
     private readonly _inFlightByCheckKey = new Map<string, Promise<PendingNotification | undefined>>();
+    private readonly _inFlightVersionByCliPath = new Map<string, Promise<CliVersionInfo | null | undefined>>();
     private readonly _cancellationSource = new vscode.CancellationTokenSource();
-    private _doctorTail: Promise<void> = Promise.resolve();
+    private readonly _versionQueue = new AsyncSerialQueue();
+    private readonly _doctorQueue = new AsyncSerialQueue();
     private _disposed = false;
 
     constructor(
@@ -129,11 +131,10 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         }
 
         // This user-initiated guard intentionally bypasses the five-minute cache.
-        const currentVersionProbe = await this._versionProvider.getCliVersion({
-            target: notification.target,
-            cliPath: notification.cli.cliPath,
-            cancellationToken: this._cancellationSource.token,
-        });
+        const currentVersionProbe = await this._getCliVersion(
+            notification.target,
+            notification.cli.cliPath,
+            false);
         if (this._disposed) {
             return;
         }
@@ -144,6 +145,39 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         await this._surface.executeCommand(updateAspireCliCommand, notification.target, notification.cli.cliPath);
     }
 
+    private _getCliVersion(
+        target: CliPathResolutionTarget,
+        cliPath: string,
+        coalesce = true,
+    ): Promise<CliVersionInfo | null | undefined> {
+        const cliPathKey = getComparisonKey(path.normalize(cliPath));
+        const startProbe = () => this._versionQueue.run(
+            () => this._versionProvider.getCliVersion({
+                target,
+                cliPath,
+                cancellationToken: this._cancellationSource.token,
+            }),
+            () => this._disposed);
+        if (!coalesce) {
+            return startProbe();
+        }
+
+        const existing = this._inFlightVersionByCliPath.get(cliPathKey);
+        if (existing) {
+            return existing;
+        }
+
+        let probe!: Promise<CliVersionInfo | null | undefined>;
+        probe = startProbe()
+            .finally(() => {
+                if (this._inFlightVersionByCliPath.get(cliPathKey) === probe) {
+                    this._inFlightVersionByCliPath.delete(cliPathKey);
+                }
+            });
+        this._inFlightVersionByCliPath.set(cliPathKey, probe);
+        return probe;
+    }
+
     private async _checkForUpdate(
         target: CliPathResolutionTarget,
         checkKey: string,
@@ -151,11 +185,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         workingDirectory: string,
         checkStartedAt: number,
     ): Promise<PendingNotification | undefined> {
-        const versionProbe = await this._versionProvider.getCliVersion({
-            target,
-            cliPath,
-            cancellationToken: this._cancellationSource.token,
-        });
+        const versionProbe = await this._getCliVersion(target, cliPath);
         if (this._disposed) {
             return undefined;
         }
@@ -203,13 +233,14 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return undefined;
         }
 
-        const recommendation = await this._runDoctor(() =>
-            this._versionProvider.getCliUpdateRecommendation({
+        const recommendation = await this._doctorQueue.run(
+            () => this._versionProvider.getCliUpdateRecommendation({
                 target,
                 cliPath,
                 workingDirectory,
                 cancellationToken: this._cancellationSource.token,
-            }));
+            }),
+            () => this._disposed);
         if (recommendation === undefined || this._disposed) {
             return undefined;
         }
@@ -237,22 +268,6 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         return comparison !== undefined && comparison < 0
             ? { target, cli: identity, recommendedVersion: recommendation.version }
             : undefined;
-    }
-
-    private async _runDoctor(
-        action: () => Promise<CliUpdateRecommendation>,
-    ): Promise<CliUpdateRecommendation | undefined> {
-        const previous = this._doctorTail;
-        let release!: () => void;
-        this._doctorTail = new Promise(resolve => release = resolve);
-        await previous;
-
-        try {
-            return this._disposed ? undefined : await action();
-        }
-        finally {
-            release();
-        }
     }
 
     private _recordUnavailable(state: CliCheckState): void {
@@ -292,6 +307,7 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         this._cancellationSource.cancel();
         this._cancellationSource.dispose();
         this._inFlightByCheckKey.clear();
+        this._inFlightVersionByCliPath.clear();
         this._stateByCheckKey.clear();
         this._notifiedCliVersions.clear();
     }
@@ -318,4 +334,22 @@ function readPersistedSuppressions(globalState: vscode.Memento | undefined): str
 
 function areCliIdentitiesEqual(left: CliVersionInfo | undefined, right: CliVersionInfo): boolean {
     return left?.version === right.version;
+}
+
+class AsyncSerialQueue {
+    private _tail: Promise<void> = Promise.resolve();
+
+    async run<T>(action: () => Promise<T>, isCancelled: () => boolean): Promise<T | undefined> {
+        const previous = this._tail;
+        let release!: () => void;
+        this._tail = new Promise(resolve => release = resolve);
+        await previous;
+
+        try {
+            return isCancelled() ? undefined : await action();
+        }
+        finally {
+            release();
+        }
+    }
 }

@@ -218,12 +218,20 @@ suite('outdatedCliNotifier', () => {
 
     test('coalesces same-path checks and serializes distinct doctors', async () => {
         const versionProvider = new FakeVersionProvider();
+        let activeVersions = 0;
+        let maximumActiveVersions = 0;
+        const releaseVersions: Array<() => void> = [];
         versionProvider.getCliVersion = async options => {
             versionProvider.versionCalls.push(options);
-            return {
-                cliPath: options?.cliPath ?? '/cli/aspire',
-                version: '13.5.0',
-            };
+            activeVersions++;
+            maximumActiveVersions = Math.max(maximumActiveVersions, activeVersions);
+            return await new Promise(resolve => releaseVersions.push(() => {
+                activeVersions--;
+                resolve({
+                    cliPath: options?.cliPath ?? '/cli/aspire',
+                    version: '13.5.0',
+                });
+            }));
         };
         let activeDoctors = 0;
         let maximumActiveDoctors = 0;
@@ -247,6 +255,10 @@ suite('outdatedCliNotifier', () => {
         const shared = Array.from({ length: 10 }, () =>
             notifier.notifyIfOutdated(windowCliPathTarget, '/shared/aspire'));
         const distinct = notifier.notifyIfOutdated(windowCliPathTarget, '/other/aspire');
+        await waitFor(() => releaseVersions.length === 1, 'Expected first serialized version probe.');
+        releaseVersions.shift()?.();
+        await waitFor(() => releaseVersions.length === 1, 'Expected second serialized version probe.');
+        releaseVersions.shift()?.();
         await waitFor(() => releaseDoctors.length === 1, 'Expected first serialized doctor.');
         releaseDoctors.shift()?.();
         await waitFor(() => releaseDoctors.length === 1, 'Expected second serialized doctor.');
@@ -254,6 +266,7 @@ suite('outdatedCliNotifier', () => {
         await Promise.all([...shared, distinct]);
 
         assert.strictEqual(versionProvider.versionCalls.length, 2);
+        assert.strictEqual(maximumActiveVersions, 1);
         assert.strictEqual(versionProvider.recommendationCalls.length, 2);
         assert.strictEqual(maximumActiveDoctors, 1);
         notifier.dispose();
@@ -286,9 +299,12 @@ suite('outdatedCliNotifier', () => {
         const surface = new FakeSurface();
         const notifier = new OutdatedCliNotifier(versionProvider, surface);
 
-        await notifier.notifyIfOutdated(targetA, '/shared/aspire');
-        await notifier.notifyIfOutdated(targetB, '/shared/aspire');
+        await Promise.all([
+            notifier.notifyIfOutdated(targetA, '/shared/aspire'),
+            notifier.notifyIfOutdated(targetB, '/shared/aspire'),
+        ]);
 
+        assert.strictEqual(versionProvider.versionCalls.length, 1);
         assert.deepStrictEqual(
             versionProvider.recommendationCalls.map(call => call?.target),
             [targetA, targetB]);
@@ -366,12 +382,37 @@ suite('outdatedCliNotifier', () => {
 
         const notification = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
         await waitFor(() => surface.warnings.length === 1, 'Expected warning to open.');
-        versionProvider.currentVersion = {
-            cliPath: '/cli/aspire',
-            version: '13.5.1',
+        versionProvider.versionCalls.length = 0;
+        let releaseOlderProbe!: () => void;
+        versionProvider.getCliVersion = async options => {
+            versionProvider.versionCalls.push(options);
+            if (versionProvider.versionCalls.length === 1) {
+                return await new Promise(resolve => {
+                    releaseOlderProbe = () => resolve({
+                        cliPath: '/cli/aspire',
+                        version: '13.5.0',
+                    });
+                });
+            }
+            return {
+                cliPath: '/cli/aspire',
+                version: '13.5.1',
+            };
         };
+        const backgroundCheck = notifier.notifyIfOutdated(
+            workspaceFolderCliPathTarget({
+                uri: vscode.Uri.file('/other'),
+                name: 'other',
+                index: 0,
+            }),
+            '/cli/aspire');
+        await waitFor(() => versionProvider.versionCalls.length === 1, 'Expected older probe to start.');
         resolveSelection(strings.updateAspireCliAction);
-        await notification;
+        await new Promise(resolve => setImmediate(resolve));
+        releaseOlderProbe();
+        await Promise.all([notification, backgroundCheck]);
+
+        assert.strictEqual(versionProvider.versionCalls.length, 2);
         assert.deepStrictEqual(surface.commands, []);
 
         const second = createNotifier();
