@@ -1,9 +1,9 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param _apim_computeBackendUrl_catalog_api string
-
 param _apim_openApiUrl_catalog_api string
+
+param _apim_computeBackendUrl_catalog_api string
 
 resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   name: take('apim${uniqueString(resourceGroup().id)}', 24)
@@ -25,21 +25,6 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   }
 }
 
-resource _apim_computeBackend_catalog_api 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
-  name: 'catalog_apiBackend'
-  properties: {
-    protocol: 'http'
-    url: _apim_computeBackendUrl_catalog_api
-    title: 'catalog-api'
-    type: 'Single'
-    tls: {
-      validateCertificateChain: true
-      validateCertificateName: true
-    }
-  }
-  parent: apim
-}
-
 resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'catalog-api'
   properties: {
@@ -52,6 +37,21 @@ resource catalog_api 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
     ]
     format: 'openapi+json-link'
     value: _apim_openApiUrl_catalog_api
+  }
+  parent: apim
+}
+
+resource _apim_computeBackend_catalog_api 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
+  name: 'catalog_apiBackend'
+  properties: {
+    protocol: 'http'
+    url: empty(catalog_api.properties.?serviceUrl) ? _apim_computeBackendUrl_catalog_api : catalog_api.properties.?serviceUrl
+    title: 'catalog-api'
+    type: 'Single'
+    tls: {
+      validateCertificateChain: true
+      validateCertificateName: true
+    }
   }
   parent: apim
 }

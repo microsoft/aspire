@@ -2129,10 +2129,6 @@ public static class AzureApiManagementExtensions
         IReadOnlyList<ApiManagementNamedValueProvisioningResource> namedValues)
     {
         var apiIdentifier = Infrastructure.NormalizeBicepIdentifier(apiResource.Name);
-        var (backendIdentifier, backend, managedIdentityResource) = apiResource.Target is not null
-            ? AddComputeBackend(infrastructure, apiResource, service, apiIdentifier)
-            : ResolveApiManagementBackend(apiResource, provisionedBackends, provisionedBackendPools);
-
         var api = new ApiManagementApiProvisioningResource(
             apiIdentifier)
         {
@@ -2162,7 +2158,20 @@ public static class AzureApiManagementExtensions
                 CreateGeneratedBicepIdentifier("openApiUrl", apiIdentifier));
         }
 
-        infrastructure.Add(api);
+        var usesImportedServiceUrl = apiResource.OpenApiSource is AzureApiManagementOpenApiEndpoint;
+        if (usesImportedServiceUrl)
+        {
+            infrastructure.Add(api);
+        }
+
+        var (backendIdentifier, backend, managedIdentityResource) = apiResource.Target is not null
+            ? AddComputeBackend(infrastructure, apiResource, api, service, apiIdentifier)
+            : ResolveApiManagementBackend(apiResource, provisionedBackends, provisionedBackendPools);
+
+        if (!usesImportedServiceUrl)
+        {
+            infrastructure.Add(api);
+        }
 
         if (apiResource.OpenApiSource is null)
         {
@@ -2215,6 +2224,7 @@ public static class AzureApiManagementExtensions
         AddComputeBackend(
             AzureResourceInfrastructure infrastructure,
             AzureApiManagementApiResource apiResource,
+            ApiManagementApiProvisioningResource api,
             ApiManagementServiceProvisioningResource service,
             string apiIdentifier)
     {
@@ -2267,9 +2277,22 @@ public static class AzureApiManagementExtensions
         var backendName = CreateBoundedIdentifier($"{apiIdentifier}Backend", 80);
         var endpointExpression = computeEnvironment.GetEndpointPropertyExpression(
             endpoint.Property(EndpointProperty.Url));
-        var backendUrl = endpointExpression.AsProvisioningParameter(
+        var computeBackendUrl = endpointExpression.AsProvisioningParameter(
             infrastructure,
             CreateGeneratedBicepIdentifier("computeBackendUrl", apiIdentifier));
+        var importedServiceUrl = new SafeMemberExpression(
+            new MemberExpression(new IdentifierExpression(api.BicepIdentifier), "properties"),
+            "serviceUrl");
+        BicepValue<string> backendUrl = apiResource.OpenApiSource is AzureApiManagementOpenApiEndpoint
+            // APIM resolves the document's servers entry during import. Reuse that value so a
+            // non-root server path is not discarded when the policy selects the named backend.
+            // Documents without a server URL can omit serviceUrl or leave it empty, so retain
+            // the compute endpoint as a fallback.
+            ? new ConditionalExpression(
+                new FunctionCallExpression(new IdentifierExpression("empty"), importedServiceUrl),
+                computeBackendUrl.Value.Compile(),
+                importedServiceUrl)
+            : computeBackendUrl;
 
         var backend = new ApiManagementBackendProvisioningResource(backendIdentifier)
         {

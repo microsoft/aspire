@@ -725,6 +725,10 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         Assert.Contains("format: 'openapi+json-link'", bicep);
         Assert.Contains("param _apim_openApiUrl_catalog_api string", bicep);
+        Assert.Contains("param _apim_computeBackendUrl_catalog_api string", bicep);
+        Assert.Contains(
+            "url: empty(catalog_api.properties.?serviceUrl) ? _apim_computeBackendUrl_catalog_api : catalog_api.properties.?serviceUrl",
+            bicep);
         Assert.DoesNotContain("name: 'proxy'", bicep);
         Assert.Contains("catalog-backend", manifest.ToJsonString());
         Assert.Contains("/openapi/v1.json", manifest.ToJsonString());
