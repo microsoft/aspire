@@ -511,11 +511,7 @@ internal sealed class AppHostLauncher(
                 connection ??= backchannelMonitor.Connections.FirstOrDefault(
                     candidate => IsLaunchedByChildCli(candidate, childProcess.ProcessId, childStableStartedAt));
                 connection ??= backchannelMonitor.Connections.FirstOrDefault(
-                    candidate =>
-                        candidate.AppHostInfo?.AppHostPath is { } candidateAppHostPath &&
-                        StringComparers.FileSystemPath.Equals(
-                            PathNormalizer.ResolveToFilesystemPath(candidateAppHostPath),
-                            canonicalAppHostPath));
+                    candidate => IsUnattributedAppHostAtPath(candidate, canonicalAppHostPath, childProcess.ProcessId, childStableStartedAt));
                 if (connection is not null)
                 {
                     waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
@@ -674,6 +670,56 @@ internal sealed class AppHostLauncher(
         }
 
         return ProcessStartTimeHelper.AreCloseMilliseconds(cliStableStartedAt.ToUnixTimeMilliseconds(), childStableStarted);
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="candidate"/> is an AppHost at the path we are launching that
+    /// cannot be attributed to a different CLI, used as a fallback when the child CLI's PID does not
+    /// identify any connection.
+    /// </summary>
+    /// <remarks>
+    /// The path alone is not sufficient. A previously launched AppHost at the same path may still be
+    /// running: <see cref="StopExistingInstancesAsync"/> only finds sockets keyed on a spelling derived
+    /// from the caller's path, whereas this match canonicalizes the AppHost's self-reported path, so it
+    /// can see instances that were never stopped. It would also usually win the race, because a stale
+    /// AppHost is already listening while the one we just spawned is still starting. Adopting it would
+    /// report the wrong dashboard and leave the newly spawned AppHost running unattended.
+    ///
+    /// Two facts narrow the candidates without resorting to a heuristic. An AppHost that names a
+    /// different launching CLI was definitively not launched by our child, and an AppHost our child
+    /// launched cannot have started before our child. AppHosts reporting neither field are old enough
+    /// that the path match is all we have; they keep it rather than becoming unlaunchable.
+    /// </remarks>
+    internal static bool IsUnattributedAppHostAtPath(
+        IAppHostAuxiliaryBackchannel candidate,
+        string canonicalAppHostPath,
+        int childProcessId,
+        long? childStableStartedAt)
+    {
+        if (candidate.AppHostInfo is not { } appHostInfo)
+        {
+            return false;
+        }
+
+        if (appHostInfo.CliProcessId is { } cliProcessId && cliProcessId != childProcessId)
+        {
+            return false;
+        }
+
+        // StableStartedAt and childStableStartedAt are both in the stable PID-identity clock domain,
+        // so this ordering comparison is exact rather than a cross-domain guess. The tolerance only
+        // absorbs the tick rounding described on StableStartTimeMatchTolerance.
+        if (appHostInfo.StableStartedAt is { } stableStartedAt &&
+            childStableStartedAt is { } childStableStarted &&
+            stableStartedAt.ToUnixTimeMilliseconds() <
+                childStableStarted - (long)ProcessStartTimeHelper.StableStartTimeMatchTolerance.TotalMilliseconds)
+        {
+            return false;
+        }
+
+        return StringComparers.FileSystemPath.Equals(
+            PathNormalizer.ResolveToFilesystemPath(appHostInfo.AppHostPath),
+            canonicalAppHostPath);
     }
 
     private LaunchResult CreateChildExitedLaunchResult(IProcessExecution childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)

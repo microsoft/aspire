@@ -1614,6 +1614,96 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.False(AppHostLauncher.IsLaunchedByChildCli(candidate, Environment.ProcessId, childStableStartedAt: null));
     }
 
+    [Fact]
+    public void IsUnattributedAppHostAtPath_MatchingPathWithoutCliProcessId_ReturnsTrue()
+    {
+        // The fallback exists for AppHosts too old to report which CLI launched them. Narrowing it
+        // must not make that population unlaunchable.
+        var candidate = CreateCandidate("/tmp/AppHost.csproj", cliProcessId: null, stableStartedAt: null);
+
+        Assert.True(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: null));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_DifferentCliProcessId_ReturnsFalse()
+    {
+        // StopExistingInstancesAsync only finds sockets keyed on a spelling derived from the caller's
+        // path, so a previously launched AppHost at this path can still be running. It is already
+        // listening while the AppHost we just spawned is still starting, so it would win this match and
+        // the launcher would report its dashboard while leaving the new AppHost running unattended.
+        var candidate = CreateCandidate("/tmp/AppHost.csproj", cliProcessId: 4243, stableStartedAt: null);
+
+        Assert.False(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: null));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_StartedBeforeChild_ReturnsFalse()
+    {
+        // Same stale-instance scenario, but for an AppHost old enough that it never reports a launching
+        // CLI. It cannot be ours because it was already running before our child existed.
+        var childStableStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var candidate = CreateCandidate(
+            "/tmp/AppHost.csproj",
+            cliProcessId: null,
+            stableStartedAt: DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt - 60_000));
+
+        Assert.False(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_StartedAfterChild_ReturnsTrue()
+    {
+        // The AppHost our child launches necessarily starts after it, so the ordering check must not
+        // reject the instance we are actually waiting for.
+        var childStableStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var candidate = CreateCandidate(
+            "/tmp/AppHost.csproj",
+            cliProcessId: null,
+            stableStartedAt: DateTimeOffset.FromUnixTimeMilliseconds(childStableStartedAt + 500));
+
+        Assert.True(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: childStableStartedAt));
+    }
+
+    [Fact]
+    public void IsUnattributedAppHostAtPath_DifferentPath_ReturnsFalse()
+    {
+        var candidate = CreateCandidate("/tmp/OtherAppHost.csproj", cliProcessId: null, stableStartedAt: null);
+
+        Assert.False(AppHostLauncher.IsUnattributedAppHostAtPath(
+            candidate,
+            PathNormalizer.ResolveToFilesystemPath("/tmp/AppHost.csproj"),
+            childProcessId: 4242,
+            childStableStartedAt: null));
+    }
+
+    private static TestAppHostAuxiliaryBackchannel CreateCandidate(string appHostPath, int? cliProcessId, DateTimeOffset? stableStartedAt)
+        => new()
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = appHostPath,
+                ProcessId = 4444,
+                CliProcessId = cliProcessId,
+                StableStartedAt = stableStartedAt,
+            },
+        };
+
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
