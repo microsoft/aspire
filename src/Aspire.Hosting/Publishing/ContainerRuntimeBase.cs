@@ -276,6 +276,24 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     /// <summary>
+    /// Builds a string of additional arguments for container build commands.
+    /// Entries are appended verbatim because each entry must be a complete argument
+    /// token (flag plus value), such as "--cache-from" or "type=registry,ref=img:cache".
+    /// Quoting them would corrupt flags like --cache-to whose values contain commas.
+    /// </summary>
+    /// <param name="additionalArguments">The additional arguments to append.</param>
+    /// <returns>A string containing the space-joined arguments, or empty string if none are provided.</returns>
+    protected static string BuildAdditionalArgumentsString(IReadOnlyList<string>? additionalArguments)
+    {
+        if (additionalArguments is not { Count: > 0 })
+        {
+            return string.Empty;
+        }
+
+        return " " + string.Join(" ", additionalArguments);
+    }
+
+    /// <summary>
     /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
     /// </summary>
     protected async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(

@@ -176,7 +176,8 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
             var buildOptions = new ContainerImageBuildOptions
             {
                 ImageName = originalImageName,
-                TargetPlatform = context.TargetPlatform ?? ContainerTargetPlatform.LinuxAmd64
+                TargetPlatform = context.TargetPlatform ?? ContainerTargetPlatform.LinuxAmd64,
+                AdditionalArguments = [.. context.AdditionalArguments]
             };
 
             await containerRuntime.BuildImageAsync(

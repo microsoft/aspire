@@ -86,6 +86,9 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             // Add stage if specified
             arguments += BuildStageString(stage);
 
+            // Add additional arguments if specified (e.g., BuildKit cache configuration)
+            arguments += BuildAdditionalArgumentsString(options?.AdditionalArguments);
+
             arguments += $" \"{contextPath}\"";
 
             // Prepare environment variables for build secrets
