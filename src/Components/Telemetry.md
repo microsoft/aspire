@@ -114,15 +114,14 @@ Aspire.Confluent.Kafka:
     - "messaging.kafka.network.transmitted"
     - "messaging.kafka.network.rx"
     - "messaging.kafka.network.received"
-    - "messaging.kafka.message.tx"
+    - "messaging.client.sent.messages"
     - "messaging.kafka.message.transmitted"
-    - "messaging.kafka.message.rx"
+    - "messaging.client.consumed.messages"
     - "messaging.kafka.message.received"
   - "OpenTelemetry.Instrumentation.ConfluentKafka"
-    - "messaging.publish.duration"
-    - "messaging.publish.messages"
-    - "messaging.receive.duration"
-    - "messaging.receive.messages"
+    - "messaging.client.operation.duration"
+    - "messaging.client.sent.messages"
+    - "messaging.client.consumed.messages"
 
 Aspire.Elastic.Clients.Elasticsearch:
 - Log categories:

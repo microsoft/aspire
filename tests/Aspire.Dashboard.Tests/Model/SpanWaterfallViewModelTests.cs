@@ -185,6 +185,38 @@ public sealed class SpanWaterfallViewModelTests
         Assert.Equal(expected, result);
     }
 
+    [Fact]
+    public void MatchesFilter_MessagingOperationName_MatchesOperation()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+        var span = TelemetryTestHelpers.CreateOtlpSpan(
+            app,
+            trace,
+            scope,
+            spanId: "12345",
+            parentSpanId: null,
+            startDate: new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc),
+            attributes:
+            [
+                KeyValuePair.Create("messaging.system", "kafka"),
+                KeyValuePair.Create("messaging.operation.name", "send"),
+                KeyValuePair.Create("messaging.destination.name", "orders")
+            ],
+            kind: OtlpSpanKind.Producer);
+        trace.AddSpan(span);
+        var vm = SpanWaterfallViewModel.Create(
+            trace,
+            [],
+            new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+
+        var result = vm.MatchesFilter("send", typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out _);
+
+        Assert.True(result);
+    }
+
     [Theory]
     [InlineData("http", null, new string[] { }, false)]
     [InlineData("http", null, new string[] { "http.request.method" }, true)]

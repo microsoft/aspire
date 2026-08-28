@@ -83,7 +83,12 @@ public class OtelTracesTests
             await producer.FlushAsync();
         }
 
-        Assert.Equal(5, activities.Where(x => x.OperationName == $"{topic} publish").Count());
+        Assert.Equal(5, activities.Count);
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal($"send {topic}", activity.OperationName);
+            Assert.Equal(ActivityKind.Producer, activity.Kind);
+        });
 
         activities.Clear();
 
@@ -112,7 +117,12 @@ public class OtelTracesTests
             }
         }
 
-        Assert.Equal(5, activities.Where(x => x.OperationName == $"{topic} receive").Count());
+        Assert.Equal(5, activities.Count);
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal($"poll {topic}", activity.OperationName);
+            Assert.Equal(ActivityKind.Client, activity.Kind);
+        });
 
         await host.StopAsync();
     }
