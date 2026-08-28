@@ -8,6 +8,53 @@ builder.AddServiceDefaults();
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
+app.MapGet("/openapi/v1.json", () => Results.Text(
+    """
+    {
+      "openapi": "3.0.1",
+      "info": {
+        "title": "Catalog API",
+        "version": "v1"
+      },
+      "paths": {
+        "/products": {
+          "get": {
+            "operationId": "getProducts",
+            "responses": {
+              "200": {
+                "description": "The catalog products."
+              }
+            }
+          }
+        },
+        "/products/{id}": {
+          "get": {
+            "operationId": "getProduct",
+            "parameters": [
+              {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "The requested product."
+              },
+              "404": {
+                "description": "The product was not found."
+              }
+            }
+          }
+        }
+      }
+    }
+    """,
+    "application/json"));
 app.MapGet("/", () => Results.Ok(new
 {
     service = "catalog",

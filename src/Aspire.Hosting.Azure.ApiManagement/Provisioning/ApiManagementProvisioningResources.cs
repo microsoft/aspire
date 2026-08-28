@@ -9,7 +9,7 @@ using Azure.Provisioning.Resources;
 namespace Aspire.Hosting.Azure.ApiManagement.Provisioning;
 
 internal sealed class ApiManagementServiceProvisioningResource(string bicepIdentifier)
-    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service", "2024-05-01")
+    : ProvisionableResource(bicepIdentifier, "Microsoft.ApiManagement/service", "2025-03-01-preview")
 {
     private BicepValue<string>? _name;
     private BicepValue<AzureLocation>? _location;
@@ -101,6 +101,12 @@ internal sealed class ApiManagementServiceProvisioningResource(string bicepIdent
     {
         get { Initialize(); return _id!; }
     }
+
+    public static ApiManagementServiceProvisioningResource FromExisting(string bicepIdentifier) =>
+        new(bicepIdentifier)
+        {
+            IsExistingResource = true,
+        };
 
     protected override void DefineProvisionableProperties()
     {
@@ -448,6 +454,8 @@ internal sealed class ApiManagementApiProvisioningResource(string bicepIdentifie
     private BicepValue<bool>? _subscriptionRequired;
     private BicepValue<string>? _type;
     private BicepList<string>? _protocols;
+    private BicepValue<string>? _format;
+    private BicepValue<string>? _value;
     private ResourceReference<ApiManagementServiceProvisioningResource>? _parent;
 
     public BicepValue<string> Name
@@ -486,6 +494,18 @@ internal sealed class ApiManagementApiProvisioningResource(string bicepIdentifie
         set { Initialize(); _protocols!.Assign(value); }
     }
 
+    public BicepValue<string> Format
+    {
+        get { Initialize(); return _format!; }
+        set { Initialize(); _format!.Assign(value); }
+    }
+
+    public BicepValue<string> Value
+    {
+        get { Initialize(); return _value!; }
+        set { Initialize(); _value!.Assign(value); }
+    }
+
     public ApiManagementServiceProvisioningResource? Parent
     {
         get { Initialize(); return _parent!.Value; }
@@ -501,6 +521,8 @@ internal sealed class ApiManagementApiProvisioningResource(string bicepIdentifie
         _subscriptionRequired = DefineProperty<bool>(nameof(SubscriptionRequired), ["properties", "subscriptionRequired"]);
         _type = DefineProperty<string>(nameof(Type), ["properties", "type"]);
         _protocols = DefineListProperty<string>(nameof(Protocols), ["properties", "protocols"]);
+        _format = DefineProperty<string>(nameof(Format), ["properties", "format"]);
+        _value = DefineProperty<string>(nameof(Value), ["properties", "value"]);
         _parent = DefineResource<ApiManagementServiceProvisioningResource>(nameof(Parent), ["parent"], isRequired: true);
     }
 }

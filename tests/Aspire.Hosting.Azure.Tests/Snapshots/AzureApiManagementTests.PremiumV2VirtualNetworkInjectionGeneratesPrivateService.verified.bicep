@@ -15,8 +15,8 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
     }
   }
   sku: {
-    name: 'Premium'
-    capacity: 2
+    name: 'PremiumV2'
+    capacity: 1
   }
   identity: {
     type: 'SystemAssigned'

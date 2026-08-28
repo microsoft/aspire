@@ -51,6 +51,49 @@ The compute-targeted `AddApi` overload creates an API, an APIM backend, and a wi
 
 API Management resources are automatically omitted during `aspire run`. Azure compute environments do not materialize their public endpoints in run mode, and a cloud-hosted APIM instance cannot reach a backend running on localhost. Use `aspire deploy` to provision APIM and exercise its routing; no execution-mode guard is required around the APIM resources.
 
+## OpenAPI import
+
+Import the OpenAPI document exposed by an Aspire compute resource:
+
+```csharp
+apim.AddApi("catalog-api", catalog, "catalog")
+    .WithOpenApiEndpoint("/openapi/v1.json");
+```
+
+Aspire resolves the target's deployed external HTTP or HTTPS endpoint and gives APIM a link to the document. The endpoint must be publicly reachable from the APIM control plane during deployment. The default document path is `/openapi/v1.json`.
+
+For private backends or documents generated before deployment, import a file relative to the AppHost directory:
+
+```csharp
+apim.AddApi("catalog-api", catalog, "catalog")
+    .WithOpenApiDocument("../Catalog/openapi.json");
+```
+
+JSON and YAML OpenAPI documents are inferred from the file extension. Pass `AzureApiManagementOpenApiFormat.SwaggerJson` explicitly for Swagger 2.0 documents. Imported operations replace the generated wildcard proxy operation; operations added with `AddOperation` are still provisioned in addition to the imported operations.
+
+## Existing API Management services
+
+Adopt an existing service while letting Aspire manage the APIs and other child resources declared in the AppHost:
+
+```csharp
+var apim = builder.AddAzureApiManagement("apim", new()
+{
+    PublisherEmail = "api-owners@example.com",
+}).PublishAsExisting("shared-apim", resourceGroup: "shared-infrastructure");
+
+apim.AddApi("catalog-api", catalog, "catalog");
+```
+
+Aspire treats the existing service itself as read-only. It can manage declared APIs, operations, backends, pools, policies, fragments, products, subscriptions, named values, and diagnostics, but it rejects service-level virtual-network, private-endpoint, custom-domain, and managed-identity mutations.
+
+When managed backends authenticate with the existing service's system identity, confirm that the identity is already enabled:
+
+```csharp
+apim.WithExistingSystemAssignedIdentity();
+```
+
+This confirmation does not modify the service. Diagnostics and Aspire-created Azure role assignments currently require the APIM service and their target resources to be in the same deployment resource group.
+
 ## Backends and backend pools
 
 Backends and pools are first-class resources that can be reused by APIs. The specialized Foundry adapter configures the deployment URL, managed-identity authentication, the required Cognitive Services role assignment, and an HTTP 429 circuit breaker:
@@ -304,7 +347,7 @@ await product.addSubscription("catalog-client", "Catalog client");
 
 Configure the tier and capacity with `AzureApiManagementOptions`. The integration supports Consumption, Developer, Basic, Basic v2, Standard, Standard v2, Premium, and Premium v2 capacity validation.
 
-Classic Developer and Premium VNet injection can use an existing Aspire subnet:
+Classic Developer and Premium VNet injection can use an existing undelegated Aspire subnet:
 
 ```csharp
 var subnet = builder.AddAzureVirtualNetwork("vnet")
@@ -315,7 +358,28 @@ apim.WithClassicVirtualNetwork(
     AzureApiManagementVirtualNetworkMode.Internal);
 ```
 
-The subnet must be undelegated and should have the APIM-required network security rules. Standard v2 outbound integration and Premium v2 injection use different subnet delegation and lifecycle models and are not configured by `WithClassicVirtualNetwork`.
+Standard v2 and Premium v2 outbound integration automatically delegates a dedicated subnet to `Microsoft.Web/serverFarms`:
+
+```csharp
+var subnet = builder.AddAzureVirtualNetwork("vnet")
+    .AddSubnet("apim-subnet", "10.0.0.0/24");
+
+apim.WithVirtualNetworkIntegration(subnet);
+```
+
+Premium v2 injection provides private inbound and outbound access and automatically delegates its subnet to `Microsoft.Web/hostingEnvironments`:
+
+```csharp
+var apim = builder.AddAzureApiManagement("apim", new()
+{
+    PublisherEmail = "api-owners@example.com",
+    Sku = AzureApiManagementSku.PremiumV2,
+});
+
+apim.WithVirtualNetworkInjection(subnet);
+```
+
+Both v2 configurations require a dedicated `/27` or larger subnet. Aspire creates an NSG when the subnet does not already have one and adds the required outbound HTTPS rule for the `AzureKeyVault` service tag. Premium v2 injection must be selected when the service is created. Configure private DNS for the injected gateway hostname as described in the Azure API Management Premium v2 injection documentation.
 
 ### Private Container Apps backends
 
@@ -345,7 +409,16 @@ apim.AddApi("catalog-api", catalog, "catalog");
 
 Classic APIM VNet injection requires an NSG on the APIM subnet. Allow inbound TCP 3443 from the `ApiManagement` service tag, TCP 6390 from `AzureLoadBalancer`, and TCP 443 from `Internet` when the APIM gateway remains public.
 
-Inbound private endpoints are not yet supported by this integration. APIM must first be provisioned with public access enabled, then receive its private endpoint, and finally be updated to disable public access. The integration rejects this configuration until it can model that multi-phase lifecycle safely.
+Create an inbound private endpoint for the APIM gateway with the Azure networking integration:
+
+```csharp
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var privateEndpointSubnet = vnet.AddSubnet("private-endpoint-subnet", "10.0.0.0/24");
+
+privateEndpointSubnet.AddPrivateEndpoint(apim);
+```
+
+Aspire creates the service with its default public access, provisions the private endpoint and `privatelink.azure-api.net` DNS zone, and then runs a staged update that disables public network access. Private endpoints cannot be combined with classic or Premium v2 VNet injection. Consumption and Basic v2 do not support private endpoints.
 
 ## Configure Azure provisioning for local development
 
@@ -365,6 +438,9 @@ See [Local Azure Provisioning](https://aspire.dev/integrations/cloud/azure/local
 * https://learn.microsoft.com/azure/api-management/
 * https://learn.microsoft.com/azure/api-management/api-management-howto-policies
 * https://learn.microsoft.com/azure/api-management/virtual-network-concepts
+* https://learn.microsoft.com/azure/api-management/integrate-vnet-outbound
+* https://learn.microsoft.com/azure/api-management/inject-vnet-v2
+* https://learn.microsoft.com/azure/api-management/private-endpoint
 
 ## Feedback & contributing
 

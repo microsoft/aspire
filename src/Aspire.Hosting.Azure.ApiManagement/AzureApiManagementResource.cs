@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.ApiManagement.Provisioning;
+using Azure.Provisioning.Primitives;
 
 namespace Aspire.Hosting.Azure;
 
@@ -21,7 +25,7 @@ public class AzureApiManagementResource(
     string name,
     AzureApiManagementOptions options,
     Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IAzurePrivateEndpointTarget
+    : AzureProvisioningResource(name, configureInfrastructure), IAzurePrivateEndpointTargetNotification
 {
     private readonly List<string> _inboundPolicyStatements = [];
 
@@ -65,10 +69,18 @@ public class AzureApiManagementResource(
     /// </summary>
     internal List<AzureApiManagementCustomDomain> CustomDomains { get; } = [];
 
+    internal HashSet<IResource> OpenApiDeploymentTargets { get; } = [];
+
     /// <summary>
     /// Gets or sets the service-level Application Insights diagnostic.
     /// </summary>
     internal AzureApiManagementDiagnostic? Diagnostic { get; set; }
+
+    /// <summary>
+    /// Gets the physical service name output reference.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Bicep output references are not projected to polyglot AppHosts.")]
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the resource ID output reference.
@@ -86,7 +98,14 @@ public class AzureApiManagementResource(
     /// Gets the managed identity principal ID output reference.
     /// </summary>
     [AspireExportIgnore(Reason = "Bicep output references are not projected to polyglot AppHosts.")]
-    public BicepOutputReference PrincipalId => new("principalId", this);
+    public BicepOutputReference PrincipalId
+    {
+        get
+        {
+            RequiresSystemAssignedIdentity = true;
+            return new("principalId", this);
+        }
+    }
 
     /// <summary>
     /// Gets the complete service-level policy document, when one has been configured.
@@ -103,16 +122,86 @@ public class AzureApiManagementResource(
     /// </summary>
     internal AzureApiManagementVirtualNetworkConfiguration? VirtualNetworkConfiguration { get; set; }
 
+    internal AzureApiManagementPublicNetworkAccessUpdateResource? PublicNetworkAccessUpdate { get; set; }
+
+    internal bool ExistingSystemAssignedIdentityConfirmed { get; set; }
+
+    internal bool RequiresSystemAssignedIdentity { get; set; }
+
     /// <summary>
     /// Adds an inbound policy statement.
     /// </summary>
     internal void AddInboundPolicyStatement(string policyXml) => _inboundPolicyStatements.Add(policyXml);
 
+    /// <inheritdoc/>
+    public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infrastructure)
+    {
+        var bicepIdentifier = this.GetBicepIdentifier();
+        var existingService = infrastructure.GetProvisionableResources()
+            .OfType<ApiManagementServiceProvisioningResource>()
+            .SingleOrDefault(resource => resource.BicepIdentifier == bicepIdentifier);
+
+        if (existingService is not null)
+        {
+            return existingService;
+        }
+
+        ApiManagementServiceProvisioningResource service;
+        if (this.IsExisting())
+        {
+            service = CreateExistingOrNewProvisionableResource(
+                infrastructure,
+                static (identifier, name) =>
+                {
+                    var existing = ApiManagementServiceProvisioningResource.FromExisting(identifier);
+                    existing.Name = name;
+                    return existing;
+                },
+                static _ => throw new UnreachableException());
+        }
+        else
+        {
+            service = ApiManagementServiceProvisioningResource.FromExisting(bicepIdentifier);
+            service.Name = NameOutputReference.AsProvisioningParameter(infrastructure);
+            infrastructure.Add(service);
+        }
+
+        return service;
+    }
+
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Gateway"];
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.azure-api.net"];
+
+    void IAzurePrivateEndpointTargetNotification.OnPrivateEndpointCreated(
+        IResourceBuilder<AzurePrivateEndpointResource> privateEndpoint)
+    {
+        if (PublicNetworkAccessUpdate is not null)
+        {
+            return;
+        }
+
+        PublicNetworkAccessUpdate = new AzureApiManagementPublicNetworkAccessUpdateResource(
+            AzureApiManagementExtensions.CreateBoundedIdentifier($"{Name}-disable-public-access", 64),
+            this,
+            privateEndpoint.Resource);
+        privateEndpoint.ApplicationBuilder.AddResource(PublicNetworkAccessUpdate)
+            .WithRelationship(this, "Disables public access")
+            .WithRelationship(privateEndpoint.Resource, "Private endpoint");
+    }
 }
 
 internal sealed record AzureApiManagementVirtualNetworkConfiguration(
     AzureSubnetResource Subnet,
-    AzureApiManagementVirtualNetworkMode Mode);
+    AzureApiManagementVirtualNetworkMode Mode,
+    AzureApiManagementVirtualNetworkKind Kind);
+
+internal enum AzureApiManagementVirtualNetworkKind
+{
+    Classic,
+    V2Integration,
+    PremiumV2Injection,
+}
+
+internal sealed record AzureApiManagementSubnetUsageAnnotation(
+    AzureApiManagementResource ApiManagement) : IResourceAnnotation;

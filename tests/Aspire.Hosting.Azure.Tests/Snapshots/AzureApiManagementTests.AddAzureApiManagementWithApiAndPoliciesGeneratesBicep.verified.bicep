@@ -3,13 +3,12 @@ param location string = resourceGroup().location
 
 param _apim_computeBackendUrl_catalog_api string
 
-resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
+resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   name: take('apim${uniqueString(resourceGroup().id)}', 24)
   location: location
   properties: {
     publisherEmail: 'api-owners@example.com'
     publisherName: 'Contoso APIs'
-    publicNetworkAccess: 'Enabled'
     virtualNetworkType: 'None'
   }
   sku: {
@@ -111,6 +110,8 @@ resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/polic
 }
 
 output gatewayUrl string = apim.properties.gatewayUrl
+
+output name string = apim.name
 
 output id string = apim.id
 

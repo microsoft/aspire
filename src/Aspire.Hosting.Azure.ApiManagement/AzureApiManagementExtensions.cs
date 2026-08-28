@@ -4,6 +4,7 @@
 #pragma warning disable AZPROVISION001 // Azure.Provisioning is experimental.
 #pragma warning disable ASPIREAZURE003 // Azure provisioning APIs are experimental.
 #pragma warning disable ASPIRECOMPUTE002 // Compute environment endpoint projection is experimental.
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental.
 
 using System.Diagnostics;
 using System.IO.Hashing;
@@ -15,12 +16,14 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.ApplicationInsights;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
+using Azure.Provisioning.Network;
 using Azure.Provisioning.Resources;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
@@ -68,6 +71,31 @@ public static class AzureApiManagementExtensions
         ValidateCapacity(options.Sku, options.Capacity);
 
         var resource = new AzureApiManagementResource(name, options, ConfigureInfrastructure);
+        resource.Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            var provisionSteps = context.GetSteps(resource, WellKnownPipelineTags.ProvisionInfrastructure);
+            foreach (var target in resource.OpenApiDeploymentTargets)
+            {
+                if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(target, out var computeEnvironment) ||
+                    target.GetDeploymentTargetAnnotation(computeEnvironment)?.DeploymentTarget is not { } deploymentTarget)
+                {
+                    // Deployment targets are materialized by the compute environment's BeforeStart step.
+                    // The callback runs once before that step and again when the deploy pipeline is resolved.
+                    continue;
+                }
+
+                if (deploymentTarget is not AzureProvisioningResource azureDeploymentTarget)
+                {
+                    throw new InvalidOperationException(
+                        $"Resource '{target.Name}' uses a compute publisher that cannot be ordered before API Management OpenAPI import. " +
+                        "Use WithOpenApiDocument instead.");
+                }
+
+                // Azure provisioning resources use this stable step name. Referencing it directly also works
+                // when the compute environment expands deployment-target steps after this callback executes.
+                provisionSteps.DependsOn($"provision-{azureDeploymentTarget.Name}");
+            }
+        }));
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -78,6 +106,25 @@ public static class AzureApiManagementExtensions
 
         return builder.AddResource(resource)
             .WithIconName("GlobeShield");
+    }
+
+    /// <summary>
+    /// Confirms that an existing API Management service has a system-assigned managed identity.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// This method does not modify the existing service. Call it when Aspire-managed backends use managed-identity
+    /// authentication or require role assignments that target the existing service's system-assigned identity.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementResource> WithExistingSystemAssignedIdentity(
+        this IResourceBuilder<AzureApiManagementResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Resource.ExistingSystemAssignedIdentityConfirmed = true;
+        return builder;
     }
 
     /// <summary>
@@ -140,6 +187,87 @@ public static class AzureApiManagementExtensions
         string? apiName = null)
     {
         return AddApiCore(builder, name, path, displayName, subscriptionRequired, apiName);
+    }
+
+    /// <summary>
+    /// Imports an OpenAPI document from a file into an API.
+    /// </summary>
+    /// <param name="builder">The API Management API resource builder.</param>
+    /// <param name="documentPath">The document path, relative to the AppHost directory when not absolute.</param>
+    /// <param name="format">The document format. The file extension is used when omitted.</param>
+    /// <returns>The API Management API resource builder.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="documentPath"/> is empty, contains no content, or its extension cannot determine the format.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the document does not exist.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementApiResource> WithOpenApiDocument(
+        this IResourceBuilder<AzureApiManagementApiResource> builder,
+        string documentPath,
+        AzureApiManagementOpenApiFormat? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(documentPath);
+
+        var fullPath = Path.GetFullPath(documentPath, builder.ApplicationBuilder.AppHostDirectory);
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"The OpenAPI document '{fullPath}' does not exist.", fullPath);
+        }
+
+        var content = File.ReadAllText(fullPath);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new ArgumentException($"The OpenAPI document '{fullPath}' is empty.", nameof(documentPath));
+        }
+
+        builder.Resource.OpenApiSource = new AzureApiManagementOpenApiContent(
+            content,
+            format ?? InferOpenApiFormat(documentPath));
+        return builder;
+    }
+
+    /// <summary>
+    /// Imports an OpenAPI document exposed by the API's target compute resource.
+    /// </summary>
+    /// <param name="builder">The API Management API resource builder.</param>
+    /// <param name="documentPath">The absolute path of the OpenAPI endpoint, such as <c>/openapi/v1.json</c>.</param>
+    /// <param name="endpointName">The target endpoint name. An external HTTP or HTTPS endpoint is selected when omitted.</param>
+    /// <param name="format">The document format. The endpoint path extension is used when omitted.</param>
+    /// <returns>The API Management API resource builder.</returns>
+    /// <remarks>
+    /// Azure API Management retrieves linked documents through its control plane, so the selected endpoint must be
+    /// externally reachable during deployment. Use <see cref="WithOpenApiDocument"/> for private backends.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="documentPath"/> is empty or is not an absolute path.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the API has no target compute resource or no suitable external endpoint.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementApiResource> WithOpenApiEndpoint(
+        this IResourceBuilder<AzureApiManagementApiResource> builder,
+        string documentPath = "/openapi/v1.json",
+        string? endpointName = null,
+        AzureApiManagementOpenApiFormat? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(documentPath);
+
+        if (!documentPath.StartsWith("/", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The OpenAPI endpoint path must start with '/'.", nameof(documentPath));
+        }
+
+        if (builder.Resource.Target is null)
+        {
+            throw new InvalidOperationException(
+                $"API Management API '{builder.Resource.Name}' does not have a target compute resource.");
+        }
+
+        builder.Resource.OpenApiSource = new AzureApiManagementOpenApiEndpoint(
+            documentPath,
+            endpointName,
+            format ?? InferOpenApiFormat(documentPath));
+        builder.Resource.Parent.OpenApiDeploymentTargets.Add(builder.Resource.Target);
+        return builder;
     }
 
     /// <summary>
@@ -1251,27 +1379,124 @@ public static class AzureApiManagementExtensions
                 $"Subnet '{subnet.Resource.Name}' is delegated to another Azure service. Classic API Management injection requires an undelegated subnet.");
         }
 
-        if (builder.Resource.VirtualNetworkConfiguration is { } existing &&
-            !ReferenceEquals(existing.Subnet, subnet.Resource))
+        ValidateSubnetOwnership(builder.Resource, subnet.Resource);
+        if (SetVirtualNetworkConfiguration(
+                builder.Resource,
+                subnet.Resource,
+                mode,
+                AzureApiManagementVirtualNetworkKind.Classic))
+        {
+            subnet.Resource.Annotations.Add(new AzureApiManagementSubnetUsageAnnotation(builder.Resource));
+        }
+        return builder.WithRelationship(subnet.Resource, "Virtual network");
+    }
+
+    /// <summary>
+    /// Integrates a Standard v2 or Premium v2 API Management service with a virtual network for outbound access.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="subnet">A dedicated subnet for API Management virtual network integration.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The subnet is delegated to <c>Microsoft.Web/serverFarms</c>. The APIM gateway remains publicly accessible,
+    /// while backend traffic can reach resources in the virtual network.
+    /// See <see href="https://learn.microsoft.com/azure/api-management/integrate-vnet-outbound">APIM outbound virtual network integration</see>.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the selected SKU does not support v2 virtual network integration, the subnet has a conflicting
+    /// delegation, or the subnet is already used by another API Management service.
+    /// </exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementResource> WithVirtualNetworkIntegration(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        if (builder.Resource.Options.Sku is not (AzureApiManagementSku.StandardV2 or AzureApiManagementSku.PremiumV2))
         {
             throw new InvalidOperationException(
-                $"API Management resource '{builder.Resource.Name}' is already associated with subnet '{existing.Subnet.Name}'.");
+                $"Virtual network integration is supported only by the Standard v2 and Premium v2 SKUs, not '{builder.Resource.Options.Sku}'.");
         }
 
-        builder.Resource.VirtualNetworkConfiguration = new(subnet.Resource, mode);
-        return builder.WithRelationship(subnet.Resource, "Virtual network");
+        ValidateV2SubnetSize(subnet.Resource);
+        ValidateSubnetOwnership(builder.Resource, subnet.Resource);
+        ConfigureV2SubnetDelegation(subnet, AzureSubnetServiceDelegations.AppServiceEnvironments);
+        if (SetVirtualNetworkConfiguration(
+                builder.Resource,
+                subnet.Resource,
+                AzureApiManagementVirtualNetworkMode.External,
+                AzureApiManagementVirtualNetworkKind.V2Integration))
+        {
+            subnet.Resource.Annotations.Add(new AzureApiManagementSubnetUsageAnnotation(builder.Resource));
+            ConfigureV2SubnetNetworkSecurityGroup(subnet);
+        }
+
+        return builder.WithRelationship(subnet.Resource, "Virtual network integration");
+    }
+
+    /// <summary>
+    /// Injects a Premium v2 API Management service into a virtual network for private inbound and outbound access.
+    /// </summary>
+    /// <param name="builder">The Azure API Management resource builder.</param>
+    /// <param name="subnet">A dedicated subnet for API Management virtual network injection.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The subnet is delegated to <c>Microsoft.Web/hostingEnvironments</c>. Premium v2 injection can only be
+    /// selected when the service is created and cannot later be changed to virtual network integration.
+    /// See <see href="https://learn.microsoft.com/azure/api-management/inject-vnet-v2">Premium v2 virtual network injection</see>.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the selected SKU is not Premium v2, the subnet has a conflicting delegation, or the subnet is
+    /// already used by another API Management service.
+    /// </exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureApiManagementResource> WithVirtualNetworkInjection(
+        this IResourceBuilder<AzureApiManagementResource> builder,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        if (builder.Resource.Options.Sku is not AzureApiManagementSku.PremiumV2)
+        {
+            throw new InvalidOperationException(
+                $"Virtual network injection is supported only by the Premium v2 SKU, not '{builder.Resource.Options.Sku}'.");
+        }
+
+        ValidateV2SubnetSize(subnet.Resource);
+        ValidateSubnetOwnership(builder.Resource, subnet.Resource);
+        const string delegation = "Microsoft.Web/hostingEnvironments";
+        ConfigureV2SubnetDelegation(subnet, delegation);
+        if (SetVirtualNetworkConfiguration(
+                builder.Resource,
+                subnet.Resource,
+                AzureApiManagementVirtualNetworkMode.Internal,
+                AzureApiManagementVirtualNetworkKind.PremiumV2Injection))
+        {
+            subnet.Resource.Annotations.Add(new AzureApiManagementSubnetUsageAnnotation(builder.Resource));
+            ConfigureV2SubnetNetworkSecurityGroup(subnet);
+        }
+
+        return builder.WithRelationship(subnet.Resource, "Virtual network injection");
     }
 
     private static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
     {
         var azureResource = (AzureApiManagementResource)infrastructure.AspireResource;
 
-        if (azureResource.IsExisting())
-        {
-            throw new InvalidOperationException(
-                $"API Management resource '{azureResource.Name}' cannot be published as an existing resource. " +
-                "Existing APIM services are not yet supported because child APIs and policies would mutate the service.");
-        }
+        ValidateBackendPhysicalNames(azureResource);
+
+        var isExisting = azureResource.IsExisting();
+        var hasExplicitExistingScope =
+            azureResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
+            (existingAnnotation.ResourceGroup is not null || existingAnnotation.Subscription is not null);
+        var requiresSystemAssignedIdentity =
+            azureResource.RequiresSystemAssignedIdentity ||
+            azureResource.Backends.Any(backend =>
+                backend.Options.ManagedIdentityResource is not null ||
+                backend.RoleAssignments.Count > 0);
 
         var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
 
@@ -1283,36 +1508,94 @@ public static class AzureApiManagementExtensions
                     $"API Management SKU '{azureResource.Options.Sku}' does not support private endpoints.");
             }
 
-            throw new InvalidOperationException(
-                $"Private endpoints are not yet supported for API Management resource '{azureResource.Name}'. " +
-                "APIM requires public network access during initial provisioning and a separate post-deployment update after the private endpoint is created.");
+            if (azureResource.VirtualNetworkConfiguration is
+                {
+                    Kind: AzureApiManagementVirtualNetworkKind.Classic or
+                        AzureApiManagementVirtualNetworkKind.PremiumV2Injection,
+                })
+            {
+                throw new InvalidOperationException(
+                    $"API Management resource '{azureResource.Name}' cannot combine a private endpoint with virtual network injection.");
+            }
         }
 
-        var service = new ApiManagementServiceProvisioningResource(
-            infrastructure.AspireResource.GetBicepIdentifier())
+        if (isExisting && hasPrivateEndpoint)
         {
-            PublisherEmail = azureResource.Options.PublisherEmail,
-            PublisherName = azureResource.Options.PublisherName,
-            SkuName = GetProvisioningSku(azureResource.Options.Sku),
-            SkuCapacity = azureResource.Options.Capacity,
-            Identity = new ManagedServiceIdentity
-            {
-                ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned,
-            },
-            PublicNetworkAccess = "Enabled",
-            VirtualNetworkType = "None",
-            Tags =
-            {
-                { "aspire-resource-name", azureResource.Name },
-            },
-        };
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' cannot change its public network access.");
+        }
 
-        UserAssignedIdentity? keyVaultIdentity = null;
-        if (azureResource.CustomDomains.Count > 0 ||
+        if (isExisting && azureResource.VirtualNetworkConfiguration is not null)
+        {
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' cannot change its virtual network configuration.");
+        }
+
+        if (isExisting && azureResource.CustomDomains.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' cannot change its custom domains.");
+        }
+
+        if (isExisting &&
             azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
         {
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' cannot attach the managed identity required by Key Vault named values.");
+        }
+
+        if (isExisting &&
+            requiresSystemAssignedIdentity &&
+            !azureResource.ExistingSystemAssignedIdentityConfirmed)
+        {
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' must have a system-assigned managed identity. " +
+                $"Call {nameof(WithExistingSystemAssignedIdentity)} to confirm its configuration.");
+        }
+
+        if (isExisting &&
+            hasExplicitExistingScope &&
+            (azureResource.Diagnostic is not null ||
+             azureResource.Apis.Any(api => api.Diagnostic is not null) ||
+             azureResource.Backends.Any(backend => backend.RoleAssignments.Count > 0)))
+        {
+            throw new InvalidOperationException(
+                $"Existing API Management resource '{azureResource.Name}' cannot configure diagnostics or Azure role assignments " +
+                "when it is adopted from another resource group or subscription.");
+        }
+
+        var service = isExisting
+            ? (ApiManagementServiceProvisioningResource)azureResource.AddAsExistingResource(infrastructure)
+            : new ApiManagementServiceProvisioningResource(infrastructure.AspireResource.GetBicepIdentifier())
+            {
+                PublisherEmail = azureResource.Options.PublisherEmail,
+                PublisherName = azureResource.Options.PublisherName,
+                SkuName = GetProvisioningSku(azureResource.Options.Sku),
+                SkuCapacity = azureResource.Options.Capacity,
+                Identity = new ManagedServiceIdentity
+                {
+                    ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned,
+                },
+                VirtualNetworkType = "None",
+                Tags =
+                {
+                    { "aspire-resource-name", azureResource.Name },
+                },
+            };
+
+        UserAssignedIdentity? keyVaultIdentity = null;
+        if (!isExisting &&
+            (azureResource.CustomDomains.Count > 0 ||
+            azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
+           )
+        {
             keyVaultIdentity = new UserAssignedIdentity(
-                CreateGeneratedBicepIdentifier("keyVaultIdentity", azureResource.Name));
+                CreateGeneratedBicepIdentifier("keyVaultIdentity", azureResource.Name))
+            {
+                Name = BicepFunction.Take(
+                    BicepFunction.Interpolate($"apim-kv-{azureResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                    128),
+            };
             infrastructure.Add(keyVaultIdentity);
 
             service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
@@ -1339,7 +1622,7 @@ public static class AzureApiManagementExtensions
             var roleAssignment = AddKeyVaultRoleAssignment(
                 infrastructure,
                 customDomain.Certificate,
-                keyVaultIdentity.PrincipalId,
+                keyVaultIdentity,
                 KeyVaultBuiltInRole.KeyVaultCertificateUser,
                 keyVaultRoleAssignments);
             service.DependsOn.Add(roleAssignment);
@@ -1354,7 +1637,10 @@ public static class AzureApiManagementExtensions
             });
         }
 
-        infrastructure.Add(service);
+        if (!isExisting)
+        {
+            infrastructure.Add(service);
+        }
 
         var policyFragments = AddPolicyFragments(infrastructure, azureResource, service);
         AddNamedValues(infrastructure, azureResource, service, keyVaultIdentity, keyVaultRoleAssignments);
@@ -1385,14 +1671,21 @@ public static class AzureApiManagementExtensions
         {
             Value = service.GatewayUri,
         });
+        infrastructure.Add(new ProvisioningOutput("name", typeof(string))
+        {
+            Value = service.Name,
+        });
         infrastructure.Add(new ProvisioningOutput("id", typeof(string))
         {
             Value = service.Id,
         });
-        infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
+        if (!isExisting || azureResource.ExistingSystemAssignedIdentityConfirmed)
         {
-            Value = service.Identity.PrincipalId,
-        });
+            infrastructure.Add(new ProvisioningOutput("principalId", typeof(string))
+            {
+                Value = service.Identity.PrincipalId,
+            });
+        }
     }
 
     private static void AddServicePolicy(
@@ -1486,7 +1779,7 @@ public static class AzureApiManagementExtensions
                 var roleAssignment = AddKeyVaultRoleAssignment(
                     infrastructure,
                     secretReference,
-                    keyVaultIdentity.PrincipalId,
+                    keyVaultIdentity,
                     KeyVaultBuiltInRole.KeyVaultSecretsUser,
                     keyVaultRoleAssignments);
                 namedValue.DependsOn.Add(roleAssignment);
@@ -1706,7 +1999,7 @@ public static class AzureApiManagementExtensions
     private static RoleAssignment AddKeyVaultRoleAssignment(
         AzureResourceInfrastructure infrastructure,
         IAzureKeyVaultSecretReference secretReference,
-        BicepValue<Guid> principalId,
+        UserAssignedIdentity identity,
         KeyVaultBuiltInRole role,
         Dictionary<string, RoleAssignment> roleAssignments)
     {
@@ -1719,10 +2012,20 @@ public static class AzureApiManagementExtensions
             return existingRoleAssignment;
         }
 
-        var roleAssignment = vault.CreateRoleAssignment(
-            role,
-            RoleManagementPrincipalType.ServicePrincipal,
-            principalId);
+        var roleDefinitionId = BicepFunction.GetSubscriptionResourceId(
+            "Microsoft.Authorization/roleDefinitions",
+            role.ToString());
+        var roleAssignment = new RoleAssignment(
+            Infrastructure.NormalizeBicepIdentifier($"{vault.BicepIdentifier}_{KeyVaultBuiltInRole.GetBuiltInRoleName(role)}"))
+        {
+            // Role assignment names must be known at the start of deployment. The principal ID is
+            // runtime-only, so use the identity resource ID to keep the name stable and deterministic.
+            Name = BicepFunction.CreateGuid(vault.Id, identity.Id, roleDefinitionId),
+            Scope = new IdentifierExpression(vault.BicepIdentifier),
+            PrincipalType = RoleManagementPrincipalType.ServicePrincipal,
+            PrincipalId = identity.PrincipalId,
+            RoleDefinitionId = roleDefinitionId,
+        };
         infrastructure.Add(roleAssignment);
         roleAssignments.Add(key, roleAssignment);
         return roleAssignment;
@@ -1765,18 +2068,36 @@ public static class AzureApiManagementExtensions
                 "https",
             },
         };
+
+        if (apiResource.OpenApiSource is AzureApiManagementOpenApiContent content)
+        {
+            api.Format = GetOpenApiImportFormat(content.Format, isLink: false);
+            api.Value = content.Content;
+        }
+        else if (apiResource.OpenApiSource is AzureApiManagementOpenApiEndpoint endpointSource)
+        {
+            var documentUrl = ResolveOpenApiEndpoint(apiResource, endpointSource);
+            api.Format = GetOpenApiImportFormat(endpointSource.Format, isLink: true);
+            api.Value = documentUrl.AsProvisioningParameter(
+                infrastructure,
+                CreateGeneratedBicepIdentifier("openApiUrl", apiIdentifier));
+        }
+
         infrastructure.Add(api);
 
-        var catchAllOperation = new ApiManagementOperationProvisioningResource(
-            CreateGeneratedBicepIdentifier("proxyOperation", apiIdentifier))
+        if (apiResource.OpenApiSource is null)
         {
-            Parent = api,
-            Name = "proxy",
-            DisplayName = "Proxy",
-            Method = "*",
-            UriTemplate = "/*",
-        };
-        infrastructure.Add(catchAllOperation);
+            var catchAllOperation = new ApiManagementOperationProvisioningResource(
+                CreateGeneratedBicepIdentifier("proxyOperation", apiIdentifier))
+            {
+                Parent = api,
+                Name = "proxy",
+                DisplayName = "Proxy",
+                Method = "*",
+                UriTemplate = "/*",
+            };
+            infrastructure.Add(catchAllOperation);
+        }
 
         foreach (var operationResource in apiResource.Operations)
         {
@@ -1883,6 +2204,50 @@ public static class AzureApiManagementExtensions
         return (backendName, backend, null);
     }
 
+    private static ReferenceExpression ResolveOpenApiEndpoint(
+        AzureApiManagementApiResource apiResource,
+        AzureApiManagementOpenApiEndpoint source)
+    {
+        Debug.Assert(apiResource.Target is IResourceWithEndpoints);
+        var endpointResource = (IResourceWithEndpoints)apiResource.Target;
+        var endpoint = source.EndpointName is not null
+            ? endpointResource.GetEndpoint(source.EndpointName)
+            : endpointResource.GetEndpoints()
+                .FirstOrDefault(candidate =>
+                    candidate.EndpointAnnotation.IsExternal &&
+                    candidate.EndpointAnnotation.UriScheme is "http" or "https");
+
+        if (endpoint is null ||
+            !endpoint.EndpointAnnotation.IsExternal ||
+            endpoint.EndpointAnnotation.UriScheme is not ("http" or "https"))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' does not expose a suitable external HTTP or HTTPS endpoint for OpenAPI import. " +
+                "Use WithOpenApiDocument for a private backend.");
+        }
+
+        if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(apiResource.Target, out var computeEnvironment))
+        {
+            throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' does not have a compute environment. " +
+                "Configure an Azure deployment environment before importing its OpenAPI endpoint.");
+        }
+
+        if (computeEnvironment is AzureContainerAppEnvironmentResource
+            {
+                InternalLoadBalancerVirtualNetwork: not null,
+            })
+        {
+            throw new InvalidOperationException(
+                $"Resource '{apiResource.Target.Name}' is deployed to an internal Container Apps environment. " +
+                "The API Management control plane cannot retrieve its OpenAPI document. Use WithOpenApiDocument instead.");
+        }
+
+        var endpointExpression = computeEnvironment.GetEndpointPropertyExpression(
+            endpoint.Property(EndpointProperty.Url));
+        return ReferenceExpression.Create($"{endpointExpression}{source.Path}");
+    }
+
     private static Dictionary<AzureApiManagementBackendResource, ApiManagementBackendProvisioningResource> AddBackends(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
@@ -1914,6 +2279,29 @@ public static class AzureApiManagementExtensions
         }
 
         return provisionedBackends;
+    }
+
+    private static void ValidateBackendPhysicalNames(AzureApiManagementResource azureResource)
+    {
+        var backendNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var backendName in azureResource.Backends.Select(backend => backend.BackendName)
+                     .Concat(azureResource.BackendPools.Select(pool => pool.BackendPoolName)))
+        {
+            backendNames.Add(backendName);
+        }
+
+        foreach (var apiResource in azureResource.Apis.Where(api => api.Target is not null))
+        {
+            var apiIdentifier = Infrastructure.NormalizeBicepIdentifier(apiResource.Name);
+            var backendName = CreateBoundedIdentifier($"{apiIdentifier}Backend", 80);
+            if (!backendNames.Add(backendName))
+            {
+                throw new InvalidOperationException(
+                    $"API Management API '{apiResource.Name}' generates backend physical name '{backendName}', " +
+                    "which is already used by another backend or backend pool.");
+            }
+        }
     }
 
     private static Dictionary<AzureApiManagementBackendPoolResource, ApiManagementBackendProvisioningResource> AddBackendPools(
@@ -2126,17 +2514,19 @@ public static class AzureApiManagementExtensions
         var resolvedNamedValueName = namedValueName ?? name;
         var resolvedDisplayName = displayName ?? name;
         ValidateGeneralIdentifier(resolvedNamedValueName, 256, nameof(namedValueName));
-        if (resolvedDisplayName.Length > 256 ||
+        if (resolvedDisplayName.Length is 0 or > 256 ||
             resolvedDisplayName.Any(character => !char.IsLetterOrDigit(character) && character is not ('-' or '.' or '_')))
         {
             throw new ArgumentException(
-                "The named-value display name must be at most 256 characters and contain only letters, digits, hyphens, periods, and underscores.",
+                "The named-value display name must contain between 1 and 256 letters, digits, hyphens, periods, or underscores.",
                 nameof(displayName));
         }
         if (builder.Resource.NamedValues.Any(namedValue =>
-            string.Equals(namedValue.NamedValueName, resolvedNamedValueName, StringComparison.OrdinalIgnoreCase)))
+            string.Equals(namedValue.NamedValueName, resolvedNamedValueName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(namedValue.DisplayName, resolvedDisplayName, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException($"An API Management named value with physical name '{resolvedNamedValueName}' has already been added.");
+            throw new InvalidOperationException(
+                $"An API Management named value with physical name '{resolvedNamedValueName}' or display name '{resolvedDisplayName}' has already been added.");
         }
 
         var resource = new AzureApiManagementNamedValueResource(
@@ -2555,6 +2945,118 @@ public static class AzureApiManagementExtensions
         // generated APIM symbols that cannot collide with symbols derived from user resource names.
         return Infrastructure.NormalizeBicepIdentifier(
             string.Join('_', resourceNames.Prepend(kind).Prepend("apim").Prepend(string.Empty)));
+    }
+
+    private static AzureApiManagementOpenApiFormat InferOpenApiFormat(string path)
+    {
+        var pathWithoutQuery = path.Split('?', '#')[0];
+        return Path.GetExtension(pathWithoutQuery).ToLowerInvariant() switch
+        {
+            ".json" => AzureApiManagementOpenApiFormat.OpenApiJson,
+            ".yaml" or ".yml" => AzureApiManagementOpenApiFormat.OpenApi,
+            _ => throw new ArgumentException(
+                "The OpenAPI format cannot be inferred. Specify the format explicitly.",
+                nameof(path)),
+        };
+    }
+
+    private static string GetOpenApiImportFormat(AzureApiManagementOpenApiFormat format, bool isLink) =>
+        (format, isLink) switch
+        {
+            (AzureApiManagementOpenApiFormat.OpenApi, false) => "openapi",
+            (AzureApiManagementOpenApiFormat.OpenApi, true) => "openapi-link",
+            (AzureApiManagementOpenApiFormat.OpenApiJson, false) => "openapi+json",
+            (AzureApiManagementOpenApiFormat.OpenApiJson, true) => "openapi+json-link",
+            (AzureApiManagementOpenApiFormat.SwaggerJson, false) => "swagger-json",
+            (AzureApiManagementOpenApiFormat.SwaggerJson, true) => "swagger-link-json",
+            _ => throw new UnreachableException(),
+        };
+
+    private static void ConfigureV2SubnetDelegation(
+        IResourceBuilder<AzureSubnetResource> subnet,
+        string delegation)
+    {
+        if (subnet.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out var existingDelegation))
+        {
+            if (!string.Equals(existingDelegation.ServiceName, delegation, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Subnet '{subnet.Resource.Name}' is delegated to '{existingDelegation.ServiceName}', " +
+                    $"but API Management requires delegation to '{delegation}'.");
+            }
+
+            return;
+        }
+
+        subnet.WithServiceDelegation(delegation);
+    }
+
+    private static void ValidateSubnetOwnership(
+        AzureApiManagementResource apiManagement,
+        AzureSubnetResource subnet)
+    {
+        var existingUsage = subnet.Annotations
+            .OfType<AzureApiManagementSubnetUsageAnnotation>()
+            .FirstOrDefault();
+        if (existingUsage is not null && !ReferenceEquals(existingUsage.ApiManagement, apiManagement))
+        {
+            throw new InvalidOperationException(
+                $"Subnet '{subnet.Name}' is already used by API Management resource '{existingUsage.ApiManagement.Name}'. " +
+                "API Management networking requires a dedicated subnet for each service.");
+        }
+    }
+
+    private static void ConfigureV2SubnetNetworkSecurityGroup(
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        // Both v2 networking modes require an NSG that permits APIM's Azure Key Vault dependency.
+        // The shorthand adds the rule to an explicit NSG or creates an implicit NSG when needed.
+        // See https://learn.microsoft.com/azure/api-management/integrate-vnet-outbound#network-security-group.
+        subnet.AllowOutbound(
+            port: "443",
+            from: AzureServiceTags.VirtualNetwork,
+            to: AzureServiceTags.AzureKeyVault,
+            protocol: SecurityRuleProtocol.Tcp,
+            name: "allow-apim-key-vault");
+    }
+
+    private static void ValidateV2SubnetSize(AzureSubnetResource subnet)
+    {
+        if (subnet.AddressPrefix is not { } addressPrefix ||
+            !int.TryParse(addressPrefix[(addressPrefix.LastIndexOf('/') + 1)..], out var prefixLength))
+        {
+            return;
+        }
+
+        if (prefixLength > 27)
+        {
+            throw new InvalidOperationException(
+                $"Subnet '{subnet.Name}' uses '{addressPrefix}', but API Management v2 networking requires a /27 or larger subnet.");
+        }
+    }
+
+    private static bool SetVirtualNetworkConfiguration(
+        AzureApiManagementResource resource,
+        AzureSubnetResource subnet,
+        AzureApiManagementVirtualNetworkMode mode,
+        AzureApiManagementVirtualNetworkKind kind)
+    {
+        if (resource.VirtualNetworkConfiguration is { } existing &&
+            (!ReferenceEquals(existing.Subnet, subnet) ||
+             existing.Mode != mode ||
+             existing.Kind != kind))
+        {
+            throw new InvalidOperationException(
+                $"API Management resource '{resource.Name}' already has a different virtual network configuration.");
+        }
+
+        if (resource.VirtualNetworkConfiguration is not null)
+        {
+            return false;
+        }
+
+        resource.VirtualNetworkConfiguration = new(subnet, mode, kind);
+        return true;
     }
 
     private static void ValidateCapacity(AzureApiManagementSku sku, int capacity)

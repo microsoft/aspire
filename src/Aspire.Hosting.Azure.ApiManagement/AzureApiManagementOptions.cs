@@ -12,6 +12,8 @@ namespace Aspire.Hosting.Azure;
 [Experimental("ASPIREAPIM001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureApiManagementOptions
 {
+    private int? _capacity;
+
     /// <summary>
     /// Gets the publisher email address shown by API Management.
     /// </summary>
@@ -33,5 +35,9 @@ public sealed class AzureApiManagementOptions
     /// <remarks>
     /// Consumption requires zero capacity units. Developer requires one. Other tiers have SKU-specific limits.
     /// </remarks>
-    public int Capacity { get; init; } = 1;
+    public int Capacity
+    {
+        get => _capacity ?? (Sku is AzureApiManagementSku.Consumption ? 0 : 1);
+        init => _capacity = value;
+    }
 }

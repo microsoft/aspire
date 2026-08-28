@@ -9,14 +9,14 @@ resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   properties: {
     publisherEmail: 'api-owners@example.com'
     publisherName: 'Aspire'
-    virtualNetworkType: 'Internal'
+    virtualNetworkType: 'External'
     virtualNetworkConfiguration: {
       subnetResourceId: vnet_outputs_apim_subnet_id
     }
   }
   sku: {
-    name: 'Premium'
-    capacity: 2
+    name: 'StandardV2'
+    capacity: 1
   }
   identity: {
     type: 'SystemAssigned'

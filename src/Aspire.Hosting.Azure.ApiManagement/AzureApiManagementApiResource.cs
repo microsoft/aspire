@@ -90,6 +90,11 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     internal AzureApiManagementDiagnostic? Diagnostic { get; set; }
 
     /// <summary>
+    /// Gets or sets the OpenAPI document imported for this API.
+    /// </summary>
+    internal AzureApiManagementOpenApiSource? OpenApiSource { get; set; }
+
+    /// <summary>
     /// Gets the parent API Management service.
     /// </summary>
     public AzureApiManagementResource Parent { get; }
@@ -114,3 +119,16 @@ public class AzureApiManagementApiResource : Resource, IResourceWithParent<Azure
     /// </summary>
     internal void AddInboundPolicyStatement(string policyXml) => _inboundPolicyStatements.Add(policyXml);
 }
+
+internal abstract record AzureApiManagementOpenApiSource(AzureApiManagementOpenApiFormat Format);
+
+internal sealed record AzureApiManagementOpenApiContent(
+    string Content,
+    AzureApiManagementOpenApiFormat Format)
+    : AzureApiManagementOpenApiSource(Format);
+
+internal sealed record AzureApiManagementOpenApiEndpoint(
+    string Path,
+    string? EndpointName,
+    AzureApiManagementOpenApiFormat Format)
+    : AzureApiManagementOpenApiSource(Format);

@@ -11,31 +11,44 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var catalog = builder.AddProject<Projects.AzureApiManagement_ApiService>("catalog");
 var insights = builder.AddAzureApplicationInsights("insights");
+var useOpenApiEndpoint =
+    bool.TryParse(builder.Configuration["ApiManagement:UseOpenApiEndpoint"], out var configuredOpenApiEndpoint) &&
+    configuredOpenApiEndpoint;
 
 IResourceBuilder<AzureSubnetResource>? apimSubnet = null;
 
 if (builder.ExecutionContext.IsPublishMode)
 {
-    var vnet = builder.AddAzureVirtualNetwork("vnet");
-    var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
-    apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24")
-        // Classic APIM VNet injection requires these management, health-probe, and gateway rules.
-        .AllowInbound(port: "3443", from: "ApiManagement", protocol: SecurityRuleProtocol.Tcp)
-        .AllowInbound(port: "6390", from: AzureServiceTags.AzureLoadBalancer, protocol: SecurityRuleProtocol.Tcp)
-        .AllowInbound(port: "443", from: AzureServiceTags.Internet, protocol: SecurityRuleProtocol.Tcp);
+    if (useOpenApiEndpoint)
+    {
+        // APIM's control plane must be able to retrieve the OpenAPI document during deployment.
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        catalog.WithComputeEnvironment(environment)
+            .WithExternalHttpEndpoints();
+    }
+    else
+    {
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var containerAppsSubnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        apimSubnet = vnet.AddSubnet("apim-subnet", "10.0.2.0/24")
+            // Classic APIM VNet injection requires these management, health-probe, and gateway rules.
+            .AllowInbound(port: "3443", from: "ApiManagement", protocol: SecurityRuleProtocol.Tcp)
+            .AllowInbound(port: "6390", from: AzureServiceTags.AzureLoadBalancer, protocol: SecurityRuleProtocol.Tcp)
+            .AllowInbound(port: "443", from: AzureServiceTags.Internet, protocol: SecurityRuleProtocol.Tcp);
 
-    var environment = builder.AddAzureContainerAppEnvironment("env")
-        .WithDelegatedSubnet(containerAppsSubnet)
-        .WithInternalLoadBalancer(vnet);
-    catalog.WithComputeEnvironment(environment)
-        .WithExternalHttpEndpoints();
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .WithDelegatedSubnet(containerAppsSubnet)
+            .WithInternalLoadBalancer(vnet);
+        catalog.WithComputeEnvironment(environment)
+            .WithExternalHttpEndpoints();
+    }
 }
 
 var apim = builder.AddAzureApiManagement("apim", new()
 {
     PublisherEmail = "api-owners@example.com",
     PublisherName = "Aspire APIM Playground",
-    Sku = AzureApiManagementSku.Premium,
+    Sku = useOpenApiEndpoint ? AzureApiManagementSku.Developer : AzureApiManagementSku.Premium,
 }).WithApplicationInsights(insights);
 
 apim.AddNamedValue("gateway-name", "Aspire");
@@ -63,11 +76,18 @@ var catalogApi = apim.AddApi(
     subscriptionRequired: false)
     .WithInboundPolicy("<rate-limit calls=\"100\" renewal-period=\"60\" />");
 
-catalogApi.AddOperation(
-    "get-product",
-    method: "GET",
-    urlTemplate: "/products/{id}",
-    displayName: "Get product");
+if (useOpenApiEndpoint)
+{
+    catalogApi.WithOpenApiEndpoint();
+}
+else
+{
+    catalogApi.AddOperation(
+        "get-product",
+        method: "GET",
+        urlTemplate: "/products/{id}",
+        displayName: "Get product");
+}
 
 apim.AddProduct("catalog-product", "Catalog", new()
     {

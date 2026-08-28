@@ -11,7 +11,7 @@ param _apim_computeBackendUrl_catalog_api string
 param insights_outputs_name string
 
 resource _apim_keyVaultIdentity_apim 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: take('_apim_keyVaultIdentity_apim-${uniqueString(resourceGroup().id)}', 128)
+  name: take('apim-kv-apim-${uniqueString(resourceGroup().id)}', 128)
   location: location
 }
 
@@ -25,7 +25,7 @@ resource vault_gateway_certificate 'Microsoft.KeyVault/vaults/secrets@2024-11-01
 }
 
 resource vault_KeyVaultCertificateUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(vault.id, _apim_keyVaultIdentity_apim.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba'))
+  name: guid(vault.id, _apim_keyVaultIdentity_apim.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba'))
   properties: {
     principalId: _apim_keyVaultIdentity_apim.properties.principalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'db79e9a7-68ee-4b58-9aeb-b90e7c24fcba')
@@ -34,13 +34,12 @@ resource vault_KeyVaultCertificateUser 'Microsoft.Authorization/roleAssignments@
   scope: vault
 }
 
-resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
+resource apim 'Microsoft.ApiManagement/service@2025-03-01-preview' = {
   name: take('apim${uniqueString(resourceGroup().id)}', 24)
   location: location
   properties: {
     publisherEmail: 'api-owners@example.com'
     publisherName: 'Contoso APIs'
-    publicNetworkAccess: 'Enabled'
     virtualNetworkType: 'None'
     hostnameConfigurations: [
       {
@@ -110,7 +109,7 @@ resource vault_upstream_secret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' ex
 }
 
 resource vault_KeyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(vault.id, _apim_keyVaultIdentity_apim.properties.principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))
+  name: guid(vault.id, _apim_keyVaultIdentity_apim.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))
   properties: {
     principalId: _apim_keyVaultIdentity_apim.properties.principalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
@@ -320,6 +319,8 @@ resource _apim_apiDiagnostic_catalog_api 'Microsoft.ApiManagement/service/apis/d
 }
 
 output gatewayUrl string = apim.properties.gatewayUrl
+
+output name string = apim.name
 
 output id string = apim.id
 
