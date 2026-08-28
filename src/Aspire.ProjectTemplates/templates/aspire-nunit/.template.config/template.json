@@ -56,8 +56,12 @@
           "description": "Target net11.0"
         }
       ],
-      "replaces": "net8.0",
       "defaultValue": "net10.0"
+    },
+    "AppHostTargetFramework": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": ""
     },
     "AppHostProjectPath": {
       "type": "parameter",
@@ -73,6 +77,15 @@
       "type": "parameter",
       "datatype": "bool",
       "defaultValue": "false"
+    },
+    "TargetFrameworkReplacer": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "AppHostTargetFramework",
+        "fallbackVariableName": "Framework"
+      },
+      "replaces": "net8.0"
     },
     "GeneratedAppHostProjectType": {
       "type": "generated",

@@ -4,6 +4,10 @@
       "Framework": {
         "longName": "framework"
       },
+      "AppHostTargetFramework": {
+        "longName": "AppHostTargetFramework",
+        "shortName": ""
+      },
       "skipRestore": {
         "longName": "no-restore",
         "shortName": ""

@@ -24,14 +24,13 @@ public sealed class IntegrationTestScaffoldingTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.RunCommandAsync("aspire config set features.showAllTemplates true -g", counter);
         await auto.RunCommandAsync(
             "aspire new aspire-starter --name IntegrationTestApp --output IntegrationTestApp --non-interactive --suppress-agent-init",
             counter,
             TimeSpan.FromMinutes(5));
 
         await auto.TypeAsync(
-            "aspire new aspire-test " +
+            "ASPIRE_CLI_SHOW_ALL_TEMPLATES=true aspire new aspire-test " +
             "--apphost IntegrationTestApp/IntegrationTestApp.AppHost/IntegrationTestApp.AppHost.csproj " +
             "--name IntegrationTestApp.Tests --output IntegrationTestApp/IntegrationTestApp.Tests --suppress-agent-init");
         await auto.EnterAsync();

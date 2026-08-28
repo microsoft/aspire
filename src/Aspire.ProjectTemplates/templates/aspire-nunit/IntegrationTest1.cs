@@ -10,7 +10,8 @@ public class IntegrationTest1
     [Test]
     public async Task AppHostBuilds()
     {
-        using var cancellationTokenSource = new CancellationTokenSource(DefaultTimeout);
+        using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CurrentContext.CancellationToken);
+        cancellationTokenSource.CancelAfter(DefaultTimeout);
         var cancellationToken = cancellationTokenSource.Token;
         var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.GeneratedAppHostProjectType>(cancellationToken);
 
@@ -30,7 +31,8 @@ public class IntegrationTest1
     // public async Task GetWebResourceRootReturnsOkStatusCode()
     // {
     //     // Arrange
-    //     using var cts = new CancellationTokenSource(DefaultTimeout);
+    //     using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CurrentContext.CancellationToken);
+    //     cts.CancelAfter(DefaultTimeout);
     //     var cancellationToken = cts.Token;
     //     var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.MyAspireApp_AppHost>();
     //     appHost.Services.AddLogging(logging =>
