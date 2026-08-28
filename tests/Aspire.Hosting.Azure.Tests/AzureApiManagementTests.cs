@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIRECOMPUTE002
 
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
@@ -387,9 +388,83 @@ public class AzureApiManagementTests(ITestOutputHelper output)
 
         Assert.DoesNotContain("publicNetworkAccess:", serviceBicep);
         Assert.Contains("Microsoft.Resources/deploymentScripts@2023-08-01", updateBicep);
+        Assert.Contains("PRIVATE_ENDPOINT_ID", updateBicep);
+        Assert.Contains("privateLinkServiceConnectionState.status", updateBicep);
         Assert.Contains("publicNetworkAccess", updateBicep);
         Assert.Contains("Disabled", updateBicep);
         await Verify(updateBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task PrivateEndpointApprovalWaitsUntilApproved()
+    {
+        var states = new Queue<PrivateEndpointApprovalState>([
+            PrivateEndpointApprovalState.Pending,
+            PrivateEndpointApprovalState.Approved,
+        ]);
+
+        await AzureApiManagementPublicNetworkAccessUpdater.WaitForPrivateEndpointApprovalAsync(
+            _ => Task.FromResult(states.Dequeue()),
+            attempts: 2,
+            pollInterval: TimeSpan.Zero,
+            cancellationToken: default);
+
+        Assert.Empty(states);
+    }
+
+    [Fact]
+    public async Task PrivateEndpointApprovalRejectsRejectedConnection()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            AzureApiManagementPublicNetworkAccessUpdater.WaitForPrivateEndpointApprovalAsync(
+                _ => Task.FromResult(PrivateEndpointApprovalState.Rejected),
+                attempts: 1,
+                pollInterval: TimeSpan.Zero,
+                cancellationToken: default));
+
+        Assert.Contains("Public network access was not disabled", exception.Message);
+    }
+
+    [Fact]
+    public async Task PrivateEndpointApprovalTimesOutWhilePending()
+    {
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            AzureApiManagementPublicNetworkAccessUpdater.WaitForPrivateEndpointApprovalAsync(
+                _ => Task.FromResult(PrivateEndpointApprovalState.Pending),
+                attempts: 2,
+                pollInterval: TimeSpan.Zero,
+                cancellationToken: default));
+
+        Assert.Contains("Public network access was not disabled", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("Approved", 1)]
+    [InlineData("Pending", 0)]
+    [InlineData("Rejected", 2)]
+    [InlineData("Disconnected", 2)]
+    public void PrivateEndpointApprovalReadsConnectionState(
+        string status,
+        int expected)
+    {
+        using var document = JsonDocument.Parse(
+            $$"""
+            {
+              "privateLinkServiceConnections": [
+                {
+                  "properties": {
+                    "privateLinkServiceConnectionState": {
+                      "status": "{{status}}"
+                    }
+                  }
+                }
+              ]
+            }
+            """);
+
+        Assert.Equal(
+            (PrivateEndpointApprovalState)expected,
+            AzureApiManagementPublicNetworkAccessUpdater.GetPrivateEndpointApprovalState(document.RootElement));
     }
 
     [Fact]
