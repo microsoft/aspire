@@ -10,7 +10,7 @@ Use this integration to deploy container-backed Aspire compute resources to Azur
 * Permission to create sandbox groups, Azure Container Registry resources, and scoped role assignments.
 * Docker or Podman for building and inspecting Linux/amd64 OCI images.
 
-The integration grants the deployment identity the **Container Apps SandboxGroup Data Owner** role on a sandbox group that it provisions. When using an existing sandbox group, grant that role to the deployment identity before deploying.
+The integration grants the deployment identity the **Container Apps SandboxGroup Data Owner** role on a sandbox group that it provisions. It also creates a dedicated user-assigned managed identity, attaches it to the sandbox group, and grants it only **AcrPull** on the selected Azure Container Registry. When using an existing sandbox group, grant the data-owner role to the deployment identity before deploying and configure an image-pull identity as described below.
 
 ### Add the integration
 
@@ -79,13 +79,13 @@ await builder.build().run();
 
 Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
 
-Images are resolved to immutable Linux/amd64 digests before import. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
+Images are resolved to immutable Linux/amd64 digests before import. The ADC V2 import request identifies the dedicated image-pull managed identity by client ID; Aspire does not materialize, persist, or send registry refresh credentials. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
 
 Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as milliseconds, where one second is `1_000`.
 
 ## Deployment architecture
 
-Sandbox groups are ARM resources, but sandbox instances, disk images, ports, and lifecycle settings are currently exposed only through the regional Azure Dev Compute preview data plane. Aspire therefore performs sandbox deployment in-process rather than through an ARM deployment script. This lets the deployment pipeline inspect local container images, resolve and validate immutable Linux/amd64 digests, report polling progress, persist deployment state, retain a previous endpoint generation during updates, and clean up stale or failed data-plane resources.
+Sandbox groups and their image-pull identities are ARM resources, but sandbox instances, disk images, ports, and lifecycle settings are currently exposed only through the regional Azure Dev Compute preview data plane. Aspire therefore performs sandbox deployment in-process rather than through an ARM deployment script. This lets the deployment pipeline inspect local container images, resolve and validate immutable Linux/amd64 digests, import them through the ADC V2 managed-identity API, report polling progress, persist deployment state, retain a previous endpoint generation during updates, and clean up stale or failed data-plane resources.
 
 This design means Aspire owns retry, polling, state recovery, and cleanup behavior while the preview data-plane contract evolves. The implementation is intentionally isolated in the Sandboxes integration and should be reevaluated when Azure provides a stable ARM resource or deployment primitive for these operations.
 
@@ -93,10 +93,29 @@ To keep endpoint references usable during an ordinary redeploy of the same immut
 
 ## Publish, deploy, and destroy behavior
 
-* `aspire publish` emits reviewable Bicep for the sandbox group, registry, managed identities, and role assignments. Sandbox instances, disk images, ports, and data-plane URLs are deploy-time resources and are not created by publish.
-* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, creates the ADC disk image and sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs are shown in the deployment summary.
+* `aspire publish` emits reviewable Bicep for the sandbox group, registry, dedicated image-pull identity, and least-privilege role assignments. Sandbox instances, disk images, ports, and data-plane URLs are deploy-time resources and are not created by publish.
+* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, imports it with the image-pull identity client ID, creates the sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs are shown in the deployment summary.
 * `aspire destroy` removes the current and labeled retained sandbox generations and disk images before Azure resource-group cleanup. Stable ownership labels allow cleanup after deployment state is cleared when the same AppHost and Azure sandbox group scope are still configured.
 * Existing sandbox groups use the subscription, resource group, location, and name from the group's actual Azure outputs rather than the ambient deployment resource group.
+
+## Existing sandbox groups and registries
+
+For a newly managed sandbox group, Aspire creates and attaches a dedicated image-pull identity and grants it **AcrPull** on the registry selected with `WithAzureContainerRegistry`. This identity must remain separate from workload identities configured with `WithAzureUserAssignedIdentity`; Aspire rejects attempts to reuse it for a workload.
+
+Aspire treats an existing sandbox group as read-only. Supply an existing identity with `WithAcrPullIdentity`; that identity must already be attached to the group and must already have **AcrPull** on the selected registry:
+
+```csharp
+var registry = builder.AddAzureContainerRegistry("registry")
+    .PublishAsExisting("existing-acr", "shared-rg");
+
+var pullIdentity = builder.AddAzureUserAssignedIdentity("sandbox-pull")
+    .PublishAsExisting("existing-sandbox-pull", "shared-rg");
+
+var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+    .PublishAsExisting("existing-sandboxes", "shared-rg")
+    .WithAzureContainerRegistry(registry)
+    .WithAcrPullIdentity(pullIdentity);
+```
 
 ## Preview limitations
 

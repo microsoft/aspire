@@ -110,6 +110,8 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     /// </summary>
     public BicepOutputReference LocationOutputReference => new("location", this);
 
+    internal BicepOutputReference AcrPullIdentityClientIdOutputReference => new("acrPullIdentityClientId", this);
+
     internal ManagedServiceIdentityType ManagedIdentityType { get; set; } = ManagedServiceIdentityType.None;
 
     internal List<AzureUserAssignedIdentityResource> UserAssignedIdentities { get; } = [];
@@ -158,6 +160,9 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 
         var containerRegistry = ContainerRegistry ??
             throw new InvalidOperationException($"No container registry associated with Azure sandbox group '{Name}'. This should have been added automatically.");
+        var acrPullIdentity = this.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var acrPullIdentityAnnotation)
+            ? acrPullIdentityAnnotation.Identity
+            : null;
         var computeEnvironments = context.Model.Resources.OfType<IComputeEnvironmentResource>().ToList();
         var canClaimUnassignedComputeResources = computeEnvironments.Count == 1 && ReferenceEquals(computeEnvironments[0], this);
 
@@ -179,6 +184,30 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                 continue;
             }
 
+            if (this.IsExisting())
+            {
+                if (acrPullIdentity is null)
+                {
+                    throw new InvalidOperationException(
+                        $"Azure sandbox group '{Name}' is existing and cannot be mutated to attach an image-pull identity. " +
+                        $"Call 'WithAcrPullIdentity' with a user-assigned identity that is already attached to the sandbox group and has AcrPull on the configured registry.");
+                }
+
+                if (!acrPullIdentity.IsExisting())
+                {
+                    throw new InvalidOperationException(
+                        $"Azure sandbox group '{Name}' is existing, but its image-pull identity '{acrPullIdentity.Name}' is not. " +
+                        $"Call 'PublishAsExisting' on the identity because it must already be attached to the sandbox group and have AcrPull on the configured registry.");
+                }
+            }
+
+            if (acrPullIdentity is not null && UserAssignedIdentities.Contains(acrPullIdentity))
+            {
+                throw new InvalidOperationException(
+                    $"Azure sandbox group '{Name}' uses identity '{acrPullIdentity.Name}' for both image pulls and workloads. " +
+                    "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.");
+            }
+
             if (resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
             {
                 if (appIdentity.IdentityResource is not AzureUserAssignedIdentityResource userAssignedIdentity)
@@ -191,6 +220,13 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                 {
                     throw new InvalidOperationException(
                         $"Compute resource '{resource.Name}' uses managed identity '{userAssignedIdentity.Name}', but workload identities are not supported when publishing to existing Azure sandbox group '{Name}'.");
+                }
+
+                if (ReferenceEquals(acrPullIdentity, userAssignedIdentity))
+                {
+                    throw new InvalidOperationException(
+                        $"Azure sandbox group '{Name}' uses identity '{userAssignedIdentity.Name}' for both image pulls and workload '{resource.Name}'. " +
+                        "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.");
                 }
 
                 AddUserAssignedIdentity(userAssignedIdentity);

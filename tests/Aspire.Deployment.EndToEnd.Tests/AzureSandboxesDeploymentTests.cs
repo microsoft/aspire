@@ -122,16 +122,21 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
+            output.WriteLine("Step 7: Verifying the default managed-identity image-pull wiring...");
+            await auto.TypeAsync(VerifyManagedIdentityPullWiringCommand(resourceGroupName));
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
             await auto.TypeAsync(CaptureSandboxUrlFromStateCommand(stateMarkerFile, firstUrlFile));
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            output.WriteLine("Step 7: Verifying the first sandbox URL...");
+            output.WriteLine("Step 8: Verifying the first sandbox URL...");
             await auto.TypeAsync(VerifySandboxUrlCommand(firstUrlFile));
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
 
-            output.WriteLine("Step 8: Redeploying the sandbox app...");
+            output.WriteLine("Step 9: Redeploying the sandbox app...");
             await auto.TypeAsync($"aspire deploy 2>&1 | tee {BashQuote(secondDeployOutputFile)}");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
@@ -141,7 +146,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            output.WriteLine("Step 9: Verifying the redeploy summary and both sandbox URLs...");
+            output.WriteLine("Step 10: Verifying the redeploy summary and both sandbox URLs...");
             await auto.TypeAsync(VerifyRetainedUrlSummaryCommand(firstUrlFile, secondUrlFile, secondDeployOutputFile));
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -157,7 +162,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             deploymentUrls["first-retained"] = File.ReadAllText(firstUrlFile).Trim();
             deploymentUrls["second-current"] = File.ReadAllText(secondUrlFile).Trim();
 
-            output.WriteLine("Step 10: Destroying the Azure sandbox deployment...");
+            output.WriteLine("Step 11: Destroying the Azure sandbox deployment...");
             await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(10));
             destroyCompleted = true;
 
@@ -277,6 +282,20 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             "if [ -z \"$URL\" ]; then echo \"Sandbox URL not found in $STATE_FILE\"; cat \"$STATE_FILE\"; exit 1; fi && " +
             $"printf '%s\\n' \"$URL\" > {BashQuote(outputFile)} && " +
             "echo \"Sandbox URL from state: $URL\"";
+    }
+
+    private static string VerifyManagedIdentityPullWiringCommand(string resourceGroupName)
+    {
+        return
+            $"GROUP_ID=$(az resource list --resource-group {BashQuote(resourceGroupName)} --resource-type Microsoft.App/sandboxGroups --query '[0].id' -o tsv) && " +
+            "if [ -z \"$GROUP_ID\" ]; then echo \"Sandbox group was not found\"; exit 1; fi && " +
+            "PULL_ID=$(az resource show --ids \"$GROUP_ID\" --api-version 2026-02-01-preview --query 'keys(identity.userAssignedIdentities)[0]' -o tsv) && " +
+            "if [ -z \"$PULL_ID\" ]; then echo \"Sandbox image-pull identity was not attached\"; exit 1; fi && " +
+            "PULL_PRINCIPAL_ID=$(az identity show --ids \"$PULL_ID\" --query principalId -o tsv) && " +
+            $"ACR_ID=$(az acr list --resource-group {BashQuote(resourceGroupName)} --query '[0].id' -o tsv) && " +
+            "ROLE_COUNT=$(az role assignment list --assignee \"$PULL_PRINCIPAL_ID\" --scope \"$ACR_ID\" --role AcrPull --query 'length(@)' -o tsv) && " +
+            "if [ \"$ROLE_COUNT\" != \"1\" ]; then echo \"Expected one AcrPull assignment for $PULL_ID on $ACR_ID, found $ROLE_COUNT\"; exit 1; fi && " +
+            "echo \"Default sandbox image-pull identity is attached and has AcrPull\"";
     }
 
     private static string VerifySandboxUrlCommand(string urlFile)

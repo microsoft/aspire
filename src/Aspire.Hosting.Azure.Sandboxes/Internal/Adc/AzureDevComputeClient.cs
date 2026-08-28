@@ -62,7 +62,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         return SendCreateAsync<AzureDevComputeDiskImage>(
             scope,
             HttpMethod.Put,
-            $"{GetSandboxGroupPath(scope)}/diskimages",
+            $"{GetSandboxGroupPath(scope)}/diskimages/v2",
             request,
             cancellationToken);
     }
@@ -493,7 +493,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
 
         // The published OpenAPI lists the global management host, but the `aca` CLI sends
         // sandbox group data-plane requests to the regional host with this preview API version:
-        //   https://management.westus3.azuredevcompute.io/.../diskimages?api-version=2026-02-01-preview
+        //   https://management.westus3.azuredevcompute.io/.../diskimages/v2?api-version=2026-02-01-preview
         return new UriBuilder(Uri.UriSchemeHttps, host)
         {
             Path = pathOnly,
@@ -520,21 +520,16 @@ internal sealed class AzureDevComputeCreateDiskImageRequest
 
     public Dictionary<string, string> Labels { get; init; } = [];
 
-    public required AzureDevComputeDiskImageSpec Image { get; init; }
-
-    public AzureDevComputeRegistryCredentials? RegistryCredentials { get; init; }
+    public required AzureDevComputeRegistryDiskImageSource Source { get; init; }
 }
 
-internal sealed class AzureDevComputeDiskImageSpec
+internal sealed class AzureDevComputeRegistryDiskImageSource
 {
-    public required string Base { get; init; }
-}
+    public required string Kind { get; init; }
 
-internal sealed class AzureDevComputeRegistryCredentials
-{
-    public required string Username { get; init; }
+    public required string ImageUrl { get; init; }
 
-    public required string Token { get; init; }
+    public required string ManagedIdentityClientId { get; init; }
 }
 
 internal sealed class AzureDevComputeDiskImage

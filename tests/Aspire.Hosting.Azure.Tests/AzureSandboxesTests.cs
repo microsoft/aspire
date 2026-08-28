@@ -96,7 +96,7 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AzureSandboxPublishBindsPrincipalTypeInMainBicep()
+    public async Task AzureSandboxPublishBindsUserPrincipalIdInMainBicep()
     {
         using var tempDir = new TemporaryDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -155,13 +155,83 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task SandboxImagePullIdentityIsSeparateFromWorkloadIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity");
+        var workloadIdentity = builder.AddAzureUserAssignedIdentity("workload-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAcrPullIdentity(pullIdentity);
+        builder.AddContainer("worker", "image")
+            .WithAzureUserAssignedIdentity(workloadIdentity)
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Equal(workloadIdentity.Resource, Assert.Single(sandboxGroup.Resource.UserAssignedIdentities));
+        Assert.DoesNotContain(pullIdentity.Resource, sandboxGroup.Resource.UserAssignedIdentities);
+
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task SandboxImagePullIdentityCannotBeUsedAsWorkloadIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var identity = builder.AddAzureUserAssignedIdentity("shared-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAcrPullIdentity(identity);
+        builder.AddContainer("worker", "image")
+            .WithAzureUserAssignedIdentity(identity)
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Equal(
+            "Azure sandbox group 'sandboxes' uses identity 'shared-identity' for both image pulls and workload 'worker'. " +
+            "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task SandboxImagePullIdentityCannotBeConfiguredAsGroupWorkloadIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var identity = builder.AddAzureUserAssignedIdentity("shared-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAcrPullIdentity(identity)
+            .WithUserAssignedIdentity(identity);
+        builder.AddContainer("worker", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Equal(
+            "Azure sandbox group 'sandboxes' uses identity 'shared-identity' for both image pulls and workloads. " +
+            "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
     public async Task ExistingSandboxGroupRejectsWorkloadIdentityAttachment()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var identity = builder.AddAzureUserAssignedIdentity("workload-identity");
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity")
+            .PublishAsExisting("existing-pull-identity", "existing-rg");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
-            .PublishAsExisting("existing-sandboxes", "existing-rg");
+            .PublishAsExisting("existing-sandboxes", "existing-rg")
+            .WithAcrPullIdentity(pullIdentity);
         builder.AddContainer("worker", "image")
             .WithAnnotation(new AppIdentityAnnotation(identity.Resource))
             .PublishAsAzureSandbox(sandboxGroup);
@@ -173,6 +243,110 @@ public class AzureSandboxesTests
         Assert.Equal(
             "Compute resource 'worker' uses managed identity 'workload-identity', but workload identities are not supported when publishing to existing Azure sandbox group 'sandboxes'.",
             exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task ExistingSandboxGroupRequiresAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("existing-acr", "existing-rg");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg")
+            .WithAzureContainerRegistry(registry);
+        builder.AddContainer("worker", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Equal(
+            "Azure sandbox group 'sandboxes' is existing and cannot be mutated to attach an image-pull identity. " +
+            "Call 'WithAcrPullIdentity' with a user-assigned identity that is already attached to the sandbox group and has AcrPull on the configured registry.",
+            exception.InnerException?.Message);
+        Assert.DoesNotContain(model.Resources, resource => resource.Name == "sandboxes-mi");
+    }
+
+    [Fact]
+    public async Task ExistingSandboxGroupWithAcrPullIdentityRemainsReadOnly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("existing-acr", "existing-rg");
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity")
+            .PublishAsExisting("existing-pull-identity", "existing-rg");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg")
+            .WithAzureContainerRegistry(registry)
+            .WithAcrPullIdentity(pullIdentity);
+        builder.AddContainer("worker", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ExistingSandboxGroupRequiresExistingAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg")
+            .WithAcrPullIdentity(pullIdentity);
+        builder.AddContainer("worker", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Equal(
+            "Azure sandbox group 'sandboxes' is existing, but its image-pull identity 'pull-identity' is not. " +
+            "Call 'PublishAsExisting' on the identity because it must already be attached to the sandbox group and have AcrPull on the configured registry.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupRegistryUsesStandaloneAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("existing-acr", "existing-rg");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAzureContainerRegistry(registry);
+        builder.AddContainer("worker", "image")
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var pullIdentity = Assert.Single(
+            model.Resources.OfType<AzureUserAssignedIdentityResource>(),
+            resource => resource.Name == "sandboxes-mi");
+        var roles = Assert.Single(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "sandboxes-mi-roles-registry");
+        Assert.Same(registry.Resource, roles.TargetAzureResource);
+
+        var (_, groupBicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+        var (_, identityBicep) = await AzureManifestUtils.GetManifestWithBicep(pullIdentity, skipPreparer: true);
+        var (rolesManifest, rolesBicep) = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
+
+        await Verify(groupBicep, extension: "bicep")
+            .AppendContentAsFile(identityBicep, "bicep", "identity")
+            .AppendContentAsFile(rolesBicep, "bicep", "roles")
+            .AppendContentAsFile(rolesManifest.ToString(), "json", "roles");
     }
 
     [Fact]
@@ -219,14 +393,14 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AzureDevComputeClientCreatesDiskImageWithRegistryCredentials()
+    public async Task AzureDevComputeClientCreatesV2DiskImageWithManagedIdentity()
     {
         var credential = new RecordingTokenCredential();
         var handler = new RecordingHandler(async request =>
         {
             Assert.Equal(HttpMethod.Put, request.Method);
             Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
-            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages", request.RequestUri?.AbsolutePath);
+            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/v2", request.RequestUri?.AbsolutePath);
             Assert.Equal("?api-version=2026-02-01-preview", request.RequestUri?.Query);
             Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
             Assert.Equal("test-token", request.Headers.Authorization?.Parameter);
@@ -236,9 +410,12 @@ public class AzureSandboxesTests
             var root = document.RootElement;
             Assert.Equal("site-1234", root.GetProperty("name").GetString());
             Assert.Equal("site-container", root.GetProperty("labels").GetProperty("aspire-resource").GetString());
-            Assert.Equal("example.azurecr.io/site:tag", root.GetProperty("image").GetProperty("base").GetString());
-            Assert.Equal("00000000-0000-0000-0000-000000000000", root.GetProperty("registryCredentials").GetProperty("username").GetString());
-            Assert.Equal("refresh-token", root.GetProperty("registryCredentials").GetProperty("token").GetString());
+            var source = root.GetProperty("source");
+            Assert.Equal("registry", source.GetProperty("kind").GetString());
+            Assert.Equal("example.azurecr.io/site@sha256:abc123", source.GetProperty("imageUrl").GetString());
+            Assert.Equal("00000000-0000-0000-0000-000000000000", source.GetProperty("managedIdentityClientId").GetString());
+            Assert.False(root.TryGetProperty("registryCredentials", out _));
+            Assert.False(source.TryGetProperty("registryCredentials", out _));
 
             return JsonResponse(
                 """
@@ -261,14 +438,11 @@ public class AzureSandboxesTests
                 {
                     ["aspire-resource"] = "site-container"
                 },
-                Image = new AzureDevComputeDiskImageSpec
+                Source = new AzureDevComputeRegistryDiskImageSource
                 {
-                    Base = "example.azurecr.io/site:tag"
-                },
-                RegistryCredentials = new AzureDevComputeRegistryCredentials
-                {
-                    Username = "00000000-0000-0000-0000-000000000000",
-                    Token = "refresh-token"
+                    Kind = "registry",
+                    ImageUrl = "example.azurecr.io/site@sha256:abc123",
+                    ManagedIdentityClientId = "00000000-0000-0000-0000-000000000000"
                 }
             },
             CancellationToken.None);
@@ -889,7 +1063,7 @@ public class AzureSandboxesTests
     [Fact]
     public void SandboxDiskImageFailureRedactsServiceStatusDetails()
     {
-        const string secret = "short-lived-acr-refresh-token";
+        const string secret = "sensitive-service-detail";
         var exception = AzureSandboxContainerDeployment.CreateDiskImageFailureException(
             new AzureDevComputeDiskImage
             {
@@ -1107,11 +1281,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.Equal(1, attempts);
@@ -1132,11 +1302,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.Equal(1, attempts);
@@ -1156,11 +1322,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.True(exception.ResponseMayHaveBeenLost);
@@ -1179,11 +1341,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.True(exception.ResponseMayHaveBeenLost);
@@ -1205,11 +1363,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.True(exception.ResponseMayHaveBeenLost);
@@ -1231,11 +1385,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.True(exception.ResponseMayHaveBeenLost);
@@ -1254,11 +1404,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.False(exception.ResponseMayHaveBeenLost);
@@ -1277,11 +1423,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             cancellationTokenSource.Token));
 
         Assert.False(exception.ResponseMayHaveBeenLost);
@@ -1300,11 +1442,7 @@ public class AzureSandboxesTests
 
         var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
             new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
-            },
+            CreateDiskImageRequest(),
             CancellationToken.None));
 
         Assert.False(exception.ResponseMayHaveBeenLost);
@@ -1332,7 +1470,7 @@ public class AzureSandboxesTests
     [Fact]
     public async Task AzureDevComputeClientDoesNotExposeErrorBodies()
     {
-        const string secret = "registry-refresh-token-secret";
+        const string secret = "sensitive-response-value";
         var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
         {
             Content = new StringContent(secret, Encoding.UTF8, "text/plain")
@@ -2585,6 +2723,20 @@ public class AzureSandboxesTests
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "testproject";
+    }
+
+    private static AzureDevComputeCreateDiskImageRequest CreateDiskImageRequest()
+    {
+        return new AzureDevComputeCreateDiskImageRequest
+        {
+            Name = "disk-image",
+            Source = new AzureDevComputeRegistryDiskImageSource
+            {
+                Kind = "registry",
+                ImageUrl = "example.azurecr.io/site@sha256:abc123",
+                ManagedIdentityClientId = "00000000-0000-0000-0000-000000000000"
+            }
+        };
     }
 
     private sealed class TemporaryDirectory : IDisposable

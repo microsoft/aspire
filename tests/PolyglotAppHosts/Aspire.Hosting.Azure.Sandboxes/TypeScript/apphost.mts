@@ -10,6 +10,8 @@ import {
 const builder = await createBuilder();
 
 const sandboxes = await builder.addAzureSandboxGroup("sandboxes");
+const pullIdentity = await builder.addAzureUserAssignedIdentity("sandbox-pull-identity");
+await sandboxes.withAcrPullIdentity(pullIdentity);
 await sandboxes.withUserAssignedIdentity(
     await builder.addAzureUserAssignedIdentity("sandbox-identity"));
 

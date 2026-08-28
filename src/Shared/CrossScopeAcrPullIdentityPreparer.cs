@@ -18,7 +18,7 @@ using Azure.Provisioning.Roles;
 // This linked helper runs after the application model and final registry selection are complete. For
 // only that cross-scope case, it creates a standalone identity and lets AzureResourcePreparer emit the
 // role assignment as a separately scoped module. Package-specific annotations remain in their owning
-// assemblies, so this source is linked into only the ACA and App Service projects.
+// assemblies, so this source is linked into only the ACA, App Service, and Sandboxes projects.
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
@@ -41,12 +41,13 @@ internal static class CrossScopeAcrPullIdentityPreparer
     public static IResourceBuilder<TEnvironment> WithCrossScopeAcrPullIdentity<TEnvironment>(
         this IResourceBuilder<TEnvironment> builder,
         Func<AzureUserAssignedIdentityResource, IAcrPullIdentityAnnotation> createIdentityAnnotation,
-        Action<IResourceBuilder<AzureUserAssignedIdentityResource>>? configureIdentity = null)
+        Action<IResourceBuilder<AzureUserAssignedIdentityResource>>? configureIdentity = null,
+        Func<TEnvironment, bool>? canPrepareIdentity = null)
         where TEnvironment : IResource, IAzureComputeEnvironmentResource
     {
         builder.WithAnnotation(new PipelineStepAnnotation(context =>
         {
-            if (!ShouldPrepareIdentity(context.PipelineContext.ExecutionContext, builder.Resource))
+            if (!ShouldPrepareIdentity(context.PipelineContext.ExecutionContext, builder.Resource, canPrepareIdentity))
             {
                 return [];
             }
@@ -59,7 +60,7 @@ internal static class CrossScopeAcrPullIdentityPreparer
                     Description = $"Prepares the ACR pull identity for {builder.Resource.Name}.",
                     Action = stepContext =>
                     {
-                        PrepareIdentity(stepContext, builder, createIdentityAnnotation, configureIdentity);
+                        PrepareIdentity(stepContext, builder, createIdentityAnnotation, configureIdentity, canPrepareIdentity);
                         return Task.CompletedTask;
                     },
                     RequiredBySteps = [AzureEnvironmentResource.PrepareResourcesStepName]
@@ -72,12 +73,18 @@ internal static class CrossScopeAcrPullIdentityPreparer
 
     private static bool ShouldPrepareIdentity<TEnvironment>(
         DistributedApplicationExecutionContext executionContext,
-        TEnvironment environment)
+        TEnvironment environment,
+        Func<TEnvironment, bool>? canPrepareIdentity)
         where TEnvironment : IResource, IAzureComputeEnvironmentResource
     {
         // Run mode does not emit the environment Bicep that contains the problematic role assignment.
         // Adding a standalone Azure identity there would unnecessarily change the local application model.
         if (!executionContext.IsPublishMode)
+        {
+            return false;
+        }
+
+        if (canPrepareIdentity is not null && !canPrepareIdentity(environment))
         {
             return false;
         }
@@ -104,10 +111,11 @@ internal static class CrossScopeAcrPullIdentityPreparer
         PipelineStepContext context,
         IResourceBuilder<TEnvironment> builder,
         Func<AzureUserAssignedIdentityResource, IAcrPullIdentityAnnotation> createIdentityAnnotation,
-        Action<IResourceBuilder<AzureUserAssignedIdentityResource>>? configureIdentity)
+        Action<IResourceBuilder<AzureUserAssignedIdentityResource>>? configureIdentity,
+        Func<TEnvironment, bool>? canPrepareIdentity)
         where TEnvironment : IResource, IAzureComputeEnvironmentResource
     {
-        if (!ShouldPrepareIdentity(context.ExecutionContext, builder.Resource) ||
+        if (!ShouldPrepareIdentity(context.ExecutionContext, builder.Resource, canPrepareIdentity) ||
             builder.Resource.ContainerRegistry is not AzureContainerRegistryResource registry)
         {
             return;

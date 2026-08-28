@@ -10,8 +10,10 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
+using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Resources;
+using Azure.Provisioning.Roles;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
@@ -42,6 +44,36 @@ public static class AzureSandboxesExtensions
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
             var sandboxResource = (AzureSandboxGroupResource)infrastructure.AspireResource;
+            UserAssignedIdentity? newAcrPullIdentity = null;
+            string? acrPullIdentityResourceId = null;
+            BicepValue<string> acrPullIdentityClientId = new(string.Empty);
+
+            if (sandboxResource.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var identityAnnotation))
+            {
+                acrPullIdentityClientId = identityAnnotation.Identity.ClientId.AsProvisioningParameter(infrastructure);
+                if (!sandboxResource.IsExisting())
+                {
+                    var identityIdParameter = identityAnnotation.Identity.Id.AsProvisioningParameter(infrastructure);
+                    acrPullIdentityResourceId = BicepFunction.Interpolate($"{identityIdParameter}").Compile().ToString();
+                }
+            }
+            else if (!sandboxResource.IsExisting())
+            {
+                var tags = new ProvisioningParameter("tags", typeof(object))
+                {
+                    Value = new BicepDictionary<string>()
+                };
+                infrastructure.Add(tags);
+                newAcrPullIdentity = new UserAssignedIdentity(
+                    Infrastructure.NormalizeBicepIdentifier($"{sandboxResource.Name}_acr_pull_mi"))
+                {
+                    Tags = tags
+                };
+                infrastructure.Add(newAcrPullIdentity);
+                acrPullIdentityResourceId = BicepFunction.Interpolate($"{newAcrPullIdentity.Id}").Compile().ToString();
+                acrPullIdentityClientId = newAcrPullIdentity.ClientId.ToBicepExpression();
+            }
+
             var sandboxGroup = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -56,16 +88,41 @@ public static class AzureSandboxesExtensions
                         Properties = [],
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
-                    ApplyManagedServiceIdentity(resource.Identity, sandboxResource, infrastructure);
+                    ApplyManagedServiceIdentity(
+                        resource.Identity,
+                        sandboxResource,
+                        infrastructure,
+                        acrPullIdentityResourceId);
                     return resource;
                 });
 
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = sandboxGroup.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = sandboxGroup.Name.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("location", typeof(string)) { Value = sandboxGroup.Location.ToBicepExpression() });
+            infrastructure.Add(new ProvisioningOutput("acrPullIdentityClientId", typeof(string)) { Value = acrPullIdentityClientId });
 
             if (!sandboxResource.IsExisting())
             {
+                if (newAcrPullIdentity is not null)
+                {
+                    var registry = sandboxResource.ContainerRegistry ??
+                        throw new InvalidOperationException($"No container registry associated with Azure sandbox group '{sandboxResource.Name}'. This should have been added automatically.");
+                    var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infrastructure);
+                    infrastructure.Add(containerRegistry);
+                    var pullRoleAssignment = containerRegistry.CreateRoleAssignment(
+                        ContainerRegistryBuiltInRole.AcrPull,
+                        newAcrPullIdentity);
+
+                    // Azure.Provisioning currently omits the identity from the generated role-assignment name.
+                    // Include it so multiple sandbox groups can safely use the same registry.
+                    // https://github.com/Azure/azure-sdk-for-net/issues/47265
+                    pullRoleAssignment.Name = BicepFunction.CreateGuid(
+                        containerRegistry.Id,
+                        newAcrPullIdentity.Id,
+                        pullRoleAssignment.RoleDefinitionId);
+                    infrastructure.Add(pullRoleAssignment);
+                }
+
                 AddSandboxGroupDeploymentPrincipalRoleAssignment(infrastructure, sandboxGroup);
             }
         }
@@ -80,7 +137,11 @@ public static class AzureSandboxesExtensions
         AzureSandboxCleanupResource.EnsureAdded(builder);
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
         resource.DefaultContainerRegistry = CreateDefaultAzureContainerRegistry(builder, $"{name}-acr");
-        return builder.AddResource(resource);
+        var resourceBuilder = builder.AddResource(resource);
+        resourceBuilder.WithCrossScopeAcrPullIdentity(
+            identity => new AzureSandboxGroupAcrPullIdentityAnnotation(identity),
+            canPrepareIdentity: static sandboxGroup => !sandboxGroup.IsExisting());
+        return resourceBuilder;
     }
 
     /// <summary>
@@ -158,11 +219,12 @@ public static class AzureSandboxesExtensions
     }
 
     /// <summary>
-    /// Configures the Azure sandbox group to use no managed identity.
+    /// Configures the Azure sandbox group workloads to use no managed identity.
     /// </summary>
     /// <param name="builder">The sandbox group resource builder.</param>
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>This does not remove the dedicated user-assigned identity used to import images from Azure Container Registry.</remarks>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureSandboxGroupResource> WithNoManagedIdentity(this IResourceBuilder<AzureSandboxGroupResource> builder)
@@ -175,11 +237,12 @@ public static class AzureSandboxesExtensions
     }
 
     /// <summary>
-    /// Configures the Azure sandbox group to use a system-assigned managed identity.
+    /// Configures the Azure sandbox group workloads to use a system-assigned managed identity.
     /// </summary>
     /// <param name="builder">The sandbox group resource builder.</param>
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>This does not replace the dedicated user-assigned identity used to import images from Azure Container Registry.</remarks>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureSandboxGroupResource> WithSystemAssignedIdentity(this IResourceBuilder<AzureSandboxGroupResource> builder)
@@ -192,7 +255,7 @@ public static class AzureSandboxesExtensions
     }
 
     /// <summary>
-    /// Configures the Azure sandbox group to use a user-assigned managed identity.
+    /// Configures the Azure sandbox group workloads to use a user-assigned managed identity.
     /// </summary>
     /// <param name="builder">The sandbox group resource builder.</param>
     /// <param name="identity">The user-assigned managed identity resource.</param>
@@ -213,6 +276,44 @@ public static class AzureSandboxesExtensions
             builder.Resource.UserAssignedIdentities.Add(identity.Resource);
         }
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the sandbox group to use the supplied user-assigned identity when importing images from
+    /// the configured Azure Container Registry.
+    /// </summary>
+    /// <param name="builder">The sandbox group resource builder.</param>
+    /// <param name="identityBuilder">The user-assigned identity used for image pulls.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// <para>
+    /// Aspire does not create an <c>AcrPull</c> role assignment for a caller-supplied identity. The caller is
+    /// responsible for granting the identity <c>AcrPull</c> on the selected registry.
+    /// </para>
+    /// <para>
+    /// For a newly managed sandbox group, Aspire attaches the supplied identity to the group. For an existing
+    /// sandbox group, Aspire treats the group as read-only; the identity must already be attached to the group
+    /// and authorized for the selected registry.
+    /// </para>
+    /// <para>
+    /// This identity is used only for importing images. It is separate from identities configured for sandbox
+    /// workloads with <see cref="WithUserAssignedIdentity"/> or <c>WithAzureUserAssignedIdentity</c>.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="identityBuilder"/> is null.</exception>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureSandboxGroupResource> WithAcrPullIdentity(
+        this IResourceBuilder<AzureSandboxGroupResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identityBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identityBuilder);
+
+        return builder.WithAnnotation(
+            new AzureSandboxGroupAcrPullIdentityAnnotation(identityBuilder.Resource),
+            ResourceAnnotationMutationBehavior.Replace);
     }
 
     private static AzureSandboxOptions CopyAzureSandboxOptions(AzureSandboxOptions options)
@@ -238,9 +339,7 @@ public static class AzureSandboxesExtensions
     private static void AddSandboxGroupDeploymentPrincipalRoleAssignment(AzureResourceInfrastructure infrastructure, SandboxGroup sandboxGroup)
     {
         var principalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(Guid));
-        var principalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
         infrastructure.Add(principalId);
-        infrastructure.Add(principalType);
 
         // Sandbox deployment creates disk images, sandboxes, lifecycle settings, and public
         // ports through the Azure Dev Compute data-plane API after the sandbox group ARM
@@ -257,7 +356,6 @@ public static class AzureSandboxesExtensions
                 principalId,
                 BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", SandboxGroupDataOwnerRoleId)),
             Scope = new IdentifierExpression(sandboxGroup.BicepIdentifier),
-            PrincipalType = principalType,
             PrincipalId = principalId,
             RoleDefinitionId = BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", SandboxGroupDataOwnerRoleId)
         });
@@ -303,7 +401,7 @@ public static class AzureSandboxesExtensions
             return;
         }
 
-        var names = new HashSet<string>(StringComparers.EndpointAnnotationName);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var endpoint in options.Endpoints)
         {
             if (endpoint is null)
@@ -368,14 +466,29 @@ public static class AzureSandboxesExtensions
         }
     }
 
-    private static void ApplyManagedServiceIdentity(ManagedServiceIdentity identity, AzureSandboxGroupResource resource, AzureResourceInfrastructure infrastructure)
+    private static void ApplyManagedServiceIdentity(
+        ManagedServiceIdentity identity,
+        AzureSandboxGroupResource resource,
+        AzureResourceInfrastructure infrastructure,
+        string? acrPullIdentityResourceId)
     {
-        if (resource.ManagedIdentityType == ManagedServiceIdentityType.None && resource.UserAssignedIdentities.Count == 0)
+        var hasUserAssignedIdentity = acrPullIdentityResourceId is not null || resource.UserAssignedIdentities.Count > 0;
+        if (resource.ManagedIdentityType == ManagedServiceIdentityType.None && !hasUserAssignedIdentity)
         {
             return;
         }
 
-        identity.ManagedServiceIdentityType = resource.ManagedIdentityType;
+        identity.ManagedServiceIdentityType = (resource.ManagedIdentityType, hasUserAssignedIdentity) switch
+        {
+            (ManagedServiceIdentityType.None, true) => ManagedServiceIdentityType.UserAssigned,
+            (ManagedServiceIdentityType.SystemAssigned, true) => ManagedServiceIdentityType.SystemAssignedUserAssigned,
+            _ => resource.ManagedIdentityType
+        };
+
+        if (acrPullIdentityResourceId is not null)
+        {
+            identity.UserAssignedIdentities[acrPullIdentityResourceId] = new UserAssignedIdentityDetails();
+        }
 
         foreach (var userAssignedIdentity in resource.UserAssignedIdentities)
         {

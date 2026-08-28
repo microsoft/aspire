@@ -1,0 +1,10 @@
+﻿{
+  "type": "azure.bicep.v1",
+  "path": "sandboxes-mi-roles-registry.module.bicep",
+  "params": {
+    "principalId": "{sandboxes-mi.outputs.principalId}"
+  },
+  "scope": {
+    "resourceGroup": "existing-rg"
+  }
+}

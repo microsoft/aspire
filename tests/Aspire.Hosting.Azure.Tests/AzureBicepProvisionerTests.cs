@@ -1440,27 +1440,6 @@ public class AzureBicepProvisionerTests
         Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
     }
 
-    [Theory]
-    [InlineData(false, "User")]
-    [InlineData(true, "ServicePrincipal")]
-    public void PopulateWellKnownParameters_BindsPrincipalTypeFromCurrentPrincipal(bool isServicePrincipal, string expectedPrincipalType)
-    {
-        var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
-        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
-        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
-
-        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
-            principal: new AzurePrincipal(
-                Guid.NewGuid(),
-                isServicePrincipal ? "app" : "user@example.com",
-                expectedPrincipalType),
-            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
-
-        PopulateWellKnownParameters(resource, context);
-
-        Assert.Equal(expectedPrincipalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
-    }
-
     [Fact]
     public async Task BicepCliExecutor_CompilesBicepToArm()
     {

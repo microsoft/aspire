@@ -631,21 +631,14 @@ internal static class AzureSandboxContainerDeployment
         string ownerId,
         string deployId)
     {
-        AzureDevComputeRegistryCredentials? registryCredentials = null;
-        var registry = resource.Parent.ContainerRegistry;
-        if (registry is not null)
+        var managedIdentityClientId = await resource.Parent.AcrPullIdentityClientIdOutputReference
+            .GetValueAsync(context.CancellationToken)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(managedIdentityClientId))
         {
-            var registryEndpoint = await registry.RegistryEndpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(registryEndpoint) &&
-                imageReference.StartsWith($"{registryEndpoint}/", StringComparison.OrdinalIgnoreCase))
-            {
-                var token = await GetAcrRefreshTokenAsync(context, registryEndpoint).ConfigureAwait(false);
-                registryCredentials = new AzureDevComputeRegistryCredentials
-                {
-                    Username = token.Username,
-                    Token = token.Token
-                };
-            }
+            throw new InvalidOperationException(
+                $"Azure sandbox group '{resource.Parent.Name}' does not have an image-pull managed identity client ID. " +
+                $"For an existing sandbox group, call 'WithAcrPullIdentity' with an identity that is already attached to the group and has AcrPull on the configured registry.");
         }
 
         return await client.CreateDiskImageAsync(
@@ -654,30 +647,13 @@ internal static class AzureSandboxContainerDeployment
             {
                 Name = diskImageName,
                 Labels = CreateLabels(resource, ownerId, deployId),
-                Image = new AzureDevComputeDiskImageSpec
+                Source = new AzureDevComputeRegistryDiskImageSource
                 {
-                    Base = imageReference
-                },
-                RegistryCredentials = registryCredentials
+                    Kind = "registry",
+                    ImageUrl = imageReference,
+                    ManagedIdentityClientId = managedIdentityClientId
+                }
             },
-            context.CancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task<AcrRefreshToken> GetAcrRefreshTokenAsync(PipelineStepContext context, string registryEndpoint)
-    {
-        var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault() ??
-            throw new InvalidOperationException("AzureEnvironmentResource must be present in the application model.");
-        var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
-        var tenantId = provisioningContext.Tenant.TenantId?.ToString()
-            ?? throw new InvalidOperationException("Tenant ID is required for ACR authentication but was not available in provisioning context.");
-
-        var acrLoginService = context.Services.GetRequiredService<IAcrLoginService>();
-        var tokenCredentialProvider = context.Services.GetRequiredService<ITokenCredentialProvider>();
-
-        return await acrLoginService.GetRefreshTokenAsync(
-            registryEndpoint,
-            tenantId,
-            tokenCredentialProvider.TokenCredential,
             context.CancellationToken).ConfigureAwait(false);
     }
 
@@ -1439,8 +1415,8 @@ internal static class AzureSandboxContainerDeployment
         var options = GetAzureSandboxContainerOptions(resource.TargetResource);
         var endpointOptions = options?.Endpoints?.ToDictionary(
             static endpoint => endpoint.Name!,
-            StringComparers.EndpointAnnotationName);
-        var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparers.EndpointAnnotationName);
+            StringComparer.OrdinalIgnoreCase);
+        var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparer.OrdinalIgnoreCase);
         var endpoints = new Dictionary<int, SandboxEndpoint>();
         foreach (var resolvedEndpoint in resource.TargetResource.ResolveEndpoints())
         {
