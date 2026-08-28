@@ -234,7 +234,9 @@ internal sealed class StopCommand : BaseCommand
             var appHostFile = GetAppHostFile(connection);
             if (appHostFile is not null)
             {
-                return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+                // Reuse the connections already scanned above rather than scanning every socket a second
+                // time. A rescan pays each unreachable socket's connect retry budget again.
+                return await StopRunningAppHostsForResolvedFileAsync(appHostFile, allConnections, cancellationToken).ConfigureAwait(false);
             }
 
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
@@ -274,7 +276,13 @@ internal sealed class StopCommand : BaseCommand
         var appHostFile = GetAppHostFile(result.Connection!);
         if (appHostFile is not null)
         {
-            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+            // The resolver returns a single connection, but every instance running at that path should be
+            // stopped, so the full set is needed here.
+            var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                cancellationToken).ConfigureAwait(false);
+
+            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, allConnections, cancellationToken).ConfigureAwait(false);
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
@@ -282,11 +290,8 @@ internal sealed class StopCommand : BaseCommand
         return new StopAppHostResult(exitCode, appHostFile);
     }
 
-    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, bool displayNotRunningMessage, CancellationToken cancellationToken)
+    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, AppHostConnectionResult[] allConnections, CancellationToken cancellationToken)
     {
-        var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
-            SharedCommandStrings.ScanningForRunningAppHosts,
-            cancellationToken).ConfigureAwait(false);
         var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
 
         var matchingConnections = allConnections
@@ -300,11 +305,10 @@ internal sealed class StopCommand : BaseCommand
 
         if (matchingConnections.Length == 0)
         {
-            if (displayNotRunningMessage)
-            {
-                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
-            }
+            // Reachable when the AppHost exits between being resolved and these connections being
+            // enumerated. Reporting it as not running is the right outcome for that race.
+            var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
 
             return new StopAppHostResult(CliExitCodes.Success, null);
         }
