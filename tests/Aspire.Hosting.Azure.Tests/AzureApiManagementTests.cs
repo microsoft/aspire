@@ -8,6 +8,7 @@
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -1210,6 +1211,260 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task CrossResourceGroupAzureOpenAIBackendUsesTargetScopedRoleAssignmentModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var account = builder.AddAzureOpenAI("openai")
+            .PublishAsExisting("shared-openai", resourceGroup: "ai-resources");
+        var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var chatBackend = apim.AddAzureOpenAIBackend("chat-backend", deployment);
+        var responsesBackend = apim.AddAzureOpenAIBackend("responses-backend", deployment);
+        apim.AddOpenAIApi("chat-api", "chat").WithBackend(chatBackend);
+        apim.AddOpenAIApi("responses-api", "responses").WithBackend(responsesBackend);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roleAssignments = Assert.Single(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "apim-roles-openai");
+        Assert.Same(account.Resource, roleAssignments.TargetAzureResource);
+        Assert.Equal("ai-resources", roleAssignments.Scope!.ResourceGroup);
+        Assert.Contains(apim.Resource, roleAssignments.References);
+        Assert.Contains(
+            roleAssignments.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
+
+        Assert.DoesNotContain("Microsoft.Authorization/roleAssignments@", apimBicep);
+        Assert.Equal(1, rolesBicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
+        Assert.Contains("resource openai", rolesBicep);
+        Assert.DoesNotContain("scope: resourceGroup('ai-resources')", rolesBicep);
+        Assert.Contains("ai-resources", rolesManifest.ToJsonString());
+        Assert.Contains("apim.outputs.principalId", rolesManifest.ToJsonString());
+    }
+
+    [Fact]
+    public async Task ExplicitlyScopedExistingApiManagementUsesExternalRoleModuleForDefaultScopeBackend()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var account = builder.AddAzureOpenAI("openai")
+            .PublishAsExisting("shared-openai", resourceGroup: null);
+        var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        }).PublishAsExisting("shared-apim", resourceGroup: "gateway-resources")
+            .WithExistingSystemAssignedIdentity();
+        var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
+        apim.AddOpenAIApi("chat-api", "chat").WithBackend(backend);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roleAssignments = Assert.Single(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "apim-roles-openai");
+        Assert.Null(roleAssignments.Scope);
+        Assert.Same(account.Resource, roleAssignments.TargetAzureResource);
+        Assert.Contains(apim.Resource, roleAssignments.References);
+        Assert.Contains(
+            roleAssignments.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
+
+        Assert.DoesNotContain("Microsoft.Authorization/roleAssignments@", apimBicep);
+        Assert.Contains("Microsoft.Authorization/roleAssignments@", rolesBicep);
+        Assert.DoesNotContain("\"scope\"", rolesManifest.ToJsonString());
+        Assert.Contains("apim.outputs.principalId", rolesManifest.ToJsonString());
+    }
+
+    [Fact]
+    public async Task SameScopeExistingAzureOpenAIBackendKeepsInlineRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var account = builder.AddAzureOpenAI("openai")
+            .PublishAsExisting("shared-openai", resourceGroup: null);
+        var deployment = account.AddDeployment("chat", "gpt-5-mini", "2025-08-07");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var backend = apim.AddAzureOpenAIBackend("openai-backend", deployment);
+        apim.AddOpenAIApi("chat-api", "chat").WithBackend(backend);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+
+        Assert.DoesNotContain(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "apim-roles-openai");
+        Assert.Contains("Microsoft.Authorization/roleAssignments@", apimBicep);
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupKeyVaultUsesStandaloneIdentityAndTargetScopedRoleAssignments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault")
+            .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.WithCustomDomain("api.contoso.example", vault.GetSecret("gateway-certificate"));
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(
+            model.Resources.OfType<AzureUserAssignedIdentityResource>(),
+            resource => resource.Name == "apim-kv-identity");
+        var roleAssignments = Assert.Single(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "apim-kv-identity-roles-vault");
+        Assert.Same(identity, apim.Resource.KeyVaultIdentity);
+        Assert.Same(vault.Resource, roleAssignments.TargetAzureResource);
+        Assert.Equal("security-resources", roleAssignments.Scope!.ResourceGroup);
+        Assert.Contains(identity, apim.Resource.References);
+        Assert.Contains(roleAssignments, apim.Resource.References);
+        Assert.Contains(
+            identity.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+        Assert.Contains(
+            roleAssignments.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => relationship.Resource == apim.Resource && relationship.Type == "Parent");
+
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
+
+        Assert.DoesNotContain("resource _apim_keyVaultIdentity_", apimBicep);
+        Assert.DoesNotContain("Microsoft.Authorization/roleAssignments@", apimBicep);
+        Assert.Contains("param _apim_keyVaultIdentityId_apim string", apimBicep);
+        Assert.Equal(2, rolesBicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("scope: resourceGroup('security-resources')", rolesBicep);
+        Assert.Contains("security-resources", rolesManifest.ToJsonString());
+        Assert.Contains("apim-kv-identity.outputs.principalId", rolesManifest.ToJsonString());
+        Assert.Contains("output completed string = 'completed'", rolesBicep);
+        Assert.Contains("param _apim_keyVaultRoleAssignmentDependency0_apim string", apimBicep);
+    }
+
+    [Fact]
+    public async Task PublishedMainBicepOrdersKeyVaultRoleAssignmentsBeforeApiManagement()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path);
+        var vault = builder.AddAzureKeyVault("vault")
+            .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+
+        using var app = builder.Build();
+        await app.RunAsync(TestContext.Current.CancellationToken);
+
+        var mainBicepPath = Path.Combine(workspace.Path, "main.bicep");
+        Assert.True(File.Exists(mainBicepPath), $"Expected publish to produce '{mainBicepPath}'.");
+        var mainBicep = await File.ReadAllTextAsync(
+            mainBicepPath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Matches(
+            @"_apim_keyVaultRoleAssignmentDependency0_apim:\s+\S+\.outputs\.completed",
+            mainBicep);
+    }
+
+    [Fact]
+    public async Task SameScopeExistingKeyVaultKeepsInlineIdentityAndRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddAzureKeyVault("vault")
+            .PublishAsExisting("shared-vault", resourceGroup: null);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.GetSecret("upstream-secret"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+
+        Assert.Null(apim.Resource.KeyVaultIdentity);
+        Assert.DoesNotContain(
+            model.Resources.OfType<AzureUserAssignedIdentityResource>(),
+            resource => resource.Name == "apim-kv-identity");
+        Assert.Contains("resource _apim_keyVaultIdentity_", apimBicep);
+        Assert.Contains("Microsoft.Authorization/roleAssignments@", apimBicep);
+    }
+
+    [Fact]
+    public async Task CustomKeyVaultResourceKeepsInlineRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vault = builder.AddResource(new CustomKeyVaultResource("vault"));
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddKeyVaultNamedValue("upstream-secret", vault.Resource.GetSecret("upstream-secret"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Null(apim.Resource.KeyVaultIdentity);
+    }
+
+    [Fact]
+    public async Task MixedCrossScopeAndCustomKeyVaultResourcesPreserveAllRoleAssignments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var crossScopeVault = builder.AddAzureKeyVault("shared-vault")
+            .PublishAsExisting("shared-vault", resourceGroup: "security-resources");
+        var customVault = builder.AddResource(new CustomKeyVaultResource("custom-vault"));
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        apim.AddKeyVaultNamedValue("shared-secret", crossScopeVault.GetSecret("shared-secret"));
+        apim.AddKeyVaultNamedValue("custom-secret", customVault.Resource.GetSecret("custom-secret"));
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roleAssignments = Assert.Single(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "apim-kv-identity-roles-shared-vault");
+        var (_, apimBicep) = await GetManifestWithBicep(apim.Resource);
+        var (_, rolesBicep) = await GetManifestWithBicep(roleAssignments, skipPreparer: true);
+
+        Assert.Equal(1, apimBicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
+        Assert.Equal(1, rolesBicep.Split("Microsoft.Authorization/roleAssignments@", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public async Task GeneratedBicepIdentifiersCannotCollideWithUserResourceNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1335,7 +1590,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         using var app = builder.Build();
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
 
-        Assert.Contains("cannot configure diagnostics or Azure role assignments", exception.Message);
+        Assert.Contains("cannot configure diagnostics", exception.Message);
     }
 
     [Fact]
@@ -1606,5 +1861,40 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";
+    }
+
+    private sealed class CustomKeyVaultResource(string name)
+        : AzureBicepResource(
+            name,
+            templateString:
+            """
+            output name string = 'vault'
+            output vaultUri string = 'https://vault.vault.azure.net/'
+            """),
+        IAzureKeyVaultResource
+    {
+        public BicepOutputReference VaultUriOutputReference => new("vaultUri", this);
+
+        public BicepOutputReference NameOutputReference => new("name", this);
+
+        public Func<IAzureKeyVaultSecretReference, CancellationToken, Task<string?>>? SecretResolver { get; set; }
+
+        public IAzureKeyVaultSecretReference GetSecret(string secretName) => new CustomKeyVaultSecretReference(secretName, this);
+    }
+
+    private sealed class CustomKeyVaultSecretReference(
+        string secretName,
+        CustomKeyVaultResource resource) : IAzureKeyVaultSecretReference
+    {
+        public string SecretName { get; } = secretName;
+
+        public IAzureKeyVaultResource Resource { get; } = resource;
+
+        public IResource? SecretOwner { get; set; }
+
+        string IManifestExpressionProvider.ValueExpression => $"{{{resource.Name}.secrets.{SecretName}}}";
+
+        ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException($"Secret '{SecretName}' was not resolved.");
     }
 }

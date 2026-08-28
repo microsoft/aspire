@@ -105,7 +105,8 @@ public static class AzureApiManagementExtensions
         builder.AddAzureProvisioning();
 
         return builder.AddResource(resource)
-            .WithIconName("GlobeShield");
+            .WithIconName("GlobeShield")
+            .WithRoleAssignmentPreparation();
     }
 
     /// <summary>
@@ -1507,6 +1508,16 @@ public static class AzureApiManagementExtensions
                 backend.Options.ManagedIdentityResource is not null ||
                 backend.RoleAssignments.Count > 0);
 
+        for (var index = 0; index < azureResource.KeyVaultRoleAssignmentDependencies.Count; index++)
+        {
+            var dependency = azureResource.KeyVaultRoleAssignmentDependencies[index];
+            // This parameter is intentionally unused inside the APIM module. Passing the role module's
+            // output makes the dependency Bicep-visible, so APIM reads Key Vault only after RBAC exists.
+            _ = dependency.AsProvisioningParameter(
+                infrastructure,
+                CreateGeneratedBicepIdentifier($"keyVaultRoleAssignmentDependency{index}", azureResource.Name));
+        }
+
         var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
 
         if (hasPrivateEndpoint)
@@ -1565,11 +1576,10 @@ public static class AzureApiManagementExtensions
         if (isExisting &&
             hasExplicitExistingScope &&
             (azureResource.Diagnostic is not null ||
-             azureResource.Apis.Any(api => api.Diagnostic is not null) ||
-             azureResource.Backends.Any(backend => backend.RoleAssignments.Count > 0)))
+             azureResource.Apis.Any(api => api.Diagnostic is not null)))
         {
             throw new InvalidOperationException(
-                $"Existing API Management resource '{azureResource.Name}' cannot configure diagnostics or Azure role assignments " +
+                $"Existing API Management resource '{azureResource.Name}' cannot configure diagnostics " +
                 "when it is adopted from another resource group or subscription.");
         }
 
@@ -1592,24 +1602,45 @@ public static class AzureApiManagementExtensions
                 },
             };
 
-        UserAssignedIdentity? keyVaultIdentity = null;
+        UserAssignedIdentity? inlineKeyVaultIdentity = null;
+        UserAssignedIdentity? keyVaultRoleAssignmentIdentity = null;
+        BicepValue<string>? keyVaultIdentityClientId = null;
         if (!isExisting &&
             (azureResource.CustomDomains.Count > 0 ||
             azureResource.NamedValues.Any(namedValue => namedValue.Value is IAzureKeyVaultSecretReference))
            )
         {
-            keyVaultIdentity = new UserAssignedIdentity(
-                CreateGeneratedBicepIdentifier("keyVaultIdentity", azureResource.Name))
+            if (azureResource.KeyVaultIdentity is { } standaloneKeyVaultIdentity)
             {
-                Name = BicepFunction.Take(
-                    BicepFunction.Interpolate($"apim-kv-{azureResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
-                    128),
-            };
-            infrastructure.Add(keyVaultIdentity);
+                var identityId = standaloneKeyVaultIdentity.Id.AsProvisioningParameter(
+                    infrastructure,
+                    CreateGeneratedBicepIdentifier("keyVaultIdentityId", azureResource.Name));
+                keyVaultIdentityClientId = standaloneKeyVaultIdentity.ClientId.AsProvisioningParameter(
+                    infrastructure,
+                    CreateGeneratedBicepIdentifier("keyVaultIdentityClientId", azureResource.Name));
+                service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
+                service.Identity.UserAssignedIdentities[
+                    BicepFunction.Interpolate($"{identityId}").Compile().ToString()] = new UserAssignedIdentityDetails();
+                keyVaultRoleAssignmentIdentity =
+                    (UserAssignedIdentity)standaloneKeyVaultIdentity.AddAsExistingResource(infrastructure);
+            }
+            else
+            {
+                inlineKeyVaultIdentity = new UserAssignedIdentity(
+                    CreateGeneratedBicepIdentifier("keyVaultIdentity", azureResource.Name))
+                {
+                    Name = BicepFunction.Take(
+                        BicepFunction.Interpolate($"apim-kv-{azureResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                        128),
+                };
+                infrastructure.Add(inlineKeyVaultIdentity);
 
-            service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
-            service.Identity.UserAssignedIdentities[
-                BicepFunction.Interpolate($"{keyVaultIdentity.Id}").Compile().ToString()] = new UserAssignedIdentityDetails();
+                keyVaultIdentityClientId = inlineKeyVaultIdentity.ClientId;
+                service.Identity.ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssignedUserAssigned;
+                service.Identity.UserAssignedIdentities[
+                    BicepFunction.Interpolate($"{inlineKeyVaultIdentity.Id}").Compile().ToString()] = new UserAssignedIdentityDetails();
+                keyVaultRoleAssignmentIdentity = inlineKeyVaultIdentity;
+            }
         }
 
         if (azureResource.VirtualNetworkConfiguration is { } virtualNetwork)
@@ -1626,21 +1657,26 @@ public static class AzureApiManagementExtensions
         var keyVaultRoleAssignments = new Dictionary<string, RoleAssignment>(StringComparer.Ordinal);
         foreach (var customDomain in azureResource.CustomDomains)
         {
-            Debug.Assert(keyVaultIdentity is not null);
+            Debug.Assert(keyVaultIdentityClientId is not null);
             var secret = customDomain.Certificate.AsKeyVaultSecret(infrastructure);
-            var roleAssignment = AddKeyVaultRoleAssignment(
-                infrastructure,
-                customDomain.Certificate,
-                keyVaultIdentity,
-                KeyVaultBuiltInRole.KeyVaultCertificateUser,
-                keyVaultRoleAssignments);
-            service.DependsOn.Add(roleAssignment);
+            if (keyVaultRoleAssignmentIdentity is not null &&
+                (inlineKeyVaultIdentity is not null ||
+                 customDomain.Certificate.Resource is not AzureProvisioningResource))
+            {
+                var roleAssignment = AddKeyVaultRoleAssignment(
+                    infrastructure,
+                    customDomain.Certificate,
+                    keyVaultRoleAssignmentIdentity,
+                    KeyVaultBuiltInRole.KeyVaultCertificateUser,
+                    keyVaultRoleAssignments);
+                service.DependsOn.Add(roleAssignment);
+            }
             service.HostnameConfigurations.Add(new ApiManagementHostnameConfigurationProvisioningModel
             {
                 Type = GetProvisioningHostnameType(customDomain.Type),
                 HostName = customDomain.Hostname,
                 KeyVaultId = CreateVersionlessSecretUri(secret),
-                IdentityClientId = keyVaultIdentity.ClientId,
+                IdentityClientId = keyVaultIdentityClientId,
                 DefaultSslBinding = customDomain.DefaultSslBinding,
                 NegotiateClientCertificate = customDomain.NegotiateClientCertificate,
             });
@@ -1652,7 +1688,14 @@ public static class AzureApiManagementExtensions
         }
 
         var policyFragments = AddPolicyFragments(infrastructure, azureResource, service);
-        AddNamedValues(infrastructure, azureResource, service, keyVaultIdentity, keyVaultRoleAssignments);
+        AddNamedValues(
+            infrastructure,
+            azureResource,
+            service,
+            inlineKeyVaultIdentity,
+            keyVaultRoleAssignmentIdentity,
+            keyVaultIdentityClientId,
+            keyVaultRoleAssignments);
         AddServicePolicy(infrastructure, azureResource, service, policyFragments);
 
         var provisionedBackends = AddBackends(infrastructure, azureResource, service);
@@ -1758,7 +1801,9 @@ public static class AzureApiManagementExtensions
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementResource azureResource,
         ApiManagementServiceProvisioningResource service,
-        UserAssignedIdentity? keyVaultIdentity,
+        UserAssignedIdentity? inlineKeyVaultIdentity,
+        UserAssignedIdentity? keyVaultRoleAssignmentIdentity,
+        BicepValue<string>? keyVaultIdentityClientId,
         Dictionary<string, RoleAssignment> keyVaultRoleAssignments)
     {
         foreach (var namedValueResource in azureResource.NamedValues)
@@ -1778,20 +1823,25 @@ public static class AzureApiManagementExtensions
 
             if (namedValueResource.Value is IAzureKeyVaultSecretReference secretReference)
             {
-                Debug.Assert(keyVaultIdentity is not null);
+                Debug.Assert(keyVaultIdentityClientId is not null);
                 var secret = secretReference.AsKeyVaultSecret(infrastructure);
                 namedValue.KeyVault = new ApiManagementKeyVaultNamedValueProvisioningModel
                 {
                     SecretIdentifier = CreateVersionlessSecretUri(secret),
-                    IdentityClientId = keyVaultIdentity.ClientId,
+                    IdentityClientId = keyVaultIdentityClientId,
                 };
-                var roleAssignment = AddKeyVaultRoleAssignment(
-                    infrastructure,
-                    secretReference,
-                    keyVaultIdentity,
-                    KeyVaultBuiltInRole.KeyVaultSecretsUser,
-                    keyVaultRoleAssignments);
-                namedValue.DependsOn.Add(roleAssignment);
+                if (keyVaultRoleAssignmentIdentity is not null &&
+                    (inlineKeyVaultIdentity is not null ||
+                     secretReference.Resource is not AzureProvisioningResource))
+                {
+                    var roleAssignment = AddKeyVaultRoleAssignment(
+                        infrastructure,
+                        secretReference,
+                        keyVaultRoleAssignmentIdentity,
+                        KeyVaultBuiltInRole.KeyVaultSecretsUser,
+                        keyVaultRoleAssignments);
+                    namedValue.DependsOn.Add(roleAssignment);
+                }
             }
             else if (namedValueResource.Value is ParameterResource parameter)
             {
@@ -2365,6 +2415,15 @@ public static class AzureApiManagementExtensions
         var addedAssignments = new HashSet<string>(StringComparer.Ordinal);
         foreach (var assignment in azureResource.Backends.SelectMany(backend => backend.RoleAssignments))
         {
+            if (AzureApiManagementRoleAssignmentPreparer.RequiresExternalRoleAssignment(
+                azureResource,
+                assignment.Target))
+            {
+                // Assignments involving an explicit scope are emitted by the final-model preparer so
+                // neither side is incorrectly resolved relative to the other module's deployment scope.
+                continue;
+            }
+
             var key = $"{assignment.Target.Name}:{assignment.Role}";
             if (!addedAssignments.Add(key))
             {

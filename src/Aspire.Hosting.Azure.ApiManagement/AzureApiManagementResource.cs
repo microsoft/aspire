@@ -124,6 +124,10 @@ public class AzureApiManagementResource(
 
     internal AzureApiManagementPublicNetworkAccessUpdateResource? PublicNetworkAccessUpdate { get; set; }
 
+    internal AzureUserAssignedIdentityResource? KeyVaultIdentity { get; set; }
+
+    internal List<BicepOutputReference> KeyVaultRoleAssignmentDependencies { get; } = [];
+
     internal bool ExistingSystemAssignedIdentityConfirmed { get; set; }
 
     internal bool RequiresSystemAssignedIdentity { get; set; }

@@ -92,7 +92,7 @@ When managed backends authenticate with the existing service's system identity, 
 apim.WithExistingSystemAssignedIdentity();
 ```
 
-This confirmation does not modify the service. Diagnostics and Aspire-created Azure role assignments currently require the APIM service and their target resources to be in the same deployment resource group.
+This confirmation does not modify the service. Aspire creates separate role-assignment modules whenever API Management or a backend or Key Vault target uses an explicitly scoped existing Azure resource in another resource group or subscription. Diagnostics configured on an existing APIM service still require the service and Application Insights resource to be in the same deployment resource group.
 
 ## Backends and backend pools
 
