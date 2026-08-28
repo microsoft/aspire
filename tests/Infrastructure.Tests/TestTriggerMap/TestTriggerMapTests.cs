@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.SelectTests;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Xunit;
 
@@ -262,10 +263,11 @@ public sealed class TestTriggerMapTests
     [Fact]
     public void EveryJobTargetMapsToAnExistingWorkflowOrJob()
     {
-        // The job: vocabulary is small and curated. Each one resolves either to a standalone
-        // workflow file or to job id(s) in tests.yml (see the Target vocabulary table in
-        // test-trigger-map.md). Assert the map references only known jobs, and that the thing
-        // each one points at still exists — so a renamed/removed workflow or job fails loudly.
+        // The job: vocabulary is small and curated, and must exactly match the targets referenced by
+        // the map. Each token resolves either to a standalone workflow file or to job id(s) in
+        // tests.yml (see the Target vocabulary table in test-trigger-map.md). Assert the map references
+        // only known jobs, and that the thing each one points at still exists — so a renamed/removed
+        // workflow or job fails loudly.
         var workflowsDir = Path.Combine(RepoRoot.Path, ".github", "workflows");
         var testsYml = File.ReadAllText(Path.Combine(workflowsDir, "tests.yml"));
 
@@ -283,22 +285,133 @@ public sealed class TestTriggerMapTests
             ["job:winget-installer"] = () => JobExists("prepare_winget_installer_artifacts"),
             ["job:homebrew-installer"] = () => JobExists("prepare_homebrew_installer_artifacts"),
             ["job:nix-package"] = () => JobExists("nix_package"),
-            ["job:api-diffs"] = () => WorkflowExists("generate-api-diffs.yml"),
-            ["job:ats-diffs"] = () => WorkflowExists("generate-ats-diffs.yml"),
             ["job:deployment-e2e"] = () => WorkflowExists("deployment-tests.yml"),
         };
 
         var referenced = s_map.AllReferencedTargets()
             .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+            .ToHashSet(StringComparer.Ordinal);
 
         var unknown = referenced.Where(j => !expected.ContainsKey(j)).Order(StringComparer.Ordinal).ToList();
         Assert.True(unknown.Count == 0, $"job: targets not in the known vocabulary: {string.Join(", ", unknown)}");
 
+        var unreferenced = expected.Keys.Except(referenced).Order(StringComparer.Ordinal).ToList();
+        Assert.True(unreferenced.Count == 0, $"known job: targets not referenced by the map: {string.Join(", ", unreferenced)}");
+
         var broken = expected.Where(kvp => referenced.Contains(kvp.Key) && !kvp.Value())
             .Select(kvp => kvp.Key).Order(StringComparer.Ordinal).ToList();
         Assert.True(broken.Count == 0, $"job: targets whose workflow/job no longer exists: {string.Join(", ", broken)}");
+    }
+
+    [Fact]
+    public void DocumentedJobTargetVocabularyMatchesReferencedMapJobs()
+    {
+        var referenced = s_map.AllReferencedTargets()
+            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var documentation = File.ReadAllText(Path.Combine(RepoRoot.Path, "docs", "ci", "test-trigger-map.md"));
+        var targetVocabulary = TextBetween(documentation, "## Target vocabulary", "## Rule categories");
+        var documented = System.Text.RegularExpressions.Regex
+            .Matches(targetVocabulary, @"^\| `(job:[a-z0-9-]+)` \|", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var map = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml"));
+        var mapVocabulary = TextBetween(map, "# Target vocabulary:", "version: 1");
+        var documentedInMap = System.Text.RegularExpressions.Regex
+            .Matches(mapVocabulary, @"^#\s+(job:[a-z0-9-]+)\s+", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(referenced.Order(StringComparer.Ordinal), documented.Order(StringComparer.Ordinal));
+        Assert.Equal(referenced.Order(StringComparer.Ordinal), documentedInMap.Order(StringComparer.Ordinal));
+    }
+
+    public static TheoryData<string, string[]> AuditedLoosePathCases => new()
+    {
+        {
+            ".github/workflows/prepare-installer-artifacts.yml",
+            ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            ".github/scripts/assert-extension-e2e-bridge-vsix.ps1",
+            ["job:extension-unit"]
+        },
+        {
+            ".vscode/launch.json",
+            ["job:extension-unit"]
+        },
+        {
+            ".vscode/tasks.json",
+            ["job:extension-unit"]
+        },
+        {
+            "eng/test-retry-patterns.json",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/aspire-skills-bundle.common.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/smoke-installed-cli.ps1",
+            ["job:winget-installer"]
+        },
+        {
+            "eng/scripts/smoke-installed-cli.sh",
+            ["job:homebrew-installer"]
+        },
+        {
+            "eng/scripts/load-cli-e2e-images.sh",
+            ["test:Aspire.Cli.EndToEnd.Tests"]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(AuditedLoosePathCases))]
+    public void AuditedLoosePathSelectsExactConsumerSetWithoutRunAllFallback(string path, string[] expectedTargets)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll, $"{path} unexpectedly selected ALL: {result.EscalationReason}");
+        Assert.Empty(result.UnmatchedFiles);
+
+        var actualTargets = result.TestProjects.Select(name => $"test:{name}")
+            .Concat(result.Jobs)
+            .Order(StringComparer.Ordinal);
+        Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
+    }
+
+    [Theory]
+    [InlineData(".gitattributes")]
+    [InlineData("eng/scripts/gha-testreport.ps1")]
+    [InlineData("eng/scripts/split-test-projects-for-ci.ps1")]
+    [InlineData("tools/ExtractTestPartitions/Program.cs")]
+    public void BroadCiInputHasAnExplicitRunAllRule(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Theory]
+    [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
+    [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
+    [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
+    [InlineData("eng/generate-catalog.ps1")]
+    [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
+    [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
+    [InlineData("eng/scripts/cli-starter-validation.ps1")]
+    public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
     }
 
     [Fact]
@@ -332,10 +445,23 @@ public sealed class TestTriggerMapTests
             .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
             .Select(t => "run_" + t["job:".Length..].Replace('-', '_'))
             .ToHashSet(StringComparer.Ordinal);
+        var expectedAdvisoryJobs = s_map.AllReferencedTargets()
+            .Where(t => t.StartsWith("job:", StringComparison.Ordinal))
+            .Where(t => !declared.Contains("run_" + t["job:".Length..].Replace('-', '_')))
+            .ToHashSet(StringComparer.Ordinal);
+        var advisoryJobField = typeof(Selection).GetField(
+            "s_advisoryJobTargets",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(advisoryJobField);
+        var configuredAdvisoryJobs = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(
+            advisoryJobField.GetValue(null));
 
         // Sanity: the regexes actually matched, so a pattern slip can't make the asserts vacuously pass.
         Assert.Contains("run_winget_installer", declared);
         Assert.Contains("run_winget_installer", consumed);
+        Assert.Equal(
+            expectedAdvisoryJobs.Order(StringComparer.Ordinal),
+            configuredAdvisoryJobs.Keys.Order(StringComparer.Ordinal));
 
         // Finding 1: every unpacked output is a key the tool emits. A typo'd fromJSON property or a
         // renamed/removed map token leaves the output permanently empty (job silently skipped).
@@ -454,9 +580,10 @@ public sealed class TestTriggerMapTests
         // fallback treats them as owned — they need no curated rule) and non-source build/fixture infra
         // (props/targets/packages/Docker/Playwright/certs -> ALL). A tests/Shared file that is NEITHER a
         // *.cs NOR matched by an ALL path rule NOR a doc (excluded by the prefilter) would silently select
-        // nothing: it is not under a project dir (so directory containment can't attribute a loose file
-        // there) and the run-all fallback is src/-only. Pin the invariant so a new file type added under
-        // tests/Shared can't quietly fall through. (.md files are dropped by the prefilter's **.md.)
+        // no targeted work: it is not under a project dir (so directory containment can't attribute a
+        // loose file there) and would force the run-all fallback. Pin the invariant so a new file type
+        // added under tests/Shared can't quietly expand to ALL. (.md files are dropped by the prefilter's
+        // **.md.)
         var allGlobs = s_map.PathRules
             .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
             .SelectMany(r => r.Paths)
@@ -481,12 +608,11 @@ public sealed class TestTriggerMapTests
     public void EveryLocalActionUsedByAWorkflowIsRoutedToAll()
     {
         // A local composite action (.github/actions/<name>) is not a project, so Layer 1 never attributes
-        // a change to it, and the run-all fallback in TestSelector escalates only src/** files. So a
-        // changed action that no path rule matches selects NOTHING in enforce mode -- a PR editing a
-        // CI-critical action (the skip gate, the macOS keychain unlock, enumerate-tests, ...) would
-        // silently skip all tests. The map routes .github/actions/** -> ALL to cover this; pin the
-        // invariant so a new action referenced from a workflow can't fall through if that rule is ever
-        // narrowed. Failure mode: drop the .github/actions/** ALL rule and this goes red.
+        // a change to it. An action that no path rule matches therefore forces the run-all fallback, but
+        // its CI-wide impact should be explicit rather than appearing as an unattributed audit warning.
+        // The map routes .github/actions/** -> ALL to cover this; pin the invariant so a new action
+        // referenced from a workflow can't lose that explicit ownership if the rule is narrowed.
+        // Failure mode: drop the .github/actions/** ALL rule and this goes red.
         var allGlobs = s_map.PathRules
             .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
             .SelectMany(r => r.Paths)
@@ -517,7 +643,35 @@ public sealed class TestTriggerMapTests
 
         Assert.True(unrouted.Count == 0,
             $"local actions referenced by a workflow but not routed to ALL (a change to them would select " +
-            $"nothing in enforce mode): {string.Join(", ", unrouted)}");
+            $"ALL only through the unattributed fallback): {string.Join(", ", unrouted)}");
+    }
+
+    private static SelectionResult SelectWithRealMap(string path)
+    {
+        var projectPaths = LoadSolutionProjectPaths();
+        var testProjects = projectPaths
+            .Where(projectPath => projectPath.StartsWith("tests/", StringComparison.Ordinal))
+            .Select(projectPath => Path.GetFileNameWithoutExtension(projectPath)!)
+            .Where(name => name.EndsWith(".Tests", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+        var projectDirectories = projectPaths
+            .Select(projectPath => Path.GetDirectoryName(projectPath)!.Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, testProjects, projectDirectories);
+
+        return selector.Select([path], [], new SelectorOptions());
+    }
+
+    private static string TextBetween(string text, string startMarker, string endMarker)
+    {
+        var start = text.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Start marker not found: {startMarker}");
+
+        var end = text.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(end >= 0, $"End marker not found after {startMarker}: {endMarker}");
+
+        return text[start..end];
     }
 
     // Text of a top-level tests.yml job block: from "\n  <id>:" up to the next line indented exactly

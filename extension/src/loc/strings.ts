@@ -21,6 +21,8 @@ export const aspireHostingSdkVersion = (version: string) => vscode.l10n.t('Aspir
 export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI Version: {0}.', version);
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
+export const aspireTerminalClosedBeforeProcessStarted = vscode.l10n.t('Aspire terminal closed before its process started.');
+export const aspireTerminalProcessFailedToStart = vscode.l10n.t('Aspire terminal process failed to start.');
 export const createWithAspirePlaceholder = vscode.l10n.t('Choose how to set up Aspire');
 export const createNewAspireAppLabel = vscode.l10n.t('Create a new Aspire app');
 export const createNewAspireAppDescription = vscode.l10n.t('Start a greenfield application in a new directory using an Aspire template.');

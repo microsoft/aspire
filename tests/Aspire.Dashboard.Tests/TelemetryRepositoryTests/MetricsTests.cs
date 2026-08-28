@@ -1672,16 +1672,9 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 }
 
-public sealed class InMemoryMetricsTests : MetricsTests
-{
-    protected override bool UseSqlite => false;
-}
-
 public sealed class SqliteMetricsTests : MetricsTests
 {
     private static readonly DateTime s_queryTestTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-    protected override bool UseSqlite => true;
 
     [Fact]
     public async Task GetInstrument_PopulateExemplarAttributesFalse_SkipsAttributes()
