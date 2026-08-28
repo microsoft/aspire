@@ -1195,7 +1195,6 @@ public static class ResourceBuilderExtensions
         ConnectionStringReferenceAnnotation right)
     {
         return ReferenceEquals(left.Source, right.Source) &&
-            left.Optional == right.Optional &&
             string.Equals(left.ValueName, right.ValueName, StringComparison.Ordinal) &&
             left.EnvironmentVariableNames == right.EnvironmentVariableNames;
     }

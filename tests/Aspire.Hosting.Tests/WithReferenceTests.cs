@@ -909,6 +909,38 @@ public class WithReferenceTests
         Assert.Equal("Host=localhost", config["ConnectionStrings__my_db"]);
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task RepeatedConnectionStringReferencesWithDifferentOptionalValuesUseLastValue(bool firstOptional, bool secondOptional)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new TestResource("resource"));
+        var project = builder.AddProject<ProjectB>("project")
+            .WithReference(resource, optional: firstOptional)
+            .WithReference(resource, optional: secondOptional);
+
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                project.Resource,
+                DistributedApplicationOperation.Run,
+                TestServiceProvider.Instance);
+        }).DefaultTimeout();
+
+        if (secondOptional)
+        {
+            Assert.Null(exception);
+        }
+        else
+        {
+            var aggregate = Assert.IsType<AggregateException>(exception);
+            var inner = Assert.IsType<DistributedApplicationException>(aggregate.InnerException);
+            Assert.Equal("The connection string for the resource 'resource' is not available.", inner.Message);
+        }
+    }
+
     [Fact]
     public async Task RepeatedConnectionStringReferencesRemainValidWhenExpressionChanges()
     {
