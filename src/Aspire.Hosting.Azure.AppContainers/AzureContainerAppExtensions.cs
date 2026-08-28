@@ -1140,21 +1140,10 @@ public static class AzureContainerAppExtensions
             return builder;
         }
 
-        if (!builder.Resource.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var delegatedSubnet))
-        {
-            throw new InvalidOperationException(
-                $"Azure Container App environment '{builder.Resource.Name}' must use a delegated subnet before it can use an internal load balancer.");
-        }
-
-        var subnet = builder.ApplicationBuilder.Resources
-            .OfType<AzureSubnetResource>()
-            .SingleOrDefault(candidate =>
-                ReferenceExpression.Create($"{candidate.Id}").ValueExpression == delegatedSubnet.SubnetId.ValueExpression);
-        if (subnet is null || !ReferenceEquals(subnet.Parent, virtualNetwork.Resource))
-        {
-            throw new InvalidOperationException(
-                $"The delegated subnet for Azure Container App environment '{builder.Resource.Name}' must belong to virtual network '{virtualNetwork.Resource.Name}'.");
-        }
+        ValidateInternalLoadBalancerVirtualNetwork(
+            builder.ApplicationBuilder.Resources,
+            builder.Resource,
+            virtualNetwork.Resource);
 
         if (builder.Resource.InternalLoadBalancerVirtualNetwork is { } existing)
         {
@@ -1173,11 +1162,40 @@ public static class AzureContainerAppExtensions
         builder.ApplicationBuilder
             .AddAzureInfrastructure(
                 privateDnsResourceName,
-                infrastructure => AddInternalEnvironmentPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource))
+                infrastructure =>
+                {
+                    ValidateInternalLoadBalancerVirtualNetwork(
+                        builder.ApplicationBuilder.Resources,
+                        builder.Resource,
+                        virtualNetwork.Resource);
+                    AddInternalEnvironmentPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource);
+                })
             .WithParentRelationship(builder.Resource)
             .WithRelationship(virtualNetwork.Resource, "Virtual network link");
 
         return builder.WithRelationship(virtualNetwork.Resource, "Internal network");
+    }
+
+    private static void ValidateInternalLoadBalancerVirtualNetwork(
+        IEnumerable<IResource> resources,
+        AzureContainerAppEnvironmentResource environment,
+        AzureVirtualNetworkResource virtualNetwork)
+    {
+        if (!environment.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var delegatedSubnet))
+        {
+            throw new InvalidOperationException(
+                $"Azure Container App environment '{environment.Name}' must use a delegated subnet before it can use an internal load balancer.");
+        }
+
+        var subnet = resources
+            .OfType<AzureSubnetResource>()
+            .SingleOrDefault(candidate =>
+                ReferenceExpression.Create($"{candidate.Id}").ValueExpression == delegatedSubnet.SubnetId.ValueExpression);
+        if (subnet is null || !ReferenceEquals(subnet.Parent, virtualNetwork))
+        {
+            throw new InvalidOperationException(
+                $"The delegated subnet for Azure Container App environment '{environment.Name}' must belong to virtual network '{virtualNetwork.Name}'.");
+        }
     }
 
     private static string CreateBoundedIdentifier(string value, int maximumLength)
