@@ -13,9 +13,8 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
 {
     // Microsoft Entra reports the token's identity type in the `idtyp` claim: "app" for app-only
     // (service principal / managed identity / federated workload identity) tokens and "user" for
-    // user-delegated ones. Because `idtyp` is optional, the parser also uses the token shape:
-    // delegated tokens carry `scp` or user name claims, while app-only tokens can omit `roles`
-    // when the resource authorizes clients through an ACL.
+    // user-delegated ones. Only "app" needs matching here because every other value — including
+    // "user" and the claim being absent entirely — falls through to the User default below.
     // See: https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference#payload-claims
     private const string IdTypApp = "app";
 
@@ -82,20 +81,14 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
                     "the credential does not contain a valid 'oid' (object id) claim.");
             }
 
-            // `idtyp` is authoritative when present. When it is absent, `scp` or a user name
-            // claim identifies a delegated token. App-only tokens can omit `roles` when the
-            // resource performs ACL-based authorization, so the absence of application roles
-            // cannot be used to fall back to User.
-            var identityType = GetRootString(root, "idtyp");
-            var hasDelegatedScopes = GetRootString(root, "scp") is { Length: > 0 };
-            var hasUserName =
-                GetRootString(root, "upn") is { Length: > 0 } ||
-                GetRootString(root, "email") is { Length: > 0 } ||
-                GetRootString(root, "preferred_username") is { Length: > 0 } ||
-                GetRootString(root, "unique_name") is { Length: > 0 };
-            var isAppOnly =
-                string.Equals(identityType, IdTypApp, StringComparison.OrdinalIgnoreCase) ||
-                (identityType is null && !hasDelegatedScopes && !hasUserName);
+            // Default to "User" so older tokens — and any flow that omits `idtyp` — keep the
+            // historical behavior of a hardcoded "User" principalType instead of regressing to an
+            // empty value. `idtyp` is an optional claim that Entra only emits for app-only tokens
+            // unless the resource opts in via `include_user_token`, so absence is not evidence of
+            // a user identity; it just means we can't tell and fall back to the previous default.
+            // The comparison is case-insensitive for resilience against future producers that emit
+            // different casing than the lower-case values Entra documents.
+            var isAppOnly = string.Equals(GetRootString(root, "idtyp"), IdTypApp, StringComparison.OrdinalIgnoreCase);
 
             var principalType = isAppOnly
                 ? PrincipalTypeServicePrincipal
@@ -142,16 +135,6 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
             return email;
         }
 
-        if (GetRootString(root, "preferred_username") is { Length: > 0 } preferredUserName)
-        {
-            return preferredUserName;
-        }
-
-        if (GetRootString(root, "unique_name") is { Length: > 0 } uniqueName)
-        {
-            return uniqueName;
-        }
-
         if (isAppOnly && GetRootString(root, "app_displayname") is { Length: > 0 } appDisplayName)
         {
             return appDisplayName;
@@ -167,5 +150,4 @@ internal sealed class DefaultAzurePrincipalProvider(ITokenCredentialProvider tok
         root.TryGetProperty(claimName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
-
 }

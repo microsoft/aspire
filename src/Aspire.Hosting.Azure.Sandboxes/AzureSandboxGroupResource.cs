@@ -23,6 +23,8 @@ namespace Aspire.Hosting.Azure;
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource
 {
+    internal const string ImagePullIdentityClientIdOutputName = "imagePullIdentityClientId";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureSandboxGroupResource"/> class.
     /// </summary>

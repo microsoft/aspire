@@ -37,7 +37,7 @@ internal static class BicepUtilities
     /// <summary>
     /// Converts the parameters to a JSON object compatible with the ARM template.
     /// </summary>
-    public static async Task SetParametersAsync(JsonObject parameters, AzureBicepResource resource, bool skipKnownValues = false, CancellationToken cancellationToken = default, ValueProviderContext? valueProviderContext = null)
+    public static async Task SetParametersAsync(JsonObject parameters, AzureBicepResource resource, bool skipKnownValues = false, CancellationToken cancellationToken = default)
     {
         // Convert the parameters to a JSON object
         foreach (var parameter in resource.Parameters)
@@ -62,9 +62,7 @@ internal static class BicepUtilities
                     bool b => b,
                     Guid g => g.ToString(),
                     JsonNode node => node,
-                    IValueProvider v => valueProviderContext is null
-                        ? await v.GetValueAsync(cancellationToken).ConfigureAwait(false)
-                        : await v.GetValueAsync(valueProviderContext, cancellationToken).ConfigureAwait(false),
+                    IValueProvider v => await v.GetValueAsync(cancellationToken).ConfigureAwait(false),
                     null => null,
                     _ => throw new NotSupportedException($"The parameter value type {parameterValue.GetType()} is not supported.")
                 }
@@ -75,7 +73,7 @@ internal static class BicepUtilities
     /// <summary>
     /// Sets the scope information for a Bicep resource.
     /// </summary>
-    public static async Task SetScopeAsync(JsonObject scope, AzureBicepResource resource, CancellationToken cancellationToken = default, ValueProviderContext? valueProviderContext = null)
+    public static async Task SetScopeAsync(JsonObject scope, AzureBicepResource resource, CancellationToken cancellationToken = default)
     {
         scope.Clear();
 
@@ -90,9 +88,9 @@ internal static class BicepUtilities
 
         if (targetScope.HasResourceGroup)
         {
-            await SetScopeValueAsync(scope, "resourceGroup", targetScope.ResourceGroup, cancellationToken, valueProviderContext).ConfigureAwait(false);
+            await SetScopeValueAsync(scope, "resourceGroup", targetScope.ResourceGroup, cancellationToken).ConfigureAwait(false);
         }
-        await SetScopeValueAsync(scope, "subscription", targetScope.Subscription, cancellationToken, valueProviderContext).ConfigureAwait(false);
+        await SetScopeValueAsync(scope, "subscription", targetScope.Subscription, cancellationToken).ConfigureAwait(false);
         if (targetScope.IsTenantScope)
         {
             scope["tenant"] = "current";
@@ -123,7 +121,7 @@ internal static class BicepUtilities
     /// <summary>
     /// Gets the current checksum for a Bicep resource from configuration.
     /// </summary>
-    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, IConfiguration section, CancellationToken cancellationToken = default, ValueProviderContext? valueProviderContext = null)
+    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, IConfiguration section, CancellationToken cancellationToken = default)
     {
         // Fill in parameters from configuration
         if (section[DeploymentStateParametersKey] is not string jsonString)
@@ -149,10 +147,10 @@ internal static class BicepUtilities
             _ = resource.GetBicepTemplateString();
 
             // Now overwrite with live object values skipping known values.
-            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken, valueProviderContext: valueProviderContext).ConfigureAwait(false);
+            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
             if (scope is not null)
             {
-                await SetScopeAsync(scope, resource, cancellationToken: cancellationToken, valueProviderContext: valueProviderContext).ConfigureAwait(false);
+                await SetScopeAsync(scope, resource, cancellationToken).ConfigureAwait(false);
             }
 
             // Get the checksum of the new values
@@ -168,7 +166,7 @@ internal static class BicepUtilities
     /// <summary>
     /// Gets the current checksum for a Bicep resource from deployment state.
     /// </summary>
-    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, DeploymentStateSection section, ILogger logger, CancellationToken cancellationToken = default, ValueProviderContext? valueProviderContext = null)
+    public static async ValueTask<string?> GetCurrentChecksumAsync(AzureBicepResource resource, DeploymentStateSection section, ILogger logger, CancellationToken cancellationToken = default)
     {
         if (section.Data[DeploymentStateParametersKey]?.GetValue<string>() is not { Length: > 0 } jsonString)
         {
@@ -191,10 +189,10 @@ internal static class BicepUtilities
 
             _ = resource.GetBicepTemplateString();
 
-            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken, valueProviderContext: valueProviderContext).ConfigureAwait(false);
+            await SetParametersAsync(parameters, resource, skipKnownValues: true, cancellationToken: cancellationToken).ConfigureAwait(false);
             if (scope is not null)
             {
-                await SetScopeAsync(scope, resource, cancellationToken, valueProviderContext).ConfigureAwait(false);
+                await SetScopeAsync(scope, resource, cancellationToken).ConfigureAwait(false);
             }
 
             return GetChecksum(resource, parameters, scope);
@@ -218,7 +216,7 @@ internal static class BicepUtilities
             : null;
     }
 
-    private static async Task SetScopeValueAsync(JsonObject scope, string propertyName, object? value, CancellationToken cancellationToken, ValueProviderContext? valueProviderContext)
+    private static async Task SetScopeValueAsync(JsonObject scope, string propertyName, object? value, CancellationToken cancellationToken)
     {
         if (value is null)
         {
@@ -228,9 +226,7 @@ internal static class BicepUtilities
         scope[propertyName] = value switch
         {
             string s => s,
-            IValueProvider v => valueProviderContext is null
-                ? await v.GetValueAsync(cancellationToken).ConfigureAwait(false)
-                : await v.GetValueAsync(valueProviderContext, cancellationToken).ConfigureAwait(false),
+            IValueProvider v => await v.GetValueAsync(cancellationToken).ConfigureAwait(false),
             _ => throw new NotSupportedException($"The scope {propertyName} value type {value.GetType()} is not supported.")
         };
     }

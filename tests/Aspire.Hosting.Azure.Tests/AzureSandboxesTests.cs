@@ -96,24 +96,6 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AzureSandboxPublishBindsPrincipalTypeInMainBicep()
-    {
-        using var tempDir = new TemporaryDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
-            outputPath: tempDir.Path);
-        builder.AddAzureSandboxGroup("sandboxes");
-
-        using var app = builder.Build();
-        await app.RunAsync();
-
-        var mainBicep = await File.ReadAllTextAsync(
-            Path.Combine(tempDir.Path, "main.bicep"),
-            TestContext.Current.CancellationToken);
-        await Verify(mainBicep, "bicep");
-    }
-
-    [Fact]
     public async Task AddAzureSandboxGroupSupportsExplicitManagedIdentities()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -160,7 +142,10 @@ public class AzureSandboxesTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var identity = builder.AddAzureUserAssignedIdentity("workload-identity");
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity")
+            .PublishAsExisting("existing-pull-identity", "existing-rg");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAcrPullIdentity(pullIdentity)
             .PublishAsExisting("existing-sandboxes", "existing-rg");
         builder.AddContainer("worker", "image")
             .WithAnnotation(new AppIdentityAnnotation(identity.Resource))
@@ -180,15 +165,80 @@ public class AzureSandboxesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity")
+            .PublishAsExisting("existing-pull-identity", "existing-rg");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAcrPullIdentity(pullIdentity)
             .PublishAsExisting("existing-sandboxes", "existing-rg");
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandboxGroup.Resource);
 
+        var annotation = Assert.Single(sandboxGroup.Resource.Annotations.OfType<AzureSandboxGroupAcrPullIdentityAnnotation>());
+        Assert.Same(pullIdentity.Resource, annotation.Identity);
         Assert.DoesNotContain("roleAssignments", bicep, StringComparison.Ordinal);
         Assert.DoesNotContain("Container Apps SandboxGroup Data Owner", bicep, StringComparison.Ordinal);
+        Assert.Contains("pull_identity_outputs_id", bicep, StringComparison.Ordinal);
+        Assert.Contains("pull_identity_outputs_clientid", bicep, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupRegistryUsesStandaloneAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("existing-acr", "existing-rg");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAzureContainerRegistry(registry);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(
+            model.Resources.OfType<AzureUserAssignedIdentityResource>(),
+            resource => resource.Name == "sandboxes-mi");
+        var roles = Assert.Single(
+            model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.Name == "sandboxes-mi-roles-registry");
+        var annotation = Assert.Single(sandboxGroup.Resource.Annotations.OfType<AzureSandboxGroupAcrPullIdentityAnnotation>());
+
+        Assert.Same(registry.Resource, roles.TargetAzureResource);
+        Assert.Same(identity, annotation.Identity);
+        Assert.Contains(identity, sandboxGroup.Resource.References);
+
+        var (_, sandboxBicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+        var (_, identityBicep) = await AzureManifestUtils.GetManifestWithBicep(identity, skipPreparer: true);
+        var (rolesManifest, rolesBicep) = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
+
+        Assert.Contains("param sandboxes_mi_outputs_id string", sandboxBicep, StringComparison.Ordinal);
+        Assert.Contains("param sandboxes_mi_outputs_clientid string", sandboxBicep, StringComparison.Ordinal);
+        Assert.Contains("'${sandboxes_mi_outputs_id}': { }", sandboxBicep, StringComparison.Ordinal);
+        Assert.Contains("output imagePullIdentityClientId string = sandboxes_mi_outputs_clientid", sandboxBicep, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.ManagedIdentity/userAssignedIdentities", identityBicep, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.Authorization/roleAssignments", rolesBicep, StringComparison.Ordinal);
+        Assert.Equal("existing-rg", rolesManifest["scope"]?["resourceGroup"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ExistingAzureSandboxGroupRequiresAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureSandboxGroup("sandboxes")
+            .PublishAsExisting("existing-sandboxes", "existing-rg");
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Equal(
+            "Existing Azure sandbox group 'sandboxes' requires a user-assigned ACR pull identity. " +
+            "Call 'WithAcrPullIdentity' with an identity that is already attached to the sandbox group and has AcrPull on the configured registry.",
+            exception.Message);
     }
 
     [Fact]
@@ -219,14 +269,14 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AzureDevComputeClientCreatesDiskImageWithRegistryCredentials()
+    public async Task AzureDevComputeClientCreatesV2DiskImageWithManagedIdentity()
     {
         var credential = new RecordingTokenCredential();
         var handler = new RecordingHandler(async request =>
         {
             Assert.Equal(HttpMethod.Put, request.Method);
             Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
-            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages", request.RequestUri?.AbsolutePath);
+            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/v2", request.RequestUri?.AbsolutePath);
             Assert.Equal("?api-version=2026-02-01-preview", request.RequestUri?.Query);
             Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
             Assert.Equal("test-token", request.Headers.Authorization?.Parameter);
@@ -236,9 +286,12 @@ public class AzureSandboxesTests
             var root = document.RootElement;
             Assert.Equal("site-1234", root.GetProperty("name").GetString());
             Assert.Equal("site-container", root.GetProperty("labels").GetProperty("aspire-resource").GetString());
-            Assert.Equal("example.azurecr.io/site:tag", root.GetProperty("image").GetProperty("base").GetString());
-            Assert.Equal("00000000-0000-0000-0000-000000000000", root.GetProperty("registryCredentials").GetProperty("username").GetString());
-            Assert.Equal("refresh-token", root.GetProperty("registryCredentials").GetProperty("token").GetString());
+            var source = root.GetProperty("source");
+            Assert.Equal("registry", source.GetProperty("kind").GetString());
+            Assert.Equal("example.azurecr.io/site:tag", source.GetProperty("imageUrl").GetString());
+            Assert.Equal("11111111-1111-1111-1111-111111111111", source.GetProperty("managedIdentityClientId").GetString());
+            Assert.False(root.TryGetProperty("registryCredentials", out _));
+            Assert.False(root.TryGetProperty("image", out _));
 
             return JsonResponse(
                 """
@@ -261,14 +314,10 @@ public class AzureSandboxesTests
                 {
                     ["aspire-resource"] = "site-container"
                 },
-                Image = new AzureDevComputeDiskImageSpec
+                Source = new AzureDevComputeDiskImageSource
                 {
-                    Base = "example.azurecr.io/site:tag"
-                },
-                RegistryCredentials = new AzureDevComputeRegistryCredentials
-                {
-                    Username = "00000000-0000-0000-0000-000000000000",
-                    Token = "refresh-token"
+                    ImageUrl = "example.azurecr.io/site:tag",
+                    ManagedIdentityClientId = "11111111-1111-1111-1111-111111111111"
                 }
             },
             CancellationToken.None);
@@ -1110,7 +1159,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1135,7 +1184,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1159,7 +1208,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1182,7 +1231,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1208,7 +1257,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1234,7 +1283,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1257,7 +1306,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -1280,7 +1329,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             cancellationTokenSource.Token));
 
@@ -1303,7 +1352,7 @@ public class AzureSandboxesTests
             new AzureDevComputeCreateDiskImageRequest
             {
                 Name = "disk-image",
-                Image = new AzureDevComputeDiskImageSpec { Base = "example.azurecr.io/site@sha256:abc123" }
+                Source = CreateDiskImageSource()
             },
             CancellationToken.None));
 
@@ -2540,6 +2589,15 @@ public class AzureSandboxesTests
         return results;
     }
 
+    private static AzureDevComputeDiskImageSource CreateDiskImageSource()
+    {
+        return new AzureDevComputeDiskImageSource
+        {
+            ImageUrl = "example.azurecr.io/site@sha256:abc123",
+            ManagedIdentityClientId = "11111111-1111-1111-1111-111111111111"
+        };
+    }
+
     private static async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(
         bool includeSandbox,
         int emptyPollsBeforeVisible = 0)
@@ -2812,6 +2870,14 @@ public class AzureSandboxesTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return handler(request);
+        }
+    }
+
+    private sealed class TestHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name)
+        {
+            return new HttpClient(handler, disposeHandler: false);
         }
     }
 

@@ -75,67 +75,29 @@ internal sealed class AcrLoginService : IAcrLoginService
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         ArgumentNullException.ThrowIfNull(credential);
 
-        var containerRuntime = await _containerRuntimeResolver.ResolveAsync(cancellationToken).ConfigureAwait(false);
-        await ExecuteWithAcrRetryAsync(
-            registryEndpoint,
-            async () =>
-            {
-                var refreshToken = await GetRefreshTokenCoreAsync(registryEndpoint, tenantId, credential, cancellationToken).ConfigureAwait(false);
-                await containerRuntime.LoginToRegistryAsync(registryEndpoint, refreshToken.Username, refreshToken.Token, cancellationToken).ConfigureAwait(false);
-                return true;
-            },
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <inheritdoc/>
-    public async Task<AcrRefreshToken> GetRefreshTokenAsync(
-        string registryEndpoint,
-        string tenantId,
-        TokenCredential credential,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(registryEndpoint);
-        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
-        ArgumentNullException.ThrowIfNull(credential);
-
-        return await ExecuteWithAcrRetryAsync(
-            registryEndpoint,
-            () => GetRefreshTokenCoreAsync(registryEndpoint, tenantId, credential, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<AcrRefreshToken> GetRefreshTokenCoreAsync(
-        string registryEndpoint,
-        string tenantId,
-        TokenCredential credential,
-        CancellationToken cancellationToken)
-    {
+        // Step 1: Acquire AAD access token for ACR audience
         var tokenRequestContext = new TokenRequestContext([AcrScope]);
         var aadToken = await credential.GetTokenAsync(tokenRequestContext, cancellationToken).ConfigureAwait(false);
 
         _logger.LogDebug("AAD access token acquired for ACR audience, registry: {RegistryEndpoint}, token length: {TokenLength}",
             registryEndpoint, aadToken.Token.Length);
 
-        var refreshToken = await ExchangeAadTokenForAcrRefreshTokenAsync(
-            registryEndpoint, tenantId, aadToken.Token, cancellationToken).ConfigureAwait(false);
-
-        _logger.LogDebug("ACR refresh token acquired, length: {TokenLength}", refreshToken.Length);
-
-        return new AcrRefreshToken(AcrUsername, refreshToken);
-    }
-
-    private async Task<T> ExecuteWithAcrRetryAsync<T>(
-        string registryEndpoint,
-        Func<Task<T>> action,
-        CancellationToken cancellationToken)
-    {
+        var containerRuntime = await _containerRuntimeResolver.ResolveAsync(cancellationToken).ConfigureAwait(false);
         var retryStartTimestamp = _timeProvider.GetTimestamp();
 
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                return await action().ConfigureAwait(false);
+                // Step 2: Exchange AAD token for ACR refresh token
+                var refreshToken = await ExchangeAadTokenForAcrRefreshTokenAsync(
+                    registryEndpoint, tenantId, aadToken.Token, cancellationToken).ConfigureAwait(false);
+
+                _logger.LogDebug("ACR refresh token acquired, length: {TokenLength}", refreshToken.Length);
+
+                // Step 3: Login to the registry using container runtime
+                await containerRuntime.LoginToRegistryAsync(registryEndpoint, AcrUsername, refreshToken, cancellationToken).ConfigureAwait(false);
+                return;
             }
             catch (HttpRequestException ex) when (ShouldRetryAcrLoginFailure(ex, attempt, retryStartTimestamp))
             {
@@ -143,7 +105,7 @@ internal sealed class AcrLoginService : IAcrLoginService
                 // data-plane endpoint and RBAC propagation catch up with ARM deployment success.
                 _logger.LogWarning(
                     ex,
-                    "ACR operation for {RegistryEndpoint} failed on attempt {Attempt} of {MaxAttempts}. Retrying in {RetryDelay}.",
+                    "ACR login to {RegistryEndpoint} failed on attempt {Attempt} of {MaxAttempts}. Retrying in {RetryDelay}.",
                     registryEndpoint,
                     attempt,
                     MaxLoginAttempts,
