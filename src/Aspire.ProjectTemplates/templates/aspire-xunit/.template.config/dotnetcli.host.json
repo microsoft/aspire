@@ -6,7 +6,17 @@
       },
       "AppHostTargetFramework": {
         "longName": "AppHostTargetFramework",
-        "shortName": ""
+        "shortName": "",
+        "isHidden": true
+      },
+      "AppHostProjectPath": {
+        "isHidden": true
+      },
+      "AppHostProjectName": {
+        "isHidden": true
+      },
+      "WithAppHostReference": {
+        "isHidden": true
       },
       "XUnitVersion": {
         "shortName": "",
