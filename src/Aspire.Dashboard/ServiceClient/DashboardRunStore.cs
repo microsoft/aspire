@@ -363,6 +363,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                     var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
                     if (metadata is { SchemaVersion: SchemaVersion } &&
                         !string.IsNullOrEmpty(metadata.RunId) &&
+                        string.Equals(Path.GetFileName(directory), metadata.RunId, StringComparison.Ordinal) &&
                         discoveredRunIds.Add(metadata.RunId))
                     {
                         var discoveredRun = CreateDescriptor(metadata, directory, isCurrent: false);
