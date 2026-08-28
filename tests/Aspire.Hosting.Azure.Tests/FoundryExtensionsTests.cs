@@ -7,6 +7,7 @@ using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -266,6 +267,53 @@ public class FoundryExtensionsTests
 
         Assert.False(result);
         Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task FoundryLocalHealthCheck_UsesOpenAiModelsEndpoint()
+    {
+        var handler = new CallbackHttpMessageHandler((_, request) =>
+        {
+            Assert.Equal(new Uri("http://windows-host:5273/v1/models"), request.RequestUri);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var resource = new FoundryResource("foundry", _ => { })
+        {
+            EmulatorServiceUri = new Uri("http://windows-host:5273/")
+        };
+        var healthCheck = new FoundryLocalHealthCheck(resource, new TestHttpClientFactory(handler));
+
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task FoundryLocalHealthCheck_FallsBackToLegacyStatusEndpointAfterNotFound()
+    {
+        var handler = new CallbackHttpMessageHandler((attempt, request) =>
+        {
+            var expectedUri = attempt switch
+            {
+                1 => new Uri("http://windows-host:5273/v1/models"),
+                2 => new Uri("http://windows-host:5273/openai/status"),
+                _ => throw new InvalidOperationException($"Unexpected request attempt {attempt}.")
+            };
+            Assert.Equal(expectedUri, request.RequestUri);
+
+            return new HttpResponseMessage(attempt is 1 ? HttpStatusCode.NotFound : HttpStatusCode.OK);
+        });
+        var resource = new FoundryResource("foundry", _ => { })
+        {
+            EmulatorServiceUri = new Uri("http://windows-host:5273/")
+        };
+        var healthCheck = new FoundryLocalHealthCheck(resource, new TestHttpClientFactory(handler));
+
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext());
+
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Equal(2, handler.CallCount);
     }
 
     [Fact]
@@ -690,5 +738,10 @@ public class FoundryExtensionsTests
             CallCount++;
             return Task.FromResult(callback(CallCount, request));
         }
+    }
+
+    private sealed class TestHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 }
