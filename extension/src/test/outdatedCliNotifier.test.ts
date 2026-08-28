@@ -111,7 +111,7 @@ suite('outdatedCliNotifier', () => {
         versionProvider.recommendation = {
             status: 'available',
             currentVersion: '13.4.0',
-            version: '15.3.2',
+            version: '13.5.2',
         };
         versionProvider.currentVersion = versionProvider.identity;
         surface.selection = strings.updateAspireCliAction;
@@ -122,7 +122,7 @@ suite('outdatedCliNotifier', () => {
         assert.strictEqual(surface.warnings.length, 1);
         assert.strictEqual(
             surface.warnings[0].message,
-            'Aspire CLI 13.4.0 at /workspace/a/.aspire/bin/aspire has a newer version available for its current channel: 15.3.2.');
+            'Aspire CLI 13.4.0 at /workspace/a/.aspire/bin/aspire has a newer version available for its current channel: 13.5.2.');
         assert.deepStrictEqual(surface.warnings[0].actions, [
             strings.updateAspireCliAction,
             strings.dontShowAgainLabel,
