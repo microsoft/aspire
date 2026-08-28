@@ -529,9 +529,7 @@ internal class DotNetTemplateFactory(
 
                 if (appHostTargetFramework is not null)
                 {
-                    // The templates map their Framework symbol to dotnet new's conventional
-                    // lowercase --framework option in dotnetcli.host.json.
-                    extraArgs = [.. extraArgs, "--framework", appHostTargetFramework];
+                    extraArgs = [.. extraArgs, "--AppHostTargetFramework", appHostTargetFramework];
                 }
             }
 

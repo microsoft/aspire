@@ -54,10 +54,16 @@ public partial class TemplateTestsBase
         BuildEnvironment? buildEnvironment = null,
         string? extraArgs = null,
         string? overrideRootDir = null,
-        bool withAppHostReference = true)
+        bool withAppHostReference = true,
+        bool useAppHostTargetFramework = true)
     {
         buildEnvironment ??= BuildEnvironment.ForDefaultFramework;
-        var tmfArg = tfm is not null ? $"-f {tfm.Value.ToTFMString()}" : "";
+        var targetFramework = tfm?.ToTFMString();
+        var frameworkArg = targetFramework is null
+            ? ""
+            : withAppHostReference && useAppHostTargetFramework
+                ? $"--AppHostTargetFramework {targetFramework}"
+                : $"-f {targetFramework}";
 
         string rootDirToUse = overrideRootDir ?? project.RootDir;
         // Add test project
@@ -74,7 +80,7 @@ public partial class TemplateTestsBase
                                     label: $"new-test-{testTemplateName}",
                                     buildEnv: buildEnvironment)
                                 .WithWorkingDirectory(rootDirToUse);
-        var res = await newTestCmd.ExecuteAsync($"{testTemplateName} {tmfArg} -o \"{testProjectName}\" {extraArgs} {appHostArgs}");
+        var res = await newTestCmd.ExecuteAsync($"{testTemplateName} {frameworkArg} -o \"{testProjectName}\" {extraArgs} {appHostArgs}");
         res.EnsureSuccessful();
 
         Assert.True(Directory.Exists(testProjectDir), $"Expected tests project at {testProjectDir}");
@@ -83,6 +89,11 @@ public partial class TemplateTestsBase
         Assert.True(File.Exists(testProjectPath), $"Expected tests project file at {testProjectPath}");
 
         var testProject = XDocument.Load(testProjectPath);
+        if (targetFramework is not null)
+        {
+            Assert.Equal(targetFramework, Assert.Single(testProject.Descendants("TargetFramework")).Value);
+        }
+
         var projectReferences = testProject.Descendants("ProjectReference").ToArray();
         if (!withAppHostReference)
         {
