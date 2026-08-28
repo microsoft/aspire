@@ -86,6 +86,22 @@ func main() {
 				manifest.WithField("spec.maxReplicaCount", 3)
 			},
 		})
+		_ = service.AddManifestObject("keda.sh/v1alpha1", "ScaledObject", "kube-service-object-scaler", map[string]any{
+			"spec": map[string]any{
+				"scaleTargetRef": map[string]any{
+					"kind": "Deployment",
+					"name": "kube-service",
+				},
+				"triggers": []any{
+					map[string]any{
+						"type": "cpu",
+						"metadata": map[string]any{
+							"value": "50",
+						},
+					},
+				},
+			},
+		})
 	})
 	if err = serviceContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))

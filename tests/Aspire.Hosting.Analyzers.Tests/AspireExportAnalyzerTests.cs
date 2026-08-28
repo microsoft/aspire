@@ -28,6 +28,24 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task AtsConvertibleParameter_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static void AddManifest(CustomAtsObjectDto value) { }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task ValidExportWithCamelCase_NoDiagnostics()
     {
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""

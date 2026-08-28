@@ -132,6 +132,14 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void MapToAtsTypeId_AtsConvertibleType_ReturnsStringAnyDict()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(CustomAtsObjectDto));
+
+        Assert.Equal("Aspire.Hosting/Dict<string,any>", result);
+    }
+
+    [Fact]
     public void MapToAtsTypeId_NonGenericIDictionary_ReturnsStringAnyDict()
     {
         var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IDictionary));

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001
 
@@ -234,6 +236,54 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         Assert.Equal("3", maxReplicaCount.Value);
         Assert.DoesNotContain("maxReplicaCount: 3.0", content);
         Assert.Contains("enabled: true", content);
+    }
+
+    [Fact]
+    public async Task PublishAsync_CustomManifestObjectResource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var fields = CustomAtsObjectDto.Deserialize(JsonNode.Parse("""
+            {
+              "spec": {
+                "scaleTargetRef": {
+                  "kind": "Deployment",
+                  "name": "myapp"
+                },
+                "triggers": [
+                  {
+                    "type": "cpu",
+                    "metadata": {
+                      "value": "50"
+                    }
+                  }
+                ]
+              }
+            }
+            """)!.AsObject());
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+                serviceResource.AddManifestObject("keda.sh/v1alpha1", "ScaledObject", "myapp-scaler", fields));
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/myapp/scaler.yaml"));
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(content));
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var spec = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("spec")]);
+        var target = Assert.IsType<YamlMappingNode>(spec.Children[new YamlScalarNode("scaleTargetRef")]);
+        Assert.Equal("Deployment", Assert.IsType<YamlScalarNode>(target.Children[new YamlScalarNode("kind")]).Value);
+        Assert.Equal("myapp", Assert.IsType<YamlScalarNode>(target.Children[new YamlScalarNode("name")]).Value);
+        var triggers = Assert.IsType<YamlSequenceNode>(spec.Children[new YamlScalarNode("triggers")]);
+        var trigger = Assert.IsType<YamlMappingNode>(Assert.Single(triggers.Children));
+        Assert.Equal("cpu", Assert.IsType<YamlScalarNode>(trigger.Children[new YamlScalarNode("type")]).Value);
     }
 
     [Fact]

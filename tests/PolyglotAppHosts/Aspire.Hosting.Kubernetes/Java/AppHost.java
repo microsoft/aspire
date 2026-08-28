@@ -1,4 +1,6 @@
 import aspire.*;
+import java.util.List;
+import java.util.Map;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -63,6 +65,19 @@ void main() throws Exception {
                 manifest.withField("spec.scaleTargetRef.name", "kube-service");
                 manifest.withField("spec.maxReplicaCount", 3);
             });
+            service.addManifestObject(
+                "keda.sh/v1alpha1",
+                "ScaledObject",
+                "kube-service-object-scaler",
+                Map.of(
+                    "spec", Map.of(
+                        "scaleTargetRef", Map.of(
+                            "kind", "Deployment",
+                            "name", "kube-service"),
+                        "triggers", List.of(
+                            Map.of(
+                                "type", "cpu",
+                                "metadata", Map.of("value", "50"))))));
         });
         builder.build().run();
     }
