@@ -12,7 +12,7 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task SelfUpdateToStaging_RelaunchedCliUsesStagingForImplicitUpdates()
+    public async Task SelfUpdateToStaging_RelaunchedCliUsesStagingForImplicitProjectUpdate()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -84,17 +84,14 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 
         await auto.ClearScreenAsync(counter);
 
-        // Relaunch from the replaced path without specifying a channel. Seeing staging selected
-        // proves the new process resolved the identity persisted in the install sidecar.
-        await auto.TypeAsync("hash -r; aspire update --self --non-interactive --yes");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Updating to channel: staging", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(10));
-
         await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
 
-        // The persisted identity must also drive an implicit update of a project that predates it,
-        // which is the user-visible half of the scenario: the channel lands in aspire.config.json.
+        // Relaunch from the replaced path without specifying a channel. Seeing staging land in the
+        // project config proves the new process resolved the identity persisted in the install
+        // sidecar. A second `aspire update --self` cannot be used to assert this: the preserved
+        // "packages" field synthesizes a local-hive channel that replaces the same-named built-in
+        // one (PackagingService.GetChannelsAsync), and a local hive has no CliDownloadBaseUrl, so
+        // self-download reports "Channel 'staging' does not support CLI downloads".
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.RunCommandAsync(
             "aspire update --non-interactive --yes",
