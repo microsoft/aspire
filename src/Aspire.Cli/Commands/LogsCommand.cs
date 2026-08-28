@@ -79,6 +79,7 @@ internal sealed class LogsCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<LogsCommand> _logger;
+    private readonly ILogger<ResourceSnapshotWatcher> _resourceSnapshotWatcherLogger;
 
     private static readonly Argument<string?> s_resourceArgument = new("resource")
     {
@@ -118,12 +119,14 @@ internal sealed class LogsCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         ResourceColorMap resourceColorMap,
         ILogger<LogsCommand> logger,
+        ILogger<ResourceSnapshotWatcher> resourceSnapshotWatcherLogger,
         CommonCommandServices services)
         : base("logs", LogsCommandStrings.Description, services)
     {
         _resourceColorMap = resourceColorMap;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
+        _resourceSnapshotWatcherLogger = resourceSnapshotWatcherLogger;
         _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
@@ -169,7 +172,7 @@ internal sealed class LogsCommand : BaseCommand
 
         var connection = result.Connection!;
         var effectiveIncludeHidden = includeHidden || resourceName is not null;
-        using var resourceWatcher = new ResourceSnapshotWatcher(connection, effectiveIncludeHidden);
+        using var resourceWatcher = new ResourceSnapshotWatcher(connection, _resourceSnapshotWatcherLogger, effectiveIncludeHidden);
         await resourceWatcher.WaitForInitialLoadAsync(cancellationToken).ConfigureAwait(false);
 
         // Pre-resolve colors for all resource names so that assignment is

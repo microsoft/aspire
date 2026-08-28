@@ -196,6 +196,9 @@
     <trans-unit id="extension.debug.dashboardBrowser">
       <source xml:lang="en">Controls what happens with the Aspire Dashboard when this debug configuration starts. If not set, the global Aspire: Dashboard Browser setting is used.</source>
     </trans-unit>
+    <trans-unit id="configuration.aspire.enableHotReloadNotification">
+      <source xml:lang="en">Controls whether the Aspire extension shows a notification when C# Dev Kit Hot Reload is disabled.</source>
+    </trans-unit>
     <trans-unit id="command.copyAppHostPath">
       <source xml:lang="en">Copy AppHost path</source>
     </trans-unit>

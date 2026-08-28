@@ -603,6 +603,7 @@ public class Program
 
         // Commands.
         builder.Services.AddSingleton<CommonCommandServices>();
+        builder.Services.AddSingleton<ResourceWaitService>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<DcpWorkloadCleanupService>();
         builder.Services.AddTransient<NewCommand>();
