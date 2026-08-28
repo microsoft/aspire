@@ -163,7 +163,7 @@ public enum PersistentVolumeAccessMode
 /// Specifies what Kubernetes does with a persistent volume after its claim is released.
 /// </summary>
 [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public enum PersistentVolumeReclaimPolicy
+internal enum PersistentVolumeReclaimPolicy
 {
     /// <summary>
     /// Retains the backing storage for manual recovery or reuse.

@@ -24,7 +24,7 @@ namespace Aspire.Hosting.Kubernetes.Annotations;
 /// reference infrastructure outputs without materializing them into published artifacts.
 /// </remarks>
 [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class KubernetesCsiPersistentVolumeSourceAnnotation(
+internal sealed class KubernetesCsiPersistentVolumeSourceAnnotation(
     string driver,
     ReferenceExpression volumeHandle,
     IReadOnlyDictionary<string, ReferenceExpression> volumeAttributes,
