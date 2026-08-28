@@ -112,9 +112,9 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     /// </summary>
     public BicepOutputReference LocationOutputReference => new("location", this);
 
-    internal ManagedServiceIdentityType ManagedIdentityType { get; set; } = ManagedServiceIdentityType.None;
+    internal ManagedServiceIdentityType WorkloadManagedIdentityType { get; set; } = ManagedServiceIdentityType.None;
 
-    internal List<AzureUserAssignedIdentityResource> UserAssignedIdentities { get; } = [];
+    internal List<AzureUserAssignedIdentityResource> WorkloadUserAssignedIdentities { get; } = [];
 
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
 
@@ -195,7 +195,7 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                         $"Compute resource '{resource.Name}' uses managed identity '{userAssignedIdentity.Name}', but workload identities are not supported when publishing to existing Azure sandbox group '{Name}'.");
                 }
 
-                AddUserAssignedIdentity(userAssignedIdentity);
+                AddWorkloadUserAssignedIdentity(userAssignedIdentity);
             }
 
             AzureSandboxContainerDeployment.ValidateSandboxCompatibility(resource);
@@ -294,20 +294,20 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
         return DefaultContainerRegistry;
     }
 
-    internal void AddUserAssignedIdentity(AzureUserAssignedIdentityResource identity)
+    internal void AddWorkloadUserAssignedIdentity(AzureUserAssignedIdentityResource identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        if (UserAssignedIdentities.Contains(identity))
+        if (WorkloadUserAssignedIdentities.Contains(identity))
         {
             return;
         }
 
-        UserAssignedIdentities.Add(identity);
-        ManagedIdentityType = ManagedIdentityType switch
+        WorkloadUserAssignedIdentities.Add(identity);
+        WorkloadManagedIdentityType = WorkloadManagedIdentityType switch
         {
             ManagedServiceIdentityType.None => ManagedServiceIdentityType.UserAssigned,
             ManagedServiceIdentityType.SystemAssigned => ManagedServiceIdentityType.SystemAssignedUserAssigned,
-            _ => ManagedIdentityType
+            _ => WorkloadManagedIdentityType
         };
     }
 }

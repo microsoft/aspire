@@ -102,6 +102,7 @@ public class AzureSandboxesTests
 
         var identity = builder.AddAzureUserAssignedIdentity("nodeidentity");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithSystemAssignedIdentity()
             .WithUserAssignedIdentity(identity);
 
         builder.AddContainer("node", "node", "22-alpine")
@@ -112,6 +113,59 @@ public class AzureSandboxesTests
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Equal(ManagedServiceIdentityType.SystemAssignedUserAssigned, sandboxGroup.Resource.WorkloadManagedIdentityType);
+        Assert.Equal(identity.Resource, Assert.Single(sandboxGroup.Resource.WorkloadUserAssignedIdentities));
+    }
+
+    [Fact]
+    public async Task SandboxGroupWithoutWorkloadIdentityEmitsImagePullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithNoManagedIdentity();
+
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task SandboxGroupWithSystemAssignedWorkloadIdentityAlsoEmitsImagePullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithSystemAssignedIdentity();
+
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task WithNoManagedIdentityClearsGroupIdentityButPreservesComputeWorkloadIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var clearedIdentity = builder.AddAzureUserAssignedIdentity("cleared-identity");
+        var computeIdentity = builder.AddAzureUserAssignedIdentity("compute-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithUserAssignedIdentity(clearedIdentity)
+            .WithNoManagedIdentity();
+        builder.AddContainer("worker", "image")
+            .WithAnnotation(new AppIdentityAnnotation(computeIdentity.Resource))
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Equal(ManagedServiceIdentityType.UserAssigned, sandboxGroup.Resource.WorkloadManagedIdentityType);
+        Assert.Equal(computeIdentity.Resource, Assert.Single(sandboxGroup.Resource.WorkloadUserAssignedIdentities));
+
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
@@ -128,9 +182,9 @@ public class AzureSandboxesTests
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
-        Assert.Equal(ManagedServiceIdentityType.UserAssigned, sandboxGroup.Resource.ManagedIdentityType);
-        Assert.Equal(identity.Resource, Assert.Single(sandboxGroup.Resource.UserAssignedIdentities));
-        Assert.Empty(otherGroup.Resource.UserAssignedIdentities);
+        Assert.Equal(ManagedServiceIdentityType.UserAssigned, sandboxGroup.Resource.WorkloadManagedIdentityType);
+        Assert.Equal(identity.Resource, Assert.Single(sandboxGroup.Resource.WorkloadUserAssignedIdentities));
+        Assert.Empty(otherGroup.Resource.WorkloadUserAssignedIdentities);
         var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(sandboxGroup.Resource, skipPreparer: true);
         Assert.Contains("userAssignedIdentities", bicep, StringComparison.Ordinal);
         Assert.Contains("workload_identity_outputs_id", bicep, StringComparison.Ordinal);
