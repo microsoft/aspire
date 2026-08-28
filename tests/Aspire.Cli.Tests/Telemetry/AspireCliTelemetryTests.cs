@@ -407,6 +407,38 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public async Task CompleteInternalMicrosoftDiagnosticsAsync_DoesNotWaitForTagsWhenReportedTelemetryIsDisabled()
+    {
+        var blockedTag = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var machineInformationProvider = new TelemetryFixture.TestMachineInformationProvider
+        {
+            GetDeviceIdCallback = () => blockedTag.Task
+        };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            machineInformationProvider,
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            new TelemetryFixture.TestInternalMicrosoftDetector(),
+            new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = false,
+                EmitInternalMicrosoftDiagnostics = true
+            },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
+
+        telemetry.Initialize();
+        await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.False(tagsSource.TagsTask.IsCompleted);
+        blockedTag.TrySetResult("test-device-id");
+    }
+
+    [Fact]
     public async Task Initialize_BoundsInternalMicrosoftDetectorForAgentTelemetryInvocation()
     {
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
@@ -513,19 +545,22 @@ public class AspireCliTelemetryTests
         {
             DetectionCallback = async cancellationToken =>
             {
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                    throw new UnreachableException();
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(20), CancellationToken.None);
-                    throw;
-                }
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new UnreachableException();
+            }
+        };
+        var machineInformationProvider = new TelemetryFixture.TestMachineInformationProvider
+        {
+            // Tag calculation is awaited before the detector result. Delaying it proves the timeout
+            // reports when cancellation was observed rather than echoing the configured budget.
+            GetDeviceIdCallback = async () =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100));
+                return "test-device-id";
             }
         };
         using var fixture = new TelemetryFixture(
+            machineInfoProvider: machineInformationProvider,
             internalMicrosoftDetector: internalMicrosoftDetector,
             telemetryConfiguration: new TelemetryConfiguration
             {
@@ -537,7 +572,8 @@ public class AspireCliTelemetryTests
 
         var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
         Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
-        Assert.True((long?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs) > timeout.TotalMilliseconds);
+        var durationMilliseconds = Assert.IsType<long>(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs));
+        Assert.True(durationMilliseconds > timeout.TotalMilliseconds, $"Actual duration was {durationMilliseconds} ms.");
     }
 
     [Fact]

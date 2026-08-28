@@ -92,7 +92,6 @@ export default class AspireRpcServer {
 
     static async create(
         rpcClientFactory: (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => ICliRpcClient,
-        getInternalMicrosoftAlias: () => Promise<string | undefined> = async () => undefined,
     ): Promise<AspireRpcServer> {
         const token = generateToken();
         const { key, cert } = await createSelfSignedCertAsync();
@@ -149,8 +148,6 @@ export default class AspireRpcServer {
                         connection.onRequest('ping', withAuthentication(async () => {
                             return 'pong';
                         }));
-
-                        connection.onRequest('getInternalMicrosoftAlias', withAuthentication(getInternalMicrosoftAlias));
 
                         // Create the RPC client with a null debug session ID initially.
                         // Register all interaction service endpoints BEFORE calling listen()

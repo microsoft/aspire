@@ -28,24 +28,31 @@ suite('MicrosoftAccountProvider tests', () => {
     test('refreshes when Microsoft authentication sessions change', async () => {
         const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
         let accounts: vscode.AuthenticationSessionAccountInformation[] = [];
+        const observedStates: string[] = [];
         const provider = new MicrosoftAccountProvider({
             getAccounts: async () => accounts,
             onDidChangeSessions: sessionChanges.event,
         });
+        const stateRegistration = provider.onDidChangeEnvironmentState(state => observedStates.push(state.status));
 
         try {
-            await provider.getAliasAsync();
+            await provider.initializeAsync();
             assert.strictEqual(provider.alias, undefined);
+            assert.deepStrictEqual(provider.environmentState, { status: 'not_internal' });
 
             accounts = [createAccount(`internal-user.${microsoftTenantId}`, 'User@microsoft.com')];
             sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
             await waitFor(() => provider.alias === 'user');
+            assert.deepStrictEqual(provider.environmentState, { status: 'internal', alias: 'user' });
 
             accounts = [];
             sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
             await waitFor(() => provider.alias === undefined);
+            assert.deepStrictEqual(provider.environmentState, { status: 'not_internal' });
+            assert.deepStrictEqual(observedStates, ['refreshing', 'not_internal', 'refreshing', 'internal', 'refreshing', 'not_internal']);
         }
         finally {
+            stateRegistration.dispose();
             provider.dispose();
             sessionChanges.dispose();
         }
@@ -76,10 +83,13 @@ suite('MicrosoftAccountProvider tests', () => {
                 () => provider.getAliasAsync(),
                 /VS Code Microsoft accounts are unavailable/);
             assert.strictEqual(provider.alias, 'user');
+            assert.deepStrictEqual(provider.environmentState, { status: 'unavailable' });
             assert.deepStrictEqual(warnings, ['Unable to query VS Code Microsoft accounts.']);
 
             shouldFail = false;
-            assert.strictEqual(await provider.getAliasAsync(), 'user');
+            assert.deepStrictEqual(provider.getEnvironmentState(), { status: 'unavailable' });
+            await waitFor(() => provider.environmentState.status === 'internal');
+            assert.deepStrictEqual(provider.environmentState, { status: 'internal', alias: 'user' });
         }
         finally {
             provider.dispose();
@@ -97,9 +107,8 @@ suite('MicrosoftAccountProvider tests', () => {
         }, () => { });
 
         try {
-            await assert.rejects(
-                () => provider.getAliasAsync(),
-                /VS Code Microsoft accounts are unavailable/);
+            await provider.initializeAsync();
+            assert.deepStrictEqual(provider.environmentState, { status: 'unavailable' });
         }
         finally {
             provider.dispose();

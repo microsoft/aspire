@@ -57,7 +57,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const microsoftAccountProvider = new MicrosoftAccountProvider();
   context.subscriptions.push(microsoftAccountProvider);
-  const terminalProvider = new AspireTerminalProvider(context.subscriptions, undefined, cliPathResolver);
+  const terminalProvider = new AspireTerminalProvider(
+    context.subscriptions,
+    undefined,
+    cliPathResolver,
+    () => microsoftAccountProvider.getEnvironmentState());
+  context.subscriptions.push(microsoftAccountProvider.onDidChangeEnvironmentState(
+    () => terminalProvider.invalidateSharedAspireTerminal()));
+  // Account enumeration uses VS Code's local authentication API. Start it eagerly but do not block
+  // extension activation for this optional telemetry signal. A CLI launched while the initial query
+  // is pending receives refreshing and therefore cannot reuse or poison the detector cache.
+  void microsoftAccountProvider.initializeAsync();
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
@@ -84,7 +94,6 @@ export async function activate(context: vscode.ExtensionContext) {
       const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId), context.globalState);
       return client;
     },
-    () => microsoftAccountProvider.getAliasAsync(),
   );
 
   // Declared up front so DCP-server hooks can reference it through a closure;

@@ -211,6 +211,37 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_RemovesFreshCacheWhileVsCodeAccountIsRefreshing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var firstDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("Windows identity", _ =>
+                Task.FromResult(new InternalMicrosoftProbeResult(true, "windows.alias", "REDMOND")))]],
+            vsCodeMicrosoftAlias: "vscode.alias");
+        await firstDetector.IsInternalMicrosoftMachineAsync();
+
+        var secondDetector = CreateDetector(
+            cacheFilePath,
+            now,
+            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
+            vsCodeMicrosoftAccountProvider: new TestVsCodeMicrosoftAccountProvider { IsRefreshing = true });
+
+        var result = await secondDetector.IsInternalMicrosoftMachineAsync();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, result.Outcome);
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
+        Assert.False(File.Exists(cacheFilePath));
+        Assert.Contains(result.ProbeDiagnostics, diagnostic =>
+            diagnostic.Source == "VS Code Microsoft tenant" &&
+            diagnostic.Outcome == InternalMicrosoftProbeOutcome.Refreshing);
+    }
+
+    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_RejectsFreshVsCodeCacheAfterSignOut()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -240,7 +271,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenProviderIsUnavailable()
+    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenAccountSnapshotIsMissing()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
@@ -266,7 +297,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenProviderFails()
+    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenAccountStateIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
@@ -282,10 +313,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
             }
             """);
-        var provider = new TestVsCodeMicrosoftAccountProvider
-        {
-            GetInternalMicrosoftAccountAsyncCallback = _ => throw new InvalidOperationException("Simulated provider failure.")
-        };
+        var provider = new TestVsCodeMicrosoftAccountProvider { IsUnavailable = true };
         var detector = CreateDetector(
             cacheFilePath,
             now,
@@ -300,47 +328,10 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_BoundsVsCodeAccountQueryAndContinuesOtherProbes()
+    public async Task IsInternalMicrosoftMachineAsync_ContinuesOtherProbesWhenVsCodeAccountIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var queryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var releaseQuery = new TaskCompletionSource<VsCodeMicrosoftAccountState>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var provider = new TestVsCodeMicrosoftAccountProvider
-        {
-            GetInternalMicrosoftAccountAsyncCallback = _ =>
-            {
-                queryStarted.TrySetResult();
-                return releaseQuery.Task;
-            }
-        };
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            [[new InternalMicrosoftProbe("fallback", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "fallback.alias", null)))]],
-            probeStageTimeout: TimeSpan.FromMilliseconds(50),
-            vsCodeMicrosoftAccountProvider: provider);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        await queryStarted.Task.DefaultTimeout();
-        releaseQuery.SetResult(VsCodeMicrosoftAccountState.Unavailable);
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("fallback.alias", result.Alias);
-        var timeout = Assert.Single(result.ProbeDiagnostics, diagnostic => diagnostic.Source == "VS Code Microsoft tenant");
-        Assert.Equal(InternalMicrosoftProbeOutcome.TimedOut, timeout.Outcome);
-        Assert.Equal(InternalMicrosoftProbeFailureStage.ExtensionRpc, timeout.Failure?.Stage);
-        Assert.Equal(InternalMicrosoftProbeExceptionType.TaskCanceled, timeout.Failure?.ExceptionType);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_ContinuesOtherProbesWhenVsCodeProviderFails()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var provider = new TestVsCodeMicrosoftAccountProvider
-        {
-            GetInternalMicrosoftAccountAsyncCallback = _ => throw new NotSupportedException("Simulated older extension.")
-        };
+        var provider = new TestVsCodeMicrosoftAccountProvider { IsUnavailable = true };
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
@@ -354,8 +345,48 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal("fallback.alias", result.Alias);
         var failure = Assert.Single(result.ProbeDiagnostics, diagnostic => diagnostic.Source == "VS Code Microsoft tenant");
         Assert.Equal(InternalMicrosoftProbeOutcome.Failed, failure.Outcome);
-        Assert.Equal(InternalMicrosoftProbeFailureStage.ExtensionRpc, failure.Failure?.Stage);
-        Assert.Equal(InternalMicrosoftProbeExceptionType.Other, failure.Failure?.ExceptionType);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ExtensionEnvironment, failure.Failure?.Stage);
+        Assert.Null(failure.Failure?.ExceptionType);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_DoesNotCacheNegativeWhenVsCodeAccountIsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
+            vsCodeMicrosoftAccountProvider: new TestVsCodeMicrosoftAccountProvider { IsUnavailable = true });
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
+        Assert.False(File.Exists(cacheFilePath));
+        Assert.Contains(result.ProbeDiagnostics, diagnostic =>
+            diagnostic.Source == "VS Code Microsoft tenant" &&
+            diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_DoesNotCacheNegativeForSuppressedAccountSnapshot()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
+        var detector = CreateDetector(
+            cacheFilePath,
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
+            vsCodeMicrosoftAccountProvider: new TestVsCodeMicrosoftAccountProvider { IsSuppressed = true });
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, result.Outcome);
+        Assert.False(File.Exists(cacheFilePath));
+        Assert.Contains(result.ProbeDiagnostics, diagnostic =>
+            diagnostic.Source == "VS Code Microsoft tenant" &&
+            diagnostic.Outcome == InternalMicrosoftProbeOutcome.Suppressed);
     }
 
     [Fact]
@@ -363,25 +394,20 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        var queryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var provider = new TestVsCodeMicrosoftAccountProvider
-        {
-            GetInternalMicrosoftAccountAsyncCallback = async cancellationToken =>
-            {
-                queryStarted.TrySetResult();
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                return VsCodeMicrosoftAccountState.Unavailable;
-            }
-        };
+        var probeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var detector = CreateDetector(
             cacheFilePath,
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            vsCodeMicrosoftAccountProvider: provider);
+            [[new InternalMicrosoftProbe("slow", async cancellationToken =>
+            {
+                probeStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return InternalMicrosoftProbeResult.NotDetected;
+            })]]);
         using var cancellationSource = new CancellationTokenSource();
 
         var detectionTask = detector.IsInternalMicrosoftMachineAsync(cancellationSource.Token);
-        await queryStarted.Task.DefaultTimeout();
+        await probeStarted.Task.DefaultTimeout();
         await cancellationSource.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => detectionTask);

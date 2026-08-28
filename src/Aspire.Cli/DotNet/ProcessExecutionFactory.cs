@@ -4,6 +4,7 @@
 using Aspire.Cli.Processes;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -16,7 +17,12 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 {
-    internal static IReadOnlyList<string> InvocationScopedEnvVarNames { get; } = [KnownConfigNames.CliAppHostSelectionOrigin];
+    internal static IReadOnlyList<string> InvocationScopedEnvVarNames { get; } =
+    [
+        KnownConfigNames.CliAppHostSelectionOrigin,
+        EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable,
+        EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable
+    ];
 
     private readonly IEnvironment _environment;
     private readonly ILogger<ProcessExecutionFactory> _logger;
@@ -80,8 +86,8 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         }
 
         // Touching Environment here snapshots the parent env on first access. Strip invocation-scoped
-        // values before overlaying explicit values so the detached child CLI can deliberately receive
-        // the marker while AppHost and build children do not inherit it.
+        // values before overlaying explicit values so AppHost and build children cannot inherit them;
+        // callers can still deliberately provide a value to a detached child CLI when required.
         StripIdentityEnvVars(startInfo);
         StripInvocationScopedEnvVars(startInfo);
         ApplyEnvironmentVariableFilter(startInfo, options.EnvironmentVariableFilter);

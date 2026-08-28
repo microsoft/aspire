@@ -33,6 +33,12 @@ import { appHostLaunchTokenConfigKey, appHostRestartSourceSessionIdConfigKey, ap
 import { markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope } from "./AspireDebugConfigurationProviderInternal";
 import { AppHostParentOutputFilter } from "./session/appHostParentOutputFilter";
 import { getAppHostLaunchProfileOptions, getRootLaunchProfileCliArg } from "../utils/launchProfile";
+import { microsoftAccountAliasEnvironmentVariable, microsoftAccountStateEnvironmentVariable } from "../utils/microsoftAccountProvider";
+
+const microsoftAccountEnvironmentVariables = new Set([
+  microsoftAccountStateEnvironmentVariable.toLowerCase(),
+  microsoftAccountAliasEnvironmentVariable.toLowerCase(),
+]);
 import { getCliPathTargetForUri, getCliPathTargetKey, windowCliPathTarget } from "../utils/cliPathVariables";
 import { DashboardLauncher, type DashboardBrowserType, type DashboardLauncherHost } from "./session/dashboardLauncher";
 import { describeStopFailure, startStop, stopSessionInBackground } from "./session/stopHelpers";
@@ -1238,6 +1244,10 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
 
   async startAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean, options: StartAppHostOptions): Promise<void> {
     try {
+      // A newer extension can be paired with an older CLI that does not yet consume and clear the
+      // account snapshot. Strip it again at this process boundary so user AppHosts never inherit it.
+      environment = environment.filter(variable => !microsoftAccountEnvironmentVariables.has(variable.name.toLowerCase()));
+
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
       const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);

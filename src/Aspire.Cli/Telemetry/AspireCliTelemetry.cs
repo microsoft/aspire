@@ -418,7 +418,8 @@ internal sealed class AspireCliTelemetry : IHostedService
 
     private async Task EmitInternalMicrosoftDetectorDiagnosticsAsync(Task<InternalMicrosoftDetectionResult?> resultTask)
     {
-        if (!_telemetryConfiguration.EmitInternalMicrosoftDiagnostics)
+        if (!_telemetryConfiguration.ReportedTelemetryEnabled ||
+            !_telemetryConfiguration.EmitInternalMicrosoftDiagnostics)
         {
             return;
         }

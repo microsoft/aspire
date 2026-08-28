@@ -120,9 +120,11 @@ internal sealed class TelemetryFixture : IDisposable
         public string MacAddressHash { get; set; } = "test-mac-hash";
         public string UserName { get; set; } = string.Empty;
         public string UserDomainName { get; set; } = string.Empty;
+        public Func<Task<string?>>? GetDeviceIdCallback { get; set; }
+        public Func<Task<string>>? GetMacAddressHashCallback { get; set; }
 
-        public Task<string?> GetOrCreateDeviceId() => Task.FromResult(DeviceId);
-        public Task<string> GetMacAddressHash() => Task.FromResult(MacAddressHash);
+        public Task<string?> GetOrCreateDeviceId() => GetDeviceIdCallback?.Invoke() ?? Task.FromResult(DeviceId);
+        public Task<string> GetMacAddressHash() => GetMacAddressHashCallback?.Invoke() ?? Task.FromResult(MacAddressHash);
     }
 
     /// <summary>

@@ -9,7 +9,6 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -19,7 +18,7 @@ using StreamJsonRpc;
 
 namespace Aspire.Cli.Backchannel;
 
-internal interface IExtensionBackchannel : IVsCodeMicrosoftAccountProvider
+internal interface IExtensionBackchannel
 {
     Task ConnectAsync(CancellationToken cancellationToken);
     Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken);
@@ -52,7 +51,6 @@ internal interface IExtensionBackchannel : IVsCodeMicrosoftAccountProvider
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
 {
     private const string Name = "Aspire Extension";
-    private const string InternalMicrosoftAccountCapability = "internal-microsoft-account.v1";
 
     private readonly ActivitySource _activitySource = new(nameof(ExtensionBackchannel));
     private readonly TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
@@ -742,23 +740,6 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             cancellationToken);
 
         return capabilities;
-    }
-
-    public async Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken)
-    {
-        if (!await HasCapabilityAsync(InternalMicrosoftAccountCapability, cancellationToken).ConfigureAwait(false))
-        {
-            return VsCodeMicrosoftAccountState.Unavailable;
-        }
-
-        using var activity = _activitySource.StartActivity();
-        var rpc = await _rpcTaskCompletionSource.Task;
-
-        var alias = await rpc.InvokeWithCancellationAsync<string?>(
-            "getInternalMicrosoftAlias",
-            [_token],
-            cancellationToken).ConfigureAwait(false);
-        return VsCodeMicrosoftAccountState.Available(alias);
     }
 
     public async Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug, CancellationToken cancellationToken)
