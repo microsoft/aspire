@@ -77,6 +77,8 @@ export interface CliVersionStatusOptions {
 
 export type CliUpdateRecommendationOptions = Omit<CliVersionStatusOptions, 'timeoutMs'> & {
     identityChannelOverride?: string;
+    /** Captured Doctor working directory, when the caller must keep cache and process context aligned. */
+    workingDirectory?: string;
 };
 
 export interface CliVersionInfo {
@@ -117,14 +119,15 @@ interface CliVersion {
  * The CLI discovers `aspire.config.json` by walking up from its working directory, so the folder it
  * runs in decides which local settings file the answer describes. Window-scoped callers have no
  * folder of their own and fall back to the first one, which is the best available guess and matches
- * how other window-scoped commands behave.
+ * how other window-scoped commands behave. With no workspace, capture the extension host's current
+ * directory rather than leaving process launch to resolve a potentially changed workspace later.
  */
-function resolveConfigInfoWorkingDirectory(target: CliPathResolutionTarget): string | undefined {
+export function resolveConfigInfoWorkingDirectory(target: CliPathResolutionTarget): string {
     if (target.kind === 'workspaceFolder') {
         return target.workspaceFolder.uri.fsPath;
     }
 
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 }
 
 /**
@@ -303,9 +306,10 @@ export class ConfigInfoProvider {
             return { status: 'unavailable' };
         }
 
+        const workingDirectory = options?.workingDirectory ?? resolveConfigInfoWorkingDirectory(target);
         return await this._fetchCliUpdateRecommendation(
             cliPath,
-            target,
+            workingDirectory,
             options?.identityChannelOverride,
             options?.cancellationToken);
     }
@@ -559,7 +563,7 @@ export class ConfigInfoProvider {
 
     private _fetchCliUpdateRecommendation(
         cliPath: string,
-        target: CliPathResolutionTarget,
+        workingDirectory: string,
         identityChannelOverride: string | undefined,
         cancellationToken?: vscode.CancellationToken,
     ): Promise<CliUpdateRecommendation> {
@@ -621,7 +625,7 @@ export class ConfigInfoProvider {
                 try {
                     childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                         createProcessGroup: true,
-                        workingDirectory: resolveConfigInfoWorkingDirectory(target),
+                        workingDirectory,
                         noExtensionVariables: true,
                         env: nonInteractiveCliEnvironment,
                         stdoutCallback: value => {

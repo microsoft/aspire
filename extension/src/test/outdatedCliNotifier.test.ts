@@ -191,8 +191,9 @@ suite('outdatedCliNotifier', () => {
         }
 
         assert.strictEqual(values.size, 100);
-        assert.strictEqual([...values.values()].includes(0), false);
-        assert.strictEqual([...values.values()].includes(100), true);
+        const persistedValues = [...values.values()] as Array<{ suppressedAt: number }>;
+        assert.strictEqual(persistedValues.some(value => value.suppressedAt === 0), false);
+        assert.strictEqual(persistedValues.some(value => value.suppressedAt === 100), true);
         notifier.dispose();
     });
 
@@ -243,6 +244,97 @@ suite('outdatedCliNotifier', () => {
         assert.deepStrictEqual(third.surface.warnings, []);
         assert.deepStrictEqual(third.versionProvider.recommendationCalls, []);
         third.notifier.dispose();
+    });
+
+    test("Don't Show Again compaction cannot delete a concurrent refresh", async () => {
+        let now = 0;
+        const values = new Map<string, unknown>();
+        let blockNextDeletion = false;
+        let blockedDeletion: { complete: () => void } | undefined;
+        const globalState: vscode.Memento = {
+            keys: () => [...values.keys()],
+            get: <T>(key: string, defaultValue?: T): T | undefined =>
+                values.has(key) ? values.get(key) as T : defaultValue,
+            update: (key: string, value: unknown): Thenable<void> => {
+                if (value === undefined && blockNextDeletion) {
+                    blockNextDeletion = false;
+                    return new Promise(resolve => {
+                        blockedDeletion = {
+                            complete: () => {
+                                values.delete(key);
+                                resolve();
+                            },
+                        };
+                    });
+                }
+
+                if (value === undefined) {
+                    values.delete(key);
+                } else {
+                    values.set(key, value);
+                }
+                return Promise.resolve();
+            },
+        };
+
+        const staleWindow = createNotifier(() => now, globalState);
+        staleWindow.versionProvider.identity = {
+            cliPath: '/cli/0/aspire',
+            version: '13.5.0',
+        };
+        let completeStaleSelection!: (selection: string | undefined) => void;
+        staleWindow.surface.selectionPromise = new Promise(resolve => completeStaleSelection = resolve);
+        const staleNotification = staleWindow.notifier.notifyIfOutdated(
+            windowCliPathTarget,
+            '/cli/0/aspire');
+        await waitFor(
+            () => staleWindow.surface.warnings.length === 1,
+            'Expected stale window warning to open.');
+
+        const seeder = createNotifier(() => now, globalState);
+        seeder.surface.selection = strings.dontShowAgainLabel;
+        for (let index = 0; index < 100; index++) {
+            const cliPath = `/cli/${index}/aspire`;
+            seeder.versionProvider.identity = {
+                cliPath,
+                version: '13.5.0',
+            };
+            await seeder.notifier.notifyIfOutdated(windowCliPathTarget, cliPath);
+            now++;
+        }
+        seeder.notifier.dispose();
+
+        blockNextDeletion = true;
+        const compactor = createNotifier(() => now, globalState);
+        compactor.surface.selection = strings.dontShowAgainLabel;
+        compactor.versionProvider.identity = {
+            cliPath: '/cli/new/aspire',
+            version: '13.5.0',
+        };
+        const compaction = compactor.notifier.notifyIfOutdated(
+            windowCliPathTarget,
+            '/cli/new/aspire');
+        await waitFor(() => blockedDeletion !== undefined, 'Expected stale suppression deletion to block.');
+
+        now++;
+        completeStaleSelection(strings.dontShowAgainLabel);
+        await staleNotification;
+        blockedDeletion?.complete();
+        await compaction;
+
+        const freshWindow = createNotifier(() => now, globalState);
+        freshWindow.versionProvider.identity = {
+            cliPath: '/cli/0/aspire',
+            version: '13.5.0',
+        };
+        await freshWindow.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/0/aspire');
+
+        assert.strictEqual(values.size, 100);
+        assert.deepStrictEqual(freshWindow.surface.warnings, []);
+        assert.deepStrictEqual(freshWindow.versionProvider.recommendationCalls, []);
+        freshWindow.notifier.dispose();
+        compactor.notifier.dispose();
+        staleWindow.notifier.dispose();
     });
 
     test("Don't Show Again on a stale warning does not suppress the replacement version", async () => {
@@ -525,6 +617,88 @@ suite('outdatedCliNotifier', () => {
         assert.strictEqual(versionProvider.recommendationCalls.length, 2);
         assert.strictEqual(maximumActiveDoctors, 1);
         notifier.dispose();
+    });
+
+    test('isolates same-path update recommendations by resolution target', async () => {
+        const folderA: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/a'),
+            name: 'a',
+            index: 0,
+        };
+        const folderB: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/b'),
+            name: 'b',
+            index: 1,
+        };
+        const targetA = workspaceFolderCliPathTarget(folderA);
+        const targetB = workspaceFolderCliPathTarget(folderB);
+        const versionProvider = new FakeVersionProvider();
+        versionProvider.identity = {
+            cliPath: '/shared/aspire',
+            version: '13.5.0',
+        };
+        versionProvider.getCliUpdateRecommendation = async options => {
+            versionProvider.recommendationCalls.push(options);
+            return options?.target === targetA
+                ? { status: 'none', currentVersion: '13.5.0' }
+                : { status: 'available', currentVersion: '13.5.0', version: '13.6.0' };
+        };
+        const surface = new FakeSurface();
+        const notifier = new OutdatedCliNotifier(versionProvider, surface);
+
+        await notifier.notifyIfOutdated(targetA, '/shared/aspire');
+        await notifier.notifyIfOutdated(targetB, '/shared/aspire');
+
+        assert.deepStrictEqual(
+            versionProvider.recommendationCalls.map(call => call?.target),
+            [targetA, targetB]);
+        assert.strictEqual(surface.warnings.length, 1);
+        notifier.dispose();
+    });
+
+    test('refreshes the window-scoped recommendation when its Doctor working directory changes', async () => {
+        const folderA: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/a'),
+            name: 'a',
+            index: 0,
+        };
+        const folderB: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file('/workspace/b'),
+            name: 'b',
+            index: 0,
+        };
+        let workspaceFolders: readonly vscode.WorkspaceFolder[] = [];
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').get(() => workspaceFolders);
+        const versionProvider = new FakeVersionProvider();
+        versionProvider.identity = {
+            cliPath: '/shared/aspire',
+            version: '13.5.0',
+        };
+        versionProvider.getCliUpdateRecommendation = async options => {
+            versionProvider.recommendationCalls.push(options);
+            return options?.workingDirectory === folderB.uri.fsPath
+                ? { status: 'available', currentVersion: '13.5.0', version: '13.6.0' }
+                : { status: 'none', currentVersion: '13.5.0' };
+        };
+        const surface = new FakeSurface();
+        const notifier = new OutdatedCliNotifier(versionProvider, surface);
+
+        try {
+            await notifier.notifyIfOutdated(windowCliPathTarget, '/shared/aspire');
+            workspaceFolders = [folderA];
+            await notifier.notifyIfOutdated(windowCliPathTarget, '/shared/aspire');
+            workspaceFolders = [folderB];
+            await notifier.notifyIfOutdated(windowCliPathTarget, '/shared/aspire');
+
+            assert.deepStrictEqual(
+                versionProvider.recommendationCalls.map(call => call?.workingDirectory),
+                [process.cwd(), folderA.uri.fsPath, folderB.uri.fsPath]);
+            assert.strictEqual(surface.warnings.length, 1);
+        }
+        finally {
+            notifier.dispose();
+            workspaceFoldersStub.restore();
+        }
     });
 
     test('does not warn when physical and effective versions disagree', async () => {

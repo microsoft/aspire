@@ -552,6 +552,7 @@ suite('configInfoProvider tests', () => {
             assert.strictEqual(command, '/exact/aspire');
             assert.deepStrictEqual(args, ['doctor', '--format', 'json', '--nologo']);
             assert.deepStrictEqual(options?.env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
+            assert.strictEqual(options?.workingDirectory, '/captured/workspace');
             const output = JSON.parse(createDoctorVersionOutput('13.5.0', '13.6.0'));
             output.checks.push({
                 name: 'unrelated-check',
@@ -567,7 +568,10 @@ suite('configInfoProvider tests', () => {
         const provider = new ConfigInfoProvider(terminalProvider);
 
         assert.deepStrictEqual(
-            await provider.getCliUpdateRecommendation({ cliPath: '/exact/aspire' }),
+            await provider.getCliUpdateRecommendation({
+                cliPath: '/exact/aspire',
+                workingDirectory: '/captured/workspace',
+            }),
             { status: 'available', currentVersion: '13.5.0', version: '13.6.0' });
         assert.strictEqual(spawnStub.callCount, 1);
     });
