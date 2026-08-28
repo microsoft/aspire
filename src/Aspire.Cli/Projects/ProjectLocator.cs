@@ -1184,18 +1184,24 @@ internal sealed class ProjectLocator(
         // covers cases where the configured settings AppHost is selected but lives outside
         // the discovered candidate set (e.g. parent directory or excluded by enumeration).
         var allCandidates = results.BuildableAppHost.Select(c => c.AppHostFile).ToList();
-        var selectedAppHostCanonicalPath = selectedAppHost is null
-            ? null
-            : PathNormalizer.ResolveToFilesystemPath(selectedAppHost.FullName);
-        if (selectedAppHost is not null
-            && !allCandidates.Any(f =>
-                string.Equals(f.FullName, selectedAppHost.FullName, StringComparisons.FileSystemPath) ||
+        if (selectedAppHost is not null &&
+            !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, StringComparison.Ordinal)))
+        {
+            var selectedAppHostCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedAppHost.FullName);
+            var equivalentCandidateIndex = allCandidates.FindIndex(f =>
                 string.Equals(
                     PathNormalizer.ResolveToFilesystemPath(f.FullName),
                     selectedAppHostCanonicalPath,
-                    StringComparisons.FileSystemPath)))
-        {
-            allCandidates = [.. allCandidates, selectedAppHost];
+                    StringComparisons.FileSystemPath));
+
+            if (equivalentCandidateIndex >= 0)
+            {
+                allCandidates[equivalentCandidateIndex] = selectedAppHost;
+            }
+            else
+            {
+                allCandidates.Add(selectedAppHost);
+            }
         }
 
         return new AppHostProjectSearchResult(selectedAppHost, allCandidates);

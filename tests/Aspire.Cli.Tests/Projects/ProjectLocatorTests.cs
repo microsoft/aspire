@@ -4150,6 +4150,16 @@ builder.Build().Run();");
         // Exactly one candidate: the settings-derived path through the symlink must be
         // recognized as the same file as the walk-discovered real path.
         Assert.Single(found);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(pathThroughLink, result.SelectedProjectFile.FullName);
+        Assert.Equal(result.SelectedProjectFile.FullName, Assert.Single(result.AllProjectFileCandidates).FullName);
     }
 
     [Fact]
