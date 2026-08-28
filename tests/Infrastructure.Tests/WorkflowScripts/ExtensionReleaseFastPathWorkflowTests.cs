@@ -10,54 +10,50 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
 {
     private static readonly YamlMappingNode s_testsWorkflow = LoadWorkflow("tests.yml");
     private static readonly YamlMappingNode s_testJobs = Mapping(s_testsWorkflow, "jobs");
+    private static readonly YamlMappingNode s_extensionUnitWorkflow = LoadWorkflow("extension-unit-tests.yml");
+    private static readonly YamlMappingNode s_extensionUnitJobs = Mapping(s_extensionUnitWorkflow, "jobs");
     private static readonly YamlMappingNode s_ciWorkflow = LoadWorkflow("ci.yml");
     private static readonly YamlMappingNode s_ciJobs = Mapping(s_ciWorkflow, "jobs");
 
     [Fact]
-    public void WorkflowCallDeclaresReleaseOnlyInputDisabledByDefault()
+    public void FocusedExtensionWorkflowSupportsOptionalPackaging()
+    {
+        var workflowCall = Mapping(Mapping(s_extensionUnitWorkflow, "on"), "workflow_call");
+        var inputs = Mapping(workflowCall, "inputs");
+        var packageVsix = Mapping(inputs, "packageVsix");
+
+        Assert.Equal("boolean", Scalar(packageVsix, "type"));
+        Assert.Equal("true", Scalar(packageVsix, "default"));
+
+        var extensionVersionOverride = Mapping(inputs, "extensionVersionOverride");
+        Assert.Equal("string", Scalar(extensionVersionOverride, "type"));
+        Assert.Equal(string.Empty, Scalar(extensionVersionOverride, "default"));
+    }
+
+    [Fact]
+    public void FullTestsWorkflowDoesNotExposeReleaseOnlyMode()
     {
         var workflowCall = Mapping(Mapping(s_testsWorkflow, "on"), "workflow_call");
-        var input = Mapping(Mapping(workflowCall, "inputs"), "extensionReleaseOnly");
+        var inputs = Mapping(workflowCall, "inputs");
 
-        Assert.Equal("boolean", Scalar(input, "type"));
-        Assert.Equal("false", Scalar(input, "default"));
+        Assert.False(inputs.Children.ContainsKey(new YamlScalarNode("extensionReleaseOnly")));
     }
 
     [Fact]
-    public void ReleaseOnlyModeSkipsSetupAndIndependentArtifactProducers()
+    public void FocusedExtensionWorkflowContainsOnlyUnitTests()
     {
-        string[] skippedJobs =
-        [
-            "setup_for_tests",
-            "build_packages",
-            "build_cli_archive_linux",
-            "build_cli_archive_linux_arm64",
-            "build_cli_archive_windows",
-            "build_cli_archive_windows_arm64",
-            "build_cli_archive_macos",
-            "build_cli_archive_macos_x64",
-        ];
-
-        Assert.All(skippedJobs, jobName =>
-        {
-            var condition = Scalar(Mapping(s_testJobs, jobName), "if") ?? string.Empty;
-            Assert.Contains("!inputs.extensionReleaseOnly", condition, StringComparison.Ordinal);
-        });
+        Assert.Equal(
+            ["extension_tests_win"],
+            s_extensionUnitJobs.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
     }
 
     [Fact]
-    public void ExtensionUnitTestsRunInlineWhenSetupIsSkippedForReleaseOnlyMode()
+    public void FocusedExtensionWorkflowRunsUnitTestsAndOwnsPackaging()
     {
-        var job = Mapping(s_testJobs, "extension_tests_win");
+        var job = Mapping(s_extensionUnitJobs, "extension_tests_win");
 
         Assert.False(job.Children.ContainsKey(new YamlScalarNode("uses")));
         Assert.Equal("windows-latest", Scalar(job, "runs-on"));
-
-        var condition = CollapseWhitespace(Scalar(job, "if"));
-        Assert.StartsWith("${{ !cancelled() &&", condition, StringComparison.Ordinal);
-        Assert.Contains("inputs.extensionReleaseOnly", condition, StringComparison.Ordinal);
-        Assert.Contains("needs.setup_for_tests.outputs.run_extension_unit == 'true'", condition, StringComparison.Ordinal);
-        Assert.Contains("needs.setup_for_tests.outputs.run_extension_e2e == 'true'", condition, StringComparison.Ordinal);
 
         var steps = Steps(job);
         Assert.Equal(
@@ -83,12 +79,31 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void ReleaseOnlyModeDisablesVsixPackagingWithoutChangingNormalPackaging()
+    public void NormalAndReleaseCallersShareFocusedWorkflowWithDifferentPackaging()
     {
-        var steps = Steps(Mapping(s_testJobs, "extension_tests_win"));
+        var normalExtensionTests = Mapping(s_testJobs, "extension_tests_win");
+        Assert.Equal("./.github/workflows/extension-unit-tests.yml", Scalar(normalExtensionTests, "uses"));
+        Assert.Equal(
+            "${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}",
+            Scalar(normalExtensionTests, "if"));
+        Assert.Equal(["setup_for_tests"], SequenceScalars(normalExtensionTests, "needs"));
+
+        var normalInputs = Mapping(normalExtensionTests, "with");
+        Assert.Equal("true", Scalar(normalInputs, "packageVsix"));
+        Assert.Equal("${{ inputs.extensionVersionOverride }}", Scalar(normalInputs, "extensionVersionOverride"));
+
+        var releaseExtensionTests = Mapping(s_ciJobs, "extension_release_tests");
+        Assert.Equal("./.github/workflows/extension-unit-tests.yml", Scalar(releaseExtensionTests, "uses"));
+        Assert.Equal("false", Scalar(Mapping(releaseExtensionTests, "with"), "packageVsix"));
+    }
+
+    [Fact]
+    public void FocusedWorkflowPackagesAfterTestFailuresOnlyWhenRequested()
+    {
+        var steps = Steps(Mapping(s_extensionUnitJobs, "extension_tests_win"));
         var overrideVersion = Assert.Single(steps, step => Scalar(step, "name") == "Override extension version for PR builds");
         Assert.Equal(
-            "${{ !inputs.extensionReleaseOnly && !cancelled() && inputs.extensionVersionOverride != '' }}",
+            "${{ inputs.packageVsix && !cancelled() && inputs.extensionVersionOverride != '' }}",
             Scalar(overrideVersion, "if"));
 
         string[] packagingSteps =
@@ -103,12 +118,12 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
         Assert.All(packagingSteps, stepName =>
         {
             var step = Assert.Single(steps, candidate => Scalar(candidate, "name") == stepName);
-            Assert.Equal("${{ !inputs.extensionReleaseOnly && !cancelled() }}", Scalar(step, "if"));
+            Assert.Equal("${{ inputs.packageVsix && !cancelled() }}", Scalar(step, "if"));
         });
     }
 
     [Fact]
-    public void FinalResultsRequiresReleaseUnitTestSuccessAndPreservesNormalSkipChecks()
+    public void FullTestsFinalResultsPreserveNormalSkipChecks()
     {
         var results = Mapping(s_testJobs, "results");
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any dependency failed");
@@ -116,15 +131,6 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
 
         Assert.Contains("contains(needs.*.result, 'failure')", condition, StringComparison.Ordinal);
         Assert.Contains("contains(needs.*.result, 'cancelled')", condition, StringComparison.Ordinal);
-        Assert.Contains(
-            "(inputs.extensionReleaseOnly && needs.extension_tests_win.result != 'success')",
-            condition,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "(!inputs.extensionReleaseOnly && ((github.event_name == 'pull_request'",
-            condition,
-            StringComparison.Ordinal);
-
         string[] normalModeSkipChecks =
         [
             "needs.extension_tests_win.result == 'skipped'",
@@ -154,35 +160,45 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
     }
 
     [Fact]
-    public void ReleaseOnlyModeSkipsTestResultAggregation()
+    public void FullTestsWorkflowAlwaysAggregatesTestResults()
     {
         var steps = Steps(Mapping(s_testJobs, "results"));
-        var failureStep = Assert.Single(steps, step => Scalar(step, "name") == "Fail if any dependency failed");
 
         Assert.All(
-            steps.Where(step => step != failureStep),
-            step => Assert.Contains("!inputs.extensionReleaseOnly", Scalar(step, "if") ?? string.Empty, StringComparison.Ordinal));
+            steps.Where(step => Scalar(step, "name") is "Upload test results" or "Generate test results summary" or "Generate CI timeline"),
+            step => Assert.Equal("${{ always() }}", Scalar(step, "if")));
+        Assert.All(
+            steps.Where(step => Scalar(step, "name") is "Checkout code" or "Create test results directory" || Scalar(step, "uses")?.StartsWith("actions/download-artifact@", StringComparison.Ordinal) == true),
+            step => Assert.False(step.Children.ContainsKey(new YamlScalarNode("if"))));
     }
 
     [Fact]
-    public void ReleaseCallerGrantsAllReusableWorkflowPermissions()
+    public void TestMatrixCallersUseDescriptiveLaneNames()
     {
-        var workflowPermissions = Mapping(s_testsWorkflow, "permissions");
-        Assert.Equal("read", Scalar(workflowPermissions, "actions"));
-        Assert.Equal("read", Scalar(workflowPermissions, "contents"));
+        Dictionary<string, string> expectedNames = new()
+        {
+            ["tests_no_nugets"] = "No-package tests",
+            ["tests_requires_nugets_linux"] = "Package tests - Linux",
+            ["tests_requires_nugets_windows"] = "Package tests - Windows",
+            ["tests_requires_nugets_macos"] = "Package tests - macOS",
+            ["tests_requires_cli_archive"] = "CLI archive tests",
+        };
 
-        var normalPermissions = Mapping(Mapping(s_ciJobs, "tests"), "permissions");
+        Assert.All(
+            expectedNames,
+            expected => Assert.Equal(expected.Value, Scalar(Mapping(s_testJobs, expected.Key), "name")));
+    }
+
+    [Fact]
+    public void ReleaseCallerGrantsOnlyFocusedWorkflowPermissions()
+    {
+        var workflowPermissions = Mapping(s_extensionUnitWorkflow, "permissions");
         var releasePermissions = Mapping(Mapping(s_ciJobs, "extension_release_tests"), "permissions");
-        string[] requiredPermissions =
-        [
-            "actions",
-            "contents",
-            "issues",
-            "pull-requests",
-        ];
 
-        Assert.Equal(requiredPermissions, releasePermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value).Order());
-        Assert.All(requiredPermissions, permission => Assert.Equal(Scalar(normalPermissions, permission), Scalar(releasePermissions, permission)));
+        Assert.Equal(["contents"], workflowPermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+        Assert.Equal(["contents"], releasePermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
+        Assert.Equal("read", Scalar(workflowPermissions, "contents"));
+        Assert.Equal("read", Scalar(releasePermissions, "contents"));
     }
 
     [Fact]
@@ -320,11 +336,11 @@ public sealed class ExtensionReleaseFastPathWorkflowTests
             Scalar(normalTests, "if"));
 
         var releaseTests = Mapping(s_ciJobs, "extension_release_tests");
-        Assert.Equal("./.github/workflows/tests.yml", Scalar(releaseTests, "uses"));
+        Assert.Equal("./.github/workflows/extension-unit-tests.yml", Scalar(releaseTests, "uses"));
         Assert.Equal(
             "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' }}",
             Scalar(releaseTests, "if"));
-        Assert.Equal("true", Scalar(Mapping(releaseTests, "with"), "extensionReleaseOnly"));
+        Assert.Equal("false", Scalar(Mapping(releaseTests, "with"), "packageVsix"));
     }
 
     [Fact]

@@ -124,22 +124,17 @@ jobs:
   # The release PR (aspire-repo-bot, base=main, head=extension-release/vX.Y.Z,
   # diff limited to extension/package.json + extension/CHANGELOG.md) has no
   # need for the full test graph -- no .NET changes, no CLI archives, no E2E,
-  # no stabilization build. The release-only mode runs just the VS Code
-  # extension unit tests inside the same reusable workflow as normal CI.
+  # no stabilization build. The focused workflow runs only the VS Code
+  # extension unit tests and skips VSIX packaging because there is no E2E consumer.
   extension_release_tests:
     name: Extension release tests
     needs: [prepare_for_ci]
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && needs.prepare_for_ci.outputs.is_trusted_extension_release_pr == 'true' }}
-    uses: ./.github/workflows/tests.yml
-    # GitHub validates every permission requested by a reusable workflow, including jobs skipped
-    # by extensionReleaseOnly. Keep this in sync with the normal tests caller above.
+    uses: ./.github/workflows/extension-unit-tests.yml
     permissions:
-      actions: read
       contents: read
-      issues: write
-      pull-requests: write
     with:
-      extensionReleaseOnly: true
+      packageVsix: false
 
   # Stabilization gate.
   #

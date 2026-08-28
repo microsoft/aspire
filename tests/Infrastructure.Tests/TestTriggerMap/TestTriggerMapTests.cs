@@ -28,6 +28,19 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
+    {
+        const string workflow = ".github/workflows/extension-unit-tests.yml";
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(path => TestTriggerMap.GlobMatches(path, workflow)))
+            .SelectMany(rule => rule.Targets)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("job:extension-unit", targets);
+        Assert.Contains("job:extension-e2e", targets);
+    }
+
+    [Fact]
     public void RulesAreWellFormed()
     {
         // Structural hygiene: a path rule with no globs, or globs but no targets, is dead weight
