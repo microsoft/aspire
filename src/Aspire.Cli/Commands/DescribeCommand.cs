@@ -13,6 +13,7 @@ using Aspire.Cli.Utils;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Model.Serialization;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -75,6 +76,7 @@ internal sealed class DescribeCommand : BaseCommand
 
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ResourceColorMap _resourceColorMap;
+    private readonly ILogger<ResourceSnapshotWatcher> _resourceSnapshotWatcherLogger;
 
     private static readonly Argument<string?> s_resourceArgument = new("resource")
     {
@@ -102,12 +104,14 @@ internal sealed class DescribeCommand : BaseCommand
     public DescribeCommand(
         AppHostConnectionResolver connectionResolver,
         ResourceColorMap resourceColorMap,
+        ILogger<ResourceSnapshotWatcher> resourceSnapshotWatcherLogger,
         CommonCommandServices services)
         : base("describe", DescribeCommandStrings.Description, services)
     {
         Aliases.Add("resources");
         _resourceColorMap = resourceColorMap;
         _connectionResolver = connectionResolver;
+        _resourceSnapshotWatcherLogger = resourceSnapshotWatcherLogger;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -147,7 +151,11 @@ internal sealed class DescribeCommand : BaseCommand
         // so the user can describe any resource by name.
         var effectiveIncludeHidden = includeHidden || resourceName is not null;
         var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-        using var resourceWatcher = new ResourceSnapshotWatcher(connection, effectiveIncludeHidden);
+        using var resourceWatcher = new ResourceSnapshotWatcher(
+            connection,
+            _resourceSnapshotWatcherLogger,
+            effectiveIncludeHidden,
+            bufferUpdates: follow);
         await resourceWatcher.WaitForInitialLoadAsync(cancellationToken).ConfigureAwait(false);
 
         var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
@@ -161,7 +169,7 @@ internal sealed class DescribeCommand : BaseCommand
         {
             try
             {
-                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
@@ -221,23 +229,19 @@ internal sealed class DescribeCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
-    private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeDisabledCommands, CancellationToken cancellationToken)
+    private async Task<int> ExecuteWatchAsync(ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeDisabledCommands, CancellationToken cancellationToken)
     {
         // Cache the last displayed content per resource to avoid duplicate output.
         // Values are either a string (JSON mode) or a ResourceDisplayState (non-JSON mode).
         var lastDisplayedContent = new Dictionary<string, object>(StringComparers.ResourceName);
 
-        // Stream resource snapshots. The watcher keeps its dictionary up to date in the
-        // background, so we use it for relationship resolution and display name deduplication.
-        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
+        void DisplaySnapshot(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> currentSnapshots)
         {
             // Skip hidden resources when not included
             if (!resourceWatcher.IncludeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
             {
-                continue;
+                return;
             }
-
-            var currentSnapshots = resourceWatcher.GetAllResources().ToList();
 
             // Filter by resource name if specified
             if (resourceName is not null)
@@ -245,13 +249,17 @@ internal sealed class DescribeCommand : BaseCommand
                 var resolved = ResourceSnapshotMapper.ResolveResources(resourceName, currentSnapshots);
                 if (!resolved.Any(r => string.Equals(r.Name, snapshot.Name, StringComparison.OrdinalIgnoreCase)))
                 {
-                    continue;
+                    return;
                 }
             }
 
             if (format == OutputFormat.Json)
             {
-                var resourceJson = ResourceSnapshotMapper.MapToResourceJson(snapshot, currentSnapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
+                var resourceJson = ResourceSnapshotMapper.MapToResourceJson(
+                    snapshot,
+                    currentSnapshots,
+                    dashboardBaseUrl,
+                    includeDisabledCommands: includeDisabledCommands);
 
                 // NDJSON output - compact, one object per line for streaming
                 var json = JsonSerializer.Serialize(resourceJson, ResourcesCommandJsonContext.Ndjson.ResourceJson);
@@ -259,7 +267,7 @@ internal sealed class DescribeCommand : BaseCommand
                 // Skip if the JSON is identical to the last output for this resource
                 if (lastDisplayedContent.TryGetValue(snapshot.Name, out var lastValue) && lastValue is string lastJson && lastJson == json)
                 {
-                    continue;
+                    return;
                 }
 
                 lastDisplayedContent[snapshot.Name] = json;
@@ -269,14 +277,53 @@ internal sealed class DescribeCommand : BaseCommand
             {
                 // Human-readable update - build display state and skip if unchanged
                 var displayState = BuildResourceDisplayState(snapshot, currentSnapshots);
-
                 if (lastDisplayedContent.TryGetValue(snapshot.Name, out var lastValue) && lastValue.Equals(displayState))
                 {
-                    continue;
+                    return;
                 }
 
                 lastDisplayedContent[snapshot.Name] = displayState;
                 DisplayResourceUpdate(displayState);
+            }
+        }
+
+        var initialCapture = resourceWatcher.CaptureAllResources();
+        var currentSnapshots = initialCapture.Resources.ToList();
+        var snapshotIndexes = currentSnapshots
+            .Select((snapshot, index) => (snapshot.Name, index))
+            .ToDictionary(item => item.Name, item => item.index, StringComparers.ResourceName);
+        foreach (var snapshot in currentSnapshots)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DisplaySnapshot(snapshot, currentSnapshots);
+        }
+
+        await foreach (var batch in resourceWatcher.WatchResourceSnapshotBatchesAsync(initialCapture.UpdateSequence, cancellationToken).ConfigureAwait(false))
+        {
+            var changedSnapshots = new List<ResourceSnapshot>(batch.Snapshots.Count);
+            foreach (var snapshot in batch.Snapshots)
+            {
+                if (snapshotIndexes.TryGetValue(snapshot.Name, out var index))
+                {
+                    if (batch.IsResync && ReferenceEquals(currentSnapshots[index], snapshot))
+                    {
+                        continue;
+                    }
+
+                    currentSnapshots[index] = snapshot;
+                }
+                else
+                {
+                    snapshotIndexes.Add(snapshot.Name, currentSnapshots.Count);
+                    currentSnapshots.Add(snapshot);
+                }
+
+                changedSnapshots.Add(snapshot);
+            }
+
+            foreach (var snapshot in changedSnapshots)
+            {
+                DisplaySnapshot(snapshot, currentSnapshots);
             }
         }
 

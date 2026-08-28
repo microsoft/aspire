@@ -676,6 +676,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public bool SupportsV2 => _inner.SupportsV2;
         public bool SupportsV3 => _inner.SupportsV3;
         public bool SupportsTerminalsV1 => _inner.SupportsTerminalsV1;
+        public bool SupportsResourceSnapshotVersionsV1 => _inner.SupportsResourceSnapshotVersionsV1;
 
         public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
         {

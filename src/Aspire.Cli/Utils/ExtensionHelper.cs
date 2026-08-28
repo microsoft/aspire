@@ -48,6 +48,8 @@ internal static class KnownCapabilities
     // before opting into newline-delimited JSON candidate discovery.
     public const string LsJsonStream = "ls-json-stream.v1";
 
+    public const string AppHostLogOutput = "apphost-log-output.v1";
+
     // Advertised so tooling can pass `aspire run --isolated` only to CLIs that understand it.
     public const string IsolatedLaunch = "isolated-launch.v1";
 
