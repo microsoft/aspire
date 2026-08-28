@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Azure.AI.Inference;
+using Azure.Core;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -159,6 +161,48 @@ public class AspireAzureAIInferenceEmbeddingsExtensionTests
         using var host = builder.Build();
 
         Assert.Equal(expected, host.Services.GetService<HealthCheckService>() is not null);
+    }
+
+    [Theory]
+    [InlineData(200, HealthStatus.Healthy)]
+    [InlineData(500, HealthStatus.Unhealthy)]
+    public async Task HealthCheckReturnsExpectedStatus(int responseStatus, HealthStatus expectedStatus)
+    {
+        var transport = new MockTransport(_ => CreateResponse(responseStatus));
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:embedding", "Endpoint=https://account.services.ai.azure.com/models;Key=fakekey;Model=model")
+        ]);
+
+        builder.AddAzureEmbeddingsClient(
+            "embedding",
+            configureClientBuilder: clientBuilder => clientBuilder.ConfigureOptions(options =>
+            {
+                options.Transport = transport;
+                options.Retry.MaxRetries = 0;
+            }));
+
+        using var host = builder.Build();
+        var healthCheckService = host.Services.GetRequiredService<HealthCheckService>();
+
+        var report = await healthCheckService.CheckHealthAsync();
+
+        Assert.Equal(expectedStatus, Assert.Single(report.Entries).Value.Status);
+        Assert.Equal("/models/info", Assert.Single(transport.Requests).Uri.Path);
+    }
+
+    private static MockResponse CreateResponse(int status)
+    {
+        var response = new MockResponse(status).SetContent("""
+            {
+              "model_name": "model",
+              "model_type": "embeddings",
+              "model_provider_name": "provider"
+            }
+            """);
+        response.AddHeader(new HttpHeader("Content-Type", "application/json"));
+
+        return response;
     }
 
     [Theory]
