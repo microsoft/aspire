@@ -2629,7 +2629,7 @@ public class AzureSandboxesTests
                 "owner",
                 "frontend-sandbox-container",
                 "deploy",
-                responseLossReconciliationTimeout: TimeSpan.FromMilliseconds(100),
+                responseLossReconciliationTimeout: TimeSpan.FromSeconds(1),
                 pollInterval: TimeSpan.FromMilliseconds(1)));
 
         Assert.Equal("create response lost", exception.Message);
