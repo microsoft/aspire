@@ -118,7 +118,7 @@ public static partial class OtlpHelpers
         // in time share the same leading characters, e.g. Guid.CreateVersion7().
         // Before: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
         // After:  eeeeeeee
-        if (instanceId != null && Guid.TryParse(instanceId, out var guid))
+        if (instanceId is not null && Guid.TryParse(instanceId, out var guid))
         {
             Span<char> chars = stackalloc char[32];
             var result = guid.TryFormat(chars, out var charsWritten, format: "N");
