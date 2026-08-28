@@ -103,7 +103,7 @@ export async function activate(context: vscode.ExtensionContext) {
   terminalProvider.closeAllOpenAspireTerminals();
 
   const configInfoProvider = new ConfigInfoProvider(terminalProvider);
-  const outdatedCliNotifier = new OutdatedCliNotifier(configInfoProvider);
+  const outdatedCliNotifier = new OutdatedCliNotifier(configInfoProvider, undefined, Date.now, context.globalState);
   context.subscriptions.push(outdatedCliNotifier);
   context.subscriptions.push(onDidResolveCliForOperation(({ target, cliPath }) => {
     void outdatedCliNotifier.notifyIfOutdated(target, cliPath).catch(error => {

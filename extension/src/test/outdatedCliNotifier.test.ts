@@ -67,7 +67,7 @@ suite('outdatedCliNotifier', () => {
         }
     }
 
-    function createNotifier(now: () => number = Date.now): {
+    function createNotifier(now: () => number = Date.now, globalState?: vscode.Memento): {
         notifier: OutdatedCliNotifier;
         versionProvider: FakeVersionProvider;
         surface: FakeSurface;
@@ -75,9 +75,25 @@ suite('outdatedCliNotifier', () => {
         const versionProvider = new FakeVersionProvider();
         const surface = new FakeSurface();
         return {
-            notifier: new OutdatedCliNotifier(versionProvider, surface, now),
+            notifier: new OutdatedCliNotifier(versionProvider, surface, now, globalState),
             versionProvider,
             surface,
+        };
+    }
+
+    function createMemento(): vscode.Memento {
+        const values = new Map<string, unknown>();
+        return {
+            keys: () => [...values.keys()],
+            get: <T>(key: string, defaultValue?: T): T | undefined =>
+                values.has(key) ? values.get(key) as T : defaultValue,
+            update: async (key: string, value: unknown): Promise<void> => {
+                if (value === undefined) {
+                    values.delete(key);
+                } else {
+                    values.set(key, value);
+                }
+            },
         };
     }
 
@@ -112,11 +128,82 @@ suite('outdatedCliNotifier', () => {
         assert.strictEqual(
             surface.warnings[0].message,
             'Aspire CLI 13.5.0 at /workspace/a/.aspire/bin/aspire has a newer version available for its current channel: 13.6.0.');
-        assert.deepStrictEqual(surface.warnings[0].actions, [strings.updateAspireCliAction]);
+        assert.deepStrictEqual(surface.warnings[0].actions, [
+            strings.updateAspireCliAction,
+            strings.dontShowAgainLabel,
+        ]);
         assert.deepStrictEqual(surface.commands, [{
             command: 'aspire-vscode.updateSelf',
             args: [target, '/workspace/a/.aspire/bin/aspire'],
         }]);
+        notifier.dispose();
+    });
+
+    test("Don't Show Again persists for the exact CLI path and version", async () => {
+        const globalState = createMemento();
+        const first = createNotifier(Date.now, globalState);
+        first.surface.selection = strings.dontShowAgainLabel;
+
+        await first.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(first.surface.warnings.length, 1);
+        assert.deepStrictEqual(first.surface.commands, []);
+        first.notifier.dispose();
+
+        const second = createNotifier(Date.now, globalState);
+        await second.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.deepStrictEqual(second.surface.warnings, []);
+        assert.strictEqual(second.versionProvider.identityCalls.length, 1);
+        assert.deepStrictEqual(second.versionProvider.recommendationCalls, []);
+        second.notifier.dispose();
+
+        const third = createNotifier(Date.now, globalState);
+        third.versionProvider.identity = {
+            cliPath: '/cli/aspire',
+            version: '13.5.1',
+        };
+        third.versionProvider.recommendation = {
+            status: 'available',
+            currentVersion: '13.5.1',
+            version: '13.6.0',
+        };
+        await third.notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(third.surface.warnings.length, 1);
+        third.notifier.dispose();
+    });
+
+    test("Don't Show Again on a stale warning does not suppress the replacement version", async () => {
+        let now = 0;
+        const globalState = createMemento();
+        const { notifier, versionProvider, surface } = createNotifier(() => now, globalState);
+        let resolveOldSelection!: (selection: string | undefined) => void;
+        surface.selectionPromise = new Promise(resolve => resolveOldSelection = resolve);
+
+        const oldWarning = notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+        await waitFor(() => surface.warnings.length === 1, 'Expected the old CLI warning to open.');
+
+        now = 5 * 60 * 1_000;
+        versionProvider.identity = {
+            cliPath: '/cli/aspire',
+            version: '13.5.1',
+        };
+        versionProvider.recommendation = {
+            status: 'available',
+            currentVersion: '13.5.1',
+            version: '13.6.0',
+        };
+        surface.selectionPromise = undefined;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        resolveOldSelection(strings.dontShowAgainLabel);
+        await oldWarning;
+
+        now += 6 * 60 * 60 * 1_000;
+        await notifier.notifyIfOutdated(windowCliPathTarget, '/cli/aspire');
+
+        assert.strictEqual(versionProvider.recommendationCalls.length, 3);
         notifier.dispose();
     });
 

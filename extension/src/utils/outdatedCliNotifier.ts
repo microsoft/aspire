@@ -17,6 +17,8 @@ const versionFailureRetryMs = 60 * 1_000;
 const completedUpdateRefreshIntervalMs = 6 * 60 * 60 * 1_000;
 const unavailableRetryBaseMs = 60 * 1_000;
 const unavailableRetryMaximumMs = 30 * 60 * 1_000;
+const persistedSuppressionKey = 'outdatedCliNotification.suppressedCliVersions';
+const maximumPersistedSuppressions = 100;
 
 type CliVersionProvider = Pick<ConfigInfoProvider, 'getCliIdentity' | 'getCliVersion' | 'getCliUpdateRecommendation'>;
 
@@ -28,7 +30,7 @@ export interface OutdatedCliNotificationSurface {
 interface CliCheckState {
     identity: CliIdentityInfo | undefined;
     versionValidUntil: number;
-    updateStatus: 'complete' | 'ineligible' | 'unavailable' | undefined;
+    updateStatus: 'complete' | 'ineligible' | 'suppressed' | 'unavailable' | undefined;
     updateValidUntil: number;
     failureCount: number;
 }
@@ -51,6 +53,7 @@ const defaultSurface: OutdatedCliNotificationSurface = {
 export class OutdatedCliNotifier implements vscode.Disposable {
     private readonly _stateByCliPath = new Map<string, CliCheckState>();
     private readonly _notifiedCliVersions = new Set<string>();
+    private readonly _persistentlySuppressedCliVersions: Set<string>;
     private readonly _inFlightByCliPath = new Map<string, Promise<PendingNotification | undefined>>();
     private readonly _cancellationSource = new vscode.CancellationTokenSource();
     private readonly _versionLimiter = new AsyncLimiter(4);
@@ -61,7 +64,13 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         private readonly _versionProvider: CliVersionProvider,
         private readonly _surface: OutdatedCliNotificationSurface = defaultSurface,
         private readonly _now: () => number = Date.now,
+        private readonly _globalState?: vscode.Memento,
     ) {
+        const persistedSuppressions = _globalState?.get<unknown>(persistedSuppressionKey);
+        this._persistentlySuppressedCliVersions = new Set(
+            Array.isArray(persistedSuppressions)
+                ? persistedSuppressions.filter((value): value is string => typeof value === 'string')
+                : []);
     }
 
     async notifyIfOutdated(target: CliPathResolutionTarget, cliPath: string): Promise<void> {
@@ -93,8 +102,9 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             return;
         }
 
-        const notificationKey = `${getComparisonKey(path.normalize(notification.cli.cliPath))}\u0000${notification.cli.version}`;
-        if (this._notifiedCliVersions.has(notificationKey)) {
+        const notificationKey = getNotificationKey(notification.cli.cliPath, notification.cli.version);
+        if (this._notifiedCliVersions.has(notificationKey) ||
+            this._persistentlySuppressedCliVersions.has(notificationKey)) {
             return;
         }
 
@@ -104,8 +114,16 @@ export class OutdatedCliNotifier implements vscode.Disposable {
                 notification.cli.version,
                 notification.cli.cliPath,
                 notification.recommendedVersion),
-            strings.updateAspireCliAction);
-        if (this._disposed || selection !== strings.updateAspireCliAction) {
+            strings.updateAspireCliAction,
+            strings.dontShowAgainLabel);
+        if (this._disposed) {
+            return;
+        }
+        if (selection === strings.dontShowAgainLabel) {
+            await this._suppressNotification(notificationKey, notification.cli.cliPath);
+            return;
+        }
+        if (selection !== strings.updateAspireCliAction) {
             return;
         }
 
@@ -174,8 +192,17 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             };
         this._stateByCliPath.set(cliPathKey, state);
 
+        const notificationKey = getNotificationKey(identity.cliPath, identity.version);
+        if (this._persistentlySuppressedCliVersions.has(notificationKey)) {
+            state.updateStatus = 'suppressed';
+            state.updateValidUntil = Number.POSITIVE_INFINITY;
+            state.failureCount = 0;
+            return undefined;
+        }
+
         if (!identityChanged &&
             (state.updateStatus === 'ineligible' ||
+                state.updateStatus === 'suppressed' ||
                 (state.updateStatus !== undefined && state.updateValidUntil > now))) {
             return undefined;
         }
@@ -238,6 +265,31 @@ export class OutdatedCliNotifier implements vscode.Disposable {
             unavailableRetryMaximumMs);
     }
 
+    private async _suppressNotification(notificationKey: string, cliPath: string): Promise<void> {
+        this._persistentlySuppressedCliVersions.delete(notificationKey);
+        this._persistentlySuppressedCliVersions.add(notificationKey);
+        while (this._persistentlySuppressedCliVersions.size > maximumPersistedSuppressions) {
+            const oldest = this._persistentlySuppressedCliVersions.values().next().value;
+            if (oldest === undefined) {
+                break;
+            }
+            this._persistentlySuppressedCliVersions.delete(oldest);
+        }
+
+        const cliPathKey = getComparisonKey(path.normalize(cliPath));
+        const state = this._stateByCliPath.get(cliPathKey);
+        if (state?.identity &&
+            getNotificationKey(state.identity.cliPath, state.identity.version) === notificationKey) {
+            state.updateStatus = 'suppressed';
+            state.updateValidUntil = Number.POSITIVE_INFINITY;
+            state.failureCount = 0;
+        }
+
+        await this._globalState?.update(
+            persistedSuppressionKey,
+            [...this._persistentlySuppressedCliVersions]);
+    }
+
     dispose(): void {
         if (this._disposed) {
             return;
@@ -251,6 +303,10 @@ export class OutdatedCliNotifier implements vscode.Disposable {
         this._stateByCliPath.clear();
         this._notifiedCliVersions.clear();
     }
+}
+
+function getNotificationKey(cliPath: string, version: string): string {
+    return `${getComparisonKey(path.normalize(cliPath))}\u0000${version}`;
 }
 
 function areCliIdentitiesEqual(left: CliIdentityInfo | undefined, right: CliIdentityInfo): boolean {
