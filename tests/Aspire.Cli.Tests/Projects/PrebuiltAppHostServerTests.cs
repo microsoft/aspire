@@ -2167,14 +2167,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_UsesRestoreConfigFile()
+    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_PreservesAmbientNuGetConfig()
     {
-        // Explicit channel mappings flow through a generated RestoreConfigFile so generated
-        // integration projects use package source mappings instead of source-list-only restore.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         XDocument? generatedProject = null;
-        XDocument? generatedRestoreConfig = null;
 
         var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(aspireConfigPath, """
@@ -2192,12 +2189,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             BuildAsyncCallback = (projectFilePath, _, _, _) =>
             {
                 generatedProject = XDocument.Load(projectFilePath.FullName);
-                var ns = generatedProject.Root!.GetDefaultNamespace();
-                var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
-                if (!string.IsNullOrEmpty(restoreConfigFile))
-                {
-                    generatedRestoreConfig = XDocument.Load(restoreConfigFile);
-                }
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
             }
@@ -2234,15 +2225,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             var ns = generatedProject!.Root!.GetDefaultNamespace();
             var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
-            Assert.False(string.IsNullOrEmpty(restoreConfigFile));
-            Assert.NotNull(generatedRestoreConfig);
-
-            var packageSources = generatedRestoreConfig.Descendants("packageSources")
-                .Elements("add")
-                .Select(e => e.Attribute("value")?.Value)
-                .ToArray();
-            Assert.Contains(channelSource, packageSources);
-            Assert.Null(generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault());
+            var restoreSources = generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+            Assert.Null(restoreConfigFile);
+            Assert.Equal(channelSource, restoreSources);
+            Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
 
             // Aspire package versions remain in their original (non-pinned) form when no override
             // is in play; the exact-version pinning only fires when a single source is selected.
@@ -2258,12 +2244,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithCredentialBearingChannelSource_KeepsRestoreConfigTemporary()
+    public async Task PrepareAsync_WithoutRequestedChannelAndCredentialBearingSource_KeepsRestoreSourcesTemporary()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
-        string? restoreConfigFile = null;
-        string? restoreConfigContent = null;
+        string? restoreSourcesPropsFile = null;
+        string? restoreSourcesPropsContent = null;
 
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2275,10 +2261,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             {
                 var generatedProject = XDocument.Load(projectFilePath.FullName);
                 var ns = generatedProject.Root!.GetDefaultNamespace();
-                restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
-                Assert.False(string.IsNullOrEmpty(restoreConfigFile));
-                Assert.True(File.Exists(restoreConfigFile));
-                restoreConfigContent = File.ReadAllText(restoreConfigFile);
+                Assert.Null(generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault());
+                Assert.Null(generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault());
+
+                restoreSourcesPropsFile = generatedProject.Descendants(ns + "Import")
+                    .Select(static element => element.Attribute("Project")?.Value)
+                    .Single(path => string.Equals(Path.GetFileName(path), "IntegrationRestoreSources.props", StringComparison.Ordinal));
+                Assert.True(File.Exists(restoreSourcesPropsFile));
+                restoreSourcesPropsContent = File.ReadAllText(restoreSourcesPropsFile);
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
             }
@@ -2311,16 +2301,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 [
                     IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
                     IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
-                ],
-                requestedChannel: "daily");
+                ]);
 
             Assert.True(result.Success);
-            Assert.NotNull(restoreConfigFile);
-            Assert.NotNull(restoreConfigContent);
-            Assert.Contains(channelSource, restoreConfigContent);
-            Assert.False(File.Exists(restoreConfigFile));
+            Assert.NotNull(restoreSourcesPropsFile);
+            Assert.NotNull(restoreSourcesPropsContent);
+            Assert.Contains(channelSource, restoreSourcesPropsContent);
+            Assert.False(File.Exists(restoreSourcesPropsFile));
             Assert.False(File.Exists(Path.Combine(workingDirectory, "integration-restore", "nuget.config")));
             Assert.False(File.Exists(restoreStampFile));
+
+            var persistedProjectContent = await File.ReadAllTextAsync(
+                Path.Combine(workingDirectory, "integration-restore", PrebuiltAppHostServer.IntegrationProjectFileName));
+            Assert.DoesNotContain(channelSource, persistedProjectContent);
         }
         finally
         {

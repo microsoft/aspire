@@ -746,16 +746,28 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         Directory.CreateDirectory(restoreDir);
 
         var restoreSources = await ResolveIntegrationRestoreSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken).ConfigureAwait(false);
-        var hasCredentialBearingRestoreSource = restoreSources.PackageSourceMappings?.Any(
-            static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source)) == true;
-        if (hasCredentialBearingRestoreSource)
+        var useMappedRestoreConfig = !string.IsNullOrWhiteSpace(packageSourceOverride) &&
+            restoreSources.PackageSourceMappings is not null;
+        var hasCredentialBearingMappedSource = useMappedRestoreConfig &&
+            restoreSources.PackageSourceMappings!.Any(
+                static mapping => PackageSourceOverrideMappings.HasCredentialMaterial(mapping.Source));
+        var hasCredentialBearingAdditionalSource = !useMappedRestoreConfig &&
+            restoreSources.AdditionalSources.Any(
+                static source => PackageSourceOverrideMappings.HasCredentialMaterial(source));
+        var hasCredentialBearingRestoreSource =
+            hasCredentialBearingMappedSource || hasCredentialBearingAdditionalSource;
+
+        if (!useMappedRestoreConfig || hasCredentialBearingMappedSource)
         {
             var persistentRestoreConfigFile = new FileInfo(Path.Combine(restoreDir, "nuget.config"));
             if (persistentRestoreConfigFile.Exists)
             {
                 persistentRestoreConfigFile.Delete();
             }
+        }
 
+        if (hasCredentialBearingRestoreSource)
+        {
             var restoreStampFile = new FileInfo(Path.Combine(restoreDir, "obj", RestoreStampFileName));
             if (restoreStampFile.Exists)
             {
@@ -763,18 +775,28 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             }
         }
 
-        using var temporaryRestoreConfig = hasCredentialBearingRestoreSource
+        using var temporaryRestoreConfig = hasCredentialBearingMappedSource
             ? await CreateTemporaryNuGetConfigAsync(restoreSources).ConfigureAwait(false)
+            : null;
+        using var temporaryRestoreSourcesProps = hasCredentialBearingAdditionalSource
+            ? await TemporaryRestoreSourcesProps.CreateAsync(restoreSources.AdditionalSources, cancellationToken).ConfigureAwait(false)
             : null;
 
         FileInfo? restoreConfigFile;
         string? restoreConfigContent;
-        if (hasCredentialBearingRestoreSource)
+        if (!useMappedRestoreConfig)
         {
-            // Credential-bearing channel URLs must exist only for the duration of this build.
+            // Channel-only restores remain additive so NuGet continues discovering the user's
+            // ambient configuration, including private feeds used by the project-reference graph.
+            restoreConfigFile = null;
+            restoreConfigContent = null;
+        }
+        else if (temporaryRestoreConfig is not null)
+        {
+            // Credential-bearing mapped URLs must exist only for the duration of this build.
             // Persisting the generated config under .aspire/integrations would retain credentials
             // from sources such as overrideStagingFeed after the command exits.
-            restoreConfigFile = temporaryRestoreConfig!.ConfigFile;
+            restoreConfigFile = temporaryRestoreConfig.ConfigFile;
             restoreConfigContent = null;
         }
         else
@@ -785,7 +807,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
                 : await File.ReadAllTextAsync(restoreConfigFile.FullName, cancellationToken).ConfigureAwait(false);
         }
 
-        var channelSources = restoreConfigFile is null
+        var channelSources = restoreConfigFile is null && temporaryRestoreSourcesProps is null
             ? GetNuGetSources(restoreSources)
             : null;
         var projectContent = GenerateIntegrationProjectFile(
@@ -794,7 +816,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreDir,
             channelSources,
             useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
-            restoreConfigFile: restoreConfigFile?.FullName);
+            restoreConfigFile: restoreConfigFile?.FullName,
+            restoreSourcesPropsFile: temporaryRestoreSourcesProps?.PropsFile.FullName);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await WriteIfChangedAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -896,7 +919,8 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         string restoreDir,
         IEnumerable<string>? additionalSources = null,
         bool useExactPackageVersions = false,
-        string? restoreConfigFile = null)
+        string? restoreConfigFile = null,
+        string? restoreSourcesPropsFile = null)
     {
         IEnumerable<string>? restoreAdditionalSources = additionalSources;
         if (!string.IsNullOrWhiteSpace(restoreConfigFile))
@@ -911,6 +935,11 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             restoreDir,
             restoreAdditionalSources,
             restoreConfigFile);
+
+        if (!string.IsNullOrWhiteSpace(restoreSourcesPropsFile))
+        {
+            projectFile.Imports.Add(new CSharpProjectImport(restoreSourcesPropsFile));
+        }
 
         foreach (var packageReference in packageRefs)
         {
@@ -1326,5 +1355,60 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private sealed class AppHostServerPrepareFailedException(string message, OutputCollector output) : Exception(message)
     {
         public OutputCollector Output { get; } = output;
+    }
+
+    private sealed class TemporaryRestoreSourcesProps : IDisposable
+    {
+        private readonly DirectoryInfo _directory;
+
+        private TemporaryRestoreSourcesProps(DirectoryInfo directory, FileInfo propsFile)
+        {
+            _directory = directory;
+            PropsFile = propsFile;
+        }
+
+        public FileInfo PropsFile { get; }
+
+        public static async Task<TemporaryRestoreSourcesProps> CreateAsync(
+            IReadOnlyList<string> sources,
+            CancellationToken cancellationToken)
+        {
+            var directory = Directory.CreateTempSubdirectory("aspire-restore-sources");
+            try
+            {
+                var propsFile = new FileInfo(Path.Combine(directory.FullName, "IntegrationRestoreSources.props"));
+                var document = new XDocument(
+                    new XElement("Project",
+                        new XElement("PropertyGroup",
+                            new XElement("RestoreAdditionalProjectSources", string.Join(";", sources)))));
+                await File.WriteAllTextAsync(propsFile.FullName, document.ToString(), cancellationToken).ConfigureAwait(false);
+                return new TemporaryRestoreSourcesProps(directory, propsFile);
+            }
+            catch
+            {
+                try
+                {
+                    directory.Delete(recursive: true);
+                }
+                catch
+                {
+                    // Ignore cleanup failures; surface the original exception instead.
+                }
+
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                _directory.Delete(recursive: true);
+            }
+            catch
+            {
+                // Temporary source properties are best-effort cleanup after the build completes.
+            }
+        }
     }
 }
