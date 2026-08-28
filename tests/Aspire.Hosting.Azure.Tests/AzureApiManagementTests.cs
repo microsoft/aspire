@@ -818,7 +818,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void ConsumptionSkuRejectsCustomDomains()
+    public void ConsumptionSkuSupportsOneGatewayCustomDomain()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
@@ -829,10 +829,16 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             Capacity = 0,
         });
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            apim.WithCustomDomain("api.contoso.example", vault.GetSecret("certificate")));
+        apim.WithCustomDomain("api.contoso.example", vault.GetSecret("certificate"));
 
-        Assert.Contains("not supported by the API Management Consumption SKU", exception.Message);
+        Assert.Single(apim.Resource.CustomDomains);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            apim.WithCustomDomain(
+                "portal.contoso.example",
+                vault.GetSecret("portal-certificate"),
+                AzureApiManagementHostnameType.DeveloperPortal));
+
+        Assert.Contains("supports custom domains only for the gateway endpoint", exception.Message);
     }
 
     [Theory]
@@ -862,6 +868,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData(AzureApiManagementSku.Consumption)]
     [InlineData(AzureApiManagementSku.Basic)]
     [InlineData(AzureApiManagementSku.BasicV2)]
     [InlineData(AzureApiManagementSku.Standard)]

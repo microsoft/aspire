@@ -315,7 +315,7 @@ apim.WithCustomDomain(
     defaultSslBinding: true);
 ```
 
-The certificate secret URI is versionless so APIM can automatically refresh renewed certificates. Aspire creates a user-assigned identity before the APIM service, grants it the Key Vault Certificate User role, and configures the hostname to use that identity. Custom domains are not supported on the Consumption SKU. Key Vaults that require APIM's system identity through the trusted-services firewall exception need a staged deployment and are not currently supported by this API.
+The certificate secret URI is versionless so APIM can automatically refresh renewed certificates. Aspire creates a user-assigned identity before the APIM service, grants it the Key Vault Certificate User role, and configures the hostname to use that identity. The Consumption SKU supports one custom domain for the gateway endpoint only. Key Vaults that require APIM's system identity through the trusted-services firewall exception need a staged deployment and are not currently supported by this API.
 
 ## TypeScript service configuration
 

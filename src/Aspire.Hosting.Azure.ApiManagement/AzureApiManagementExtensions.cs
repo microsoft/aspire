@@ -749,9 +749,11 @@ public static class AzureApiManagementExtensions
         {
             throw new InvalidOperationException("Only one custom hostname can be configured as the default SSL binding.");
         }
-        if (builder.Resource.Options.Sku == AzureApiManagementSku.Consumption)
+        if (builder.Resource.Options.Sku == AzureApiManagementSku.Consumption &&
+            type != AzureApiManagementHostnameType.Proxy)
         {
-            throw new InvalidOperationException("Custom domains are not supported by the API Management Consumption SKU.");
+            throw new InvalidOperationException(
+                "The API Management Consumption SKU supports custom domains only for the gateway endpoint.");
         }
         if (builder.Resource.Options.Sku is AzureApiManagementSku.BasicV2 or AzureApiManagementSku.StandardV2 or AzureApiManagementSku.PremiumV2 &&
             type is AzureApiManagementHostnameType.Management or AzureApiManagementHostnameType.Scm)
