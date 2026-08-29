@@ -14,4 +14,6 @@ with create_builder() as builder:
     storage.add_queues("resource")
     storage.add_queue("resource")
     storage.add_blob_container("resource")
+    files = storage.add_files("files")
+    files.add_file_share("media")
     builder.run()

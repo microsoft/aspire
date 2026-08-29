@@ -69,6 +69,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     internal string HelmChartDescription { get; set; } = "Aspire Helm Chart";
 
     /// <summary>
+    /// Gets or sets an optional timeout for Helm deployment readiness.
+    /// </summary>
+    internal TimeSpan? HelmDeploymentTimeout { get; set; }
+
+    /// <summary>
     /// Determines whether to include an Aspire dashboard for telemetry visualization in this environment.
     /// </summary>
     public bool DashboardEnabled { get; set; } = true;
@@ -600,8 +605,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     }
 
     /// <summary>
-    /// Resolves a <see cref="ReferenceExpression"/> for inclusion in a Kubernetes manifest
-    /// produced by an ingress or gateway resource. When the expression wraps one or more
+    /// Resolves a <see cref="ReferenceExpression"/> for inclusion in a generated Kubernetes
+    /// manifest. When the expression wraps one or more
     /// <see cref="ParameterResource"/> instances that must remain deploy-time inputs
     /// (for example, secrets or parameters without published defaults), the expression is
     /// rendered with Helm template placeholders (such as <c>{{ .Values.parameters.ingress.ingressclass }}</c>)
@@ -609,14 +614,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// </summary>
     /// <param name="expression">The reference expression to resolve.</param>
     /// <param name="owningResourceName">
-    /// The name of the resource (ingress or gateway) that owns this expression. Used as the
+    /// The name of the resource that owns this expression. Used as the
     /// scoping segment in the generated Helm parameter path so multiple ingress/gateway resources
     /// can reuse the same parameter name without collision.
     /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
     private async Task<string> ResolveExpressionAsync(ReferenceExpression expression, string owningResourceName, CancellationToken cancellationToken)
     {
-        if (!expression.ValueProviders.OfType<ParameterResource>().Any(ShouldCaptureAsHelmValue))
+        var hasDeferredValueProvider = expression.ValueProviders.Any(IsDeferredValueProvider);
+        if (!hasDeferredValueProvider &&
+            !expression.ValueProviders.OfType<ParameterResource>().Any(ShouldCaptureAsHelmValue))
         {
             try
             {
@@ -685,6 +692,32 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 : valueKey.ToHelmParameterExpression(owningResourceName);
         }
 
+        if (IsDeferredValueProvider(valueProvider) &&
+            valueProvider is IManifestExpressionProvider expressionProvider)
+        {
+            var valueKey = expressionProvider.ValueExpression
+                .Replace(HelmExtensions.StartDelimiter, string.Empty)
+                .Replace(HelmExtensions.EndDelimiter, string.Empty)
+                .Replace("{", string.Empty)
+                .Replace("}", string.Empty)
+                .Replace(".", "_")
+                .ToHelmValuesSectionName();
+
+            if (!CapturedHelmValueProviders.Any(c =>
+                    c.Section == HelmExtensions.ConfigKey &&
+                    c.ResourceKey == owningResourceKey &&
+                    c.ValueKey == valueKey))
+            {
+                CapturedHelmValueProviders.Add(new CapturedHelmValueProvider(
+                    HelmExtensions.ConfigKey,
+                    owningResourceKey,
+                    valueKey,
+                    valueProvider));
+            }
+
+            return valueKey.ToHelmConfigExpression(owningResourceName);
+        }
+
         // For non-ParameterResource providers (string literals, endpoint references, etc.)
         // resolve normally. If a nested provider throws MissingParameterValueException
         // we intentionally let it propagate: silently substituting an empty string here
@@ -696,6 +729,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     private static bool ShouldCaptureAsHelmValue(ParameterResource parameter)
         => parameter.Secret || parameter.Default is null;
+
+    private static bool IsDeferredValueProvider(IValueProvider valueProvider)
+        => valueProvider is IManifestExpressionProvider
+            and not ParameterResource
+            and not EndpointReference
+            and not EndpointReferenceExpression;
 
     private async Task<List<string>> ResolveHostnamesAsync(
         IEnumerable<ReferenceExpression> hostnames,
@@ -989,6 +1028,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         foreach (var volumeResource in volumeResources)
         {
             volumeResource.GeneratedClaim = await BuildPersistentVolumeClaim(volumeResource, cancellationToken).ConfigureAwait(false);
+            volumeResource.GeneratedVolume = volumeResource.TryGetLastAnnotation<KubernetesCsiPersistentVolumeSourceAnnotation>(out var source)
+                ? await BuildPersistentVolume(volumeResource, volumeResource.GeneratedClaim, source, cancellationToken).ConfigureAwait(false)
+                : null;
         }
     }
 
@@ -1008,13 +1050,19 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             },
         };
 
+        volumeResource.TryGetLastAnnotation<KubernetesCsiPersistentVolumeSourceAnnotation>(out var staticSource);
+
         foreach (var (key, value) in volumeResource.VolumeAnnotations)
         {
             claim.Metadata.Annotations[key] = await ResolveExpressionAsync(value, volumeResource.Name, cancellationToken).ConfigureAwait(false);
         }
 
         // Resolve access modes, falling back to the env-wide policy when none configured.
-        if (volumeResource.AccessModes.Count == 0)
+        if (volumeResource.AccessModes.Count == 0 && staticSource?.DefaultAccessMode is { } defaultAccessMode)
+        {
+            claim.Spec.AccessModes.Add(defaultAccessMode.ToKubernetesString());
+        }
+        else if (volumeResource.AccessModes.Count == 0)
         {
             claim.Spec.AccessModes.Add(DefaultStorageReadWritePolicy);
         }
@@ -1040,12 +1088,61 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 claim.Spec.StorageClassName = storageClass;
             }
         }
+        else if (!string.IsNullOrEmpty(staticSource?.DefaultStorageClassName))
+        {
+            claim.Spec.StorageClassName = staticSource.DefaultStorageClassName;
+        }
         else if (!string.IsNullOrEmpty(DefaultStorageClassName))
         {
             claim.Spec.StorageClassName = DefaultStorageClassName;
         }
 
+        if (staticSource is not null)
+        {
+            claim.Spec.VolumeName = volumeResource.GetVolumeName();
+            claim.Spec.StorageClassName ??= string.Empty;
+        }
+
         return claim;
+    }
+
+    private async Task<PersistentVolume> BuildPersistentVolume(
+        KubernetesPersistentVolumeResource volumeResource,
+        PersistentVolumeClaim claim,
+        KubernetesCsiPersistentVolumeSourceAnnotation source,
+        CancellationToken cancellationToken)
+    {
+        var volume = new PersistentVolume
+        {
+            Metadata =
+            {
+                Name = volumeResource.GetVolumeName(),
+            },
+            Spec =
+            {
+                StorageClassName = claim.Spec.StorageClassName ?? string.Empty,
+                PersistentVolumeReclaimPolicy = source.ReclaimPolicy.ToString(),
+                Csi = new CsiPersistentVolumeSourceV1
+                {
+                    Driver = source.Driver,
+                    VolumeHandle = await ResolveExpressionAsync(source.VolumeHandle, volumeResource.Name, cancellationToken).ConfigureAwait(false),
+                    FileSystemType = source.FileSystemType,
+                    ReadOnly = source.ReadOnly ? true : null,
+                },
+            },
+        };
+
+        volume.Spec.AccessModes.AddRange(claim.Spec.AccessModes);
+        volume.Spec.Capacity["storage"] = claim.Spec.Resources.Requests["storage"];
+        volume.Spec.MountOptions.AddRange(source.MountOptions);
+
+        foreach (var (key, value) in source.VolumeAttributes)
+        {
+            volume.Spec.Csi.VolumeAttributes[key] =
+                await ResolveExpressionAsync(value, volumeResource.Name, cancellationToken).ConfigureAwait(false);
+        }
+
+        return volume;
     }
 
     private async Task BuildGatewayObjects(

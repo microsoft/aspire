@@ -9,10 +9,11 @@ using Aspire.Hosting.Kubernetes.Resources;
 namespace Aspire.Hosting.Kubernetes;
 
 /// <summary>
-/// Represents a Kubernetes PersistentVolumeClaim as a first-class resource in the
-/// Aspire application model. A persistent volume resource carries the storage class,
-/// capacity, access modes, and metadata annotations needed to render a
-/// <c>v1.PersistentVolumeClaim</c> at publish time. Workloads bind to it with
+/// Represents Kubernetes persistent storage as a first-class resource in the Aspire
+/// application model. A persistent volume resource carries the storage class, capacity,
+/// access modes, and metadata annotations needed to render a
+/// <c>v1.PersistentVolumeClaim</c> at publish time. Deployment-target integrations can
+/// additionally configure a statically provisioned <c>v1.PersistentVolume</c>. Workloads bind to it with
 /// <see cref="KubernetesPersistentVolumeExtensions.WithPersistentVolume{T}(IResourceBuilder{T}, IResourceBuilder{KubernetesPersistentVolumeResource})"/>.
 /// </summary>
 /// <param name="name">The name of the persistent volume resource. Used as the
@@ -106,6 +107,12 @@ public sealed class KubernetesPersistentVolumeResource(
     internal PersistentVolumeClaim? GeneratedClaim { get; set; }
 
     /// <summary>
+    /// Gets the generated <see cref="PersistentVolume"/> when the resource uses a static
+    /// backing volume, populated during publish processing.
+    /// </summary>
+    internal PersistentVolume? GeneratedVolume { get; set; }
+
+    /// <summary>
     /// The canonical Kubernetes name of the PVC that backs this volume resource.
     /// Both the PVC emission path (<c>BuildPersistentVolumeClaim</c>) and the pod
     /// volume binding path (<c>WithPodSpecVolumes</c>) resolve the name via this
@@ -114,6 +121,11 @@ public sealed class KubernetesPersistentVolumeResource(
     /// publish. Do not derive the PVC name from the resource name directly.
     /// </summary>
     internal string GetClaimName() => Name.ToKubernetesResourceName();
+
+    /// <summary>
+    /// Gets the canonical Kubernetes name of the static persistent volume.
+    /// </summary>
+    internal string GetVolumeName() => $"{GetClaimName()}-pv";
 }
 
 /// <summary>
@@ -145,4 +157,21 @@ public enum PersistentVolumeAccessMode
     /// 1.27 or later (<c>ReadWriteOncePod</c> access mode).
     /// </summary>
     ReadWriteOncePod,
+}
+
+/// <summary>
+/// Specifies what Kubernetes does with a persistent volume after its claim is released.
+/// </summary>
+[Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+internal enum PersistentVolumeReclaimPolicy
+{
+    /// <summary>
+    /// Retains the backing storage for manual recovery or reuse.
+    /// </summary>
+    Retain,
+
+    /// <summary>
+    /// Deletes the backing storage through the volume provider.
+    /// </summary>
+    Delete,
 }

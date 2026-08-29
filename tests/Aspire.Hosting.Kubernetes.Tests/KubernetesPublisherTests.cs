@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
@@ -1861,6 +1862,43 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
                 System.Text.RegularExpressions.Regex.Escape(backupTierName) + @"\s*:"),
             valuesContent);
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithStaticCsiPersistentVolume_EmitsPreboundVolumeAndClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithCapacity("100Gi");
+        data.WithAnnotation(new KubernetesCsiPersistentVolumeSourceAnnotation(
+            driver: "example.csi.test",
+            volumeHandle: ReferenceExpression.Create($"account#share"),
+            volumeAttributes: new Dictionary<string, ReferenceExpression>
+            {
+                ["account"] = ReferenceExpression.Create($"account"),
+                ["share"] = ReferenceExpression.Create($"share"),
+            },
+            mountOptions: ["dir_mode=0770", "file_mode=0770"],
+            defaultStorageClassName: "example-csi",
+            defaultAccessMode: PersistentVolumeAccessMode.ReadWriteMany));
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(data, "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        var volumePath = Path.Combine(workspace.Path, "templates", "data", "pv.yaml");
+        var claimPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
+
+        Assert.True(File.Exists(volumePath), $"Expected persistent volume manifest at {volumePath}");
+        Assert.True(File.Exists(claimPath), $"Expected persistent volume claim manifest at {claimPath}");
+
+        await Verify(await File.ReadAllTextAsync(volumePath), "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(claimPath), "yaml");
     }
 
     /// <summary>

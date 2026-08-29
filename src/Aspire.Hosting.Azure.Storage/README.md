@@ -33,7 +33,7 @@ aspire secret set Azure:Location "<azure location>"
 
 ## Usage example
 
-In the AppHost, add a Blob (can use tables or queues also) Storage connection and reference it from another resource with either C# or TypeScript:
+In the AppHost, add a Blob (files, tables, or queues can also be used) Storage connection and reference it from another resource with either C# or TypeScript:
 
 **C#**
 
@@ -87,6 +87,34 @@ builder.AddProject<Projects.MyService>()
 
 This approach allows you to define and reference specific blob containers and queues as first-class resources in your AppHost model.
 
+## Creating and using Azure Files
+
+Azure Files uses managed identity authentication by default. Newly provisioned storage accounts enable SMB OAuth and disable shared key access.
+
+```csharp
+var storage = builder.AddAzureStorage("storage");
+var files = storage.AddFiles("files");
+var share = files.AddFileShare("media");
+```
+
+```typescript
+const storage = await builder.addAzureStorage("storage");
+const files = await storage.addFiles("files");
+const share = await files.addFileShare("media");
+```
+
+The Files service and file share can be referenced independently:
+
+```csharp
+api.WithReference(files).WithReference(share);
+```
+
+```typescript
+await api.withReference(files).withReference(share);
+```
+
+The local Azure Storage emulator does not support Azure Files.
+
 ## Creating and using data lake
 ```csharp
 var storage = builder.AddAzureStorage("azure-storage");
@@ -134,6 +162,24 @@ The Data Lake Storage resource exposes the following connection properties:
 | `Uri` | The URI of the data lake storage service, with the format `https://mystorageaccount.dfs.core.windows.net/` |
 
 Emulator currently does not support data lake storage.
+
+### Azure Files
+
+The Azure Files resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Uri` | The URI of the Azure Files service, with the format `https://mystorageaccount.file.core.windows.net/` |
+
+The local Azure Storage emulator does not support Azure Files.
+
+### Azure File Share
+
+The Azure File Share resource inherits all properties from its parent `AzureFileStorageResource` and adds:
+
+| Property Name | Description |
+|---------------|-------------|
+| `FileShareName` | The name of the Azure file share |
 
 ### Data Lake File System
 

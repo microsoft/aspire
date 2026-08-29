@@ -45,7 +45,7 @@ resource sqlServerAdmin 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
   name: sql_outputs_sqlserveradminname
 }
 
-resource depscriptstorage 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource depscriptstorage 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: depscriptstorage_outputs_name
 }
 
@@ -118,7 +118,7 @@ resource script_sql_db 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource depscriptstorage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource depscriptstorage 'Microsoft.Storage/storageAccounts@2025-06-01' = {
   name: take('depscriptstorage${uniqueString(resourceGroup().id)}', 24)
   kind: 'StorageV2'
   location: location
@@ -148,7 +148,11 @@ output queueEndpoint string = depscriptstorage.properties.primaryEndpoints.queue
 
 output tableEndpoint string = depscriptstorage.properties.primaryEndpoints.table
 
+output fileEndpoint string = depscriptstorage.properties.primaryEndpoints.file
+
 output name string = depscriptstorage.name
+
+output resourceGroupName string = resourceGroup().name
 
 output id string = depscriptstorage.id
 
@@ -571,7 +575,7 @@ param depscriptstorage_outputs_name string
 
 param principalId string
 
-resource depscriptstorage 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource depscriptstorage 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: depscriptstorage_outputs_name
 }
 

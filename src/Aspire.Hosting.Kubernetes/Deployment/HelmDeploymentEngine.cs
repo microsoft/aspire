@@ -437,6 +437,10 @@ internal static partial class HelmDeploymentEngine
                 arguments.Append(CultureInfo.InvariantCulture, $" --namespace {@namespace}");
                 arguments.Append(" --create-namespace");
                 arguments.Append(" --wait");
+                if (environment.HelmDeploymentTimeout is { } timeout)
+                {
+                    arguments.Append(CultureInfo.InvariantCulture, $" --timeout {(long)Math.Ceiling(timeout.TotalSeconds)}s");
+                }
 
                 if (environment.KubeConfigPath is not null)
                 {

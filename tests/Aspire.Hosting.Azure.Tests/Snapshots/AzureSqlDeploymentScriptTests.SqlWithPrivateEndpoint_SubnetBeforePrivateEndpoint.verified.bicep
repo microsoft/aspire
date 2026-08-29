@@ -45,7 +45,7 @@ resource sqlServerAdmin 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
   name: sql_outputs_sqlserveradminname
 }
 
-resource sql_store 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource sql_store 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: sql_store_outputs_name
 }
 
@@ -533,7 +533,7 @@ param sql_store_outputs_name string
 
 param principalId string
 
-resource sql_store 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource sql_store 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: sql_store_outputs_name
 }
 
@@ -551,7 +551,7 @@ resource sql_store_StorageFileDataPrivilegedContributor 'Microsoft.Authorization
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource sql_store 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource sql_store 'Microsoft.Storage/storageAccounts@2025-06-01' = {
   name: take('sqlstore${uniqueString(resourceGroup().id)}', 24)
   kind: 'StorageV2'
   location: location
@@ -581,7 +581,11 @@ output queueEndpoint string = sql_store.properties.primaryEndpoints.queue
 
 output tableEndpoint string = sql_store.properties.primaryEndpoints.table
 
+output fileEndpoint string = sql_store.properties.primaryEndpoints.file
+
 output name string = sql_store.name
+
+output resourceGroupName string = resourceGroup().name
 
 output id string = sql_store.id
 

@@ -83,6 +83,15 @@ public sealed class PersistentVolumeSpecV1
     public LocalVolumeSourceV1? Local { get; set; }
 
     /// <summary>
+    /// Gets or sets the Container Storage Interface (CSI) volume source.
+    /// </summary>
+    /// <remarks>
+    /// See <see href="https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-v1/#CSIPersistentVolumeSource"/>.
+    /// </remarks>
+    [YamlMember(Alias = "csi")]
+    public CsiPersistentVolumeSourceV1? Csi { get; set; }
+
+    /// <summary>
     /// Represents the access modes for a Persistent Volume in a Kubernetes cluster.
     /// AccessModes define the ways in which the volume can be mounted and utilized:
     /// - ReadWriteOnce: The volume can be mounted as read-write by a single node.

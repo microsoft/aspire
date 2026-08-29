@@ -10,6 +10,7 @@
     "Aspire.Hosting": "",
     "Aspire.Hosting.Azure.Kubernetes": "",
     "Aspire.Hosting.Azure.Network": "",
+    "Aspire.Hosting.Azure.Storage": "",
     "Aspire.Hosting.Redis": ""
   }
 }

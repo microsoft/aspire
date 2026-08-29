@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
 #pragma warning disable ASPIREPIPELINES002 // IDeploymentStateManager is experimental
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
+#pragma warning disable ASPIRECOMPUTE002 // Kubernetes persistent-volume resources are experimental
 #pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
 using System.Text;
@@ -11,6 +12,8 @@ using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Kubernetes.Annotations;
+using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +59,17 @@ public partial class AzureKubernetesEnvironmentResource
         // The system pool should only run system pods; application workloads
         // need a user pool.
         var defaultUserPool = EnsureDefaultUserNodePool(this, appModel);
+        var workloadIdentityScope = ResolveWorkloadIdentityScope();
+        foreach (var volume in appModel.Resources.OfType<KubernetesPersistentVolumeResource>())
+        {
+            if (ReferenceEquals(volume.Parent.OwningComputeEnvironment, this) &&
+                volume.TryGetLastAnnotation<AzureFileSharePersistentVolumeAnnotation>(out var azureFiles))
+            {
+                // Scope is finalized only after all fluent configuration has run, so repeat the
+                // eager assignment here to keep WithAzureFileShare/AsExisting call order irrelevant.
+                azureFiles.Identity.Scope = workloadIdentityScope;
+            }
+        }
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -74,70 +88,120 @@ public partial class AzureKubernetesEnvironmentResource
                 r.Annotations.Add(new KubernetesNodePoolAnnotation(defaultUserPool));
             }
 
-            // Wire workload identity: if the resource has an AppIdentityAnnotation
-            // (auto-created by AzureResourcePreparer or explicit via WithAzureUserAssignedIdentity),
-            // generate a ServiceAccount and wire the pod spec.
-            if (r.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
+            r.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity);
+            var azureFileVolumes = GetAzureFileVolumes(r);
+
+            // Azure resource references use the workload's app identity. Azure Files volumes use
+            // a volume-specific identity because one static PV has one fixed CSI client ID.
+            if (appIdentity is not null || azureFileVolumes.Count > 0)
             {
-                // Ensure OIDC + workload identity are enabled on the cluster
+                // Ensure OIDC + workload identity are enabled on the cluster.
                 OidcIssuerEnabled = true;
                 WorkloadIdentityEnabled = true;
 
-                var saName = $"{r.Name}-sa";
-                var identityClientId = appIdentity.IdentityResource.ClientId;
+                var saName = $"{r.Name.ToKubernetesResourceName()}-sa";
 
-                // Use KubernetesServiceCustomizationAnnotation to inject SA + pod spec changes
-                // during Helm chart generation.
+                // A bare service account is sufficient for CSI token requests. Add the Azure
+                // Workload Identity annotations only when the application itself uses an identity.
                 r.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
                 {
-                    // Create ServiceAccount with workload identity annotations
-                    var serviceAccount = new ServiceAccountV1();
-                    serviceAccount.Metadata.Name = saName;
-                    serviceAccount.Metadata.Annotations["azure.workload.identity/client-id"] =
-                        $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}";
-                    serviceAccount.Metadata.Labels["azure.workload.identity/use"] = "true";
-                    kubeResource.AdditionalResources.Add(serviceAccount);
+                    var existingPodSpec = kubeResource.Workload?.PodTemplate.Spec;
+                    var configuredServiceAccount = !string.IsNullOrEmpty(existingPodSpec?.ServiceAccountName)
+                        ? existingPodSpec.ServiceAccountName
+                        : existingPodSpec?.ServiceAccount;
+                    if (!string.IsNullOrEmpty(configuredServiceAccount) &&
+                        !string.Equals(configuredServiceAccount, saName, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{r.Name}' uses service account '{configuredServiceAccount}', but Azure workload identity requires the Aspire-managed service account '{saName}'.");
+                    }
 
-                    // Add a placeholder parameter for the identity clientId
-                    // so it appears in values.yaml under parameters.<name>.identityClientId.
-                    // The actual value is resolved at deploy time via CapturedHelmValueProviders.
-                    kubeResource.Parameters["identityClientId"] = new KubernetesResource.HelmValue(
-                        $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}",
-                        string.Empty);
+                    var serviceAccount = kubeResource.AdditionalResources
+                        .OfType<ServiceAccountV1>()
+                        .SingleOrDefault(resource => string.Equals(resource.Metadata.Name, saName, StringComparison.Ordinal));
+                    if (serviceAccount is null)
+                    {
+                        serviceAccount = new ServiceAccountV1();
+                        serviceAccount.Metadata.Name = saName;
+                        kubeResource.AdditionalResources.Add(serviceAccount);
+                    }
 
-                    // Set serviceAccountName on pod spec and add workload identity label
+                    if (appIdentity is not null)
+                    {
+                        var identityClientIdExpression = "identityClientId".ToHelmParameterExpression(r.Name);
+                        serviceAccount.Metadata.Annotations["azure.workload.identity/client-id"] =
+                            identityClientIdExpression;
+                        serviceAccount.Metadata.Labels["azure.workload.identity/use"] = "true";
+                        kubeResource.Parameters["identityClientId"] = new KubernetesResource.HelmValue(
+                            identityClientIdExpression,
+                            string.Empty);
+                    }
+
                     if (kubeResource.Workload?.PodTemplate is { } podTemplate)
                     {
                         if (podTemplate.Spec is { } podSpec)
                         {
                             podSpec.ServiceAccountName = saName;
+                            podSpec.ServiceAccount = null;
                         }
 
-                        // The workload identity webhook requires this label on the POD
-                        // to inject AZURE_CLIENT_ID, token volume mounts, etc.
-                        podTemplate.Metadata.Labels["azure.workload.identity/use"] = "true";
+                        if (appIdentity is not null)
+                        {
+                            // The webhook injects the application identity environment and token mount.
+                            podTemplate.Metadata.Labels["azure.workload.identity/use"] = "true";
+                        }
                     }
                 }));
 
-                // Wire the identity clientId as a deferred Helm value so it gets
-                // resolved from the Bicep output at deploy time. The SA annotation
-                // references {{ .Values.parameters.<name>.identityClientId }}.
-                if (identityClientId is IValueProvider clientIdProvider)
+                if (appIdentity is not null)
                 {
-                    KubernetesEnvironment.CapturedHelmValueProviders.Add(
-                        new KubernetesEnvironmentResource.CapturedHelmValueProvider(
-                            "parameters",
-                            r.Name,
-                            "identityClientId",
-                            clientIdProvider));
+                    if (appIdentity.IdentityResource.ClientId is IValueProvider clientIdProvider)
+                    {
+                        KubernetesEnvironment.CapturedHelmValueProviders.Add(
+                            new KubernetesEnvironmentResource.CapturedHelmValueProvider(
+                                "parameters",
+                                r.Name.ToHelmValuesSectionName(),
+                                "identityClientId",
+                                clientIdProvider));
+                    }
+
+                    WorkloadIdentities[new AksWorkloadIdentityBindingKey(r.Name, null)] = new AksWorkloadIdentityBinding(
+                        saName,
+                        $"{r.Name}-fedcred",
+                        appIdentity.IdentityResource);
                 }
 
-                // Store the identity reference for federated credential Bicep generation
-                WorkloadIdentities[r.Name] = appIdentity.IdentityResource;
+                foreach (var (volume, volumeIdentity) in azureFileVolumes)
+                {
+                    WorkloadIdentities[new AksWorkloadIdentityBindingKey(r.Name, volume.Name)] = new AksWorkloadIdentityBinding(
+                        saName,
+                        $"{r.Name}-fedcred",
+                        volumeIdentity);
+                }
             }
         }
 
         return Task.CompletedTask;
+    }
+
+    private static List<(KubernetesPersistentVolumeResource Volume, AzureUserAssignedIdentityResource Identity)> GetAzureFileVolumes(IResource resource)
+    {
+        var volumes = new List<(KubernetesPersistentVolumeResource, AzureUserAssignedIdentityResource)>();
+        if (!resource.TryGetAnnotationsOfType<KubernetesPersistentVolumeBindingAnnotation>(out var bindings))
+        {
+            return volumes;
+        }
+
+        foreach (var binding in bindings)
+        {
+            if (binding.Volume.TryGetLastAnnotation<AzureFileSharePersistentVolumeAnnotation>(out var azureFiles) &&
+                !volumes.Any(entry => ReferenceEquals(entry.Item1, binding.Volume)))
+            {
+                volumes.Add((binding.Volume, azureFiles.Identity));
+            }
+        }
+
+        return volumes;
     }
 
     /// <summary>

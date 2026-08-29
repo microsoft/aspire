@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 
@@ -145,10 +146,10 @@ public partial class AzureKubernetesEnvironmentResource :
     internal Dictionary<string, BicepOutputReference> NodePoolSubnets { get; } = [];
 
     /// <summary>
-    /// Gets the workload identity mappings. Key is the resource name, value is the identity resource.
+    /// Gets the workload identity mappings. The key uniquely identifies the identity and service-account binding.
     /// Used to generate federated identity credentials in Bicep.
     /// </summary>
-    internal Dictionary<string, IAppIdentityResource> WorkloadIdentities { get; } = [];
+    internal Dictionary<AksWorkloadIdentityBindingKey, AksWorkloadIdentityBinding> WorkloadIdentities { get; } = [];
 
     /// <summary>
     /// Gets or sets the network profile for the AKS cluster.
@@ -164,6 +165,42 @@ public partial class AzureKubernetesEnvironmentResource :
     /// Gets or sets the default container registry auto-created for this AKS environment.
     /// </summary>
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+
+    /// <summary>
+    /// Gets the Azure Storage accounts that back static Azure Files persistent volumes.
+    /// </summary>
+    internal Dictionary<string, AzureStorageResource> AzureFileStorageAccounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Resolves the resource-group scope used for generated workload identities.
+    /// </summary>
+    internal AzureBicepResourceScope? ResolveWorkloadIdentityScope()
+    {
+        if (Scope is not null)
+        {
+            return Scope;
+        }
+
+        if (!this.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) ||
+            existing.ResourceGroup is null)
+        {
+            return null;
+        }
+
+        return existing.Subscription is { } subscription
+            ? new AzureBicepResourceScope(existing.ResourceGroup, subscription)
+            : new AzureBicepResourceScope(existing.ResourceGroup);
+    }
+
+    /// <inheritdoc/>
+    public override string GetBicepTemplateString()
+    {
+        // AKS workload-identity FICs are materialized by a pipeline preparation step, which can
+        // run after dependency discovery first requests the template. Always render current state.
+        using var template = GetBicepTemplateFile();
+
+        return File.ReadAllText(template.Path);
+    }
 
     /// <summary>
     /// Gets the load balancer resources registered against this AKS environment via

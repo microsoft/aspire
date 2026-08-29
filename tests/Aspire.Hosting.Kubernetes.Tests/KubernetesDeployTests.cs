@@ -10,6 +10,7 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
@@ -1713,6 +1714,60 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StaticCsiVolumeDeferredValues_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var resourceGroup = new TestValueProvider("resolved-rg", "{storage.outputs.resourceGroupName}");
+        var accountName = new TestValueProvider("resolved-account", "{storage.outputs.name}");
+        var volume = envBuilder.AddPersistentVolume("data").WithCapacity("5Gi");
+        volume.WithAnnotation(new KubernetesCsiPersistentVolumeSourceAnnotation(
+            "example.csi.test",
+            ReferenceExpression.Create($"{resourceGroup}#{accountName}#share"),
+            new Dictionary<string, ReferenceExpression>
+            {
+                ["resourceGroup"] = ReferenceExpression.Create($"{resourceGroup}"),
+                ["account"] = ReferenceExpression.Create($"{accountName}"),
+            },
+            defaultStorageClassName: "example-csi",
+            defaultAccessMode: PersistentVolumeAccessMode.ReadWriteMany));
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var env = envBuilder.Resource;
+        Assert.Contains(env.CapturedHelmValueProviders, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "data" &&
+            captured.ValueKey == "storage_outputs_resourceGroupName" &&
+            captured.ValueProvider == resourceGroup);
+        Assert.Contains(env.CapturedHelmValueProviders, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "data" &&
+            captured.ValueKey == "storage_outputs_name" &&
+            captured.ValueProvider == accountName);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(
+                await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "data", "pv.yaml")),
+                "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
     public void AddKubernetesEnvironment_CreatesDashboardByDefault()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1833,6 +1888,34 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.NotNull(dashboard.OtlpGrpcEndpoint);
         Assert.Equal("http", dashboard.PrimaryEndpoint.EndpointName);
         Assert.Equal("otlp-grpc", dashboard.OtlpGrpcEndpoint.EndpointName);
+    }
+
+    [Fact]
+    public async Task HelmDeploy_UsesConfiguredTimeout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner();
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Deploy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IDeploymentStateManager, InMemoryDeploymentStateManager>();
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+
+        var environment = builder.AddKubernetesEnvironment("env").Resource;
+        environment.HelmDeploymentTimeout = TimeSpan.FromMinutes(15);
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.StartsWith("upgrade --install", fakeHelm.LastArguments);
+        Assert.Contains("--timeout 900s", fakeHelm.LastArguments);
     }
 
     [Fact]

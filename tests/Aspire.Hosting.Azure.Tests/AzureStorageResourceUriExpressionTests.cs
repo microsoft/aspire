@@ -52,6 +52,29 @@ public class AzureStorageResourceUriExpressionTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void FileUriExpressionReturnsExpectedValueOrThrowUnderEmulator(bool isEmulator)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var storage = builder.AddAzureStorage("storage");
+        if (isEmulator)
+        {
+            storage.RunAsEmulator();
+        }
+
+        var resource = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        if (isEmulator)
+        {
+            Assert.Throws<InvalidOperationException>(() => resource.FileUriExpression);
+        }
+        else
+        {
+            Assert.Equal("{storage.outputs.fileEndpoint}", resource.FileUriExpression.ValueExpression);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void QueueUriExpressionReturnsExpectedValue(bool isEmulator)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
