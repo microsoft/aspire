@@ -631,6 +631,11 @@ internal static class AzureSandboxContainerDeployment
         string ownerId,
         string deployId)
     {
+        var managedIdentityClientId = await ResolveImagePullManagedIdentityClientIdAsync(
+            resource.Parent,
+            imageReference,
+            context.CancellationToken).ConfigureAwait(false);
+
         return await client.CreateDiskImageAsync(
             scope,
             new AzureDevComputeCreateDiskImageRequest
@@ -640,12 +645,36 @@ internal static class AzureSandboxContainerDeployment
                 Source = new AzureDevComputeDiskImageSource
                 {
                     ImageUrl = imageReference,
-                    ManagedIdentityClientId = GetRequiredOutput(
-                        resource.Parent,
-                        AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName)
+                    ManagedIdentityClientId = managedIdentityClientId
                 }
             },
             context.CancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<string?> ResolveImagePullManagedIdentityClientIdAsync(
+        AzureSandboxGroupResource sandboxGroup,
+        string imageReference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sandboxGroup);
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageReference);
+
+        var registry = sandboxGroup.ContainerRegistry;
+        if (registry is null)
+        {
+            return null;
+        }
+
+        var registryEndpoint = await registry.RegistryEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(registryEndpoint) ||
+            !imageReference.StartsWith($"{registryEndpoint}/", StringComparison.OrdinalIgnoreCase))
+        {
+            // ADC rejects an ACR managed identity when it is supplied for a public registry such as
+            // Docker Hub. Authenticate only images hosted by the ACR selected for this sandbox group.
+            return null;
+        }
+
+        return GetRequiredOutput(sandboxGroup, AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName);
     }
 
     private static async Task<AzureDevComputeDiskImage> WaitForDiskImageReadyAsync(

@@ -79,7 +79,7 @@ await builder.build().run();
 
 Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
 
-Images are resolved to immutable Linux/amd64 digests before import. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
+Images are resolved to immutable Linux/amd64 digests before import. Images hosted by the configured Azure Container Registry are imported with a dedicated user-assigned identity that has `AcrPull`; public registry images are imported without that ACR identity. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
 
 Duration options use `TimeSpan` in C#. Generated TypeScript SDKs represent `TimeSpan` values as milliseconds, where one second is `1_000`.
 
