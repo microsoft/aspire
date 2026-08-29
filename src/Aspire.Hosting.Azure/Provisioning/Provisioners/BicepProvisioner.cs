@@ -1373,13 +1373,15 @@ internal sealed class BicepProvisioner(
     {
         static void ValidateUnknownPrincipalParameter(ProvisioningContext context)
         {
-            // Well-known principal parameters can only be populated in run mode.
-            // In publish mode, principal parameters must be provided by the creator of the bicep resource.
+            // Application principal parameters can only be populated in run mode. Published artifacts
+            // bind them from their outer template because the application identity can differ from the
+            // credential applying the deployment.
 
             // We assume that the BicepProvisioner only runs in publish mode during `aspire deploy` operations
             // and not from azd. azd fills in principal parameters during its deployment process with a managed
-            // identity it creates. But the BicepProvisioner only fills them in with the current principal,
-            // which is not correct in publish mode.
+            // identity it creates. The deployment-principal parameters are the exception: direct `aspire deploy`
+            // intentionally binds them from the current credential because that identity performs subsequent
+            // data-plane operations.
             if (context.ExecutionContext.IsPublishMode)
             {
                 throw new InvalidOperationException("An Azure principal parameter was not supplied a value. Ensure you are using an environment that supports role assignments, for example AddAzureContainerAppEnvironment.");
@@ -1393,12 +1395,14 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
+        var populatedDeploymentPrincipalId = false;
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.DeploymentPrincipalId, out var deploymentPrincipalId) && deploymentPrincipalId is null)
         {
             // Published artifacts bind this deployment-principal parameter from the outer
             // main.bicep template. Direct `aspire deploy` has no outer template, so use the
             // authenticated principal that performs the data-plane deployment.
             resource.Parameters[AzureBicepResource.KnownParameters.DeploymentPrincipalId] = context.Principal.Id;
+            populatedDeploymentPrincipalId = true;
         }
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalName, out var principalName) && principalName is null)
@@ -1410,7 +1414,7 @@ internal sealed class BicepProvisioner(
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
-            if (!resource.Parameters.ContainsKey(AzureBicepResource.KnownParameters.DeploymentPrincipalId))
+            if (!populatedDeploymentPrincipalId)
             {
                 ValidateUnknownPrincipalParameter(context);
             }

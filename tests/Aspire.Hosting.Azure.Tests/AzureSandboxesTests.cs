@@ -25,7 +25,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSandboxesTests
+public class AzureSandboxesTests(ITestOutputHelper output)
 {
     [Fact]
     public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
@@ -75,6 +75,23 @@ public class AzureSandboxesTests
             .AppendContentAsFile(hostGroupBicep, "bicep")
             .AppendContentAsFile(workerGroupManifest.ToString(), "json")
             .AppendContentAsFile(workerGroupBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task PublishGeneratesDeploymentPrincipalParameters()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path);
+
+        builder.AddAzureSandboxGroup("sandboxes");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var mainBicep = File.ReadAllText(Path.Combine(workspace.Path, "main.bicep"));
+        await Verify(mainBicep, "bicep");
     }
 
     [Fact]
