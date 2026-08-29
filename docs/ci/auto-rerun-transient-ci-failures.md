@@ -110,7 +110,8 @@ For job-level log matching (e.g., a Windows-specific process init failure):
     {
       "jobName": { "regex": ".*windows.*" },
       "output": "0xC0000142",
-      "reason": "Windows process initialization failure"
+      "reason": "Windows process initialization failure",
+      "causeId": "windows-process-init-failure-0xc0000142"
     }
   ]
 }
@@ -140,6 +141,37 @@ For job-level log matching (e.g., a Windows-specific process init failure):
 |-------|------|-----------------|
 | `jobName` | string or `{"regex": "..."}` | GitHub Actions job name (e.g., `Tests / Run ubuntu-latest Aspire.Hosting.Redis.Tests`) |
 | `output` | string or `{"regex": "..."}` | Full job log text (capped at 256KB) |
+| `causeId` | lowercase slug | Optional canonical ID used by CI failure analysis to associate this stable signal with one recurring-cause record. The auto-rerun workflow validates but otherwise ignores this field |
+
+### Choosing a `causeId`
+
+Add `causeId` only when the job pattern identifies one specific underlying cause. CI failure analysis uses the value as the canonical identity even when the agent proposes a different ID, so every matching occurrence updates the same memory record and GitHub issue. The field does not change whether the auto-rerun workflow retries the job.
+
+Do not assign a `causeId` to a broad symptom such as `Could not resolve host` when the same text can represent unrelated failures. An incorrect mapping would combine those failures into one recurring-cause issue.
+
+Before adding a mapping, search the CI failure memory branch for an existing record:
+
+```bash
+git --no-pager fetch origin memory/ci-failure-analysis
+git --no-pager ls-tree -r --name-only FETCH_HEAD -- causes/
+git --no-pager grep -i -n "0xC0000142" FETCH_HEAD -- causes/
+```
+
+If a matching record exists, use its `id` exactly:
+
+```bash
+git --no-pager show \
+  FETCH_HEAD:causes/windows-process-init-failure-0xc0000142.json
+```
+
+If no matching record exists, mint a descriptive ID for the underlying cause. It must:
+
+- contain only lowercase letters, digits, and hyphens
+- start with a letter or digit
+- describe the cause rather than the affected job
+- be unique across `eng/test-retry-patterns.json` and the memory branch
+
+For example, prefer `windows-process-init-failure-0xc0000142` over `windows-tests-failed`. The next matching analysis run creates the record under the chosen ID; later runs reuse it.
 
 ### Matching semantics
 
@@ -161,10 +193,11 @@ For job-level log matching (e.g., a Windows-specific process init failure):
 2. **Use `reason` to document the known transient failure.** The reason text appears in PR comments, so make it descriptive enough that a reviewer can understand *why* this pattern is retry-worthy.
 3. **Prefer plain strings over regex.** Substring matching is simpler, easier to review, and less prone to surprising matches. Use regex only when you need anchoring, alternation, or wildcards.
 4. **Temporarily disable before deleting.** Set `"enabled": false` rather than removing a rule. This preserves the pattern for future reference if the same transient issue recurs.
-5. **Test your patterns locally.** The test suite validates config structure and regex compilation. Run the tests after modifying the config:
+5. **Test your patterns locally.** The test suites validate config structure, regex compilation, and `causeId` canonicalization. Run both after modifying the config:
    ```bash
    dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj --no-launch-profile -- \
      --filter-class "*.AutoRerunTransientCiFailuresTests" \
+     --filter-class "*.AnalyzeCiFailureCauseResolverTests" \
      --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
    ```
 

@@ -625,10 +625,12 @@ safe-outputs:
           with:
             persist-credentials: false
             sparse-checkout: |
-              .github/workflows/analyze-ci-failure-validation.sh
+              .github/workflows/analyze-ci-failure-cause-resolver.js
               .github/workflows/analyze-ci-failure-persistence.sh
               .github/workflows/analyze-ci-failure-comment.sh
               .github/workflows/analyze-ci-failure-issue.sh
+              .github/workflows/analyze-ci-failure-validation.sh
+              eng/test-retry-patterns.json
             sparse-checkout-cone-mode: false
         - uses: actions/download-artifact@v4
           with:

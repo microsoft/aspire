@@ -1084,7 +1084,7 @@ function validateRetryPatternsConfig(config) {
     }
 
     const testPatternAllowedFields = new Set(['testName', 'testProject', 'output', 'reason', 'enabled']);
-    const jobPatternAllowedFields = new Set(['jobName', 'output', 'reason', 'enabled']);
+    const jobPatternAllowedFields = new Set(['jobName', 'output', 'reason', 'enabled', 'causeId']);
     const testPatternMatcherFields = ['testName', 'testProject', 'output'];
     const jobPatternMatcherFields = ['jobName', 'output'];
 
@@ -1131,6 +1131,11 @@ function validatePatternRule(rule, path, allowedFields, matcherFields, errors) {
 
     if (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') {
         errors.push(`${path}: 'enabled' must be a boolean.`);
+    }
+
+    if (rule.causeId !== undefined &&
+        (typeof rule.causeId !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(rule.causeId))) {
+        errors.push(`${path}: 'causeId' must be a safe cause ID.`);
     }
 
     const hasMatcherField = matcherFields.some(field => rule[field] !== undefined);
