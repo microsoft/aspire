@@ -1393,6 +1393,14 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
+        if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) && userPrincipalId is null)
+        {
+            // Published artifacts bind this deployment-principal parameter from the outer
+            // main.bicep template. Direct `aspire deploy` has no outer template, so use the
+            // authenticated principal that performs the data-plane deployment.
+            resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = context.Principal.Id;
+        }
+
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalName, out var principalName) && principalName is null)
         {
             ValidateUnknownPrincipalParameter(context);
@@ -1402,7 +1410,10 @@ internal sealed class BicepProvisioner(
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
-            ValidateUnknownPrincipalParameter(context);
+            if (!resource.Parameters.ContainsKey(AzureBicepResource.KnownParameters.UserPrincipalId))
+            {
+                ValidateUnknownPrincipalParameter(context);
+            }
 
             // Use the principal type detected from the credential's access token (the `idtyp`
             // claim) instead of hardcoding "User". A hardcoded "User" caused the role-assignment

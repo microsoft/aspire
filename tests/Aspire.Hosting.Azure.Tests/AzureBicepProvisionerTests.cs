@@ -149,6 +149,44 @@ public class AzureBicepProvisionerTests
     [Theory]
     [InlineData("User")]
     [InlineData("ServicePrincipal")]
+    public async Task GetOrCreateResourceAsync_InPublishMode_PopulatesDeploymentPrincipalParameters(string principalType)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        var sentinel = new InvalidOperationException("stop-after-populate-well-known-parameters");
+        var bicepExecutor = new ThrowingBicepCompiler(sentinel);
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            bicepExecutor,
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var principalId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            principal: new AzurePrincipal(principalId, "deployment-principal", principalType),
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+        Assert.Same(sentinel, thrown);
+
+        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
+        Assert.Equal(principalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
+    }
+
+    [Theory]
+    [InlineData("User")]
+    [InlineData("ServicePrincipal")]
     [InlineData("Group")]
     public async Task GetOrCreateResourceAsync_InRunMode_PopulatesPrincipalTypeFromContext(string principalType)
     {

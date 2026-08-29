@@ -3,6 +3,7 @@
   "path": "workergroup.module.bicep",
   "params": {
     "workergroup_acr_outputs_name": "{workergroup-acr.outputs.name}",
-    "principalId": ""
+    "userPrincipalId": "",
+    "principalType": ""
   }
 }

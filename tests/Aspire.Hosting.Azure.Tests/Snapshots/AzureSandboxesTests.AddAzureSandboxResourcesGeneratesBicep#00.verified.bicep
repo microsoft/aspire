@@ -5,7 +5,9 @@ param hostmi_outputs_id string
 
 param hostgroup_acr_outputs_name string
 
-param principalId string
+param userPrincipalId string
+
+param principalType string
 
 resource hostgroup_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: take('hostgroup_mi-${uniqueString(resourceGroup().id)}', 128)
@@ -43,10 +45,11 @@ resource hostgroup_acr_hostgroup_mi_AcrPull 'Microsoft.Authorization/roleAssignm
 }
 
 resource hostgroup_deploymentPrincipalDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(hostgroup.id, principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c'))
+  name: guid(hostgroup.id, userPrincipalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c'))
   properties: {
-    principalId: principalId
+    principalId: userPrincipalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c')
+    principalType: principalType
   }
   scope: hostgroup
 }

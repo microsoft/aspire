@@ -3,7 +3,9 @@ param location string = resourceGroup().location
 
 param sandboxes_acr_outputs_name string
 
-param principalId string
+param userPrincipalId string
+
+param principalType string
 
 resource sandboxes_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: take('sandboxes_mi-${uniqueString(resourceGroup().id)}', 128)
@@ -40,10 +42,11 @@ resource sandboxes_acr_sandboxes_mi_AcrPull 'Microsoft.Authorization/roleAssignm
 }
 
 resource sandboxes_deploymentPrincipalDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(sandboxes.id, principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c'))
+  name: guid(sandboxes.id, userPrincipalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c'))
   properties: {
-    principalId: principalId
+    principalId: userPrincipalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c')
+    principalType: principalType
   }
   scope: sandboxes
 }

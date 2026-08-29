@@ -336,8 +336,10 @@ public static class AzureSandboxesExtensions
 
     private static void AddSandboxGroupDeploymentPrincipalRoleAssignment(AzureResourceInfrastructure infrastructure, SandboxGroup sandboxGroup)
     {
-        var principalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalId, typeof(Guid));
+        var principalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(Guid));
+        var principalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
         infrastructure.Add(principalId);
+        infrastructure.Add(principalType);
 
         // Sandbox deployment creates disk images, sandboxes, lifecycle settings, and public
         // ports through the Azure Dev Compute data-plane API after the sandbox group ARM
@@ -354,6 +356,7 @@ public static class AzureSandboxesExtensions
                 principalId,
                 BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", SandboxGroupDataOwnerRoleId)),
             Scope = new IdentifierExpression(sandboxGroup.BicepIdentifier),
+            PrincipalType = principalType,
             PrincipalId = principalId,
             RoleDefinitionId = BicepFunction.GetSubscriptionResourceId("Microsoft.Authorization/roleDefinitions", SandboxGroupDataOwnerRoleId)
         });

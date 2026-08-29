@@ -3,7 +3,9 @@ param location string = resourceGroup().location
 
 param workergroup_acr_outputs_name string
 
-param principalId string
+param userPrincipalId string
+
+param principalType string
 
 resource workergroup_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: take('workergroup_mi-${uniqueString(resourceGroup().id)}', 128)
@@ -40,10 +42,11 @@ resource workergroup_acr_workergroup_mi_AcrPull 'Microsoft.Authorization/roleAss
 }
 
 resource workergroup_deploymentPrincipalDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(workergroup.id, principalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c'))
+  name: guid(workergroup.id, userPrincipalId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c'))
   properties: {
-    principalId: principalId
+    principalId: userPrincipalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'c24cf47c-5077-412d-a19c-45202126392c')
+    principalType: principalType
   }
   scope: workergroup
 }
