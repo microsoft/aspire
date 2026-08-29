@@ -16,6 +16,17 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureBicepResourceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void DeploymentPrincipalIdPreservesUserPrincipalIdParameterName()
+    {
+#pragma warning disable CS0618 // Type or member is obsolete
+        var userPrincipalId = AzureBicepResource.KnownParameters.UserPrincipalId;
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal("userPrincipalId", AzureBicepResource.KnownParameters.DeploymentPrincipalId);
+        Assert.Equal(AzureBicepResource.KnownParameters.DeploymentPrincipalId, userPrincipalId);
+    }
+
+    [Fact]
     public void AddBicepResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

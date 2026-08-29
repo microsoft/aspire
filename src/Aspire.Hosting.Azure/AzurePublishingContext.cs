@@ -320,7 +320,7 @@ public sealed class AzurePublishingContext(
 
             foreach (var parameter in resource.Parameters)
             {
-                if (parameter.Key == AzureBicepResource.KnownParameters.UserPrincipalId && parameter.Value is null)
+                if (parameter.Key == AzureBicepResource.KnownParameters.DeploymentPrincipalId && parameter.Value is null)
                 {
                     module.Parameters.Add(parameter.Key, principalId);
                     continue;

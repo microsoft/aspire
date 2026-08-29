@@ -156,7 +156,7 @@ public class AzureBicepProvisionerTests
         using var services = builder.Services.BuildServiceProvider();
 
         var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
-        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.DeploymentPrincipalId] = null;
         resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
 
         var sentinel = new InvalidOperationException("stop-after-populate-well-known-parameters");
@@ -180,7 +180,7 @@ public class AzureBicepProvisionerTests
             provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
         Assert.Same(sentinel, thrown);
 
-        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
+        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.DeploymentPrincipalId]);
         Assert.Equal(principalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
     }
 

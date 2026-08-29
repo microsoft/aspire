@@ -336,7 +336,7 @@ public static class AzureSandboxesExtensions
 
     private static void AddSandboxGroupDeploymentPrincipalRoleAssignment(AzureResourceInfrastructure infrastructure, SandboxGroup sandboxGroup)
     {
-        var principalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(Guid));
+        var principalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.DeploymentPrincipalId, typeof(Guid));
         var principalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
         infrastructure.Add(principalId);
         infrastructure.Add(principalType);

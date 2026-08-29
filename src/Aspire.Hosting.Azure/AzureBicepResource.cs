@@ -406,7 +406,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     /// </summary>
     public static class KnownParameters
     {
-        private const string UserPrincipalIdConst = "userPrincipalId";
+        private const string DeploymentPrincipalIdConst = "userPrincipalId";
         private const string PrincipalIdConst = "principalId";
         private const string PrincipalNameConst = "principalName";
         private const string PrincipalTypeConst = "principalType";
@@ -430,10 +430,21 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         public static readonly string PrincipalType = PrincipalTypeConst;
 
         /// <summary>
-        /// The principal id of the user doing the deployment.
+        /// The name of the parameter containing the ID of the principal performing the deployment.
         /// </summary>
-        /// <remarks>Referred as Deployment principal in ARM documentation.</remarks>
-        public static readonly string UserPrincipalId = UserPrincipalIdConst;
+        /// <remarks>
+        /// The parameter name remains <c>userPrincipalId</c> for compatibility with existing Bicep modules.
+        /// </remarks>
+        public static readonly string DeploymentPrincipalId = DeploymentPrincipalIdConst;
+
+        /// <summary>
+        /// The name of the parameter containing the ID of the user performing the deployment.
+        /// </summary>
+        /// <remarks>
+        /// This field is obsolete. Use <see cref="DeploymentPrincipalId"/> instead.
+        /// </remarks>
+        [Obsolete("KnownParameters.UserPrincipalId is obsolete. Use KnownParameters.DeploymentPrincipalId instead.")]
+        public static readonly string UserPrincipalId = DeploymentPrincipalId;
 
         /// <summary>
         /// The name of the key vault resource used to store secret outputs.
@@ -453,7 +464,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         public static readonly string LogAnalyticsWorkspaceId = LogAnalyticsWorkspaceIdConst;
 
         internal static bool IsKnownParameterName(string name) =>
-            name is PrincipalIdConst or UserPrincipalIdConst or PrincipalNameConst or PrincipalTypeConst or KeyVaultNameConst or LocationConst or LogAnalyticsWorkspaceIdConst;
+            name is PrincipalIdConst or DeploymentPrincipalIdConst or PrincipalNameConst or PrincipalTypeConst or KeyVaultNameConst or LocationConst or LogAnalyticsWorkspaceIdConst;
 
     }
 
