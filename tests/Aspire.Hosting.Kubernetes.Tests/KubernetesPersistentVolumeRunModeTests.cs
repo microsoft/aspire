@@ -95,6 +95,37 @@ public class KubernetesPersistentVolumeRunModeTests
     }
 
     [Fact]
+    public async Task OneResourceBoundToSameNamedVolumesInDifferentEnvironmentsKeepsStoresSeparate()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var firstEnvironment = builder.AddKubernetesEnvironment("first-env");
+        var secondEnvironment = builder.AddKubernetesEnvironment("second-env");
+        var firstVolume = firstEnvironment.AddPersistentVolume("data");
+        var secondVolume = secondEnvironment.AddPersistentVolume("data");
+
+        // Both volumes are named "data", so VolumeName alone cannot tell the two bindings apart. Only run
+        // mode can express this: AddPersistentVolume registers the volume in publish mode and the duplicate
+        // name is rejected, while run mode hands back a CreateResourceBuilder that never registers it.
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithPersistentVolume(firstVolume, "/srv/first", env: "FIRST_PATH")
+            .WithPersistentVolume(secondVolume, "/srv/second", env: "SECOND_PATH");
+
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal(
+            KubernetesPersistentVolumeLocalStorage.GetPath(store, firstVolume.Resource),
+            environment["FIRST_PATH"]);
+        Assert.Equal(
+            KubernetesPersistentVolumeLocalStorage.GetPath(store, secondVolume.Resource),
+            environment["SECOND_PATH"]);
+    }
+
+    [Fact]
     public async Task ContainerUsesScopedVolumeAndContainerMountPath()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

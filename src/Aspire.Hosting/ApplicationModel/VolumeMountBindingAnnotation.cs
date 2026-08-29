@@ -32,8 +32,10 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <para>
 /// The two facets are produced by different parties at different times — the AppHost author opts into the
 /// environment variable, while the compute environment supplies the local path — so a resource can carry
-/// several of these annotations for the same <see cref="VolumeName"/>. Lookups take the last match, which
-/// mirrors normal last-one-wins annotation behavior.
+/// several of these annotations for the same <see cref="VolumeName"/>. A binding resolves through its own
+/// <see cref="RunModeHostPathResolver"/> when it has one, and otherwise takes the last sibling that does.
+/// <see cref="VolumeName"/> alone is not a unique key, because separate compute environments can each
+/// declare a volume under the same name.
 /// </para>
 /// </remarks>
 public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceAnnotation
@@ -89,10 +91,17 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
             return mountPath;
         }
 
-        // The resolver can live on a different annotation than the one declaring the mount. The name-match
-        // composition spells the mount and the compute environment binding as two separate calls, so scan
-        // every binding for this volume rather than only consulting this one.
-        var resolver = context.Resource.Annotations
+        // Prefer this binding's own resolver. The sibling scan below only exists for the name-match
+        // composition, where the mount and the compute environment binding are spelled as two separate
+        // calls and the mount-declaring annotation therefore carries no resolver of its own.
+        //
+        // Scanning unconditionally would alias distinct volumes, because VolumeName is not unique across
+        // compute environments. A host process can bind same-named volumes from two Kubernetes
+        // environments in run mode — publish mode cannot express that shape, since AddPersistentVolume
+        // registers the volume in the model and the name collides, but run mode uses CreateResourceBuilder
+        // and never registers it. Every binding would then select the last resolver and point at one
+        // environment's local store, silently mixing the two volumes' data.
+        var resolver = RunModeHostPathResolver ?? context.Resource.Annotations
             .OfType<VolumeMountBindingAnnotation>()
             .LastOrDefault(annotation =>
                 annotation.RunModeHostPathResolver is not null &&
