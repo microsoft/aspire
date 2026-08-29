@@ -18,6 +18,13 @@
       "job": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
       "pr_number": 19567,
       "observed_at": "2026-08-27T21:33:49Z"
+    },
+    {
+      "run_id": 33231909693,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33231909693",
+      "job": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "pr_number": 19008,
+      "observed_at": "2026-08-29T04:10:07Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19742"

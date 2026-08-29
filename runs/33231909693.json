@@ -1,0 +1,38 @@
+{
+  "run_id": 33231909693,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33231909693",
+  "analyzed_at": "2026-08-29T04:10:07Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19008,
+    "title": "Add Azure Container Apps Sandboxes deployment target",
+    "author": "spboyer",
+    "state": "closed",
+    "head_branch": "spboyer/aca-sandboxes",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19008"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "id": 99046302954,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33231909693/job/99046302954",
+      "classification": "flaky-test",
+      "reason": "Test failure is a known recurring SQLite column-count mismatch in Dashboard.Components tests on Windows, matching prior cause 'dashboard-components-sqlite-column-count-mismatch' (2 prior occurrences). The failing test/namespace is unrelated to the PR's Azure Container Apps Sandboxes changes.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Pages.MetricsTests.ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared",
+      "job": "Tests / Dashboard.Components / Dashboard.Components (windows-latest)",
+      "error": "Microsoft.Data.Sqlite.SqliteException : SQLite Error 1: 'expected 0 columns for '' but got 18'.",
+      "stack_trace": "at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()\n   at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()\n   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)\n   at Aspire.Dashboard.ServiceClient.TracingSqliteConnection.TracingDbCommand.ExecuteDbDataReader(CommandBehavior behavior) in /_/src/Aspire.Dashboard/ServiceClient/TracingSqliteConnection.cs:line 296\n   at Aspire.Dashboard.Otlp.Storage.SqliteTelemetryRepository.MaterializeMetricDimensions(...) in SqliteTelemetryRepository.Metrics.Reads.cs:line 206",
+      "classification": "flaky",
+      "reason": "Matches a previously identified recurring flaky failure (cause id dashboard-components-sqlite-column-count-mismatch, issue #19742). The PR under test (#19008) does not touch Aspire.Dashboard or SQLite telemetry storage code, so this is unrelated to PR changes."
+    }
+  ],
+  "causes": ["dashboard-components-sqlite-column-count-mismatch"]
+}
