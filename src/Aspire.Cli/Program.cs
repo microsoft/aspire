@@ -309,7 +309,7 @@ public class Program
         // Capture it before DI startup, then remove both values from configuration and the actual
         // process environment so AppHosts, build tools, and arbitrary child processes cannot inherit it.
         var vsCodeMicrosoftAccountProvider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(builder.Configuration);
-        builder.Services.AddSingleton<IVsCodeMicrosoftAccountProvider>(vsCodeMicrosoftAccountProvider);
+        builder.Services.AddSingleton(vsCodeMicrosoftAccountProvider);
 
         // Set up settings with appropriate paths.
         var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger);
@@ -1356,6 +1356,10 @@ public class Program
         {
             builder.Services.AddSingleton<IExtensionRpcTarget, ExtensionRpcTarget>();
             builder.Services.AddSingleton<IExtensionBackchannel, ExtensionBackchannel>();
+            builder.Services.AddSingleton<IVsCodeMicrosoftAccountProvider>(provider =>
+                new FallbackVsCodeMicrosoftAccountProvider(
+                    provider.GetRequiredService<EnvironmentVsCodeMicrosoftAccountProvider>(),
+                    () => provider.GetRequiredService<IExtensionBackchannel>()));
 
             var extensionPromptEnabled = builder.Configuration[KnownConfigNames.ExtensionPromptEnabled] is "true";
             builder.Services.AddSingleton<IInteractionService>(provider =>
@@ -1376,6 +1380,8 @@ public class Program
         }
         else
         {
+            builder.Services.AddSingleton<IVsCodeMicrosoftAccountProvider>(provider =>
+                provider.GetRequiredService<EnvironmentVsCodeMicrosoftAccountProvider>());
             builder.Services.AddSingleton<IInteractionService>(provider =>
             {
                 var consoleEnvironment = provider.GetRequiredService<ConsoleEnvironment>();

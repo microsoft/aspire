@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -67,6 +68,8 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
 
     public TaskCompletionSource? GetCapabilitiesAsyncCalled { get; set; }
     public Func<CancellationToken, Task<string[]>>? GetCapabilitiesAsyncCallback { get; set; }
+
+    public Func<CancellationToken, Task<VsCodeMicrosoftAccountState>>? GetInternalMicrosoftAccountAsyncCallback { get; set; }
 
     public TaskCompletionSource? HasCapabilityAsyncCalled { get; set; }
     public Func<string, CancellationToken, Task<bool>>? HasCapabilityAsyncCallback { get; set; }
@@ -234,6 +237,9 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
             ? GetCapabilitiesAsyncCallback.Invoke(cancellationToken)
             : Task.FromResult(Array.Empty<string>());
     }
+
+    public Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken)
+        => GetInternalMicrosoftAccountAsyncCallback?.Invoke(cancellationToken) ?? Task.FromResult(VsCodeMicrosoftAccountState.Suppressed);
 
     public async Task<bool> HasCapabilityAsync(string capability, CancellationToken cancellationToken)
     {

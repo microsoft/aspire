@@ -9,6 +9,35 @@ import { ICliRpcClient, RpcClient } from '../../server/rpcClient';
 import { extensionLogOutputChannel } from '../../utils/logging';
 
 suite('AspireRpcServer', () => {
+    test('returns the current internal Microsoft account state over the authenticated RPC channel', async function () {
+        this.timeout(10000);
+
+        const getAccountState = sinon.stub().returns(['internal', 'current.alias']);
+        const rpcServer = await AspireRpcServer.create(
+            (_connectionInfo, connection) => new RpcClient(connection, null, () => null),
+            getAccountState);
+        const transport = await connectClient(rpcServer, async () => null);
+
+        try {
+            const capabilities = await transport.connection.sendRequest<string[]>(
+                'getCapabilities',
+                rpcServer.connectionInfo.token);
+            const accountState = await transport.connection.sendRequest<string[]>(
+                'getInternalMicrosoftAccountState',
+                rpcServer.connectionInfo.token);
+
+            assert.ok(capabilities.includes('internal-microsoft-account.v1'));
+            assert.deepStrictEqual(accountState, ['internal', 'current.alias']);
+            sinon.assert.calledOnce(getAccountState);
+        }
+        finally {
+            transport.connection.end();
+            transport.connection.dispose();
+            transport.socket.destroy();
+            rpcServer.dispose();
+        }
+    });
+
     test('server disposal owns a client while its debug-session handshake is pending', async function () {
         this.timeout(10000);
 

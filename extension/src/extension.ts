@@ -62,8 +62,6 @@ export async function activate(context: vscode.ExtensionContext) {
     undefined,
     cliPathResolver,
     () => microsoftAccountProvider.getEnvironmentState());
-  context.subscriptions.push(microsoftAccountProvider.onDidChangeEnvironmentState(
-    () => terminalProvider.invalidateSharedAspireTerminal()));
   // Account enumeration uses VS Code's local authentication API. Start it eagerly but do not block
   // extension activation for this optional telemetry signal. A CLI launched while the initial query
   // is pending receives refreshing and therefore cannot reuse or poison the detector cache.
@@ -93,6 +91,10 @@ export async function activate(context: vscode.ExtensionContext) {
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
       const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId), context.globalState);
       return client;
+    },
+    () => {
+      const state = microsoftAccountProvider.getEnvironmentState();
+      return state.status === 'internal' ? [state.status, state.alias] : [state.status];
     },
   );
 

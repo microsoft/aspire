@@ -14,6 +14,7 @@ import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral 
 import {
     microsoftAccountAliasEnvironmentVariable,
     MicrosoftAccountEnvironmentState,
+    microsoftAccountRpcState,
     microsoftAccountStateEnvironmentVariable,
 } from '../utils/microsoftAccountProvider';
 
@@ -1127,20 +1128,53 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
         });
 
-        test('adds the current Microsoft account snapshot to extension-managed CLI environments', () => {
+        test('adds the account snapshot to spawned CLIs but removes it from interactive terminals', () => {
             microsoftAccountState = { status: 'internal', alias: 'current.alias' };
+            sinon.stub(terminalProvider, 'getCliExecutableIdentity').returns('cli-identity');
+            terminalProvider.setMicrosoftAccountEnvironmentSupport('aspire', true, 'cli-identity');
 
-            const terminalEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, undefined, true);
+            const processEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
+            const terminalEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire', true);
             microsoftAccountState = { status: 'not_internal' };
-            const signedOutTerminalEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, undefined, true);
-            const signedOutProcessEnvironment = terminalProvider.createEnvironment();
+            const signedOutTerminalEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire', true);
+            const signedOutProcessEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
+            const oldCliEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'old-aspire');
 
-            assert.strictEqual(terminalEnvironment[microsoftAccountStateEnvironmentVariable], 'internal');
-            assert.strictEqual(terminalEnvironment[microsoftAccountAliasEnvironmentVariable], 'current.alias');
-            assert.strictEqual(signedOutTerminalEnvironment[microsoftAccountStateEnvironmentVariable], 'not_internal');
+            assert.strictEqual(processEnvironment[microsoftAccountStateEnvironmentVariable], 'internal');
+            assert.strictEqual(processEnvironment[microsoftAccountAliasEnvironmentVariable], 'current.alias');
+            assert.strictEqual(terminalEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
+            assert.strictEqual(terminalEnvironment[microsoftAccountAliasEnvironmentVariable], null);
+            assert.strictEqual(signedOutTerminalEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
             assert.strictEqual(signedOutTerminalEnvironment[microsoftAccountAliasEnvironmentVariable], null);
             assert.strictEqual(signedOutProcessEnvironment[microsoftAccountStateEnvironmentVariable], 'not_internal');
             assert.strictEqual(signedOutProcessEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
+            assert.strictEqual(oldCliEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
+            assert.strictEqual(oldCliEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
+        });
+
+        test('falls back to RPC when a capable CLI is replaced in place', () => {
+            microsoftAccountState = { status: 'internal', alias: 'current.alias' };
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-account-capability-'));
+            const cliPath = path.join(directory, 'aspire');
+            fs.writeFileSync(cliPath, 'current');
+
+            try {
+                const identity = terminalProvider.getCliExecutableIdentity(cliPath);
+                assert.ok(identity);
+                terminalProvider.setMicrosoftAccountEnvironmentSupport(cliPath, true, identity);
+                const currentEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, cliPath);
+
+                fs.writeFileSync(cliPath, 'older-replacement');
+                const replacementEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, cliPath);
+
+                assert.strictEqual(currentEnvironment[microsoftAccountStateEnvironmentVariable], 'internal');
+                assert.strictEqual(currentEnvironment[microsoftAccountAliasEnvironmentVariable], 'current.alias');
+                assert.strictEqual(replacementEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
+                assert.strictEqual(replacementEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
+            }
+            finally {
+                fs.rmSync(directory, { recursive: true, force: true });
+            }
         });
 
         test('marks Microsoft account snapshot unavailable without extension backchannel variables', () => {

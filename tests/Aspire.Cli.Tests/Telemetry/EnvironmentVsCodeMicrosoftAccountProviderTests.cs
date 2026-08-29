@@ -17,6 +17,7 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
     [InlineData("not_internal", null, true, null, false)]
     [InlineData("unavailable", null, false, null, true)]
     [InlineData("refreshing", null, false, null, false)]
+    [InlineData("rpc", null, false, null, false)]
     [InlineData(null, null, false, null, false)]
     [InlineData("internal", null, false, null, true)]
     [InlineData("internal", "bad alias", false, null, true)]
@@ -43,7 +44,7 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
         var clearedVariables = new List<string>();
 
         var provider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration, clearedVariables.Add);
-        var result = provider.GetInternalMicrosoftAccount();
+        var result = provider.State;
 
         Assert.Equal(expectedAvailable, result.IsAvailable);
         Assert.Equal(expectedAlias, result.Alias);
@@ -53,6 +54,14 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
             (state is null && alias is null) ||
             (state == EnvironmentVsCodeMicrosoftAccountProvider.RefreshingState && alias is null),
             result.PreventsNegativeCache);
+        if (state is null && alias is null)
+        {
+            Assert.Equal(VsCodeMicrosoftAccountStateKind.Suppressed, result.Kind);
+        }
+        else if (state == EnvironmentVsCodeMicrosoftAccountProvider.RpcState && alias is null)
+        {
+            Assert.Equal(VsCodeMicrosoftAccountStateKind.RpcFallback, result.Kind);
+        }
         Assert.Null(configuration[EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable]);
         Assert.Null(configuration[EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable]);
         Assert.Equal(
@@ -84,7 +93,7 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
 
         var provider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration);
 
-        Assert.Equal("current.alias", provider.GetInternalMicrosoftAccount().Alias);
+        Assert.Equal("current.alias", provider.State.Alias);
         Assert.Null(Environment.GetEnvironmentVariable(EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable));
         Assert.Null(Environment.GetEnvironmentVariable(EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable));
     }
@@ -101,7 +110,7 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
             .Build();
 
         var provider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration, _ => { });
-        var result = provider.GetInternalMicrosoftAccount();
+        var result = provider.State;
 
         Assert.False(result.IsAvailable);
         Assert.False(result.IsUnavailable);
@@ -126,7 +135,7 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
             .Build();
 
         var provider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration, _ => { });
-        var result = provider.GetInternalMicrosoftAccount();
+        var result = provider.State;
 
         Assert.Equal(expectedAvailable, result.IsAvailable);
         Assert.Equal(expectedUnavailable, result.IsUnavailable);
@@ -168,10 +177,93 @@ public class EnvironmentVsCodeMicrosoftAccountProviderTests
             .Build();
 
         var provider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration, _ => { });
-        var result = provider.GetInternalMicrosoftAccount();
+        var result = provider.State;
 
         Assert.False(result.IsAvailable);
         Assert.False(result.IsUnavailable);
         Assert.Null(result.Alias);
+    }
+
+    [Fact]
+    public async Task FallbackProvider_UsesRpcOnlyWhenEnvironmentRequestsFallback()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ExtensionEndpoint] = "localhost:1234",
+                [KnownConfigNames.ExtensionToken] = "extension-token",
+                [KnownConfigNames.ExtensionCert] = "extension-cert",
+                [EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable] = EnvironmentVsCodeMicrosoftAccountProvider.RpcState
+            })
+            .Build();
+        var environmentProvider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration, _ => { });
+        var rpcProvider = new TestVsCodeMicrosoftAccountProvider
+        {
+            GetInternalMicrosoftAccountAsyncCallback = _ =>
+                Task.FromResult(VsCodeMicrosoftAccountState.Available("rpc.alias"))
+        };
+        var provider = new FallbackVsCodeMicrosoftAccountProvider(environmentProvider, () => rpcProvider);
+
+        var result = await provider.GetInternalMicrosoftAccountAsync(CancellationToken.None);
+
+        Assert.Equal("rpc.alias", result.Alias);
+        Assert.Equal(VsCodeMicrosoftAccountTransport.Rpc, result.Transport);
+    }
+
+    [Fact]
+    public async Task FallbackProvider_DoesNotResolveRpcForEnvironmentSnapshot()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ExtensionEndpoint] = "localhost:1234",
+                [KnownConfigNames.ExtensionToken] = "extension-token",
+                [KnownConfigNames.ExtensionCert] = "extension-cert",
+                [EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable] = EnvironmentVsCodeMicrosoftAccountProvider.InternalState,
+                [EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable] = "environment.alias"
+            })
+            .Build();
+        var environmentProvider = EnvironmentVsCodeMicrosoftAccountProvider.CaptureAndClear(configuration, _ => { });
+        var rpcProviderResolved = false;
+        var provider = new FallbackVsCodeMicrosoftAccountProvider(environmentProvider, () =>
+        {
+            rpcProviderResolved = true;
+            return new TestVsCodeMicrosoftAccountProvider();
+        });
+
+        var result = await provider.GetInternalMicrosoftAccountAsync(CancellationToken.None);
+
+        Assert.Equal("environment.alias", result.Alias);
+        Assert.False(rpcProviderResolved);
+    }
+
+    [Theory]
+    [InlineData("internal", "rpc.alias", "Available")]
+    [InlineData("not_internal", null, "Available")]
+    [InlineData("refreshing", null, "Refreshing")]
+    [InlineData("unavailable", null, "Unavailable")]
+    [InlineData("rpc", null, "Unavailable")]
+    public void ParseRpc_ParsesStructuredStateAndRejectsRecursiveFallback(
+        string state,
+        string? alias,
+        string expectedKind)
+    {
+        var payload = alias is null ? new[] { state } : [state, alias];
+
+        var result = EnvironmentVsCodeMicrosoftAccountProvider.ParseRpc(payload);
+
+        Assert.Equal(expectedKind, result.Kind.ToString());
+        Assert.Equal(VsCodeMicrosoftAccountTransport.Rpc, result.Transport);
+    }
+
+    [Theory]
+    [InlineData()]
+    [InlineData("internal", "alias", "unexpected")]
+    public void ParseRpc_RejectsMalformedArity(params string[] payload)
+    {
+        var result = EnvironmentVsCodeMicrosoftAccountProvider.ParseRpc(payload);
+
+        Assert.Equal(VsCodeMicrosoftAccountStateKind.Unavailable, result.Kind);
+        Assert.Equal(VsCodeMicrosoftAccountTransport.Rpc, result.Transport);
     }
 }

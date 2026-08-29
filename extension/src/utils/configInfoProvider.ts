@@ -7,6 +7,7 @@ import { CapabilityStatus, ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema
 import * as strings from '../loc/strings';
 import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 import { CliPathResolutionTarget, windowCliPathTarget } from './cliPathVariables';
+import { microsoftAccountEnvironmentCapability } from './microsoftAccountProvider';
 
 const configInfoTimeoutMs = 30_000;
 const cliVersionProbeTimeoutMs = 30_000;
@@ -132,6 +133,7 @@ export class ConfigInfoProvider {
         if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
             return null;
         }
+        const cliExecutableIdentity = this._terminalProvider.getCliExecutableIdentity?.(cliPath);
 
         // `aspire config info` reports the local settings file it discovers from its working
         // directory, so the answer is per-folder, not per-CLI. Keying the caches by CLI path alone
@@ -164,20 +166,36 @@ export class ConfigInfoProvider {
             if (result && this._probeGenerationByCliPath.get(cacheKey) === generation) {
                 this._cachedConfigInfoByCliPath.set(cacheKey, result);
             }
-            return result;
+            return this.recordMicrosoftAccountEnvironmentSupport(cliPath, cliExecutableIdentity, result);
         }
 
         const existingProbe = this._inFlightByCliPath.get(cacheKey);
         if (existingProbe) {
-            return await this._awaitProbe(
+            return this.recordMicrosoftAccountEnvironmentSupport(cliPath, cliExecutableIdentity, await this._awaitProbe(
                 existingProbe,
                 remainingTimeoutMs,
                 suppressErrors,
-                options?.cancellationToken);
+                options?.cancellationToken));
         }
 
         const probe = this._startSharedProbe(cacheKey, cliPath, workingDirectory, suppressErrors, remainingTimeoutMs);
-        return await this._awaitProbe(probe, undefined, suppressErrors, options?.cancellationToken);
+        return this.recordMicrosoftAccountEnvironmentSupport(
+            cliPath,
+            cliExecutableIdentity,
+            await this._awaitProbe(probe, undefined, suppressErrors, options?.cancellationToken));
+    }
+
+    private recordMicrosoftAccountEnvironmentSupport(
+        cliPath: string,
+        cliExecutableIdentity: string | undefined,
+        configInfo: ConfigInfo | null): ConfigInfo | null {
+        if (configInfo && cliExecutableIdentity) {
+            this._terminalProvider.setMicrosoftAccountEnvironmentSupport?.(
+                cliPath,
+                configInfo.capabilities?.includes(microsoftAccountEnvironmentCapability) === true,
+                cliExecutableIdentity);
+        }
+        return configInfo;
     }
 
     /**

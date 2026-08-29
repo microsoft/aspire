@@ -12,8 +12,12 @@ internal sealed class TestVsCodeMicrosoftAccountProvider(bool isAvailable = fals
     public bool IsUnavailable { get; set; }
     public bool IsRefreshing { get; set; }
     public bool IsSuppressed { get; set; }
+    public Func<CancellationToken, Task<VsCodeMicrosoftAccountState>>? GetInternalMicrosoftAccountAsyncCallback { get; set; }
 
-    public VsCodeMicrosoftAccountState GetInternalMicrosoftAccount()
+    public Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken)
+        => GetInternalMicrosoftAccountAsyncCallback?.Invoke(cancellationToken) ?? Task.FromResult(GetState());
+
+    private VsCodeMicrosoftAccountState GetState()
     {
         if (IsRefreshing)
         {

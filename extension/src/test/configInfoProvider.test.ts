@@ -11,6 +11,7 @@ import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { describeIncludeDisabledCommandsCapability, isolatedLaunchCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { microsoftAccountEnvironmentCapability } from '../utils/microsoftAccountProvider';
 
 function emitConfigInfo(options: cliModule.SpawnProcessOptions | undefined, capabilities: readonly string[] = []): void {
     options?.stdoutCallback?.(JSON.stringify({
@@ -140,6 +141,24 @@ suite('configInfoProvider tests', () => {
         assert.strictEqual(workingDirectory, workspaceFolder.uri.fsPath);
         assert.deepStrictEqual(spawnStub.firstCall.args[2], ['config', 'info', '--json', '--nologo']);
         assert.strictEqual(spawnStub.firstCall.args[3]?.noExtensionVariables, true);
+    });
+
+    test('records Microsoft account environment support for the probed CLI path', async () => {
+        const setSupport = sinon.stub();
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            getCliExecutableIdentity: () => 'cli-identity',
+            createEnvironment: () => ({}),
+            setMicrosoftAccountEnvironmentSupport: setSupport,
+        } as unknown as AspireTerminalProvider;
+        sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            emitConfigInfo(options, [microsoftAccountEnvironmentCapability]);
+            return {} as ChildProcessWithoutNullStreams;
+        });
+
+        await new ConfigInfoProvider(terminalProvider).getConfigInfo();
+
+        sinon.assert.calledOnceWithExactly(setSupport, '/usr/bin/aspire', true, 'cli-identity');
     });
 
     test('getConfigInfo runs in the targeted folder rather than the first one', async () => {

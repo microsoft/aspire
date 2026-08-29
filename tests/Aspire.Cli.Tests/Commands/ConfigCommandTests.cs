@@ -44,6 +44,12 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesMicrosoftAccountEnvironment()
+    {
+        Assert.Contains(KnownCapabilities.MicrosoftAccountEnvironment, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
         var info = new Aspire.Cli.Commands.ConfigInfo(

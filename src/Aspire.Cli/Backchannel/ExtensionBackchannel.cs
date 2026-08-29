@@ -9,6 +9,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -18,7 +19,7 @@ using StreamJsonRpc;
 
 namespace Aspire.Cli.Backchannel;
 
-internal interface IExtensionBackchannel
+internal interface IExtensionBackchannel : IVsCodeMicrosoftAccountProvider
 {
     Task ConnectAsync(CancellationToken cancellationToken);
     Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken);
@@ -52,6 +53,7 @@ internal interface IExtensionBackchannel
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
 {
     private const string Name = "Aspire Extension";
+    private const string InternalMicrosoftAccountCapability = "internal-microsoft-account.v1";
 
     private readonly ActivitySource _activitySource = new(nameof(ExtensionBackchannel));
     private readonly TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
@@ -63,6 +65,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     private readonly IExtensionRpcTarget _target;
     private readonly IConfiguration _configuration;
     private readonly Func<CancellationToken, Task>? _connectCoreAsyncOverride;
+    private int _connected;
 
     public ExtensionBackchannel(ILogger<ExtensionBackchannel> logger, IExtensionRpcTarget target, IConfiguration configuration)
         : this(logger, target, configuration, connectCoreAsyncOverride: null)
@@ -84,6 +87,11 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
+            if (Volatile.Read(ref _connected) == 0)
+            {
+                return;
+            }
+
             try
             {
                 StopDebuggingAsync().GetAwaiter().GetResult();
@@ -162,6 +170,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                 {
                     await ConnectCoreAsync().ConfigureAwait(false);
                     _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
+                    Volatile.Write(ref _connected, 1);
                     connectionSetupTcs.TrySetResult();
                     return;
                 }
@@ -755,6 +764,26 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             cancellationToken);
 
         return capabilities;
+    }
+
+    public async Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken)
+    {
+        // Telemetry may stop waiting after its bounded probe timeout, but it must not cancel the
+        // shared connection attempt that command interaction also uses.
+        await ConnectAsync(CancellationToken.None).WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!await HasCapabilityAsync(InternalMicrosoftAccountCapability, cancellationToken).ConfigureAwait(false))
+        {
+            return VsCodeMicrosoftAccountState.Suppressed with { Transport = VsCodeMicrosoftAccountTransport.Rpc };
+        }
+
+        using var activity = _activitySource.StartActivity();
+        var rpc = await _rpcTaskCompletionSource.Task.ConfigureAwait(false);
+        var accountState = await rpc.InvokeWithCancellationAsync<string[]>(
+            "getInternalMicrosoftAccountState",
+            [_token],
+            cancellationToken).ConfigureAwait(false);
+        return EnvironmentVsCodeMicrosoftAccountProvider.ParseRpc(accountState);
     }
 
     public async Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug, CancellationToken cancellationToken)

@@ -56,8 +56,12 @@ internal static class KnownCapabilities
     // Advertised so tooling can pass `aspire run --launch-profile` only to CLIs that understand it.
     public const string LaunchProfile = "launch-profile.v1";
 
+    // Advertised so the extension only places a Microsoft account alias in environments for CLIs
+    // that consume and clear it before launching build tools or user processes.
+    public const string MicrosoftAccountEnvironment = "microsoft-account-environment.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, LaunchProfile];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, LsJsonStream, IsolatedLaunch, LaunchProfile, MicrosoftAccountEnvironment];
 }

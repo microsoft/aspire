@@ -11,7 +11,7 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal interface IVsCodeMicrosoftAccountProvider
 {
-    VsCodeMicrosoftAccountState GetInternalMicrosoftAccount();
+    Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken);
 }
 
 internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicrosoftAccountProvider
@@ -22,6 +22,7 @@ internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicroso
     internal const string InternalState = "internal";
     internal const string NotInternalState = "not_internal";
     internal const string RefreshingState = "refreshing";
+    internal const string RpcState = "rpc";
     internal const string UnavailableState = "unavailable";
 
     private readonly VsCodeMicrosoftAccountState _state;
@@ -31,7 +32,13 @@ internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicroso
         _state = state;
     }
 
-    public VsCodeMicrosoftAccountState GetInternalMicrosoftAccount() => _state;
+    internal VsCodeMicrosoftAccountState State => _state;
+
+    public Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(_state);
+    }
 
     internal static EnvironmentVsCodeMicrosoftAccountProvider CaptureAndClear(
         IConfiguration configuration,
@@ -45,11 +52,15 @@ internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicroso
             !string.IsNullOrEmpty(configuration[KnownConfigNames.ExtensionCert]);
         var state = isExtensionInvocation
             ? stateValue is null && aliasValue is null
-                // Older extensions have a valid backchannel but no account contract. Avoid caching
-                // a false negative before a later invocation supplies the live snapshot.
+                // Older extensions do not advertise any account transport. Avoid caching a false
+                // negative, but do not infer RPC from the mere presence of inherited credentials.
                 ? VsCodeMicrosoftAccountState.Suppressed
                 : Parse(stateValue, aliasValue)
             : ParseUntrustedNonPositiveState(stateValue, aliasValue);
+        if (state.Kind != VsCodeMicrosoftAccountStateKind.Missing)
+        {
+            state = state with { Transport = VsCodeMicrosoftAccountTransport.Environment };
+        }
 
         configuration[StateEnvironmentVariable] = null;
         configuration[AliasEnvironmentVariable] = null;
@@ -61,12 +72,13 @@ internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicroso
         return new(state);
     }
 
-    private static VsCodeMicrosoftAccountState Parse(string? state, string? alias)
+    internal static VsCodeMicrosoftAccountState Parse(string? state, string? alias)
     {
         // The extension emits one of:
         //   STATE=internal      ALIAS=<normalized-alias>
         //   STATE=not_internal ALIAS absent
         //   STATE=refreshing   ALIAS absent
+        //   STATE=rpc          ALIAS absent
         //   STATE=unavailable  ALIAS absent
         // A missing pair identifies an older extension. Any other combination is treated as
         // unavailable so malformed input cannot invalidate a valid cache as an explicit sign-out.
@@ -100,7 +112,26 @@ internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicroso
             return VsCodeMicrosoftAccountState.Refreshing;
         }
 
+        if (state?.Equals(RpcState, StringComparison.OrdinalIgnoreCase) == true &&
+            alias is null)
+        {
+            return VsCodeMicrosoftAccountState.RpcFallback;
+        }
+
         return VsCodeMicrosoftAccountState.Unavailable;
+    }
+
+    internal static VsCodeMicrosoftAccountState ParseRpc(string[] accountState)
+    {
+        var state = accountState switch
+        {
+            [var status] => Parse(status, alias: null),
+            [var status, var alias] => Parse(status, alias),
+            _ => VsCodeMicrosoftAccountState.Unavailable
+        };
+        return state.Kind == VsCodeMicrosoftAccountStateKind.RpcFallback
+            ? VsCodeMicrosoftAccountState.Unavailable with { Transport = VsCodeMicrosoftAccountTransport.Rpc }
+            : state with { Transport = VsCodeMicrosoftAccountTransport.Rpc };
     }
 
     private static VsCodeMicrosoftAccountState ParseUntrustedNonPositiveState(string? state, string? alias)
@@ -147,8 +178,27 @@ internal sealed class EnvironmentVsCodeMicrosoftAccountProvider : IVsCodeMicroso
     }
 }
 
+internal sealed class FallbackVsCodeMicrosoftAccountProvider(
+    EnvironmentVsCodeMicrosoftAccountProvider environmentProvider,
+    Func<IVsCodeMicrosoftAccountProvider> rpcProviderFactory) : IVsCodeMicrosoftAccountProvider
+{
+    public async Task<VsCodeMicrosoftAccountState> GetInternalMicrosoftAccountAsync(CancellationToken cancellationToken)
+    {
+        var state = await environmentProvider.GetInternalMicrosoftAccountAsync(cancellationToken).ConfigureAwait(false);
+        if (state.Kind != VsCodeMicrosoftAccountStateKind.RpcFallback)
+        {
+            return state;
+        }
+
+        var rpcState = await rpcProviderFactory().GetInternalMicrosoftAccountAsync(cancellationToken).ConfigureAwait(false);
+        return rpcState with { Transport = VsCodeMicrosoftAccountTransport.Rpc };
+    }
+}
+
 internal sealed record VsCodeMicrosoftAccountState(VsCodeMicrosoftAccountStateKind Kind, string? Alias)
 {
+    internal VsCodeMicrosoftAccountTransport Transport { get; init; }
+
     internal static VsCodeMicrosoftAccountState Missing { get; } = new(VsCodeMicrosoftAccountStateKind.Missing, Alias: null);
 
     internal static VsCodeMicrosoftAccountState Unavailable { get; } = new(VsCodeMicrosoftAccountStateKind.Unavailable, Alias: null);
@@ -156,6 +206,8 @@ internal sealed record VsCodeMicrosoftAccountState(VsCodeMicrosoftAccountStateKi
     internal static VsCodeMicrosoftAccountState Suppressed { get; } = new(VsCodeMicrosoftAccountStateKind.Suppressed, Alias: null);
 
     internal static VsCodeMicrosoftAccountState Refreshing { get; } = new(VsCodeMicrosoftAccountStateKind.Refreshing, Alias: null);
+
+    internal static VsCodeMicrosoftAccountState RpcFallback { get; } = new(VsCodeMicrosoftAccountStateKind.RpcFallback, Alias: null);
 
     internal static VsCodeMicrosoftAccountState Available(string? alias) => new(VsCodeMicrosoftAccountStateKind.Available, alias);
 
@@ -174,5 +226,13 @@ internal enum VsCodeMicrosoftAccountStateKind
     Available,
     Unavailable,
     Suppressed,
-    Refreshing
+    Refreshing,
+    RpcFallback
+}
+
+internal enum VsCodeMicrosoftAccountTransport
+{
+    None,
+    Environment,
+    Rpc
 }

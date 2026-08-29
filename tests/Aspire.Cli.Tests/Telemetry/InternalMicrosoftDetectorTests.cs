@@ -971,6 +971,27 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task CheckWindowsUserDnsDomainAsync_RejectsNonAsciiAlias()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "tést.alias"
+            });
+
+        var result = await detector.CheckWindowsUserDnsDomainAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Null(result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+    }
+
+    [Fact]
     public async Task CheckWindowsWorkplaceJoinAsync_UsesExecutionContextEnvironmentAndProcessFactory()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1331,6 +1352,32 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         Assert.True(result.IsInternalMicrosoft);
         Assert.Equal("current.alias", result.Alias);
+    }
+
+    [Fact]
+    public async Task IsInternalMicrosoftMachineAsync_ReportsVsCodeProviderDuration()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var provider = new TestVsCodeMicrosoftAccountProvider
+        {
+            GetInternalMicrosoftAccountAsyncCallback = async cancellationToken =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(30), cancellationToken);
+                return VsCodeMicrosoftAccountState.Available("current.alias");
+            }
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: null,
+            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["CI"] = "true" }),
+            vsCodeMicrosoftAccountProvider: provider);
+
+        var result = await detector.IsInternalMicrosoftMachineAsync();
+
+        var diagnostic = Assert.Single(result.ProbeDiagnostics, diagnostic =>
+            diagnostic.Source == "VS Code Microsoft tenant");
+        Assert.True(diagnostic.Duration >= TimeSpan.FromMilliseconds(20), $"Actual duration was {diagnostic.Duration}.");
     }
 
     [Fact]

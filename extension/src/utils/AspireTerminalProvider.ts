@@ -10,11 +10,13 @@ import { CliPathResolutionResult, CliPathResolver, resolveCliPath } from './cliP
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath } from './cliPathEnvironment';
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
 import path from 'path';
+import { statSync } from 'fs';
 import { assertNoTerminalControlCharacters } from './cmdShim';
 import {
     microsoftAccountAliasEnvironmentVariable,
     MicrosoftAccountEnvironmentState,
     microsoftAccountStateEnvironmentVariable,
+    microsoftAccountRpcState,
 } from './microsoftAccountProvider';
 
 // Re-exported so existing importers keep a single implementation of the guard.
@@ -154,6 +156,7 @@ function addMicrosoftAccountEnvironmentWithoutAlias(
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId = new Map<string, AspireTerminal>();
     private _invalidatedSharedTerminals = new Set<vscode.Terminal>();
+    private _microsoftAccountEnvironmentCliIdentities = new Map<string, string>();
     private readonly _terminalsWithAspireCommands = new WeakSet<vscode.Terminal>();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
@@ -201,6 +204,30 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     set dcpServerConnectionInfo(value: DcpServerConnectionInfo) {
         this._dcpServerConnectionInfo = value;
+    }
+
+    getCliExecutableIdentity(cliPath: string): string | undefined {
+        if (!path.isAbsolute(cliPath)) {
+            return undefined;
+        }
+
+        try {
+            const stat = statSync(cliPath);
+            return [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
+        }
+        catch {
+            return undefined;
+        }
+    }
+
+    setMicrosoftAccountEnvironmentSupport(cliPath: string, supported: boolean, expectedIdentity: string): void {
+        const key = getCliPathComparisonKey(cliPath);
+        if (supported && this.getCliExecutableIdentity(cliPath) === expectedIdentity) {
+            this._microsoftAccountEnvironmentCliIdentities.set(key, expectedIdentity);
+        }
+        else {
+            this._microsoftAccountEnvironmentCliIdentities.delete(key);
+        }
     }
 
     async sendAspireCommandToAspireTerminal(subcommand: AspireSubcommand, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
@@ -461,8 +488,25 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
         });
         const microsoftAccountState = this._getMicrosoftAccountEnvironmentState();
-        if (microsoftAccountState) {
-            addMicrosoftAccountEnvironment(env, microsoftAccountState, isTerminalEnvironment === true);
+        const supportedCliIdentity = resolvedCliPath
+            ? this._microsoftAccountEnvironmentCliIdentities.get(getCliPathComparisonKey(resolvedCliPath))
+            : undefined;
+        if (isTerminalEnvironment && microsoftAccountState) {
+            // Interactive terminals are long-lived. Explicitly remove any inherited snapshot so
+            // each CLI launched from the shell receives only the non-sensitive RPC marker.
+            env[microsoftAccountStateEnvironmentVariable] = microsoftAccountRpcState;
+            env[microsoftAccountAliasEnvironmentVariable] = null;
+        }
+        else if (microsoftAccountState &&
+            resolvedCliPath &&
+            supportedCliIdentity !== undefined &&
+            supportedCliIdentity === this.getCliExecutableIdentity(resolvedCliPath)) {
+            addMicrosoftAccountEnvironment(env, microsoftAccountState, false);
+        }
+        else if (microsoftAccountState) {
+            // Older or not-yet-probed CLIs ignore this marker, while a compatible CLI uses the
+            // authenticated RPC fallback without exposing the alias to its child environment.
+            env[microsoftAccountStateEnvironmentVariable] = microsoftAccountRpcState;
         }
 
         if (debugSessionId) {
@@ -608,6 +652,12 @@ function areResolvedCliPathsEqual(left: string | undefined, right: string): bool
     return process.platform === 'win32'
         ? path.win32.normalize(left).toLowerCase() === path.win32.normalize(right).toLowerCase()
         : left === right;
+}
+
+function getCliPathComparisonKey(cliPath: string): string {
+    return process.platform === 'win32'
+        ? path.win32.normalize(cliPath).toLowerCase()
+        : cliPath;
 }
 
 function isPowerShell7Available(): boolean {

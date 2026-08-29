@@ -28,12 +28,10 @@ suite('MicrosoftAccountProvider tests', () => {
     test('refreshes when Microsoft authentication sessions change', async () => {
         const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
         let accounts: vscode.AuthenticationSessionAccountInformation[] = [];
-        const observedStates: string[] = [];
         const provider = new MicrosoftAccountProvider({
             getAccounts: async () => accounts,
             onDidChangeSessions: sessionChanges.event,
         });
-        const stateRegistration = provider.onDidChangeEnvironmentState(state => observedStates.push(state.status));
 
         try {
             await provider.initializeAsync();
@@ -49,10 +47,8 @@ suite('MicrosoftAccountProvider tests', () => {
             sessionChanges.fire({ provider: { id: 'microsoft', label: 'Microsoft' } });
             await waitFor(() => provider.alias === undefined);
             assert.deepStrictEqual(provider.environmentState, { status: 'not_internal' });
-            assert.deepStrictEqual(observedStates, ['refreshing', 'not_internal', 'refreshing', 'internal', 'refreshing', 'not_internal']);
         }
         finally {
-            stateRegistration.dispose();
             provider.dispose();
             sessionChanges.dispose();
         }

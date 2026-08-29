@@ -8,6 +8,8 @@ const validAliasPattern = /^[A-Za-z0-9._-]+$/;
 // This process contract must match EnvironmentVsCodeMicrosoftAccountProvider in Aspire.Cli.
 export const microsoftAccountStateEnvironmentVariable = 'ASPIRE_EXTENSION_MICROSOFT_ACCOUNT_STATE';
 export const microsoftAccountAliasEnvironmentVariable = 'ASPIRE_EXTENSION_MICROSOFT_ACCOUNT_ALIAS';
+export const microsoftAccountEnvironmentCapability = 'microsoft-account-environment.v1';
+export const microsoftAccountRpcState = 'rpc';
 
 export type MicrosoftAccountEnvironmentState =
     | Readonly<{ status: 'internal'; alias: string }>
@@ -25,9 +27,6 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
     private _latestRefreshSucceeded = false;
     private _refreshInProgress = false;
     private _disposed = false;
-    private readonly _onDidChangeEnvironmentState = new vscode.EventEmitter<MicrosoftAccountEnvironmentState>();
-
-    readonly onDidChangeEnvironmentState = this._onDidChangeEnvironmentState.event;
 
     get alias(): string | undefined {
         return this._alias;
@@ -156,28 +155,16 @@ export class MicrosoftAccountProvider implements vscode.Disposable {
         this._refreshGeneration++;
         this.setRefreshTask(undefined);
         this._authenticationChangeRegistration?.dispose();
-        this._onDidChangeEnvironmentState.dispose();
     }
 
     private updateAccountState(latestRefreshSucceeded: boolean, alias: string | undefined): void {
-        const previousState = this.environmentState;
         this._refreshInProgress = false;
         this._latestRefreshSucceeded = latestRefreshSucceeded;
         this._alias = alias;
-        const currentState = this.environmentState;
-        if (previousState.status !== currentState.status ||
-            (previousState.status === 'internal' && currentState.status === 'internal' && previousState.alias !== currentState.alias)) {
-            this._onDidChangeEnvironmentState.fire(currentState);
-        }
     }
 
     private beginRefresh(): void {
-        const previousState = this.environmentState;
         this._refreshInProgress = true;
-        const currentState = this.environmentState;
-        if (previousState.status !== currentState.status) {
-            this._onDidChangeEnvironmentState.fire(currentState);
-        }
     }
 
     private setRefreshTask(refreshTask: Promise<void> | undefined): void {
