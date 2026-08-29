@@ -102,6 +102,8 @@ public static class KubernetesEnvironmentExtensions
 
     private static void ValidateRunModePersistentVolumeBindings(PersistentVolumeBinding[] bindings)
     {
+        ValidateRunModeVolumeNamesAreUnambiguous(bindings);
+
         foreach (var (resource, annotation) in bindings)
         {
             // The env can be spelled on the binding or on a separate name-matched mount, and both make
@@ -120,6 +122,39 @@ public static class KubernetesEnvironmentExtensions
         }
 
         ValidateRunModeBackingStoreCompatibility(bindings);
+    }
+
+    private static void ValidateRunModeVolumeNamesAreUnambiguous(PersistentVolumeBinding[] bindings)
+    {
+        // Only run mode can reach this. Publish mode registers each volume with AddResource, so a second
+        // volume sharing a name fails global resource-name uniqueness while the model is still being
+        // built. Run mode hands back a CreateResourceBuilder that never registers the volume, so the
+        // collision survives to here.
+        //
+        // Both run-mode paths key off the volume name alone — the local path lookup in
+        // VolumeMountBindingAnnotation.ResolvePath and the container mount rewrite in
+        // ApplyRunModeContainerVolumeName — so two distinct volumes sharing a name on one resource would
+        // silently resolve to a single backing store and mix their data. Reject that rather than teach
+        // both paths to disambiguate, because the shape can never be published: whichever local
+        // behavior we chose would only work in the inner loop.
+        foreach (var resourceGroup in bindings.GroupBy(item => item.Resource))
+        {
+            foreach (var nameGroup in resourceGroup.GroupBy(
+                item => item.Annotation.Volume.Name,
+                StringComparer.OrdinalIgnoreCase))
+            {
+                var volumes = nameGroup.Select(item => item.Annotation.Volume).Distinct().ToArray();
+
+                if (volumes.Length > 1)
+                {
+                    var environmentNames = string.Join(", ", volumes.Select(volume => $"'{volume.Parent.Name}'"));
+                    throw new DistributedApplicationException(
+                        $"Resource '{resourceGroup.Key.Name}' binds {volumes.Length} different Kubernetes persistent volumes named '{nameGroup.Key}' (from environments {environmentNames}). " +
+                        $"Run mode resolves both the local path and the container volume by name, so these would share one backing store. " +
+                        $"Publishing rejects this shape as well, because two resources cannot share the name '{nameGroup.Key}'. Give the volumes distinct names.");
+                }
+            }
+        }
     }
 
     private static void ValidateRunModeBackingStoreCompatibility(PersistentVolumeBinding[] bindings)

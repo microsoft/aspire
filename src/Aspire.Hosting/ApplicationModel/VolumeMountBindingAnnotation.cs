@@ -95,12 +95,11 @@ public sealed class VolumeMountBindingAnnotation(string volumeName) : IResourceA
         // composition, where the mount and the compute environment binding are spelled as two separate
         // calls and the mount-declaring annotation therefore carries no resolver of its own.
         //
-        // Scanning unconditionally would alias distinct volumes, because VolumeName is not unique across
-        // compute environments. A host process can bind same-named volumes from two Kubernetes
-        // environments in run mode — publish mode cannot express that shape, since AddPersistentVolume
-        // registers the volume in the model and the name collides, but run mode uses CreateResourceBuilder
-        // and never registers it. Every binding would then select the last resolver and point at one
-        // environment's local store, silently mixing the two volumes' data.
+        // Scanning unconditionally would alias distinct volumes, because VolumeName is not a unique key —
+        // two compute environments can each declare a volume under the same name, and every binding would
+        // then select the last resolver and point at one environment's store. Aspire.Hosting.Kubernetes
+        // rejects that shape up front, but this annotation is public and shared across compute
+        // environments, so it resolves correctly on its own rather than relying on any one of them.
         var resolver = RunModeHostPathResolver ?? context.Resource.Annotations
             .OfType<VolumeMountBindingAnnotation>()
             .LastOrDefault(annotation =>

@@ -94,8 +94,10 @@ public class KubernetesPersistentVolumeRunModeTests
         Assert.NotEqual(firstProjectEnvironment["DATA_PATH"], secondProjectEnvironment["DATA_PATH"]);
     }
 
-    [Fact]
-    public async Task OneResourceBoundToSameNamedVolumesInDifferentEnvironmentsKeepsStoresSeparate()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OneResourceBoundToSameNamedVolumesInDifferentEnvironmentsIsRejected(bool nameMatchSpelling)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var firstEnvironment = builder.AddKubernetesEnvironment("first-env");
@@ -103,26 +105,54 @@ public class KubernetesPersistentVolumeRunModeTests
         var firstVolume = firstEnvironment.AddPersistentVolume("data");
         var secondVolume = secondEnvironment.AddPersistentVolume("data");
 
-        // Both volumes are named "data", so VolumeName alone cannot tell the two bindings apart. Only run
-        // mode can express this: AddPersistentVolume registers the volume in publish mode and the duplicate
-        // name is rejected, while run mode hands back a CreateResourceBuilder that never registers it.
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+        // Both volumes are named "data", so neither the local path lookup nor the container mount
+        // rewrite can tell the two bindings apart. Only run mode can express this: AddPersistentVolume
+        // registers the volume in publish mode and the duplicate name is rejected while the model is
+        // built, while run mode hands back a CreateResourceBuilder that never registers it.
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null);
+
+        if (nameMatchSpelling)
+        {
+            project.WithVolume("data", "/srv/first", env: "FIRST_PATH")
+                .WithPersistentVolume(firstVolume)
+                .WithVolume("data", "/srv/second", env: "SECOND_PATH")
+                .WithPersistentVolume(secondVolume);
+        }
+        else
+        {
+            project.WithPersistentVolume(firstVolume, "/srv/first", env: "FIRST_PATH")
+                .WithPersistentVolume(secondVolume, "/srv/second", env: "SECOND_PATH");
+        }
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+
+        Assert.Contains("binds 2 different Kubernetes persistent volumes named 'data'", exception.Message);
+        Assert.Contains("'first-env'", exception.Message);
+        Assert.Contains("'second-env'", exception.Message);
+        Assert.Contains("project", exception.Message);
+    }
+
+    [Fact]
+    public async Task OneContainerBoundToSameNamedVolumesInDifferentEnvironmentsIsRejected()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var firstEnvironment = builder.AddKubernetesEnvironment("first-env");
+        var secondEnvironment = builder.AddKubernetesEnvironment("second-env");
+        var firstVolume = firstEnvironment.AddPersistentVolume("data");
+        var secondVolume = secondEnvironment.AddPersistentVolume("data");
+
+        builder.AddContainer("container", "image")
             .WithPersistentVolume(firstVolume, "/srv/first", env: "FIRST_PATH")
             .WithPersistentVolume(secondVolume, "/srv/second", env: "SECOND_PATH");
 
         using var app = builder.Build();
-        var store = app.Services.GetRequiredService<IAspireStore>();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
 
-        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            project.Resource,
-            serviceProvider: app.Services);
-
-        Assert.Equal(
-            KubernetesPersistentVolumeLocalStorage.GetPath(store, firstVolume.Resource),
-            environment["FIRST_PATH"]);
-        Assert.Equal(
-            KubernetesPersistentVolumeLocalStorage.GetPath(store, secondVolume.Resource),
-            environment["SECOND_PATH"]);
+        Assert.Contains("binds 2 different Kubernetes persistent volumes named 'data'", exception.Message);
+        Assert.Contains("container", exception.Message);
     }
 
     [Fact]
