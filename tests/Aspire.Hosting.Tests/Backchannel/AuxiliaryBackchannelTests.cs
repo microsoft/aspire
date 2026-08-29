@@ -616,7 +616,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     public void CreateSocket_ResolvesFilesystemAliases()
     {
         // The CLI resolves filesystem aliases before searching for an AppHost's backchannel socket
-        // (AppHostHelper.FindMatchingNonOrphanedSockets), so the AppHost must key its socket off the same
+        // (AppHostSocketManager.FindSockets), so the AppHost must key its socket off the same
         // canonical physical path. File-based AppHosts otherwise report AppHost:FilePath as
         // Path.GetFullPath(EntryPointFilePath), which leaves intermediate symlinks unresolved and made
         // 'aspire describe/stop --apphost' miss the AppHost. See https://github.com/microsoft/aspire/issues/17618.
