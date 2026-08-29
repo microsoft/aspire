@@ -112,6 +112,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                     type = "infra-failure",
                     title = "Windows test host process crashes",
                     error_pattern = "0xC0000142",
+                    issue_url = "https://github.com/microsoft/aspire/issues/42",
                     occurrences = new[] { new { observed_at = "2026-08-07T18:03:31Z" } }
                 },
                 new
@@ -160,6 +161,16 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         Assert.Equal(
             ["Tests / Microsoft.Azure.StackExchangeRedis / Microsoft.Azure.StackExchangeRedis (windows-latest)"],
             ReadStrings(windowsCause, "job_names"));
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/42",
+            windowsCause.GetProperty("issue_url").GetString());
+        Assert.Equal(["windows-process-init-0xc0000142"], ReadStrings(windowsCause, "aliases"));
+        JsonElement windowsAlias = Assert.Single(
+            result.GetProperty("priorCauseAliases").EnumerateArray(),
+            alias => alias.GetProperty("legacy_id").GetString() == "windows-process-init-0xc0000142");
+        Assert.Equal(
+            "windows-process-init-failure-0xc0000142",
+            windowsAlias.GetProperty("canonical_id").GetString());
 
         JsonElement remoteHostCause = FindCause(result, "remotehost-jsonrpc-auth-timeout");
         Assert.Equal(
@@ -798,7 +809,9 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
         });
 
-        Assert.Equal(canonicalCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal(canonicalCauseId, cause.GetProperty("id").GetString());
+        Assert.Equal([legacyCauseId], ReadStrings(cause, "aliases"));
         JsonElement migration = Assert.Single(result.GetProperty("priorCauseMigrations").EnumerateArray());
         Assert.Equal(legacyCauseId, migration.GetProperty("legacy_id").GetString());
         Assert.Equal(canonicalCauseId, migration.GetProperty("canonical_id").GetString());
@@ -1298,6 +1311,81 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DoesNotMatchSupportedTypeIncompatiblePriorCauseForTestName()
+    {
+        const string testName = "Aspire.Sample.Tests.SampleTests.FlakyTest";
+        const string currentCauseId = "current-flaky-test";
+        object payload = CreateSingleTestPayload(
+            testName,
+            currentCauseId,
+            new
+            {
+                id = "prior-infra-failure",
+                type = "infra-failure",
+                title = "Prior infrastructure failure",
+                test_name = testName,
+                error_pattern = "The sample test failed."
+            },
+            error: "The sample test failed.");
+
+        JsonElement result = await ResolveAsync(payload);
+
+        Assert.Equal(currentCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PrefersTypeCompatiblePriorCauseForMatchingTestName()
+    {
+        const string testName = "Aspire.Sample.Tests.SampleTests.FlakyTest";
+        const string canonicalCauseId = "canonical-flaky-test";
+        const string issueUrl = "https://github.com/microsoft/aspire/issues/12345";
+        object payload = CreateSingleTestPayload(
+            testName,
+            "current-flaky-test",
+            new
+            {
+                id = canonicalCauseId,
+                type = "flaky-test",
+                title = "Canonical flaky test",
+                test_name = testName,
+                error_pattern = "The sample test failed.",
+                issue_url = issueUrl,
+                occurrences = new[] { new { observed_at = "2026-07-02T00:00:00Z" } }
+            },
+            error: "The sample test failed.");
+
+        using JsonDocument payloadDocument = JsonDocument.Parse(JsonSerializer.Serialize(payload, s_jsonOptions));
+        JsonElement root = payloadDocument.RootElement;
+        object expandedPayload = new
+        {
+            analysis = root.GetProperty("analysis"),
+            causes = root.GetProperty("causes"),
+            priorCauses = new object[]
+            {
+                new
+                {
+                    id = "older-infra-failure",
+                    type = "infra-failure",
+                    title = "Older infrastructure failure",
+                    test_name = testName,
+                    error_pattern = "The sample test failed.",
+                    occurrences = new[] { new { observed_at = "2026-07-01T00:00:00Z" } }
+                },
+                root.GetProperty("priorCauses")[0]
+            },
+            retryPatterns = root.GetProperty("retryPatterns")
+        };
+
+        JsonElement result = await ResolveAsync(expandedPayload);
+
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal(canonicalCauseId, cause.GetProperty("id").GetString());
+        Assert.Equal(issueUrl, cause.GetProperty("issue_url").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RejectsUnsupportedCanonicalPriorCauseTypes()
     {
         object payload = CreateSingleTestPayload(
@@ -1433,6 +1521,207 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AppliesJobNameOnlyRetryPattern()
+    {
+        const string canonicalCauseId = "stable-job-cause";
+        JsonElement result = await ResolveAsync(CreateRetryPatternPayload(
+            "agent-proposed-cause",
+            new
+            {
+                jobName = new { regex = ".*Sample.*" },
+                causeId = canonicalCauseId
+            }));
+
+        Assert.Equal(canonicalCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RejectsCurrentCauseMergeAcrossTypes()
+    {
+        CommandResult result = await ExecuteHarnessAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "infra-proposal", "flaky-proposal" },
+                failed_jobs = new object[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Build / Windows",
+                        classification = "transient-infra",
+                        reason = "Shared failure"
+                    },
+                    new
+                    {
+                        id = 2,
+                        name = "Tests / Windows",
+                        classification = "flaky-test",
+                        reason = "Shared failure"
+                    }
+                },
+                failed_tests = new[]
+                {
+                    new
+                    {
+                        name = "Aspire.Tests.Sample",
+                        job = "Tests / Windows",
+                        error = "Shared failure",
+                        stack_trace = string.Empty
+                    }
+                }
+            },
+            causes = new object[]
+            {
+                new
+                {
+                    id = "infra-proposal",
+                    type = "infra-failure",
+                    title = "Infrastructure failure",
+                    error_pattern = "Shared failure",
+                    job_ids = new[] { 1 }
+                },
+                new
+                {
+                    id = "flaky-proposal",
+                    type = "flaky-test",
+                    title = "Flaky test",
+                    test_name = "Aspire.Tests.Sample",
+                    error_pattern = "Shared failure",
+                    job_ids = new[] { 2 }
+                }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new
+            {
+                jobFailurePatterns = new[]
+                {
+                    new
+                    {
+                        output = new { regex = "Shared failure" },
+                        causeId = "shared-canonical"
+                    }
+                }
+            }
+        });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("cannot merge current causes with types", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RejectsCanonicalRedirectAcrossPriorCauseTypes()
+    {
+        CommandResult result = await ExecuteHarnessAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "legacy-infra" },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Tests / Windows",
+                        classification = "flaky-test",
+                        reason = "Shared failure"
+                    }
+                },
+                failed_tests = new[]
+                {
+                    new
+                    {
+                        name = "Aspire.Tests.Sample",
+                        job = "Tests / Windows",
+                        error = "Shared failure",
+                        stack_trace = string.Empty
+                    }
+                }
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "legacy-infra",
+                    type = "flaky-test",
+                    title = "Current flaky test",
+                    test_name = "Aspire.Tests.Sample",
+                    error_pattern = "Shared failure",
+                    job_ids = new[] { 1 }
+                }
+            },
+            priorCauses = new object[]
+            {
+                new
+                {
+                    id = "legacy-infra",
+                    type = "infra-failure",
+                    title = "Prior infrastructure failure",
+                    error_pattern = "Shared failure"
+                },
+                new
+                {
+                    id = "canonical-flaky",
+                    type = "flaky-test",
+                    title = "Canonical flaky test",
+                    test_name = "Aspire.Tests.Sample",
+                    error_pattern = "Shared failure"
+                }
+            },
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("cannot alias prior cause type", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task UsesTrustedJobNamesForPersistedAttribution()
+    {
+        JsonElement result = await ResolveAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "worker-crash" },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 101,
+                        name = "Agent supplied job name",
+                        classification = "transient-infra",
+                        reason = "Worker crashed"
+                    }
+                },
+                failed_tests = Array.Empty<object>()
+            },
+            trustedFailedJobs = new[]
+            {
+                new { id = 101, name = "Build / Windows" }
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    title = "Worker crash",
+                    error_pattern = "Worker crashed",
+                    job_ids = new[] { 101 }
+                }
+            },
+            priorCauses = Array.Empty<object>(),
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        });
+
+        Assert.Equal(["Build / Windows"], ReadStrings(FindOnlyCause(result), "job_names"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task IgnoresInvalidRetryPatternRegex()
     {
         const string currentCauseId = "current-infra-cause";
@@ -1478,6 +1767,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         string causesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "causes")).FullName;
         string priorCausesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "prior-causes")).FullName;
         string retryPatternsPath = Path.Combine(_workspace.Path, "retry-patterns.json");
+        string trustedFailedJobsPath = Path.Combine(_workspace.Path, "trusted-failed-jobs.json");
 
         await WriteJsonAsync(analysisPath, new
         {
@@ -1487,7 +1777,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                 new
                 {
                     id = 1,
-                    name = "Tests / Sample / Sample (windows-latest)",
+                    name = "Agent supplied job name",
                     classification = "transient-infra",
                     reason = "Process completed with exit code -1073741502 (0xC0000142)."
                 }
@@ -1510,6 +1800,19 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             error_pattern = "0xC0000142",
             occurrences = new[] { new { observed_at = "2026-07-10T01:22:31Z" } }
         });
+        await WriteJsonAsync(Path.Combine(priorCausesDirectory, $"{proposedCauseId}.json"), new
+        {
+            id = proposedCauseId,
+            type = "infra-failure",
+            title = "Superseded Windows process initialization failure",
+            error_pattern = "0xC0000142",
+            issue_url = "https://github.com/microsoft/aspire/issues/42",
+            occurrences = new[] { new { observed_at = "2026-08-01T01:22:31Z" } }
+        });
+        await WriteJsonAsync(trustedFailedJobsPath, new[]
+        {
+            new { id = 1, name = "Tests / Sample / Sample (windows-latest)" }
+        });
         await WriteJsonAsync(retryPatternsPath, new
         {
             jobFailurePatterns = new[]
@@ -1531,7 +1834,8 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             analysisPath,
             causesDirectory,
             priorCausesDirectory,
-            retryPatternsPath);
+            retryPatternsPath,
+            trustedFailedJobsPath);
 
         result.EnsureSuccessful();
         Assert.False(File.Exists(Path.Combine(causesDirectory, $"{proposedCauseId}.json")));
@@ -1541,6 +1845,20 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         Assert.Equal(
             [canonicalCauseId],
             ReadStrings(analysis.RootElement, "causes"));
+
+        using JsonDocument canonical = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(causesDirectory, $"{canonicalCauseId}.json")));
+        Assert.Equal(
+            ["Tests / Sample / Sample (windows-latest)"],
+            ReadStrings(canonical.RootElement, "job_names"));
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/42",
+            canonical.RootElement.GetProperty("issue_url").GetString());
+        Assert.Equal([proposedCauseId], ReadStrings(canonical.RootElement, "aliases"));
+
+        using JsonDocument alias = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(priorCausesDirectory, $"{proposedCauseId}.json")));
+        Assert.Equal(canonicalCauseId, alias.RootElement.GetProperty("canonical_id").GetString());
     }
 
     [Fact]
@@ -1614,7 +1932,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
     [RequiresTools(["node"])]
     public async Task CommandLineMigratesLegacyCauseFiles()
     {
-        const string legacyCauseId = "processguest-signalerThrows-treekill-timeout";
+        const string legacyCauseId = "processguest-signalerThrows_treekill-timeout";
         const string canonicalCauseId = "processguest-signalerthrows-treekill-timeout";
 
         string analysisPath = Path.Combine(_workspace.Path, "legacy-analysis-result.json");
@@ -1686,6 +2004,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         using JsonDocument migratedDocument = JsonDocument.Parse(await File.ReadAllTextAsync(canonicalPath));
         JsonElement migratedCause = migratedDocument.RootElement;
         Assert.Equal(canonicalCauseId, migratedCause.GetProperty("id").GetString());
+        Assert.False(migratedCause.TryGetProperty("canonical_id", out _));
         Assert.Equal(
             "https://github.com/microsoft/aspire/issues/1111",
             migratedCause.GetProperty("issue_url").GetString());
@@ -1717,22 +2036,22 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         int resolverIndex = workflow.IndexOf("analyze-ci-failure-cause-resolver.js", StringComparison.Ordinal);
         int persistenceIndex = workflow.IndexOf("cp \"$ANALYSIS_FILE\" \"memory-repo/runs/${RUN_ID}.json\"", StringComparison.Ordinal);
         int memoryPushIndex = workflow.IndexOf("git -C memory-repo push origin \"HEAD:$MEMORY_BRANCH\"", StringComparison.Ordinal);
-        int issueCreationIndex = workflow.IndexOf("CREATED_ISSUE_URL=$(gh issue create", StringComparison.Ordinal);
+        int issuePublicationIndex = workflow.IndexOf("- name: Publish cause issues", StringComparison.Ordinal);
         int commentStepIndex = workflow.IndexOf("- name: Comment on pull request", StringComparison.Ordinal);
         int resolverFailureStepIndex = workflow.IndexOf("- name: Report cause resolver failure", StringComparison.Ordinal);
 
         Assert.True(resolverIndex >= 0, "The publish job must invoke the deterministic cause resolver.");
         Assert.True(checkoutIndex < artifactDownloadIndex, "Checkout must not delete the downloaded trusted run artifacts.");
         Assert.True(persistenceIndex > resolverIndex, "Cause identities must be normalized before the run summary is persisted.");
-        Assert.Contains("group: analyze-ci-failure-publish", workflow, StringComparison.Ordinal);
+        Assert.Contains("group: analyze-ci-failure", workflow, StringComparison.Ordinal);
         Assert.Contains("queue: max", workflow, StringComparison.Ordinal);
         Assert.Contains("$ex * ($new | del(.occurrences, .issue_url))", workflow, StringComparison.Ordinal);
-        Assert.True(memoryPushIndex < issueCreationIndex, "Canonical cause identities must be pushed before issue side effects.");
+        Assert.True(memoryPushIndex < issuePublicationIndex, "Canonical cause identities must be pushed before issue side effects.");
         Assert.Contains("node .github/workflows/analyze-ci-failure-cause-resolver.js \\", workflow, StringComparison.Ordinal);
         Assert.Contains("|| RESOLVER_STATUS=$?", workflow, StringComparison.Ordinal);
         Assert.Contains("if [ \"$RESOLVER_STATUS\" -eq 0 ]; then", workflow, StringComparison.Ordinal);
         Assert.Contains("echo \"resolver_status=${RESOLVER_STATUS}\" >> \"$GITHUB_OUTPUT\"", workflow, StringComparison.Ordinal);
-        Assert.True(commentStepIndex > issueCreationIndex, "PR comments must run after cause issue side effects.");
+        Assert.True(commentStepIndex > issuePublicationIndex, "PR comments must run after cause issue side effects.");
         Assert.True(
             resolverFailureStepIndex > commentStepIndex,
             "Resolver failures must be reported only after the independent PR analysis comment step.");

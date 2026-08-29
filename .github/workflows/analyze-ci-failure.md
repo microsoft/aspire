@@ -53,7 +53,6 @@ jobs:
           sparse-checkout: |
             eng/test-retry-patterns.json
             .github/workflows/analyze-ci-failure-history.sh
-            .github/workflows/analyze-ci-failure-candidates.sh
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
         id: collect
@@ -96,15 +95,10 @@ jobs:
           RUN_STARTED_AT=$(jq -r '.run_started_at // ""' ci-failure-data/run.json)
           RUN_UPDATED_AT=$(jq -r '.updated_at // ""' ci-failure-data/run.json)
           RUN_EVENT=$(jq -r '.event // ""' ci-failure-data/run.json)
-          RUN_WORKFLOW_PATH=$(jq -r '.path // ""' ci-failure-data/run.json)
           HEAD_SHA=$(jq -r '.head_sha // ""' ci-failure-data/run.json)
           HEAD_BRANCH=$(jq -r '.head_branch // ""' ci-failure-data/run.json)
           RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
           CONCLUSION=$(jq -r '.conclusion // ""' ci-failure-data/run.json)
-          if [ "$RUN_WORKFLOW_PATH" != ".github/workflows/ci.yml" ]; then
-            echo "::error::Run ${RUN_ID} belongs to workflow '${RUN_WORKFLOW_PATH}', not '.github/workflows/ci.yml'"
-            exit 1
-          fi
           case "${RUN_EVENT}:${HEAD_BRANCH}" in
             push:main)
               RUN_SCOPE="main"
@@ -176,10 +170,50 @@ jobs:
             fi
 
             LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // ""' ci-failure-data/last-successful-main-run.json)
-            bash .github/workflows/analyze-ci-failure-candidates.sh \
-              "$REPO" "$LAST_SUCCESSFUL_SHA" "$HEAD_SHA" \
-              ci-failure-data/candidate-merges.json \
-              ci-failure-data/candidate-merge-history-status.json
+            echo "[]" > ci-failure-data/candidate-merges.json
+            echo '{"state":"unavailable"}' > ci-failure-data/candidate-merge-history-status.json
+            if [ -n "${LAST_SUCCESSFUL_SHA}" ] && [ -n "${HEAD_SHA}" ]; then
+              if gh api --paginate --slurp "repos/${REPO}/compare/${LAST_SUCCESSFUL_SHA}...${HEAD_SHA}?per_page=100" \
+                  > ci-failure-data/main-comparison-pages.json 2>/dev/null; then
+                jq '{
+                  total_commits: (.[0].total_commits // 0),
+                  commits: [.[].commits[]?]
+                }' ci-failure-data/main-comparison-pages.json > ci-failure-data/main-comparison.json
+                RECEIVED_COMMIT_COUNT=$(jq '.commits | length' ci-failure-data/main-comparison.json)
+                TOTAL_COMMIT_COUNT=$(jq '.total_commits' ci-failure-data/main-comparison.json)
+                if [ "$RECEIVED_COMMIT_COUNT" -lt "$TOTAL_COMMIT_COUNT" ]; then
+                  echo "::warning::GitHub returned only ${RECEIVED_COMMIT_COUNT} of ${TOTAL_COMMIT_COUNT} commits in the comparison."
+                  echo '{"state":"incomplete"}' > ci-failure-data/candidate-merge-history-status.json
+                else
+                  echo '{"state":"available"}' > ci-failure-data/candidate-merge-history-status.json
+                fi
+                jq -c '.commits[]? | {sha, message: .commit.message, html_url}' \
+                  ci-failure-data/main-comparison.json | while IFS= read -r COMMIT; do
+                  COMMIT_SHA=$(jq -r '.sha' <<< "${COMMIT}")
+                  if ! MERGE_PR=$(gh api "repos/${REPO}/commits/${COMMIT_SHA}/pulls" \
+                      --jq "[.[] | select(.base.repo.full_name == \"${REPO}\" and .base.ref == \"main\" and .merged_at != null)] | first // null" \
+                      2>/dev/null); then
+                    echo "::warning::Unable to associate commit ${COMMIT_SHA} with a merged pull request."
+                    echo '{"state":"incomplete"}' > ci-failure-data/candidate-merge-history-status.json
+                    continue
+                  fi
+                  if [ "${MERGE_PR}" != "null" ]; then
+                    jq --argjson commit "${COMMIT}" --argjson pr "${MERGE_PR}" \
+                      '. + [$commit + {pull_request: {
+                        number: $pr.number,
+                        title: $pr.title,
+                        url: $pr.html_url,
+                        merged_at: $pr.merged_at
+                      }}]' ci-failure-data/candidate-merges.json \
+                      > ci-failure-data/candidate-merges.tmp
+                    mv ci-failure-data/candidate-merges.tmp ci-failure-data/candidate-merges.json
+                  fi
+                done
+              else
+                echo "::warning::Unable to compare the last successful main commit with the failed commit."
+              fi
+              rm -f ci-failure-data/main-comparison.json ci-failure-data/main-comparison-pages.json
+            fi
           fi
           echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
 
@@ -625,11 +659,12 @@ safe-outputs:
           with:
             persist-credentials: false
             sparse-checkout: |
+              .github/workflows/analyze-ci-failure-cause-issues.js
               .github/workflows/analyze-ci-failure-cause-resolver.js
               .github/workflows/analyze-ci-failure-persistence.sh
               .github/workflows/analyze-ci-failure-comment.sh
-              .github/workflows/analyze-ci-failure-issue.sh
               .github/workflows/analyze-ci-failure-validation.sh
+              .github/workflows/tracking-issue.js
               eng/test-retry-patterns.json
             sparse-checkout-cone-mode: false
         - uses: actions/download-artifact@v4
@@ -638,7 +673,8 @@ safe-outputs:
             path: ci-failure-data/
         - name: Validate analysis scope
           run: bash .github/workflows/analyze-ci-failure-validation.sh
-        - name: Publish analysis data and comment on PR
+        - name: Publish analysis data and cause issues
+          id: publish-analysis
           run: |
             set -euo pipefail
 
@@ -652,11 +688,33 @@ safe-outputs:
             ANALYSIS_FILE="$ARTIFACT_DIR/agent/analysis-result.json"
             CAUSES_DIR="$ARTIFACT_DIR/agent/causes"
 
+            if [ ! -f "$ANALYSIS_FILE" ]; then
+              echo "::error::Analysis result not found at $ANALYSIS_FILE"
+              exit 1
+            fi
+
+            # Validate summary JSON
+            if ! jq empty "$ANALYSIS_FILE" 2>/dev/null; then
+              echo "::error::analysis-result.json is not valid JSON"
+              exit 1
+            fi
+
             RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
             TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
             TRUSTED_RUN_ID=$(jq -r '.run_id' "$RUN_CONTEXT_FILE")
             TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
+            TRUSTED_PR_NUMBERS=$(jq -r '.pr_numbers' "$RUN_CONTEXT_FILE")
             VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
+
+            # Validate cause files
+            if [ -d "$CAUSES_DIR" ]; then
+              for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
+                [ -f "$CAUSE_FILE" ] || continue
+                if ! jq empty "$CAUSE_FILE" 2>/dev/null; then
+                  echo "::warning::Invalid JSON in cause file: $(basename "$CAUSE_FILE")"
+                fi
+              done
+            fi
 
             REPO="${{ github.repository }}"
             MEMORY_BRANCH="memory/ci-failure-analysis"
@@ -665,8 +723,10 @@ safe-outputs:
             RUN_ID="$TRUSTED_RUN_ID"
             RUN_SCOPE="$TRUSTED_RUN_SCOPE"
             RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
+            PR_NUMBERS="$TRUSTED_PR_NUMBERS"
             ANALYZED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             PR_NUMBER=$(bash .github/workflows/analyze-ci-failure-persistence.sh pr-number)
+            RESOLVER_STATUS=0
 
             # ── 1. Set up memory branch and merge cause data ──
             # Pull request code issues are handled on the PR and do not need
@@ -686,10 +746,20 @@ safe-outputs:
               git -C memory-repo config user.name "github-actions[bot]"
               git -C memory-repo config user.email "github-actions[bot]@users.noreply.github.com"
 
-              # Store run summary under runs/ directory
-              mkdir -p "memory-repo/runs"
-              bash .github/workflows/analyze-ci-failure-persistence.sh write-run-summary \
-                "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json" "$ANALYZED_AT"
+              # Agent-generated IDs are proposals. Resolve them against the complete
+              # memory branch before any run, cause, or issue lookup is persisted.
+              node .github/workflows/analyze-ci-failure-cause-resolver.js \
+                "$ANALYSIS_FILE" \
+                "$CAUSES_DIR" \
+                "memory-repo/causes" \
+                "eng/test-retry-patterns.json" \
+                "$TRUSTED_FAILED_JOBS_FILE" || RESOLVER_STATUS=$?
+
+              if [ "$RESOLVER_STATUS" -eq 0 ]; then
+                # Store run summary under runs/ directory
+                mkdir -p "memory-repo/runs"
+                bash .github/workflows/analyze-ci-failure-persistence.sh write-run-summary \
+                  "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json" "$ANALYZED_AT"
 
               # Store individual cause files under causes/ (shared across runs).
               # Each cause file accumulates occurrences over time. The agent
@@ -704,8 +774,7 @@ safe-outputs:
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
-                  CAUSE_JOBS=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                    cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" display)
+                  CAUSE_JOBS=$(jq -r '(.job_names // ["unknown"]) | join("<br>")' "$CAUSE_FILE")
 
                   # Add an occurrences array with this run's entry to the agent's cause file
                   CAUSE_WITH_OCC=$(bash .github/workflows/analyze-ci-failure-persistence.sh add-occurrence \
@@ -721,8 +790,7 @@ safe-outputs:
                     # Merge: append new occurrence, deduplicate by run_id
                     echo "$CAUSE_WITH_OCC" | jq -s --slurpfile existing "$EXISTING" '
                       .[0] as $new | $existing[0] as $ex |
-                      ($ex | del(.job_ids, .job_names)) *
-                      ($new | del(.occurrences, .issue_url, .job_ids, .job_names)) * {
+                      $ex * ($new | del(.occurrences, .issue_url)) * {
                         occurrences: (
                           [$ex.occurrences[], $new.occurrences[]]
                           | unique_by(.run_id)
@@ -750,203 +818,78 @@ safe-outputs:
                 echo "Memory branch updated with analysis for run ${RUN_ID}"
               fi
 
-            # ── 2. Create or update issues for each cause ──
-            if [ -d "$CAUSES_DIR" ]; then
-              # Build occurrence info from the run summary for issue updates
-              # Build the occurrence table row for this run
-              OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              if [ "$RUN_SCOPE" = "main" ]; then
-                OCCURRENCE_CONTEXT="main"
-              elif [ "$PR_NUMBER" = "0" ]; then
-                OCCURRENCE_CONTEXT="unavailable"
+                echo "publish_cause_issues=true" >> "$GITHUB_OUTPUT"
+                echo "analyzed_at=${ANALYZED_AT}" >> "$GITHUB_OUTPUT"
+                echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
               else
-                OCCURRENCE_CONTEXT="#${PR_NUMBER}"
-              fi
-              for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
-                [ -f "$CAUSE_FILE" ] || continue
-
-                CAUSE_ID=$(jq -r '.id' "$CAUSE_FILE")
-
-                CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
-                CAUSE_JOBS=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                  cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" display)
-                CAUSE_JOBS_TABLE=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                  cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" table)
-                NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${CAUSE_JOBS_TABLE} | ${OCCURRENCE_CONTEXT} |"
-
-                CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
-                MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
-                TYPE_MARKER="<!-- ci-failure-cause-type:${CAUSE_TYPE} -->"
-
-                # Check if the stored cause file already has a linked issue
-                EXISTING_ISSUE=""
-                if [ -f "$CAUSE_STORED" ]; then
-                  STORED_ISSUE_URL=$(jq -r '.issue_url // empty' "$CAUSE_STORED")
-                  if [ -n "$STORED_ISSUE_URL" ]; then
-                    if [[ "$STORED_ISSUE_URL" =~ ^https://github\.com/${REPO}/issues/([0-9]+)$ ]]; then
-                      EXISTING_ISSUE="${BASH_REMATCH[1]}"
-                      ISSUE_JSON=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" 2>/dev/null || echo "")
-                      if [ -n "$ISSUE_JSON" ] && jq -e \
-                          --arg marker "$MARKER" \
-                          --arg type_marker "$TYPE_MARKER" \
-                          --arg cause_type "$CAUSE_TYPE" '
-                          (.body // "" | split("\n") | map(rtrimstr("\r"))) as $lines |
-                          (.pull_request == null) and
-                          any(.labels[]?; .name == "ci-failure-cause") and
-                          ($lines[0] == $marker) and
-                          (
-                            ($lines[1] == $type_marker) or
-                            ([$lines[] | select(startswith("**Type**: "))] == ["**Type**: " + $cause_type])
-                          )
-                        ' <<< "$ISSUE_JSON" >/dev/null; then
-                        ISSUE_STATE=$(jq -r '.state' <<< "$ISSUE_JSON")
-                      else
-                        echo "Linked issue #${EXISTING_ISSUE} does not match cause ${CAUSE_ID}, will search by marker"
-                        EXISTING_ISSUE=""
-                      fi
-                    else
-                      echo "Stored issue URL is not a canonical ${REPO} issue URL, will search by marker"
-                      EXISTING_ISSUE=""
-                    fi
-                  fi
-                fi
-
-                # If no stored issue link, fall back to searching by marker
-                REOPEN="false"
-                if [ -z "$EXISTING_ISSUE" ]; then
-                  # Fetch labeled issues for marker search (lazy-loaded once)
-                  if [ -z "${ISSUES_CACHE_LOADED:-}" ]; then
-                    OPEN_ISSUES_CACHE=$(mktemp)
-                    CLOSED_ISSUES_CACHE=$(mktemp)
-                    gh issue list --repo "$REPO" --label "ci-failure-cause" --state open --limit 500 --json number,body \
-                      > "$OPEN_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$OPEN_ISSUES_CACHE"
-                    gh issue list --repo "$REPO" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
-                      > "$CLOSED_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$CLOSED_ISSUES_CACHE"
-                    ISSUES_CACHE_LOADED="true"
-                  fi
-
-                  EXISTING_ISSUE=$(jq -r \
-                    --arg marker "$MARKER" \
-                    --arg type_marker "$TYPE_MARKER" \
-                    --arg cause_type "$CAUSE_TYPE" '
-                      .[] |
-                      (.body // "" | split("\n") | map(rtrimstr("\r"))) as $lines |
-                      select(
-                        ($lines[0] == $marker) and
-                        (
-                          ($lines[1] == $type_marker) or
-                          ([$lines[] | select(startswith("**Type**: "))] == ["**Type**: " + $cause_type])
-                        )
-                      ) |
-                      .number
-                    ' \
-                    "$OPEN_ISSUES_CACHE" | head -1 || true)
-
-                  if [ -z "$EXISTING_ISSUE" ]; then
-                    EXISTING_ISSUE=$(jq -r \
-                      --arg marker "$MARKER" \
-                      --arg type_marker "$TYPE_MARKER" \
-                      --arg cause_type "$CAUSE_TYPE" '
-                        .[] |
-                        (.body // "" | split("\n") | map(rtrimstr("\r"))) as $lines |
-                        select(
-                          ($lines[0] == $marker) and
-                          (
-                            ($lines[1] == $type_marker) or
-                            ([$lines[] | select(startswith("**Type**: "))] == ["**Type**: " + $cause_type])
-                          )
-                        ) |
-                        .number
-                      ' \
-                      "$CLOSED_ISSUES_CACHE" | head -1 || true)
-                    if [ -n "$EXISTING_ISSUE" ]; then
-                      REOPEN="true"
-                    fi
-                  fi
-                else
-                  # Check if the stored issue is closed (may need reopening)
-                  if [ "$ISSUE_STATE" = "closed" ]; then
-                    REOPEN="true"
-                  fi
-                fi
-
-                if [ -n "$EXISTING_ISSUE" ]; then
-                  # Store issue URL in the cause file on memory branch
-                  ISSUE_URL="https://github.com/${REPO}/issues/${EXISTING_ISSUE}"
-                  if [ -f "$CAUSE_STORED" ]; then
-                    jq --arg url "$ISSUE_URL" '.issue_url = $url' "$CAUSE_STORED" > "${CAUSE_STORED}.tmp" \
-                      && mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
-                  fi
-
-                  # Append new occurrence rows to the existing issue body, skipping
-                  # if this run_id is already recorded (avoids duplicates on re-runs).
-                  CURRENT_BODY=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""')
-                  # Anchor the pattern with '(' from the markdown link to avoid
-                  # partial matches (e.g., run 123 matching run 1234).
-                  if echo "$CURRENT_BODY" | grep -qF "[${RUN_ID}]("; then
-                    echo "Occurrence for run ${RUN_ID} already recorded in issue #${EXISTING_ISSUE}. Skipping."
-                  else
-                    BODY_FILE=$(mktemp)
-                    printf '%s\n%s\n' "$CURRENT_BODY" "$NEW_OCCURRENCE_ROW" > "$BODY_FILE"
-                    gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
-                    rm -f "$BODY_FILE"
-                  fi
-
-                  if [ "$REOPEN" = "true" ]; then
-                    gh issue reopen "$EXISTING_ISSUE" --repo "$REPO"
-                    echo "Reopened and updated issue #${EXISTING_ISSUE} for cause: ${CAUSE_ID}"
-                  else
-                    echo "Updated issue #${EXISTING_ISSUE} for cause: ${CAUSE_ID}"
-                  fi
-                else
-                  # Create a new issue for this cause
-                  BODY_FILE=$(mktemp)
-                  ISSUE_METADATA_FILE=$(mktemp)
-                  bash .github/workflows/analyze-ci-failure-issue.sh \
-                    "$CAUSE_FILE" "$RUN_CONTEXT_FILE" \
-                    ci-failure-data/last-successful-main-run.json \
-                    ci-failure-data/triggering-merge-pr.json \
-                    "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" \
-                    "$NEW_OCCURRENCE_ROW" "$BODY_FILE" "$ISSUE_METADATA_FILE"
-
-                  if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
-                    gh label create "main-ci-break" --repo "$REPO" \
-                      --color "b60205" \
-                      --description "Deterministic repository breakage on the main branch" \
-                      --force
-                  fi
-
-                  ISSUE_TITLE=$(jq -r '.title' "$ISSUE_METADATA_FILE")
-                  LABELS=$(jq -r '.labels' "$ISSUE_METADATA_FILE")
-                  CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
-                    --title "$ISSUE_TITLE" \
-                    --label "$LABELS" \
-                    --body-file "$BODY_FILE")
-                  rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
-                  echo "Created issue for cause: ${CAUSE_ID} — ${CREATED_ISSUE_URL}"
-
-                  # Store issue URL in the cause file on memory branch
-                  if [ -f "$CAUSE_STORED" ]; then
-                    jq --arg url "$CREATED_ISSUE_URL" '.issue_url = $url' "$CAUSE_STORED" > "${CAUSE_STORED}.tmp" \
-                      && mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
-                  fi
-                fi
-              done
-              rm -f "${OPEN_ISSUES_CACHE:-}" "${CLOSED_ISSUES_CACHE:-}"
-            fi
-
-              # ── 3. Push issue links to the memory branch ──
-              git -C memory-repo add -A
-              if git -C memory-repo diff --cached --quiet; then
-                echo "No issue-link changes to memory branch"
-              else
-                git -C memory-repo commit -m "Link CI failure issues for run ${RUN_ID}"
-                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
-                echo "Memory branch updated with issue links for run ${RUN_ID}"
+                echo "::error::Cause resolver failed; skipping memory persistence and issue updates."
               fi
             fi
 
-        - name: Comment on PR
+            echo "resolver_status=${RESOLVER_STATUS}" >> "$GITHUB_OUTPUT"
+
+        - name: Publish cause issues
+          id: publish-cause-issues
+          if: steps.publish-analysis.outputs.publish_cause_issues == 'true'
+          uses: actions/github-script@v9.0.0
+          env:
+            ANALYZED_AT: ${{ steps.publish-analysis.outputs.analyzed_at }}
+            PR_NUMBER: ${{ steps.publish-analysis.outputs.pr_number }}
+          with:
+            script: |
+              const fs = require('node:fs');
+              const path = require('node:path');
+              const publisher = require('./.github/workflows/analyze-ci-failure-cause-issues.js');
+
+              const outputFile = process.env.GH_AW_AGENT_OUTPUT;
+              const artifactDirectory = path.dirname(outputFile);
+              const runContext = JSON.parse(fs.readFileSync('ci-failure-data/run-context.json', 'utf8'));
+              const run = JSON.parse(fs.readFileSync('ci-failure-data/run.json', 'utf8'));
+              const mainContext = runContext.run_scope === 'main'
+                ? {
+                    lastSuccessfulSha: JSON.parse(
+                      fs.readFileSync('ci-failure-data/last-successful-main-run.json', 'utf8')).head_sha ?? 'unknown',
+                    failedSha: runContext.head_sha ?? 'unknown',
+                    triggeringMerge: fs.existsSync('ci-failure-data/triggering-merge-pr.json')
+                      ? (() => {
+                          const pullRequest = JSON.parse(
+                            fs.readFileSync('ci-failure-data/triggering-merge-pr.json', 'utf8'));
+                          return pullRequest.number
+                            ? `#${pullRequest.number} ${pullRequest.title}`
+                            : 'Not found';
+                        })()
+                      : 'Not found',
+                  }
+                : undefined;
+
+              await publisher.publishCauseIssues(github, context, core, {
+                causesDirectory: path.join(artifactDirectory, 'agent', 'causes'),
+                memoryCausesDirectory: path.join('memory-repo', 'causes'),
+                runId: Number(runContext.run_id),
+                runUrl: run.html_url ?? '',
+                runScope: runContext.run_scope,
+                prNumber: Number(process.env.PR_NUMBER),
+                analyzedAt: process.env.ANALYZED_AT,
+                mainContext,
+              });
+
+        - name: Persist issue links
+          if: steps.publish-analysis.outputs.publish_cause_issues == 'true'
+          run: |
+            set -euo pipefail
+            RUN_ID=$(jq -r '.run_id' ci-failure-data/run-context.json)
+            MEMORY_BRANCH="memory/ci-failure-analysis"
+            git -C memory-repo add -A
+            if git -C memory-repo diff --cached --quiet; then
+              echo "No issue-link changes to memory branch"
+            else
+              git -C memory-repo commit -m "Link CI failure issues for run ${RUN_ID}"
+              git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
+              echo "Memory branch updated with issue links for run ${RUN_ID}"
+            fi
+
+        - name: Comment on pull request
+          if: always() && steps.publish-analysis.outcome == 'success'
           run: |
             set -euo pipefail
 
@@ -954,6 +897,11 @@ safe-outputs:
             ANALYSIS_FILE="$(dirname "$OUTPUT_FILE")/agent/analysis-result.json"
             RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
             TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
+            if [ -z "$OUTPUT_FILE" ] || [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ]; then
+              echo "::error::Analysis result or trusted run context not found"
+              exit 1
+            fi
+
             RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
             RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
             PR_NUMBERS=$(jq -r '.pr_numbers' "$RUN_CONTEXT_FILE")
@@ -1001,6 +949,12 @@ safe-outputs:
               echo "Posted new analysis comment on PR #${FIRST_PR}"
             fi
             rm -f "$COMMENT_FILE"
+
+        - name: Report cause resolver failure
+          if: steps.publish-analysis.outputs.resolver_status != '0'
+          env:
+            RESOLVER_STATUS: ${{ steps.publish-analysis.outputs.resolver_status }}
+          run: exit "$RESOLVER_STATUS"
     rerun-failed-jobs:
       name: "Rerun failed CI jobs"
       description: |
@@ -1270,14 +1224,14 @@ Analyze all of the data to classify each failed job (see **Classification Rules*
 
 When a failure is classified as `flaky-test`, `infra-failure`, or `main-repository-breakage` (NOT pull-request `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
 
-If any of this run's tracked failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked.
+If any of this run's tracked failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked. The publish job independently treats agent-generated IDs as proposals and deterministically resolves them against the complete cause memory, so a prior cause omitted from the summary cannot create a duplicate identity.
 
 A failure matches an existing cause when:
 - For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
 - For infra failures: the error message substantially matches the `error_pattern` of a prior infra-failure cause
 - For main repository breakages: the deterministic failure substantially matches the `error_pattern` of a prior main-repository-breakage cause
 
-When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Add the current run's `job_ids` as described below and add the cause ID to the `causes` array in the run summary.
+When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Also add the cause ID to the `causes` array in the run summary.
 
 ### Step 3: Write the analysis JSON files
 
@@ -1358,7 +1312,7 @@ Each cause file must follow this schema:
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
   "error_pattern": "The key error message or pattern that identifies this cause",
-  "job_ids": [123456789]
+  "job_ids": [67890]
 }
 ```
 
@@ -1366,11 +1320,12 @@ Field details:
 - `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
 - `type`: One of `"flaky-test"`, `"infra-failure"`, or `"main-repository-breakage"`. Do NOT create cause files for pull-request code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
-- `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
+- `test_name`: The fully qualified test method name without theory argument text. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
-- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. A `flaky-test` cause normally references `flaky-test` jobs, but it may reference a `code-issue` or `main-repository-breakage` job when `failed_tests` contains a `"flaky"` test from that same job.
+- `job_ids`: Required array containing the numeric IDs of every failed job caused by this underlying failure. Use the IDs from `failed_jobs`; do not attribute a cause to an unrelated failed job.
+- The union of `job_ids` across all cause files MUST cover every failed job classified as `transient-infra`, `flaky-test`, or `main-repository-breakage`.
 
-Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
+Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
 Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
 
@@ -1489,8 +1444,6 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 ### Mixed Failures
 
 If there are both transient and non-transient failures, set `verdict` to `"mixed"`. Report all findings with per-job and per-test classifications.
-
-A single failed job can contain both a deterministic failure and a flaky failed test. In that case, classify the job by the deterministic failure, include the flaky test and its cause, and use `mixed` so neither failure is omitted.
 
 Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 

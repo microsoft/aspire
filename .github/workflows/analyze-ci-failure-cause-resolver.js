@@ -5,7 +5,13 @@ const trackedClassifications = new Set(['flaky-test', 'transient-infra', 'main-r
 const supportedCauseTypes = new Set(['flaky-test', 'infra-failure', 'main-repository-breakage']);
 const safeCauseIdPattern = /^[a-z0-9][a-z0-9-]*$/;
 
-function resolveCauses({ analysis, causes, priorCauses = [], retryPatterns = {} }) {
+function resolveCauses({
+    analysis,
+    causes,
+    priorCauses = [],
+    retryPatterns = {},
+    trustedFailedJobs = analysis?.failed_jobs,
+}) {
     validateInputs(analysis, causes, priorCauses);
     validateRetryPatternCauseIds(retryPatterns);
 
@@ -20,17 +26,25 @@ function resolveCauses({ analysis, causes, priorCauses = [], retryPatterns = {} 
     // records so fixing an ID does not split one cause into old and new identities.
     const priorByNormalizedId = buildPriorByNormalizedId(priorCauses);
     const failedJobsById = new Map(analysis.failed_jobs.map(job => [job.id, job]));
+    const trustedFailedJobsById = buildTrustedFailedJobsById(analysis, trustedFailedJobs);
     const canonicalizations = [...proposalNormalization.canonicalizations];
     const normalizedById = new Map();
     const proposedToCanonical = new Map();
     const priorCauseMigrations = new Map();
+    const priorCauseAliases = new Map();
 
     for (const cause of causes) {
         const jobIds = resolveCauseJobIds(cause, analysis, failedJobsById);
-        const jobNames = jobIds.map(jobId => failedJobsById.get(jobId).name);
+        const jobNames = jobIds.map(jobId => trustedFailedJobsById.get(jobId).name);
         const evidence = buildEvidence(cause, analysis, jobIds);
 
-        const proposedAlias = findPriorCauseByProposedId(cause, priorById, priorByNormalizedId);
+        const proposedPriorCause = findPriorCauseById(cause.id, priorById, priorByNormalizedId);
+        const proposedCanonicalCause = proposedPriorCause
+            ? resolveAlias(proposedPriorCause, priorById)
+            : undefined;
+        const proposedAlias = proposedPriorCause?.canonical_id
+            ? proposedCanonicalCause
+            : undefined;
         let testNameMatch;
         let retryPatternMatch;
         let explicitMatcherMatch;
@@ -71,7 +85,41 @@ function resolveCauses({ analysis, causes, priorCauses = [], retryPatterns = {} 
 
         const priorCauseId = canonicalPriorCause?.id;
         const canonicalId = getCanonicalCauseId(cause.id, priorCauseId);
-        const normalizedCause = normalizeCause(cause, canonicalPriorCause, canonicalId, jobIds, jobNames);
+        const supersededPriorCause =
+            proposedCanonicalCause?.id !== priorCauseId &&
+            proposedCanonicalCause?.id !== canonicalId
+            ? proposedCanonicalCause
+            : undefined;
+        if (supersededPriorCause) {
+            validateCauseType(supersededPriorCause);
+            if (supersededPriorCause.type !== cause.type) {
+                throw new Error(
+                    `Cause '${cause.id}' of type '${cause.type}' cannot alias prior cause type ` +
+                    `'${supersededPriorCause.type}'.`);
+            }
+            const existingAliasTarget = priorCauseAliases.get(supersededPriorCause.id);
+            if (existingAliasTarget && existingAliasTarget !== canonicalId) {
+                throw new Error(
+                    `Prior cause '${supersededPriorCause.id}' matched conflicting canonical causes ` +
+                    `'${existingAliasTarget}' and '${canonicalId}'.`);
+            }
+            priorCauseAliases.set(supersededPriorCause.id, canonicalId);
+        }
+        const aliases = unique([
+            ...(canonicalPriorCause?.aliases ?? []),
+            ...(priorCauseId && priorCauseId !== canonicalId ? [priorCauseId] : []),
+            ...(supersededPriorCause
+                ? [supersededPriorCause.id, ...(supersededPriorCause.aliases ?? [])]
+                : []),
+        ]);
+        const normalizedCause = normalizeCause(
+            cause,
+            canonicalPriorCause,
+            canonicalId,
+            jobIds,
+            jobNames,
+            aliases,
+            canonicalPriorCause?.issue_url ?? supersededPriorCause?.issue_url);
         validateCauseType(normalizedCause);
         proposedToCanonical.set(cause.id, canonicalId);
 
@@ -84,6 +132,11 @@ function resolveCauses({ analysis, causes, priorCauses = [], retryPatterns = {} 
         }
 
         const existing = normalizedById.get(canonicalId);
+        if (existing && existing.type !== normalizedCause.type) {
+            throw new Error(
+                `Canonical cause '${canonicalId}' cannot merge current causes with types ` +
+                `'${existing.type}' and '${normalizedCause.type}'.`);
+        }
         normalizedById.set(
             canonicalId,
             existing ? mergeCurrentCauses(existing, normalizedCause) : normalizedCause);
@@ -104,6 +157,7 @@ function resolveCauses({ analysis, causes, priorCauses = [], retryPatterns = {} 
         causes: unique([...referencedCauseIds, ...normalizedCauses.map(cause => cause.id)]),
         failed_jobs: analysis.failed_jobs.map(job => ({
             ...job,
+            name: trustedFailedJobsById.get(job.id).name,
             cause_ids: normalizedCauses
                 .filter(cause => cause.job_ids.includes(job.id))
                 .map(cause => cause.id),
@@ -127,7 +181,36 @@ function resolveCauses({ analysis, causes, priorCauses = [], retryPatterns = {} 
             legacy_id: legacyId,
             canonical_id: canonicalId,
         })),
+        priorCauseAliases: [...priorCauseAliases].map(([legacyId, canonicalId]) => ({
+            legacy_id: legacyId,
+            canonical_id: canonicalId,
+        })),
     };
+}
+
+function buildTrustedFailedJobsById(analysis, trustedFailedJobs) {
+    if (!Array.isArray(trustedFailedJobs)) {
+        throw new Error('Trusted failed jobs must be an array.');
+    }
+
+    const trustedFailedJobsById = new Map();
+    for (const job of trustedFailedJobs) {
+        if (!job || typeof job.id !== 'number' || typeof job.name !== 'string' || job.name.length === 0) {
+            throw new Error('Trusted failed jobs must have numeric IDs and non-empty names.');
+        }
+        if (trustedFailedJobsById.has(job.id)) {
+            throw new Error(`Trusted failed job ID '${job.id}' is duplicated.`);
+        }
+        trustedFailedJobsById.set(job.id, job);
+    }
+
+    for (const job of analysis.failed_jobs) {
+        if (!trustedFailedJobsById.has(job.id)) {
+            throw new Error(`Analysis references failed job ID '${job.id}' outside the trusted scope.`);
+        }
+    }
+
+    return trustedFailedJobsById;
 }
 
 function validateInputs(analysis, causes, priorCauses) {
@@ -299,11 +382,6 @@ function buildEvidence(cause, analysis, jobIds) {
     ].filter(value => typeof value === 'string' && value.length > 0).join('\n');
 }
 
-function findPriorCauseByProposedId(cause, priorById, priorByNormalizedId) {
-    const priorCause = findPriorCauseById(cause.id, priorById, priorByNormalizedId);
-    return priorCause?.canonical_id ? resolveAlias(priorCause, priorById) : undefined;
-}
-
 function findPriorCauseByExistingId(cause, priorById, priorByNormalizedId) {
     const priorCause = findPriorCauseById(cause.id, priorById, priorByNormalizedId);
     return priorCause ? resolveAlias(priorCause, priorById) : undefined;
@@ -321,15 +399,20 @@ function findPriorCauseByTestName(cause, priorCauses, priorById) {
     const normalizedTestName = normalizeTestName(cause.test_name);
     const candidates = priorCauses.filter(prior =>
         allTestNames(prior).some(testName => normalizeTestName(testName) === normalizedTestName));
+    const typeCompatibleCandidates = candidates.filter(prior => prior.type === cause.type);
+    const unsupportedCandidates = candidates.filter(prior => !supportedCauseTypes.has(prior.type));
 
-    return selectOldestCanonicalCause(candidates, priorById);
+    return selectOldestCanonicalCause(
+        typeCompatibleCandidates.length > 0 ? typeCompatibleCandidates : unsupportedCandidates,
+        priorById);
 }
 
 function findPriorCauseByRetryPattern(evidence, jobNames, retryPatterns, priorById) {
     const matchingCauseIds = unique((retryPatterns.jobFailurePatterns ?? [])
         .filter(pattern => pattern.enabled !== false)
         .filter(pattern => pattern.causeId)
-        .filter(pattern => matchesConfiguredPattern(pattern.output, evidence))
+        .filter(pattern => pattern.output || pattern.jobName)
+        .filter(pattern => !pattern.output || matchesConfiguredPattern(pattern.output, evidence))
         .filter(pattern => !pattern.jobName || jobNames.some(jobName => matchesConfiguredPattern(pattern.jobName, jobName)))
         .map(pattern => pattern.causeId));
 
@@ -398,7 +481,7 @@ function resolveAlias(cause, priorById) {
     return current;
 }
 
-function normalizeCause(cause, priorCause, canonicalId, jobIds, jobNames) {
+function normalizeCause(cause, priorCause, canonicalId, jobIds, jobNames, aliases, issueUrl) {
     const testNames = unique([
         ...allTestNames(priorCause ?? {}),
         cause.test_name,
@@ -415,19 +498,22 @@ function normalizeCause(cause, priorCause, canonicalId, jobIds, jobNames) {
         test_names: testNames.length > 0 ? testNames : undefined,
         error_pattern: priorCause?.error_pattern ?? cause.error_pattern,
         matchers: priorCause?.matchers,
-        issue_url: priorCause?.issue_url,
+        issue_url: issueUrl,
+        aliases: aliases.length > 0 ? aliases : undefined,
         job_ids: jobIds,
         job_names: jobNames,
     });
 }
 
 function mergeCurrentCauses(existing, current) {
-    return {
+    const aliases = unique([...(existing.aliases ?? []), ...(current.aliases ?? [])]);
+    return removeUndefined({
         ...existing,
         test_names: unique([...(existing.test_names ?? []), ...(current.test_names ?? [])]),
+        aliases: aliases.length > 0 ? aliases : undefined,
         job_ids: unique([...existing.job_ids, ...current.job_ids]),
         job_names: unique([...existing.job_names, ...current.job_names]),
-    };
+    });
 }
 
 function validateTrackedJobsHaveCauses(analysis) {
@@ -583,21 +669,51 @@ function migratePriorCauseFiles(directory, migrations) {
     }
 }
 
+function writePriorCauseAliases(directory, aliases) {
+    for (const alias of aliases) {
+        if (typeof alias.legacy_id !== 'string' || /[\\/]/.test(alias.legacy_id) ||
+            !safeCauseIdPattern.test(alias.canonical_id)) {
+            throw new Error(
+                `Cannot alias unsafe cause IDs '${alias.legacy_id ?? ''}' -> '${alias.canonical_id ?? ''}'.`);
+        }
+
+        const aliasPath = path.join(directory, `${alias.legacy_id}.json`);
+        if (!fs.existsSync(aliasPath)) {
+            throw new Error(`Prior cause file '${alias.legacy_id}.json' does not exist.`);
+        }
+
+        const cause = JSON.parse(fs.readFileSync(aliasPath, 'utf8'));
+        cause.canonical_id = alias.canonical_id;
+        fs.writeFileSync(aliasPath, `${JSON.stringify(cause, null, 2)}\n`);
+    }
+}
+
 function runCli(args) {
-    if (args.length !== 4) {
+    if (args.length < 4 || args.length > 5) {
         throw new Error(
-            'Usage: node analyze-ci-failure-cause-resolver.js <analysis-file> <causes-directory> <prior-causes-directory> <retry-patterns-file>');
+            'Usage: node analyze-ci-failure-cause-resolver.js <analysis-file> <causes-directory> <prior-causes-directory> <retry-patterns-file> [trusted-failed-jobs-file]');
     }
 
-    const [analysisFile, causesDirectory, priorCausesDirectory, retryPatternsFile] = args;
+    const [
+        analysisFile,
+        causesDirectory,
+        priorCausesDirectory,
+        retryPatternsFile,
+        trustedFailedJobsFile,
+    ] = args;
+    const analysis = JSON.parse(fs.readFileSync(analysisFile, 'utf8'));
     const result = resolveCauses({
-        analysis: JSON.parse(fs.readFileSync(analysisFile, 'utf8')),
+        analysis,
         causes: readJsonFiles(causesDirectory),
         priorCauses: readJsonFiles(priorCausesDirectory),
         retryPatterns: JSON.parse(fs.readFileSync(retryPatternsFile, 'utf8')),
+        trustedFailedJobs: trustedFailedJobsFile
+            ? JSON.parse(fs.readFileSync(trustedFailedJobsFile, 'utf8'))
+            : analysis.failed_jobs,
     });
 
     migratePriorCauseFiles(priorCausesDirectory, result.priorCauseMigrations);
+    writePriorCauseAliases(priorCausesDirectory, result.priorCauseAliases);
     fs.writeFileSync(analysisFile, `${JSON.stringify(result.analysis, null, 2)}\n`);
     fs.mkdirSync(causesDirectory, { recursive: true });
     for (const fileName of fs.readdirSync(causesDirectory)) {
@@ -616,6 +732,9 @@ function runCli(args) {
     }
     for (const migration of result.priorCauseMigrations) {
         console.log(`Migrated legacy cause ${migration.legacy_id} -> ${migration.canonical_id}`);
+    }
+    for (const alias of result.priorCauseAliases) {
+        console.log(`Aliased prior cause ${alias.legacy_id} -> ${alias.canonical_id}`);
     }
 }
 

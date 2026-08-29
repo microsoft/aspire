@@ -12,18 +12,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 {
     private const string ValidationScriptRelativePath = ".github/workflows/analyze-ci-failure-validation.sh";
     private const string HistoryScriptRelativePath = ".github/workflows/analyze-ci-failure-history.sh";
-    private const string CandidatesScriptRelativePath = ".github/workflows/analyze-ci-failure-candidates.sh";
-    private const string IssueScriptRelativePath = ".github/workflows/analyze-ci-failure-issue.sh";
     private const string PersistenceScriptRelativePath = ".github/workflows/analyze-ci-failure-persistence.sh";
     private const string CommentScriptRelativePath = ".github/workflows/analyze-ci-failure-comment.sh";
 
     private static readonly string s_sourceWorkflow = ReadWorkflow("analyze-ci-failure.md");
+    private static readonly string s_causeIssuePublisher = ReadWorkflow("analyze-ci-failure-cause-issues.js");
     private static readonly string s_validationScript = File.ReadAllText(
         Path.Combine(RepoRoot.Path, ValidationScriptRelativePath));
-    private static readonly string s_candidatesScript = File.ReadAllText(
-        Path.Combine(RepoRoot.Path, CandidatesScriptRelativePath));
-    private static readonly string s_issueScript = File.ReadAllText(
-        Path.Combine(RepoRoot.Path, IssueScriptRelativePath));
 
     private static readonly string[] s_executableWorkflows =
     [
@@ -41,8 +36,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         ForEachExecutableWorkflow(workflow =>
         {
             Assert.Contains("RUN_EVENT=$(jq -r '.event // \"\"' ci-failure-data/run.json)", workflow, StringComparison.Ordinal);
-            Assert.Contains("RUN_WORKFLOW_PATH=$(jq -r '.path // \"\"' ci-failure-data/run.json)", workflow, StringComparison.Ordinal);
-            Assert.Contains("if [ \"$RUN_WORKFLOW_PATH\" != \".github/workflows/ci.yml\" ]; then", workflow, StringComparison.Ordinal);
             Assert.Contains("case \"${RUN_EVENT}:${HEAD_BRANCH}\" in", workflow, StringComparison.Ordinal);
             Assert.Contains("push:main)", workflow, StringComparison.Ordinal);
             Assert.Contains("pull_request:*|pull_request_target:*)", workflow, StringComparison.Ordinal);
@@ -58,66 +51,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task ManualCollectionRejectsRunFromAnotherWorkflow()
-    {
-        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
-        var callLogPath = Path.Combine(_workspace.Path, "gh-calls.log");
-        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
-        await File.WriteAllTextAsync(
-            fakeGhPath,
-            """
-            #!/usr/bin/env bash
-            echo "$*" >> "${GH_CALL_LOG}"
-            if [ "$(wc -l < "${GH_CALL_LOG}")" -eq 1 ]; then
-              cat <<'JSON'
-            {"id":123,"path":".github/workflows/tests.yml","run_attempt":1,"run_started_at":"2026-08-31T12:00:00Z","updated_at":"2026-08-31T12:05:00Z","event":"push","head_sha":"abc","head_branch":"main","html_url":"https://github.com/microsoft/aspire/actions/runs/123","conclusion":"failure"}
-            JSON
-            else
-              exit 99
-            fi
-            """);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                fakeGhPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Collect CI failure data");
-        var result = await RunProcessAsync(
-            "bash",
-            ["-c", script],
-            new Dictionary<string, string>
-            {
-                ["EVENT_NAME"] = "workflow_dispatch",
-                ["GITHUB_OUTPUT"] = Path.Combine(_workspace.Path, "github-output"),
-                ["GH_CALL_LOG"] = callLogPath,
-                ["MANUAL_RUN_ID"] = "123",
-                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
-                ["REPO"] = "microsoft/aspire",
-                ["WORKFLOW_RUN_ATTEMPT"] = string.Empty,
-                ["WORKFLOW_RUN_ID"] = string.Empty,
-            });
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Run 123 belongs to workflow '.github/workflows/tests.yml', not '.github/workflows/ci.yml'",
-            result.Output,
-            StringComparison.Ordinal);
-        Assert.Single(await File.ReadAllLinesAsync(callLogPath));
-    }
-
-    [Fact]
     public void MainRunContextTreatsTriggeringMergeAsNonCausal()
     {
         ForEachExecutableWorkflow(workflow =>
         {
-            var checkoutStep = GetSection(
-                workflow,
-                "- name: Checkout data collection helpers",
-                "- name: Collect CI failure data");
-            Assert.Contains(CandidatesScriptRelativePath, checkoutStep, StringComparison.Ordinal);
             Assert.Contains("last-successful-main-run.json", workflow, StringComparison.Ordinal);
             Assert.Contains("candidate-merges.json", workflow, StringComparison.Ordinal);
             Assert.Contains(
@@ -131,10 +68,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "bash .github/workflows/analyze-ci-failure-history.sh",
                 workflow,
                 StringComparison.Ordinal);
-            Assert.Contains(
-                "bash .github/workflows/analyze-ci-failure-candidates.sh",
-                workflow,
-                StringComparison.Ordinal);
+            Assert.Contains("RECEIVED_COMMIT_COUNT", workflow, StringComparison.Ordinal);
+            Assert.Contains("TOTAL_COMMIT_COUNT", workflow, StringComparison.Ordinal);
             Assert.Contains(
                 "Triggering merge PR (context only, not necessarily causal)",
                 workflow,
@@ -144,8 +79,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "consider the complete candidate merge range since the last successful main run",
             s_sourceWorkflow,
             StringComparison.Ordinal);
-        Assert.Contains("RECEIVED_COMMIT_COUNT", s_candidatesScript, StringComparison.Ordinal);
-        Assert.Contains("TOTAL_COMMIT_COUNT", s_candidatesScript, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -339,7 +272,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":123,"name":"Tests"}]""",
             "nuget-timeout.json",
-            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""");
+            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -359,7 +292,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":123,"name":"Tests"}]""",
             "nuget-timeout.json",
-            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""");
+            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -379,7 +312,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":123,"name":"Tests"}]""",
             "flaky-failure.json",
-            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Deterministic","job_ids":[123]}""");
+            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Deterministic"}""");
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -395,37 +328,37 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
         "nuget-timeout.json",
-        """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""")]
+        """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""")]
     [InlineData(
         """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":null,"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
         "nuget-timeout.json",
-        """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""")]
+        """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""")]
     [InlineData(
         """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":null,"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
         "nuget-timeout.json",
-        """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""")]
+        """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""")]
     [InlineData(
         """{"run_id":123,"run_scope":"main","verdict":"main-repository-breakage","pr":null,"failed_jobs":[{"id":123,"classification":"main-repository-breakage"}],"failed_tests":[],"causes":["main-build-break"]}""",
         """{"run_id":123,"run_scope":"main","pr_numbers":""}""",
         "main-build-break.json",
-        """{"id":"main-build-break","type":"main-repository-breakage","title":"Main build break","error_pattern":"Compilation failed","job_ids":[123]}""")]
+        """{"id":"main-build-break","type":"main-repository-breakage","title":"Main build break","error_pattern":"Compilation failed"}""")]
     [InlineData(
         """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","stack_trace":"","classification":"flaky","reason":"Intermittent"}],"causes":["flaky-failure"]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
         "flaky-failure.json",
-        """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Flaky","job_ids":[123]}""")]
+        """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Flaky"}""")]
     [InlineData(
         """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","stack_trace":null,"classification":"flaky","reason":"Intermittent"}],"causes":["flaky-failure"]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
         "flaky-failure.json",
-        """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Flaky","job_ids":[123]}""")]
+        """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Flaky"}""")]
     [InlineData(
         """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","classification":"flaky","reason":"Intermittent"}],"causes":["flaky-failure"]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
         "flaky-failure.json",
-        """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Flaky","job_ids":[123]}""")]
+        """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Flaky"}""")]
     [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorAcceptsValidResults(
         string analysis,
@@ -443,91 +376,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
         Assert.Equal(0, result.ExitCode);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorRejectsCauseWithoutJobIds()
-    {
-        await WriteValidationFixtureAsync(
-            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
-            """[{"id":123,"name":"Tests"}]""",
-            "nuget-timeout.json",
-            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""");
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Cause nuget-timeout.json contains unsupported or publisher-owned fields",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorRejectsUnknownCauseJobId()
-    {
-        await WriteValidationFixtureAsync(
-            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
-            """[{"id":123,"name":"Tests"}]""",
-            "nuget-timeout.json",
-            """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[999]}""");
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Cause nuget-timeout.json references an unknown or incompatible failed job",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorRejectsEmptyFailedTestJobThatCouldMaskUnknownCauseJobId()
-    {
-        await WriteValidationFixtureAsync(
-            """{"run_id":123,"run_scope":"pull-request","verdict":"mixed","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[{"name":"Tests.Flaky","job":"","classification":"flaky","reason":"Known intermittent failure","error":"Failed","stack_trace":""}],"causes":["flaky-failure"]}""",
-            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
-            """[{"id":123,"name":"Tests"}]""",
-            "flaky-failure.json",
-            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","error_pattern":"Failed","test_name":"Tests.Flaky","job_ids":[999]}""");
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Analysis failed_tests must match the safe field schema",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("[]")]
-    [InlineData("[\"123\"]")]
-    [InlineData("[123,123]")]
-    [InlineData("[0]")]
-    [InlineData("[1.5]")]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorRejectsMalformedCauseJobIds(string jobIds)
-    {
-        await WriteValidationFixtureAsync(
-            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
-            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
-            """[{"id":123,"name":"Tests"}]""",
-            "nuget-timeout.json",
-            $$"""{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":{{jobIds}}}""");
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Cause nuget-timeout.json contains unsupported or publisher-owned fields",
-            result.Output,
-            StringComparison.Ordinal);
     }
 
     [Theory]
@@ -703,7 +551,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":1,"name":"Tests"},{"id":2,"name":"Build"}]""",
             new Dictionary<string, string>
             {
-                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1),
+                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test"),
             });
 
         await AssertValidationRejectsMismatchedCausePresenceAsync();
@@ -724,11 +572,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":1,"name":"Tests"}]""",
             new Dictionary<string, string>
             {
-                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1),
-                ["infra-failure.json"] = CreateCause("infra-failure", "infra-failure", 1),
+                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test"),
+                ["infra-failure.json"] = CreateCause("infra-failure", "infra-failure"),
             });
 
-        await AssertValidationRejectsIncompatibleCauseJobAsync();
+        await AssertValidationRejectsMismatchedCausePresenceAsync();
     }
 
     [Fact]
@@ -749,8 +597,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":1,"name":"Build"},{"id":2,"name":"Tests"},{"id":3,"name":"Setup"}]""",
             new Dictionary<string, string>
             {
-                ["main-failure.json"] = CreateCause("main-failure", "main-repository-breakage", 1),
-                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 2),
+                ["main-failure.json"] = CreateCause("main-failure", "main-repository-breakage"),
+                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test"),
             });
 
         await AssertValidationRejectsMismatchedCausePresenceAsync();
@@ -771,10 +619,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":1,"name":"Build"},{"id":2,"name":"Setup"}]""",
             new Dictionary<string, string>
             {
-                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 2),
+                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test"),
             });
 
-        await AssertValidationRejectsIncompatibleCauseJobAsync();
+        await AssertValidationRejectsMismatchedCausePresenceAsync();
     }
 
     [Theory]
@@ -841,12 +689,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
               """;
         var causes = new Dictionary<string, string>
         {
-            ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 2),
-            ["infra-failure.json"] = CreateCause("infra-failure", "infra-failure", 3),
+            ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test"),
+            ["infra-failure.json"] = CreateCause("infra-failure", "infra-failure"),
         };
         if (isMain)
         {
-            causes["main-failure.json"] = CreateCause("main-failure", "main-repository-breakage", 1);
+            causes["main-failure.json"] = CreateCause("main-failure", "main-repository-breakage");
         }
 
         await WriteValidationFixtureAsync(
@@ -861,101 +709,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorAcceptsPullRequestMixedVerdictWithinOneJob()
-    {
-        await WriteValidationFixtureAsync(
-            """
-            {"run_id":123,"run_scope":"pull-request","verdict":"mixed","pr":{"number":42},
-             "failed_jobs":[{"id":1,"classification":"code-issue"}],
-             "failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
-             "causes":["flaky-failure"]}
-            """,
-            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
-            """[{"id":1,"name":"Tests"}]""",
-            new Dictionary<string, string>
-            {
-                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1),
-            });
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.Equal(0, result.ExitCode);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorRejectsCodeIssueVerdictWithFlakyTest()
-    {
-        await WriteValidationFixtureAsync(
-            """
-            {"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":{"number":42},
-             "failed_jobs":[{"id":1,"classification":"code-issue"}],
-             "failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
-             "causes":[]}
-            """,
-            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
-            """[{"id":1,"name":"Tests"}]""");
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Analysis failed_tests are incompatible with verdict code-issue",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorAcceptsMainMixedVerdictWithinOneJob()
-    {
-        await WriteValidationFixtureAsync(
-            """
-            {"run_id":123,"run_scope":"main","verdict":"mixed","pr":null,
-             "failed_jobs":[{"id":1,"classification":"main-repository-breakage"}],
-             "failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
-             "causes":["main-failure","flaky-failure"]}
-            """,
-            """{"run_id":123,"run_scope":"main","pr_numbers":""}""",
-            """[{"id":1,"name":"Tests"}]""",
-            new Dictionary<string, string>
-            {
-                ["main-failure.json"] = CreateCause("main-failure", "main-repository-breakage", 1),
-                ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1),
-            });
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.Equal(0, result.ExitCode);
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorRejectsMainBreakageVerdictWithFlakyTest()
-    {
-        await WriteValidationFixtureAsync(
-            """
-            {"run_id":123,"run_scope":"main","verdict":"main-repository-breakage","pr":null,
-             "failed_jobs":[{"id":1,"classification":"main-repository-breakage"}],
-             "failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"boom","stack_trace":"","classification":"flaky","reason":"Intermittent"}],
-             "causes":["main-failure"]}
-            """,
-            """{"run_id":123,"run_scope":"main","pr_numbers":""}""",
-            """[{"id":1,"name":"Tests"}]""",
-            "main-failure.json",
-            CreateCause("main-failure", "main-repository-breakage", 1));
-
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "::error::Analysis failed_tests are incompatible with verdict main-repository-breakage",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void MainRepositoryBreakageUsesDedicatedIssueAndNeverPrComment()
     {
         Assert.Contains(
@@ -963,11 +716,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
 
+        Assert.Contains("cause.type === 'main-repository-breakage'", s_causeIssuePublisher, StringComparison.Ordinal);
+        Assert.Contains("? '[Main CI Failure]'", s_causeIssuePublisher, StringComparison.Ordinal);
+        Assert.Contains("return [CAUSE_LABEL, 'main-ci-break'];", s_causeIssuePublisher, StringComparison.Ordinal);
+
         ForEachExecutableWorkflow(workflow =>
         {
-            Assert.Contains("CAUSE_TYPE\" = \"main-repository-breakage", workflow, StringComparison.Ordinal);
-            Assert.Contains(IssueScriptRelativePath, workflow, StringComparison.Ordinal);
-            Assert.Contains("gh label create \"main-ci-break\"", workflow, StringComparison.Ordinal);
             Assert.Contains(
                 "if [ \"$RUN_SCOPE\" = \"main\" ]; then\necho \"Main run analysis is reported through cause issues, not PR comments.\"\nexit 0",
                 workflow,
@@ -976,92 +730,23 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task MainRepositoryBreakageIssueUsesTrustedMainContext()
-    {
-        var causePath = Path.Combine(_workspace.Path, "main-build-break.json");
-        var runContextPath = Path.Combine(_workspace.Path, "run-context.json");
-        var lastSuccessfulRunPath = Path.Combine(_workspace.Path, "last-successful-main-run.json");
-        var triggeringMergePath = Path.Combine(_workspace.Path, "triggering-merge-pr.json");
-        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
-        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
-        await File.WriteAllTextAsync(
-            causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"Main build break","error_pattern":"Compilation failed"}""");
-        await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
-        await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
-        await File.WriteAllTextAsync(
-            triggeringMergePath,
-            """{"number":41,"title":"Candidate merge","html_url":"https://github.com/microsoft/aspire/pull/41"}""");
-
-        var result = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                causePath,
-                runContextPath,
-                lastSuccessfulRunPath,
-                triggeringMergePath,
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "main",
-                "0",
-                "Build",
-                "| 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Build | main |",
-                bodyPath,
-                metadataPath,
-            ]);
-
-        Assert.Equal(0, result.ExitCode);
-        using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(metadataPath));
-        Assert.Equal("[Main CI Failure] Main build break", metadata.RootElement.GetProperty("title").GetString());
-        Assert.Equal("ci-failure-cause,main-ci-break", metadata.RootElement.GetProperty("labels").GetString());
-        Assert.Equal(
-            """
-            <!-- ci-failure-cause:main-build-break -->
-            <!-- ci-failure-cause-type:main-repository-breakage -->
-
-            ## Build Information
-
-            Build: https://github.com/microsoft/aspire/actions/runs/123
-            Affected branch: `main`
-            Last successful main SHA: `trusted-success`
-            Failed main SHA: `trusted-failure`
-            Triggering merge PR (context only, not necessarily causal): #41 Candidate merge
-
-            ## Error Message
-
-            ```
-            Compilation failed
-            ```
-
-            ## Description
-
-            Main build break
-
-            **Type**: main-repository-breakage
-
-            ## Occurrences
-
-            | Date | Build | Job | Context |
-            |------|-------|-----|----|
-            | 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Build | main |
-            """.ReplaceLineEndings("\n") + "\n",
-            (await File.ReadAllTextAsync(bodyPath)).ReplaceLineEndings("\n"));
-    }
-
-    [Fact]
     public void PublisherValidatesAgentResultAgainstTrustedScope()
     {
         ForEachExecutableWorkflow(workflow =>
         {
-            Assert.Contains(".github/workflows/analyze-ci-failure-validation.sh", workflow, StringComparison.Ordinal);
-            Assert.Contains(".github/workflows/analyze-ci-failure-persistence.sh", workflow, StringComparison.Ordinal);
-            Assert.Contains(".github/workflows/analyze-ci-failure-comment.sh", workflow, StringComparison.Ordinal);
+            var sparseCheckout = GetSection(
+                workflow,
+                "name: Checkout publication helpers",
+                "sparse-checkout-cone-mode: false");
+            Assert.Contains(".github/workflows/analyze-ci-failure-validation.sh", sparseCheckout, StringComparison.Ordinal);
+            Assert.Contains(".github/workflows/analyze-ci-failure-persistence.sh", sparseCheckout, StringComparison.Ordinal);
+            Assert.Contains(".github/workflows/analyze-ci-failure-comment.sh", sparseCheckout, StringComparison.Ordinal);
             Assert.Contains("run: bash .github/workflows/analyze-ci-failure-validation.sh", workflow, StringComparison.Ordinal);
             var validationIndex = workflow.IndexOf(
                 "run: bash .github/workflows/analyze-ci-failure-validation.sh",
                 StringComparison.Ordinal);
             var publishStepIndex = workflow.IndexOf(
-                "- name: Publish analysis data and comment on PR",
+                "- name: Publish analysis data and cause issues",
                 validationIndex,
                 StringComparison.Ordinal);
             Assert.True(validationIndex >= 0 && publishStepIndex > validationIndex);
@@ -1077,6 +762,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("Analysis must contain numeric-ID failed_jobs and string-valued causes arrays\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis failed_tests must match the safe field schema\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Cause ${CAUSE_BASENAME} contains unsupported or publisher-owned fields\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains(
+            "keys - [\"error_pattern\", \"id\", \"job_ids\", \"test_name\", \"title\", \"type\"]",
+            validationScript,
+            StringComparison.Ordinal);
+        Assert.Contains("((.job_ids | type) == \"array\")", validationScript, StringComparison.Ordinal);
+        Assert.Contains("((.job_ids | length) > 0)", validationScript, StringComparison.Ordinal);
+        Assert.Contains("all(.job_ids[]; type == \"number\")", validationScript, StringComparison.Ordinal);
         Assert.Contains("Analysis failed-job IDs do not match the trusted failed jobs\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("Verdict '${VERDICT}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("type '${CAUSE_TYPE}' is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
@@ -1091,14 +783,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("[ \"$FLAKY_CAUSE_COUNT\" -eq 0 ]", validationScript, StringComparison.Ordinal);
         Assert.Contains("A flaky-test verdict requires at least one flaky job, only transient failed jobs, and only transient causes\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("if [ \"$CODE_ISSUE_JOB_COUNT\" -ne \"$FAILED_JOB_COUNT\" ] || [ \"$CAUSE_COUNT\" -ne 0 ]; then", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis failed_tests are incompatible with verdict code-issue\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("A code-issue verdict requires every failed job to be a code issue and must not include cause files\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("if [ \"$MAIN_BREAK_JOB_COUNT\" -ne \"$FAILED_JOB_COUNT\" ] ||", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis failed_tests are incompatible with verdict main-repository-breakage\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("A main-repository-breakage verdict requires every failed job and cause to be a main repository breakage\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("{ [ \"$TRANSIENT_JOB_COUNT\" -eq 0 ] && [ \"$FLAKY_TEST_COUNT\" -eq 0 ]; }", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A mixed verdict for main requires a main-breakage job and cause plus transient job or test evidence and cause\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A mixed verdict for a pull request requires a code-issue job plus transient job or test evidence and a transient cause\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("if [ \"$MAIN_BREAK_JOB_COUNT\" -eq 0 ] || [ \"$TRANSIENT_JOB_COUNT\" -eq 0 ] ||", validationScript, StringComparison.Ordinal);
+        Assert.Contains("A mixed verdict for main requires transient and main-breakage failed jobs and causes\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("if [ \"$CODE_ISSUE_JOB_COUNT\" -eq 0 ] || [ \"$TRANSIENT_JOB_COUNT\" -eq 0 ] || [ \"$CAUSE_COUNT\" -eq 0 ]; then", validationScript, StringComparison.Ordinal);
+        Assert.Contains("A mixed verdict for a pull request requires transient and code-issue failed jobs plus a transient cause\"\nexit 1", validationScript, StringComparison.Ordinal);
 
         Assert.Contains("### If failures include Transient Test Failures and no deterministic failures:", s_sourceWorkflow, StringComparison.Ordinal);
         Assert.Contains("### If ALL failures are Non-Transient PR Code Issues:", s_sourceWorkflow, StringComparison.Ordinal);
@@ -1128,17 +819,47 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "`job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred.",
-            s_sourceWorkflow,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.",
+            "The union of `job_ids` across all cause files MUST cover every failed job classified as `transient-infra`, `flaky-test`, or `main-repository-breakage`.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
     }
 
     [Fact]
-    public void PublicationCheckoutIncludesRenderers()
+    public void CauseIssueLifecycleIsDelegatedToCheckedInModule()
+    {
+        ForEachExecutableWorkflow(workflow =>
+        {
+            Assert.Contains(
+                "require('./.github/workflows/analyze-ci-failure-cause-issues.js')",
+                workflow,
+                StringComparison.Ordinal);
+            Assert.Contains("publishCauseIssues(github, context, core", workflow, StringComparison.Ordinal);
+            var sparseCheckout = GetSection(
+                workflow,
+                "name: Checkout publication helpers",
+                "sparse-checkout-cone-mode: false");
+            Assert.Contains(
+                ".github/workflows/analyze-ci-failure-cause-issues.js",
+                sparseCheckout,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                ".github/workflows/tracking-issue.js",
+                sparseCheckout,
+                StringComparison.Ordinal);
+
+            var publisher = GetSection(
+                workflow,
+                "name: Publish cause issues",
+                "name: Persist issue links");
+            Assert.DoesNotContain("gh issue list", publisher, StringComparison.Ordinal);
+            Assert.DoesNotContain("gh issue create", publisher, StringComparison.Ordinal);
+            Assert.DoesNotContain("gh issue edit", publisher, StringComparison.Ordinal);
+            Assert.DoesNotContain("gh issue reopen", publisher, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void PublicationCheckoutIncludesCommentRenderer()
     {
         ForEachExecutableWorkflow(workflow =>
         {
@@ -1148,7 +869,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "- uses: actions/download-artifact");
 
             Assert.Contains(CommentScriptRelativePath, checkoutStep, StringComparison.Ordinal);
-            Assert.Contains(IssueScriptRelativePath, checkoutStep, StringComparison.Ordinal);
         });
     }
 
@@ -1162,49 +882,26 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "RUN_CONTEXT_FILE=\"ci-failure-data/run-context.json\"",
                 "# ── 4. Post PR comment using the analysis JSON ──");
 
-            Assert.Contains("RUN_ID=\"$TRUSTED_RUN_ID\"", publisher, StringComparison.Ordinal);
-            Assert.Contains("RUN_SCOPE=\"$TRUSTED_RUN_SCOPE\"", publisher, StringComparison.Ordinal);
-            Assert.DoesNotContain("TRUSTED_PR_NUMBERS", publisher, StringComparison.Ordinal);
             Assert.Contains("RUN_URL=$(jq -r '.html_url // \"\"' ci-failure-data/run.json)", publisher, StringComparison.Ordinal);
             Assert.Contains("ANALYZED_AT=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")", publisher, StringComparison.Ordinal);
-            Assert.DoesNotContain("FIRST_JOB", publisher, StringComparison.Ordinal);
             Assert.Contains("PR_NUMBER=$(bash .github/workflows/analyze-ci-failure-persistence.sh pr-number)", publisher, StringComparison.Ordinal);
             Assert.Contains("write-run-summary", publisher, StringComparison.Ordinal);
             Assert.Contains("add-occurrence", publisher, StringComparison.Ordinal);
-            Assert.Contains(
-                "cause-job-names \"$CAUSE_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" display",
-                publisher,
-                StringComparison.Ordinal);
-            Assert.Contains(
-                "cause-job-names \"$CAUSE_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" table",
-                publisher,
-                StringComparison.Ordinal);
-            Assert.DoesNotContain("jq empty \"$ANALYSIS_FILE\"", publisher, StringComparison.Ordinal);
-            Assert.DoesNotContain("jq empty \"$CAUSE_FILE\"", publisher, StringComparison.Ordinal);
-            Assert.DoesNotContain("grep -qP", publisher, StringComparison.Ordinal);
             Assert.DoesNotContain("cp \"$ANALYSIS_FILE\"", publisher, StringComparison.Ordinal);
-            Assert.Contains("jq 'del(.job_ids, .job_names)'", publisher, StringComparison.Ordinal);
-            Assert.Contains("($ex | del(.job_ids, .job_names))", publisher, StringComparison.Ordinal);
-            Assert.Contains("($new | del(.occurrences, .issue_url, .job_ids, .job_names))", publisher, StringComparison.Ordinal);
+            Assert.Contains("FAILED_SHA=$(jq -r '.head_sha // \"unknown\"' \"$RUN_CONTEXT_FILE\")", publisher, StringComparison.Ordinal);
+            Assert.Contains("LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // \"unknown\"' ci-failure-data/last-successful-main-run.json)", publisher, StringComparison.Ordinal);
+            Assert.Contains("TRIGGERING_MERGE=$(jq -r 'if .number then \"#\\(.number) \\(.title)\" else \"Not found\" end' ci-failure-data/triggering-merge-pr.json)", publisher, StringComparison.Ordinal);
+            Assert.True(
+                publisher.IndexOf("analyze-ci-failure-cause-resolver.js", StringComparison.Ordinal) <
+                publisher.IndexOf("write-run-summary", StringComparison.Ordinal));
+            Assert.Contains("($new | del(.occurrences, .issue_url))", publisher, StringComparison.Ordinal);
             Assert.Contains("if $ex.issue_url then {issue_url: $ex.issue_url} else {} end", publisher, StringComparison.Ordinal);
-            Assert.Contains(
-                "Stored cause ${CAUSE_BASENAME} cannot change type from '${CURRENT_CAUSE_TYPE}' to '${CAUSE_TYPE}'\"\nexit 1",
-                publisher,
-                StringComparison.Ordinal);
             var causeTypeIndex = publisher.IndexOf("CAUSE_TYPE=$(jq -r '.type' \"$CAUSE_FILE\")", StringComparison.Ordinal);
             var currentCauseTypeIndex = publisher.IndexOf("CURRENT_CAUSE_TYPE=$(jq -r '.type // \"\"' \"$EXISTING\")", StringComparison.Ordinal);
             Assert.True(causeTypeIndex >= 0 && causeTypeIndex < currentCauseTypeIndex);
-            Assert.Contains("\"$STORED_ISSUE_URL\" =~ ^https://github\\.com/${REPO}/issues/([0-9]+)$", publisher, StringComparison.Ordinal);
-            Assert.Contains(".pull_request == null", publisher, StringComparison.Ordinal);
-            Assert.Contains("any(.labels[]?; .name == \"ci-failure-cause\")", publisher, StringComparison.Ordinal);
-            Assert.Contains("TYPE_MARKER=\"<!-- ci-failure-cause-type:${CAUSE_TYPE} -->\"", publisher, StringComparison.Ordinal);
-            Assert.Contains("map(rtrimstr(\"\\r\"))", publisher, StringComparison.Ordinal);
-            Assert.Contains("$lines[0] == $marker", publisher, StringComparison.Ordinal);
-            Assert.Contains("$lines[1] == $type_marker", publisher, StringComparison.Ordinal);
-            Assert.Contains("[\"**Type**: \" + $cause_type]", publisher, StringComparison.Ordinal);
             Assert.True(
                 publisher.IndexOf("git -C memory-repo push origin \"HEAD:$MEMORY_BRANCH\"", StringComparison.Ordinal) <
-                publisher.IndexOf("# ── 2. Create or update issues for each cause ──", StringComparison.Ordinal));
+                publisher.IndexOf("name: Publish cause issues", StringComparison.Ordinal));
             Assert.Contains(
                 "\"$ANALYSIS_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" \"$RUN_URL\" > \"$COMMENT_FILE\"",
                 workflow,
@@ -1212,9 +909,14 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.Contains(".user.login == \\\"github-actions[bot]\\\"", workflow, StringComparison.Ordinal);
             Assert.Contains("startswith(\\\"${MARKER}\\\\n\\\")", workflow, StringComparison.Ordinal);
         });
-        Assert.Contains("FAILED_SHA=$(jq -r '.head_sha // \"unknown\"' \"$RUN_CONTEXT_FILE\")", s_issueScript, StringComparison.Ordinal);
-        Assert.Contains("LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // \"unknown\"' \"$LAST_SUCCESSFUL_RUN_FILE\")", s_issueScript, StringComparison.Ordinal);
-        Assert.Contains("TRIGGERING_MERGE=$(jq -r 'if .number then \"#\\(.number) \\(.title)\" else \"Not found\" end' \"$TRIGGERING_MERGE_FILE\")", s_issueScript, StringComparison.Ordinal);
+
+        Assert.Contains(
+            "causeIds.some(causeId => lines[0] === causeMarker(causeId))",
+            s_causeIssuePublisher,
+            StringComparison.Ordinal);
+        Assert.Contains("lines[1]?.startsWith('<!-- ci-failure-cause-type:')", s_causeIssuePublisher, StringComparison.Ordinal);
+        Assert.Contains("legacyTypeLines.length === 1", s_causeIssuePublisher, StringComparison.Ordinal);
+        Assert.Contains("tracking.executeIssueReconciliation(", s_causeIssuePublisher, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1279,21 +981,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 collectionStep,
                 StringComparison.Ordinal);
         });
-    }
-
-    [Theory]
-    [InlineData("Collect CI failure data")]
-    [InlineData("Publish analysis data and comment on PR")]
-    [InlineData("Comment on PR")]
-    [RequiresTools(["bash"])]
-    public async Task CompiledWorkflowShellStepHasValidBashSyntax(string stepName)
-    {
-        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", stepName);
-        var result = await RunProcessAsync("bash", ["-n"], standardInput: script);
-
-        Assert.True(
-            result.ExitCode == 0,
-            $"Expected compiled '{stepName}' script to pass 'bash -n'.{Environment.NewLine}{result.Output}");
     }
 
     [Fact]
@@ -1612,104 +1299,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
-    public async Task CandidateMergeCollectionPreservesResultsWhenAssociationIsIncomplete()
-    {
-        var fakeGh = """
-            #!/usr/bin/env bash
-            echo "$*" >> "${GH_CALL_LOG}"
-            case "$*" in
-              *"compare/trusted-success...trusted-failure"*)
-                cat <<'JSON'
-            [
-              {
-                "total_commits": 2,
-                "commits": [
-                  {"sha":"unavailable","commit":{"message":"Unavailable commit"},"html_url":"https://github.com/microsoft/aspire/commit/unavailable"}
-                ]
-              },
-              {
-                "commits": [
-                  {"sha":"associated","commit":{"message":"Associated commit"},"html_url":"https://github.com/microsoft/aspire/commit/associated"}
-                ]
-              }
-            ]
-            JSON
-                ;;
-              *"commits/associated/pulls"*)
-                echo '{"number":41,"title":"Associated PR","html_url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-30T00:00:00Z"}'
-                ;;
-              *"commits/unavailable/pulls"*)
-                exit 1
-                ;;
-              *)
-                exit 99
-                ;;
-            esac
-            """;
-        var candidatesPath = Path.Combine(_workspace.Path, "candidate-merges.json");
-        var statusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
-
-        var result = await RunCandidateScriptAsync(fakeGh, candidatesPath, statusPath);
-
-        Assert.Equal(0, result.ExitCode);
-        using var candidates = JsonDocument.Parse(await File.ReadAllTextAsync(candidatesPath));
-        var candidate = Assert.Single(candidates.RootElement.EnumerateArray());
-        Assert.Equal("associated", candidate.GetProperty("sha").GetString());
-        Assert.Equal(41, candidate.GetProperty("pull_request").GetProperty("number").GetInt32());
-        using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
-        Assert.Equal("incomplete", status.RootElement.GetProperty("state").GetString());
-        var ghCalls = await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "gh-calls.log"));
-        Assert.Contains(
-            ghCalls,
-            call => call.Contains("compare/trusted-success...trusted-failure", StringComparison.Ordinal)
-                && call.Contains("--paginate", StringComparison.Ordinal)
-                && call.Contains("--slurp", StringComparison.Ordinal));
-        Assert.Contains(ghCalls, call => call.Contains("commits/unavailable/pulls", StringComparison.Ordinal));
-        Assert.Contains(ghCalls, call => call.Contains("commits/associated/pulls", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task CandidateMergeCollectionReportsIncompleteWhenCompareRangeIsTruncated()
-    {
-        var fakeGh = """
-            #!/usr/bin/env bash
-            case "$*" in
-              *"compare/trusted-success...trusted-failure"*)
-                cat <<'JSON'
-            [
-              {
-                "total_commits": 5,
-                "commits": [
-                  {"sha":"associated","commit":{"message":"Associated commit"},"html_url":"https://github.com/microsoft/aspire/commit/associated"}
-                ]
-              }
-            ]
-            JSON
-                ;;
-              *"commits/associated/pulls"*)
-                echo '{"number":41,"title":"Associated PR","html_url":"https://github.com/microsoft/aspire/pull/41","merged_at":"2026-08-30T00:00:00Z"}'
-                ;;
-              *)
-                exit 99
-                ;;
-            esac
-            """;
-        var candidatesPath = Path.Combine(_workspace.Path, "candidate-merges.json");
-        var statusPath = Path.Combine(_workspace.Path, "candidate-merge-history-status.json");
-
-        var result = await RunCandidateScriptAsync(fakeGh, candidatesPath, statusPath);
-
-        Assert.Equal(0, result.ExitCode);
-        using var candidates = JsonDocument.Parse(await File.ReadAllTextAsync(candidatesPath));
-        var candidate = Assert.Single(candidates.RootElement.EnumerateArray());
-        Assert.Equal("associated", candidate.GetProperty("sha").GetString());
-        using var status = JsonDocument.Parse(await File.ReadAllTextAsync(statusPath));
-        Assert.Equal("incomplete", status.RootElement.GetProperty("state").GetString());
-    }
-
-    [Fact]
-    [RequiresTools(["bash", "jq"])]
     public async Task PersistedMainAnalysisRebuildsAllContextFromTrustedArtifacts()
     {
         await WritePersistenceFixtureAsync(
@@ -1889,101 +1478,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
-    [RequiresTools(["bash", "jq"])]
-    public async Task CauseJobNamesUseTrustedPerCauseAttribution()
-    {
-        var trustedJobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
-        var buildCausePath = Path.Combine(_workspace.Path, "build-cause.json");
-        var testCausePath = Path.Combine(_workspace.Path, "test-cause.json");
-        var multiJobCausePath = Path.Combine(_workspace.Path, "multi-job-cause.json");
-        await File.WriteAllTextAsync(
-            trustedJobsPath,
-            """[{"id":1,"name":"Build | Linux"},{"id":2,"name":"Tests\r\nWindows"}]""");
-        await File.WriteAllTextAsync(
-            buildCausePath,
-            """{"id":"build-failure","type":"infra-failure","title":"Build failure","error_pattern":"boom","job_ids":[1]}""");
-        await File.WriteAllTextAsync(
-            testCausePath,
-            """{"id":"test-failure","type":"flaky-test","title":"Test failure","test_name":"Tests.Flaky","error_pattern":"boom","job_ids":[2]}""");
-        await File.WriteAllTextAsync(multiJobCausePath, """{"job_ids":[2,1]}""");
-
-        var buildResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            ["cause-job-names", buildCausePath, trustedJobsPath, "display"]);
-        var testResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            ["cause-job-names", testCausePath, trustedJobsPath, "display"]);
-        var tableResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            ["cause-job-names", multiJobCausePath, trustedJobsPath, "table"]);
-
-        Assert.Equal(0, buildResult.ExitCode);
-        Assert.Equal("Build | Linux\n", buildResult.Output);
-        Assert.Equal(0, testResult.ExitCode);
-        Assert.Equal("Tests Windows\n", testResult.Output);
-        Assert.Equal(0, tableResult.ExitCode);
-        Assert.Equal("Tests Windows<br>Build \\| Linux\n", tableResult.Output);
-
-        var buildBodyPath = Path.Combine(_workspace.Path, "build-body.md");
-        var buildMetadataPath = Path.Combine(_workspace.Path, "build-metadata.json");
-        var testBodyPath = Path.Combine(_workspace.Path, "test-body.md");
-        var testMetadataPath = Path.Combine(_workspace.Path, "test-metadata.json");
-        var buildIssueResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                buildCausePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "pull-request",
-                "42",
-                buildResult.Output.TrimEnd(),
-                "| build occurrence |",
-                buildBodyPath,
-                buildMetadataPath,
-            ]);
-        var testIssueResult = await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
-            [
-                testCausePath,
-                "unused-run-context.json",
-                "unused-last-success.json",
-                "unused-triggering-merge.json",
-                "https://github.com/microsoft/aspire/actions/runs/123",
-                "pull-request",
-                "42",
-                testResult.Output.TrimEnd(),
-                "| test occurrence |",
-                testBodyPath,
-                testMetadataPath,
-            ]);
-
-        Assert.Equal(0, buildIssueResult.ExitCode);
-        Assert.Equal(0, testIssueResult.ExitCode);
-        Assert.Contains(
-            "Build error leg: Build | Linux\n",
-            await File.ReadAllTextAsync(buildBodyPath),
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Build error leg or test failing: Tests Windows / `Tests.Flaky`\n",
-            await File.ReadAllTextAsync(testBodyPath),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void PublicationDoesNotRenderUnavailablePrAsNumber()
     {
-        ForEachExecutableWorkflow(workflow =>
-        {
-            Assert.Contains(
-                "elif [ \"$PR_NUMBER\" = \"0\" ]; then\nOCCURRENCE_CONTEXT=\"unavailable\"",
-                workflow,
-                StringComparison.Ordinal);
-        });
         Assert.Contains(
-            "  if [ \"$RUN_SCOPE\" = \"pull-request\" ] && [ \"$PR_NUMBER\" != \"0\" ]; then\n    echo \"Pull request: #${PR_NUMBER}\"",
-            s_issueScript,
+            "run.prNumber > 0 ? `#${run.prNumber}` : 'unavailable'",
+            s_causeIssuePublisher,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "run.runScope === 'pull-request' && run.prNumber > 0",
+            s_causeIssuePublisher,
             StringComparison.Ordinal);
     }
 
@@ -2044,8 +1547,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 .Order());
     }
 
-    private static string CreateCause(string id, string type, int jobId, params int[] additionalJobIds)
-        => $$"""{"id":"{{id}}","type":"{{type}}","title":"Failure","error_pattern":"boom","job_ids":{{JsonSerializer.Serialize(new[] { jobId }.Concat(additionalJobIds))}}}""";
+    private static string CreateCause(string id, string type)
+        => $$"""{"id":"{{id}}","type":"{{type}}","title":"Failure","error_pattern":"boom"}""";
 
     private static string ReadWorkflow(string fileName)
         => File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", fileName));
@@ -2095,28 +1598,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
                 ["GH_CALL_LOG"] = Path.Combine(_workspace.Path, "gh-calls.log"),
                 ["GH_CALL_COUNT_FILE"] = Path.Combine(_workspace.Path, "gh-call-count"),
-            });
-    }
-
-    private async Task<CommandResult> RunCandidateScriptAsync(string fakeGh, string candidatesPath, string statusPath)
-    {
-        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
-        var fakeGhPath = Path.Combine(fakeBinDirectory, "gh");
-        await File.WriteAllTextAsync(fakeGhPath, fakeGh);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                fakeGhPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        return await RunBashScriptAsync(
-            Path.Combine(RepoRoot.Path, CandidatesScriptRelativePath),
-            ["microsoft/aspire", "trusted-success", "trusted-failure", candidatesPath, statusPath],
-            new Dictionary<string, string>
-            {
-                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
-                ["GH_CALL_LOG"] = Path.Combine(_workspace.Path, "gh-calls.log"),
             });
     }
 
@@ -2183,30 +1664,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     private static string ExtractWorkflowScript(string workflowFileName, string stepName)
-        => ExtractWorkflowLiteralBlock(
-            workflowFileName,
-            stepName,
-            line => line.TrimEnd().EndsWith("script: |", StringComparison.Ordinal),
-            "script");
-
-    private static string ExtractWorkflowRunScript(string workflowFileName, string stepName)
-        => ExtractWorkflowLiteralBlock(
-            workflowFileName,
-            stepName,
-            line => line.Trim() == "run: |",
-            "run");
-
-    private static string ExtractWorkflowLiteralBlock(
-        string workflowFileName,
-        string stepName,
-        Predicate<string> isBlockStart,
-        string blockName)
     {
         var lines = ReadWorkflow(workflowFileName).ReplaceLineEndings("\n").Split('\n');
-        var stepIndex = Array.FindIndex(lines, line => line.Trim() == $"- name: {stepName}" || line.Trim() == stepName);
+        var stepIndex = Array.FindIndex(lines, line => line.Trim() == stepName);
         Assert.True(stepIndex >= 0, $"Could not find workflow step: {stepName}");
-        var scriptIndex = Array.FindIndex(lines, stepIndex, isBlockStart);
-        Assert.True(scriptIndex >= 0, $"Could not find {blockName} block for workflow step: {stepName}");
+        var scriptIndex = Array.FindIndex(lines, stepIndex, line => line.TrimEnd().EndsWith("script: |", StringComparison.Ordinal));
+        Assert.True(scriptIndex >= 0, $"Could not find script block for workflow step: {stepName}");
 
         var keyIndent = IndentOf(lines[scriptIndex]);
         var body = new List<string>();
@@ -2375,17 +1838,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
             "::error::Failed-job classifications and persisted cause types do not match",
-            result.Output,
-            StringComparison.Ordinal);
-    }
-
-    private async Task AssertValidationRejectsIncompatibleCauseJobAsync()
-    {
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains(
-            "references an unknown or incompatible failed job",
             result.Output,
             StringComparison.Ordinal);
     }

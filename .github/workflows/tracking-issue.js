@@ -1,66 +1,47 @@
-// Generic helpers for "tracking issues": a single deduplicated GitHub issue per
-// subject, identified by a hidden HTML-comment marker, whose failures accrue as
-// one comment per event (a failed run, a broken build, ...). The issue body is a
-// fixed description written once at creation; every subsequent failure is a new
-// comment. The comment both fires @notifications and — via a hidden per-run
-// marker — is the dedup key, so there is no body rewriting and no ordering window.
+// Generic deterministic lifecycle helpers for automated tracking issues.
 //
-// This module owns the reusable *mechanics* — marker-based dedup lookup, the
-// per-run comment-recording loop, and the octokit primitives to
-// create/comment/close an issue. Callers own the *content and policy*: they build
-// the marker text, title, body, comments, and labels, and decide what action to
-// take. Nothing here is specific to any repository, label, workflow, or product —
-// keep it that way.
-//
-// The pure helpers (no network) are unit-tested via
-// tests/Infrastructure.Tests/WorkflowScripts/TrackingIssueTests.cs. The octokit
-// primitives and recordRun are exercised by the consumers' integration paths.
+// The pure planner owns identity lookup, canonical selection, and the ordered
+// mutation plan. The executor applies that plan through an injected transport,
+// so live Octokit callers, dry-run renderers, and future CLI-backed callers use
+// the same lifecycle decisions.
 
 'use strict';
 
-// ---------------------------------------------------------------------------
-// Pure: marker mechanics
-// ---------------------------------------------------------------------------
+const DUPLICATE_EXEMPT_MARKER = '<!-- tracking-issue-duplicate-exempt -->';
 
-// Returns the oldest issue (lowest number) whose body carries the marker.
-// "Oldest wins" gives a deterministic canonical issue. Concurrent double-filing is
-// already unlikely — most consumer workflows serialize via a `concurrency` group,
-// and the rest only file on their (infrequent) scheduled run — but if a duplicate
-// is ever filed (e.g. one created manually) the older one stays canonical and the
-// duplicate has to be closed by hand.
+function findIssuesForMarkers(issues, markers, isMatchingIssue = () => true) {
+    const exactMarkers = [...new Set(
+        (markers ?? []).filter(marker => typeof marker === 'string' && marker.length > 0))];
+    return (issues ?? [])
+        .filter(issue =>
+            typeof issue?.body === 'string' &&
+            exactMarkers.some(marker => issue.body.includes(marker)) &&
+            isMatchingIssue(issue))
+        .sort((left, right) => left.number - right.number);
+}
+
 function findIssueForMarker(issues, marker) {
-    const matches = (issues ?? []).filter(
-        issue => typeof issue?.body === 'string' && issue.body.includes(marker));
-    if (matches.length === 0) {
-        return null;
-    }
-
-    return matches.reduce((oldest, issue) => (issue.number < oldest.number ? issue : oldest));
+    return findIssuesForMarkers(issues, [marker])[0] ?? null;
 }
 
 function findOpenIssueForMarker(issues, marker) {
-    return findIssueForMarker((issues ?? []).filter(issue => issue?.state === undefined || issue.state === 'open'), marker);
+    return findIssueForMarker(
+        (issues ?? []).filter(issue => issue?.state === undefined || issue.state === 'open'),
+        marker);
 }
 
-// Hidden marker embedded in each failure comment, e.g.
-//   <!-- run:12345678 -->
-// `runId` is stable across re-runs of the same run, so this is the dedup key that
-// stops a poller (or a re-run) from posting a second comment for a run already
-// recorded. Kept in an HTML comment so it never renders in the issue thread.
 function runMarker(runId) {
     return `<!-- run:${runId} -->`;
 }
 
-// Builds a standard tracking-issue body: the hidden marker, an optional hidden
-// auto-close stamp, a one-line lead, then a short explanatory note (closing
-// policy + docs link). Consumers supply only the parts that differ; the skeleton
-// (marker placement, spacing) is shared so every tracking issue reads the same.
-// The body is static — failures are recorded as comments, not appended here.
-//
-// `autoClose` (optional) embeds a hidden close-policy stamp right after the
-// marker (see autoCloseStamp). Pass `true` for issues a green run should close
-// automatically (infra/automation), `false` for issues a human must close after
-// triage (test failures). Omit it when the body carries no close policy.
+function duplicateExemptStamp() {
+    return DUPLICATE_EXEMPT_MARKER;
+}
+
+function isDuplicateExempt(issue) {
+    return typeof issue?.body === 'string' && issue.body.includes(DUPLICATE_EXEMPT_MARKER);
+}
+
 function buildBody({ marker, lead, note, autoClose }) {
     const head = autoClose === undefined ? [marker] : [marker, autoCloseStamp(autoClose)];
     return [
@@ -73,22 +54,10 @@ function buildBody({ marker, lead, note, autoClose }) {
     ].join('\n');
 }
 
-// Hidden close-policy stamp embedded in an issue body, e.g.
-//   <!-- autoclose:true -->
-// `true`  => a watchdog may close the issue when the subject's latest run is green.
-// `false` => the issue must be closed by a human (e.g. a flaky test where a single
-//            green run does not prove the problem is fixed).
-// Kept in an HTML comment so it never renders in the issue.
 function autoCloseStamp(autoClose) {
     return `<!-- autoclose:${autoClose ? 'true' : 'false'} -->`;
 }
 
-// Reads the close-policy stamp from an issue body. Returns `true`/`false` when a
-// stamp is present, or `null` when it is missing or unparseable. Callers MUST
-// treat `null` conservatively (do not auto-close) so a human-edited body or an
-// issue filed before stamping was introduced is never closed out from under a
-// triager. Matches the autoCloseStamp shape, tolerant of surrounding whitespace:
-//   <!-- autoclose:true -->  /  <!--autoclose:false-->
 function readAutoClose(body) {
     if (typeof body !== 'string') {
         return null;
@@ -102,11 +71,218 @@ function readAutoClose(body) {
     return match[1].toLowerCase() === 'true';
 }
 
-// ---------------------------------------------------------------------------
-// Octokit primitives (network). Thin wrappers; no policy.
-// ---------------------------------------------------------------------------
+function duplicateReconciliationMarker(canonicalIssueNumber, duplicateIssueNumber) {
+    return `<!-- tracking-issue-duplicate:v1:${canonicalIssueNumber}:${duplicateIssueNumber} -->`;
+}
 
-// Idempotently ensures a label exists. A 422 means it already exists.
+function hasMarker(items, marker) {
+    return (items ?? []).some(
+        item => typeof (item?.body ?? item) === 'string' && (item.body ?? item).includes(marker));
+}
+
+function normalizeCanonicalActions(actions, issueNumber) {
+    return (actions ?? []).map(action => ({
+        ...action,
+        issueNumber: action.issueNumber ?? issueNumber,
+    }));
+}
+
+// Returns an ordered, side-effect-free mutation plan. `isMatchingIssue` is an
+// identity extension point for producers whose marker requires additional
+// deterministic validation, such as a separately versioned type marker.
+function planIssueReconciliation({
+    issues,
+    label,
+    labels,
+    marker,
+    alternateMarkers = [],
+    title,
+    buildBody,
+    closeDuplicates = false,
+    isMatchingIssue = () => true,
+    reopen = 'when-changing',
+    actionsForCanonical = () => [],
+}) {
+    const matches = findIssuesForMarkers(
+        issues,
+        [marker, ...alternateMarkers],
+        isMatchingIssue)
+        .filter(issue => !isDuplicateExempt(issue));
+    const issueLabels = [...new Set([label, ...(labels ?? [])])];
+
+    if (matches.length === 0) {
+        const body = buildBody();
+        const syntheticIssue = {
+            number: null,
+            state: 'open',
+            title,
+            body,
+            labels: issueLabels,
+            comments: [],
+        };
+        const canonicalActions = normalizeCanonicalActions(
+            actionsForCanonical(syntheticIssue, { created: true, matches: [syntheticIssue] }),
+            null);
+        return {
+            canonicalIssueNumber: null,
+            created: true,
+            requiresRelist: true,
+            matches: [],
+            actions: [
+                { type: 'create', title, body, labels: issueLabels },
+                ...canonicalActions,
+            ],
+        };
+    }
+
+    const canonical = matches[0];
+    const actions = [];
+    if (closeDuplicates) {
+        for (const duplicate of matches.slice(1)) {
+            if (duplicate.state === 'closed') {
+                continue;
+            }
+
+            const reconciliationMarker = duplicateReconciliationMarker(
+                canonical.number,
+                duplicate.number);
+            if (!hasMarker(canonical.comments, reconciliationMarker)) {
+                actions.push({
+                    type: 'comment',
+                    issueNumber: canonical.number,
+                    body: `[automated] Issue #${duplicate.number} was identified as a duplicate.\n\n${reconciliationMarker}`,
+                });
+            }
+            if (!hasMarker(duplicate.comments, reconciliationMarker)) {
+                actions.push({
+                    type: 'comment',
+                    issueNumber: duplicate.number,
+                    body: `[automated] Duplicate of #${canonical.number}. Future occurrences are tracked there.\n\n${reconciliationMarker}`,
+                });
+            }
+            actions.push({
+                type: 'close',
+                issueNumber: duplicate.number,
+                stateReason: 'not_planned',
+            });
+        }
+    }
+
+    const canonicalActions = normalizeCanonicalActions(
+        actionsForCanonical(canonical, { created: false, matches }),
+        canonical.number);
+    const hasExplicitReopen = canonicalActions.some(action => action.type === 'reopen');
+    const shouldReopen =
+        canonical.state === 'closed' &&
+        !hasExplicitReopen &&
+        (reopen === 'always' || (reopen === 'when-changing' && canonicalActions.length > 0));
+    if (shouldReopen) {
+        actions.push({ type: 'reopen', issueNumber: canonical.number });
+    }
+    actions.push(...canonicalActions);
+
+    return {
+        canonicalIssueNumber: canonical.number,
+        created: false,
+        requiresRelist: false,
+        matches,
+        actions,
+    };
+}
+
+async function executeAction(transport, action, canonicalIssueNumber) {
+    const issueNumber = action.issueNumber ?? canonicalIssueNumber;
+    switch (action.type) {
+        case 'update':
+            await transport.updateIssue(issueNumber, { body: action.body });
+            break;
+        case 'comment':
+            await transport.addComment(issueNumber, action.body);
+            break;
+        case 'close':
+            await transport.closeIssue(issueNumber, { stateReason: action.stateReason });
+            break;
+        case 'reopen':
+            await transport.reopenIssue(issueNumber);
+            break;
+        default:
+            throw new Error(`Unsupported issue reconciliation action '${action.type}'.`);
+    }
+
+    return { ...action, issueNumber };
+}
+
+async function preparePlanningIssues(issues, prepareIssues) {
+    return prepareIssues ? await prepareIssues(issues) : issues;
+}
+
+async function executeIssueReconciliation(transport, core, options) {
+    let issues = options.issues ?? await transport.listIssues(options.label);
+    issues = await preparePlanningIssues(issues, options.prepareIssues);
+    let plan = planIssueReconciliation({ ...options, issues });
+    const appliedActions = [];
+    let createdIssue = null;
+
+    if (plan.actions[0]?.type === 'create') {
+        const [createAction, ...pendingActions] = plan.actions;
+        createdIssue = await transport.createIssue({
+            title: createAction.title,
+            body: createAction.body,
+            labels: createAction.labels,
+        });
+        appliedActions.push({ ...createAction, issueNumber: createdIssue.number });
+
+        if (plan.requiresRelist) {
+            issues = await transport.listIssues(options.label);
+            issues = await preparePlanningIssues(issues, options.prepareIssues);
+            plan = planIssueReconciliation({ ...options, issues });
+            if (plan.actions[0]?.type === 'create') {
+                throw new Error('Created tracking issue was not returned by the all-state label listing.');
+            }
+            for (const action of plan.actions) {
+                appliedActions.push(await executeAction(
+                    transport,
+                    action,
+                    plan.canonicalIssueNumber));
+            }
+        } else {
+            plan = {
+                ...plan,
+                canonicalIssueNumber: createdIssue.number,
+                requiresRelist: false,
+                actions: pendingActions,
+            };
+            for (const action of pendingActions) {
+                appliedActions.push(await executeAction(
+                    transport,
+                    action,
+                    createdIssue.number));
+            }
+        }
+    } else {
+        for (const action of plan.actions) {
+            appliedActions.push(await executeAction(
+                transport,
+                action,
+                plan.canonicalIssueNumber));
+        }
+    }
+
+    const canonicalIssueNumber = plan.canonicalIssueNumber ?? createdIssue?.number;
+    core.info(`Reconciled tracking issue #${canonicalIssueNumber}.`);
+    return {
+        number: canonicalIssueNumber,
+        created: createdIssue?.number === canonicalIssueNumber,
+        reopened: appliedActions.some(action =>
+            action.type === 'reopen' && action.issueNumber === canonicalIssueNumber),
+        duplicatesClosed: appliedActions
+            .filter(action => action.type === 'close')
+            .map(action => action.issueNumber),
+        appliedActions,
+        plan,
+    };
+}
+
 async function ensureLabel(github, owner, repo, { name, color, description }) {
     try {
         await github.rest.issues.createLabel({ owner, repo, name, color, description });
@@ -117,16 +293,10 @@ async function ensureLabel(github, owner, repo, { name, color, description }) {
     }
 }
 
-// Lists issues carrying a label. Uses the (strongly-consistent) list
-// API rather than Search, whose eventual-consistency window would let
-// near-simultaneous pollers each see "0 hits" and file duplicates.
 async function listIssuesByLabel(github, owner, repo, label, { state = 'all' } = {}) {
     const items = await github.paginate(github.rest.issues.listForRepo, {
         owner, repo, labels: label, state, per_page: 100,
     });
-    // listForRepo returns pull requests too (they are issues in the REST model).
-    // Exclude them so a labeled PR whose body happens to carry a tracking marker is
-    // never mistaken for the managed issue and then commented/closed in its place.
     return items.filter(item => !item.pull_request);
 }
 
@@ -139,86 +309,157 @@ async function createIssue(github, owner, repo, { title, body, labels }) {
     return created.data;
 }
 
+async function updateIssue(github, owner, repo, issueNumber, patch) {
+    const updated = await github.rest.issues.update({
+        owner,
+        repo,
+        issue_number: issueNumber,
+        ...patch,
+    });
+    return updated?.data;
+}
+
 async function addComment(github, owner, repo, issueNumber, body) {
     await github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body });
 }
 
 async function closeIssue(github, owner, repo, issueNumber, { stateReason = 'completed' } = {}) {
-    await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed', state_reason: stateReason });
+    await updateIssue(github, owner, repo, issueNumber, {
+        state: 'closed',
+        state_reason: stateReason,
+    });
 }
 
 async function reopenIssue(github, owner, repo, issueNumber) {
-    await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'open' });
+    await updateIssue(github, owner, repo, issueNumber, { state: 'open' });
 }
 
-// True when a comment carrying `marker` already exists on the issue. The marker is
-// the hidden per-run token (see runMarker); scanning comments — never collapsed or
-// truncated — reliably detects "already recorded this exact run".
-async function hasCommentForRun(github, owner, repo, issueNumber, marker) {
-    const comments = await github.paginate(github.rest.issues.listComments, {
+async function listComments(github, owner, repo, issueNumber) {
+    return await github.paginate(github.rest.issues.listComments, {
         owner, repo, issue_number: issueNumber, per_page: 100,
     });
-    return comments.some(comment => typeof comment?.body === 'string' && comment.body.includes(marker));
 }
 
-// ---------------------------------------------------------------------------
-// Orchestration: find-or-create the tracking issue, then record this run as a
-// comment unless it is already recorded. This is the one place the dedup contract
-// lives, so every consumer shares identical semantics.
-// ---------------------------------------------------------------------------
+async function hasCommentForRun(github, owner, repo, issueNumber, marker) {
+    return hasMarker(await listComments(github, owner, repo, issueNumber), marker);
+}
 
-// Options:
-//   label       - the lookup label; the issue is found and (by default) filed with it.
-//   labels      - full label set for a newly-filed issue (defaults to [label]).
-//   marker      - per-subject body marker used to find the canonical issue.
-//   title       - title for a newly-filed issue.
-//   runId       - stable run identifier; the dedup key (see runMarker).
-//   buildBody   - () => string, the static issue body for a fresh issue.
-//   comment     - the failure comment text; the run marker is appended to it.
-//   issues      - optional pre-fetched all-state issue list (a multi-subject caller,
-//                 e.g. the watchdog, lists once and reuses it across subjects).
-// Returns { number, created } when a comment was posted, or { number, skipped }
-// when the run was already recorded.
-async function recordRun(github, context, core, { label, labels, marker, title, runId, buildBody, comment, issues }) {
+function createOctokitIssueTransport(github, context) {
     const { owner, repo } = context.repo;
-    const list = issues ?? await listIssuesByLabel(github, owner, repo, label);
-    const issue = findOpenIssueForMarker(list, marker) ?? findIssueForMarker(list, marker);
-    const runComment = runMarker(runId);
-    const commentBody = `${comment}\n\n${runComment}`;
+    return {
+        listIssues: label => listIssuesByLabel(github, owner, repo, label),
+        createIssue: request => createIssue(github, owner, repo, request),
+        updateIssue: (issueNumber, patch) => updateIssue(
+            github, owner, repo, issueNumber, patch),
+        addComment: (issueNumber, body) => addComment(
+            github, owner, repo, issueNumber, body),
+        closeIssue: (issueNumber, options) => closeIssue(
+            github, owner, repo, issueNumber, options),
+        reopenIssue: issueNumber => reopenIssue(github, owner, repo, issueNumber),
+        listComments: issueNumber => listComments(github, owner, repo, issueNumber),
+    };
+}
 
-    if (issue === null) {
-        const created = await createIssue(github, owner, repo, { title, body: buildBody(), labels: labels ?? [label] });
-        // A fresh issue has no comments, so the first failure is always posted
-        // without a dedup check; the comment is what notifies subscribers.
-        await addComment(github, owner, repo, created.number, commentBody);
-        return { number: created.number, created: true };
+async function recordRun(
+    github,
+    context,
+    core,
+    {
+        label,
+        labels,
+        marker,
+        title,
+        runId,
+        buildBody: buildIssueBody,
+        comment,
+        issues,
+        alternateMarkers = [],
+        closeDuplicates = false,
+        isMatchingIssue = () => true,
+    }) {
+    const transport = createOctokitIssueTransport(github, context);
+    const occurrenceMarker = runMarker(runId);
+    const commentBody = `${comment}\n\n${occurrenceMarker}`;
+    const prepareIssues = async inventory => {
+        const matches = findIssuesForMarkers(
+            inventory,
+            [marker, ...alternateMarkers],
+            isMatchingIssue);
+        const openMatches = matches.filter(issue => issue.state !== 'closed');
+        const planningMatches = !closeDuplicates && openMatches.length > 0
+            ? openMatches
+            : matches;
+        const allMatchNumbers = new Set(matches.map(issue => issue.number));
+        const planningMatchNumbers = new Set(planningMatches.map(issue => issue.number));
+        const commentsByNumber = new Map();
+        await Promise.all(planningMatches.map(async issue => {
+            commentsByNumber.set(issue.number, await transport.listComments(issue.number));
+        }));
+        return inventory
+            .filter(issue =>
+                !allMatchNumbers.has(issue.number) || planningMatchNumbers.has(issue.number))
+            .map(issue => ({
+                ...issue,
+                comments: commentsByNumber.get(issue.number) ?? issue.comments,
+            }));
+    };
+    const result = await executeIssueReconciliation(transport, core, {
+        label,
+        labels,
+        marker,
+        alternateMarkers,
+        title,
+        buildBody: buildIssueBody,
+        issues,
+        closeDuplicates,
+        isMatchingIssue,
+        reopen: 'when-changing',
+        prepareIssues,
+        actionsForCanonical: (issue, { matches }) => {
+            const occurrenceIssue = matches.find(
+                match => hasMarker(match.comments, occurrenceMarker));
+            if (occurrenceIssue) {
+                if (issue.state === 'closed' && occurrenceIssue.number !== issue.number) {
+                    return [{ type: 'reopen' }];
+                }
+                return [];
+            }
+            return [{ type: 'comment', body: commentBody }];
+        },
+    });
+    const recorded = result.appliedActions.some(
+        action => action.type === 'comment' && action.body === commentBody);
+    if (!recorded) {
+        core.info(`Run ${runId} already recorded in #${result.number}; skipping duplicate comment.`);
     }
 
-    if (await hasCommentForRun(github, owner, repo, issue.number, runComment)) {
-        core.info(`Run ${runId} already recorded in #${issue.number}; skipping duplicate comment.`);
-        return { number: issue.number, skipped: true };
-    }
-
-    const reopened = issue.state === 'closed';
-    if (reopened) {
-        await reopenIssue(github, owner, repo, issue.number);
-    }
-
-    await addComment(github, owner, repo, issue.number, commentBody);
-    return { number: issue.number, created: false, reopened };
+    return {
+        number: result.number,
+        created: result.created,
+        skipped: !recorded,
+        reopened: result.reopened,
+        duplicatesClosed: result.duplicatesClosed,
+    };
 }
 
 module.exports = {
+    findIssuesForMarkers,
     findIssueForMarker,
     findOpenIssueForMarker,
     runMarker,
+    duplicateExemptStamp,
+    isDuplicateExempt,
     buildBody,
     autoCloseStamp,
     readAutoClose,
+    planIssueReconciliation,
+    executeIssueReconciliation,
+    createOctokitIssueTransport,
     ensureLabel,
     listIssuesByLabel,
     listOpenIssuesByLabel,
     createIssue,
+    updateIssue,
     addComment,
     closeIssue,
     reopenIssue,

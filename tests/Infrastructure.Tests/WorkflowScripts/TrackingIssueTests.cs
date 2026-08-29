@@ -146,6 +146,28 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RecordRunDoesNotReopenClosedCanonicalWhenRunWasAlreadyRecordedThere()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 6,
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->", state = "closed", comments = new[] { "first <!-- run:6 -->" } },
+                }
+            });
+
+        Assert.True(result.Result.Skipped);
+        Assert.Equal("closed", Assert.Single(result.Issues).State);
+        Assert.Empty(result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RecordRunReopensClosedIssueForNewRun()
     {
         var result = await InvokeHarnessAsync<RecordRunResult>(
@@ -173,7 +195,7 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task RecordRunPrefersOpenIssueOverOlderClosedDuplicate()
+    public async Task RecordRunKeepsOldestIssueCanonicalAndClosesNewerDuplicates()
     {
         var result = await InvokeHarnessAsync<RecordRunResult>(
             "recordRun",
@@ -182,6 +204,7 @@ public sealed class TrackingIssueTests : IDisposable
                 marker = "<!-- m -->",
                 runId = 7,
                 comment = "again",
+                closeDuplicates = true,
                 issues = new object[]
                 {
                     new { number = 5, body = "lead <!-- m -->", state = "closed", comments = new[] { "first <!-- run:6 -->" } },
@@ -191,16 +214,196 @@ public sealed class TrackingIssueTests : IDisposable
 
         Assert.False(result.Result.Created);
         Assert.False(result.Result.Skipped);
-        Assert.Equal(["createComment"], result.Calls);
+        Assert.Equal([8], result.Result.DuplicatesClosed);
 
-        var closedIssue = Assert.Single(result.Issues, issue => issue.Number == 5);
-        Assert.Equal("closed", closedIssue.State);
-        Assert.Single(closedIssue.Comments);
+        var canonicalIssue = Assert.Single(result.Issues, issue => issue.Number == 5);
+        Assert.Equal("open", canonicalIssue.State);
+        Assert.Contains(canonicalIssue.Comments, comment => comment.Contains("<!-- run:7 -->", StringComparison.Ordinal));
+        Assert.Contains(canonicalIssue.Comments, comment => comment.Contains("#8", StringComparison.Ordinal));
 
-        var openIssue = Assert.Single(result.Issues, issue => issue.Number == 8);
-        Assert.Equal("open", openIssue.State);
-        var comment = Assert.Single(openIssue.Comments);
-        Assert.Contains("<!-- run:7 -->", comment);
+        var duplicateIssue = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("closed", duplicateIssue.State);
+        Assert.Equal("not_planned", duplicateIssue.StateReason);
+        Assert.Contains(duplicateIssue.Comments, comment => comment.Contains("Duplicate of #5", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunPreservesOpenFirstCompatibilityWithoutDuplicateClosure()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->", state = "closed" },
+                    new { number = 8, body = "<!-- m -->", state = "open" },
+                }
+            });
+
+        Assert.Equal(8, result.Result.Number);
+        Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 5).State);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 8).State);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunUsesIdentityPredicateBeforeSelectingCanonicalIssue()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                requiredSecondLine = "<!-- type:infra -->",
+                runId = 7,
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->\n<!-- type:test -->" },
+                    new { number = 8, body = "<!-- m -->\n<!-- type:infra -->" },
+                }
+            });
+
+        Assert.Equal(8, result.Result.Number);
+        Assert.Empty(result.Result.DuplicatesClosed);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 5).State);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunRelistsAfterCreationAndClosesConcurrentDuplicate()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                closeDuplicates = true,
+                concurrentIssue = new { number = 4, body = "<!-- m -->" },
+            });
+
+        Assert.Equal(4, result.Result.Number);
+        Assert.False(result.Result.Created);
+        Assert.Equal([1000], result.Result.DuplicatesClosed);
+
+        var createdDuplicate = Assert.Single(result.Issues, issue => issue.Number == 1000);
+        Assert.Equal("closed", createdDuplicate.State);
+        Assert.Equal("not_planned", createdDuplicate.StateReason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunRelistsAfterCreationWithoutDuplicateClosure()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                concurrentIssue = new { number = 4, body = "<!-- m -->" },
+            });
+
+        Assert.Equal(4, result.Result.Number);
+        Assert.False(result.Result.Created);
+        Assert.Empty(result.Result.DuplicatesClosed);
+        Assert.Contains(
+            Assert.Single(result.Issues, issue => issue.Number == 4).Comments,
+            comment => comment.Contains("<!-- run:7 -->", StringComparison.Ordinal));
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 1000).State);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunResumesDuplicateClosureWithoutRepeatingReconciliationComments()
+    {
+        const string reconciliationMarker = "<!-- tracking-issue-duplicate:v1:5:8 -->";
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new
+                    {
+                        number = 5,
+                        body = "<!-- m -->",
+                        comments = new[] { $"[automated] Issue #8 is a duplicate.\n\n{reconciliationMarker}" },
+                    },
+                    new
+                    {
+                        number = 8,
+                        body = "<!-- m -->",
+                        comments = new[] { $"[automated] Duplicate of #5.\n\n{reconciliationMarker}" },
+                    },
+                }
+            });
+
+        var canonicalIssue = Assert.Single(result.Issues, issue => issue.Number == 5);
+        Assert.Equal(2, canonicalIssue.Comments.Length);
+
+        var duplicateIssue = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("closed", duplicateIssue.State);
+        Assert.Single(duplicateIssue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunReopensCanonicalWhenOccurrenceWasRecordedOnDuplicate()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new { number = 5, body = "<!-- m -->", state = "closed" },
+                    new { number = 8, body = "<!-- m -->", comments = new[] { "failure <!-- run:7 -->" } },
+                }
+            });
+
+        Assert.True(result.Result.Skipped);
+        Assert.Equal("open", Assert.Single(result.Issues, issue => issue.Number == 5).State);
+        Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 8).State);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PlannerAndExecutorProduceTheSameDeterministicActions()
+    {
+        var result = await InvokeHarnessAsync<PlanExecutionResult>(
+            "planAndExecute",
+            new
+            {
+                marker = "<!-- m -->",
+                updateBody = "<!-- m -->\nupdated",
+                comment = "new occurrence",
+                closeDuplicates = true,
+                issues = new object[]
+                {
+                    new { number = 8, body = "<!-- m -->\nold", state = "closed" },
+                    new { number = 12, body = "<!-- m -->\nduplicate", state = "open" },
+                }
+            });
+
+        Assert.Equal(8, result.Plan.CanonicalIssueNumber);
+        Assert.Equal(
+            ["comment", "comment", "close", "reopen", "update", "comment"],
+            result.Plan.Actions.Select(action => action.Type));
+        Assert.Equal(
+            result.Plan.Actions.Select(action => action.Type),
+            result.AppliedActions.Select(action => action.Type));
     }
 
     [Fact]
@@ -305,7 +508,13 @@ public sealed class TrackingIssueTests : IDisposable
 
     private sealed record RecordRunResult(RecordResult Result, string[] Calls, IssueState[] Issues);
 
-    private sealed record RecordResult(int Number, bool Created, bool Skipped);
+    private sealed record RecordResult(int Number, bool Created, bool Skipped, int[] DuplicatesClosed);
 
-    private sealed record IssueState(int Number, string State, string Body, string[] Labels, string[] Comments);
+    private sealed record IssueState(int Number, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
+
+    private sealed record PlanExecutionResult(ReconciliationPlan Plan, ReconciliationAction[] AppliedActions);
+
+    private sealed record ReconciliationPlan(int? CanonicalIssueNumber, ReconciliationAction[] Actions);
+
+    private sealed record ReconciliationAction(string Type);
 }
