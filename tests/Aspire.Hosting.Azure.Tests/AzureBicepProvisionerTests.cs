@@ -149,14 +149,14 @@ public class AzureBicepProvisionerTests
     [Theory]
     [InlineData("User")]
     [InlineData("ServicePrincipal")]
-    public async Task GetOrCreateResourceAsync_InPublishMode_PopulatesDeploymentPrincipalParameters(string principalType)
+    public async Task GetOrCreateResourceAsync_InPublishMode_PopulatesUserPrincipalParameters(string principalType)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
         using var services = builder.Services.BuildServiceProvider();
 
         var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
-        resource.Parameters[AzureBicepResource.KnownParameters.DeploymentPrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
         resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
 
         var sentinel = new InvalidOperationException("stop-after-populate-well-known-parameters");
@@ -180,19 +180,19 @@ public class AzureBicepProvisionerTests
             provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
         Assert.Same(sentinel, thrown);
 
-        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.DeploymentPrincipalId]);
+        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
         Assert.Equal(principalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
     }
 
     [Fact]
-    public async Task GetOrCreateResourceAsync_InPublishMode_ThrowsForUnknownPrincipalTypeWhenDeploymentPrincipalIdIsProvided()
+    public async Task GetOrCreateResourceAsync_InPublishMode_ThrowsForUnknownPrincipalTypeWhenUserPrincipalIdIsProvided()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
         using var services = builder.Services.BuildServiceProvider();
 
         var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
-        resource.Parameters[AzureBicepResource.KnownParameters.DeploymentPrincipalId] = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
         resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
 
         var provisioner = new BicepProvisioner(

@@ -97,7 +97,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
             var prefix = Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
             // This tells azd to avoid creating infrastructure
-            var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.DeploymentPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
+            var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
             infra.Add(userPrincipalId);
 
             var tags = new ProvisioningParameter("tags", typeof(object))

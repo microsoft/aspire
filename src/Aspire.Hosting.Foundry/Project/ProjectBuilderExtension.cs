@@ -345,7 +345,7 @@ public static class AzureCognitiveServicesProjectExtensions
         infra.Add(tags);
 
         // This tells azd to avoid creating infrastructure
-        var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.DeploymentPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
+        var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
         infra.Add(userPrincipalId);
 
         /*
