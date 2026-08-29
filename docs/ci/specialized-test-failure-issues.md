@@ -100,8 +100,9 @@ scheduled pipeline is the same class of problem the scanner reports.
 
 ## Logic and tests
 
-The reusable issue mechanics (marker dedup, the comment-recording loop with
-per-run dedup, octokit primitives) live in the generic, repo-agnostic engine
+The reusable issue mechanics (exact-marker reconciliation, oldest-issue
+canonicalization, duplicate closure, the per-run comment loop, and octokit
+primitives) live in the generic, repo-agnostic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), shared with the
 [scheduled-workflow scanner](monitor-scheduled-workflows.md), the
 [nightly-pipeline failure reporter](pipeline-failure-issues.md), and the

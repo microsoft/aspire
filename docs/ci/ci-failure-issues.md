@@ -80,8 +80,9 @@ check avoids filing on a skip.
 
 ## Logic and tests
 
-The reusable issue mechanics (marker dedup, the comment-recording loop with
-per-run dedup, octokit primitives) live in the generic engine
+The reusable issue mechanics (exact-marker reconciliation, oldest-issue
+canonicalization, duplicate closure, the per-run comment loop, and octokit
+primitives) live in the generic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), unit-tested by
 [`TrackingIssueTests`](../../tests/Infrastructure.Tests/WorkflowScripts/TrackingIssueTests.cs).
 

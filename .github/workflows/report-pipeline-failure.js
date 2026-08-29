@@ -104,6 +104,7 @@ async function report({ github, context, core, labels, cc = '', commentDetail = 
         runId: context.runId,
         buildBody: () => buildIssueBody({ marker, displayName, workflowFile, cc }),
         comment: formatComment({ run, detail: commentDetail }),
+        closeDuplicates: true,
     });
 
     if (!result.skipped) {

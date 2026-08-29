@@ -41,7 +41,12 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     }
                     const requestedState = state ?? 'open';
                     return {
-                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                        // Octokit responses are snapshots, not live references to
+                        // GitHub state. Clone them so an update call cannot silently
+                        // mutate the runner's cached issue list in the test.
+                        data: store.issues
+                            .filter(issue => requestedState === 'all' || issue.state === requestedState)
+                            .map(issue => ({ ...issue, labels: [...(issue.labels ?? [])], comments: [...(issue.comments ?? [])] })),
                     };
                 },
                 create: async ({ title, body, labels }) => {

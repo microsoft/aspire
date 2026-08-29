@@ -17,8 +17,7 @@ async function dispatch(operation, payload) {
         case 'parseCommand':
             return helper.parseCommand(payload.body, payload.defaultSourceUrl ?? null);
 
-        case 'buildIssueSearchQuery':
-            return helper.buildIssueSearchQuery(payload.owner ?? 'microsoft', payload.repo ?? 'aspire', payload.metadataMarker);
+
 
         case 'formatListResponse':
             return helper.formatListResponse(payload.resolverOutcome, payload.resultJson ?? null);

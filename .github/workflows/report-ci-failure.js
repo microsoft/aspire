@@ -104,6 +104,7 @@ async function reportFailure({ github, context, core }) {
         runId: context.runId,
         buildBody: () => buildIssueBody({ marker, ref }),
         comment: formatComment({ run: runContext(context) }),
+        closeDuplicates: true,
     });
 
     if (!result.skipped) {

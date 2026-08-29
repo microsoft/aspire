@@ -217,7 +217,9 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                 continue;
             }
 
-            const issue = tracking.findOpenIssueForMarker(issues, marker);
+            const managedIssues = tracking.findIssuesForMarkers(issues, [marker])
+                .filter(issue => !tracking.isDuplicateExempt(issue));
+            const issue = managedIssues[0] ?? null;
             const conclusion = latest.conclusion;
             // `selfReports` entries own their plain failures in-pipeline; the watchdog
             // only backstops the conclusions that reporter cannot catch.
@@ -239,11 +241,28 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                 const issueLabels = [...new Set([label, ...(wf.labels ?? [])])];
                 const issueBody = buildIssueBody({ marker, displayName: wf.name, workflowFile: wf.file, selfReports: wf.selfReports === true });
                 if (dryRun) {
-                    const recordingIssue = tracking.findOpenIssueForMarker(issues, marker) ?? tracking.findIssueForMarker(issues, marker);
-                    if (recordingIssue !== null &&
-                        !recordingIssue.dryRunPlaceholder &&
-                        await tracking.hasCommentForRun(github, owner, repo, recordingIssue.number, tracking.runMarker(latest.id))) {
-                        core.info(`Run ${latest.id} already recorded in #${recordingIssue.number}; skipping duplicate comment.`);
+                    const recordingIssue = managedIssues[0] ?? null;
+                    const duplicateIssues = managedIssues.slice(1).filter(issue => issue.state === 'open');
+                    for (const duplicateIssue of duplicateIssues) {
+                        log(`would CLOSE duplicate issue #${duplicateIssue.number} as not_planned (canonical #${recordingIssue.number})`);
+                        duplicateIssue.state = 'closed';
+                    }
+
+                    let occurrenceIssue = null;
+                    for (const matchingIssue of managedIssues) {
+                        if (!matchingIssue.dryRunPlaceholder &&
+                            await tracking.hasCommentForRun(github, owner, repo, matchingIssue.number, tracking.runMarker(latest.id))) {
+                            occurrenceIssue = matchingIssue;
+                            break;
+                        }
+                    }
+
+                    if (occurrenceIssue !== null) {
+                        if (recordingIssue.state === 'closed' && occurrenceIssue.number !== recordingIssue.number) {
+                            log(`would REOPEN canonical issue #${recordingIssue.number}; run ${latest.id} is recorded on duplicate #${occurrenceIssue.number}`);
+                            recordingIssue.state = 'open';
+                        }
+                        core.info(`Run ${latest.id} already recorded in #${occurrenceIssue.number}; skipping duplicate comment.`);
                         continue;
                     }
 
@@ -260,7 +279,14 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                     runId: latest.id,
                     buildBody: () => issueBody,
                     comment, issues,
+                    closeDuplicates: true,
                 });
+                for (const duplicateNumber of result.duplicatesClosed) {
+                    const duplicateIssue = issues.find(issue => issue.number === duplicateNumber);
+                    if (duplicateIssue !== undefined) {
+                        duplicateIssue.state = 'closed';
+                    }
+                }
                 if (result.created) {
                     issues.push({ number: result.number, body: issueBody, labels: issueLabels, state: 'open' });
                 } else if (result.reopened) {
@@ -279,7 +305,9 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
 
         const newestConclusion = typeof newest.conclusion === 'string' ? newest.conclusion.toLowerCase() : null;
         if (newestConclusion !== null && SUCCESS_CONCLUSIONS.has(newestConclusion)) {
-            const issue = tracking.findOpenIssueForMarker(issues, marker);
+            const issue = tracking.findIssuesForMarkers(issues, [marker])
+                .filter(candidate => !tracking.isDuplicateExempt(candidate))
+                .find(candidate => candidate.state === 'open') ?? null;
             const failureConclusions = wf.selfReports ? BACKSTOP_CONCLUSIONS : FAILURE_CONCLUSIONS;
             const { action, reason } = decideAction({ conclusion: newest.conclusion, issue, failureConclusions });
             core.info(`${wf.file}: newest run=${newest.id ?? '?'} conclusion=${newest.conclusion ?? 'none'} -> ${action} (${reason})`);

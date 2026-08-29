@@ -13,6 +13,8 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailingTestIssueFixture>, IDisposable
 {
+    private const string StableMetadataMarker = "<!-- failing-test-signature: v1:5462cd03581ff4ab -->";
+
     private readonly TemporaryWorkspace _workspace;
     private readonly CreateFailingTestIssueFixture _fixture;
     private readonly ITestOutputHelper _output;
@@ -64,7 +66,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         Assert.Contains("stdout line 1", response.Issue.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("### Other info", response.Issue.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("Pull Request:", response.Issue.Body, StringComparison.Ordinal);
-        Assert.StartsWith("<!-- failing-test-signature: v1:", response.Issue!.MetadataMarker, StringComparison.Ordinal);
+        Assert.Equal(StableMetadataMarker, response.Issue!.MetadataMarker);
         Assert.Single(response.Resolution!.JobUrls);
         Assert.NotNull(response.Diagnostics);
         Assert.Equal("diagnostics.log", response.Diagnostics!.LogFile);
@@ -79,10 +81,10 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     {
         var fixtureDirectory = CreateFixtureDirectory();
 
-        // Provide search-issue fixture that returns no match so tool creates a new issue
+        // Provide an all-state issue-list fixture with no match so the tool creates a new issue.
         File.WriteAllText(
-            Path.Combine(fixtureDirectory, "search-issue.json"),
-            "{}");
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            "[]");
 
         // Write a fixture response for the gh issue create call
         File.WriteAllText(
@@ -93,6 +95,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
               "url": "https://github.com/microsoft/aspire/issues/99999"
             }
             """);
+        File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
 
         var result = await RunToolAsync(
             fixtureDirectory,
@@ -111,6 +114,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         Assert.NotNull(response.Issue!.CreatedIssue);
         Assert.Equal(99999, response.Issue.CreatedIssue!.Number);
         Assert.Equal("https://github.com/microsoft/aspire/issues/99999", response.Issue.CreatedIssue.Url);
+        Assert.Contains("Recorded run 123 on issue #99999.", File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -118,19 +122,23 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     {
         var fixtureDirectory = CreateFixtureDirectory();
 
-        // Provide search-issue fixture that returns an open issue
+        // Provide an all-state issue-list fixture that returns an open issue.
         File.WriteAllText(
-            Path.Combine(fixtureDirectory, "search-issue.json"),
-            """
-            {
-              "number": 55555,
-              "url": "https://github.com/microsoft/aspire/issues/55555",
-              "state": "open"
-            }
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            $$"""
+            [
+              {
+                "number": 55555,
+                "html_url": "https://github.com/microsoft/aspire/issues/55555",
+                "state": "open",
+                "body": "{{StableMetadataMarker}}"
+              }
+            ]
             """);
 
         // Stub the add-issue-comment call
         File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "list-comments-55555.json"), "[]");
 
         var result = await RunToolAsync(
             fixtureDirectory,
@@ -159,20 +167,24 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     {
         var fixtureDirectory = CreateFixtureDirectory();
 
-        // Provide search-issue fixture that returns a closed issue
+        // Provide an all-state issue-list fixture that returns a closed issue.
         File.WriteAllText(
-            Path.Combine(fixtureDirectory, "search-issue.json"),
-            """
-            {
-              "number": 44444,
-              "url": "https://github.com/microsoft/aspire/issues/44444",
-              "state": "closed"
-            }
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            $$"""
+            [
+              {
+                "number": 44444,
+                "html_url": "https://github.com/microsoft/aspire/issues/44444",
+                "state": "closed",
+                "body": "{{StableMetadataMarker}}"
+              }
+            ]
             """);
 
         // Stub the reopen-issue and add-issue-comment calls
         File.WriteAllText(Path.Combine(fixtureDirectory, "reopen-issue.json"), "{}");
         File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "list-comments-44444.json"), "[]");
 
         var result = await RunToolAsync(
             fixtureDirectory,
@@ -201,10 +213,10 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     {
         var fixtureDirectory = CreateFixtureDirectory();
 
-        // Provide search-issue fixture that returns no match (empty object, no "number")
+        // Provide an all-state issue-list fixture with no match.
         File.WriteAllText(
-            Path.Combine(fixtureDirectory, "search-issue.json"),
-            "{}");
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            "[]");
 
         // Provide create-issue fixture
         File.WriteAllText(
@@ -215,6 +227,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
               "url": "https://github.com/microsoft/aspire/issues/88888"
             }
             """);
+        File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
 
         var result = await RunToolAsync(
             fixtureDirectory,
@@ -233,6 +246,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         Assert.Null(response.Issue!.ExistingIssue);
         Assert.NotNull(response.Issue.CreatedIssue);
         Assert.Equal(88888, response.Issue.CreatedIssue!.Number);
+        Assert.Contains("Recorded run 123 on issue #88888.", File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log")), StringComparison.Ordinal);
 
         var diagnosticsLog = File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log"));
         Assert.Contains("No existing issue found. Creating new issue on GitHub...", diagnosticsLog, StringComparison.Ordinal);
@@ -242,17 +256,6 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     public async Task ForceNewFlagSkipsSearchAndCreatesNewIssue()
     {
         var fixtureDirectory = CreateFixtureDirectory();
-
-        // Even though search-issue fixture returns an existing issue, --force-new should skip it
-        File.WriteAllText(
-            Path.Combine(fixtureDirectory, "search-issue.json"),
-            """
-            {
-              "number": 55555,
-              "url": "https://github.com/microsoft/aspire/issues/55555",
-              "state": "open"
-            }
-            """);
 
         File.WriteAllText(
             Path.Combine(fixtureDirectory, "create-issue.json"),
@@ -284,6 +287,131 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
 
         var diagnosticsLog = File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log"));
         Assert.Contains("--force-new flag set. Creating new issue on GitHub...", diagnosticsLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateFlagUsesOldestExactMatchAndClosesNewerDuplicate()
+    {
+        var fixtureDirectory = CreateFixtureDirectory();
+
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            $$"""
+            [
+              {
+                "number": 55555,
+                "html_url": "https://github.com/microsoft/aspire/issues/55555",
+                "state": "open",
+                "body": "{{StableMetadataMarker}}"
+              },
+              {
+                "number": 44444,
+                "html_url": "https://github.com/microsoft/aspire/issues/44444",
+                "state": "closed",
+                "body": "{{StableMetadataMarker}}"
+              }
+            ]
+            """);
+        File.WriteAllText(Path.Combine(fixtureDirectory, "reopen-issue.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "add-issue-comment.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "close-issue.json"), "{}");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "list-comments-44444.json"), "[]");
+        File.WriteAllText(Path.Combine(fixtureDirectory, "list-comments-55555.json"), "[]");
+
+        var result = await RunToolAsync(
+            fixtureDirectory,
+            "--test", "Tests.Namespace.Type.Method",
+            "--url", "https://github.com/microsoft/aspire/actions/runs/123",
+            "--workflow", "ci",
+            "--repo", "microsoft/aspire",
+            "--create");
+
+        Assert.Equal(0, result.ExitCode);
+
+        var response = JsonSerializer.Deserialize<CreateFailingTestIssueResponse>(result.Output, JsonOptions);
+        Assert.Equal(44444, response!.Issue!.ExistingIssue!.Number);
+        Assert.Null(response.Issue.CreatedIssue);
+
+        var diagnosticsLog = File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log"));
+        Assert.Contains("Closing newer duplicate issue #55555", diagnosticsLog, StringComparison.Ordinal);
+        Assert.Contains("Found closed issue #44444. Reopening...", diagnosticsLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateFlagDoesNotReopenOrCommentWhenRunIsAlreadyRecordedOnCanonical()
+    {
+        var fixtureDirectory = CreateFixtureDirectory();
+
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "list-issues.json"),
+            $$"""
+            [
+              {
+                "number": 44444,
+                "html_url": "https://github.com/microsoft/aspire/issues/44444",
+                "state": "closed",
+                "body": "{{StableMetadataMarker}}"
+              }
+            ]
+            """);
+        File.WriteAllText(
+            Path.Combine(fixtureDirectory, "list-comments-44444.json"),
+            """
+            [
+              {
+                "body": "Earlier failure.\n\n<!-- run:123 -->"
+              }
+            ]
+            """);
+
+        var result = await RunToolAsync(
+            fixtureDirectory,
+            "--test", "Tests.Namespace.Type.Method",
+            "--url", "https://github.com/microsoft/aspire/actions/runs/123",
+            "--workflow", "ci",
+            "--repo", "microsoft/aspire",
+            "--create");
+
+        Assert.Equal(0, result.ExitCode);
+        var response = JsonSerializer.Deserialize<CreateFailingTestIssueResponse>(result.Output, JsonOptions);
+        Assert.Equal(44444, response!.Issue!.ExistingIssue!.Number);
+
+        var diagnosticsLog = File.ReadAllText(Path.Combine(fixtureDirectory, "diagnostics.log"));
+        Assert.Contains("Run 123 is already recorded on issue #44444", diagnosticsLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reopening", diagnosticsLog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Adding comment", diagnosticsLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StableSignatureNormalizesCaseWhitespaceAndWorkflowSeparators()
+    {
+        var fixtureDirectory = CreateFixtureDirectory(
+            new TestTrxCase(
+                CanonicalTestName: "  TESTS.NAMESPACE.TYPE.METHOD  ",
+                DisplayName: "  TESTS.NAMESPACE.TYPE.METHOD  ",
+                Outcome: "Failed",
+                ErrorMessage: "Expected 1 but found 2."));
+        WriteJsonFixture(
+            fixtureDirectory,
+            "repos/microsoft/aspire/actions/workflows/ci.yml",
+            """
+            {
+              "id": 99,
+              "name": "CI",
+              "path": "  .GITHUB\\WORKFLOWS\\CI.YML  "
+            }
+            """);
+
+        var result = await RunToolAsync(
+            fixtureDirectory,
+            "--test", "tests.namespace.type.method",
+            "--url", "https://github.com/microsoft/aspire/actions/runs/123",
+            "--workflow", "ci",
+            "--repo", "microsoft/aspire");
+
+        Assert.Equal(0, result.ExitCode);
+        var response = JsonSerializer.Deserialize<CreateFailingTestIssueResponse>(result.Output, JsonOptions);
+        Assert.Equal(StableMetadataMarker, response!.Issue!.MetadataMarker);
     }
 
     [Fact]

@@ -126,11 +126,12 @@ run succeeded" comment and is closed with `state_reason: completed`.
 
 ## Dedup
 
-Issue lookup uses `GET /issues?labels=automation-broken&state=open` (strongly
+Issue lookup uses `GET /issues?labels=automation-broken&state=all` (strongly
 consistent) plus a local body-marker filter — the Search API is avoided because
 its eventual-consistency window could let near-simultaneous runs each see
-"0 hits". If two open issues ever carry the same marker, the oldest (lowest
-number) is treated as canonical.
+"0 hits". If multiple issues carry the same exact marker, the oldest (lowest
+number) is canonical. Newer open matches are linked and closed with
+`state_reason: not_planned`; their discussion remains intact.
 
 ## Permissions and auth
 
@@ -146,8 +147,8 @@ warning and is skipped rather than failing the whole watchdog run.
 
 ## Logic and tests
 
-The reusable issue mechanics (marker dedup, the comment-recording loop with
-per-run dedup, octokit primitives) live in the generic, repo-agnostic engine
+The reusable issue mechanics (exact-marker reconciliation, duplicate closure, the
+per-run comment loop, and octokit primitives) live in the generic, repo-agnostic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), shared with the
 [specialized-test failure reporter](specialized-test-failure-issues.md), the
 [nightly-pipeline failure reporter](pipeline-failure-issues.md), the

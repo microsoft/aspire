@@ -44,7 +44,30 @@ public class GitHubCliArgumentTests
             arguments);
     }
 
-    private static async Task<IReadOnlyList<string>> CaptureArgumentsAsync(Func<Task<string>> call)
+    [Fact]
+    public async Task FailingTestIssueLookupUsesPaginatedIssueListing()
+    {
+        var arguments = await CaptureArgumentsAsync(
+            () => GitHubCli.FindIssuesByMarkerAsync(
+                "microsoft/aspire",
+                "failing-test",
+                "<!-- marker -->",
+                CancellationToken.None),
+            "[]");
+
+        Assert.Equal(
+            [
+                "api",
+                "-H",
+                "Accept: application/vnd.github+json",
+                "--paginate",
+                "--slurp",
+                "repos/microsoft/aspire/issues?labels=failing-test&state=all&per_page=100",
+            ],
+            arguments);
+    }
+
+    private static async Task<IReadOnlyList<string>> CaptureArgumentsAsync<T>(Func<Task<T>> call, string response = "{}")
     {
         IReadOnlyList<string> captured = [];
 
@@ -56,7 +79,7 @@ public class GitHubCliArgumentTests
         GitHubCli.GhInvokerOverride = (arguments, _) =>
         {
             captured = arguments;
-            return Task.FromResult("{}");
+            return Task.FromResult(response);
         };
 
         try

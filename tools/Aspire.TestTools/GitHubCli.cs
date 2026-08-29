@@ -12,6 +12,7 @@ namespace Aspire.TestTools;
 public static class GitHubCli
 {
     private const string FixtureDirectoryEnvironmentVariable = "ASPIRE_FAILING_TEST_ISSUE_FIXTURE_DIR";
+    private const string DuplicateExemptMarker = "<!-- tracking-issue-duplicate-exempt -->";
 
     public static async Task<JsonDocument> GetJsonAsync(string endpoint, CancellationToken cancellationToken)
     {
@@ -112,69 +113,67 @@ public static class GitHubCli
     }
 
     /// <summary>
-    /// Searches for an existing failing-test issue by metadata marker.
-    /// Returns the first matching issue (prefers open, then closed), or null if none found.
+    /// Lists failing-test issues carrying an exact metadata marker, oldest first.
     /// </summary>
-    public static async Task<(int Number, string Url, string State)?> SearchExistingIssueAsync(
+    public static async Task<IReadOnlyList<GitHubIssueInfo>> FindIssuesByMarkerAsync(
         string repository,
+        string label,
         string metadataMarker,
         CancellationToken cancellationToken)
     {
-        if (TryGetFixtureContent("search-issue", ".json", out var fixtureContent))
+        string content;
+        if (TryGetFixtureContent("list-issues", ".json", out var fixtureContent))
         {
-            using var document = JsonDocument.Parse(fixtureContent);
-            var root = document.RootElement;
-            if (root.TryGetProperty("number", out var numberElement))
-            {
-                return (numberElement.GetInt32(), root.GetProperty("url").GetString()!, root.GetProperty("state").GetString()!);
-            }
-
-            return null;
+            content = fixtureContent;
+        }
+        else
+        {
+            var endpoint = $"repos/{repository}/issues?labels={Uri.EscapeDataString(label)}&state=all&per_page=100";
+            content = await RunGhAsync(
+                ["api", "-H", "Accept: application/vnd.github+json", "--paginate", "--slurp", endpoint],
+                cancellationToken).ConfigureAwait(false);
         }
 
-        var escapedMarker = metadataMarker.Replace("\"", "\\\"");
-        var query = $"repo:{repository} is:issue label:failing-test in:body \"{escapedMarker}\"";
+        using var document = JsonDocument.Parse(content);
+        List<GitHubIssueInfo> matches = [];
 
-        using var searchDocument = await GetJsonAsync(
-            $"search/issues?q={Uri.EscapeDataString(query)}&per_page=20",
-            cancellationToken).ConfigureAwait(false);
-
-        var items = searchDocument.RootElement.GetProperty("items");
-
-        // Prefer open issues, then closed issues (matching workflow JS logic).
-        JsonElement? openMatch = null;
-        JsonElement? closedMatch = null;
-
-        foreach (var item in items.EnumerateArray())
+        void AddMatches(JsonElement items)
         {
-            // Skip pull requests
-            if (item.TryGetProperty("pull_request", out _))
+            foreach (var item in items.EnumerateArray())
             {
-                continue;
-            }
+                if (item.TryGetProperty("pull_request", out _))
+                {
+                    continue;
+                }
 
-            var state = item.GetProperty("state").GetString();
-            if (state is "open" && openMatch is null)
-            {
-                openMatch = item;
-                break; // Open match is highest priority
-            }
-            else if (state is "closed" && closedMatch is null)
-            {
-                closedMatch = item;
+                var body = item.GetProperty("body").GetString() ?? string.Empty;
+                if (!body.Contains(metadataMarker, StringComparison.Ordinal)
+                    || body.Contains(DuplicateExemptMarker, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                matches.Add(new GitHubIssueInfo(
+                    item.GetProperty("number").GetInt32(),
+                    item.GetProperty("html_url").GetString()!,
+                    item.GetProperty("state").GetString()!));
             }
         }
 
-        var match = openMatch ?? closedMatch;
-        if (match is null)
+        var root = document.RootElement;
+        if (root.GetArrayLength() > 0 && root[0].ValueKind is JsonValueKind.Array)
         {
-            return null;
+            foreach (var page in root.EnumerateArray())
+            {
+                AddMatches(page);
+            }
+        }
+        else
+        {
+            AddMatches(root);
         }
 
-        return (
-            match.Value.GetProperty("number").GetInt32(),
-            match.Value.GetProperty("html_url").GetString()!,
-            match.Value.GetProperty("state").GetString()!);
+        return matches.OrderBy(static issue => issue.Number).ToArray();
     }
 
     /// <summary>
@@ -193,6 +192,65 @@ public static class GitHubCli
         await RunGhAsync(
             ["api", "-X", "PATCH", $"repos/{repository}/issues/{issueNumberString}", "-f", "state=open"],
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Closes a duplicate issue without treating it as completed work.
+    /// </summary>
+    public static async Task CloseIssueAsNotPlannedAsync(string repository, int issueNumber, CancellationToken cancellationToken)
+    {
+        if (TryGetFixtureContent("close-issue", ".json", out _))
+        {
+            return;
+        }
+
+        await RunGhAsync(
+            [
+                "api",
+                "-X",
+                "PATCH",
+                $"repos/{repository}/issues/{issueNumber.ToString(CultureInfo.InvariantCulture)}",
+                "-f",
+                "state=closed",
+                "-f",
+                "state_reason=not_planned",
+            ],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Returns whether an issue comment carries the exact marker.
+    /// </summary>
+    public static async Task<bool> IssueHasCommentMarkerAsync(
+        string repository,
+        int issueNumber,
+        string marker,
+        CancellationToken cancellationToken)
+    {
+        string content;
+        if (TryGetFixtureContent($"list-comments-{issueNumber.ToString(CultureInfo.InvariantCulture)}", ".json", out var fixtureContent))
+        {
+            content = fixtureContent;
+        }
+        else
+        {
+            var endpoint = $"repos/{repository}/issues/{issueNumber.ToString(CultureInfo.InvariantCulture)}/comments?per_page=100";
+            content = await RunGhAsync(
+                ["api", "-H", "Accept: application/vnd.github+json", "--paginate", "--slurp", endpoint],
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        using var document = JsonDocument.Parse(content);
+        var root = document.RootElement;
+        if (root.GetArrayLength() > 0 && root[0].ValueKind is JsonValueKind.Array)
+        {
+            return root.EnumerateArray()
+                .SelectMany(static page => page.EnumerateArray())
+                .Any(comment => (comment.GetProperty("body").GetString() ?? string.Empty).Contains(marker, StringComparison.Ordinal));
+        }
+
+        return root.EnumerateArray()
+            .Any(comment => (comment.GetProperty("body").GetString() ?? string.Empty).Contains(marker, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -382,3 +440,5 @@ public static class GitHubCli
         return File.Exists(fixturePath);
     }
 }
+
+public sealed record GitHubIssueInfo(int Number, string Url, string State);

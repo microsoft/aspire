@@ -155,6 +155,34 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DryRunUsesOldestCanonicalAndReportsDuplicateClosures()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = FailingRun() },
+            issues = new[]
+            {
+                new
+                {
+                    number = 44,
+                    body = $"{Marker}\n<!-- tracking-issue-duplicate-exempt -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+                new { number = 55, body = Marker, state = "closed", comments = Array.Empty<string>() },
+                new { number = 66, body = Marker, state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.Contains(result.Logs, log => log.Contains("would CLOSE duplicate issue #66 as not_planned", StringComparison.Ordinal));
+        Assert.Contains(result.Logs, log => log.Contains("would RECORD failure for generate-api-diffs.yml on issue #55", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Logs, log => log.Contains("issue #44", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ClosesIssueWhenLatestRunIsGreen()
     {
         // A successful latest run with an open issue closes it automatically, with a
@@ -307,6 +335,46 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
         Assert.Equal("closed", issue.State);
         Assert.Contains(issue.Comments, comment => comment.Contains("<!-- run:9 -->", StringComparison.Ordinal));
         Assert.Contains(issue.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DuplicateClosedDuringFailureIsNotClosedAgainByNewerSuccess()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "closed",
+                    comments = new[] { "earlier <!-- run:9 -->" },
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        Assert.Equal(1, result.Calls.Count(call => call == "update"));
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 66);
+        Assert.Equal("closed", duplicate.State);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
     }
 
     [Fact]

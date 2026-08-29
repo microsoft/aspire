@@ -72,17 +72,18 @@ are **closed by a human** once the underlying problem is fixed; there is no
 auto-close-on-green (a dev mid-triage should not have the issue closed out from
 under them by a transient green run).
 
-Issue lookup uses `GET /issues?labels=automation-broken&state=open` (strongly
+Issue lookup uses `GET /issues?labels=automation-broken&state=all` (strongly
 consistent) plus a local marker filter. The query is a superset — it also returns
 the scanner's and specialized reporter's `automation-broken` issues — but the
 per-workflow marker (`ci-failure:<file>:scheduled`) selects only this pipeline's
 issue, so the three mechanisms never manage each other's issues. Pull requests
-returned by the list API are excluded.
+returned by the list API are excluded. The oldest exact marker match remains
+canonical; newer open matches are linked and closed as duplicates.
 
 ## Logic and tests
 
-The reusable issue mechanics (marker dedup, the comment-recording loop with
-per-run dedup, octokit primitives) live in the generic engine
+The reusable issue mechanics (exact-marker reconciliation, duplicate closure, the
+per-run comment loop, and octokit primitives) live in the generic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), unit-tested by
 [`TrackingIssueTests`](../../tests/Infrastructure.Tests/WorkflowScripts/TrackingIssueTests.cs).
 

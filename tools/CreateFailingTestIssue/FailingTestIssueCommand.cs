@@ -197,49 +197,109 @@ internal static class FailingTestIssueCommand
             ExistingIssueInfo? existingIssue = null;
             if (input.Create)
             {
+                var runMarker = $"<!-- run:{resolutionSection.RunId.ToString(CultureInfo.InvariantCulture)} -->";
                 if (!input.ForceNew)
                 {
-                    Log("--create flag set. Searching for existing issue...");
-                    var existing = await GitHubCli.SearchExistingIssueAsync(
+                    Log("--create flag set. Listing all failing-test issues for an exact marker match...");
+                    var matchingIssues = await GitHubCli.FindIssuesByMarkerAsync(
                         input.Repository,
+                        "failing-test",
                         issueArtifacts.MetadataMarker,
                         cancellationToken).ConfigureAwait(false);
 
-                    if (existing is not null)
+                    if (matchingIssues.Count > 0)
                     {
-                        var (existingNumber, existingUrl, existingState) = existing.Value;
-                        existingIssue = new ExistingIssueInfo(existingNumber, existingUrl);
+                        var canonicalIssue = matchingIssues[0];
+                        existingIssue = new ExistingIssueInfo(canonicalIssue.Number, canonicalIssue.Url);
+                        GitHubIssueInfo? occurrenceIssue = null;
 
-                        if (existingState is "closed")
+                        foreach (var matchingIssue in matchingIssues)
                         {
-                            Log($"Found closed issue #{existingNumber}. Reopening...");
-                            await GitHubCli.ReopenIssueAsync(input.Repository, existingNumber, cancellationToken).ConfigureAwait(false);
+                            if (await GitHubCli.IssueHasCommentMarkerAsync(
+                                input.Repository,
+                                matchingIssue.Number,
+                                runMarker,
+                                cancellationToken).ConfigureAwait(false))
+                            {
+                                occurrenceIssue = matchingIssue;
+                                break;
+                            }
+                        }
+
+                        foreach (var duplicateIssue in matchingIssues.Skip(1).Where(static issue => issue.State is "open"))
+                        {
+                            Log($"Closing newer duplicate issue #{duplicateIssue.Number} in favor of #{canonicalIssue.Number}...");
+                            await GitHubCli.AddIssueCommentAsync(
+                                input.Repository,
+                                canonicalIssue.Number,
+                                $"[automated] Issue #{duplicateIssue.Number} was identified as a duplicate.",
+                                cancellationToken).ConfigureAwait(false);
+                            await GitHubCli.AddIssueCommentAsync(
+                                input.Repository,
+                                duplicateIssue.Number,
+                                $"[automated] Duplicate of #{canonicalIssue.Number}. Future occurrences are tracked there.",
+                                cancellationToken).ConfigureAwait(false);
+                            await GitHubCli.CloseIssueAsNotPlannedAsync(
+                                input.Repository,
+                                duplicateIssue.Number,
+                                cancellationToken).ConfigureAwait(false);
+                        }
+
+                        if (occurrenceIssue is not null)
+                        {
+                            if (canonicalIssue.State is "closed" && occurrenceIssue.Number != canonicalIssue.Number)
+                            {
+                                Log($"Run {resolutionSection.RunId} was recorded on duplicate issue #{occurrenceIssue.Number}. Reopening canonical issue #{canonicalIssue.Number}...");
+                                await GitHubCli.ReopenIssueAsync(input.Repository, canonicalIssue.Number, cancellationToken).ConfigureAwait(false);
+                            }
+
+                            Log($"Run {resolutionSection.RunId} is already recorded on issue #{occurrenceIssue.Number}; skipping duplicate comment.");
                         }
                         else
                         {
-                            Log($"Found open issue #{existingNumber}. Adding comment...");
+                            if (canonicalIssue.State is "closed")
+                            {
+                                Log($"Found closed issue #{canonicalIssue.Number}. Reopening...");
+                                await GitHubCli.ReopenIssueAsync(input.Repository, canonicalIssue.Number, cancellationToken).ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                Log($"Found open issue #{canonicalIssue.Number}. Adding comment...");
+                            }
+
+                            await GitHubCli.AddIssueCommentAsync(
+                                input.Repository,
+                                canonicalIssue.Number,
+                                $"{issueArtifacts.CommentBody}\n\n{runMarker}",
+                                cancellationToken).ConfigureAwait(false);
                         }
 
-                        await GitHubCli.AddIssueCommentAsync(
-                            input.Repository,
-                            existingNumber,
-                            issueArtifacts.CommentBody,
-                            cancellationToken).ConfigureAwait(false);
-
-                        Log($"Updated existing issue #{existingNumber}: {existingUrl}");
+                        Log($"Updated existing issue #{canonicalIssue.Number}: {canonicalIssue.Url}");
                     }
                 }
 
                 if (existingIssue is null)
                 {
                     Log(input.ForceNew ? "--force-new flag set. Creating new issue on GitHub..." : "No existing issue found. Creating new issue on GitHub...");
+                    var issueBody = input.ForceNew
+                        ? $"{issueArtifacts.Body}\n\n<!-- tracking-issue-duplicate-exempt -->"
+                        : issueArtifacts.Body;
                     var (issueNumber, issueUrl) = await GitHubCli.CreateIssueAsync(
                         input.Repository,
                         issueArtifacts.Title,
-                        issueArtifacts.Body,
+                        issueBody,
                         issueArtifacts.Labels,
                         cancellationToken).ConfigureAwait(false);
                     createdIssue = new CreatedIssueInfo(issueNumber, issueUrl);
+                    if (!input.ForceNew)
+                    {
+                        await GitHubCli.AddIssueCommentAsync(
+                            input.Repository,
+                            issueNumber,
+                            $"{issueArtifacts.CommentBody}\n\n{runMarker}",
+                            cancellationToken).ConfigureAwait(false);
+                        Log($"Recorded run {resolutionSection.RunId} on issue #{issueNumber}.");
+                    }
                     Log($"Created issue #{issueNumber}: {issueUrl}");
                 }
             }

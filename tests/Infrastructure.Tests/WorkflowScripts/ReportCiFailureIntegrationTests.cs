@@ -106,6 +106,31 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReportFailureClosesNewerExactMarkerDuplicates()
+    {
+        var result = await InvokeAsync(new
+        {
+            operation = "reportFailure",
+            env = new { REF = "main" },
+            issues = new[]
+            {
+                new { number = 5, body = "<!-- ci-failure:ci.yml:push:main -->", state = "open" },
+                new { number = 8, body = "<!-- ci-failure:ci.yml:push:main -->", state = "open" },
+            },
+        });
+
+        var canonicalIssue = Assert.Single(result.Issues, issue => issue.Number == 5);
+        Assert.Equal("open", canonicalIssue.State);
+        Assert.Contains(canonicalIssue.Comments, comment => comment.Contains("<!-- run:12345 -->", StringComparison.Ordinal));
+
+        var duplicateIssue = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("closed", duplicateIssue.State);
+        Assert.Equal("not_planned", duplicateIssue.StateReason);
+        Assert.Contains(duplicateIssue.Comments, comment => comment.Contains("Duplicate of #5", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ReportFailureCommentFailureLeavesRunUnrecorded()
     {
         var result = await InvokeAsync(new

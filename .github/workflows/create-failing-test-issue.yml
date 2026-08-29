@@ -192,6 +192,7 @@ jobs:
         script: |
           const fs = require('fs');
           const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
+          const tracking = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/tracking-issue.js`);
           const prNumber = process.env.PR_NUMBER ? parseInt(process.env.PR_NUMBER, 10) : null;
           const resolverFailed = process.env.RESOLVE_OUTCOME === 'failure';
           const hasResultFile = fs.existsSync(process.env.RESULT_PATH) && fs.statSync(process.env.RESULT_PATH).size > 0;
@@ -269,63 +270,43 @@ jobs:
             return;
           }
 
-          let targetIssue = null;
-          if (process.env.FORCE_NEW !== 'true') {
-            const query = helper.buildIssueSearchQuery(context.repo.owner, context.repo.repo, result.issue.metadataMarker);
-            const { data: search } = await github.rest.search.issuesAndPullRequests({
-              q: query,
-              per_page: 20
-            });
-
-            const issues = search.items.filter(item => !item.pull_request);
-            targetIssue = issues.find(item => item.state === 'open') ?? issues.find(item => item.state === 'closed') ?? null;
-          }
-
           let action;
           let issueNumber;
           let issueUrl;
 
-          if (targetIssue && targetIssue.state === 'open') {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: targetIssue.number,
-              body: result.issue.commentBody
-            });
-
-            action = 'updated';
-            issueNumber = targetIssue.number;
-            issueUrl = targetIssue.html_url;
-          } else if (targetIssue && targetIssue.state === 'closed') {
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: targetIssue.number,
-              state: 'open'
-            });
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: targetIssue.number,
-              body: result.issue.commentBody
-            });
-
-            action = 'reopened';
-            issueNumber = targetIssue.number;
-            issueUrl = targetIssue.html_url;
-          } else {
+          if (process.env.FORCE_NEW === 'true') {
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: result.issue.title,
-              body: result.issue.body,
+              body: `${result.issue.body}\n\n${tracking.duplicateExemptStamp()}`,
               labels: result.issue.labels
             });
 
             action = 'created';
             issueNumber = issue.number;
             issueUrl = issue.html_url;
+          } else {
+            const reconciliation = await tracking.recordRun(github, context, core, {
+              label: 'failing-test',
+              labels: result.issue.labels,
+              marker: result.issue.metadataMarker,
+              title: result.issue.title,
+              runId: result.resolution.runId,
+              buildBody: () => result.issue.body,
+              comment: result.issue.commentBody,
+              closeDuplicates: true,
+            });
+
+            action = reconciliation.created
+              ? 'created'
+              : reconciliation.reopened
+                ? 'reopened'
+                : reconciliation.skipped
+                  ? 'found'
+                  : 'updated';
+            issueNumber = reconciliation.number;
+            issueUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
           }
 
           const testName = result.match?.canonicalTestName ?? result.match?.displayTestName ?? '';

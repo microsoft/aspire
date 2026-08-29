@@ -251,18 +251,16 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task BuildIssueSearchQueryTargetsFailingTestIssuesByMetadataMarker()
+    public void WorkflowUsesSharedExactMarkerReconciliation()
     {
-        var query = await InvokeHarnessAsync<string>(
-            "buildIssueSearchQuery",
-            new
-            {
-                owner = "microsoft",
-                repo = "aspire",
-                metadataMarker = "<!-- failing-test-signature: v1:abc123 -->"
-            });
+        var workflowPath = Path.Combine(_repoRoot, ".github", "workflows", "create-failing-test-issue.yml");
+        var workflow = File.ReadAllText(workflowPath);
 
-        Assert.Equal("repo:microsoft/aspire is:issue label:failing-test in:body \"<!-- failing-test-signature: v1:abc123 -->\"", query);
+        Assert.Contains("tracking-issue.js", workflow, StringComparison.Ordinal);
+        Assert.Contains("tracking.recordRun", workflow, StringComparison.Ordinal);
+        Assert.Contains("closeDuplicates: true", workflow, StringComparison.Ordinal);
+        Assert.Contains("tracking.duplicateExemptStamp()", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("search.issuesAndPullRequests", workflow, StringComparison.Ordinal);
     }
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
