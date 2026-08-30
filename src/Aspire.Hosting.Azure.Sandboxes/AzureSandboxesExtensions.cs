@@ -632,14 +632,17 @@ public static class AzureSandboxesExtensions
             builder.Resource,
             options?.Parameters ?? []);
 
-        EnsureGatewayAccessPolicy(builder.Resource);
-        if (!callbackResource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>().Any(annotation =>
-            string.Equals(annotation.EndpointName, callbackEndpointAnnotation.Name, StringComparison.OrdinalIgnoreCase) &&
-            ReferenceEquals(annotation.ConnectorGateway, builder.Resource.Parent)))
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
-            callbackResource.Annotations.Add(new AzureConnectorGatewayEndpointAuthorizationAnnotation(
-                callbackEndpointAnnotation.Name,
-                builder.Resource.Parent));
+            EnsureGatewayAccessPolicy(builder.Resource);
+            if (!callbackResource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>().Any(annotation =>
+                string.Equals(annotation.EndpointName, callbackEndpointAnnotation.Name, StringComparison.OrdinalIgnoreCase) &&
+                ReferenceEquals(annotation.ConnectorGateway, builder.Resource.Parent)))
+            {
+                callbackResource.Annotations.Add(new AzureConnectorGatewayEndpointAuthorizationAnnotation(
+                    callbackEndpointAnnotation.Name,
+                    builder.Resource.Parent));
+            }
         }
 
         var triggerBuilder = builder.ApplicationBuilder.AddResource(trigger)

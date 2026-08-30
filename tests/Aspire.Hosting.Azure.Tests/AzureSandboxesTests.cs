@@ -221,6 +221,8 @@ public class AzureSandboxesTests
         using var app = builder.Build();
 
         Assert.Empty(await CreateStepsAsync(app, trigger.Resource, DistributedApplicationOperation.Run));
+        Assert.Empty(connection.Resource.AccessPolicies);
+        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var configuration = Assert.Single(trigger.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
