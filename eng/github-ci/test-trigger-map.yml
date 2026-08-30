@@ -390,15 +390,16 @@ affected_project_rules:
   - projects: [CreateLayout]
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs
-  - projects: [Aspire.Hosting.CodeGeneration.TypeScript, Aspire.Hosting.JavaScript]
+  - projects:
+      - Aspire.Cli
+      - Aspire.Managed
+      - Aspire.AppHost.Sdk
+      - Aspire.Hosting.AppHost
+      - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.CodeGeneration.TypeScript
+      - Aspire.Hosting.JavaScript
     targets: [job:cli-starter-validation]
-    reason: direct package inputs used when the TypeScript starter generates and runs its AppHost
-  - projects: [Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL]
-    targets: [job:cli-starter-validation]
-    reason: direct package inputs used when the C# starter generates and runs its AppHost with PostgreSQL
-  - projects: [Aspire.Cli, Aspire.Managed, Aspire.AppHost.Sdk]
-    targets: [job:cli-starter-validation]
-    reason: direct executables and SDK inputs assembled into or used by the starter validation scenarios
+    reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
   - projects:
       - Aspire.TypeSystem
       - Aspire.Hosting.RemoteHost
