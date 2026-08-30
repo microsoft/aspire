@@ -193,6 +193,7 @@ async function dispatch(operation, payload) {
                 calls: github.calls,
                 issues: snapshotIssues(store.issues),
                 issuesAfterFailure,
+                duplicatesClosed: execution.duplicatesClosed,
             };
         }
 

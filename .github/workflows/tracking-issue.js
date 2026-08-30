@@ -328,7 +328,8 @@ async function executeIssueReconciliation(transport, core, options) {
         reopened: appliedActions.some(action =>
             action.type === 'reopen' && action.issueNumber === canonicalIssueNumber),
         duplicatesClosed: appliedActions
-            .filter(action => action.type === 'close')
+            .filter(action =>
+                action.type === 'close' && action.issueNumber !== canonicalIssueNumber)
             .map(action => action.issueNumber),
         appliedActions,
         plan,

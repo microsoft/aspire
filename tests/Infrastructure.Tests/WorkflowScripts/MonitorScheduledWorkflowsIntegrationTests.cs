@@ -473,7 +473,44 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
         Assert.False(result.Threw);
         Assert.Contains("[dry-run] would CLOSE duplicate issue #66 as not_planned (canonical #55)", result.Logs);
-        Assert.DoesNotContain(result.Logs, log => log.Contains("would CLOSE #55", StringComparison.Ordinal));
+        Assert.DoesNotContain("[dry-run] would CLOSE issue #55 (generate-api-diffs.yml)", result.Logs);
+        Assert.DoesNotContain(result.Calls, call => call is "update" or "createComment");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DryRunSuccessReportsCanonicalAndDuplicateClosuresAccurately()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Single(result.Logs, log => log == "[dry-run] would CLOSE duplicate issue #66 as not_planned (canonical #55)");
+        Assert.DoesNotContain("[dry-run] would CLOSE duplicate issue #55 as not_planned (canonical #55)", result.Logs);
+        Assert.Contains("[dry-run] would CLOSE issue #55 (generate-api-diffs.yml)", result.Logs);
         Assert.DoesNotContain(result.Calls, call => call is "update" or "createComment");
     }
 
