@@ -159,6 +159,33 @@ public sealed class SpecializedTestFailureRunnerTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReconcilesExactDuplicatesIntoOldestIssue()
+    {
+        const string marker = "<!-- ci-failure:tests-outerloop.yml:test-failures -->";
+        var result = await InvokeAsync(new
+        {
+            env = OuterloopEnv(),
+            failedTests = new[] { "Tests.Type.A" },
+            issues = new[]
+            {
+                new { number = 42, body = marker, state = "open" },
+                new { number = 84, body = marker, state = "open" },
+            },
+        });
+
+        Assert.DoesNotContain("create", result.Calls);
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 42);
+        Assert.Equal("open", canonical.State);
+        Assert.Contains(canonical.Comments, comment => comment.Contains("<!-- run:12345 -->", StringComparison.Ordinal));
+
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 84);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.Contains(duplicate.Comments, comment => comment.Contains("#42", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task MissingResultsPathIsClassifiedAsTestFailures()
     {
         // The extract step crashed before emitting its path (FAILED_TESTS_PATH
@@ -243,5 +270,5 @@ public sealed class SpecializedTestFailureRunnerTests : IDisposable
 
     private sealed record RunnerResult(bool Threw, string[] Calls, RunnerIssue[] Issues);
 
-    private sealed record RunnerIssue(int Number, string? Title, string State, string Body, string[] Comments);
+    private sealed record RunnerIssue(int Number, string? Title, string State, string? StateReason, string Body, string[] Comments);
 }

@@ -18,7 +18,9 @@ instead of per branch.
 
 Runs every 2 hours (`cron: '0 */2 * * *'`) and on `workflow_dispatch`. The
 manual dispatch accepts a `dry_run` boolean that logs the issue actions it
-*would* take without mutating anything on GitHub.
+*would* take without mutating anything on GitHub. Dry run executes the same shared
+reconciliation plan against an in-memory transport, rather than maintaining a
+second issue-selection implementation.
 
 Each run fetches recent completed scheduled runs and processes the runs updated
 in a three-hour polling window, oldest to newest. That prevents an hourly
@@ -148,7 +150,8 @@ warning and is skipped rather than failing the whole watchdog run.
 ## Logic and tests
 
 The reusable issue mechanics (exact-marker reconciliation, duplicate closure, the
-per-run comment loop, and octokit primitives) live in the generic, repo-agnostic engine
+per-run comment loop, trusted close mutations, dry-run transport, and octokit
+primitives) live in the generic, repo-agnostic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), shared with the
 [specialized-test failure reporter](specialized-test-failure-issues.md), the
 [nightly-pipeline failure reporter](pipeline-failure-issues.md), the

@@ -171,6 +171,37 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ResolveSuccessClosesNewerDuplicateWhenCanonicalIsAlreadyClosed()
+    {
+        var result = await InvokeAsync(new
+        {
+            operation = "resolveSuccess",
+            env = new { REF = "main" },
+            issues = new[]
+            {
+                new
+                {
+                    number = 5,
+                    body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->",
+                    state = "closed",
+                },
+                new
+                {
+                    number = 8,
+                    body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->",
+                    state = "open",
+                },
+            },
+        });
+
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.Contains("green again", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ResolveSuccessLeavesIssueOpenWhenAutoCloseStampIsMissing()
     {
         var result = await InvokeAsync(new

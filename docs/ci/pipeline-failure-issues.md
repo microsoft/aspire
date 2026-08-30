@@ -46,10 +46,12 @@ those two conclusions — see
 which:
 
 1. Ensures the `automation-broken` label exists.
-2. Finds the open issue carrying the per-workflow marker.
-3. **No open issue** → creates one (static body with the marker) and posts the
+2. Reconciles all issue states carrying the exact per-workflow marker, keeping the
+   oldest match canonical.
+3. **No matching issue** → creates one (static body with the marker) and posts the
    failure comment.
-4. **Open issue exists** → posts the failure comment, unless this run's comment is
+4. **Matching issue exists** → reopens it when needed and posts the failure comment,
+   unless this run's comment is
    already present (dedup), in which case it is a no-op.
 
 The **comment** is what fires notifications. The first filing notifies a team via

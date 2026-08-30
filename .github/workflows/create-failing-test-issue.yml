@@ -193,6 +193,7 @@ jobs:
           const fs = require('fs');
           const helper = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue.js`);
           const tracking = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/tracking-issue.js`);
+          const failingTestTracking = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/create-failing-test-issue-tracking.js`);
           const prNumber = process.env.PR_NUMBER ? parseInt(process.env.PR_NUMBER, 10) : null;
           const resolverFailed = process.env.RESOLVE_OUTCOME === 'failure';
           const hasResultFile = fs.existsSync(process.env.RESULT_PATH) && fs.statSync(process.env.RESULT_PATH).size > 0;
@@ -270,44 +271,16 @@ jobs:
             return;
           }
 
-          let action;
-          let issueNumber;
-          let issueUrl;
-
-          if (process.env.FORCE_NEW === 'true') {
-            const { data: issue } = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: result.issue.title,
-              body: `${result.issue.body}\n\n${tracking.duplicateExemptStamp()}`,
-              labels: result.issue.labels
-            });
-
-            action = 'created';
-            issueNumber = issue.number;
-            issueUrl = issue.html_url;
-          } else {
-            const reconciliation = await tracking.recordRun(github, context, core, {
-              label: 'failing-test',
-              labels: result.issue.labels,
-              marker: result.issue.metadataMarker,
-              title: result.issue.title,
-              runId: result.resolution.runId,
-              buildBody: () => result.issue.body,
-              comment: result.issue.commentBody,
-              closeDuplicates: true,
-            });
-
-            action = reconciliation.created
-              ? 'created'
-              : reconciliation.reopened
-                ? 'reopened'
-                : reconciliation.skipped
-                  ? 'found'
-                  : 'updated';
-            issueNumber = reconciliation.number;
-            issueUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
-          }
+          const reconciliation = await failingTestTracking.reconcile({
+            transport: tracking.createOctokitIssueTransport(github, context),
+            core,
+            issue: result.issue,
+            runId: result.resolution.runId,
+            forceNew: process.env.FORCE_NEW === 'true',
+          });
+          const action = reconciliation.action;
+          const issueNumber = reconciliation.number;
+          const issueUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
 
           const testName = result.match?.canonicalTestName ?? result.match?.displayTestName ?? '';
           let disableHint = '';

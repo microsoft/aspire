@@ -67,12 +67,12 @@ An `actions/github-script` step then calls the shared orchestrator
 which:
 
 1. Classifies the failure and picks the label.
-2. Finds the open issue carrying the per-(workflow, kind) marker
+2. Reconciles all issue states carrying the exact per-(workflow, kind) marker
    `<!-- ci-failure:<workflow-file>:<kind> -->`.
-3. **No open issue** → creates one (static body with the marker) and posts the
+3. **No matching issue** → creates one (static body with the marker) and posts the
    failure comment.
-4. **Open issue exists** → posts the failure comment, unless this run's comment is
-   already present (dedup), in which case it is a no-op.
+4. **Matching issue exists** → reopens it when needed and posts the failure comment,
+   unless this run's comment is already present (dedup), in which case it is a no-op.
 
 The **comment** is what fires notifications; for `test-failures` it lists the
 failing tests (capped at 50, the rest are in the run artifacts). The issue body is
@@ -86,8 +86,10 @@ comment rather than filing a new issue. Issues are **closed by a human** once th
 underlying problem is fixed; there is no auto-close-on-green (a dev mid-triage
 should not have the issue closed out from under them by a transient green run).
 
-Issue lookup uses `GET /issues?labels=<label>&state=open` (strongly consistent)
-plus a local marker filter, mirroring the scanner. The markers use a distinct
+Issue lookup uses `GET /issues?labels=<label>&state=all` (strongly consistent)
+plus a local exact-marker filter, mirroring the scanner. The oldest match is
+canonical even when closed; newer exact duplicates are linked and closed as
+`not_planned`. The markers use a distinct
 `ci-failure:` prefix so the scanner and this reporter never manage each other's
 issues.
 

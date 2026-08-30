@@ -119,25 +119,49 @@ async function resolveSuccess({ github, context, core }) {
     const { owner, repo } = context.repo;
 
     const marker = buildMarker(ref);
-    const open = await tracking.listOpenIssuesByLabel(github, owner, repo, AUTOMATION_BROKEN_LABEL);
-    const issue = tracking.findOpenIssueForMarker(open, marker);
+    const run = runContext(context);
+    const result = await tracking.executeIssueReconciliation(
+        tracking.createOctokitIssueTransport(github, context),
+        core,
+        {
+            label: AUTOMATION_BROKEN_LABEL,
+            marker,
+            title: buildIssueTitle(ref),
+            buildBody: () => buildIssueBody({ marker, ref }),
+            createIfMissing: false,
+            closeDuplicates: true,
+            reopen: 'never',
+            actionsForCanonical: issue => {
+                if (issue.state !== 'open' || tracking.readAutoClose(issue.body) !== true) {
+                    return [];
+                }
+                return [
+                    { type: 'close', stateReason: 'completed' },
+                    {
+                        type: 'comment',
+                        body: `CI is green again on \`${ref}\` ([run #${run.runNumber}](${run.runUrl})). Closing automatically.`,
+                    },
+                ];
+            },
+        });
 
-    if (issue === null) {
+    if (result.number === null) {
         core.info(`No open CI-failure issue for ${ref}; nothing to close.`);
         return;
     }
 
-    const autoClose = tracking.readAutoClose(issue.body);
-    if (autoClose !== true) {
-        core.info(`CI-failure issue #${issue.number} for ${ref} does not opt into auto-close; leaving it open.`);
+    const closed = result.appliedActions.some(action =>
+        action.type === 'close' && action.issueNumber === result.number);
+    if (!closed) {
+        if (result.duplicatesClosed.length > 0) {
+            core.info(`Reconciled ${result.duplicatesClosed.length} duplicate CI-failure issue(s) for ${ref}.`);
+            return;
+        }
+        core.info(`CI-failure issue #${result.number} for ${ref} is closed or does not opt into auto-close; leaving it unchanged.`);
         return;
     }
 
-    const run = runContext(context);
-    await tracking.closeIssue(github, owner, repo, issue.number);
-    await tracking.addComment(github, owner, repo, issue.number,
-        `CI is green again on \`${ref}\` ([run #${run.runNumber}](${run.runUrl})). Closing automatically.`);
-    core.info(`Closed #${issue.number} for ci.yml on ${ref}`);
+    core.info(`Closed #${result.number} for ci.yml on ${ref}`);
 }
 
 // Single entry point for ci.yml's tracker job, which runs on every push

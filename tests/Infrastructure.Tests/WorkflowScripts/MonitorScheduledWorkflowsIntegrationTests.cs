@@ -379,6 +379,45 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task SuccessOnlyWindowClosesNewerDuplicateWhenCanonicalIsAlreadyClosed()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issues = new[]
+            {
+                new
+                {
+                    number = 55,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "closed",
+                    comments = Array.Empty<string>(),
+                },
+                new
+                {
+                    number = 66,
+                    body = $"{Marker}\n<!-- autoclose:true -->",
+                    state = "open",
+                    comments = Array.Empty<string>(),
+                },
+            },
+        });
+
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 66);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DoesNotCloseWhenNewestRunInPollingWindowIsRecordedFailure()
     {
         var result = await InvokeAsync(new
@@ -475,7 +514,7 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     private sealed record MonitorResult(bool Threw, string[] Calls, MonitorIssue[] Issues, string[] Logs, ListRunRequest[] ListRunRequests);
 
-    private sealed record MonitorIssue(int Number, string State, string Body, string[] Labels, string[] Comments);
+    private sealed record MonitorIssue(int Number, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 
     private sealed record ListRunRequest(string WorkflowId, int? PerPage);
 }

@@ -55,7 +55,7 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     store.issues.push(issue);
                     return { data: issue };
                 },
-                update: async ({ issue_number, body, state }) => {
+                update: async ({ issue_number, body, state, state_reason: stateReason }) => {
                     calls.push('update');
                     if (failUpdate) {
                         throw new Error('transient update failure');
@@ -63,6 +63,7 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     const issue = store.issues.find(i => i.number === issue_number);
                     if (body !== undefined) { issue.body = body; }
                     if (state) { issue.state = state; }
+                    if (stateReason) { issue.stateReason = stateReason; }
                 },
                 listComments: async ({ issue_number }) => {
                     const issue = store.issues.find(i => i.number === issue_number);
@@ -138,6 +139,7 @@ async function main() {
             issues: store.issues.map(issue => ({
                 number: issue.number,
                 state: issue.state,
+                stateReason: issue.stateReason ?? null,
                 body: issue.body,
                 labels: issue.labels ?? [],
                 comments: issue.comments ?? [],

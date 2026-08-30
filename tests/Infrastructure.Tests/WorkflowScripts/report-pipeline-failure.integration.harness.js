@@ -113,6 +113,7 @@ async function main() {
                 number: issue.number,
                 title: issue.title ?? null,
                 state: issue.state,
+                stateReason: issue.state_reason ?? null,
                 body: issue.body,
                 labels: issue.labels ?? [],
                 comments: issue.comments ?? [],

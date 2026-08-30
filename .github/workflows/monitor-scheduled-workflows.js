@@ -183,7 +183,14 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
     // distinct, so a fresh issue filed for one cannot affect another's lookup.
     // Failure recording must include closed issues so a recurring failure reopens
     // the canonical tracker instead of filing a duplicate.
-    const issues = await tracking.listIssuesByLabel(github, owner, repo, label);
+    const liveTransport = tracking.createOctokitIssueTransport(github, context);
+    let issues = await liveTransport.listIssues(label);
+    const transport = dryRun
+        ? tracking.createDryRunIssueTransport(liveTransport, issues)
+        : liveTransport;
+    if (dryRun) {
+        issues = transport.issues;
+    }
     for (const wf of watched) {
         let recentRuns;
         try {
@@ -240,47 +247,26 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                 // the lookup label; dedup keeps automation-broken single if also listed.
                 const issueLabels = [...new Set([label, ...(wf.labels ?? [])])];
                 const issueBody = buildIssueBody({ marker, displayName: wf.name, workflowFile: wf.file, selfReports: wf.selfReports === true });
-                if (dryRun) {
-                    const recordingIssue = managedIssues[0] ?? null;
-                    const duplicateIssues = managedIssues.slice(1).filter(issue => issue.state === 'open');
-                    for (const duplicateIssue of duplicateIssues) {
-                        log(`would CLOSE duplicate issue #${duplicateIssue.number} as not_planned (canonical #${recordingIssue.number})`);
-                        duplicateIssue.state = 'closed';
-                    }
-
-                    let occurrenceIssue = null;
-                    for (const matchingIssue of managedIssues) {
-                        if (!matchingIssue.dryRunPlaceholder &&
-                            await tracking.hasCommentForRun(github, owner, repo, matchingIssue.number, tracking.runMarker(latest.id))) {
-                            occurrenceIssue = matchingIssue;
-                            break;
-                        }
-                    }
-
-                    if (occurrenceIssue !== null) {
-                        if (recordingIssue.state === 'closed' && occurrenceIssue.number !== recordingIssue.number) {
-                            log(`would REOPEN canonical issue #${recordingIssue.number}; run ${latest.id} is recorded on duplicate #${occurrenceIssue.number}`);
-                            recordingIssue.state = 'open';
-                        }
-                        core.info(`Run ${latest.id} already recorded in #${occurrenceIssue.number}; skipping duplicate comment.`);
-                        continue;
-                    }
-
-                    log(`would RECORD failure for ${wf.file} on ${recordingIssue ? formatIssueReference(recordingIssue) : 'a new issue'}`);
-                    if (recordingIssue === null) {
-                        issues.push({ number: 0, body: issueBody, labels: issueLabels, state: 'open', dryRunPlaceholder: true });
-                    } else if (recordingIssue.state === 'closed') {
-                        recordingIssue.state = 'open';
-                    }
-                    continue;
-                }
-                const result = await tracking.recordRun(github, context, core, {
+                const recordingIssue = managedIssues[0] ?? null;
+                const result = await tracking.reconcileRun(transport, core, {
                     label, labels: issueLabels, marker, title: buildIssueTitle(wf.name),
                     runId: latest.id,
                     buildBody: () => issueBody,
                     comment, issues,
                     closeDuplicates: true,
                 });
+                if (dryRun) {
+                    for (const duplicateNumber of result.duplicatesClosed) {
+                        log(`would CLOSE duplicate issue #${duplicateNumber} as not_planned (canonical #${result.number})`);
+                    }
+                    if (result.reopened) {
+                        log(`would REOPEN canonical issue #${result.number}`);
+                    }
+                    if (!result.skipped) {
+                        log(`would RECORD failure for ${wf.file} on ${recordingIssue ? formatIssueReference(recordingIssue) : 'a new issue'}`);
+                    }
+                    continue;
+                }
                 for (const duplicateNumber of result.duplicatesClosed) {
                     const duplicateIssue = issues.find(issue => issue.number === duplicateNumber);
                     if (duplicateIssue !== undefined) {
@@ -316,20 +302,40 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                 continue;
             }
 
-            const autoClose = tracking.readAutoClose(issue.body);
-            if (autoClose !== true) {
+            const closeComment = `Latest run succeeded ([run #${newest.run_number}](${newest.html_url})). Closing automatically.`;
+            const closeOptions = {
+                issues,
+                label,
+                marker,
+                title: buildIssueTitle(wf.name),
+                buildBody: () => buildIssueBody({
+                    marker,
+                    displayName: wf.name,
+                    workflowFile: wf.file,
+                    selfReports: wf.selfReports === true,
+                }),
+                createIfMissing: false,
+                closeDuplicates: true,
+                reopen: 'never',
+                actionsForCanonical: candidate =>
+                    candidate.state === 'open' && tracking.readAutoClose(candidate.body) === true
+                        ? [
+                            { type: 'close', stateReason: 'completed' },
+                            { type: 'comment', body: closeComment },
+                        ]
+                        : [],
+            };
+            const closePlan = tracking.planIssueReconciliation(closeOptions);
+            if (!closePlan.actions.some(candidate => candidate.type === 'close')) {
                 core.info(`Issue #${issue.number} for ${wf.file} does not opt into auto-close; leaving it open.`);
                 continue;
             }
 
-            if (dryRun) {
+            const result = await tracking.executeIssueReconciliation(transport, core, closeOptions);
+            if (dryRun && result.appliedActions.some(candidate => candidate.type === 'close')) {
                 log(`would CLOSE ${formatIssueReference(issue)} (${wf.file})`);
-                issue.state = 'closed';
                 continue;
             }
-            await tracking.closeIssue(github, owner, repo, issue.number);
-            await tracking.addComment(github, owner, repo, issue.number,
-                `Latest run succeeded ([run #${newest.run_number}](${newest.html_url})). Closing automatically.`);
             issue.state = 'closed';
             core.info(`Closed #${issue.number} for ${wf.file}`);
         }

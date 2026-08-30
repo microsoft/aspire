@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using Aspire.TestUtilities;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -77,6 +78,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagCreatesIssueOnGitHub()
     {
         var fixtureDirectory = CreateFixtureDirectory();
@@ -118,6 +120,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagReusesOpenExistingIssue()
     {
         var fixtureDirectory = CreateFixtureDirectory();
@@ -163,6 +166,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagReopensClosedExistingIssue()
     {
         var fixtureDirectory = CreateFixtureDirectory();
@@ -209,6 +213,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagCreatesNewIssueWhenNoExistingIssueFound()
     {
         var fixtureDirectory = CreateFixtureDirectory();
@@ -253,6 +258,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task ForceNewFlagSkipsSearchAndCreatesNewIssue()
     {
         var fixtureDirectory = CreateFixtureDirectory();
@@ -290,6 +296,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagUsesOldestExactMatchAndClosesNewerDuplicate()
     {
         var fixtureDirectory = CreateFixtureDirectory();
@@ -338,6 +345,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     }
 
     [Fact]
+    [RequiresTools(["node"])]
     public async Task CreateFlagDoesNotReopenOrCommentWhenRunIsAlreadyRecordedOnCanonical()
     {
         var fixtureDirectory = CreateFixtureDirectory();

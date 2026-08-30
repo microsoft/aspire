@@ -85,6 +85,8 @@ canonicalization, duplicate closure, the per-run comment loop, and octokit
 primitives) live in the generic engine
 [`tracking-issue.js`](../../.github/workflows/tracking-issue.js), unit-tested by
 [`TrackingIssueTests`](../../tests/Infrastructure.Tests/WorkflowScripts/TrackingIssueTests.cs).
+Both failure recording and trusted green auto-close use its planner and executor;
+the reporter supplies only the branch identity, content, and close policy.
 
 The reporter logic — the pure helpers (marker, title, body, comment) and the
 `reportFailure()` / `resolveSuccess()` orchestrators (dispatched by `track()` from
