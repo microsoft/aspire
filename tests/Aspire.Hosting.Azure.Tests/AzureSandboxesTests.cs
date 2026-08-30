@@ -221,6 +221,38 @@ public class AzureSandboxesTests
         using var app = builder.Build();
 
         Assert.Empty(await CreateStepsAsync(app, trigger.Resource, DistributedApplicationOperation.Run));
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var configuration = Assert.Single(trigger.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
+        await configuration.Callback(new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Steps = [],
+            Model = model
+        });
+    }
+
+    [Fact]
+    public void ConnectorTriggerEndpointNameMatchingIsCaseInsensitive()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var connection = gateway.AddConnection("office365", "office365");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var listener = builder.AddContainer("listener", "image")
+            .WithHttpEndpoint(name: "http", targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureSandbox(sandboxGroup);
+
+        connection.AddTriggerConfig(
+            "new-email",
+            "OnNewEmailV3",
+            new EndpointReference(listener.Resource, "HTTP"));
+
+        var authorization = Assert.Single(
+            listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
+        Assert.Equal("http", authorization.EndpointName);
     }
 
     [Fact]

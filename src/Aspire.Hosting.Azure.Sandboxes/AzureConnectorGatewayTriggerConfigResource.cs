@@ -10,6 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure;
 
@@ -78,7 +79,8 @@ public sealed class AzureConnectorGatewayTriggerConfigResource : AzureProvisioni
             factoryContext => CreatePipelineStepsAsync(factoryContext, provisioningStepAnnotation)));
         Annotations.Add(new PipelineConfigurationAnnotation(async context =>
         {
-            if (GetCallbackSandboxContainerOrDefault() is not null)
+            if (context.Services.GetRequiredService<DistributedApplicationExecutionContext>().IsPublishMode &&
+                GetCallbackSandboxContainerOrDefault() is not null)
             {
                 await provisioningConfigurationAnnotation.Callback(context).ConfigureAwait(false);
             }

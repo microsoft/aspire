@@ -37,6 +37,23 @@ public static class AzureSandboxesExtensions
     /// Connector Namespace is a preview service. Connections that use OAuth or another interactive
     /// authorization flow must be authorized in the Connector Namespaces portal after provisioning.
     /// </remarks>
+    /// <example>
+    /// This example provisions a Connector Namespace with an Office 365 connection and exposes an
+    /// allow-listed operation through a managed MCP server:
+    /// <code>
+    /// var connectors = builder.AddAzureConnectorGateway("connectors");
+    /// var office365 = connectors.AddConnection("office365", "office365");
+    ///
+    /// connectors.AddMcpServerConfig("mcp")
+    ///     .WithConnector("mail", office365, new AzureConnectorGatewayMcpConnectorOptions
+    ///     {
+    ///         Operations =
+    ///         [
+    ///             new AzureConnectorGatewayMcpOperationOptions { Name = "SendEmailV2" }
+    ///         ]
+    ///     });
+    /// </code>
+    /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -544,6 +561,23 @@ public static class AzureSandboxesExtensions
     /// connections are rejected because adding a trigger would otherwise mutate the connection by
     /// implicitly provisioning a new access policy.
     /// </remarks>
+    /// <example>
+    /// This example sends new-email notifications to an external endpoint on a sandbox workload:
+    /// <code>
+    /// var sandboxes = builder.AddAzureSandboxGroup("sandboxes");
+    /// var listener = builder.AddProject&lt;Projects.Listener&gt;("listener")
+    ///     .WithExternalHttpEndpoints()
+    ///     .PublishAsAzureSandbox(sandboxes);
+    /// var connection = builder.AddAzureConnectorGateway("connectors")
+    ///     .AddConnection("office365", "office365");
+    ///
+    /// connection.AddTriggerConfig(
+    ///     "new-email",
+    ///     "OnNewEmailV3",
+    ///     listener.GetEndpoint("https"),
+    ///     new AzureConnectorGatewayTriggerOptions { CallbackPath = "/events/email" });
+    /// </code>
+    /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -581,7 +615,7 @@ public static class AzureSandboxesExtensions
             .LastOrDefault(annotation => string.Equals(
                 annotation.Name,
                 callbackEndpoint.EndpointName,
-                StringComparison.Ordinal));
+                StringComparison.OrdinalIgnoreCase));
         if (callbackEndpointAnnotation?.IsExternal != true)
         {
             throw new InvalidOperationException(
@@ -600,11 +634,11 @@ public static class AzureSandboxesExtensions
 
         EnsureGatewayAccessPolicy(builder.Resource);
         if (!callbackResource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>().Any(annotation =>
-            string.Equals(annotation.EndpointName, callbackEndpoint.EndpointName, StringComparison.Ordinal) &&
+            string.Equals(annotation.EndpointName, callbackEndpointAnnotation.Name, StringComparison.OrdinalIgnoreCase) &&
             ReferenceEquals(annotation.ConnectorGateway, builder.Resource.Parent)))
         {
             callbackResource.Annotations.Add(new AzureConnectorGatewayEndpointAuthorizationAnnotation(
-                callbackEndpoint.EndpointName,
+                callbackEndpointAnnotation.Name,
                 builder.Resource.Parent));
         }
 
