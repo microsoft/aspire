@@ -229,8 +229,8 @@ Instead, starter validation tracks the stable direct artifact boundaries:
   TypeScript code generation and JavaScript hosting, and AppHost and PostgreSQL
   hosting packages.
 - Exact path rules cover the C# starter template and template package project,
-  DCP/dashboard package inputs, bundle construction, and the PR installer used
-  by the validation workflow.
+  DCP/dashboard package inputs, executable CLI archive and bundle construction,
+  and the PR installer used by the validation workflow.
 
 Their closest aggregate test projects also reference Azure, browser, or Npgsql
 client projects, unrelated templates, or test-only utilities and fakes.

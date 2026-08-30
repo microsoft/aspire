@@ -272,6 +272,11 @@ path_rules:
     targets: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests, job:winget-installer, job:homebrew-installer]
     reason: Cli.Tests/Npm/AspireJsLauncherTests reads eng/clipack/npm/aspire.js; Infrastructure.Tests reads eng/clipack/*; CLI archive consumed by e2e and packaged into the WinGet/Homebrew installer artifacts
   - paths:
+      - eng/clipack/Common.projitems
+      - eng/clipack/Aspire.Cli.*.csproj
+    targets: [job:cli-starter-validation]
+    reason: defines the RID-specific native CLI archives installed by the starter validation workflow
+  - paths:
       - .github/workflows/build-cli-e2e-image.yml
       - eng/scripts/load-cli-e2e-images.sh
     targets: [test:Aspire.Cli.EndToEnd.Tests]

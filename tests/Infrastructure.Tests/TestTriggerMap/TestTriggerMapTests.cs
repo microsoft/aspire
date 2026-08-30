@@ -382,6 +382,48 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Cli.EndToEnd.Tests"]
         },
         {
+            "eng/clipack/Common.projitems",
+            [
+                "test:Aspire.Cli.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "test:Infrastructure.Tests",
+                "job:cli-starter-validation",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/clipack/Aspire.Cli.win-x64.csproj",
+            [
+                "test:Aspire.Cli.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "test:Infrastructure.Tests",
+                "job:cli-starter-validation",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/clipack/npm/aspire.js",
+            [
+                "test:Aspire.Cli.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "test:Infrastructure.Tests",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
+            "eng/clipack/Aspire.Cli.NativeSymbols.proj",
+            [
+                "test:Aspire.Cli.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "test:Infrastructure.Tests",
+                "job:homebrew-installer",
+                "job:winget-installer"
+            ]
+        },
+        {
             "eng/scripts/cli-starter-validation.ps1",
             ["job:cli-starter-validation"]
         },
