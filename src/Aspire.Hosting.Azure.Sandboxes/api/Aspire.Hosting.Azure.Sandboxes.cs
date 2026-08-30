@@ -55,6 +55,10 @@ namespace Aspire.Hosting
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> WithAcrPullIdentity(this ApplicationModel.IResourceBuilder<Azure.AzureSandboxGroupResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> WithConnector(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> builder, string connectorName, ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> connection, Azure.AzureConnectorGatewayMcpConnectorOptions options) { throw null; }
 
         [AspireExport]
@@ -77,21 +81,6 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public enum AzureSandboxAutoDeleteTrigger
-    {
-        AfterSuspend = 0,
-        AfterCreation = 1
-    }
-
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public enum AzureSandboxAutoSuspendMode
-    {
-        None = 0,
-        Memory = 1,
-        Disk = 2
-    }
-
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureConnectorGatewayAccessPolicyOptions
@@ -192,7 +181,7 @@ namespace Aspire.Hosting.Azure
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureConnectorGatewayTriggerConfigResource : AzureProvisioningResource, ApplicationModel.IResourceWithParent<AzureConnectorGatewayResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithoutLifetime
     {
-        public AzureConnectorGatewayTriggerConfigResource(string name, string triggerName, string operationName, ApplicationModel.EndpointReference callbackEndpoint, string? callbackPath, string? description, AzureConnectorGatewayConnectionResource connection, System.Collections.Generic.IReadOnlyList<AzureConnectorGatewayTriggerParameter> triggerParameters) : base(default!, default!) { }
+        internal AzureConnectorGatewayTriggerConfigResource() : base(default!, default!) { }
 
         public ApplicationModel.EndpointReference CallbackEndpoint { get { throw null; } }
 
@@ -231,6 +220,21 @@ namespace Aspire.Hosting.Azure
         public required string Name { get { throw null; } set { } }
 
         public required string Value { get { throw null; } set { } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum AzureSandboxAutoDeleteTrigger
+    {
+        AfterSuspend = 0,
+        AfterCreation = 1
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum AzureSandboxAutoSuspendMode
+    {
+        None = 0,
+        Memory = 1,
+        Disk = 2
     }
 
     [AspireDto]

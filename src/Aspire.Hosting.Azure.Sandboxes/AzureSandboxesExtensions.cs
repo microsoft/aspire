@@ -331,15 +331,10 @@ public static class AzureSandboxesExtensions
 
         var policyName = options.PolicyName ?? name;
         ValidateConnectorResourceName(policyName, nameof(options));
-        if (builder.Resource.AccessPolicies.Any(policy =>
-            string.Equals(policy.PolicyName, policyName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"Access policy '{policyName}' is already registered on connector connection '{builder.Resource.Name}'.");
-        }
+        var resourceName = GetValidatedAccessPolicyResourceName(builder.Resource, name, policyName);
 
         builder.Resource.AccessPolicies.Add(new AzureConnectorGatewayConnectionAccessPolicyResource(
-            GetAccessPolicyResourceName(builder.Resource, name),
+            resourceName,
             policyName,
             builder.Resource,
             options.ObjectId,
@@ -379,16 +374,11 @@ public static class AzureSandboxesExtensions
 
         policyName ??= name;
         ValidateConnectorResourceName(policyName, nameof(policyName));
-        if (builder.Resource.AccessPolicies.Any(policy =>
-            string.Equals(policy.PolicyName, policyName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"Access policy '{policyName}' is already registered on connector connection '{builder.Resource.Name}'.");
-        }
+        var resourceName = GetValidatedAccessPolicyResourceName(builder.Resource, name, policyName);
 
         builder.Resource.AccessPolicies.Add(
             AzureConnectorGatewayConnectionAccessPolicyResource.CreateUserAssignedIdentityPolicy(
-                GetAccessPolicyResourceName(builder.Resource, name),
+                resourceName,
                 policyName,
                 builder.Resource,
                 identity.Resource));
@@ -982,6 +972,33 @@ public static class AzureSandboxesExtensions
 
     private static string GetAccessPolicyResourceName(AzureConnectorGatewayConnectionResource connection, string name)
         => $"{connection.Name.Length}-{connection.Name}-policy-{name}";
+
+    private static string GetValidatedAccessPolicyResourceName(
+        AzureConnectorGatewayConnectionResource connection,
+        string name,
+        string policyName)
+    {
+        var resourceName = GetAccessPolicyResourceName(connection, name);
+        var bicepIdentifier = Infrastructure.NormalizeBicepIdentifier(resourceName);
+        if (connection.AccessPolicies.Any(policy =>
+            string.Equals(
+                Infrastructure.NormalizeBicepIdentifier(policy.Name),
+                bicepIdentifier,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Access policy resource '{name}' is already registered on connector connection '{connection.Name}'.");
+        }
+
+        if (connection.AccessPolicies.Any(policy =>
+            string.Equals(policy.PolicyName, policyName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Access policy '{policyName}' is already registered on connector connection '{connection.Name}'.");
+        }
+
+        return resourceName;
+    }
 
     private static void ValidateTriggerParameters(AzureConnectorGatewayTriggerParameter[]? parameters)
     {

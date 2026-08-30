@@ -535,6 +535,49 @@ public class AzureSandboxesTests
             Assert.Single(compoundPolicyName.Resource.AccessPolicies).Name);
     }
 
+    [Theory]
+    [InlineData(false, "reader", "reader")]
+    [InlineData(true, "reader", "reader")]
+    [InlineData(false, "reader-access", "reader_access")]
+    [InlineData(true, "reader-access", "reader_access")]
+    public void ConnectorAccessPolicyRequiresUniqueBicepIdentifier(
+        bool useIdentityPolicy,
+        string firstResourceName,
+        string secondResourceName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var connection = builder.AddAzureConnectorGateway("gateway")
+            .AddConnection("office365", "office365")
+            .WithAccessPolicy(
+                firstResourceName,
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    PolicyName = "first-policy",
+                    ObjectId = "11111111-1111-1111-1111-111111111111",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                });
+
+        var exception = useIdentityPolicy
+            ? Assert.Throws<InvalidOperationException>(() => connection.WithIdentityAccessPolicy(
+                secondResourceName,
+                builder.AddAzureUserAssignedIdentity("reader-identity"),
+                "second-policy"))
+            : Assert.Throws<InvalidOperationException>(() => connection.WithAccessPolicy(
+                secondResourceName,
+                new AzureConnectorGatewayAccessPolicyOptions
+                {
+                    PolicyName = "second-policy",
+                    ObjectId = "33333333-3333-3333-3333-333333333333",
+                    TenantId = "22222222-2222-2222-2222-222222222222"
+                }));
+
+        Assert.Equal(
+            $"Access policy resource '{secondResourceName}' is already registered on connector connection 'office365'.",
+            exception.Message);
+        Assert.Single(connection.Resource.AccessPolicies);
+    }
+
     [Fact]
     public void ConnectorTriggerRejectsReservedAccessPolicyCollision()
     {
