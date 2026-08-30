@@ -37,8 +37,12 @@ async function dispatch(operation, payload) {
             const calls = [];
             const transport = {
                 ensureLabel: async () => { calls.push('ensureLabel'); },
-                listIssues: async () => issues,
+                listIssues: async () => {
+                    calls.push('listIssues');
+                    return issues;
+                },
                 createIssue: async request => {
+                    calls.push('createIssue');
                     const issue = {
                         number: nextNumber++,
                         state: 'open',
@@ -48,21 +52,30 @@ async function dispatch(operation, payload) {
                     issues.push(issue);
                     return issue;
                 },
-                updateIssue: async (issueNumber, patch) => Object.assign(
-                    issues.find(issue => issue.number === issueNumber),
-                    patch),
+                updateIssue: async (issueNumber, patch) => {
+                    calls.push('updateIssue');
+                    Object.assign(issues.find(issue => issue.number === issueNumber), patch);
+                },
                 addComment: async (issueNumber, body) => {
+                    calls.push('addComment');
                     issues.find(issue => issue.number === issueNumber).comments.push(body);
                 },
-                closeIssue: async (issueNumber, { stateReason }) => Object.assign(
-                    issues.find(issue => issue.number === issueNumber),
-                    { state: 'closed', stateReason }),
+                closeIssue: async (issueNumber, { stateReason }) => {
+                    calls.push('closeIssue');
+                    Object.assign(
+                        issues.find(issue => issue.number === issueNumber),
+                        { state: 'closed', stateReason });
+                },
                 reopenIssue: async issueNumber => {
+                    calls.push('reopenIssue');
                     issues.find(issue => issue.number === issueNumber).state = 'open';
                 },
-                listComments: async issueNumber => issues
-                    .find(issue => issue.number === issueNumber).comments
-                    .map(body => ({ body })),
+                listComments: async issueNumber => {
+                    calls.push('listComments');
+                    return issues
+                        .find(issue => issue.number === issueNumber).comments
+                        .map(body => ({ body }));
+                },
             };
             const result = await tracking.reconcile({
                 transport,
@@ -102,6 +115,9 @@ async function dispatch(operation, payload) {
             const calls = [];
             const runGh = async (args, input) => {
                 calls.push({ args, input: input ?? null });
+                if (payload.labelAlreadyExists && args.includes('repos/microsoft/aspire/labels')) {
+                    throw new Error('gh api failed: Validation Failed (HTTP 422)');
+                }
                 if (args.includes('--paginate')) {
                     return '[]';
                 }
@@ -115,6 +131,12 @@ async function dispatch(operation, payload) {
                 { runGh });
             if (payload.operation === 'list') {
                 await transport.listIssues('failing-test');
+            } else if (payload.operation === 'ensure') {
+                await transport.ensureLabel({
+                    name: 'failing-test',
+                    color: 'b60205',
+                    description: 'A test is failing in CI',
+                });
             } else {
                 await transport.ensureLabel({
                     name: 'failing-test',

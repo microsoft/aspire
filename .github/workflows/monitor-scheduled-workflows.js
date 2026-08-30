@@ -332,12 +332,28 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
             }
 
             const result = await tracking.executeIssueReconciliation(transport, core, closeOptions);
-            if (dryRun && result.appliedActions.some(candidate => candidate.type === 'close')) {
-                log(`would CLOSE ${formatIssueReference(issue)} (${wf.file})`);
+            const canonicalClosed = result.appliedActions.some(candidate =>
+                candidate.type === 'close' && candidate.issueNumber === result.number);
+            if (dryRun) {
+                if (canonicalClosed) {
+                    const canonical = issues.find(candidate => candidate.number === result.number) ?? issue;
+                    log(`would CLOSE ${formatIssueReference(canonical)} (${wf.file})`);
+                }
                 continue;
             }
-            issue.state = 'closed';
-            core.info(`Closed #${issue.number} for ${wf.file}`);
+
+            for (const action of result.appliedActions.filter(candidate => candidate.type === 'close')) {
+                const closedIssue = issues.find(candidate => candidate.number === action.issueNumber);
+                if (closedIssue !== undefined) {
+                    closedIssue.state = 'closed';
+                }
+            }
+
+            if (canonicalClosed) {
+                core.info(`Closed #${result.number} for ${wf.file}`);
+            } else if (result.duplicatesClosed.length > 0) {
+                core.info(`Reconciled ${result.duplicatesClosed.length} duplicate issue(s) for ${wf.file}.`);
+            }
         }
     }
 }

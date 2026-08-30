@@ -338,7 +338,9 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
             });
 
         Assert.NotNull(result.Calls);
-        Assert.Equal(["ensureLabel"], result.Calls);
+        Assert.Equal("ensureLabel", result.Calls[0]);
+        Assert.Contains("listIssues", result.Calls);
+        Assert.Contains("createIssue", result.Calls);
     }
 
     [Fact]
@@ -371,6 +373,20 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
         Assert.Contains(result.Calls, call => call.Args.Contains("POST") && call.Args.Contains("repos/microsoft/aspire/issues"));
         Assert.Contains(result.Calls, call => call.Args.Contains("PATCH") && call.Input!.Contains("\"state\":\"closed\"", StringComparison.Ordinal));
         Assert.Contains(result.Calls, call => call.Args.Contains("PATCH") && call.Input!.Contains("\"state\":\"open\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task GhApiTransportTreatsExistingLabelAsSuccess()
+    {
+        var result = await InvokeHarnessAsync<GhTransportResponse>(
+            "ghTransport",
+            new { operation = "ensure", labelAlreadyExists = true });
+
+        Assert.True(result.Available);
+        var call = Assert.Single(result.Calls!);
+        Assert.Contains("POST", call.Args);
+        Assert.Contains("repos/microsoft/aspire/labels", call.Args);
     }
 
     [Fact]

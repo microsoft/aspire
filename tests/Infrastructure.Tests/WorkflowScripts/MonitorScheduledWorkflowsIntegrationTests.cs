@@ -226,6 +226,30 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DuplicateOnlyReconciliationDoesNotReportCanonicalAsClosed()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:false -->", state = "open", comments = Array.Empty<string>() },
+                new { number = 66, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 55);
+        Assert.Equal("open", canonical.State);
+        var duplicate = Assert.Single(result.Issues, issue => issue.Number == 66);
+        Assert.Equal("closed", duplicate.State);
+        Assert.Equal("not_planned", duplicate.StateReason);
+        Assert.DoesNotContain(result.Logs, log => log.Contains("Closed #55", StringComparison.Ordinal));
+        Assert.Contains(result.Logs, log => log.Contains("Reconciled 1 duplicate", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DryRunDoesNotLogCloseWhenAutoCloseStampIsFalse()
     {
         var result = await InvokeAsync(new
