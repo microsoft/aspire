@@ -24,6 +24,7 @@ internal interface IExtensionInteractionService : IInteractionService
     void DisplayConsolePlainText(string message);
     Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null);
     void WriteDebugSessionMessage(string message, bool stdout, string? textStyle);
+    void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry);
     void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false);
 }
 
@@ -564,6 +565,12 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
     public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(StringUtils.RemoveMarkup(message), stdout, textStyle, _cancellationToken));
+        Debug.Assert(result);
+    }
+
+    public void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry)
+    {
+        var result = _extensionTaskChannel.Writer.TryWrite(async () => await Backchannel.WriteAppHostLogEntryAsync(entry, _cancellationToken).ConfigureAwait(false));
         Debug.Assert(result);
     }
 

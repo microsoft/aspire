@@ -36,6 +36,28 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 
 ## Code Review Instructions
 
+### Conditional Test Selection
+
+When reviewing a pull request, check whether `eng/github-ci/test-trigger-map.yml`
+needs to change if the diff:
+
+* Adds, removes, or renames a test project.
+* Adds or changes a CI job, reusable workflow, or `run_*` selection gate.
+* Adds or changes a script, configuration file, or other loose input consumed by
+  CI or tests but not represented by an MSBuild project reference.
+
+Do not request manual mappings for files evaluated by projects in the
+`Aspire.slnx`-rooted ProjectGraph; Layer 1 owns them. For Layer 2 blind spots,
+verify that the map routes each path to its actual consumer, uses `ALL` for
+broad shared inputs, or explicitly classifies paths handled by unconditional or
+dedicated workflows and paths with no PR-CI consumer. A gated job implemented by
+a reusable workflow must route changes to that workflow file to the job target
+and keep its `run_*` output wiring consistent.
+
+Selector behavior changes should include focused coverage in
+`tests/Infrastructure.Tests/TestTriggerMap/`. See
+`docs/ci/test-trigger-map.md` for the map vocabulary and maintenance guidance.
+
 ### API Files and Public API Surface
 
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.

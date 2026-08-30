@@ -160,6 +160,17 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
 
         var containerRegistry = ContainerRegistry ??
             throw new InvalidOperationException($"No container registry associated with Azure sandbox group '{Name}'. This should have been added automatically.");
+        var imagePullIdentity = this.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var imagePullIdentityAnnotation)
+            ? imagePullIdentityAnnotation.Identity
+            : null;
+
+        if (imagePullIdentity is not null && WorkloadUserAssignedIdentities.Contains(imagePullIdentity))
+        {
+            throw new InvalidOperationException(
+                $"Azure sandbox group '{Name}' uses identity '{imagePullIdentity.Name}' for both image pulls and workloads. " +
+                "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.");
+        }
+
         var computeEnvironments = context.Model.Resources.OfType<IComputeEnvironmentResource>().ToList();
         var canClaimUnassignedComputeResources = computeEnvironments.Count == 1 && ReferenceEquals(computeEnvironments[0], this);
 
@@ -193,6 +204,13 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
                 {
                     throw new InvalidOperationException(
                         $"Compute resource '{resource.Name}' uses managed identity '{userAssignedIdentity.Name}', but workload identities are not supported when publishing to existing Azure sandbox group '{Name}'.");
+                }
+
+                if (ReferenceEquals(imagePullIdentity, userAssignedIdentity))
+                {
+                    throw new InvalidOperationException(
+                        $"Azure sandbox group '{Name}' uses identity '{userAssignedIdentity.Name}' for both image pulls and workload '{resource.Name}'. " +
+                        "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.");
                 }
 
                 AddWorkloadUserAssignedIdentity(userAssignedIdentity);

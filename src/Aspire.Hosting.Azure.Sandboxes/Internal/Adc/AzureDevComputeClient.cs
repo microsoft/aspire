@@ -529,7 +529,7 @@ internal sealed class AzureDevComputeDiskImageSource
 
     public required string ImageUrl { get; init; }
 
-    public required string ManagedIdentityClientId { get; init; }
+    public string? ManagedIdentityClientId { get; init; }
 }
 
 internal sealed class AzureDevComputeDiskImage

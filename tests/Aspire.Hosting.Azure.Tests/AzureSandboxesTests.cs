@@ -702,6 +702,57 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public async Task ExistingAzureSandboxGroupRejectsNewAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
+            .WithAcrPullIdentity(pullIdentity)
+            .PublishAsExisting("existing-sandboxes", "existing-rg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.GetManifestWithBicep(model, sandboxGroup.Resource));
+        Assert.Equal(
+            "Existing Azure sandbox group 'sandboxes' requires a user-assigned ACR pull identity. " +
+            "Call 'WithAcrPullIdentity' with an identity that is already attached to the sandbox group and has AcrPull on the configured registry.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AzureSandboxGroupRejectsReusingAcrPullIdentityForWorkloads(bool configurePullIdentityFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var identity = builder.AddAzureUserAssignedIdentity("shared-identity");
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        if (configurePullIdentityFirst)
+        {
+            sandboxGroup.WithAcrPullIdentity(identity);
+            sandboxGroup.WithUserAssignedIdentity(identity);
+        }
+        else
+        {
+            sandboxGroup.WithUserAssignedIdentity(identity);
+            sandboxGroup.WithAcrPullIdentity(identity);
+        }
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+        Assert.Equal(
+            "Azure sandbox group 'sandboxes' uses identity 'shared-identity' for both image pulls and workloads. " +
+            "Use a dedicated image-pull identity so its AcrPull permission is not exposed to sandbox workloads.",
+            exception.InnerException?.Message);
+    }
+
+    [Fact]
     public async Task CrossResourceGroupRegistryUsesStandaloneAcrPullIdentity()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -842,6 +893,67 @@ public class AzureSandboxesTests
 
         Assert.Equal("disk-1", diskImage.Id);
         Assert.Equal([AzureDevComputeClient.AuthorizationScope], credential.Scopes);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientOmitsManagedIdentityForPublicImage()
+    {
+        var handler = new RecordingHandler(async request =>
+        {
+            var body = await request.Content!.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            var source = document.RootElement.GetProperty("source");
+            Assert.Equal("docker.io/library/nginx@sha256:abc123", source.GetProperty("imageUrl").GetString());
+            Assert.False(source.TryGetProperty("managedIdentityClientId", out _));
+
+            return JsonResponse(
+                """
+                {
+                  "id": "disk-1",
+                  "labels": {},
+                  "image": { "base": "docker.io/library/nginx@sha256:abc123" },
+                  "status": { "state": "Ready", "createdAt": "2026-06-03T00:00:00Z", "updatedAt": "2026-06-03T00:00:00Z" }
+                }
+                """);
+        });
+        var client = new AzureDevComputeClient(
+            new HttpClient(handler),
+            new RecordingTokenCredential(),
+            NullLogger.Instance);
+
+        await client.CreateDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            new AzureDevComputeCreateDiskImageRequest
+            {
+                Source = new AzureDevComputeDiskImageSource
+                {
+                    ImageUrl = "docker.io/library/nginx@sha256:abc123"
+                }
+            },
+            CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SandboxImagePullIdentityIsOnlyUsedForConfiguredAcr()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        sandboxGroup.Resource.ContainerRegistry!.Outputs["loginServer"] = "example.azurecr.io";
+        sandboxGroup.Resource.Outputs[AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName] =
+            "11111111-1111-1111-1111-111111111111";
+
+        var acrIdentity = await AzureSandboxContainerDeployment.ResolveImagePullManagedIdentityClientIdAsync(
+            sandboxGroup.Resource,
+            "example.azurecr.io/site@sha256:abc123",
+            CancellationToken.None);
+        var publicIdentity = await AzureSandboxContainerDeployment.ResolveImagePullManagedIdentityClientIdAsync(
+            sandboxGroup.Resource,
+            "docker.io/library/nginx@sha256:def456",
+            CancellationToken.None);
+
+        Assert.Equal("11111111-1111-1111-1111-111111111111", acrIdentity);
+        Assert.Null(publicIdentity);
     }
 
     [Fact]

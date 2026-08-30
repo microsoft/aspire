@@ -771,7 +771,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     // projects. affected_project_rules key off project NAME globs and must match only PRODUCTION names.
     // A matrix test project ("Aspire.Hosting.Foo.Tests") matches a production glob ("Aspire.Hosting*"),
     // so without the production-only filter a TEST-ONLY change would spuriously fire that rule's
-    // production jobs (ats-diffs / extension-e2e / typescript-api-compat / deployment-e2e).
+    // production jobs (extension-e2e / typescript-api-compat / deployment-e2e).
     [Fact]
     public void AffectedProjectRulesMatchProductionProjectsNotTestProjects()
     {
@@ -822,11 +822,19 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded(".gitignore"));                    // repo-ROOT .gitignore (anchored)
         Assert.True(filter.IsExcluded(".github/CODEOWNERS"));
         Assert.True(filter.IsExcluded(".github/ISSUE_TEMPLATE/10_bug_report.yml"));
+        Assert.True(filter.IsExcluded(".github/dependabot.yml"));
+        Assert.True(filter.IsExcluded(".github/policies/labelManagement.prOpened.yml"));
+        Assert.True(filter.IsExcluded(".github/extensions/aspire-team-app/extension.mjs"));
+        Assert.True(filter.IsExcluded(".vscode/settings.json"));
+        Assert.True(filter.IsExcluded("pyrightconfig.json"));
 
         // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
-        // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), and
-        // .editorconfig / .gitattributes affect the build and checkout.
+        // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), root
+        // launch/task files are validated by extension tests, and .editorconfig / .gitattributes affect the
+        // build and checkout.
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/ts-starter/.gitignore"));
+        Assert.False(filter.IsExcluded(".vscode/launch.json"));
+        Assert.False(filter.IsExcluded(".vscode/tasks.json"));
         Assert.False(filter.IsExcluded(".editorconfig"));
         Assert.False(filter.IsExcluded(".gitattributes"));
 

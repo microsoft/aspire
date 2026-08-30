@@ -636,7 +636,8 @@ public static class AzureSandboxesExtensions
             BicepValue<string> imagePullIdentityClientId;
             if (sandboxResource.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var imagePullIdentityAnnotation))
             {
-                if (sandboxResource.IsExisting() && imagePullIdentityAnnotation.IsAspireManaged)
+                if (sandboxResource.IsExisting() &&
+                    (imagePullIdentityAnnotation.IsAspireManaged || !imagePullIdentityAnnotation.Identity.IsExisting()))
                 {
                     throw CreateExistingSandboxGroupMissingAcrPullIdentityException(sandboxResource);
                 }
