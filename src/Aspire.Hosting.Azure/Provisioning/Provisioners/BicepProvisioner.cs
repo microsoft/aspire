@@ -1395,8 +1395,9 @@ internal sealed class BicepProvisioner(
             resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = context.Principal.Id;
         }
 
+        var hasUserPrincipalId = resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId);
         var populatedUserPrincipalId = false;
-        if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) && userPrincipalId is null)
+        if (hasUserPrincipalId && userPrincipalId is null)
         {
             // Published artifacts bind this deployment-principal parameter from the outer
             // main.bicep template. Direct `aspire deploy` has no outer template, so use the
@@ -1414,7 +1415,14 @@ internal sealed class BicepProvisioner(
 
         if (resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) && principalType is null)
         {
-            if (!populatedUserPrincipalId)
+            if (hasUserPrincipalId && !populatedUserPrincipalId)
+            {
+                throw new InvalidOperationException(
+                    $"The Azure parameter '{AzureBicepResource.KnownParameters.PrincipalType}' must be supplied when " +
+                    $"'{AzureBicepResource.KnownParameters.UserPrincipalId}' is provided explicitly.");
+            }
+
+            if (!hasUserPrincipalId)
             {
                 ValidateUnknownPrincipalParameter(context);
             }

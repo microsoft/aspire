@@ -141,13 +141,15 @@ public sealed class AzurePublishingContext(
         var principalId = ParameterLookup[environment.PrincipalId];
         MainInfrastructure.Add(principalId);
 
-        ProvisioningParameter? principalType = null;
+        ProvisioningParameter? deploymentPrincipalType = null;
         if (bicepResourcesToPublish.Any(resource =>
-            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var value) &&
-            value is null))
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) &&
+            userPrincipalId is null &&
+            resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.PrincipalType, out var principalType) &&
+            principalType is null))
         {
-            principalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
-            MainInfrastructure.Add(principalType);
+            deploymentPrincipalType = new ProvisioningParameter(AzureBicepResource.KnownParameters.PrincipalType, typeof(string));
+            MainInfrastructure.Add(deploymentPrincipalType);
         }
 
         var rg = new ResourceGroup("rg")
@@ -339,9 +341,12 @@ public sealed class AzurePublishingContext(
                     module.Parameters.Add(parameter.Key, principalId);
                     continue;
                 }
-                if (parameter.Key == AzureBicepResource.KnownParameters.PrincipalType && parameter.Value is null)
+                if (parameter.Key == AzureBicepResource.KnownParameters.PrincipalType &&
+                    parameter.Value is null &&
+                    resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.UserPrincipalId, out var userPrincipalId) &&
+                    userPrincipalId is null)
                 {
-                    module.Parameters.Add(parameter.Key, principalType!);
+                    module.Parameters.Add(parameter.Key, deploymentPrincipalType!);
                     continue;
                 }
 

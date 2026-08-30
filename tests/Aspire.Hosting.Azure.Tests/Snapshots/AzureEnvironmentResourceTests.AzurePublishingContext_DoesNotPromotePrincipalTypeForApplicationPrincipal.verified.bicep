@@ -11,21 +11,30 @@ resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   location: location
 }
 
-module included_storage 'included-storage/included-storage.bicep' = {
-  name: 'included-storage'
+module acaEnv_acr 'acaEnv-acr/acaEnv-acr.bicep' = {
+  name: 'acaEnv-acr'
   scope: rg
   params: {
     location: location
   }
 }
 
-module included_storage_roles 'included-storage-roles/included-storage-roles.bicep' = {
-  name: 'included-storage-roles'
+module acaEnv 'acaEnv/acaEnv.bicep' = {
+  name: 'acaEnv'
   scope: rg
   params: {
     location: location
-    included_storage_outputs_name: included_storage.outputs.name
-    principalType: ''
+    acaenv_acr_outputs_name: acaEnv_acr.outputs.name
+    userPrincipalId: principalId
+  }
+}
+
+module roles 'roles/roles.bicep' = {
+  name: 'roles'
+  scope: rg
+  params: {
+    location: location
     principalId: principalId
+    principalType: ''
   }
 }

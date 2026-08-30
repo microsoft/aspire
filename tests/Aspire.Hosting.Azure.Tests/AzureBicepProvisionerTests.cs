@@ -184,10 +184,12 @@ public class AzureBicepProvisionerTests
         Assert.Equal(principalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
     }
 
-    [Fact]
-    public async Task GetOrCreateResourceAsync_InPublishMode_ThrowsForUnknownPrincipalTypeWhenUserPrincipalIdIsProvided()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task GetOrCreateResourceAsync_ThrowsWhenExplicitUserPrincipalIdHasNoPrincipalType(DistributedApplicationOperation operation)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
         builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
         using var services = builder.Services.BuildServiceProvider();
 
@@ -201,17 +203,19 @@ public class AzureBicepProvisionerTests
             new TestBicepCliExecutor(),
             new TestSecretClientProvider(),
             services.GetRequiredService<IDeploymentStateManager>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            new DistributedApplicationExecutionContext(operation),
             services.GetRequiredService<IFileSystemService>(),
             NullLogger<BicepProvisioner>.Instance);
 
         var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
-            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+            executionContext: new DistributedApplicationExecutionContext(operation));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
 
-        Assert.Contains("Azure principal parameter was not supplied", exception.Message);
+        Assert.Equal(
+            "The Azure parameter 'principalType' must be supplied when 'userPrincipalId' is provided explicitly.",
+            exception.Message);
     }
 
     [Theory]
