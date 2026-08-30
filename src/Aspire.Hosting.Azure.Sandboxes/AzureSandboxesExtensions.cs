@@ -266,6 +266,7 @@ public static class AzureSandboxesExtensions
             connectorName,
             options?.DisplayName,
             builder.Resource);
+        connection.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
         builder.Resource.Connections.Add(connection);
         return builder.ApplicationBuilder.AddResource(connection);
     }
@@ -426,6 +427,7 @@ public static class AzureSandboxesExtensions
             configName,
             options?.Description,
             builder.Resource);
+        config.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
         builder.Resource.McpServerConfigs.Add(config);
         return builder.ApplicationBuilder.AddResource(config);
     }

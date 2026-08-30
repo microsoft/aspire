@@ -111,6 +111,12 @@ public class AzureSandboxesTests
 
         Assert.Same(gateway.Resource, connection.Resource.Parent);
         Assert.Same(gateway.Resource, mcp.Resource.Parent);
+        Assert.Equal(
+            ManifestPublishingCallbackAnnotation.Ignore,
+            Assert.Single(connection.Resource.Annotations.OfType<ManifestPublishingCallbackAnnotation>()));
+        Assert.Equal(
+            ManifestPublishingCallbackAnnotation.Ignore,
+            Assert.Single(mcp.Resource.Annotations.OfType<ManifestPublishingCallbackAnnotation>()));
         var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource);
 
         await Verify(manifest.ToString(), "json")
