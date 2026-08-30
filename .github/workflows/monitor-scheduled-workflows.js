@@ -335,6 +335,9 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
             const canonicalClosed = result.appliedActions.some(candidate =>
                 candidate.type === 'close' && candidate.issueNumber === result.number);
             if (dryRun) {
+                for (const duplicateNumber of result.duplicatesClosed) {
+                    log(`would CLOSE duplicate issue #${duplicateNumber} as not_planned (canonical #${result.number})`);
+                }
                 if (canonicalClosed) {
                     const canonical = issues.find(candidate => candidate.number === result.number) ?? issue;
                     log(`would CLOSE ${formatIssueReference(canonical)} (${wf.file})`);
