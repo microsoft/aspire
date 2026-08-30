@@ -39,6 +39,8 @@ await outlookMcp.withConnector("office365", outlook, {
 
 const sandboxes = await builder.addAzureSandboxGroup("sandboxes");
 await sandboxes.withUserAssignedIdentity(sandboxIdentity);
+const pullIdentity = await builder.addAzureUserAssignedIdentity("sandbox-pull-identity");
+await sandboxes.withAcrPullIdentity(pullIdentity);
 
 const api = await builder
     .addContainer("api", "mcr.microsoft.com/dotnet/runtime-deps:10.0")
