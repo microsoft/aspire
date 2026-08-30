@@ -36,7 +36,7 @@ public sealed class AzureConnectorGatewayTriggerConfigResource : AzureProvisioni
     /// <param name="description">The trigger config description.</param>
     /// <param name="connection">The connector connection used by the trigger.</param>
     /// <param name="triggerParameters">The connector trigger parameters.</param>
-    public AzureConnectorGatewayTriggerConfigResource(
+    internal AzureConnectorGatewayTriggerConfigResource(
         string name,
         string triggerName,
         string operationName,

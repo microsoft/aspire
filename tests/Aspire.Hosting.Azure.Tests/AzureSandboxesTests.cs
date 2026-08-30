@@ -264,6 +264,12 @@ public class AzureSandboxesTests
     }
 
     [Fact]
+    public void ConnectorTriggerResourceCannotBypassSecuredBuilderPath()
+    {
+        Assert.Empty(typeof(AzureConnectorGatewayTriggerConfigResource).GetConstructors());
+    }
+
+    [Fact]
     public void ConnectorTriggerRejectsAnonymousSandboxEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
