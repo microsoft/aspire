@@ -257,6 +257,9 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
         Assert.Empty(result.Issues);
         Assert.DoesNotContain("update", result.Calls);
         Assert.DoesNotContain("createComment", result.Calls);
+        Assert.Contains("No matching tracking issue to reconcile.", result.Logs);
+        Assert.Contains("No open CI-failure issue for main; nothing to close.", result.Logs);
+        Assert.DoesNotContain(result.Logs, log => log.Contains("#undefined", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -353,7 +356,7 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
 
     private sealed record HarnessResponse(RunnerResult Result);
 
-    private sealed record RunnerResult(bool Threw, string[] Calls, RunnerIssue[] Issues);
+    private sealed record RunnerResult(bool Threw, string[] Calls, string[] Logs, RunnerIssue[] Issues);
 
     private sealed record RunnerIssue(int Number, string? Title, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 }

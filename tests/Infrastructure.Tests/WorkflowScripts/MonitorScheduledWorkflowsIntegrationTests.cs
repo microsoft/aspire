@@ -147,6 +147,7 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
             },
         });
 
+        Assert.False(result.Threw);
         Assert.DoesNotContain(result.Logs, log => log.Contains("would RECORD", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
         var issue = Assert.Single(result.Issues);

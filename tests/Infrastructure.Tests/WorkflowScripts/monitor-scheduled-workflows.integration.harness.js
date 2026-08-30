@@ -46,7 +46,11 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                         // mutate the runner's cached issue list in the test.
                         data: store.issues
                             .filter(issue => requestedState === 'all' || issue.state === requestedState)
-                            .map(issue => ({ ...issue, labels: [...(issue.labels ?? [])], comments: [...(issue.comments ?? [])] })),
+                            .map(issue => ({
+                                ...issue,
+                                labels: [...(issue.labels ?? [])],
+                                comments: issue.comments?.length ?? 0,
+                            })),
                     };
                 },
                 create: async ({ title, body, labels }) => {

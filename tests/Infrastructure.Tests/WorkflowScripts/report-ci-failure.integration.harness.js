@@ -14,7 +14,7 @@
 //     "failUpdate": false,             // make issues.update throw (transient failure)
 //     "runId": 12345, "runNumber": 7, "sha": "abcdef..."
 //   }
-// Output: { threw, calls, issues: [ { number, title, state, state_reason, body, labels, comments } ] }
+// Output: { threw, calls, logs, issues: [ { number, title, state, state_reason, body, labels, comments } ] }
 
 'use strict';
 
@@ -88,7 +88,8 @@ async function main() {
         next: input.nextNumber ?? 1000,
     };
     const github = makeGithub(store, { failComment: input.failComment === true, failUpdate: input.failUpdate === true });
-    const core = { info: () => {}, warning: () => {} };
+    const logs = [];
+    const core = { info: message => logs.push(String(message)), warning: () => {} };
     const context = {
         repo: { owner: 'microsoft', repo: 'aspire' },
         runId: input.runId ?? 12345,
@@ -108,6 +109,7 @@ async function main() {
         result: {
             threw,
             calls: github.calls,
+            logs,
             issues: store.issues.map(issue => ({
                 number: issue.number,
                 title: issue.title ?? null,
