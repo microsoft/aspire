@@ -137,7 +137,7 @@ Kitty payloads are base64, and the addon decodes them with a streaming base64
 decoder from the `sixel` package that is compiled to WebAssembly via `inwasm`.
 It is instantiated lazily on the first payload chunk:
 
-```
+```text
 KittyGraphicsHandler.put -> _streamPayload -> decoder.init()
   -> new WebAssembly.Module / new WebAssembly.Instance
 ```
