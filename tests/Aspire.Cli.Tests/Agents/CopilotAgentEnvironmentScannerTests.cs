@@ -329,6 +329,17 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         public string? GetInstallationMarker() => marker;
     }
 
+    private sealed class FakeCopilotCliRunner(SemVersion? version) : ICopilotCliRunner
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            return Task.FromResult(version);
+        }
+    }
+
     private static PlaywrightCliInstaller CreatePlaywrightCliInstaller()
     {
         return new PlaywrightCliInstaller(
