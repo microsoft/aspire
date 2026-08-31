@@ -11,7 +11,8 @@ await cosmos.configureInfrastructure(async infrastructure => {
     const bypassResourceId = await infrastructure.createCosmosDBResourceIdentifier(
         "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass",
     );
-    await account.networkAclBypassResourceIds.get().add(bypassResourceId);
+    const bypassResourceIds = await account.networkAclBypassResourceIds.get();
+    await bypassResourceIds.add(bypassResourceId);
 });
 
 // 2) withDefaultAzureSku
