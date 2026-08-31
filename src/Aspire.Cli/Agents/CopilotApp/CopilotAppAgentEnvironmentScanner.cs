@@ -17,9 +17,9 @@ internal sealed class CopilotAppAgentEnvironmentScanner(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (installationDetector.GetInstallationPath() is { } installationPath)
+        if (installationDetector.GetInstallationMarker() is { } installationMarker)
         {
-            logger.LogDebug("Detected GitHub Copilot App installation at {Path}", installationPath);
+            logger.LogDebug("Detected GitHub Copilot App using installation marker {Marker}", installationMarker);
             context.AddDetectedClient(AgentClientKind.CopilotApp);
         }
 

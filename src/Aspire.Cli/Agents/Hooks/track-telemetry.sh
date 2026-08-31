@@ -150,12 +150,10 @@ sessionId=$(extract_json_field "$rawInput" "sessionId")
 
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Detect the client (used only for a low-cardinality client-name tag).
-if [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
-    clientName="copilot-app"
-elif [ "$COPILOT_CLI" = "1" ]; then
-    clientName="copilot-cli"
-elif printf '%s' "$rawInput" | grep -q '"hook_event_name"'; then
+# Detect the client (used only for a low-cardinality client-name tag). Claude/VS Code payload
+# identity wins over inherited environment markers. Keep the App marker before COPILOT_CLI because
+# App sessions also set COPILOT_CLI=1.
+if printf '%s' "$rawInput" | grep -q '"hook_event_name"'; then
     toolUseId=$(extract_json_field "$rawInput" "tool_use_id")
     transcriptPath=$(extract_json_field "$rawInput" "transcript_path")
     transcriptPathNorm=$(printf '%s' "$transcriptPath" | tr '\\' '/')
@@ -163,6 +161,10 @@ elif printf '%s' "$rawInput" | grep -q '"hook_event_name"'; then
         *__vscode*|*/Code/*|*/Code\ -\ Insiders/*) clientName="vscode" ;;
         *) clientName="claude-code" ;;
     esac
+elif [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
+    clientName="copilot-app"
+elif [ "$COPILOT_CLI" = "1" ]; then
+    clientName="copilot-cli"
 elif printf '%s' "$rawInput" | grep -q '"toolArgs"'; then
     clientName="copilot-cli"
 else

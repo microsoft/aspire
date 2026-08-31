@@ -95,12 +95,62 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     }
 
     [Fact]
+    public void GetLinuxApplicationDirectories_WithoutXdgOverrides_UsesFreedesktopDefaults()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var detector = CreateInstallationDetector(TestEnvironment.CreateLinux(), workspace);
+        var rootDirectory = Path.DirectorySeparatorChar.ToString();
+
+        Assert.Equal(
+            [
+                Path.Combine(workspace.WorkspaceRoot.FullName, ".local", "share", "applications"),
+                Path.Combine(rootDirectory, "usr", "local", "share", "applications"),
+                Path.Combine(rootDirectory, "usr", "share", "applications"),
+            ],
+            detector.GetLinuxApplicationDirectories());
+    }
+
+    [Fact]
+    public void GetLinuxApplicationDirectories_WithXdgOverrides_UsesAbsoluteEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dataHome = workspace.CreateDirectory("xdg-data-home");
+        var firstDataDirectory = workspace.CreateDirectory("xdg-data-first");
+        var secondDataDirectory = workspace.CreateDirectory("xdg-data-second");
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["XDG_DATA_HOME"] = dataHome.FullName,
+            ["XDG_DATA_DIRS"] = string.Join(
+                Path.PathSeparator,
+                firstDataDirectory.FullName,
+                "relative-directory",
+                secondDataDirectory.FullName),
+        });
+        var detector = CreateInstallationDetector(environment, workspace);
+
+        Assert.Equal(
+            [
+                Path.Combine(dataHome.FullName, "applications"),
+                Path.Combine(firstDataDirectory.FullName, "applications"),
+                Path.Combine(secondDataDirectory.FullName, "applications"),
+            ],
+            detector.GetLinuxApplicationDirectories());
+    }
+
+    [Fact]
     public async Task ScanAsync_WithoutInstallationOrRuntimeMarker_DoesNotDetectCopilotApp()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dataHome = workspace.CreateDirectory("xdg-data-home");
+        var dataDirectory = workspace.CreateDirectory("xdg-data-dir");
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["XDG_DATA_HOME"] = dataHome.FullName,
+            ["XDG_DATA_DIRS"] = dataDirectory.FullName,
+        });
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
-        await CreateScanner(TestEnvironment.CreateLinux(), workspace).ScanAsync(
+        await CreateScanner(environment, workspace).ScanAsync(
             context,
             TestContext.Current.CancellationToken);
 
@@ -113,12 +163,19 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         TemporaryWorkspace workspace)
     {
         return new(
-            new CopilotAppInstallationDetector(
-                environment,
-                TestExecutionContextHelper.CreateExecutionContext(
-                    workspace.WorkspaceRoot,
-                    homeDirectory: workspace.WorkspaceRoot)),
+            CreateInstallationDetector(environment, workspace),
             NullLogger<CopilotAppAgentEnvironmentScanner>.Instance);
+    }
+
+    private static CopilotAppInstallationDetector CreateInstallationDetector(
+        IEnvironment environment,
+        TemporaryWorkspace workspace)
+    {
+        return new(
+            environment,
+            TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                homeDirectory: workspace.WorkspaceRoot));
     }
 
     private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory)

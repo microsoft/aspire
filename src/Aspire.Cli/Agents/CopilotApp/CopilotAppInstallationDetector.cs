@@ -9,9 +9,9 @@ namespace Aspire.Cli.Agents.CopilotApp;
 internal interface ICopilotAppInstallationDetector
 {
     /// <summary>
-    /// Gets the detected installation path, or <see langword="null"/> when the App is not installed.
+    /// Gets the marker that established the App is installed, or <see langword="null"/> when it is not installed.
     /// </summary>
-    string? GetInstallationPath();
+    string? GetInstallationMarker();
 }
 
 /// <summary>
@@ -29,9 +29,10 @@ internal sealed class CopilotAppInstallationDetector(
     private const string AppDirectoryName = "GitHub Copilot";
     private const string WindowsExecutableName = "github.exe";
     private const string MacOSAppBundleName = "GitHub Copilot.app";
+    private const string LinuxApplicationsDirectoryName = "applications";
 
     /// <inheritdoc />
-    public string? GetInstallationPath()
+    public string? GetInstallationMarker()
     {
         // Unlike Copilot CLI, the App executable is a single-instance GUI application and a
         // `--version` launch does not exit. Use install markers instead; the runtime marker also
@@ -72,13 +73,52 @@ internal sealed class CopilotAppInstallationDetector(
 
         if (environment.IsLinux())
         {
-            return FindLinuxDesktopEntry(
-                Path.Combine(executionContext.HomeDirectory.FullName, ".local", "share", "applications"))
-                ?? FindLinuxDesktopEntry(
-                    Path.Combine(Path.DirectorySeparatorChar.ToString(), "usr", "share", "applications"));
+            foreach (var applicationsDirectory in GetLinuxApplicationDirectories())
+            {
+                if (FindLinuxDesktopEntry(applicationsDirectory) is { } desktopEntry)
+                {
+                    return desktopEntry;
+                }
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Gets the Linux application directories in freedesktop search order.
+    /// </summary>
+    internal IReadOnlyList<string> GetLinuxApplicationDirectories()
+    {
+        // Desktop entries are XDG data files, so search the user data root before each system data
+        // root. Relative XDG values are invalid and ignored by the freedesktop base-directory spec.
+        // https://specifications.freedesktop.org/basedir/latest/
+        var applicationsDirectories = new List<string>();
+        var configuredDataHome = environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        var dataHome = !string.IsNullOrEmpty(configuredDataHome) && Path.IsPathFullyQualified(configuredDataHome)
+            ? configuredDataHome
+            : Path.Combine(executionContext.HomeDirectory.FullName, ".local", "share");
+        applicationsDirectories.Add(Path.Combine(dataHome, LinuxApplicationsDirectoryName));
+
+        var configuredDataDirectories = environment.GetEnvironmentVariable("XDG_DATA_DIRS");
+        if (string.IsNullOrEmpty(configuredDataDirectories))
+        {
+            var rootDirectory = Path.DirectorySeparatorChar.ToString();
+            applicationsDirectories.Add(Path.Combine(rootDirectory, "usr", "local", "share", LinuxApplicationsDirectoryName));
+            applicationsDirectories.Add(Path.Combine(rootDirectory, "usr", "share", LinuxApplicationsDirectoryName));
+        }
+        else
+        {
+            foreach (var dataDirectory in configuredDataDirectories.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (Path.IsPathFullyQualified(dataDirectory))
+                {
+                    applicationsDirectories.Add(Path.Combine(dataDirectory, LinuxApplicationsDirectoryName));
+                }
+            }
+        }
+
+        return applicationsDirectories.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     private static string? FindLinuxDesktopEntry(string applicationsDirectory)

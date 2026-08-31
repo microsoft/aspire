@@ -82,17 +82,15 @@ $normalizedInput = $rawInput -replace '\\"', '"'
 
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
-# Detect the client (used only for a low-cardinality client-name tag).
+# Detect the client (used only for a low-cardinality client-name tag). Claude/VS Code payload
+# identity wins over inherited environment markers. Keep the App marker before COPILOT_CLI because
+# App sessions also set COPILOT_CLI=1.
 $propertyNames = @()
 if ($data.PSObject -and $data.PSObject.Properties) { $propertyNames = $data.PSObject.Properties.Name }
 $hasHookEventName = $propertyNames -contains 'hook_event_name'
 $hasToolArgs = $propertyNames -contains 'toolArgs'
 
-if ($env:AI_AGENT -eq 'github_copilot_app_agent') {
-    $clientName = 'copilot-app'
-} elseif ($env:COPILOT_CLI -eq '1') {
-    $clientName = 'copilot-cli'
-} elseif ($hasHookEventName) {
+if ($hasHookEventName) {
     $toolUseId = [string]$data.tool_use_id
     $transcriptPath = ([string]$data.transcript_path) -replace '\\', '/'
     if ($toolUseId -match '__vscode' -or $transcriptPath -match '/Code( - Insiders)?/') {
@@ -100,6 +98,10 @@ if ($env:AI_AGENT -eq 'github_copilot_app_agent') {
     } else {
         $clientName = 'claude-code'
     }
+} elseif ($env:AI_AGENT -eq 'github_copilot_app_agent') {
+    $clientName = 'copilot-app'
+} elseif ($env:COPILOT_CLI -eq '1') {
+    $clientName = 'copilot-cli'
 } elseif ($hasToolArgs) {
     $clientName = 'copilot-cli'
 } else {
