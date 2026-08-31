@@ -434,6 +434,7 @@ function createDryRunIssueTransport(sourceTransport, issues, onAction = () => {}
                 state: 'open',
                 comments: [],
                 ...request,
+                dryRunPlaceholder: true,
             };
             inventory.push(issue);
             onAction({ type: 'create', issueNumber: issue.number, ...request });

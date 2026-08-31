@@ -206,6 +206,59 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DoesNotCloseIssueWhenAutoCloseStampIsRemovedBeforeSuccessEvaluation()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+            issuesAfterInitialList = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:false -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(2, result.ListIssuesCount);
+        Assert.Equal(["createLabel"], result.Calls);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Contains("<!-- autoclose:false -->", issue.Body);
+        Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotCloseIssueClosedByUserBeforeSuccessEvaluation()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+            issuesAfterInitialList = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "closed", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(2, result.ListIssuesCount);
+        Assert.Equal(["createLabel"], result.Calls);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task LeavesIssueOpenWhenAutoCloseStampIsFalse()
     {
         var result = await InvokeAsync(new
@@ -282,13 +335,22 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
                 [WatchedFile] = new[]
                 {
                     FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
-                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                    FailingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(45)),
+                    SucceedingRun(id: 11, runNumber: 11, updatedAt: MinutesAgo(15)),
                 },
             },
         });
 
-        Assert.Contains(result.Logs, log => log.Contains("would RECORD failure", StringComparison.Ordinal));
-        Assert.Contains(result.Logs, log => log.Contains("would CLOSE", StringComparison.Ordinal));
+        Assert.Equal(
+            [
+                "[dry-run] would RECORD failure for generate-api-diffs.yml on a new issue",
+                "[dry-run] would RECORD failure for generate-api-diffs.yml on the new issue",
+            ],
+            result.Logs.Where(log => log.Contains("would RECORD failure", StringComparison.Ordinal)));
+        Assert.Contains("[dry-run] would CLOSE the new issue (generate-api-diffs.yml)", result.Logs);
+        Assert.DoesNotContain(result.Logs, log =>
+            log.Contains("would RECORD", StringComparison.Ordinal) && log.Contains("issue #0", StringComparison.Ordinal) ||
+            log.Contains("would CLOSE", StringComparison.Ordinal) && log.Contains("issue #0", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
         Assert.Empty(result.Issues);
     }
@@ -610,7 +672,13 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     private sealed record HarnessResponse(MonitorResult Result);
 
-    private sealed record MonitorResult(bool Threw, string[] Calls, MonitorIssue[] Issues, string[] Logs, ListRunRequest[] ListRunRequests);
+    private sealed record MonitorResult(
+        bool Threw,
+        string[] Calls,
+        MonitorIssue[] Issues,
+        string[] Logs,
+        ListRunRequest[] ListRunRequests,
+        int ListIssuesCount);
 
     private sealed record MonitorIssue(int Number, string State, string? StateReason, string Body, string[] Labels, string[] Comments);
 

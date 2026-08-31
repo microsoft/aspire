@@ -413,6 +413,25 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void CSharpToolBoundsWholeAdapterReconciliation()
+    {
+        var commandPath = Path.Combine(_repoRoot, "tools", "CreateFailingTestIssue", "FailingTestIssueCommand.cs");
+        var command = File.ReadAllText(commandPath);
+
+        Assert.Contains("s_issueReconciliationTimeout = TimeSpan.FromMinutes(5)", command, StringComparison.Ordinal);
+        Assert.Contains("using var reconciliationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);", command, StringComparison.Ordinal);
+        Assert.Contains("reconciliationCts.CancelAfter(s_issueReconciliationTimeout);", command, StringComparison.Ordinal);
+        Assert.Contains("StandardInput.WriteAsync(request.AsMemory(), reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("StandardOutput.ReadToEndAsync(reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("StandardError.ReadToEndAsync(reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("WaitForExitAsync(reconciliationCts.Token)", command, StringComparison.Ordinal);
+        Assert.Contains("cancellationToken.ThrowIfCancellationRequested();", command, StringComparison.Ordinal);
+        Assert.Contains("throw new TimeoutException(\"Failing-test issue reconciliation timed out after five minutes.\", ex);", command, StringComparison.Ordinal);
+        Assert.Contains("process.Kill(entireProcessTree: true)", command, StringComparison.Ordinal);
+        Assert.Contains("await process.WaitForExitAsync(CancellationToken.None)", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ProducersUseSharedPlannerForTrustedCloseAndDryRun()
     {
         var reportCi = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", "report-ci-failure.js"));

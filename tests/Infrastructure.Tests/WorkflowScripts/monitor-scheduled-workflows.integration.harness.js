@@ -21,17 +21,29 @@ const path = require('node:path');
 
 const monitor = require('../../../.github/workflows/monitor-scheduled-workflows.js');
 
-function makeGithub(store, runsByFile, { failUpdate }) {
+function makeGithub(store, runsByFile, { failUpdate, issuesAfterInitialList }) {
     const calls = [];
     const listRunRequests = [];
+    let listIssuesCount = 0;
     return {
         calls,
         listRunRequests,
+        get listIssuesCount() {
+            return listIssuesCount;
+        },
         paginate: async (fn, params) => (await fn(params)).data,
         rest: {
             issues: {
                 createLabel: async () => { calls.push('createLabel'); },
                 listForRepo: async ({ labels, state }) => {
+                    listIssuesCount++;
+                    if (listIssuesCount === 2 && issuesAfterInitialList) {
+                        store.issues = issuesAfterInitialList.map(issue => ({
+                            comments: [],
+                            state: 'open',
+                            ...issue,
+                        }));
+                    }
                     // Production narrows by the lookup label before the marker filter
                     // (tracking-issue.js listOpenIssuesByLabel). Fail loudly if that
                     // narrowing is ever dropped so the regression is caught here
@@ -111,7 +123,10 @@ async function main() {
         issues: (input.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
         next: input.nextNumber ?? 1000,
     };
-    const github = makeGithub(store, input.runsByFile ?? {}, { failUpdate: input.failUpdate === true });
+    const github = makeGithub(store, input.runsByFile ?? {}, {
+        failUpdate: input.failUpdate === true,
+        issuesAfterInitialList: input.issuesAfterInitialList,
+    });
     const logs = [];
     const warnings = [];
     const core = {
@@ -140,6 +155,7 @@ async function main() {
             logs,
             warnings,
             listRunRequests: github.listRunRequests,
+            listIssuesCount: github.listIssuesCount,
             issues: store.issues.map(issue => ({
                 number: issue.number,
                 state: issue.state,

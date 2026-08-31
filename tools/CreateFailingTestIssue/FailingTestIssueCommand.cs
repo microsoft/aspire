@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Net;
@@ -16,6 +16,7 @@ namespace CreateFailingTestIssue;
 internal static class FailingTestIssueCommand
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan s_issueReconciliationTimeout = TimeSpan.FromMinutes(5);
 
     private static readonly HashSet<string> s_failedOutcomes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -356,6 +357,9 @@ internal static class FailingTestIssueCommand
         bool forceNew,
         CancellationToken cancellationToken)
     {
+        using var reconciliationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        reconciliationCts.CancelAfter(s_issueReconciliationTimeout);
+
         var adapterPath = Path.Combine(AppContext.BaseDirectory, "create-failing-test-issue-tracking.js");
         ProcessStartInfo processStartInfo = new()
         {
@@ -381,12 +385,12 @@ internal static class FailingTestIssueCommand
 
         try
         {
-            await process.StandardInput.WriteAsync(request.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await process.StandardInput.WriteAsync(request.AsMemory(), reconciliationCts.Token).ConfigureAwait(false);
             process.StandardInput.Close();
 
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(reconciliationCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(reconciliationCts.Token);
+            await process.WaitForExitAsync(reconciliationCts.Token).ConfigureAwait(false);
             var stdout = await stdoutTask.ConfigureAwait(false);
             var stderr = await stderrTask.ConfigureAwait(false);
 
@@ -399,7 +403,7 @@ internal static class FailingTestIssueCommand
             return JsonSerializer.Deserialize<IssueReconciliationResult>(stdout, s_jsonOptions)
                 ?? throw new InvalidOperationException("Failing-test issue reconciliation returned an empty response.");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
             if (!process.HasExited)
             {
@@ -414,7 +418,8 @@ internal static class FailingTestIssueCommand
             }
 
             await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException("Failing-test issue reconciliation timed out after five minutes.", ex);
         }
     }
 

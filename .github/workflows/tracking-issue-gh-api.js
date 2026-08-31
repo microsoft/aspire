@@ -27,6 +27,10 @@ function runGh(args, input) {
     });
 }
 
+// Live `gh api --paginate --slurp` output is an array of page arrays,
+// `[[{...}], [{...}]]`, while fixtures and injected runners use the flat
+// `[{...}]` shape. Entries are issue or comment objects, so only a paginated
+// response can have an array as its first element.
 function parsePaginatedJson(content) {
     const value = JSON.parse(content);
     if (Array.isArray(value[0])) {

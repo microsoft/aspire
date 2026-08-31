@@ -291,7 +291,9 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
 
         const newestConclusion = typeof newest.conclusion === 'string' ? newest.conclusion.toLowerCase() : null;
         if (newestConclusion !== null && SUCCESS_CONCLUSIONS.has(newestConclusion)) {
-            const issue = tracking.findIssuesForMarkers(issues, [marker])
+            const closeIssues = await transport.listIssues(label);
+            issues = closeIssues;
+            const issue = tracking.findIssuesForMarkers(closeIssues, [marker])
                 .filter(candidate => !tracking.isDuplicateExempt(candidate))
                 .find(candidate => candidate.state === 'open') ?? null;
             const failureConclusions = wf.selfReports ? BACKSTOP_CONCLUSIONS : FAILURE_CONCLUSIONS;
@@ -304,7 +306,7 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
 
             const closeComment = `Latest run succeeded ([run #${newest.run_number}](${newest.html_url})). Closing automatically.`;
             const closeOptions = {
-                issues,
+                issues: closeIssues,
                 label,
                 marker,
                 title: buildIssueTitle(wf.name),
@@ -339,14 +341,14 @@ async function run({ github, context, core, dryRun = false, now = new Date() }) 
                     log(`would CLOSE duplicate issue #${duplicateNumber} as not_planned (canonical #${result.number})`);
                 }
                 if (canonicalClosed) {
-                    const canonical = issues.find(candidate => candidate.number === result.number) ?? issue;
+                    const canonical = closeIssues.find(candidate => candidate.number === result.number) ?? issue;
                     log(`would CLOSE ${formatIssueReference(canonical)} (${wf.file})`);
                 }
                 continue;
             }
 
             for (const action of result.appliedActions.filter(candidate => candidate.type === 'close')) {
-                const closedIssue = issues.find(candidate => candidate.number === action.issueNumber);
+                const closedIssue = closeIssues.find(candidate => candidate.number === action.issueNumber);
                 if (closedIssue !== undefined) {
                     closedIssue.state = 'closed';
                 }

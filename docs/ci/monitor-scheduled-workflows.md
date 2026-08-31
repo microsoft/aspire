@@ -125,6 +125,8 @@ plus any per-entry `labels`, and are stamped `autoClose:true`.
 When the newest completed scheduled run in the polling window concludes
 `success`, any open `automation-broken` issue for that workflow gets a "latest
 run succeeded" comment and is closed with `state_reason: completed`.
+Live success handling re-lists issues immediately before evaluating the trusted
+`autoclose:true` stamp so intervening user edits or closures are preserved.
 
 ## Dedup
 
