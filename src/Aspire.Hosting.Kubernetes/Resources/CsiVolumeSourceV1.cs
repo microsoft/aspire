@@ -30,8 +30,9 @@ public sealed class CsiVolumeSourceV1
     /// Gets or sets a value indicating whether the volume should be mounted read-only.
     /// </summary>
     /// <remarks>
-    /// If set to true, Kubernetes requests a read-only mount from the CSI driver.
-    /// If omitted, the driver's default mount behavior is used.
+    /// If set to <see langword="true"/>, Kubernetes requests a read-only mount from the
+    /// CSI driver. When omitted, Kubernetes treats the value as <see langword="false"/>,
+    /// so the volume is mounted read/write.
     /// </remarks>
     [YamlMember(Alias = "readOnly")]
     public bool? ReadOnly { get; set; }
