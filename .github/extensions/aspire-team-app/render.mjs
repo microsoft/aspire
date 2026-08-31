@@ -485,6 +485,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 /* Live SLA countdown note under a card's pills. Colored by state; the "due in Xh" /
    "overdue" text is recomputed client-side against the browser clock. */
 .sla-note { margin-top: 6px; font-size: 11px; font-weight: 600; line-height: 1.3; letter-spacing: 0.01em; }
+.sla-note.ok { color: var(--muted); font-weight: 500; }
 .sla-note.approaching { color: color-mix(in srgb, var(--warning), var(--fg) 20%); }
 .sla-note.breached { color: color-mix(in srgb, var(--danger), var(--fg) 12%); }
 
@@ -2331,8 +2332,8 @@ function prCard(item, actions) {
     "</div>" +
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
-    ((item.sla && item.sla.state && item.sla.state !== "ok")
-      ? '<div class="sla-note ' + (item.sla.state === "breached" ? "breached" : "approaching") + '">' + esc(slaNoteText(item.sla)) + "</div>"
+    ((item.sla && item.sla.state)
+      ? '<div class="sla-note ' + item.sla.state + '">' + esc(slaNoteText(item.sla)) + "</div>"
       : "") +
   "</a>";
   const acts = (actions && actions.length)
@@ -2500,25 +2501,42 @@ function slaNoteText(sla) {
       ? "\u23f0 Review within SLA \u00b7 due in " + fmtDur(left)
       : "\u23f0 Out of SLA \u00b7 due now";
   }
+  if (sla.state === "ok") {
+    // Comfortable candidates still show a calm live countdown so the panel conveys the
+    // queue at a glance. The server never emits "ok" once the deadline passes, but guard
+    // the clock-skew edge anyway.
+    const left = new Date(sla.deadlineAt).getTime() - Date.now();
+    return left > 0
+      ? "\ud83d\udd52 On SLA clock \u00b7 due in " + fmtDur(left)
+      : "\u23f0 Out of SLA \u00b7 due now";
+  }
   return "";
 }
 
-// The pinned SLA panel: breached PRs first, then approaching. Renders nothing when
-// nothing is at risk. Reuses the standard focus card actions so a reviewer can act inline.
+// The pinned SLA panel: breached PRs first, then approaching, then comfortable "ok"
+// candidates. Stays visible whenever at least one candidate is tracked (so the team
+// always sees the live queue) and renders nothing only when there are zero candidates.
+// Reuses the standard focus card actions so a reviewer can act inline.
 function slaPanelHtml() {
   const s = state.sla;
   if (!s) return "";
   const breached = s.breached || [];
   const approaching = s.approaching || [];
-  const items = breached.concat(approaching);
+  const ok = s.ok || [];
+  // Actionable first (breached, then approaching), comfortable "ok" candidates last so the
+  // panel is always present when anything is tracked, not just when something is at risk.
+  const items = breached.concat(approaching).concat(ok);
   if (!items.length) return "";
-  const tone = breached.length ? "danger" : "warning";
+  const tone = breached.length ? "danger" : approaching.length ? "warning" : "muted";
   const repoLabel = (s.repos && s.repos.length) ? s.repos.map(shortRepo).join(", ") : "aspire-1p";
   const parts = [];
   if (breached.length) parts.push(breached.length + " out of SLA");
   if (approaching.length) parts.push(approaching.length + " approaching");
+  if (ok.length) parts.push(ok.length + " within budget");
+  const atRisk = breached.length || approaching.length;
   const subtitle = "Non-team PRs in " + repoLabel + " on the " + s.budgetHours +
-    " business-hour review SLA \u00b7 " + parts.join(" \u00b7 ") + ". Review these first.";
+    " business-hour review SLA \u00b7 " + parts.join(" \u00b7 ") +
+    (atRisk ? ". Review these first." : ". All within budget \u2014 clear the top ones early.");
   return queuePanel({
     id: "review-sla",
     title: "Review SLA",

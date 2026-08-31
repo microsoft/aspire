@@ -384,12 +384,23 @@ export async function annotateDashboardSla(dashboard, opts = {}) {
   // so the SLA pill rides along wherever the PR appears.
   if (attention) decorateAttention(attention, statusByKey);
 
-  // The dedicated panel shows only actionable states (approaching / breached),
-  // breached first then approaching, each group by soonest deadline.
+  // snapshot() builds attention.slaCandidates as *fresh* card objects, so they are not
+  // the same references decorateAttention() just stamped in the focus/bucket lists. Stamp
+  // them directly here — the panel arrays below read c.sla, so without this the panel
+  // would report a non-zero total/okCount but render no rows.
+  for (const card of cards) {
+    const status = statusByKey.get(slaCandidateKey(card.pr));
+    if (status) decorateCard(card, status);
+  }
+
+  // The dedicated panel shows every tracked candidate so the team always has visibility
+  // into the SLA queue. Actionable states sort first (breached, then approaching), each
+  // group by soonest deadline; comfortable "ok" candidates follow with a live countdown.
   const byDeadline = (a, b) => new Date(a.sla.deadlineAt) - new Date(b.sla.deadlineAt);
   const panelCards = cards.filter((c) => c.sla && c.sla.state !== "ok");
   const breached = panelCards.filter((c) => c.sla.state === "breached").sort(byDeadline);
   const approaching = panelCards.filter((c) => c.sla.state === "approaching").sort(byDeadline);
+  const ok = cards.filter((c) => c.sla && c.sla.state === "ok").sort(byDeadline);
 
   dashboard.sla = {
     repos: SLA_REPOS,
@@ -398,7 +409,9 @@ export async function annotateDashboardSla(dashboard, opts = {}) {
     tz: SLA_TIMEZONE,
     breached,
     approaching,
-    // Count of tracked-but-comfortable candidates, for a quiet "N within budget" note.
+    // Tracked-but-comfortable candidates, shown with a quiet countdown so the panel
+    // stays useful even when nothing is at risk yet.
+    ok,
     okCount: cards.length - panelCards.length,
     total: cards.length,
   };

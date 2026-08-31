@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hourMs } from "./constants.mjs";
+import { hourMs, SLA_REPOS } from "./constants.mjs";
 import {
   addBusinessMs,
+  annotateDashboardSla,
   businessMsBetween,
   isSlaCandidatePr,
   isSlaRepo,
@@ -151,4 +152,50 @@ test("reconcileTracking: adds new keys, preserves firstQualifiedAt, prunes gone 
   assert.equal(tracking.prs["r#3"].firstQualifiedAt, now2);
   // r#1 keeps its original clock start throughout.
   assert.equal(tracking.prs["r#1"].firstQualifiedAt, now1);
+});
+
+test("annotateDashboardSla: freshly-qualified candidates populate the ok panel list", async () => {
+  const repo = SLA_REPOS[0];
+  const mk = (number, author) => ({
+    pr: {
+      repository: repo,
+      number,
+      author,
+      title: `PR ${number}`,
+      url: `https://example/${number}`,
+      review: { reviewerCount: 0 },
+    },
+  });
+  // A focus card sharing PR #1's key proves the SLA record also rides the attention
+  // lists, which are *different object references* than attention.slaCandidates.
+  const focusCard = mk(1, "external-one");
+  const dashboard = {
+    attention: {
+      focus: [focusCard],
+      slaCandidates: [mk(1, "external-one"), mk(2, "external-two")],
+    },
+  };
+  // Mon 2025-01-06 10:00 PT: both PRs are freshly qualified, so with a same-run start
+  // stamp they sit comfortably inside the 8h budget (warn at 16:00, due Tue).
+  const now = pt(2025, 1, 6, 10);
+  await annotateDashboardSla(dashboard, { now, persist: false });
+
+  const s = dashboard.sla;
+  assert.equal(s.total, 2);
+  assert.equal(s.okCount, 2);
+  assert.equal(s.breached.length, 0);
+  assert.equal(s.approaching.length, 0);
+  // The regression guard: candidate cards are stamped directly, so the ok list is
+  // populated even though slaCandidates are not the same references as focus/buckets.
+  assert.equal(s.ok.length, 2);
+  for (const c of s.ok) {
+    assert.equal(c.sla.state, "ok");
+    assert.ok(c.sla.deadlineAt);
+    assert.ok(c.sla.firstQualifiedAt);
+  }
+  // The scratch field is stripped from the broadcast payload.
+  assert.equal("slaCandidates" in dashboard.attention, false);
+  // The focus card (separate reference, same PR) is decorated too.
+  assert.ok(focusCard.sla);
+  assert.equal(focusCard.sla.state, "ok");
 });
