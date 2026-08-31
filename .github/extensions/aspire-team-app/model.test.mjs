@@ -15,6 +15,7 @@ import {
   createIssueSignals,
   filterCheckFailureRules,
   isChecksFailing,
+  isCoreTeamAuthor,
   isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
@@ -295,6 +296,27 @@ test("createDeveloperPullRequestCounts attributes open PRs to core-team members 
   // The "_microsoft" alias attributes to the canonical core-team login.
   assert.equal(byActor.get("IEvangelist"), 1);
   assert.equal(byActor.has("randocontributor"), false);
+});
+
+test("isCoreTeamAuthor: EMU logins are core team only via the explicit allowlist", () => {
+  // Public core-team login and a member alt whose base matches the public roster.
+  assert.equal(isCoreTeamAuthor("davidfowl"), true);
+  assert.equal(isCoreTeamAuthor("eerhardt_microsoft"), true);
+
+  // Listed EMU logins whose base does NOT match a public login (e.g. David Pine is
+  // @IEvangelist publicly but dapine_microsoft on the mirror) still resolve via the
+  // allowlist, not a suffix-strip.
+  assert.equal(isCoreTeamAuthor("dapine_microsoft"), true);
+  assert.equal(isCoreTeamAuthor("midenn_microsoft"), true);
+  assert.equal(isCoreTeamAuthor("karolz_microsoft"), true);
+
+  // An unlisted "*_microsoft" account is NOT core team — carrying the suffix is not
+  // enough. These are the review targets the SLA queue is meant to catch.
+  assert.equal(isCoreTeamAuthor("andreas_microsoft"), false);
+  assert.equal(isCoreTeamAuthor("someexternal_microsoft"), false);
+
+  // Non-Microsoft community author.
+  assert.equal(isCoreTeamAuthor("randocontributor"), false);
 });
 
 function isoAgoIssue(ms) {

@@ -159,10 +159,11 @@ never sits unreviewed past budget.
 
 - **Who it applies to** — a PR qualifies for the SLA clock when **all** of these hold:
   it lives on an SLA repo (`devdiv-microsoft/aspire-1p`), it already qualifies for the
-  focused **Needs attention** queue, its author is **not** on the core team (enterprise
-  `_microsoft` aliases count as core team), and it has had **zero human reviews** so far
-  (Copilot/bot reviews don't stop the clock). The first human review — comment or
-  approval — stops the clock immediately.
+  focused **Needs attention** queue, its author is **not** on the core team (core-team
+  membership on the mirror is an explicit allowlist of enterprise `_microsoft` accounts —
+  see `coreTeamEmuLogins` in `constants.mjs`; any other `_microsoft` author is a review
+  target), and it has had **zero human reviews** so far (Copilot/bot reviews don't stop
+  the clock). The first human review — comment or approval — stops the clock immediately.
 - **Business-time budget** — the budget is **8 business hours**, measured Mon–Fri
   09:00–17:00 **Pacific**. Overnight, weekend, and holiday-adjacent hours don't burn
   budget, and the window tracks Pacific daylight/standard transitions automatically. A

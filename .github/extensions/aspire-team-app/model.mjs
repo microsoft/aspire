@@ -7,6 +7,7 @@
 
 import {
   afscromeIssueAuthor,
+  coreTeamEmuLogins,
   coreTeamMembers,
   coreTeamMemberAliasSuffixes,
   ctiTeamTitleMarker,
@@ -87,15 +88,19 @@ function isBotAuthor(author, authorType) {
 export function isCoreTeamAuthor(author) {
   return coreTeamOwnershipActor(author) !== null;
 }
-// Resolves the core-team actor that "owns" a PR by an author, honoring alias
-// suffixes (#95). Returns a canonical coreTeamMembers login when the author
-// matches directly or via a stripped alias suffix; otherwise returns the alias
-// login itself when the author carries a configured suffix (an MSFT alt account
-// not individually listed); null for everyone else.
+const coreTeamEmuLoginSet = new Set(coreTeamEmuLogins.map((login) => login.toLowerCase()));
+
+// Resolves the core-team actor that "owns" a PR by an author. Returns a canonical
+// coreTeamMembers login when the author matches a listed member directly or via a
+// stripped alias suffix (a member's "*_microsoft" alt whose base is a public login,
+// e.g. "eerhardt_microsoft" -> "eerhardt"). Otherwise, an EMU-form login counts as core
+// team only when it is on the explicit coreTeamEmuLogins allowlist (the mirror roster,
+// whose bases frequently differ from public logins). Everyone else -- including any
+// unlisted "*_microsoft" account -- returns null so they remain review targets.
 function coreTeamOwnershipActor(author) {
   const member = matchingCoreTeamMember(author);
   if (member) return member;
-  return isConfiguredTeamAlias(author) ? author : null;
+  return coreTeamEmuLoginSet.has(String(author || "").toLowerCase()) ? author : null;
 }
 function matchingCoreTeamMember(author) {
   const authorKey = actorIdentityKey(author);
@@ -113,9 +118,6 @@ function configuredTeamAliasBase(author) {
     return s.length > 0 && normalized.endsWith(s) && normalized.length > s.length;
   });
   return suffix ? String(author).slice(0, -suffix.length) : null;
-}
-function isConfiguredTeamAlias(author) {
-  return configuredTeamAliasBase(author) !== null;
 }
 function isCommunityToolkitPullRequest(pr) {
   return pr.repository.toLowerCase() === "communitytoolkit/aspire";

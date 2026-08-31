@@ -122,6 +122,10 @@ test("isSlaCandidatePr: only non-team, un-reviewed PRs on an SLA repo qualify", 
   assert.equal(isSlaCandidatePr(candidatePr({ author: "joperezr" })), false);
   // A core-team enterprise alias is exempt too.
   assert.equal(isSlaCandidatePr(candidatePr({ author: "joperezr_microsoft" })), false);
+  // A listed EMU login whose base differs from the public login is exempt via the allowlist.
+  assert.equal(isSlaCandidatePr(candidatePr({ author: "dapine_microsoft" })), false);
+  // An UNLISTED "*_microsoft" account is a review target — the suffix alone is not core team.
+  assert.equal(isSlaCandidatePr(candidatePr({ author: "andreas_microsoft" })), true);
   // Any human review stops the clock.
   assert.equal(isSlaCandidatePr(candidatePr({ review: { reviewerCount: 1 } })), false);
   // Repos outside the SLA never qualify.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { capFocusKeepingDebt, loadDashboard } from "./github.mjs";
+import { capFocusKeepingDebt, deriveReview, loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
 
@@ -31,6 +31,30 @@ test("capFocusKeepingDebt keeps the head cap plus review-debt cards that spill p
 
   // No spillover at all when everything fits under the cap.
   assert.deepEqual(capFocusKeepingDebt(cards.slice(0, 2), 5).map((c) => c.pr.number), [1, 2]);
+});
+
+test("deriveReview: Copilot's code-review bot does not count as a human reviewer", () => {
+  const viewers = new Set();
+  // GraphQL returns the Copilot reviewer bot's login WITHOUT the "[bot]" suffix.
+  const copilotOnly = deriveReview(
+    [{ author: { login: "copilot-pull-request-reviewer" }, state: "COMMENTED", submittedAt: "2026-07-01T10:00:00Z" }],
+    [], viewers, "devdiv-microsoft/aspire-1p", 0,
+  );
+  assert.equal(copilotOnly.reviewerCount, 0);
+  assert.equal(copilotOnly.state, "waiting");
+  // The side-flag still records that Copilot weighed in.
+  assert.equal(copilotOnly.copilotReviewed, true);
+
+  // A genuine human review is still counted and sets the headline state.
+  const withHuman = deriveReview(
+    [
+      { author: { login: "copilot-pull-request-reviewer" }, state: "COMMENTED", submittedAt: "2026-07-01T10:00:00Z" },
+      { author: { login: "octocat" }, state: "APPROVED", submittedAt: "2026-07-01T11:00:00Z" },
+    ],
+    [], viewers, "devdiv-microsoft/aspire-1p", 0,
+  );
+  assert.equal(withHuman.reviewerCount, 1);
+  assert.equal(withHuman.state, "approved");
 });
 
 test("loadDashboard paginates open pull requests for each watched repo", async () => {

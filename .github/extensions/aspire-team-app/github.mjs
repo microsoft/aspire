@@ -209,9 +209,15 @@ function resolveAuthor(login, assignees) {
 // Server-parity review summary (mirrors GitHubClient.CreateReviewStatusFromGraphQlAsync).
 // `rawUnresolved` is the count of unresolved review threads before policy gating.
 const RESOLUTION_REQUIRED_REPOS = new Set(["microsoft/aspire"]);
-function deriveReview(reviews, requestedReviewers, viewers, repo, rawUnresolved) {
+export function deriveReview(reviews, requestedReviewers, viewers, repo, rawUnresolved) {
+  // Copilot's code-review bot submits real REVIEW nodes whose GraphQL author.login is
+  // "copilot-pull-request-reviewer" (bot logins come back WITHOUT the "[bot]" suffix over
+  // GraphQL). It is not a human sign-off, so it must be kept out of the human review set --
+  // otherwise it inflates reviewerCount to 1, mislabels the PR as "Review started", and (on
+  // the aspire-1p mirror) wrongly clears the review SLA clock. isBotReviewer doesn't catch
+  // this login, so exclude Copilot reviewers explicitly; copilotReviewed still tracks it.
   const human = reviews
-    .filter((r) => r.author?.login && !isBotReviewer(r.author.login) && r.submittedAt)
+    .filter((r) => r.author?.login && !isBotReviewer(r.author.login) && !isCopilotReviewer(r.author.login) && r.submittedAt)
     .sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt));
   const copilotReviewed = reviews.some((r) => isCopilotReviewer(r.author?.login));
 

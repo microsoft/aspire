@@ -22,10 +22,39 @@ export const coreTeamMembers = [
 ];
 
 // Author login suffixes that mark a core-team member's alt/enterprise alias (e.g.
-// "dapine_microsoft"). Any author ending in one of these is treated as core team,
-// and if the base login (with the suffix stripped) matches a coreTeamMembers entry
-// it is attributed to that member. Ported from pr-dashboard Dashboard config (#95).
+// "dapine_microsoft"). When the base login (with the suffix stripped) matches a
+// coreTeamMembers entry the PR is attributed to that member. Ported from pr-dashboard
+// Dashboard config (#95). NOTE: carrying a suffix is NOT by itself proof of core-team
+// membership — see coreTeamEmuLogins below. This list is also consumed by accounts.mjs
+// (isEmuLogin) to detect Enterprise Managed User accounts for per-account repo defaults.
 export const coreTeamMemberAliasSuffixes = ["_microsoft"];
+
+// Explicit allowlist of Enterprise Managed User (EMU) logins that ARE the Aspire core
+// team on the private first-party mirror (devdiv-microsoft/aspire-1p). Membership here
+// is authoritative for EMU-form authors: on the mirror every author is an EMU account,
+// and an EMU login is treated as core team ONLY if it appears in this list. Any other
+// "*_microsoft" author is a review target (a candidate for the review SLA queue).
+//
+// This is deliberately explicit rather than "anything ending in _microsoft", because the
+// EMU base often differs from the person's public GitHub login (e.g. David Pine is
+// @IEvangelist publicly but "dapine_microsoft" on the mirror), so a suffix-strip against
+// the public coreTeamMembers roster can't recognize them. Keep in sync with the team's
+// EMU roster. Logins are compared case-insensitively.
+export const coreTeamEmuLogins = [
+  "eerhardt_microsoft",     // Eric Erhardt
+  "ankj_microsoft",         // Ankit Jain
+  "dapine_microsoft",       // David Pine
+  "midenn_microsoft",       // Mitch Denny
+  "adamratzman_microsoft",  // Adam Ratzman
+  "danegsta_microsoft",     // David Negstad
+  "jamesnk_microsoft",      // James Newton-King
+  "karolz_microsoft",       // Karol Zadora-Przylecki
+  "sebros_microsoft",       // Sebastien Ros
+  "ellahathaway_microsoft", // Ella Hathaway
+  "joperezr_microsoft",     // Jose Perez Rodriguez
+  "dedward_microsoft",      // Damian Edwards
+  "maleger_microsoft",      // Maddy Montaquila
+];
 
 // Repos where specific check failures are non-blocking (informational only), so an
 // aggregate "failure" rollup driven solely by these checks should not read as red CI.
