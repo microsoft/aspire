@@ -2322,6 +2322,47 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandNonInteractive_WithMcpsAspire_AppliesDetectedMcpActions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var applyCount = 0;
+        var detector = new FakeAgentEnvironmentDetector(AgentClientKind.VsCode)
+        {
+            Applicators =
+            [
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetDefinition.AspireMcpServer,
+                    "vscode",
+                    "VS Code MCP",
+                    _ =>
+                    {
+                        applyCount++;
+                        return Task.CompletedTask;
+                    })
+            ]
+        };
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+            options.AgentEnvironmentDetectorFactory = _ => detector;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse(
+            "new aspire-empty --name TestApp --output ./output --skill-locations none --skills none --mcps aspire");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, applyCount);
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;
@@ -2441,7 +2482,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
                 return runner;
             };
-            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3257,7 +3298,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
-            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3286,7 +3327,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
-            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 

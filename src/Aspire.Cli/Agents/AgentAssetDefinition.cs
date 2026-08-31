@@ -8,19 +8,34 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Describes an agent asset that can be selected and installed.
+/// Describes common selection metadata for an agent asset.
 /// </summary>
 [DebuggerDisplay("AssetKind = {AssetKind}, Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
-internal sealed class AgentAssetDefinition
+internal abstract class AgentAssetDefinition
 {
+    protected AgentAssetDefinition(
+        AgentAssetKind assetKind,
+        string name,
+        string description,
+        bool isDefault)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        AssetKind = assetKind;
+        Name = name;
+        Description = description;
+        IsDefault = isDefault;
+    }
+
     /// <summary>
     /// The Playwright CLI skill for browser automation.
     /// </summary>
-    public static readonly AgentAssetDefinition PlaywrightCli = new(
+    public static readonly AgentFileAssetDefinition PlaywrightCli = new(
         AgentAssetKind.Skill,
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
-        AgentAssetSourceKind.ExternalInstaller,
+        AgentFileAssetSourceKind.ExternalInstaller,
         files: [],
         installExcludedRelativePaths: [],
         isDefault: false);
@@ -28,11 +43,11 @@ internal sealed class AgentAssetDefinition
     /// <summary>
     /// The dotnet-inspect skill for querying .NET API surfaces.
     /// </summary>
-    public static readonly AgentAssetDefinition DotnetInspect = new(
+    public static readonly AgentFileAssetDefinition DotnetInspect = new(
         AgentAssetKind.Skill,
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
-        AgentAssetSourceKind.Static,
+        AgentFileAssetSourceKind.Static,
         files: [new AgentAssetFile("SKILL.md", CommonAgentApplicators.DotnetInspectSkillFileContent)],
         installExcludedRelativePaths: [],
         isDefault: false,
@@ -41,45 +56,11 @@ internal sealed class AgentAssetDefinition
     /// <summary>
     /// The Aspire MCP server configuration applied to detected agent environments.
     /// </summary>
-    public static readonly AgentAssetDefinition AspireMcpServer = CreateActionAsset(
-        "aspire-mcp-server",
-        AgentCommandStrings.InitCommand_ConfigureMcpServer);
-
-    private AgentAssetDefinition(
-        AgentAssetKind assetKind,
-        string name,
-        string description,
-        AgentAssetSourceKind sourceKind,
-        IReadOnlyList<AgentAssetFile> files,
-        IReadOnlyList<string> installExcludedRelativePaths,
-        bool isDefault,
-        bool hasInstallableFiles = false,
-        IReadOnlyList<string>? applicableLanguages = null)
-    {
-        if (sourceKind is AgentAssetSourceKind.Action &&
-            (files.Count > 0 ||
-             installExcludedRelativePaths.Count > 0 ||
-             hasInstallableFiles ||
-             applicableLanguages is { Count: > 0 }))
-        {
-            throw new ArgumentException("Action-backed agent assets cannot define file installation metadata.");
-        }
-
-        if ((assetKind is AgentAssetKind.Mcp) != (sourceKind is AgentAssetSourceKind.Action))
-        {
-            throw new ArgumentException("MCP agent assets must be action-backed, and action-backed assets must be MCP assets.");
-        }
-
-        AssetKind = assetKind;
-        Name = name;
-        Description = description;
-        SourceKind = sourceKind;
-        Files = [.. files];
-        InstallExcludedRelativePaths = [.. installExcludedRelativePaths];
-        IsDefault = isDefault;
-        HasInstallableFiles = hasInstallableFiles || Files.Count > 0;
-        ApplicableLanguages = applicableLanguages is null ? [] : [.. applicableLanguages];
-    }
+    public static readonly AgentActionAssetDefinition AspireMcpServer = new(
+        AgentAssetKind.Mcp,
+        "aspire",
+        AgentCommandStrings.InitCommand_ConfigureMcpServer,
+        isDefault: false);
 
     /// <summary>
     /// Gets the asset kind.
@@ -97,9 +78,96 @@ internal sealed class AgentAssetDefinition
     public string Description { get; }
 
     /// <summary>
+    /// Gets whether the asset should be selected by default.
+    /// </summary>
+    public bool IsDefault { get; }
+
+    /// <summary>
+    /// Gets agent assets defined directly by the CLI.
+    /// </summary>
+    public static IReadOnlyList<AgentAssetDefinition> CliDefined { get; } =
+        [PlaywrightCli, DotnetInspect, AspireMcpServer];
+
+    /// <summary>
+    /// Gets CLI-defined file assets of the specified kind.
+    /// </summary>
+    public static IReadOnlyList<AgentFileAssetDefinition> GetCliDefinedFileAssets(AgentAssetKind assetKind)
+        => CliDefined.OfType<AgentFileAssetDefinition>()
+            .Where(asset => asset.AssetKind == assetKind)
+            .ToList();
+
+    /// <summary>
+    /// Gets CLI-defined action assets of the specified kind.
+    /// </summary>
+    public static IReadOnlyList<AgentActionAssetDefinition> GetCliDefinedActionAssets(AgentAssetKind assetKind)
+        => CliDefined.OfType<AgentActionAssetDefinition>()
+            .Where(asset => asset.AssetKind == assetKind)
+            .ToList();
+
+    /// <summary>
+    /// Gets whether this asset has the specified name.
+    /// </summary>
+    public bool HasName(string name, StringComparison comparison = StringComparison.Ordinal)
+        => string.Equals(Name, name, comparison);
+
+    /// <inheritdoc />
+    public override string ToString() => Name;
+}
+
+/// <summary>
+/// Describes a file-backed agent asset.
+/// </summary>
+internal sealed class AgentFileAssetDefinition : AgentAssetDefinition
+{
+    internal AgentFileAssetDefinition(
+        AgentAssetKind assetKind,
+        string name,
+        string description,
+        AgentFileAssetSourceKind sourceKind,
+        IReadOnlyList<AgentAssetFile> files,
+        IReadOnlyList<string> installExcludedRelativePaths,
+        bool isDefault,
+        bool hasInstallableFiles = false,
+        IReadOnlyList<string>? applicableLanguages = null)
+        : base(assetKind, name, description, isDefault)
+    {
+        if (assetKind is not AgentAssetKind.Skill)
+        {
+            throw new ArgumentException("Only Skill assets can be file-backed in this layer.", nameof(assetKind));
+        }
+
+        SourceKind = sourceKind;
+        Files = [.. files];
+        InstallExcludedRelativePaths = [.. installExcludedRelativePaths];
+        HasInstallableFiles = hasInstallableFiles || Files.Count > 0;
+        ApplicableLanguages = applicableLanguages is null ? [] : [.. applicableLanguages];
+    }
+
+    /// <summary>
+    /// Creates a skill asset sourced from the Aspire skills bundle.
+    /// </summary>
+    internal static AgentFileAssetDefinition CreateAspireSkillsBundle(
+        string name,
+        string description,
+        IReadOnlyList<string>? installExcludedRelativePaths = null,
+        IReadOnlyList<string>? applicableLanguages = null)
+    {
+        return new(
+            AgentAssetKind.Skill,
+            name,
+            description,
+            AgentFileAssetSourceKind.AspireSkillsBundle,
+            files: [],
+            installExcludedRelativePaths: installExcludedRelativePaths ?? [],
+            isDefault: true,
+            hasInstallableFiles: true,
+            applicableLanguages);
+    }
+
+    /// <summary>
     /// Gets where the asset's installable content comes from.
     /// </summary>
-    public AgentAssetSourceKind SourceKind { get; }
+    public AgentFileAssetSourceKind SourceKind { get; }
 
     /// <summary>
     /// Gets files stored directly on the asset definition.
@@ -117,64 +185,9 @@ internal sealed class AgentAssetDefinition
     public IReadOnlyList<string> InstallExcludedRelativePaths { get; }
 
     /// <summary>
-    /// Gets whether the asset should be selected by default.
-    /// </summary>
-    public bool IsDefault { get; }
-
-    /// <summary>
     /// Gets the language identifiers to which this asset applies.
     /// </summary>
     public IReadOnlyList<string> ApplicableLanguages { get; }
-
-    /// <summary>
-    /// Gets agent assets defined directly by the CLI.
-    /// </summary>
-    public static IReadOnlyList<AgentAssetDefinition> CliDefined { get; } =
-        [PlaywrightCli, DotnetInspect, AspireMcpServer];
-
-    /// <summary>
-    /// Gets CLI-defined assets of the specified kind.
-    /// </summary>
-    public static IReadOnlyList<AgentAssetDefinition> GetCliDefined(AgentAssetKind assetKind)
-        => CliDefined.Where(asset => asset.AssetKind == assetKind).ToList();
-
-    private static AgentAssetDefinition CreateActionAsset(
-        string name,
-        string description)
-    {
-        return new(
-            AgentAssetKind.Mcp,
-            name,
-            description,
-            AgentAssetSourceKind.Action,
-            files: [],
-            installExcludedRelativePaths: [],
-            isDefault: false);
-    }
-
-    /// <summary>
-    /// Creates a skill asset sourced from the Aspire skills bundle.
-    /// </summary>
-    internal static AgentAssetDefinition CreateAspireSkillsBundle(
-        string name,
-        string description,
-        IReadOnlyList<string>? installExcludedRelativePaths = null,
-        IReadOnlyList<string>? applicableLanguages = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(description);
-
-        return new(
-            AgentAssetKind.Skill,
-            name,
-            description,
-            AgentAssetSourceKind.AspireSkillsBundle,
-            files: [],
-            installExcludedRelativePaths: installExcludedRelativePaths ?? [],
-            isDefault: true,
-            hasInstallableFiles: true,
-            applicableLanguages);
-    }
 
     /// <summary>
     /// Gets whether a bundled file should be installed.
@@ -211,15 +224,6 @@ internal sealed class AgentAssetDefinition
             string.Equals(language, detectedLanguage.Value.Value, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// Gets whether this asset has the specified name.
-    /// </summary>
-    public bool HasName(string name, StringComparison comparison = StringComparison.Ordinal)
-        => string.Equals(Name, name, comparison);
-
-    /// <inheritdoc />
-    public override string ToString() => Name;
-
     private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
     {
         if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal))
@@ -238,9 +242,28 @@ internal sealed class AgentAssetDefinition
 }
 
 /// <summary>
-/// Identifies where an agent asset's installable content is sourced from.
+/// Describes an agent asset applied through detected environment actions.
 /// </summary>
-internal enum AgentAssetSourceKind
+internal sealed class AgentActionAssetDefinition : AgentAssetDefinition
+{
+    internal AgentActionAssetDefinition(
+        AgentAssetKind assetKind,
+        string name,
+        string description,
+        bool isDefault)
+        : base(assetKind, name, description, isDefault)
+    {
+        if (assetKind is not AgentAssetKind.Mcp)
+        {
+            throw new ArgumentException("Only MCP assets can be action-backed.", nameof(assetKind));
+        }
+    }
+}
+
+/// <summary>
+/// Identifies where a file-backed agent asset's content is sourced from.
+/// </summary>
+internal enum AgentFileAssetSourceKind
 {
     /// <summary>
     /// The asset is represented by files compiled into the CLI.
@@ -256,9 +279,4 @@ internal enum AgentAssetSourceKind
     /// The asset is managed by a dedicated external installer.
     /// </summary>
     ExternalInstaller,
-
-    /// <summary>
-    /// The asset is applied through detected environment actions.
-    /// </summary>
-    Action,
 }

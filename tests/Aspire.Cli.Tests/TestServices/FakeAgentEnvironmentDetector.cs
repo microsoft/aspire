@@ -5,7 +5,7 @@ using Aspire.Cli.Agents;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-internal sealed class FakeAgentEnvironmentDetector(params AgentClient[] detectedClients) : IAgentEnvironmentDetector
+internal sealed class FakeAgentEnvironmentDetector(params AgentClientKind[] detectedClients) : IAgentEnvironmentDetector
 {
     public IReadOnlyList<AgentEnvironmentApplicator> Applicators { get; init; } = [];
 

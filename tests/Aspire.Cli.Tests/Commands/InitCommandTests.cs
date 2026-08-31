@@ -499,7 +499,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             }
 
             return items
-                .OfType<AgentAssetDefinition>()
+                .OfType<AgentFileAssetDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
                 .Cast<object>()
                 .ToList();
@@ -510,7 +510,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
-            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -548,7 +548,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             }
 
             return items
-                .OfType<AgentAssetDefinition>()
+                .OfType<AgentFileAssetDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
                 .Cast<object>()
                 .ToList();
@@ -559,7 +559,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
-            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClientKind.CopilotCli);
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -593,6 +593,41 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
+    }
+
+    [Fact]
+    public async Task InitCommand_NonInteractive_WithMcpsAspire_AppliesDetectedMcpActions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var applyCount = 0;
+        var detector = new FakeAgentEnvironmentDetector(AgentClientKind.VsCode)
+        {
+            Applicators =
+            [
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetDefinition.AspireMcpServer,
+                    "vscode",
+                    "VS Code MCP",
+                    _ =>
+                    {
+                        applyCount++;
+                        return Task.CompletedTask;
+                    })
+            ]
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AgentEnvironmentDetectorFactory = _ => detector;
+        });
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var parseResult = command.Parse(
+            "init --non-interactive --skill-locations none --skills none --mcps aspire");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(1, applyCount);
     }
 
     [Fact]

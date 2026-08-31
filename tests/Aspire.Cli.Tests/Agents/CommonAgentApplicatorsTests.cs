@@ -74,7 +74,7 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
     {
-        var bundleSkill = AgentAssetDefinition.CreateAspireSkillsBundle(
+        var bundleSkill = AgentFileAssetDefinition.CreateAspireSkillsBundle(
             "aspire-monitoring",
             "Observe Aspire apps with logs, traces, metrics, and resource state");
 
@@ -97,7 +97,7 @@ public class CommonAgentApplicatorsTests
     {
         Assert.Equal(AgentAssetKind.Skill, AgentAssetDefinition.PlaywrightCli.AssetKind);
         Assert.Empty(AgentAssetDefinition.PlaywrightCli.Files);
-        Assert.Equal(AgentAssetSourceKind.ExternalInstaller, AgentAssetDefinition.PlaywrightCli.SourceKind);
+        Assert.Equal(AgentFileAssetSourceKind.ExternalInstaller, AgentAssetDefinition.PlaywrightCli.SourceKind);
         Assert.False(AgentAssetDefinition.PlaywrightCli.HasInstallableFiles);
     }
 
@@ -106,15 +106,15 @@ public class CommonAgentApplicatorsTests
     {
         Assert.All(
             [
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
-                AgentAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
+                AgentFileAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
+                AgentFileAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
+                AgentFileAssetDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
             ],
             skill =>
             {
                 Assert.Equal(AgentAssetKind.Skill, skill.AssetKind);
                 Assert.Empty(skill.Files);
-                Assert.Equal(AgentAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
+                Assert.Equal(AgentFileAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
                 Assert.True(skill.HasInstallableFiles);
             });
     }
@@ -122,7 +122,7 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetDefinition_StaticInstallableSkillDescriptionsFitAgentHostLimits()
     {
-        var installableSkills = AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill)
+        var installableSkills = AgentAssetDefinition.GetCliDefinedFileAssets(AgentAssetKind.Skill)
             .Where(static skill => skill.Files.Count > 0);
 
         foreach (var skill in installableSkills)
@@ -141,7 +141,7 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetDefinition_BundleSkill_ExcludesManifestPathsFromInstall()
     {
-        var bundleSkill = AgentAssetDefinition.CreateAspireSkillsBundle(
+        var bundleSkill = AgentFileAssetDefinition.CreateAspireSkillsBundle(
             CommonAgentApplicators.AspireSkillName,
             "Aspire CLI commands and workflows for distributed apps",
             installExcludedRelativePaths: [Path.Combine("evals")]);
@@ -156,7 +156,7 @@ public class CommonAgentApplicatorsTests
     {
         var skillFile = Assert.Single(AgentAssetDefinition.DotnetInspect.Files);
 
-        Assert.Equal(AgentAssetSourceKind.Static, AgentAssetDefinition.DotnetInspect.SourceKind);
+        Assert.Equal(AgentFileAssetSourceKind.Static, AgentAssetDefinition.DotnetInspect.SourceKind);
         Assert.True(AgentAssetDefinition.DotnetInspect.HasInstallableFiles);
         Assert.Contains("# dotnet-inspect", skillFile.Content);
     }
@@ -164,30 +164,28 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void AgentAssetDefinition_AspireMcpServer_IsActionBackedAndNonDefault()
     {
-        var mcpAsset = Assert.Single(AgentAssetDefinition.GetCliDefined(AgentAssetKind.Mcp));
+        var mcpAsset = Assert.Single(AgentAssetDefinition.GetCliDefinedActionAssets(AgentAssetKind.Mcp));
 
         Assert.Same(AgentAssetDefinition.AspireMcpServer, mcpAsset);
-        Assert.Equal(AgentAssetSourceKind.Action, mcpAsset.SourceKind);
-        Assert.Empty(mcpAsset.Files);
-        Assert.Empty(mcpAsset.InstallExcludedRelativePaths);
-        Assert.Empty(mcpAsset.ApplicableLanguages);
-        Assert.False(mcpAsset.HasInstallableFiles);
         Assert.False(mcpAsset.IsDefault);
         Assert.All(
-            AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill),
-            static skill => Assert.NotEqual(AgentAssetSourceKind.Action, skill.SourceKind));
+            AgentAssetDefinition.CliDefined.Where(static asset => asset.AssetKind is AgentAssetKind.Skill),
+            static skill => Assert.IsType<AgentFileAssetDefinition>(skill));
+        Assert.All(
+            AgentAssetDefinition.CliDefined.Where(static asset => asset.AssetKind is AgentAssetKind.Mcp),
+            static mcp => Assert.IsType<AgentActionAssetDefinition>(mcp));
     }
 
     [Fact]
-    public void AgentClient_AllKnownClientsSupportSkillsAndMcp()
+    public void AgentClientKind_AllKnownClientsSupportSkillsAndMcp()
     {
-        AgentClient[] clients =
+        AgentClientKind[] clients =
         [
-            AgentClient.CopilotCli,
-            AgentClient.CopilotApp,
-            AgentClient.VsCode,
-            AgentClient.ClaudeCode,
-            AgentClient.OpenCode,
+            AgentClientKind.CopilotCli,
+            AgentClientKind.CopilotApp,
+            AgentClientKind.VsCode,
+            AgentClientKind.ClaudeCode,
+            AgentClientKind.OpenCode,
         ];
 
         Assert.All(clients, static client =>
@@ -195,6 +193,16 @@ public class CommonAgentApplicatorsTests
             Assert.True(client.Supports(AgentAssetKind.Skill));
             Assert.True(client.Supports(AgentAssetKind.Mcp));
         });
+    }
+
+    [Fact]
+    public void EveryAgentAssetKind_HasSupportingClient()
+    {
+        var clients = Enum.GetValues<AgentClientKind>();
+
+        Assert.All(
+            Enum.GetValues<AgentAssetKind>(),
+            assetKind => Assert.Contains(clients, client => client.Supports(assetKind)));
     }
 
     private static string? GetFrontmatterValue(string content, string key)

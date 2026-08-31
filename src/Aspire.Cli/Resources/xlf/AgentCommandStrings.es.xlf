@@ -147,9 +147,19 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_McpsOptionDescription">
+        <source>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_NoCompatibleClientForAssetKind">
         <source>No detected agent environment supports {0} assets. Skipping their default installation.</source>
         <target state="new">No detected agent environment supports {0} assets. Skipping their default installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_NoCompatibleClientForSelectedMcp">
+        <source>No compatible detected agent environment is available for the selected MCP server configuration.</source>
+        <target state="new">No compatible detected agent environment is available for the selected MCP server configuration.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">

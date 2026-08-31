@@ -17,12 +17,12 @@ public class AspireSkillsBundleTests
 
     private static readonly AspireSkillsBundleProvider s_bundleProvider = new();
 
-    private static AgentAssetDefinition AspireSkillDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
+    private static AgentFileAssetDefinition AspireSkillDefinition => AgentFileAssetDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireSkillName,
         AspireSkillDescription,
         installExcludedRelativePaths: ["evals"]);
 
-    private static AgentAssetDefinition AspireifySkillDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
+    private static AgentFileAssetDefinition AspireifySkillDefinition => AgentFileAssetDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireifySkillName,
         AspireifySkillDescription);
 
@@ -104,7 +104,7 @@ public class AspireSkillsBundleTests
             Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
             Assert.Equal(AspireSkillDescription, skill.Description);
             Assert.True(skill.IsDefault);
-            Assert.Equal(AgentAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
+            Assert.Equal(AgentFileAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
             Assert.Equal(["evals"], skill.InstallExcludedRelativePaths);
             Assert.Empty(skill.ApplicableLanguages);
         }

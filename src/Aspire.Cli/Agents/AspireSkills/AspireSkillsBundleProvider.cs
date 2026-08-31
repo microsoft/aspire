@@ -214,7 +214,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' cannot exclude SKILL.md from installation.", skillName));
             }
 
-            var definition = AgentAssetDefinition.CreateAspireSkillsBundle(
+            var definition = AgentFileAssetDefinition.CreateAspireSkillsBundle(
                 skillName,
                 skill.Description,
                 installExcludedRelativePaths,

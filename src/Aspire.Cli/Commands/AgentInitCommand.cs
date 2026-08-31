@@ -50,6 +50,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Options.Add(s_workspaceRootOption);
         Options.Add(s_skillLocationsOption);
         Options.Add(s_skillsOption);
+        Options.Add(s_mcpsOption);
     }
 
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -69,7 +70,16 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<string?> s_skillsOption = new("--skills")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
-            string.Join(",", AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill).Select(static asset => asset.Name)),
+            string.Join(",", AgentAssetDefinition.GetCliDefinedFileAssets(AgentAssetKind.Skill).Select(static asset => asset.Name)),
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice),
+        Recursive = true
+    };
+
+    internal static readonly Option<string?> s_mcpsOption = new("--mcps")
+    {
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_McpsOptionDescription,
+            string.Join(",", AgentAssetDefinition.GetCliDefinedActionAssets(AgentAssetKind.Mcp).Select(static asset => asset.Name)),
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice),
         Recursive = true
@@ -91,9 +101,10 @@ internal sealed class AgentInitCommand : BaseCommand
     /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
     /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
     /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
-    /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
-    /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
-    /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
+    /// Callers that expose <c>--skill-locations</c>, <c>--skills</c>, and <c>--mcps</c> can pass
+    /// <paramref name="skillLocationsBinding"/>, <paramref name="skillsBinding"/>, and
+    /// <paramref name="mcpsBinding"/> so the chained execution reuses the same non-interactive
+    /// selection semantics as standalone <c>aspire agent init</c>.
     /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
@@ -102,7 +113,8 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
-        Func<AgentAssetDefinition, bool>? selectByDefault,
+        PromptBinding<string?> mcpsBinding,
+        Func<AgentFileAssetDefinition, bool>? selectByDefault,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
@@ -120,7 +132,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, mcpsBinding, cancellationToken);
         }
 
         return AgentInitExecutionResult.Empty(CliExitCodes.Success);
@@ -134,7 +146,8 @@ internal sealed class AgentInitCommand : BaseCommand
         // is default-on. Users can still opt into it from the prompt or via --skills.
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupAssetsFromDefaults, skillLocationsBinding, skillsBinding, cancellationToken);
+        var mcpsBinding = PromptBinding.Create(parseResult, s_mcpsOption);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupAssetsFromDefaults, skillLocationsBinding, skillsBinding, mcpsBinding, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
@@ -161,7 +174,7 @@ internal sealed class AgentInitCommand : BaseCommand
     /// standalone <c>aspire agent init</c> (typically run against an existing project).
     /// Skills filtered here remain available to opt into from the prompt or via <c>--skills</c>.
     /// </summary>
-    internal static bool ExcludeOneTimeSetupAssetsFromDefaults(AgentAssetDefinition asset)
+    internal static bool ExcludeOneTimeSetupAssetsFromDefaults(AgentFileAssetDefinition asset)
         => asset.IsDefault && !s_oneTimeSetupSkillNames.Contains(asset.Name);
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -196,9 +209,10 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
         DirectoryInfo workspaceRoot,
-        Func<AgentAssetDefinition, bool>? selectByDefault,
+        Func<AgentFileAssetDefinition, bool>? selectByDefault,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
+        PromptBinding<string?> mcpsBinding,
         CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
@@ -236,7 +250,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // Select file-backed Skill assets only when a compatible client was detected or the caller
         // explicitly requested skill locations/assets. Explicit options intentionally remain an override.
         IReadOnlyList<AgentAssetLocation> selectedSkillLocations = [];
-        IReadOnlyList<AgentAssetDefinition> selectedSkills = [];
+        IReadOnlyList<AgentFileAssetDefinition> selectedSkills = [];
         AspireSkillsBundle? aspireSkillsBundle = null;
         string? bundleInstallFailureMessage = null;
         var hasExplicitSkillSelection =
@@ -267,10 +281,10 @@ internal sealed class AgentInitCommand : BaseCommand
 
             if (selectedSkillLocations.Count > 0)
             {
-                IReadOnlyList<AgentAssetDefinition> availableSkills;
+                IReadOnlyList<AgentFileAssetDefinition> availableSkills;
                 if (ShouldSkipBundleCatalogResolution(skillsBinding))
                 {
-                    availableSkills = AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill)
+                    availableSkills = AgentAssetDefinition.GetCliDefinedFileAssets(AgentAssetKind.Skill)
                         .Where(asset => asset.IsApplicableToLanguage(detectedLanguage))
                         .ToList();
                 }
@@ -318,25 +332,40 @@ internal sealed class AgentInitCommand : BaseCommand
         var mcpApplicators = userChoices
             .Where(static applicator => applicator.Asset?.AssetKind is AgentAssetKind.Mcp)
             .ToList();
-        IReadOnlyList<AgentAssetDefinition> selectedMcpAssets = [];
-        if (!HasCompatibleClient(context, AgentAssetKind.Mcp))
+        var availableMcpAssets = AgentAssetDefinition.GetCliDefinedActionAssets(AgentAssetKind.Mcp);
+        var (mcpsWereProvided, _, _) = PromptBinding.Resolve(mcpsBinding);
+        var hasCompatibleMcpClient = HasCompatibleClient(context, AgentAssetKind.Mcp);
+        IReadOnlyList<AgentActionAssetDefinition> selectedMcpAssets = [];
+        var hasMcpSelectionErrors = false;
+        if (!hasCompatibleMcpClient && !mcpsWereProvided)
         {
             DisplayNoCompatibleClientWarning(AgentAssetKind.Mcp);
         }
-        else if (mcpApplicators.Count > 0)
+        else if (mcpApplicators.Count > 0 || mcpsWereProvided)
         {
-            var mcpAssets = AgentAssetDefinition.GetCliDefined(AgentAssetKind.Mcp)
-                .Where(asset => mcpApplicators.Any(applicator => ReferenceEquals(applicator.Asset, asset)))
-                .ToList();
-            selectedMcpAssets = await InteractionService.PromptForSelectionsAsync(
-                AgentCommandStrings.InitCommand_SelectMcpServers,
-                mcpAssets,
-                asset => $"[bold]{asset.Description.EscapeMarkup()}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
-                preSelected: [],
-                optional: true,
-                binding: PromptBinding.CreateDefault<string?>(ConsoleInteractionService.NoneChoice),
-                echoSelected: false,
-                cancellationToken: cancellationToken);
+            var selectableMcpAssets = mcpApplicators.Count > 0
+                ? availableMcpAssets
+                    .Where(asset => mcpApplicators.Any(applicator => ReferenceEquals(applicator.Asset, asset)))
+                    .ToList()
+                : availableMcpAssets;
+            if (selectableMcpAssets.Count > 0)
+            {
+                selectedMcpAssets = await InteractionService.PromptForSelectionsAsync(
+                    AgentCommandStrings.InitCommand_SelectMcpServers,
+                    selectableMcpAssets,
+                    asset => $"[bold]{asset.Description.EscapeMarkup()}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
+                    preSelected: [],
+                    optional: true,
+                    binding: mcpsBinding.WithDefault(ConsoleInteractionService.NoneChoice),
+                    echoSelected: false,
+                    cancellationToken: cancellationToken);
+            }
+
+            if (!hasCompatibleMcpClient && selectedMcpAssets.Count > 0)
+            {
+                InteractionService.DisplayError(AgentCommandStrings.InitCommand_NoCompatibleClientForSelectedMcp);
+                hasMcpSelectionErrors = true;
+            }
         }
 
         var hasErrors = await ApplySkillAssetsAsync(
@@ -346,6 +375,7 @@ internal sealed class AgentInitCommand : BaseCommand
             selectedSkills,
             aspireSkillsBundle,
             cancellationToken);
+        hasErrors |= hasMcpSelectionErrors;
         hasErrors |= await ApplyMcpAssetsAsync(
             selectedMcpAssets,
             mcpApplicators,
@@ -390,7 +420,7 @@ internal sealed class AgentInitCommand : BaseCommand
         DirectoryInfo workspaceRoot,
         AgentEnvironmentScanContext context,
         IReadOnlyList<AgentAssetLocation> selectedLocations,
-        IReadOnlyList<AgentAssetDefinition> selectedSkills,
+        IReadOnlyList<AgentFileAssetDefinition> selectedSkills,
         AspireSkillsBundle? aspireSkillsBundle,
         CancellationToken cancellationToken)
     {
@@ -411,7 +441,7 @@ internal sealed class AgentInitCommand : BaseCommand
                     continue;
                 }
 
-                if (skill.SourceKind is AgentAssetSourceKind.AspireSkillsBundle && aspireSkillsBundle is null)
+                if (skill.SourceKind is AgentFileAssetSourceKind.AspireSkillsBundle && aspireSkillsBundle is null)
                 {
                     continue;
                 }
@@ -490,7 +520,7 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     private async Task<bool> ApplyMcpAssetsAsync(
-        IReadOnlyList<AgentAssetDefinition> selectedAssets,
+        IReadOnlyList<AgentActionAssetDefinition> selectedAssets,
         IReadOnlyList<AgentEnvironmentApplicator> applicators,
         CancellationToken cancellationToken)
     {
@@ -527,7 +557,7 @@ internal sealed class AgentInitCommand : BaseCommand
         TelemetryHookConfigurationResult result;
         try
         {
-            result = await _telemetryHookConfigurator.ConfigureAsync(context.DetectedClientKinds, cancellationToken);
+            result = await _telemetryHookConfigurator.ConfigureAsync(context.DetectedClients, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -574,9 +604,9 @@ internal sealed class AgentInitCommand : BaseCommand
             _ => client.ToString(),
         };
 
-    private async Task<(IReadOnlyList<AgentAssetDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<AgentFileAssetDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
     {
-        var skills = new List<AgentAssetDefinition>();
+        var skills = new List<AgentFileAssetDefinition>();
         AspireSkillsBundle? bundle = null;
         string? failureMessage = null;
 
@@ -597,14 +627,14 @@ internal sealed class AgentInitCommand : BaseCommand
         // When the bundle is unavailable (network failure, version mismatch, etc.), fall back
         // silently to the CLI-defined skills. The installer already logs the underlying cause
         // at debug level, so the user is not interrupted with a warning they cannot act on.
-        skills.AddRange(AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill));
+        skills.AddRange(AgentAssetDefinition.GetCliDefinedFileAssets(AgentAssetKind.Skill));
 
         return (skills
             .Where(s => s.IsApplicableToLanguage(detectedLanguage))
             .ToList(), bundle, failureMessage);
     }
 
-    private static bool HasUnknownBundleSkillCandidate(string requestedSkills, IReadOnlyList<AgentAssetDefinition> availableSkills)
+    private static bool HasUnknownBundleSkillCandidate(string requestedSkills, IReadOnlyList<AgentFileAssetDefinition> availableSkills)
     {
         // Tokens like "all" / "none" don't name skills, so the "looks like a bundle skill but missing"
         // diagnostic doesn't apply — let the normal validation path handle them.
@@ -664,7 +694,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private static bool IsCliDefinedSkillName(string name)
     {
-        return AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill)
+        return AgentAssetDefinition.GetCliDefinedFileAssets(AgentAssetKind.Skill)
             .Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -728,9 +758,9 @@ internal sealed class AgentInitCommand : BaseCommand
         return simplified;
     }
 
-    private static IReadOnlyList<AgentAssetDefinition> GetDefaultSkills(
-        IEnumerable<AgentAssetDefinition> availableSkills,
-        Func<AgentAssetDefinition, bool>? selectByDefault)
+    private static IReadOnlyList<AgentFileAssetDefinition> GetDefaultSkills(
+        IEnumerable<AgentFileAssetDefinition> availableSkills,
+        Func<AgentFileAssetDefinition, bool>? selectByDefault)
     {
         // When the caller doesn't customize default selection, fall back to AgentAssetDefinition.IsDefault.
         // Bundle-sourced skills are uniformly IsDefault=true; CLI-defined skills (playwright-cli,
@@ -747,7 +777,7 @@ internal sealed class AgentInitCommand : BaseCommand
     private async Task<SkillInstallResult> InstallSkillAsync(
         DirectoryInfo rootDirectory,
         string relativeSkillDirectory,
-        AgentAssetDefinition skill,
+        AgentFileAssetDefinition skill,
         AspireSkillsBundle? aspireSkillsBundle,
         bool isUserLevel,
         CancellationToken cancellationToken)
@@ -841,7 +871,7 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     private static async Task<IReadOnlyList<AgentAssetFile>> GetSkillFilesAsync(
-        AgentAssetDefinition skill,
+        AgentFileAssetDefinition skill,
         AspireSkillsBundle? aspireSkillsBundle,
         CancellationToken cancellationToken)
     {
@@ -850,7 +880,7 @@ internal sealed class AgentInitCommand : BaseCommand
             return skill.Files;
         }
 
-        if (skill.SourceKind is AgentAssetSourceKind.AspireSkillsBundle)
+        if (skill.SourceKind is AgentFileAssetSourceKind.AspireSkillsBundle)
         {
             if (aspireSkillsBundle is null)
             {
@@ -871,8 +901,8 @@ internal sealed class AgentInitCommand : BaseCommand
 internal readonly record struct AgentInitExecutionResult(
     int ExitCode,
     IReadOnlyList<AgentAssetLocation> SelectedSkillLocations,
-    IReadOnlyList<AgentAssetDefinition> SelectedSkills,
-    IReadOnlyList<AgentAssetDefinition> SelectedMcpAssets)
+    IReadOnlyList<AgentFileAssetDefinition> SelectedSkills,
+    IReadOnlyList<AgentActionAssetDefinition> SelectedMcpAssets)
 {
     public static AgentInitExecutionResult Empty(int exitCode) => new(exitCode, [], [], []);
 }

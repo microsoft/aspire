@@ -84,17 +84,6 @@ public class AgentEnvironmentApplicatorTests
     }
 
     [Fact]
-    public void ForAsset_RejectsFileBackedAsset()
-    {
-        Assert.Throws<ArgumentException>(() =>
-            AgentEnvironmentApplicator.ForAsset(
-                AgentAssetDefinition.DotnetInspect,
-                "vscode",
-                "VS Code",
-                _ => Task.CompletedTask));
-    }
-
-    [Fact]
     public void ScanContext_DeduplicatesApplicatorsByAssetAndTarget()
     {
         var context = new AgentEnvironmentScanContext

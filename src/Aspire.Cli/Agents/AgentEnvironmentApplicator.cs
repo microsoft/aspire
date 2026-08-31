@@ -37,7 +37,7 @@ internal sealed class AgentEnvironmentApplicator
         Func<CancellationToken, Task> applyCallback,
         McpInitPromptGroup? promptGroup,
         int priority,
-        AgentAssetDefinition? asset,
+        AgentActionAssetDefinition? asset,
         string? targetId)
     {
         ArgumentNullException.ThrowIfNull(description);
@@ -59,16 +59,12 @@ internal sealed class AgentEnvironmentApplicator
     /// Creates an applicator for an action-backed agent asset at a detected target.
     /// </summary>
     public static AgentEnvironmentApplicator ForAsset(
-        AgentAssetDefinition asset,
+        AgentActionAssetDefinition asset,
         string targetId,
         string description,
         Func<CancellationToken, Task> applyCallback)
     {
         ArgumentNullException.ThrowIfNull(asset);
-        if (asset.SourceKind is not AgentAssetSourceKind.Action)
-        {
-            throw new ArgumentException($"Agent asset '{asset.Name}' is not action-backed.", nameof(asset));
-        }
 
         return new(
             description,
@@ -97,7 +93,7 @@ internal sealed class AgentEnvironmentApplicator
     /// <summary>
     /// Gets the action-backed agent asset that owns this applicator, if any.
     /// </summary>
-    public AgentAssetDefinition? Asset { get; }
+    public AgentActionAssetDefinition? Asset { get; }
 
     /// <summary>
     /// Gets the agent asset kind that owns this applicator, if any.

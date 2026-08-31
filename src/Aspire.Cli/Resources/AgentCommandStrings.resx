@@ -129,6 +129,9 @@
   <data name="InitCommand_NoCompatibleClientForAssetKind" xml:space="preserve">
     <value>No detected agent environment supports {0} assets. Skipping their default installation.</value>
   </data>
+  <data name="InitCommand_NoCompatibleClientForSelectedMcp" xml:space="preserve">
+    <value>No compatible detected agent environment is available for the selected MCP server configuration.</value>
+  </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
     <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
   </data>
@@ -245,6 +248,9 @@
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+  </data>
+  <data name="InitCommand_McpsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of MCP servers to configure (e.g. {0}), '{1}', or '{2}'</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
     <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>

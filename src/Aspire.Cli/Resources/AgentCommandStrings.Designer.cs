@@ -268,6 +268,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to No compatible detected agent environment is available for the selected MCP server configuration..
+        /// </summary>
+        internal static string InitCommand_NoCompatibleClientForSelectedMcp {
+            get {
+                return ResourceManager.GetString("InitCommand_NoCompatibleClientForSelectedMcp", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
         /// </summary>
         internal static string InitCommand_TelemetryHooksInstalled {
@@ -615,6 +624,15 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_SkillsOptionDescription {
             get {
                 return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of MCP servers to configure (e.g. {0}), &apos;{1}&apos;, or &apos;{2}&apos;.
+        /// </summary>
+        internal static string InitCommand_McpsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_McpsOptionDescription", resourceCulture);
             }
         }
 

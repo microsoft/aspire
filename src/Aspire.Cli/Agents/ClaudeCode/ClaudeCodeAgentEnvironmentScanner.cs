@@ -55,7 +55,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
 
         if (claudeCodeFolder is not null)
         {
-            context.AddDetectedClient(AgentClient.ClaudeCode);
+            context.AddDetectedClient(AgentClientKind.ClaudeCode);
 
             // If .claude folder is found, override the workspace root with its parent directory
             var workspaceRoot = claudeCodeFolder.Parent ?? context.RepositoryRoot;
@@ -87,7 +87,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
             {
                 _logger.LogDebug("Found Claude Code CLI version: {Version}", claudeCodeVersion);
 
-                context.AddDetectedClient(AgentClient.ClaudeCode);
+                context.AddDetectedClient(AgentClientKind.ClaudeCode);
 
                 // Claude Code is installed - offer to create config at workspace root
                 if (!HasAspireServerConfigured(context.RepositoryRoot))
