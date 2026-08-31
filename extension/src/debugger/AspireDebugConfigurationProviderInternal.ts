@@ -12,6 +12,7 @@ interface ExternalLaunchReservationMarker {
     reservationId: string;
     appHostPath: string;
     isDirectoryScope: boolean;
+    kind: 'run' | 'operation';
 }
 
 export function markAspireDebugConfigurationAsExtensionOwned(configuration: vscode.DebugConfiguration): void {
@@ -26,8 +27,19 @@ export function isAspireDebugConfigurationExtensionOwned(configuration: vscode.D
         configRecord.launchedByExtension === extensionOwnedConfigurationValue;
 }
 
-export function markAspireDebugConfigurationWithExternalLaunchReservation(configuration: vscode.DebugConfiguration, reservationId: string, appHostPath: string, isDirectoryScope = false): void {
-    (configuration as Record<string, unknown>)[externalLaunchReservationMarker] = { reservationId, appHostPath, isDirectoryScope };
+export function markAspireDebugConfigurationWithExternalLaunchReservation(
+    configuration: vscode.DebugConfiguration,
+    reservationId: string,
+    appHostPath: string,
+    isDirectoryScope = false,
+    kind: ExternalLaunchReservationMarker['kind'] = 'run',
+): void {
+    (configuration as Record<string, unknown>)[externalLaunchReservationMarker] = {
+        reservationId,
+        appHostPath,
+        isDirectoryScope,
+        kind,
+    };
 }
 
 export function getAspireDebugConfigurationExternalLaunchReservation(configuration: vscode.DebugConfiguration): ExternalLaunchReservationMarker | undefined {
@@ -39,11 +51,13 @@ export function getAspireDebugConfigurationExternalLaunchReservation(configurati
     const candidate = reservation as Partial<ExternalLaunchReservationMarker>;
     return typeof candidate.reservationId === 'string' &&
         typeof candidate.appHostPath === 'string' &&
-        (candidate.isDirectoryScope === undefined || typeof candidate.isDirectoryScope === 'boolean')
+        (candidate.isDirectoryScope === undefined || typeof candidate.isDirectoryScope === 'boolean') &&
+        (candidate.kind === undefined || candidate.kind === 'run' || candidate.kind === 'operation')
         ? {
             reservationId: candidate.reservationId,
             appHostPath: candidate.appHostPath,
             isDirectoryScope: candidate.isDirectoryScope === true,
+            kind: candidate.kind ?? 'run',
         }
         : undefined;
 }

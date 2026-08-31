@@ -15,7 +15,6 @@ public sealed class AzureResourceScopeDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19173")]
     public async Task DeployExistingServiceBusWithResourceGroupAndSubscriptionScope()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);

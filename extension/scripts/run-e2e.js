@@ -71,6 +71,7 @@ if (!verifyExtesterFeedOnly) {
 }
 const tempRoot = verifyExtesterFeedOnly ? '' : fs.realpathSync.native(requestedTempRoot);
 const shortRunRoot = verifyExtesterFeedOnly ? '' : fs.mkdtempSync(path.join(tempRoot, 'aev-'));
+const e2eNuGetPackages = path.join(downloadCacheRoot, 'nuget-packages', shardName);
 const isolatedAspireHome = path.join(shortRunRoot, 'aspire-home');
 const storageDir = path.join(shortRunRoot, 'storage');
 const extensionsDir = path.join(shortRunRoot, 'extensions');
@@ -123,6 +124,7 @@ const COMMAND_INERT_PATH_PATTERN = isWindows ? WINDOWS_COMMAND_INERT_PATH_PATTER
 const COMMAND_INTERPRETER_NAME = isWindows ? 'cmd.exe' : '/bin/sh';
 const COMMAND_INERT_PATH_ALPHABET = isWindows ? '._-+@~:\\/' : '._-+,=:@%/';
 const primaryAppHostProject = path.join(workspaceRoot, 'AspireE2E.AppHost', 'AspireE2E.AppHost.csproj');
+const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');
 const workspaceNuGetConfigPath = path.join(workspaceRoot, 'NuGet.config');
 const enableAzureFunctionsE2E = process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';
 const advisoryIssue = process.env.ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE || '';
@@ -145,6 +147,18 @@ function prepareRunDirectories() {
   removePath(recordingsDir, { recursive: true, force: true });
   for (const directory of [artifactsDir, resultsDir, diagnosticsStorageRoot, isolatedAspireHome, storageDir, extensionsDir]) {
     fs.mkdirSync(directory, { recursive: true });
+  }
+}
+
+function prepareNuGetPackageCache() {
+  fs.mkdirSync(e2eNuGetPackages, { recursive: true });
+  for (const entry of fs.readdirSync(e2eNuGetPackages, { withFileTypes: true })) {
+    // E2E builds reuse package versions, so only repository-built Aspire packages can be stale.
+    // Keep third-party packages warm across runs, and isolate each shard so concurrent runs do not
+    // remove packages another shard is restoring.
+    if (/^aspire(?:\.|$)/i.test(entry.name)) {
+      removePathWithoutFollowingLinks(path.join(e2eNuGetPackages, entry.name), { recursive: true, force: true });
+    }
   }
 }
 
@@ -587,6 +601,7 @@ async function main() {
 
     assertSpecMatches(testSpec);
     prepareRunDirectories();
+    prepareNuGetPackageCache();
     logE2eConfiguration();
 
     const bundledCliPath = resolveCliPath();
@@ -631,6 +646,8 @@ async function main() {
       // ignore an extension host left behind by an earlier run that is still polling them.
       ASPIRE_EXTENSION_E2E_RUN_ID: runId,
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
+      NUGET_PACKAGES: e2eNuGetPackages,
+      ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
       ASPIRE_EXTENSION_E2E_PRIMARY_APPHOST: primaryAppHostProject,
       ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: appHostSdkVersion,
@@ -835,9 +852,19 @@ function resolveAzureFunctionsVsixPaths() {
     return [];
   }
 
-  // The Functions extension activates the Azure Resource Groups extension directly.
-  // Install both VSIXes explicitly because the E2E VS Code instance runs offline.
+  // Aspire advertises its azure-functions launch capability only when both the C# and
+  // Azure Functions extensions are installed. Install C# with its required .NET runtime
+  // dependency, plus the Azure Resource Groups extension that Functions activates directly.
+  // All dependencies must be explicit because the E2E VS Code instance runs offline.
   return [
+    {
+      displayName: '.NET Install Tool',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX'),
+    },
+    {
+      displayName: 'C#',
+      path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX'),
+    },
     {
       displayName: 'Azure Resource Groups',
       path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX'),
@@ -959,6 +986,7 @@ function ensureJavaAppHostSdkGenerated(bundledCliPath, playgroundRoot) {
   logStep('Generating the Aspire Java SDK in the playground');
   const result = spawnSync(bundledCliPath, ['restore'], {
     cwd: appHostDirectory,
+    env: getAspireCliEnvironment(),
     shell: false,
     encoding: 'utf8',
     timeout: 600000,
@@ -1179,8 +1207,13 @@ function resolveRequiredVsixPath(environmentVariable) {  const configuredPath = 
 }
 
 function validateAzureFunctionsCoreTools() {
-  const executable = process.platform === 'win32' ? 'func.cmd' : 'func';
-  const result = spawnSync(executable, ['--version'], {
+  // Node cannot launch .cmd files directly on Windows, so invoke the trusted, constant
+  // Core Tools command through ComSpec instead.
+  // https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows
+  const displayName = isWindows ? 'func.cmd' : 'func';
+  const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;
+  const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];
+  const result = spawnSync(executable, args, {
     cwd: extensionRoot,
     env: getAspireCliEnvironment(),
     shell: false,
@@ -1189,7 +1222,7 @@ function validateAzureFunctionsCoreTools() {
   });
 
   if (result.error) {
-    throw new Error(`Unable to execute Azure Functions Core Tools (${executable}): ${result.error.message}`);
+    throw new Error(`Unable to execute Azure Functions Core Tools (${displayName}): ${result.error.message}`);
   }
 
   if (result.status !== 0) {
@@ -1347,7 +1380,7 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzur
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -1360,10 +1393,14 @@ ${azureFunctionsPackageReference}  </ItemGroup>
 `);
 
   const azureFunctionsResource = includeAzureFunctions
-    ? `\nbuilder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n`
+    ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
+#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRETERMINAL001
+
+using Aspire.Hosting.Pipelines;
+
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -1439,7 +1476,36 @@ builder.AddResource(new NoCommandsResource("e2e-no-commands"));
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
     .WithHttpEndpoint(name: "http")
     .WithTerminal();
-${azureFunctionsResource}
+
+${azureFunctionsResource}builder.Pipeline.AddStep("e2e-run-action-step", async context =>
+{
+    var task = await context.ReportingStep
+        .CreateTaskAsync("Running E2E run action pipeline step", context.CancellationToken)
+        .ConfigureAwait(false);
+
+    await using (task.ConfigureAwait(false))
+    {
+        await task.CompleteAsync(
+            "E2E run action pipeline step completed",
+            CompletionState.Completed,
+            context.CancellationToken).ConfigureAwait(false);
+    }
+});
+
+builder.Pipeline.AddStep("e2e-debug-action-step", async context =>
+{
+    var task = await context.ReportingStep
+        .CreateTaskAsync("Running E2E debug action pipeline step", context.CancellationToken)
+        .ConfigureAwait(false);
+
+    await using (task.ConfigureAwait(false))
+    {
+        await task.CompleteAsync(
+            "E2E debug action pipeline step completed",
+            CompletionState.Completed,
+            context.CancellationToken).ConfigureAwait(false);
+    }
+});
 
 builder.Build().Run();
 
@@ -1451,12 +1517,12 @@ function writeAzureFunctionsProject(projectName) {
   const projectDirectory = path.join(workspaceRoot, projectName);
   const propertiesDirectory = path.join(projectDirectory, 'Properties');
   const certificatePath = path.join(projectDirectory, 'https-e2e.pfx');
-  const certificatePassword = 'AspireE2E';
+  const certificatePassword = String.raw`Aspire E2E p@ss'\word`;
   fs.mkdirSync(propertiesDirectory, { recursive: true });
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -1510,7 +1576,7 @@ public sealed class HttpsFunction
     profiles: {
       [projectName]: {
         commandName: 'Project',
-        commandLineArgs: `--useHttps --cert ${certificatePath} --password ${certificatePassword}`,
+        commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`,
         launchBrowser: false,
       },
     },
@@ -1527,7 +1593,7 @@ function writeWorkerProject(projectName) {
   fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -1633,6 +1699,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300',
     ASPIRE_CLI_TELEMETRY_OPTOUT: 'true',
     ASPIRE_VERSION_CHECK_DISABLED: 'true',
+    NUGET_PACKAGES: e2eNuGetPackages,
     DOTNET_CLI_UI_LANGUAGE: 'en',
     DOTNET_CLI_TELEMETRY_OPTOUT: '1',
     DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1',
@@ -1665,7 +1732,7 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const fallbackSourceEntries = getApprovedFallbackPackageSources()
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
-  fs.writeFileSync(workspaceNuGetConfigPath, `<?xml version="1.0" encoding="utf-8"?>
+  const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
     <clear />
@@ -1673,7 +1740,11 @@ ${sourceEntries}
 ${fallbackSourceEntries}
   </packageSources>
 </configuration>
-`);
+`;
+  // External AppHost fixtures are siblings of the workspace, while an explicitly supplied
+  // workspace may sit outside the run root. Keep both restore scopes deterministic.
+  fs.writeFileSync(runRootNuGetConfigPath, nugetConfig);
+  fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);
 }
 
 function getApprovedFallbackPackageSources() {

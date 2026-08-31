@@ -362,7 +362,6 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: azure-functions
-            advisoryIssue: https://github.com/microsoft/aspire/issues/19151
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -495,6 +494,18 @@ jobs:
           export PATH="$core_tools_directory:$PATH"
           func --version
 
+          dotnet_runtime_vsix="$RUNNER_TEMP/vscode-dotnet-runtime-3.1.0.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$dotnet_runtime_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/vscode-dotnet-runtime/3.1.0/vspackage'
+          echo '8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a  '"$dotnet_runtime_vsix" | sha256sum --check -
+
+          csharp_vsix="$RUNNER_TEMP/vscode-csharp-2.148.23-linux-x64.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$csharp_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.148.23/vspackage?targetPlatform=linux-x64'
+          echo '18b503e614a979212762683b35a4fa1806688ba773d5fe93bf62c9f9346db23f  '"$csharp_vsix" | sha256sum --check -
+
           azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
           curl --fail --location --compressed --retry 3 --retry-all-errors \
             --output "$azure_resource_groups_vsix" \
@@ -509,6 +520,8 @@ jobs:
 
           {
             echo 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'
+            echo "ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnet_runtime_vsix"
+            echo "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix"
             echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
             echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
             echo 'FUNCTIONS_CORE_TOOLS_TELEMETRY_OPTOUT=1'
@@ -731,6 +744,7 @@ jobs:
             Get-ChildItem -Path $ridNugets -Recurse -File -Filter '*.nupkg' | Copy-Item -Destination $hiveDir -Force
           }
 
+          "ASPIRE_CLI_PACKAGES=$hiveDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASPIRE_EXTENSION_E2E_CLI_PATH=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION=$(($samplePackage.Name -replace '^Aspire\.Hosting\.AppHost\.', '') -replace '\.nupkg$', '')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $cli.FullName --version

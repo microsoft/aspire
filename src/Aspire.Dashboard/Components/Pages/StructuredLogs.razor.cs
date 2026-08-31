@@ -41,12 +41,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private readonly CancellationTokenSource _cts = new();
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
+    private int? _displayedItemCount;
     private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
-    private FluentDataGrid<OtlpLogEntry>? _dataGrid;
+    private FluentDataGrid<LogSummary>? _dataGrid;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
 
@@ -58,7 +59,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public StructuredLogsPageViewModel PageViewModel { get; set; } = null!;
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required StructuredLogsViewModel ViewModel { get; init; }
@@ -82,7 +88,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required DimensionManager DimensionManager { get; set; }
+    public required DimensionManager DimensionManager { get; init; }
 
     [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
@@ -122,37 +128,43 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [SupplyParameterFromQuery]
     public long? LogEntryId { get; set; }
 
-    private async ValueTask<GridItemsProviderResult<OtlpLogEntry>> GetData(GridItemsProviderRequest<OtlpLogEntry> request)
+    private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
         ViewModel.StartIndex = request.StartIndex;
         ViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
 
-        var logs = ViewModel.GetLogs();
+        var logs = await ViewModel.GetLogsAsync(request.CancellationToken);
 
-        if (logs.IsFull && !TelemetryRepository.HasDisplayedMaxLogLimitMessage)
+        if (!TelemetryRepository.IsReadOnly)
         {
-            TelemetryRepository.MaxLogLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
-                MessageService,
-                Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitTitle)],
-                string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxLogCount),
-                () => TelemetryRepository.MaxLogLimitMessage = null);
+            if (logs.IsFull && !TelemetryRepository.HasDisplayedMaxLogLimitMessage)
+            {
+                TelemetryRepository.MaxLogLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
+                    MessageService,
+                    Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitTitle)],
+                    string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxLogCount),
+                    () => TelemetryRepository.MaxLogLimitMessage = null);
 
-            TelemetryRepository.HasDisplayedMaxLogLimitMessage = true;
+                TelemetryRepository.HasDisplayedMaxLogLimitMessage = true;
+            }
+            else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
+            {
+                // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
+                message.Close();
+            }
         }
-        else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
-        {
-            // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
-            message.Close();
-        }
+
+        var virtualizedLogCount = DashboardUIHelpers.GetVirtualizedItemCount(logs.TotalItemCount);
+        _displayedItemCount = virtualizedLogCount < logs.TotalItemCount ? virtualizedLogCount : null;
 
         // Updating the total item count as a field doesn't work because it isn't updated with the grid.
         // The workaround is to explicitly update and refresh the control.
         _totalItemsCount = logs.TotalItemCount;
-        _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount);
+        _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
         TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
 
-        return GridItemsProviderResult.From(logs.Items, logs.TotalItemCount);
+        return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
     }
 
     protected override void OnInitialized()
@@ -259,10 +271,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
-        {
-            await ClearSelectedLogEntryAsync();
-        }
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
@@ -300,6 +309,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
     }
 
+    private Task OnShowPropertiesAsync(LogSummary summary, string? focusElementId)
+    {
+        var entry = TelemetryRepository.GetLog(summary.InternalId);
+        return entry is null ? Task.CompletedTask : OnShowPropertiesAsync(entry, focusElementId);
+    }
+
     private Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
     {
         PageViewModel.SelectedLogEntry = null;
@@ -321,13 +336,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             await _contentLayout.CloseMobileToolbarAsync();
         }
 
+        var resourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
         await FilterHelpers.OpenFilterAsync(
             entry,
             DialogService,
             DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            propertyKeys: TelemetryRepository.GetLogPropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
+            getPropertyKeysAsync: cancellationToken => TelemetryRepository.GetLogPropertyKeysAsync(resourceKey, cancellationToken),
             knownKeys: KnownStructuredLogFields.AllFields,
-            getFieldValues: TelemetryRepository.GetLogsFieldValues,
+            getFieldValuesAsync: TelemetryRepository.GetLogsFieldValuesAsync,
             FilterLoc);
     }
 
@@ -353,10 +369,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
         }
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
-        {
-            await ClearSelectedLogEntryAsync();
-        }
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
@@ -366,15 +379,33 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ViewModel.FilterText = _filter;
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
+    }
+
+    internal async Task ClearSelectedLogEntryIfExcludedAsync(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+    {
+        if (PageViewModel.SelectedLogEntry is null)
+        {
+            return;
+        }
+
+        // An older filter query could finish after a newer query and clear the selection using stale filters.
+        // The query is constrained to one log and filter changes are user-driven, so this is unlikely and not
+        // worth the additional state and coordination required to guard against it.
+        var isExcluded = await PageViewModel.IsSelectedLogEntryExcludedByFiltersAsync(
+            TelemetryRepository,
+            textFilter,
+            fieldFilters,
+            _cts.Token);
+        if (isExcluded)
         {
             await ClearSelectedLogEntryAsync();
         }
     }
 
-    private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
+    private string GetResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, _resources);
 
-    private string GetRowClass(OtlpLogEntry entry)
+    private string GetRowClass(LogSummary entry)
     {
         if (entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId)
         {
@@ -401,7 +432,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<OtlpLogEntry>.TrySetMaxItemCount(_dataGrid, 10_000))
+        if (_dataGrid != null && FluentDataGridHelper<LogSummary>.TrySetMaxItemCount(_dataGrid, 10_000))
         {
             StateHasChanged();
         }
@@ -440,7 +471,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ? string.Format(
             CultureInfo.CurrentCulture,
             Loc[nameof(Dashboard.Resources.StructuredLogs.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value, MillisecondsDisplay.Truncated))
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
         : null;
 
     public void Dispose()
@@ -507,23 +538,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
-    private bool IsGenAILogEntry(OtlpLogEntry logEntry)
-    {
-        if (string.IsNullOrEmpty(logEntry.SpanId) || string.IsNullOrEmpty(logEntry.TraceId))
-        {
-            return false;
-        }
-
-        if (GenAIHelpers.HasGenAIAttribute(logEntry.Attributes))
-        {
-            // GenAI telemetry is on the log entry.
-            return true;
-        }
-
-        return ViewModel.HasGenAISpan(logEntry.TraceId, logEntry.SpanId);
-    }
-
-    private async Task LaunchGenAIVisualizerAsync(OtlpLogEntry logEntry)
+    private async Task LaunchGenAIVisualizerAsync(LogSummary logEntry)
     {
         var available = await TraceLinkHelpers.WaitForSpanToBeAvailableAsync(
             logEntry.TraceId,
@@ -532,7 +547,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             DialogService,
             InvokeAsync,
             DialogsLoc,
-            CancellationToken.None).ConfigureAwait(false);
+            _cts.Token).ConfigureAwait(false);
 
         if (available)
         {
@@ -563,14 +578,15 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
                     }
 
                     return genAISpans;
-                });
+                },
+                _cts.Token);
         }
     }
 
     private Task ClearStructureLogs(ResourceKey? key)
     {
-        TelemetryRepository.ClearStructuredLogs(key);
-        return Task.CompletedTask;
+        DataSource.EnsureWritable();
+        return TelemetryRepositoryWriter.ClearStructuredLogsAsync(key);
     }
 
     public class StructuredLogsPageViewModel
@@ -580,12 +596,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
 
         /// <summary>
-        /// Returns true when the selected log entry is excluded by any of the active filters
-        /// (log level, text filter, or field filters).
-        /// Delegates to <see cref="StructuredLogsViewModel.BuildFilters"/> to ensure consistent
-        /// behavior with the grid query.
+        /// Returns <see langword="true"/> when the selected log entry is excluded by the active filters.
         /// </summary>
-        public bool IsSelectedLogEntryExcludedByFilters(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+        public async Task<bool> IsSelectedLogEntryExcludedByFiltersAsync(
+            ITelemetryRepository telemetryRepository,
+            string textFilter,
+            IReadOnlyList<FieldTelemetryFilter> fieldFilters,
+            CancellationToken cancellationToken)
         {
             if (SelectedLogEntry is null)
             {
@@ -594,16 +611,15 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
             var entry = SelectedLogEntry.LogEntry;
             var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
-
-            foreach (var filter in filters.GetEnabledFilters())
+            var matchingLogs = await telemetryRepository.GetLogsAsync(new GetLogsContext
             {
-                if (!filter.Apply([entry]).Any())
-                {
-                    return true;
-                }
-            }
-
-            return false;
+                ResourceKeys = [],
+                StartIndex = 0,
+                Count = 1,
+                Filters = filters,
+                LogIds = [entry.InternalId]
+            }, cancellationToken).ConfigureAwait(false);
+            return matchingLogs.Items.Count == 0;
         }
     }
 

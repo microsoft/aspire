@@ -2,10 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
-import { lsJsonStreamCapability, type ConfigInfo } from '../../types/configInfo';
+import {
+    lsJsonStreamCapability,
+    type ConfigInfo,
+} from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { VSBrowser } from './extester';
+import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
+import { reloadWindow } from './vscode';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -87,9 +92,34 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
+export async function reloadWorkspaceForE2E(timeoutMs = 120000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;
+    const controlFilePath = getControlFilePath();
+    if (controlFilePath) {
+        fs.rmSync(controlFilePath, { force: true });
+    }
+
+    await reloadWindow();
+    await waitForExtensionState(
+        file => file.extensionHostSessionId !== previousExtensionHostSessionId,
+        'extension host to reload with the E2E workspace open',
+        Math.max(1, deadline - Date.now()));
+    await VSBrowser.instance.waitForWorkbench(Math.max(1, deadline - Date.now()));
+}
+
 export async function setWorkspaceFoldersForE2E(folders: readonly { folderPath: string; name?: string }[]): Promise<Array<{ name: string; uri: string; fileName: string }>> {
     const status = await executeE2eControlCommand({ name: 'setWorkspaceFolders', folders }, { timeoutMs: 30000 });
     return status.result as Array<{ name: string; uri: string; fileName: string }>;
+}
+
+export async function setWorkspaceFolderCliPathForE2E(folderPath: string, cliPath: string): Promise<{ targetKey: string; cliPath: string }> {
+    const status = await executeE2eControlCommand({ name: 'setWorkspaceFolderCliPath', folderPath, cliPath });
+    return status.result as { targetKey: string; cliPath: string };
+}
+
+export async function clearWorkspaceFolderCliPathsForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'clearWorkspaceFolderCliPaths' });
 }
 
 export async function restoreWorkspaceFoldersForE2E(): Promise<void> {
@@ -224,8 +254,61 @@ export function removePrimaryAppHostFixture(): void {
     removeWorkspaceAppHostConfig();
 }
 
-export function writeNoCapabilitiesCliWrapper(name = 'aspire-no-capabilities'): string {
+export function writeBaselineActionCliWrapper(name = 'aspire-baseline-actions'): string {
     return writeCliWrapper(name, {
+        configInfoJson: createConfigInfo(),
+    });
+}
+
+/**
+ * A CLI whose `deploy` blocks until the test releases it. The extension
+ * ends a durable non-Run operation when the CLI process exits, so holding the process is what
+ * keeps one deploy observably in flight for the operating row and duplicate-action assertions.
+ */
+export function writeGatedDeployActionCliWrapper(name = 'aspire-gated-deploy-action'): {
+    cliPath: string;
+    waitForDeployRequest: () => Promise<void>;
+    releaseDeploy: () => void;
+    cleanup: () => void;
+} {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-deploy-action');
+    const deployRequestFilePath = path.join(gateDirectory, 'deploy-request');
+    const deployReleaseFilePath = path.join(gateDirectory, 'release-deploy');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    const cliPath = writeCliWrapper(name, {
+        configInfoJson: createConfigInfo(),
+        deployGateDirectory: gateDirectory,
+        deployRequestFilePath,
+        deployReleaseFilePath,
+    });
+    const scriptPath = path.join(path.dirname(cliPath), `${name}.js`);
+
+    return {
+        cliPath,
+        waitForDeployRequest: () => waitForPath(deployRequestFilePath, 120_000),
+        releaseDeploy: () => writeFileWithRetry(deployReleaseFilePath, ''),
+        cleanup: () => {
+            try {
+                removePath(gateDirectory, { recursive: true, force: true });
+            }
+            finally {
+                try {
+                    removePath(cliPath, { force: true });
+                }
+                finally {
+                    removePath(scriptPath, { force: true });
+                }
+            }
+        },
+    };
+}
+
+export function writeLegacyPipelineActionCliWrapper(name = 'aspire-legacy-pipeline-action'): string {
+    return writeCliWrapper(name, {
+        // Omitting `pipelines` keeps the extension-side input
+        // fallback active for CLIs that cannot select a pipeline step through the interaction API.
         configInfoJson: createConfigInfo(),
     });
 }
@@ -482,7 +565,7 @@ builder.Build().Run();
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -864,6 +947,9 @@ function writeCliWrapper(
         streamedLsRequestFilePath?: string;
         streamedLsReleaseFilePath?: string;
         streamedLsInvocationLogPath?: string;
+        deployGateDirectory?: string;
+        deployRequestFilePath?: string;
+        deployReleaseFilePath?: string;
         invocationLogPath?: string;
         psSnapshotDelayMs?: number;
         psSnapshotRequestFilePath?: string;
@@ -885,9 +971,12 @@ const realCli = ${JSON.stringify(getCliPath())};
 const args = process.argv.slice(2);
 ${options.invocationLogPath === undefined ? '' : `fs.appendFileSync(${JSON.stringify(options.invocationLogPath)}, JSON.stringify(args) + '\\n');`}
 
-function waitForReleaseFile(filePath, description) {
-  const deadline = Date.now() + 120000;
+function waitForReleaseFile(filePath, description, timeoutMs = 120000, releaseDirectory) {
+  const deadline = Date.now() + timeoutMs;
   while (!fs.existsSync(filePath)) {
+    if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {
+      return;
+    }
     if (Date.now() >= deadline) {
       console.error(\`Timed out waiting for \${description} release file: \${filePath}\`);
       process.exit(124);
@@ -917,6 +1006,28 @@ ${options.configInfoJson === undefined
   process.exit(0);`}
 }
 
+${options.deployReleaseFilePath === undefined
+        ? ''
+        : `// The extension keeps a durable deploy operation in flight until this process exits, so
+// blocking here holds the operation open for as long as the test needs. The debug session has
+// already started by then: the launch response is sent before the CLI is awaited.
+if (args[0] === 'deploy') {
+${options.deployRequestFilePath === undefined
+            ? ''
+            : `  try {
+    fs.writeFileSync(${JSON.stringify(options.deployRequestFilePath)}, '');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      throw error;
+    }
+    process.exit(0);
+  }`}
+  // The test owns release timing. This fail-safe only prevents an orphaned CLI if its host crashes.
+  waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});
+  process.exit(0);
+}
+
+`}
 ${options.streamedLsCandidate === undefined
         ? ''
         : `if (args[0] === 'ls') {

@@ -32,7 +32,7 @@ public class StructuredLogDetailsTests : DashboardTestContext
         });
         var model = new StructureLogsDetailsViewModel
         {
-            LogEntry = new OtlpLogEntry(
+            LogEntry = TelemetryTestHelpers.CreateOtlpLogEntry(
                 record: TelemetryTestHelpers.CreateLogRecord(attributes:
                 [
                     KeyValuePair.Create("Message", "value1"),

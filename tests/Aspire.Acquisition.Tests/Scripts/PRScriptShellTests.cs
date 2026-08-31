@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Templates.Tests;
+using Aspire.TestUtilities;
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
@@ -85,6 +86,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18732")]
     public async Task MockGhApiWorkflowWithoutJqFailsLoudly()
     {
         using var env = new TestEnvironment();

@@ -320,6 +320,31 @@ suite('E2E launch profile', () => {
         assert.ok(openFolderIndex > clearControlFileIndex);
     });
 
+    test('reloads outside the extension host and waits for the fresh workbench', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const previousSessionIndex = fixtures.indexOf('const previousExtensionHostSessionId = readStateFile().extensionHostSessionId;');
+        const clearControlFileIndex = fixtures.indexOf('fs.rmSync(controlFilePath, { force: true });');
+        const reloadWindowIndex = fixtures.indexOf('await reloadWindow();');
+        const waitForSessionIndex = fixtures.indexOf('file => file.extensionHostSessionId !== previousExtensionHostSessionId');
+        const waitForWorkbenchIndex = fixtures.indexOf('VSBrowser.instance.waitForWorkbench');
+
+        assert.ok(apiTypes.includes('extensionHostSessionId: string;'));
+        assert.strictEqual(apiTypes.includes("{ name: 'reloadWindow' }"), false);
+        assert.ok(e2eStateFileBridge.includes('const extensionHostSessionId = randomUUID();'));
+        assert.ok(e2eStateFileBridge.includes('extensionHostSessionId,'));
+        assert.strictEqual(e2eStateFileBridge.includes("case 'reloadWindow'"), false);
+        assert.ok(vscodeHelpers.includes("new Workbench().executeCommand('Developer: Reload Window')"));
+        assert.ok(previousSessionIndex >= 0);
+        assert.ok(clearControlFileIndex > previousSessionIndex);
+        assert.ok(reloadWindowIndex > clearControlFileIndex);
+        assert.ok(waitForSessionIndex > reloadWindowIndex);
+        assert.ok(waitForWorkbenchIndex > waitForSessionIndex);
+    });
+
     test('validates explicit workspace folder before reporting bridge command start', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
@@ -475,25 +500,55 @@ suite('E2E launch profile', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
         const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const appHostLifecycleTools = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostLifecycleTools.e2e.test.ts'), 'utf8');
+        const dotnetRuntimeInstallIndex = runner.indexOf("displayName: '.NET Install Tool'");
+        const csharpInstallIndex = runner.indexOf("displayName: 'C#'");
         const resourceGroupsInstallIndex = runner.indexOf("displayName: 'Azure Resource Groups'");
         const functionsInstallIndex = runner.indexOf("displayName: 'Azure Functions'");
+        const dotNetSetupIndex = workflow.indexOf('name: Setup .NET');
+        const azureFunctionsPrerequisitesIndex = workflow.indexOf('name: Install Azure Functions E2E prerequisites');
         const runStepIndex = workflow.indexOf('- name: Run extension E2E tests');
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
         const runStep = workflow.slice(runStepIndex, uploadStepIndex);
+        // Generated project files embed their target framework as:
+        //   <TargetFramework>net10.0</TargetFramework>
+        const runnerTargetFrameworks = [...runner.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]);
+        const fixtureTargetFrameworks = [fixtures, appHostLifecycleTools]
+            .flatMap(source => [...source.matchAll(/<TargetFramework>([^<]+)<\/TargetFramework>/g)].map(match => match[1]));
 
         assert.ok(workflow.includes('shardName: azure-functions'));
         assert.ok(workflow.includes('installAzureFunctions: true'));
+        assert.ok(dotNetSetupIndex >= 0);
+        assert.ok(dotNetSetupIndex < azureFunctionsPrerequisitesIndex);
+        assert.ok(workflow.includes('global-json-file: global.json'));
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(workflow.includes("core_tools_version='4.12.1'"));
         assert.ok(workflow.includes('faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e'));
+        assert.ok(workflow.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
+        assert.ok(workflow.includes('8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a'));
+        assert.ok(workflow.includes('csharp/2.148.23/vspackage?targetPlatform=linux-x64'));
+        assert.ok(workflow.includes('18b503e614a979212762683b35a4fa1806688ba773d5fe93bf62c9f9346db23f'));
         assert.ok(workflow.includes('vscode-azureresourcegroups/0.12.7/vspackage'));
         assert.ok(workflow.includes('e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a'));
         assert.ok(workflow.includes('vscode-azurefunctions/1.22.0/vspackage'));
         assert.ok(workflow.includes('146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2'));
         assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'));
-        assert.ok(resourceGroupsInstallIndex >= 0);
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnet_runtime_vsix'));
+        assert.ok(workflow.includes('ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix'));
+        assert.ok(dotnetRuntimeInstallIndex >= 0);
+        assert.ok(csharpInstallIndex > dotnetRuntimeInstallIndex);
+        assert.ok(resourceGroupsInstallIndex > csharpInstallIndex);
         assert.ok(functionsInstallIndex > resourceGroupsInstallIndex);
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX')"));
+        assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_CSHARP_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX')"));
         assert.ok(runner.includes("path: resolveRequiredVsixPath('ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX')"));
+        assert.ok(runner.includes("const executable = isWindows ? (process.env.ComSpec || 'cmd.exe') : displayName;"));
+        assert.ok(runner.includes("const args = isWindows ? ['/d', '/s', '/c', 'func.cmd --version'] : ['--version'];"));
+        assert.ok(runner.includes("const certificatePassword = String.raw`Aspire E2E p@ss'\\word`;"));
+        assert.ok(runner.includes('commandLineArgs: `--useHttps --cert "${certificatePath}" --password "${certificatePassword}"`'));
         assert.ok(runStep.includes('ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}'));
         assert.strictEqual(runStep.includes('continue-on-error:'), false);
     });
@@ -510,6 +565,24 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('completed test failures tracked by ${advisoryIssue}. Diagnostics were uploaded for investigation.'));
         assert.strictEqual(runner.includes('ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE'), false);
         assert.strictEqual(runner.includes('completedTests'), false);
+    });
+
+    test('reloads the generated Azure Functions workspace before reopening the Aspire view', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const spec = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'azureFunctions.e2e.test.ts'), 'utf8');
+        const firstOpenIndex = spec.indexOf('await openAspireView();');
+        const initialWorkspaceLoadedIndex = spec.indexOf('await waitForWorkspaceAppHost();');
+        const reloadWorkspaceIndex = spec.indexOf('await reloadWorkspaceForE2E();');
+        const reloadedWorkspaceIndex = spec.indexOf('await waitForWorkspaceAppHost();', initialWorkspaceLoadedIndex + 1);
+        const reopenedViewIndex = spec.indexOf('await openAspireView();', firstOpenIndex + 1);
+        const runAppHostIndex = spec.indexOf("name: 'runAppHost'");
+
+        assert.ok(firstOpenIndex >= 0);
+        assert.ok(initialWorkspaceLoadedIndex > firstOpenIndex);
+        assert.ok(reloadWorkspaceIndex > initialWorkspaceLoadedIndex);
+        assert.ok(reloadedWorkspaceIndex > reloadWorkspaceIndex);
+        assert.ok(reopenedViewIndex > reloadedWorkspaceIndex);
+        assert.ok(runAppHostIndex > reopenedViewIndex);
     });
 
     test('keeps Linux E2E recordings for successful runs by default', () => {
@@ -571,6 +644,59 @@ suite('E2E launch profile', () => {
         assert.ok(runTests.includes('extestEnv'));
     });
 
+    test('persists E2E NuGet packages while purging repo-built Aspire packages', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const nuGetPathDeclaration = "const e2eNuGetPackages = path.join(downloadCacheRoot, 'nuget-packages', shardName);";
+        const nuGetPathIndex = runner.indexOf(nuGetPathDeclaration);
+        const restoreWorkspaceIndex = runner.indexOf('restoreWorkspaceFixture();');
+        const prepareCacheStart = runner.indexOf('function prepareNuGetPackageCache()');
+        const prepareCacheEnd = runner.indexOf('\nfunction ', prepareCacheStart + 1);
+        const prepareCache = runner.slice(prepareCacheStart, prepareCacheEnd);
+        const mainStart = runner.indexOf('async function main()');
+        const mainBody = runner.slice(mainStart, runner.indexOf('\n  finally {', mainStart));
+        const cliEnvironmentStart = runner.indexOf('function getAspireCliEnvironment');
+        const cliEnvironmentEnd = runner.indexOf('\nfunction ', cliEnvironmentStart + 1);
+        const cliEnvironment = runner.slice(cliEnvironmentStart, cliEnvironmentEnd);
+        const extestEnvironmentStart = runner.indexOf('const extestEnv = getAspireCliEnvironment({');
+        const extestEnvironmentEnd = runner.indexOf('\n    });', extestEnvironmentStart);
+        const extestEnvironment = runner.slice(extestEnvironmentStart, extestEnvironmentEnd);
+        const javaSdkGenerationStart = runner.indexOf('function ensureJavaAppHostSdkGenerated');
+        const javaSdkGenerationEnd = runner.indexOf('\nfunction ', javaSdkGenerationStart + 1);
+        const javaSdkGeneration = runner.slice(javaSdkGenerationStart, javaSdkGenerationEnd);
+        const javaRestoreStart = javaSdkGeneration.indexOf("spawnSync(bundledCliPath, ['restore'], {");
+        const javaRestoreEnd = javaSdkGeneration.indexOf('\n  });', javaRestoreStart);
+        const javaRestore = javaSdkGeneration.slice(javaRestoreStart, javaRestoreEnd);
+
+        assert.ok(nuGetPathIndex >= 0);
+        assert.ok(nuGetPathIndex < restoreWorkspaceIndex);
+        assert.ok(prepareCacheStart >= 0);
+        assert.ok(prepareCacheEnd > prepareCacheStart);
+        assert.ok(prepareCache.includes("fs.mkdirSync(e2eNuGetPackages, { recursive: true });"));
+        assert.ok(prepareCache.includes("fs.readdirSync(e2eNuGetPackages, { withFileTypes: true })"));
+        assert.ok(prepareCache.includes("/^aspire(?:\\.|$)/i.test(entry.name)"));
+        assert.ok(prepareCache.includes("removePathWithoutFollowingLinks(path.join(e2eNuGetPackages, entry.name), { recursive: true, force: true });"));
+        assert.ok(mainBody.includes('prepareNuGetPackageCache();'));
+        assert.ok(cliEnvironment.includes('NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(extestEnvironment.includes('NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(extestEnvironment.includes('ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,'));
+        assert.ok(javaRestoreStart >= 0);
+        assert.ok(javaRestoreEnd > javaRestoreStart);
+        assert.ok(javaRestore.includes('env: getAspireCliEnvironment(),'));
+    });
+
+    test('makes local NuGet sources available to external AppHosts', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const writeConfigStart = runner.indexOf('function writeNuGetConfigIfLocalPackageSourcesExist');
+        const writeConfigEnd = runner.indexOf('\nfunction ', writeConfigStart + 1);
+        const writeConfig = runner.slice(writeConfigStart, writeConfigEnd);
+
+        assert.ok(runner.includes("const runRootNuGetConfigPath = path.join(shortRunRoot, 'NuGet.config');"));
+        assert.ok(writeConfig.includes('fs.writeFileSync(runRootNuGetConfigPath, nugetConfig);'));
+        assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
+    });
+
     test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
@@ -612,6 +738,36 @@ suite('E2E launch profile', () => {
         assert.ok(e2eStateFileBridge.includes("context.globalState.update(dashboardDefaultChangedNotificationKey, undefined)"));
         assert.ok(fixtures.includes('resetDashboardDefaultChangedNotificationForE2E'));
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
+    });
+
+    test('scopes real debug browser cleanup to Windows while retaining deterministic nonblocking coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+        const vscodeHelpers = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
+        const aspireDebugSessionTests = fs.readFileSync(path.join(extensionRoot, 'src', 'test', 'aspireDebugSession.test.ts'), 'utf8');
+        const debugBrowserTest = getTestBlock(debugDashboard, 'starts the AppHost without waiting for the dashboard debug browser and closes the browser on Windows');
+        const normalizedDebugBrowserTest = debugBrowserTest.replace(/\r\n/g, '\n');
+        const nonblockingUnitTest = getTestBlock(aspireDebugSessionTests, 'openDashboard does not wait for a dashboard debug session to start');
+        const nonWindowsSkip = `if (process.platform !== 'win32') {
+            this.skip();
+        }`;
+
+        assert.deepStrictEqual({
+            nonWindowsSkipPrecedesDashboardBrowserSetting: normalizedDebugBrowserTest.indexOf(nonWindowsSkip) >= 0
+                && normalizedDebugBrowserTest.indexOf(nonWindowsSkip) < normalizedDebugBrowserTest.indexOf("writeWorkspaceSetting('aspire.dashboardBrowser', 'debugChrome')"),
+            waitsForBrowserDebugSession: debugBrowserTest.includes('await waitForBrowserDebugSession()'),
+            waitsForNoBrowserDebugSessions: debugBrowserTest.includes('await waitForNoBrowserDebugSessions()'),
+            hasNonblockingUnitTest: aspireDebugSessionTests.includes("test('openDashboard does not wait for a dashboard debug session to start'"),
+            usesNeverSettlingBrowserLaunch: nonblockingUnitTest.includes('new Promise<boolean>(() => { })'),
+            removedOptionalModalHelper: !vscodeHelpers.includes('export async function dismissModalDialogIfPresent('),
+        }, {
+            nonWindowsSkipPrecedesDashboardBrowserSetting: true,
+            waitsForBrowserDebugSession: true,
+            waitsForNoBrowserDebugSessions: true,
+            hasNonblockingUnitTest: true,
+            usesNeverSettlingBrowserLaunch: true,
+            removedOptionalModalHelper: true,
+        });
     });
 
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
@@ -844,6 +1000,35 @@ suite('E2E launch profile', () => {
         assert.ok(cleanup.includes('() => cancelAppHostsSectionTextTransition()'), 'The transition tracker must be disposed even when the E2E fails before observing the rendered row.');
     });
 
+    test('derives AppHost tree cold-start budgets from the effective CLI startup timeout', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+
+        assert.ok(runner.includes("ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300'"));
+        assert.ok(appHostTree.includes('const cliStartupTimeoutMs = getCliStartupTimeoutMs();'));
+        assert.ok(appHostTree.includes('const configuredSeconds = Number(process.env.ASPIRE_CLI_START_TIMEOUT);'));
+        assert.ok(appHostTree.includes('this.timeout(cliStartupTimeoutMs * 2);'));
+        assert.ok(runningBeforeDiscoveryTest.includes('waitForRunningAppHost(cliStartupTimeoutMs)'));
+        assert.ok(!appHostTree.includes('this.timeout(600000);'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForRunningAppHost(300000)'));
+    });
+
+    test('starts the running-before-discovery scenario through the deterministic control bridge', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const appHostTree = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const runningBeforeDiscoveryTest = getTestBlock(appHostTree, 'running AppHosts appear before slow discovery results');
+
+        assert.ok(runningBeforeDiscoveryTest.includes('const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();'));
+        assert.ok(runningBeforeDiscoveryTest.includes("const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');"));
+        assert.ok(runningBeforeDiscoveryTest.includes("await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });"));
+        assert.ok(runningBeforeDiscoveryTest.includes("await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);"));
+        assert.ok(!runningBeforeDiscoveryTest.includes('waitForTreeItem('));
+        assert.ok(!runningBeforeDiscoveryTest.includes('.expand()'));
+        assert.ok(!runningBeforeDiscoveryTest.includes('clickTreeItem('));
+    });
+
     test('patches ExTester launch arguments without version-specific assumptions or replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
@@ -871,6 +1056,44 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000)"));
         assert.ok(!zeroToRunning.includes("waitForEditorTitle(dashboardHost"));
         assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
+    });
+
+    test('keeps the ambiguous dynamic debug launch timeout above its process-state wait', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const dynamicDebugConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'dynamicDebugConfiguration.e2e.test.ts'), 'utf8');
+        const ambiguousLaunchTest = getTestBlock(dynamicDebugConfiguration, 'launches the selected AppHost from an ambiguous single-folder workspace');
+
+        assert.ok(dynamicDebugConfiguration.includes('const appHostProcessStateTimeoutMs = 120000;'));
+        assert.ok(ambiguousLaunchTest.includes('this.timeout(300000);'));
+        assert.ok(ambiguousLaunchTest.includes('appHostProcessStateTimeoutMs'));
+    });
+
+    test('uses state-specific assertions for debugger guidance and project creation readiness', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const workspaceTargetProofSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'workspaceTargetProof.e2e.test.ts'), 'utf8');
+
+        assert.ok(workspaceTargetProofSource.includes("const wrapperDirectory = path.join(fixtureRoot, '.workspace-target-cli-wrappers');"));
+        assert.ok(workspaceTargetProofSource.includes('const wrapperPath = path.join(wrapperDirectory, `aspire-${folderName}`);'));
+        assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
+        const workspaceRouting = getTestBlock(workspaceTargetProofSource, 'isolates folder terminals and keeps global commands window scoped');
+        assert.ok(workspaceRouting.includes("const folderC = createFolderFixture(runRoot, 'folder-c');"));
+        assert.ok(workspaceRouting.includes("const workspaceFolderLabels = ['folder-a', 'folder-b', 'folder-c'] as const;"));
+        assert.ok(workspaceRouting.includes("await invokeNewForFolder('folder-c', folderC);"));
+        assert.ok(!workspaceRouting.includes("await invokeNewForFolder('folder-b', folderB);"));
+        assert.ok(workspaceRouting.includes('assert.ok(!updateCommand.commandLine.includes(folderC.wrapperPath), updateCommand.commandLine);'));
+
+        const edgeCases = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+        assert.ok(edgeCases.includes("waitForNotificationMessage("));
+        assert.ok(edgeCases.includes("'Set up Python debugging support to debug resources in this app.'"));
+        assert.ok(!edgeCases.includes("name: 'getCodeLenses'"));
+        assert.ok(!edgeCases.includes("waitForCodeLensText("));
+        assert.ok(!edgeCases.includes("name: 'openFile'"));
+        assert.ok(!edgeCases.includes("waitForWorkbenchText('Set up Python debugger'"));
+
+        const workspaceCollision = getTestBlock(workspaceTargetProofSource, 'reopens the project folder picker after a colliding selection');
+        assert.ok(!workspaceCollision.includes('await openAspireView();'));
+        assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
     });
 
     test('uses integrated-browser webview text instead of editor title waits', () => {
@@ -1016,13 +1239,17 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.indexOf('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)') > zeroToRunning.indexOf('await runE2eTeardown(['));
         assert.ok(zeroToRunning.indexOf('appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);') < zeroToRunning.lastIndexOf("executeE2eControlCommand({ name: 'stopDebugging' })"));
         assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
-        assert.ok(dynamicDebugConfiguration.includes('let appHostPidBeforeStop: number | undefined;'));
-        assert.ok(dynamicDebugConfiguration.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(firstAppHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes('() => stopAppHostIfRunning(appHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes('() => stopAppHostIfRunning(firstAppHostPath)'));
-        assert.ok(dynamicDebugConfiguration.includes("waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000)"));
-        assert.ok(dynamicDebugConfiguration.indexOf("waitForKnownProcessExit(appHostPidBeforeStop, 'the dynamic debug configuration AppHost process', 30000)") < dynamicDebugConfiguration.indexOf('removePath(fixtureRoot, { recursive: true, force: true })'));
+        assert.ok(dynamicDebugConfiguration.includes('let appHostPidsBeforeStop: number[];'));
+        assert.ok(dynamicDebugConfiguration.includes('appHostPidsBeforeStop = [];'));
+        const captureFixtureAppHostPids = dynamicDebugConfiguration.indexOf('appHostPidsBeforeStop = fixtureAppHostPaths');
+        const stopFixtureAppHosts = dynamicDebugConfiguration.indexOf('...fixtureAppHostPaths.map(appHostPath => () => fs.existsSync(appHostPath) ? stopAppHostIfRunning(appHostPath) : undefined)');
+        const waitForFixtureAppHostPids = dynamicDebugConfiguration.indexOf('Promise.all(appHostPidsBeforeStop.map(appHostPid =>');
+        const removeFixtureRoot = dynamicDebugConfiguration.indexOf('removePath(fixtureRoot, { recursive: true, force: true })');
+        assert.ok(captureFixtureAppHostPids >= 0);
+        assert.ok(stopFixtureAppHosts > captureFixtureAppHostPids);
+        assert.ok(dynamicDebugConfiguration.includes("waitForKnownProcessExit(appHostPid, 'a dynamic debug configuration AppHost process', 30000)"));
+        assert.ok(waitForFixtureAppHostPids > stopFixtureAppHosts);
+        assert.ok(removeFixtureRoot > waitForFixtureAppHostPids);
         assert.ok(commandPalette.includes('runE2eTeardown'));
         assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
         assert.ok(!commandPalette.includes('throw new AggregateError'));
@@ -1046,6 +1273,32 @@ suite('E2E launch profile', () => {
         assert.ok(fixtures.includes("code === 'ENOTEMPTY'"));
         assert.ok(fixtures.includes("error.code === 'EPERM'"));
         assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
+    });
+
+    test('keeps the gated deploy test-controlled and cleans its fixture in finally', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+        const gatedDeployFixture = fixtures.slice(
+            fixtures.indexOf('export function writeGatedDeployActionCliWrapper'),
+            fixtures.indexOf('export function writeLegacyPipelineActionCliWrapper'));
+        const durableOperationTest = getTestBlock(treeActions, 'keeps one durable operation per AppHost while a deploy session is in flight');
+
+        assert.ok(gatedDeployFixture.includes('cleanup: () => void;'));
+        assert.ok(gatedDeployFixture.includes('removePath(gateDirectory, { recursive: true, force: true });'));
+        assert.ok(gatedDeployFixture.includes('removePath(cliPath, { force: true });'));
+        assert.ok(gatedDeployFixture.includes('removePath(scriptPath, { force: true });'));
+        assert.ok(fixtures.includes("waitForReleaseFile(${JSON.stringify(options.deployReleaseFilePath)}, 'gated deploy', 900000, ${JSON.stringify(options.deployGateDirectory)});"));
+        assert.ok(fixtures.includes('if (releaseDirectory !== undefined && !fs.existsSync(releaseDirectory)) {'));
+        assert.ok(durableOperationTest.replace(/\r\n/g, '\n').includes(`finally {
+            try {
+                gatedCli.releaseDeploy();
+            }
+            finally {
+                gatedCli.cleanup();
+            }
+            await waitForNoDebugSessions(120000);
+        }`));
     });
 
     test('keeps tree action resource lifecycle commands as terminal routing assertions', () => {

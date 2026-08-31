@@ -10,11 +10,28 @@ portable installs, the Aspire home used for hives and local state.
 ## File contract
 
 `.aspire-install.json` sits beside the running `aspire` binary
-(`<binaryDir>/.aspire-install.json`) and contains exactly one field:
+(`<binaryDir>/.aspire-install.json`). The install route writes the required
+`source` field and may add identity fields consumed by `IdentityResolver`:
 
 ```json
-{ "source": "<route>" }
+{
+  "source": "<route>",
+  "channel": "<stable|staging|daily|local|pr-N>",
+  "version": "<informational version>",
+  "commit": "<source commit>"
+}
 ```
+
+Identity fields are optional so sidecars written by older installers remain
+valid. `aspire update --self` atomically updates `channel` in an existing
+sidecar after replacing and verifying the executable, while preserving
+`source` and fields unrelated to executable identity. Existing `version` and
+`commit` values are removed so the resolver reads those values from the
+replacement binary rather than retaining identity from the executable that was
+replaced. A legacy sidecar-less install remains sidecar-less because self-update
+cannot infer its original route. Persisting the selected channel is required
+when a staging download contains a ship-candidate binary that is deliberately
+stamped `stable`.
 
 | `source` value | Install route                                          |
 |----------------|--------------------------------------------------------|

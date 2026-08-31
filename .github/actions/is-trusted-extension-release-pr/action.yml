@@ -1,0 +1,66 @@
+name: 'Is Trusted Extension Release PR'
+description: |
+  Classifies whether a pull request is the trusted, bot-authored VS Code
+  extension release PR that is allowed onto the release fast path (see
+  microsoft/aspire#19581).
+
+  A PR is trusted only when ALL identity fields match and its patch contains
+  exactly the expected extension package version and changelog updates:
+    - base branch is 'main'
+    - base and head repositories are 'microsoft/aspire' (blocks forks)
+    - PR author is 'aspire-repo-bot[bot]'
+    - head branch starts with 'extension-release/v'
+    - only extension/package.json and extension/CHANGELOG.md changed
+    - package.json changes only its X.Y.Z version
+    - CHANGELOG.md prepends a matching version section without editing prior notes
+
+  The same-repository + bot-author checks are what make the branch-prefix check
+  safe: a fork cannot bypass full CI by simply naming its branch
+  'extension-release/*', because it can never make head_repo equal the base
+  repository or make the PR author equal the bot's App slug.
+
+  The validator reads files from the supplied head revision and its merge base
+  with the supplied base revision. It never executes revision content.
+
+inputs:
+  repository:
+    description: "The base repository, e.g. 'microsoft/aspire' (github.repository)."
+    required: true
+  base_ref:
+    description: "The PR's base branch name (github.event.pull_request.base.ref)."
+    required: true
+  head_repo:
+    description: "The PR head repository full name (github.event.pull_request.head.repo.full_name)."
+    required: true
+  head_ref:
+    description: "The PR head branch name (github.event.pull_request.head.ref)."
+    required: true
+  author:
+    description: "The PR author's login (github.event.pull_request.user.login)."
+    required: true
+  base_sha:
+    description: "The full base tip SHA used to compute the PR merge base (github.event.pull_request.base.sha)."
+    required: true
+  head_sha:
+    description: "The full head commit SHA (github.event.pull_request.head.sha)."
+    required: true
+
+outputs:
+  is_trusted:
+    description: "'true' if this PR matches the trusted extension-release fast-path predicate, otherwise 'false'."
+    value: ${{ steps.classify.outputs.is_trusted }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: classify
+      shell: pwsh
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        BASE_REF: ${{ inputs.base_ref }}
+        HEAD_REPO: ${{ inputs.head_repo }}
+        HEAD_REF: ${{ inputs.head_ref }}
+        AUTHOR: ${{ inputs.author }}
+        BASE_SHA: ${{ inputs.base_sha }}
+        HEAD_SHA: ${{ inputs.head_sha }}
+      run: '& "$env:GITHUB_ACTION_PATH/validate.ps1"'

@@ -77,7 +77,7 @@ parameters:
   - name: SkipWinGetPublish
     displayName: '[Advanced] Skip WinGet Publishing (re-run after success)'
     type: boolean
-    default: true
+    default: false
 
   - name: SkipGitHubTasks
     displayName: '[Advanced] Skip GitHub Tasks dispatch (re-run after success)'
@@ -239,7 +239,7 @@ extends:
                   displayName: 'Publish npm Signature Sidecars'
                   targetPath: '$(Pipeline.Workspace)/npm/signatures'
                   artifactName: 'NpmSignatureArtifacts'
-                - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                - ${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:
                   - output: pipelineArtifact
                     displayName: 'Publish WinGet Manifests'
                     targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
@@ -419,7 +419,7 @@ extends:
                     downloadPath: '$(Pipeline.Workspace)/aspire-build'
                     checkDownloadedFiles: true
 
-              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+              - ${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:
                 - download: aspire-build
                   displayName: 'Download WinGet Manifests from Source Build'
                   artifact: winget-manifests-stable
@@ -2099,7 +2099,14 @@ extends:
                   } else {
                     Write-Host " (EXECUTED)"
                   }
-                  Write-Host "║ WinGet:         (runs in parallel after this job)"
+                  Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } else {
+                    Write-Host " (runs in parallel after this job)"
+                  }
                   Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
                   if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
                     Write-Host " (SKIPPED)"
@@ -2178,7 +2185,9 @@ extends:
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
 
-                  npm install -g @vscode/vsce@3.7.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+                  # Pin Azure Identity explicitly so VSCE's transitive dependency graph
+                  # remains stable across npm feed updates.
+                  npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
                   vsce --version
                 displayName: 'Install vsce'
 
@@ -2310,7 +2319,8 @@ extends:
             condition: |
               and(
                 in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
-                eq('${{ parameters.SkipWinGetPublish }}', 'false')
+                eq('${{ parameters.SkipWinGetPublish }}', 'false'),
+                eq('${{ parameters.IsPrerelease }}', 'false')
               )
             timeoutInMinutes: 30
             pool:

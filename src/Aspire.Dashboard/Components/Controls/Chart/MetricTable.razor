@@ -95,7 +95,14 @@
             }
         </ChildContent>
         <EmptyContent>
-            <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+            @if (_hasUpdated)
+            {
+                <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" />@:&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+            }
+            else
+            {
+                @Loc[nameof(ControlsStrings.Loading)]
+            }
         </EmptyContent>
     </FluentDataGrid>
 </div>

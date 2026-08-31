@@ -236,8 +236,9 @@ Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions # Optional confi
   Description?: string # Gets or sets the description for the input.
   Disabled?: boolean # Gets or sets a value indicating whether the input is disabled.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description is rendered as Markdown.
+  FileFilter?: string # Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as "image/*".
   Label?: string # Gets or sets the label for the input. Defaults to the input name when not specified.
-  MaxFileSize?: number # Gets or sets the maximum file size in bytes for file chooser inputs.
+  MaxFileSize?: number # Gets or sets the maximum file size in bytes for file inputs.
   MaxLength?: number # Gets or sets the maximum length for text inputs.
   Placeholder?: string # Gets or sets the placeholder text for the input.
   Required?: boolean # Gets or sets a value indicating whether the input is required.
@@ -294,6 +295,7 @@ Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions # Options for n
 Aspire.Hosting/Aspire.Hosting.Ats.InteractionProgressOptions # Options for progress dialog prompts.
   EnableMessageMarkdown?: boolean # Gets or sets a value indicating whether Markdown in the message is rendered.
   PrimaryButtonText?: string # Gets or sets the primary button text (e.g. "Cancel").
+  Title?: string # Gets or sets the optional title of the progress dialog.
   Work?: callback # Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed. When provided, the progress dialog remains open while this callback executes and closes automatically when the callback completes.
 Aspire.Hosting/Aspire.Hosting.Ats.ParameterCustomInputOptions # Options for customizing parameter inputs from polyglot app hosts.
   AllowCustomChoice?: boolean # Gets or sets whether custom choices are allowed.
@@ -322,8 +324,9 @@ Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an inte
   AllowCustomChoice?: boolean # Gets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   AllowMultipleFiles?: boolean # Gets or sets a value indicating whether multiple files can be selected. Only used by `File` inputs.
   Description?: string # Gets or sets the description for the input.
-  Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
+  Disabled: boolean # Gets or sets a value indicating whether the input is disabled.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
+  FileFilter?: string # Gets or sets the file type filter for `File` inputs. Uses the same format as the HTML `accept` attribute, e.g. `".pem,.pfx,.crt"` or `"image/*"`. When set, the file picker restricts selectable files. The CLI validates only dot-prefixed extension filters and does not validate MIME type patterns such as `"image/*"`.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label?: string # Gets or sets the label for the input. If not specified, the name will be used as the label.
   MaxFileSize?: number # Gets or sets the maximum file size in bytes for `File` inputs. If not specified, the server applies the configured upload limit (default 100 MB). When specified, the value is capped at the server-side upload limit.
@@ -333,6 +336,8 @@ Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an inte
   Placeholder?: string # Gets the placeholder text for the input.
   Required?: boolean # Gets or sets a value indicating whether the input is required.
   Value: string # Gets or sets the value of the input.
+Aspire.Hosting/Aspire.Hosting.RunConfiguration # Holds settings applicable to the AppHost run mode (when `Operation` is `Run`).
+  WatchEnabled?: boolean # Indicates that resources should start in watch mode if able.
 
 # Enum Types
 enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope = None | Append | Override | System
@@ -547,6 +552,7 @@ Aspire.Hosting.Ats/input(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionI
 Aspire.Hosting.Ats/InputsInteractionResult.canceled(context: Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult) -> boolean
 Aspire.Hosting.Ats/InputsInteractionResult.inputs(context: Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
 Aspire.Hosting.Ats/InteractionInputLoadContext.inputs(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+Aspire.Hosting.Ats/releaseFiles(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder) -> void
 Aspire.Hosting.Ats/setChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> void
 Aspire.Hosting.Ats/setValue(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionLoadingInput, value: string) -> void
 Aspire.Hosting.Ats/withChoiceOptions(context: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder, choices: Aspire.Hosting/Aspire.Hosting.Ats.InteractionChoiceOption[]) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
@@ -648,6 +654,7 @@ Aspire.Hosting/DistributedApplicationExecutionContext.isPublishMode(context: Asp
 Aspire.Hosting/DistributedApplicationExecutionContext.isRunMode(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> boolean
 Aspire.Hosting/DistributedApplicationExecutionContext.operation(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> enum:Aspire.Hosting.DistributedApplicationOperation
 Aspire.Hosting/DistributedApplicationExecutionContext.publisherName(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> string
+Aspire.Hosting/DistributedApplicationExecutionContext.runConfiguration(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> Aspire.Hosting/Aspire.Hosting.RunConfiguration
 Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting/DistributedApplicationExecutionContext.services(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting/DistributedApplicationExecutionContext.setPublisherName(context: Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext, value: string) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
@@ -748,7 +755,7 @@ Aspire.Hosting/promptInput(title: string, message: string, input: Aspire.Hosting
 Aspire.Hosting/promptInputs(title: string, message: string, inputs: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder[], options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult
 Aspire.Hosting/promptMessageBox(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/promptNotification(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
-Aspire.Hosting/promptProgress(message: string, title?: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionProgressOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
+Aspire.Hosting/promptProgress(message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionProgressOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/publishAsConnectionString() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsContainer() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsDockerFile(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource

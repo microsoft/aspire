@@ -188,7 +188,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                         new XElement("IsAspireProjectResource", "false")));
                 }
             }
-            else if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
+            else if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase) &&
+                     !integration.DisableLocalProjectSubstitution)
             {
                 var projectPath = Path.Combine(_repoRoot, "src", integration.Name, $"{integration.Name}.csproj");
                 if (File.Exists(projectPath) && addedProjects.Add(integration.Name))
@@ -227,7 +228,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             doc.Root!.Add(new XElement("ItemGroup",
                 otherPackages.Select(p => new XElement("PackageReference",
                     new XAttribute("Include", p.Name),
-                    new XAttribute("Version", p.Version)))));
+                    new XAttribute("VersionOverride", p.Version)))));
         }
 
         // Add imports for in-repo AppHost building

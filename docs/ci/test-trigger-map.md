@@ -73,22 +73,15 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:typescript-api-compat` | `tests.yml` → [`typescript-api-compat.yml`](../../.github/workflows/typescript-api-compat.yml) |
 | `job:extension-unit` | `tests.yml` `extension_tests_win` + `extension_bootstrap_linux` |
 | `job:extension-e2e` | `tests.yml` → [`extension-e2e-tests.yml`](../../.github/workflows/extension-e2e-tests.yml) |
-| `job:cli-starter` | `tests.yml` `cli_starter_validation_windows` |
 | `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:nix-package` | `tests.yml` `nix_package` |
-| `job:api-diffs` | [`generate-api-diffs.yml`](../../.github/workflows/generate-api-diffs.yml) — *schedule-only today* |
-| `job:ats-diffs` | [`generate-ats-diffs.yml`](../../.github/workflows/generate-ats-diffs.yml) — *schedule-only today* |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
-| `ALL` | full test matrix + all jobs |
+| `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while independently scheduled, dispatched, or outerloop targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
-Base builds (packages, CLI native archives, installer artifacts, the CLI E2E
-image) are not modelled as targets. They are upstream `needs:` of the targets
-above and run whenever any dependent target runs.
-
-Their **workflow files** are in the catch-all `path_rules` entry (target `ALL`)
-because a change to *how* they build can affect every consumer.
+Unconditional baseline builds are not selector targets. Gated reusable
+workflows are routed to the target they implement or serve.
 
 ## Rule categories
 
@@ -105,7 +98,7 @@ set instead of repeating it. Example:
 
 ```yaml
 groups:
-  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:cli-starter, job:extension-e2e, job:winget-installer, job:homebrew-installer]
+  CLI_BUNDLE: [test:Aspire.Cli.EndToEnd.Tests, job:extension-e2e, job:winget-installer, job:homebrew-installer]
 ```
 
 Group members may themselves be group names; expansion is recursive and
@@ -159,6 +152,10 @@ src/Components/Common/**                          # link-compiled into many comp
 src/Vendoring/OpenTelemetry.Instrumentation.*/**  # glob-compiled into Redis/Kafka components; Layer 1 covers
 ```
 
+This also includes paths already exercised by unconditional or dedicated
+workflows, schedule/dispatch-only inputs, and paths with no PR-CI consumer.
+Each entry's YAML comment records which case applies.
+
 ### Path rules (`path_rules`)
 
 The one general path-glob → targets matcher. `targets` may be `test:` / `job:` /
@@ -196,8 +193,6 @@ with `--skip-layer1`; the loose-file `path_rules` still cover those triggers.
 Project name means the `.csproj` base name, which is what Layer 1 emits.
 
 ```yaml
-- projects: [Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
-  targets: [job:cli-starter]
 - projects: [Aspire.Hosting*, Aspire.Cli]
   targets: [job:typescript-api-compat]
 ```
@@ -212,32 +207,65 @@ A `test → test` edge whose target has its own rule is followed; cycles termina
 This is how a job fires based on *which tests run*, not on which file changed:
 
 ```yaml
-- tests: [test:Aspire.Cli.Tests, test:Aspire.Cli.EndToEnd.Tests]
-  targets: [job:cli-starter]
 - tests: [test:Aspire.Acquisition.Tests]
-  targets: [job:cli-starter, job:winget-installer, job:homebrew-installer]
+  targets: [job:winget-installer, job:homebrew-installer]
 ```
 
 ## Maintenance
 
-The map is hand-curated; there is no generator. The verifier tests
-(`Infrastructure.Tests/TestTriggerMap/TestTriggerMapTests.cs`) keep it honest
-and tell you exactly what to fix when the repo changes.
+The map is hand-curated; there is no generator. Do not add a rule only because a
+file changed or a verifier failed. First trace the file to the work that consumes
+it.
 
-Steady state:
+1. **Decide which layer owns the dependency.**
+   - If a project in the `Aspire.slnx`-rooted `ProjectGraph` evaluates the file
+     and MSBuild expresses the dependency, Layer 1 owns it. Do not add a manual
+     rule for a new `ProjectReference`, linked file, or ordinary project input.
+   - Otherwise it is a Layer 2 blind spot. Common examples are workflow
+     implementations, scripts invoked by CI, and configuration read directly by
+     a test or job.
+2. **Identify the actual consumer.** Follow script invocations, reusable-workflow
+   calls, project imports, and job `needs:` edges. Determine whether the consumer
+   is a selector-gated PR test/job, an unconditional or dedicated workflow, a
+   schedule/dispatch-only workflow, or has no CI consumer.
+3. **Choose the narrowest accurate representation.**
+   - use `path_rules` for a path with specific `test:` or `job:` consumers;
+   - use `ALL` only for inputs shared broadly enough to invalidate precise
+     routing;
+   - use `ignore` when Layer 2 must account for a path but the selector has no
+     target to schedule; record why in the adjacent YAML comment;
+   - add a top-level skip pattern only when the path cannot affect main CI, or a
+     dedicated workflow fully validates it; preserve any `keep_routed` carve-out;
+   - use `affected_project_rules` only when an affected production project
+     implies work beyond the graph-selected tests, and `derived_targets` only
+     when selecting one test inherently requires another target.
+4. **Wire jobs end to end.** A selector-gated `job:` target needs a matching
+   `run_*` output in `tests.yml`, a gate that consumes that output, and a route
+   from any reusable workflow that implements the job. Targets outside those PR
+   gates must remain advisory rather than appearing as PR-runnable work.
+5. **Add a regression that would catch both under- and over-selection.**
+   - curated routing changes use the real map in `TestTriggerMapTests.cs` and
+     compare the complete selected target sets;
+   - selector-engine behavior uses focused synthetic maps in
+     `SelectTestsAcceptanceTests.cs`;
+   - CLI rendering and side-channel behavior belongs in
+     `SelectTestsCliTests.cs`;
+   - action or workflow-gate contracts belong in `SelectTestsWorkflowTests.cs`
+     or an exact real-workflow invariant.
 
-1. Make the change. The graph closure (Layer 1) tracks itself — you do **not**
-   edit the map for a new `ProjectReference`, a new `src` project in
-   `Aspire.slnx`, or a new linked-file edge.
-2. Run the verifier. Each failure names the offending path/project/target:
-   - new `src` project neither in `Aspire.slnx` nor matched by a rule → add a
-     `path_rules` entry, or add it to the solution;
-   - a convention-miss dir whose non-MSBuild changes should run a specific test
-     → add a `path_rules` entry;
-   - renamed/removed test project, job, or path → fix the name/glob.
-3. Check the selector's audit summary for **unattributed changed files**. A new
-   non-.NET job or runtime file read shows up there, prompting a `path_rules`
-   addition.
+After restoring the repository, run the focused selector suite:
+
+```bash
+dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
+  --no-launch-profile -- \
+  --filter-namespace "Infrastructure.Tests.TestTriggerMap" \
+  --filter-not-trait "quarantined=true" \
+  --filter-not-trait "outerloop=true"
+```
+
+Finally, inspect the PR audit comment or job summary. Confirm that every changed
+file is attributed, the selected PR tests/jobs are the expected complete sets,
+and independently scheduled targets appear only as advisory impact.
 
 The hand-owned knowledge (`conventions`, `ignore`, `path_rules`,
 `derived_targets`) encodes dependencies a fresh codebase read cannot recover, so
@@ -260,9 +288,14 @@ carry it forward. Never silently regenerate it.
 - **Safety vs. selectivity.** The catch-all `ALL` rule, the run-all fallback, and
   the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
   `src` coverage and the convention backstop for non-MSBuild files.
-- **Schedule/outerloop-only targets.** `api-diffs`, `ats-diffs`,
-  `deployment-e2e`, and `Aspire.EndToEnd.Tests` are not in the regular PR matrix
-  today; their rules give the *would-be* trigger paths.
+- **Independent workflow targets.** `deployment-e2e`,
+  `Aspire.Deployment.EndToEnd.Tests`, `Aspire.EndToEnd.Tests`, and
+  `Aspire.Oracle.EntityFrameworkCore.Tests` are not in the regular PR matrix
+  today; their rules give the *would-be* trigger paths. Their own schedules,
+  dispatches, or narrow PR workflow triggers decide whether they run. Comments
+  and job summaries list them separately from work the PR selector can actually
+  run. The API/ATS baseline regeneration workflows are independently scheduled
+  or dispatched and ignored as selector targets, as described in `ignore` above.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files

@@ -469,6 +469,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
             Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
             Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1, response.Capabilities);
         }
 
         await app.StopAsync().DefaultTimeout();

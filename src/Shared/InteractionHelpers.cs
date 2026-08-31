@@ -15,6 +15,9 @@ internal static partial class InteractionHelpers
     // to prevent possible abuse of interactions API.
     public const int DefaultMaxLength = 8000;
 
+    // Limits multi-file inputs to a practical number of files while preventing unbounded submissions.
+    public const int MaxFileCount = 100;
+
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NonAlphanumericRegex();
 
@@ -28,6 +31,8 @@ internal static partial class InteractionHelpers
 
         return configuredInputLength.Value;
     }
+
+    public static int GetMaxFileCount(bool allowMultipleFiles) => allowMultipleFiles ? MaxFileCount : 1;
 
     public static string LabelToName(string label)
     {

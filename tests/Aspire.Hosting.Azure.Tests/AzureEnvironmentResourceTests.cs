@@ -175,6 +175,31 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzurePublishingContext_DoesNotPromotePrincipalTypeForApplicationPrincipal()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path);
+
+        builder.AddAzureContainerAppEnvironment("acaEnv");
+        var roles = builder.AddBicepTemplateString("roles",
+            """
+            param location string
+            param principalId string
+            param principalType string
+            """);
+        roles.Resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = null;
+        roles.Resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        using var app = builder.Build();
+        app.Run();
+
+        var mainBicep = File.ReadAllText(Path.Combine(workspace.Path, "main.bicep"));
+        await Verify(mainBicep, "bicep");
+    }
+
+    [Fact]
     public async Task AzurePublishingContext_WritesScopedModuleExpressions()
     {
         using var workspace = TemporaryWorkspace.Create(output);

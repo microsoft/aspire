@@ -120,7 +120,7 @@ Before starting a release:
    | `SkipNpmRidPublish` | Set `true` if npm RID packages published but the pointer package did not. | `false` |
    | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. Registry validation still runs. | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success. | `false` |
-   | `SkipWinGetPublish` | Set `true` if re-running after WinGet success. | `true` |
+   | `SkipWinGetPublish` | Set `true` if re-running a stable release after WinGet success. Prerelease releases skip WinGet automatically. | `false` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow. | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading `aspire-cli-*` assets to the GitHub release. | `false` |
    | `SkipNixPackageUpdate` | Set `true` if the Nix flake update was already added to the baseline version PR. Stable releases dispatch the updater with checksums from the source build; prereleases skip it. | `false` |

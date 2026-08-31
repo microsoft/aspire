@@ -97,6 +97,11 @@
         <target state="needs-review-translation">対話型入力は、この環境ではサポートされていません。--non-interactive フラグを使用するか、CLI が対話型ターミナルで実行されていることを確認してください。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidSelection">
+        <source>Invalid selection.</source>
+        <target state="new">Invalid selection.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
         <target state="needs-review-translation">[暗い]詳細については、次を参照してください: [link]{0}[/][/]</target>

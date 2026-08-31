@@ -1,5 +1,27 @@
 # Aspire VS Code Extension Changelog
 
+## v1.20.0
+
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->
+
+### Fixes
+
+- Prevent the Hot Reload advisory notification from repeatedly reappearing during a debug session ([#19672](https://github.com/microsoft/aspire/pull/19672)).
+
+### Documentation
+
+- Rewrite the extension README and walkthrough with clearer setup and getting-started guidance ([#19632](https://github.com/microsoft/aspire/pull/19632)).
+
+## v1.19.0
+
+<!-- aspire-ext-changelog-done from=b5be9fc0742c7cdf5e02e4b6e2b7cb5c45e5c387 to=c1d2831ade34a050e8ea1111ac64aeda67c7321e base=1.18.0 -->
+
+### Features
+
+- Surface **Deploy**, **Publish**, **Run pipeline step**, and **Debug pipeline step** actions directly on AppHost items in the Aspire pane, instead of requiring the Command Palette ([#19407](https://github.com/microsoft/aspire/issues/19407), [#19466](https://github.com/microsoft/aspire/pull/19466)).
+- Add a **Create with Aspire...** action to the Aspire pane toolbar for creating a new Aspire app or adding Aspire to the current workspace ([#19499](https://github.com/microsoft/aspire/issues/19499), [#19539](https://github.com/microsoft/aspire/pull/19539)).
+- Prompt to pick an AppHost when a debug configuration's directory contains multiple buildable AppHosts with no configured default, instead of failing inside a non-interactive launch ([#19280](https://github.com/microsoft/aspire/issues/19280), [#19541](https://github.com/microsoft/aspire/pull/19541)).
+
 ## v1.18.0
 
 <!-- aspire-ext-changelog-done from=1c8df90b9860e508e841ee5bae43d9fdd0e6bd60 to=95ba0548da04adf7d7fe6866fff9e3df2d2ee549 base=1.17.0 -->

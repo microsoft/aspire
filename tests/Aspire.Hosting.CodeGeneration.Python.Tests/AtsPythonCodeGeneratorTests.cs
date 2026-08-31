@@ -578,6 +578,119 @@ public class AtsPythonCodeGeneratorTests
         };
     }
 
+    [Fact]
+    public void GeneratedCode_DisambiguatesParameterMappingsWhenCapabilityIdMatchesMethodName()
+    {
+        // A capability declared with a bare [AspireExport] has a capability ID whose trailing segment
+        // is its method name, so the capability-ID fallback collapses onto the method name it was
+        // meant to escape. Builder classes are emitted in name order, so CollidingAlphaResource
+        // claims VolumeParameters and the bare CollidingBetaResource capability has to be qualified
+        // by its declaring namespace. Snapshot coverage cannot reach this: the shipped volume
+        // capabilities happen to emit in the opposite order.
+        var files = _generator.GenerateDistributedApplication(CreateContextWithCollidingParameterMappings());
+
+        // The generator composes output with StringBuilder.AppendLine, which writes Environment.NewLine,
+        // so the raw text is CRLF on Windows and LF elsewhere. Normalize before matching the multi-line
+        // expectations below, which assert exact field order and so cannot be collapsed to single lines.
+        var aspirePy = files["aspire_app.py"].ReplaceLineEndings("\n");
+
+        Assert.Contains("class VolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: typing.Required[str]\n    env: typing.Required[str]\n    is_read_only: bool", aspirePy);
+        Assert.Contains("class TestsBetaVolumeParameters(typing.TypedDict, total=False):\n    target: typing.Required[str]\n    name: str\n    is_read_only: bool", aspirePy);
+    }
+
+    private static AtsContext CreateContextWithCollidingParameterMappings()
+    {
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var boolType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Boolean,
+            Category = AtsTypeCategory.Primitive
+        };
+
+        var projectType = new AtsTypeRef
+        {
+            TypeId = "Tests/CollidingAlphaResource",
+            ClrType = typeof(CollidingAlphaResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        var containerType = new AtsTypeRef
+        {
+            TypeId = "Tests/CollidingBetaResource",
+            ClrType = typeof(CollidingBetaResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                // Emitted first (name order), so this claims VolumeParameters for its own shape.
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests.Alpha/withAlphaVolume",
+                    MethodName = "withVolume",
+                    Parameters =
+                    [
+                        new AtsParameterInfo { Name = "builder", Type = projectType },
+                        new AtsParameterInfo { Name = "target", Type = stringType },
+                        new AtsParameterInfo { Name = "name", Type = stringType },
+                        new AtsParameterInfo { Name = "env", Type = stringType },
+                        new AtsParameterInfo { Name = "isReadOnly", Type = boolType, IsOptional = true }
+                    ],
+                    ReturnType = projectType,
+                    TargetTypeId = projectType.TypeId,
+                    TargetType = projectType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [projectType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                },
+                // Bare-export shape: the capability ID also ends in withVolume, so it has no
+                // capability-ID fallback and must be qualified by its declaring namespace.
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests.Beta/withVolume",
+                    MethodName = "withVolume",
+                    Parameters =
+                    [
+                        new AtsParameterInfo { Name = "builder", Type = containerType },
+                        new AtsParameterInfo { Name = "target", Type = stringType },
+                        new AtsParameterInfo { Name = "name", Type = stringType, IsOptional = true },
+                        new AtsParameterInfo { Name = "isReadOnly", Type = boolType, IsOptional = true }
+                    ],
+                    ReturnType = containerType,
+                    TargetTypeId = containerType.TypeId,
+                    TargetType = containerType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [containerType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes =
+            [
+                new AtsTypeInfo
+                {
+                    AtsTypeId = projectType.TypeId,
+                    ClrType = typeof(CollidingAlphaResource)
+                },
+                new AtsTypeInfo
+                {
+                    AtsTypeId = containerType.TypeId,
+                    ClrType = typeof(CollidingBetaResource)
+                }
+            ],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
     private sealed class KeywordResource;
 
     private sealed class AcronymResource;
@@ -589,4 +702,18 @@ public class AtsPythonCodeGeneratorTests
     private sealed class GenericTypeArgument<TLeft, TRight>;
 
     private sealed class GenericResource : GenericBaseResource<GenericTypeArgument<int, string>>, IGenericResource<GenericTypeArgument<int, string>>;
+
+    private sealed class CollidingAlphaResource : IResource
+    {
+        public string Name => nameof(CollidingAlphaResource);
+
+        public ResourceAnnotationCollection Annotations { get; } = [];
+    }
+
+    private sealed class CollidingBetaResource : IResource
+    {
+        public string Name => nameof(CollidingBetaResource);
+
+        public ResourceAnnotationCollection Annotations { get; } = [];
+    }
 }

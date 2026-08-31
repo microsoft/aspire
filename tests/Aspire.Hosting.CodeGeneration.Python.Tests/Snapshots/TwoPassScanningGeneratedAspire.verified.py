@@ -1751,6 +1751,20 @@ class VolumeParameters(typing.TypedDict, total=False):
     is_read_only: bool
 
 
+class ProjectVolumeParameters(typing.TypedDict, total=False):
+    target: typing.Required[str]
+    name: typing.Required[str]
+    env: typing.Required[str]
+    is_read_only: bool
+
+
+class ExecutableVolumeParameters(typing.TypedDict, total=False):
+    target: typing.Required[str]
+    name: typing.Required[str]
+    env: typing.Required[str]
+    is_read_only: bool
+
+
 class DataVolumeParameters(typing.TypedDict, total=False):
     name: str
     is_read_only: bool
@@ -2635,16 +2649,15 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(TestRedisResource, result)
 
-    def add_test_vault(self, name: str, **kwargs: typing.Unpack["TestVaultResourceKwargs"]) -> TestVaultResource:  # type: ignore
+    def add_test_vault(self, name: str) -> AbstractTestVaultResource:
         """Adds a test vault resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/addTestVault',
             rpc_args,
-            kwargs,
         )
-        return typing.cast(TestVaultResource, result)
+        return typing.cast(AbstractTestVaultResource, result)
 
 
 class AbstractDistributedApplicationEvent(abc.ABC):
@@ -5801,6 +5814,14 @@ class InteractionInputBuilder:
         )
         return typing.cast(InteractionInputBuilder, result)
 
+    def release_files(self) -> None:
+        """Releases uploaded files associated with the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting.Ats/releaseFiles',
+            rpc_args
+        )
+
     def with_dynamic_loading(self, callback: typing.Callable[[InteractionInputLoadContext], None], *, options: DynamicLoadingOptions | None = None) -> InteractionInputBuilder:
         """Attaches a callback that dynamically loads or updates the input after the prompt starts."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
@@ -7754,6 +7775,30 @@ class AbstractResourceWithWaitSupport(AbstractResource):
     @abc.abstractmethod
     def wait_for_completion(self, dependency: AbstractResource, *, exit_code: int = 0) -> typing.Self:
         """Waits for the dependency resource to enter the Exited or Finished state before starting the resource."""
+
+
+class AbstractTestMutablePromiseCollisionResource(AbstractResource):
+    """Abstract base class for AbstractTestMutablePromiseCollisionResource interface."""
+
+    @_uncached_property
+    def value(self) -> str:
+        """Gets or sets the test value."""
+
+    @value.setter
+    def value(self, value: str) -> None:
+        """Sets the Value property"""
+
+
+class AbstractTestMutablePromiseCollisionResourcePromise(AbstractResource):
+    """Abstract base class for AbstractTestMutablePromiseCollisionResourcePromise interface."""
+
+
+class AbstractTestPromiseCollisionResource(AbstractResource):
+    """Abstract base class for AbstractTestPromiseCollisionResource interface."""
+
+
+class AbstractTestPromiseCollisionResourcePromise(AbstractResource):
+    """Abstract base class for AbstractTestPromiseCollisionResourcePromise interface."""
 
 
 class AbstractTestVaultResource(AbstractResource):
@@ -10344,6 +10389,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    volume: tuple[str, str, str] | ProjectVolumeParameters
     endpoints_in_env: typing.Iterable[str]
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
@@ -10843,6 +10889,21 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_volume(self, target: str, name: str, env: str, *, is_read_only: bool = False) -> typing.Self:
+        """Adds a volume to a project resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['target'] = target
+        rpc_args['name'] = name
+        rpc_args['env'] = env
+        if is_read_only is not None:
+            rpc_args['isReadOnly'] = is_read_only
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withProjectVolume',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoints_in_env(self, endpoint_names: typing.Iterable[str]) -> typing.Self:
         """Includes only the specified project endpoint names in environment-variable injection."""
         rpc_args: dict[str, typing.Any] = {'resource': self._handle}
@@ -11239,6 +11300,22 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
+        if _volume := kwargs.pop("volume", None):
+            if _validate_tuple_types(_volume, (str, str, str)):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(tuple[str, str, str], _volume)[0]
+                rpc_args["name"] = typing.cast(tuple[str, str, str], _volume)[1]
+                rpc_args["env"] = typing.cast(tuple[str, str, str], _volume)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProjectVolume', rpc_args))
+            elif _validate_dict_types(_volume, ProjectVolumeParameters):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(ProjectVolumeParameters, _volume)["target"]
+                rpc_args["name"] = typing.cast(ProjectVolumeParameters, _volume)["name"]
+                rpc_args["env"] = typing.cast(ProjectVolumeParameters, _volume)["env"]
+                rpc_args["isReadOnly"] = typing.cast(ProjectVolumeParameters, _volume).get("is_read_only")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProjectVolume', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'volume'. Expected: (str, str, str) or ProjectVolumeParameters")
         if _endpoints_in_env := kwargs.pop("endpoints_in_env", None):
             if _validate_type(_endpoints_in_env, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"resource": handle}
@@ -11322,6 +11399,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    volume: tuple[str, str, str] | ExecutableVolumeParameters
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
@@ -11808,6 +11886,21 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_volume(self, target: str, name: str, env: str, *, is_read_only: bool = False) -> typing.Self:
+        """Adds a volume to an executable resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['target'] = target
+        rpc_args['name'] = name
+        rpc_args['env'] = env
+        if is_read_only is not None:
+            rpc_args['isReadOnly'] = is_read_only
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withExecutableVolume',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12183,6 +12276,22 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
+        if _volume := kwargs.pop("volume", None):
+            if _validate_tuple_types(_volume, (str, str, str)):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(tuple[str, str, str], _volume)[0]
+                rpc_args["name"] = typing.cast(tuple[str, str, str], _volume)[1]
+                rpc_args["env"] = typing.cast(tuple[str, str, str], _volume)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableVolume', rpc_args))
+            elif _validate_dict_types(_volume, ExecutableVolumeParameters):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(ExecutableVolumeParameters, _volume)["target"]
+                rpc_args["name"] = typing.cast(ExecutableVolumeParameters, _volume)["name"]
+                rpc_args["env"] = typing.cast(ExecutableVolumeParameters, _volume)["env"]
+                rpc_args["isReadOnly"] = typing.cast(ExecutableVolumeParameters, _volume).get("is_read_only")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableVolume', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'volume'. Expected: (str, str, str) or ExecutableVolumeParameters")
         if _on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None):
             if _validate_type(_on_resource_endpoints_allocated, typing.Callable[[ResourceEndpointsAllocatedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -12450,12 +12559,15 @@ class TestRedisResourceKwargs(ContainerResourceKwargs, total=False):
 
     connection_property: tuple[str, str | ReferenceExpression]
     on_connection_string_available: typing.Callable[[ConnectionStringAvailableEvent], None]
+    promise_collision_resources: tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise]
+    mutable_promise_collision_resources: tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise]
     persistence: TestPersistenceMode | typing.Literal[True]
     connection_string: ReferenceExpression
     connection_string_direct: str
     redis_specific: str
     multi_param_handle_callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]
     data_volume: DataVolumeParameters | typing.Literal[True]
+    concrete_vault_resource: TestVaultResource
 
 class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString):
     """TestRedisResource resource."""
@@ -12491,6 +12603,30 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/onConnectionStringAvailable',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_promise_collision_resources(self, resource: AbstractTestPromiseCollisionResource, resource_promise: AbstractTestPromiseCollisionResourcePromise) -> typing.Self:
+        """Configures a Redis resource with parameter-only resources whose generated names collide."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['resourcePromise'] = resource_promise
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_mutable_promise_collision_resources(self, resource: AbstractTestMutablePromiseCollisionResource, resource_promise: AbstractTestMutablePromiseCollisionResourcePromise) -> typing.Self:
+        """Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['resourcePromise'] = resource_promise
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withMutablePromiseCollisionResources',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -12627,6 +12763,17 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_concrete_vault_resource(self, resource: TestVaultResource) -> typing.Self:
+        """Configures a Redis resource with the concrete vault resource as a parameter."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestRedisResourceKwargs]) -> None:
         if _connection_property := kwargs.pop("connection_property", None):
             if _validate_tuple_types(_connection_property, (str, str | ReferenceExpression)):
@@ -12643,6 +12790,22 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onConnectionStringAvailable', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_connection_string_available'. Expected: Callable[[ConnectionStringAvailableEvent], None]")
+        if _promise_collision_resources := kwargs.pop("promise_collision_resources", None):
+            if _validate_tuple_types(_promise_collision_resources, (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[0]
+                rpc_args["resourcePromise"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'promise_collision_resources'. Expected: (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)")
+        if _mutable_promise_collision_resources := kwargs.pop("mutable_promise_collision_resources", None):
+            if _validate_tuple_types(_mutable_promise_collision_resources, (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[0]
+                rpc_args["resourcePromise"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withMutablePromiseCollisionResources', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'mutable_promise_collision_resources'. Expected: (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)")
         if _persistence := kwargs.pop("persistence", None):
             if _validate_type(_persistence, TestPersistenceMode):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -12692,6 +12855,13 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'data_volume'. Expected: DataVolumeParameters or Literal[True]")
+        if _concrete_vault_resource := kwargs.pop("concrete_vault_resource", None):
+            if _validate_type(_concrete_vault_resource, TestVaultResource):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(TestVaultResource, _concrete_vault_resource)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'concrete_vault_resource'. Expected: TestVaultResource")
         super().__init__(handle, client, **kwargs)
 
 

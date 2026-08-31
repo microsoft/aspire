@@ -354,7 +354,7 @@ public class TelemetryApiTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         try
         {
-            var response = await httpClient.GetAsync("/api/telemetry/spans?follow=true", HttpCompletionOption.ResponseHeadersRead, cts.Token).DefaultTimeout();
+            using var response = await httpClient.GetAsync("/api/telemetry/spans?follow=true", HttpCompletionOption.ResponseHeadersRead, cts.Token).DefaultTimeout();
 
             // Assert - should have NDJSON content type and streaming headers
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

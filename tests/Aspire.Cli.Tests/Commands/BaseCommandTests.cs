@@ -25,6 +25,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("ps --format table", false)]
     [InlineData("ps --format invalid", false)]
     [InlineData("docs --format json", false)]
+    [InlineData("do --list-steps --format json", true)]
+    [InlineData("do --list-steps --format=json", true)]
+    [InlineData("do --list-steps", false)]
     public async Task BaseCommand_FormatOption_SetsConsoleOutputCorrectly(string args, bool expectErrorConsole)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -191,6 +194,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("run --format json", false)]
     [InlineData("run", true)]
     [InlineData("docs", false)]
+    [InlineData("do --list-steps --format json", false)]
+    [InlineData("do --list-steps --format=json", false)]
+    [InlineData("do --list-steps --format table", true)]
     public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

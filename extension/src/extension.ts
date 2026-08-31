@@ -37,10 +37,13 @@ import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
+import { initializeHotReloadAdvisory } from './debugger/hotReload';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
 export async function activate(context: vscode.ExtensionContext) {
+  initializeHotReloadAdvisory(context.workspaceState);
+
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   initializeTelemetry(context);
@@ -113,7 +116,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);
 
-  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider);
+  const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
@@ -124,7 +127,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   appHostLaunchService.setExternalAppHostStopper((appHostPath, token) =>
     stopExternalAppHost(terminalProvider, appHostPath, token));
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState);
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState, vscode.env.clipboard, configInfoProvider);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,

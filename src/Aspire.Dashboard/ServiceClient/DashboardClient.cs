@@ -9,7 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
@@ -21,7 +20,6 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Semver;
 using DashboardResources = Aspire.Dashboard.Resources.Resources;
-using ResourceHealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -38,7 +36,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <para>
 /// If the <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
 /// no known endpoint to connect to, and this dashboard client will be disabled. Calls to
-/// <see cref="IDashboardClient.SubscribeResourcesAsync"/> and <see cref="IDashboardClient.SubscribeConsoleLogs"/>
+/// <see cref="IResourceRepository.SubscribeResourcesAsync"/> and <see cref="IResourceRepository.SubscribeConsoleLogs"/>
 /// will throw if <see cref="IDashboardClient.IsEnabled"/> is <see langword="false"/>. Callers should
 /// check this property first, before calling these methods.
 /// </para>
@@ -47,16 +45,14 @@ internal sealed class DashboardClient : IDashboardClient
 {
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
+    internal const string LiveAppHostServiceKey = "LiveAppHost";
 
     // The dashboard's own version, extracted from its assembly at startup. Used to compare against
     // the minimum version required by the AppHost.
     private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
-    // _resourceByName is the displayed model exposed through IDashboardClient. Keep the raw AppHost
-    // snapshots separately so a parent row that temporarily displays a replica's state can fall back
-    // to its own state as soon as the replica disappears.
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly Dictionary<string, ResourceViewModel> _sourceResourceByName = new(StringComparers.ResourceName);
+    private readonly ActivitySource _activitySource;
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -72,6 +68,7 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly DashboardOptions _dashboardOptions;
     private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
+    private readonly IResourceRepositoryWriter _resourceRepositoryWriter;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
@@ -96,17 +93,21 @@ internal sealed class DashboardClient : IDashboardClient
     private Task? _connection;
 
     public DashboardClient(
+        DashboardActivitySource activitySource,
         ILoggerFactory loggerFactory,
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
         IStringLocalizer<DashboardResources> loc,
+        IResourceRepositoryWriter resourceRepositoryWriter,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
+        _activitySource = activitySource.ActivitySource;
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
         _loc = loc;
+        _resourceRepositoryWriter = resourceRepositoryWriter;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -330,7 +331,12 @@ internal sealed class DashboardClient : IDashboardClient
         }
 
         SetConnectionState(DashboardConnectionState.Connecting);
-        _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        // The connection watches resources for the lifetime of the dashboard. Don't let the request or
+        // component that first accesses the client become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
+        {
+            _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        }
     }
 
     async Task ConnectAndWatchAsync(CancellationToken cancellationToken)
@@ -547,7 +553,7 @@ internal sealed class DashboardClient : IDashboardClient
 
         // There is no consistent way to know which replica is instance 1 vs instance 2. It shouldn't ever matter.
         // This index provides an easy way to identify resources across app runs that takes into account replicas.
-        var replicas = _sourceResourceByName.Values.Count(r => r.DisplayName == displayName);
+        var replicas = _resourceByName.Values.Count(r => r.DisplayName == displayName);
         return replicas + 1;
     }
 
@@ -557,14 +563,15 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
+            using var activity = _activitySource.StartActivity("Process resource update", ActivityKind.Consumer);
+            activity?.SetTag("aspire.dashboard.resource_update.type", response.KindCase.ToString());
+
             List<ResourceViewModelChange>? changes = null;
+            ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
 
             lock (_lock)
             {
-                var previousDisplayedResources = new Dictionary<string, ResourceViewModel>(_resourceByName, StringComparers.ResourceName);
-                List<ResourceViewModelChange>? sourceChanges = null;
-
                 // We received a message, which means we are connected. Clear the error count.
                 if (retryContext.ErrorCount > 0)
                 {
@@ -574,24 +581,26 @@ internal sealed class DashboardClient : IDashboardClient
 
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
                 {
+                    var resourcesWithLoadedConsoleLogs = _resourceByName.Values
+                        .Where(resource => resource.ConsoleLogsLoaded)
+                        .Select(resource => resource.Name)
+                        .ToHashSet(StringComparers.ResourceName);
+
                     // Populate our map using the initial data.
-                    _sourceResourceByName.Clear();
                     _resourceByName.Clear();
 
-                    // An initial snapshot replaces everything subscribers currently display, so the diff below has
-                    // to run even when the snapshot carries no resources. Leaving this null for an empty snapshot
-                    // would skip the diff entirely, so reconnecting to an AppHost that no longer reports a resource
-                    // would never emit its delete and subscribers would keep showing the stale row.
-                    sourceChanges = [];
+                    // TODO send a "clear" event via outgoing channels, in case consumers have extra items to be removed
 
                     foreach (var resource in response.InitialData.Resources)
                     {
                         // Add to map.
                         var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
-                        _sourceResourceByName[resource.Name] = viewModel;
+                        viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
+                        _resourceByName[resource.Name] = viewModel;
 
                         // Send this update to any subscribers too.
-                        sourceChanges.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
+                        changes ??= [];
+                        changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                     }
 
                     _initialDataReceivedTcs.TrySetResult();
@@ -601,21 +610,25 @@ internal sealed class DashboardClient : IDashboardClient
                     // Apply changes to the model.
                     foreach (var change in response.Changes.Value)
                     {
-                        sourceChanges ??= [];
+                        changes ??= [];
 
                         if (change.KindCase == WatchResourcesChange.KindOneofCase.Upsert)
                         {
                             // Upsert (i.e. add or replace)
                             var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
-                            _sourceResourceByName[change.Upsert.Name] = viewModel;
-                            sourceChanges.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
+                            if (_resourceByName.TryGetValue(change.Upsert.Name, out var existingResource))
+                            {
+                                viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
+                            }
+                            _resourceByName[change.Upsert.Name] = viewModel;
+                            changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                         }
                         else if (change.KindCase == WatchResourcesChange.KindOneofCase.Delete)
                         {
                             // Remove
-                            if (_sourceResourceByName.Remove(change.Delete.ResourceName, out var removed))
+                            if (_resourceByName.Remove(change.Delete.ResourceName, out var removed))
                             {
-                                sourceChanges.Add(new(ResourceViewModelChangeType.Delete, removed));
+                                changes.Add(new(ResourceViewModelChangeType.Delete, removed));
                             }
                             else
                             {
@@ -633,18 +646,6 @@ internal sealed class DashboardClient : IDashboardClient
                     throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {response.KindCase}");
                 }
 
-                if (sourceChanges is not null)
-                {
-                    var displayedResources = CreateDisplayedResources(_sourceResourceByName.Values);
-                    changes = CreateDisplayedResourceChanges(previousDisplayedResources, displayedResources, sourceChanges);
-
-                    _resourceByName.Clear();
-                    foreach (var resource in displayedResources.Values)
-                    {
-                        _resourceByName[resource.Name] = resource;
-                    }
-                }
-
                 // Resolve resource colors for all resources so that color assignment is
                 // deterministic of order returned from the service, not order that the color for a resource is first used.
                 if (changes is not null)
@@ -652,7 +653,20 @@ internal sealed class DashboardClient : IDashboardClient
                     var resolvedNames = _resourceByName.Values
                         .Select(r => ResourceViewModel.GetResourceName(r, _resourceByName));
                     ColorGenerator.Instance.ResolveAll(resolvedNames);
+
+                    // Capture subscribers atomically with the model transition. A subscriber added after this
+                    // point receives the updated model in its initial snapshot and must not also receive this change.
+                    resourceChannels = _outgoingResourceChannels;
                 }
+            }
+
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
+            {
+                await _resourceRepositoryWriter.ReplaceResourcesAsync(response.InitialData.Resources).ConfigureAwait(false);
+            }
+            else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
+            {
+                await _resourceRepositoryWriter.ApplyChangesAsync(response.Changes.Value).ConfigureAwait(false);
             }
 
             // Update connection state outside the lock to avoid potential deadlocks
@@ -664,7 +678,7 @@ internal sealed class DashboardClient : IDashboardClient
 
             if (changes is not null)
             {
-                foreach (var channel in _outgoingResourceChannels)
+                foreach (var channel in resourceChannels)
                 {
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(changes);
@@ -673,157 +687,6 @@ internal sealed class DashboardClient : IDashboardClient
         }
 
         return RetryResult.Retry;
-    }
-
-    private static Dictionary<string, ResourceViewModel> CreateDisplayedResources(IEnumerable<ResourceViewModel> sourceResources)
-    {
-        var sourceResourceList = sourceResources.ToList();
-        var childrenByParentName = sourceResourceList
-            .Where(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { Length: > 0 })
-            .ToLookup(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)!, StringComparers.ResourceName);
-
-        var displayedResources = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
-        foreach (var resource in sourceResourceList)
-        {
-            var stateSource = GetReplicaStateSource(resource, childrenByParentName);
-            displayedResources[resource.Name] = stateSource is not null ? resource.WithStateFrom(stateSource) : resource;
-        }
-
-        return displayedResources;
-    }
-
-    private static List<ResourceViewModelChange>? CreateDisplayedResourceChanges(
-        IReadOnlyDictionary<string, ResourceViewModel> previousDisplayedResources,
-        IReadOnlyDictionary<string, ResourceViewModel> displayedResources,
-        IReadOnlyList<ResourceViewModelChange> sourceChanges)
-    {
-        var changes = new List<ResourceViewModelChange>();
-        var emittedResourceNames = new HashSet<string>(StringComparers.ResourceName);
-
-        foreach (var (changeType, sourceResource) in sourceChanges)
-        {
-            if (changeType == ResourceViewModelChangeType.Upsert)
-            {
-                if (displayedResources.TryGetValue(sourceResource.Name, out var displayedResource))
-                {
-                    changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, displayedResource));
-                    emittedResourceNames.Add(sourceResource.Name);
-                }
-            }
-            else if (changeType == ResourceViewModelChangeType.Delete)
-            {
-                if (!displayedResources.ContainsKey(sourceResource.Name) &&
-                    previousDisplayedResources.TryGetValue(sourceResource.Name, out var previousDisplayedResource))
-                {
-                    changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, previousDisplayedResource));
-                    emittedResourceNames.Add(sourceResource.Name);
-                }
-            }
-        }
-
-        foreach (var (resourceName, displayedResource) in displayedResources)
-        {
-            if (emittedResourceNames.Contains(resourceName))
-            {
-                continue;
-            }
-
-            if (!previousDisplayedResources.TryGetValue(resourceName, out var previousDisplayedResource) ||
-                !HasSameDisplayedReplicaState(previousDisplayedResource, displayedResource))
-            {
-                changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, displayedResource));
-                emittedResourceNames.Add(resourceName);
-            }
-        }
-
-        foreach (var (resourceName, previousDisplayedResource) in previousDisplayedResources)
-        {
-            if (!emittedResourceNames.Contains(resourceName) && !displayedResources.ContainsKey(resourceName))
-            {
-                changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, previousDisplayedResource));
-            }
-        }
-
-        return changes.Count > 0 ? changes : null;
-    }
-
-    private static bool HasSameDisplayedReplicaState(ResourceViewModel previousResource, ResourceViewModel resource)
-    {
-        return string.Equals(previousResource.State, resource.State, StringComparison.Ordinal) &&
-            previousResource.KnownState == resource.KnownState &&
-            string.Equals(previousResource.StateStyle, resource.StateStyle, StringComparison.Ordinal) &&
-            previousResource.StartTimeStamp == resource.StartTimeStamp &&
-            previousResource.StopTimeStamp == resource.StopTimeStamp &&
-            previousResource.HealthStatus == resource.HealthStatus &&
-            previousResource.HealthReports.SequenceEqual(resource.HealthReports) &&
-            previousResource.HasSameStateOwnedProperties(resource);
-    }
-
-    private static ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent, ILookup<string, ResourceViewModel> childrenByParentName)
-    {
-        // The legacy Hidden state controls parent visibility and downstream filtering, so a replica must not replace it.
-        if (parent.KnownState is KnownResourceState.Hidden)
-        {
-            return null;
-        }
-
-        ResourceViewModel? best = null;
-        var bestTier = int.MaxValue;
-
-        foreach (var child in childrenByParentName[parent.Name])
-        {
-            if (ReferenceEquals(child, parent) || !IsReplicaChild(parent, child))
-            {
-                continue;
-            }
-
-            var tier = GetReplicaPriorityTier(child);
-            if (tier is null)
-            {
-                continue;
-            }
-
-            if (tier < bestTier || (tier == bestTier && CompareReplicaRelevance(child, best!) < 0))
-            {
-                best = child;
-                bestTier = tier.Value;
-            }
-        }
-
-        return best;
-
-        static int? GetReplicaPriorityTier(ResourceViewModel r) => r switch
-        {
-            _ when r.IsRunningState() => 0,
-            _ when r.IsUnusableTransitoryState() => 1,
-            _ when r.IsRuntimeUnhealthy() || r.IsFailedToStart() => 2,
-            // Hidden is only meaningful on the row that owns it. Projecting it onto the logical parent
-            // would make an otherwise visible resource disappear as soon as one replica opts out of display.
-            _ when r.KnownState is KnownResourceState.Hidden => null,
-            _ when !r.HasNoState() => 3,
-            _ => null
-        };
-
-        static int CompareReplicaRelevance(ResourceViewModel a, ResourceViewModel b)
-        {
-            var healthComparison = (a.HealthStatus ?? ResourceHealthStatus.Unhealthy).CompareTo(b.HealthStatus ?? ResourceHealthStatus.Unhealthy);
-            if (healthComparison != 0)
-            {
-                return healthComparison;
-            }
-
-            // CalculateReplicaIndex derives the index from the current number of resources sharing the
-            // display name. An inserted resource gets a different index on its first replacement, and
-            // later replacements can change it again after that count changes, so it is not stable across
-            // upserts. Tie-break on the immutable resource name so update order cannot change the parent state.
-            return StringComparers.ResourceName.Compare(a.Name, b.Name);
-        }
-    }
-
-    private static bool IsReplicaChild(ResourceViewModel parent, ResourceViewModel child)
-    {
-        return string.Equals(child.GetResourcePropertyValue(KnownProperties.Resource.ParentName), parent.Name, StringComparisons.ResourceName) &&
-            string.Equals(child.DisplayName, parent.DisplayName, StringComparisons.ResourceName);
     }
 
     private async Task<RetryResult> WatchInteractionsAsync(RetryContext retryContext, CancellationToken cancellationToken)
@@ -1070,6 +933,12 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        // Console-log persistence is demand-driven rather than always-on. This known limitation means
+        // historical runs can omit logs for resources that were never viewed or exported. The historical
+        // Console Logs page checks this capture state and displays a notice when logs aren't available.
+        // See https://github.com/microsoft/aspire/issues/18823.
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+
         // It's ok to dispose CTS with using because this method exits after it is finished being used.
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
@@ -1089,6 +958,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
                 {
+                    await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(CreateLogLines(response.LogLines));
                 }
@@ -1111,6 +981,8 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
         var call = _client!.WatchResourceConsoleLogs(
@@ -1120,8 +992,26 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
         {
+            await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
             yield return CreateLogLines(response.LogLines);
         }
+    }
+
+    /// <inheritdoc/>
+    public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) =>
+        _resourceRepositoryWriter.ClearConsoleLogsAsync(resourceNames, clearDate);
+
+    private async Task MarkConsoleLogsLoadedAsync(string resourceName)
+    {
+        lock (_lock)
+        {
+            if (_resourceByName.TryGetValue(resourceName, out var resource))
+            {
+                resource.ConsoleLogsLoaded = true;
+            }
+        }
+
+        await _resourceRepositoryWriter.MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
     }
 
     private static ResourceLogLine[] CreateLogLines(IList<ConsoleLogLine> logLines)
@@ -1287,18 +1177,9 @@ internal sealed class DashboardClient : IDashboardClient
         {
             lock (_lock)
             {
-                _sourceResourceByName.Clear();
-                _resourceByName.Clear();
-
                 foreach (var data in initialData)
                 {
-                    var resource = data.ToViewModel(CalculateReplicaIndex(data.DisplayName), _knownPropertyLookup, _logger);
-                    _sourceResourceByName[data.Name] = resource;
-                }
-
-                foreach (var (name, resource) in CreateDisplayedResources(_sourceResourceByName.Values))
-                {
-                    _resourceByName[name] = resource;
+                    _resourceByName[data.Name] = data.ToViewModel(CalculateReplicaIndex(data.DisplayName), _knownPropertyLookup, _logger);
                 }
             }
         }

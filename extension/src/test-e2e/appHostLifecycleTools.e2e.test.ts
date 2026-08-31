@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { findRunningAppHost, getCommandInvocationCount, getDebugLaunchCount, isSamePath, readStateFile, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
@@ -300,6 +300,7 @@ suite('Aspire AppHost lifecycle E2E', function () {
             const linkedFixture = fixture;
             assert.ok(linkedFixture);
             const wrapper = writeTimeoutCliWrapper();
+            const timeoutMs = 10000;
             let descendantPid: number | undefined;
 
             try {
@@ -309,12 +310,12 @@ suite('Aspire AppHost lifecycle E2E', function () {
                     name: 'runAspireCli',
                     args: ['timeout-tree'],
                     workingDirectory: path.relative(getWorkspaceRoot(), linkedFixture.linkedWorktreePath),
-                    timeoutMs: 1000,
+                    timeoutMs,
                 }, 30000);
                 invocation.catch(() => undefined);
 
-                descendantPid = await waitForProcessIdFile(wrapper.pidPath, 10000);
-                await assert.rejects(invocation, /timed out after 1000ms/);
+                descendantPid = await waitForProcessIdFile(wrapper.pidPath, 30000);
+                await assert.rejects(invocation, new RegExp(`timed out after ${timeoutMs}ms`));
                 assert.strictEqual(isProcessRunning(descendantPid), false, `Expected descendant process ${descendantPid} to be gone before runAspireCli rejected.`);
             }
             finally {
@@ -746,7 +747,7 @@ async function createLinkedWorktreeAppHostFixture(): Promise<LinkedWorktreeAppHo
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -1320,6 +1321,46 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>
 }
 
 function isProcessRunning(pid: number): boolean {
+    if (process.platform === 'linux') {
+        try {
+            // /proc/<pid>/stat starts with "<pid> (<command>) <state>"; Z and X are no longer running.
+            const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+            const state = stat.slice(stat.lastIndexOf(') ') + 2, stat.lastIndexOf(') ') + 3);
+            return state !== 'Z' && state !== 'X';
+        }
+        catch (error) {
+            return !(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+        }
+    }
+
+    if (process.platform === 'darwin') {
+        // `ps -o stat=` emits a state such as S+ or Z; a zombie has terminated but awaits reaping.
+        const result = spawnSync('/bin/ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+        if (result.error) {
+            throw result.error;
+        }
+        if (result.status === null) {
+            throw new Error(`Unable to determine process state for PID ${pid}.`);
+        }
+        return result.status === 0 && !result.stdout.trimStart().startsWith('Z');
+    }
+
+    if (process.platform === 'win32') {
+        const result = spawnSync('powershell.exe', [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$process = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($null -ne $process -and -not $process.HasExited) { exit 0 } else { exit 1 }`,
+        ], { windowsHide: true });
+        if (result.error) {
+            throw result.error;
+        }
+        if (result.status === null) {
+            throw new Error(`Unable to determine process state for PID ${pid}.`);
+        }
+        return result.status === 0;
+    }
+
     try {
         process.kill(pid, 0);
         return true;
@@ -1333,18 +1374,32 @@ function writeTimeoutCliWrapper(): { cliPath: string; pidPath: string; directory
     const directory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'run-aspire-cli-timeout');
     const childScriptPath = path.join(directory, 'timeout-child.js');
     const pidPath = path.join(directory, 'timeout-child.pid');
+    const configInfo = JSON.stringify({
+        localSettingsPath: path.join(getWorkspaceRoot(), 'aspire.config.json'),
+        globalSettingsPath: path.join(getWorkspaceRoot(), 'global-aspire.config.json'),
+        availableFeatures: [],
+        localSettingsSchema: { properties: [] },
+        globalSettingsSchema: { properties: [] },
+        capabilities: [],
+    });
     fs.rmSync(directory, { recursive: true, force: true });
     fs.mkdirSync(directory, { recursive: true });
     fs.writeFileSync(childScriptPath, [
         "const fs = require('fs');",
+        "const { spawn } = require('child_process');",
         'const [pidPath, mode, ...args] = process.argv.slice(2);',
+        "if (mode === 'config' && args[0] === 'info' && args.includes('--json')) {",
+        `  console.log(${JSON.stringify(configInfo)});`,
+        '  process.exit(0);',
+        '}',
         "const output = args.join(' ');",
         'console.log(output);',
         'console.error(output);',
         "if (mode === 'fail') {",
         '  process.exit(23);',
         '}',
-        'fs.writeFileSync(pidPath, String(process.pid));',
+        "const descendant = spawn(process.execPath, ['-e', 'setInterval(() => undefined, 1000);'], { stdio: 'ignore' });",
+        'fs.writeFileSync(pidPath, String(descendant.pid));',
         'setInterval(() => undefined, 1000);',
         '',
     ].join('\n'));
@@ -1370,17 +1425,7 @@ function writeTimeoutCliWrapper(): { cliPath: string; pidPath: string; directory
         '  echo "99.0.0"',
         '  exit 0',
         'fi',
-        'mode=$1',
-        'shift',
-        'printf "%s\\n" "$*"',
-        'printf "%s\\n" "$*" >&2',
-        'if [ "$mode" = "fail" ]; then',
-        '  exit 23',
-        'fi',
-        '/bin/sleep 600 &',
-        'child_pid=$!',
-        `printf "%s" "$child_pid" > ${quotePosixShellArgument(pidPath)}`,
-        'wait "$child_pid"',
+        `exec ${quotePosixShellArgument(process.execPath)} ${quotePosixShellArgument(childScriptPath)} ${quotePosixShellArgument(pidPath)} "$@"`,
         '',
     ].join('\n'), { mode: 0o755 });
     return { cliPath, pidPath, directory };

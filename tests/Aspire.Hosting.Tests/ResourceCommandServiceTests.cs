@@ -383,6 +383,28 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_CommandException_Failure()
+    {
+        using var builder = CreateBuilder();
+        const string diagnostic = "Failed to apply launch configuration. Process fallback is unavailable.";
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: _ => throw new FailedToApplyEnvironmentException(diagnostic));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Equal(diagnostic, result.Message);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_LegacyCommandName_FallsBackToCurrentName()
     {
         // Arrange

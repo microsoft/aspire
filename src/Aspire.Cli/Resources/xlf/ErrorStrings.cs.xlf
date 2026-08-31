@@ -267,6 +267,16 @@
         <target state="needs-review-translation">Projekt neobsahuje hostitele aplikací Aspire.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SdkExportGeneratorPackageNotExportable">
+        <source>SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</source>
+        <target state="new">SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</target>
+        <note>{0} is the code-generation package name.</note>
+      </trans-unit>
+      <trans-unit id="SdkExportLanguageDoesNotSupportCodeGeneration">
+        <source>SDK API export is not supported for {0} because it does not use a code generator.</source>
+        <target state="new">SDK API export is not supported for {0} because it does not use a code generator.</target>
+        <note>{0} is the AppHost language display name, for example "C# (.NET)".</note>
+      </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
         <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>
         <target state="needs-review-translation">Funkce AppHost pro jednosouborové scénáře není povolená. Chcete-li používat .cs soubory AppHost, povolte tuto funkci v konfiguraci</target>
