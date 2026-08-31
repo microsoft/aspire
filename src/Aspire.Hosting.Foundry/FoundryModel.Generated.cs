@@ -145,6 +145,12 @@ public partial class FoundryModel
         public static readonly FoundryModel CohereEmbedV3Multilingual = new() { Name = "Cohere-embed-v3-multilingual", Version = "1", Format = "Cohere" };
 
         /// <summary>
+        /// Cohere Parse 5 is a high-performance document vision parser.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel CohereParseV5 = new() { Name = "Cohere-parse-v5", Version = "1", Format = "Cohere" };
+
+        /// <summary>
         /// Rerank improves search systems by sorting documents based on their semantic similarity to a query
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -168,18 +174,6 @@ public partial class FoundryModel
     /// </summary>
     public static partial class DeepSeek
     {
-        /// <summary>
-        /// DeepSeek-R1 excels at reasoning tasks using a step-by-step training process, such as language, scientific reasoning, and coding tasks.
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel DeepSeekR1 = new() { Name = "DeepSeek-R1", Version = "1", Format = "DeepSeek" };
-
-        /// <summary>
-        /// The DeepSeek R1 0528 model has improved reasoning capabilities, this version also offers a reduced hallucination rate, enhanced support for function calling, and better experience for vibe coding.
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel DeepSeekR10528 = new() { Name = "DeepSeek-R1-0528", Version = "1", Format = "DeepSeek" };
-
         /// <summary>
         /// DeepSeek-V3.2, a model that harmonizes high computational efficiency with superior reasoning and agent performance
         /// </summary>
@@ -3342,6 +3336,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok43 = new() { Name = "grok-4.3", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.6 is a multimodal large language model from xAI designed for coding, engineering, knowledge work, research, and agentic workflows, with improvements in reasoning, task completion, and long-horizon problem solving.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Grok46 = new() { Name = "grok-4.6", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok Code Fast 1 is a fast, economical AI model for agentic coding, built from scratch with a new architecture, trained on programming-rich data, and fine-tuned for real-world coding tasks like bug fixes and project setup.
