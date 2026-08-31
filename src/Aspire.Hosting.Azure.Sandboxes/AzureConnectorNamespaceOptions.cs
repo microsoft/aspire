@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 [AspireDto]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayConnectionOptions
+public sealed class AzureConnectorNamespaceConnectionOptions
 {
     /// <summary>
     /// Gets or sets the Azure child resource name. The Aspire resource name is used when omitted.
@@ -28,7 +28,7 @@ public sealed class AzureConnectorGatewayConnectionOptions
 /// </summary>
 [AspireDto]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayAccessPolicyOptions
+public sealed class AzureConnectorNamespaceAccessPolicyOptions
 {
     /// <summary>
     /// Gets or sets the Azure child resource name. The Aspire resource name is used when omitted.
@@ -51,7 +51,7 @@ public sealed class AzureConnectorGatewayAccessPolicyOptions
 /// </summary>
 [AspireDto]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayMcpServerConfigOptions
+public sealed class AzureConnectorNamespaceMcpServerConfigOptions
 {
     /// <summary>
     /// Gets or sets the Azure child resource name. The Aspire resource name is used when omitted.
@@ -69,7 +69,7 @@ public sealed class AzureConnectorGatewayMcpServerConfigOptions
 /// </summary>
 [AspireDto]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayMcpConnectorOptions
+public sealed class AzureConnectorNamespaceMcpConnectorOptions
 {
     /// <summary>
     /// Gets or sets the friendly connector name shown to MCP clients.
@@ -84,7 +84,7 @@ public sealed class AzureConnectorGatewayMcpConnectorOptions
     /// <summary>
     /// Gets or sets the allow-listed connector operations exposed as MCP tools.
     /// </summary>
-    public AzureConnectorGatewayMcpOperationOptions[] Operations { get; set; } = [];
+    public AzureConnectorNamespaceMcpOperationOptions[] Operations { get; set; } = [];
 }
 
 /// <summary>
@@ -92,7 +92,7 @@ public sealed class AzureConnectorGatewayMcpConnectorOptions
 /// </summary>
 [AspireDto]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayMcpOperationOptions
+public sealed class AzureConnectorNamespaceMcpOperationOptions
 {
     /// <summary>
     /// Gets or sets the connector operation ID.
@@ -108,32 +108,4 @@ public sealed class AzureConnectorGatewayMcpOperationOptions
     /// Gets or sets the operation description shown to MCP clients.
     /// </summary>
     public string? Description { get; set; }
-}
-
-/// <summary>
-/// Configures a Connector Namespace trigger that delivers events to an Azure sandbox endpoint.
-/// </summary>
-[AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayTriggerOptions
-{
-    /// <summary>
-    /// Gets or sets the Azure child resource name. The Aspire resource name is used when omitted.
-    /// </summary>
-    public string? TriggerName { get; set; }
-
-    /// <summary>
-    /// Gets or sets the trigger description shown in the Connector Namespace portal.
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Gets or sets the relative callback path appended to the Azure sandbox endpoint.
-    /// </summary>
-    public string? CallbackPath { get; set; }
-
-    /// <summary>
-    /// Gets or sets the connector operation parameters.
-    /// </summary>
-    public AzureConnectorGatewayTriggerParameter[] Parameters { get; set; } = [];
 }

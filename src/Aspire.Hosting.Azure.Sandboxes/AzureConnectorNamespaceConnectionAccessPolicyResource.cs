@@ -7,30 +7,29 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
 
-internal sealed class AzureConnectorGatewayConnectionAccessPolicyResource : Resource, IResourceWithParent<AzureConnectorGatewayConnectionResource>
+internal sealed class AzureConnectorNamespaceConnectionAccessPolicyResource : Resource, IResourceWithParent<AzureConnectorNamespaceConnectionResource>
 {
-    public AzureConnectorGatewayConnectionAccessPolicyResource(
+    public AzureConnectorNamespaceConnectionAccessPolicyResource(
         string name,
         string policyName,
-        AzureConnectorGatewayConnectionResource parent,
+        AzureConnectorNamespaceConnectionResource parent,
         string objectId,
         string tenantId)
-        : this(name, policyName, parent, objectId, tenantId, usesGatewayManagedIdentity: false)
+        : this(name, policyName, parent, objectId, tenantId, identityResource: null)
     {
     }
 
-    private AzureConnectorGatewayConnectionAccessPolicyResource(
+    private AzureConnectorNamespaceConnectionAccessPolicyResource(
         string name,
         string policyName,
-        AzureConnectorGatewayConnectionResource parent,
+        AzureConnectorNamespaceConnectionResource parent,
         string objectId,
         string tenantId,
-        bool usesGatewayManagedIdentity,
-        AzureUserAssignedIdentityResource? identityResource = null)
+        AzureUserAssignedIdentityResource? identityResource)
         : base(name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(policyName);
-        if (!usesGatewayManagedIdentity && identityResource is null)
+        if (identityResource is null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(objectId);
             ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
@@ -40,7 +39,6 @@ internal sealed class AzureConnectorGatewayConnectionAccessPolicyResource : Reso
         Parent = parent ?? throw new ArgumentNullException(nameof(parent));
         ObjectId = objectId;
         TenantId = tenantId;
-        UsesGatewayManagedIdentity = usesGatewayManagedIdentity;
         IdentityResource = identityResource;
     }
 
@@ -50,22 +48,14 @@ internal sealed class AzureConnectorGatewayConnectionAccessPolicyResource : Reso
 
     public string TenantId { get; }
 
-    public AzureConnectorGatewayConnectionResource Parent { get; }
+    public AzureConnectorNamespaceConnectionResource Parent { get; }
 
     public AzureUserAssignedIdentityResource? IdentityResource { get; }
 
-    public static AzureConnectorGatewayConnectionAccessPolicyResource CreateGatewayManagedIdentityPolicy(
+    public static AzureConnectorNamespaceConnectionAccessPolicyResource CreateUserAssignedIdentityPolicy(
         string name,
         string policyName,
-        AzureConnectorGatewayConnectionResource parent)
-    {
-        return new(name, policyName, parent, objectId: string.Empty, tenantId: string.Empty, usesGatewayManagedIdentity: true);
-    }
-
-    public static AzureConnectorGatewayConnectionAccessPolicyResource CreateUserAssignedIdentityPolicy(
-        string name,
-        string policyName,
-        AzureConnectorGatewayConnectionResource parent,
+        AzureConnectorNamespaceConnectionResource parent,
         AzureUserAssignedIdentityResource identity)
     {
         ArgumentNullException.ThrowIfNull(identity);
@@ -75,9 +65,6 @@ internal sealed class AzureConnectorGatewayConnectionAccessPolicyResource : Reso
             parent,
             objectId: string.Empty,
             tenantId: string.Empty,
-            usesGatewayManagedIdentity: false,
             identity);
     }
-
-    public bool UsesGatewayManagedIdentity { get; }
 }

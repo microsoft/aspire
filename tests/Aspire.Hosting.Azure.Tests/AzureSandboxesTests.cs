@@ -56,22 +56,22 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AddAzureConnectorGatewayResourcesGeneratesBicep()
+    public async Task AddAzureConnectorNamespaceResourcesGeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
         var connection = gateway.AddConnection(
             "office365",
             "office365",
-            new AzureConnectorGatewayConnectionOptions
+            new AzureConnectorNamespaceConnectionOptions
             {
                 ConnectionName = "office365-outlook",
                 DisplayName = "Office 365 Outlook"
             });
         connection.WithAccessPolicy(
             "worker-access",
-            new AzureConnectorGatewayAccessPolicyOptions
+            new AzureConnectorNamespaceAccessPolicyOptions
             {
                 PolicyName = "worker-acl",
                 ObjectId = "11111111-1111-1111-1111-111111111111",
@@ -83,7 +83,7 @@ public class AzureSandboxesTests
             policyName: "worker-identity-acl");
         var mcp = gateway.AddMcpServerConfig(
             "outlook-mcp",
-            new AzureConnectorGatewayMcpServerConfigOptions
+            new AzureConnectorNamespaceMcpServerConfigOptions
             {
                 ConfigName = "outlook-tools",
                 Description = "Allow-listed Outlook tools."
@@ -91,13 +91,13 @@ public class AzureSandboxesTests
         mcp.WithConnector(
             "office365",
             connection,
-            new AzureConnectorGatewayMcpConnectorOptions
+            new AzureConnectorNamespaceMcpConnectorOptions
             {
                 DisplayName = "Office 365 Outlook",
                 Description = "Read-only Outlook operations.",
                 Operations =
                 [
-                    new AzureConnectorGatewayMcpOperationOptions
+                    new AzureConnectorNamespaceMcpOperationOptions
                     {
                         Name = "GetEmailsV3",
                         DisplayName = "Get emails",
@@ -124,17 +124,17 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task ExistingConnectorGatewayChildrenGenerateExistingBicep()
+    public async Task ExistingConnectorNamespaceChildrenGenerateExistingBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var gateway = builder.AddAzureConnectorGateway("gateway")
+        var gateway = builder.AddAzureConnectorNamespace("gateway")
             .PublishAsExisting("existing-gateway", "existing-rg");
-        gateway.AddConnection("office365", "office365", new AzureConnectorGatewayConnectionOptions
+        gateway.AddConnection("office365", "office365", new AzureConnectorNamespaceConnectionOptions
         {
             ConnectionName = "existing-connection"
         }).AsExisting();
-        gateway.AddMcpServerConfig("mcp", new AzureConnectorGatewayMcpServerConfigOptions
+        gateway.AddMcpServerConfig("mcp", new AzureConnectorNamespaceMcpServerConfigOptions
         {
             ConfigName = "existing-mcp"
         }).AsExisting();
@@ -148,299 +148,20 @@ public class AzureSandboxesTests
     }
 
     [Fact]
-    public async Task AddConnectorTriggerConfigSecuresSandboxCallback()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var gateway = builder.AddAzureConnectorGateway("gateway");
-        var connection = gateway.AddConnection("sharepoint", "sharepointonline");
-        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
-        var listener = builder.AddContainer("listener", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
-        var trigger = connection.AddTriggerConfig(
-            "new-file",
-            "GetOnNewFileItems",
-            listener.GetEndpoint("http"),
-            new AzureConnectorGatewayTriggerOptions
-            {
-                TriggerName = "sharepoint-new-file",
-                CallbackPath = "/webhook",
-                Description = "Posts new SharePoint files to the sandbox.",
-                Parameters =
-                [
-                    new AzureConnectorGatewayTriggerParameter
-                    {
-                        Name = "dataset",
-                        Value = "https://contoso.sharepoint.com/sites/demo"
-                    },
-                    new AzureConnectorGatewayTriggerParameter
-                    {
-                        Name = "table",
-                        Value = "Documents"
-                    }
-                ]
-            });
-
-        using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
-
-        var accessPolicy = Assert.Single(connection.Resource.AccessPolicies);
-        Assert.True(accessPolicy.UsesGatewayManagedIdentity);
-        Assert.Equal("gateway-acl", accessPolicy.PolicyName);
-        Assert.Equal("webhook", trigger.Resource.CallbackPath);
-
-        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(
-            listener.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
-        var endpoint = Assert.Single(AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
-        Assert.False(endpoint.Anonymous);
-        Assert.Equal(gateway.Resource, Assert.Single(endpoint.AuthorizedConnectorGateways));
-
-        var triggerSteps = await CreateStepsAsync(app, trigger.Resource);
-        var triggerStep = Assert.Single(triggerSteps);
-        Assert.Equal("provision-new-file", triggerStep.Name);
-        Assert.Contains("deploy-listener-sandbox-container", triggerStep.DependsOnSteps);
-        Assert.Contains(WellKnownPipelineSteps.Deploy, triggerStep.RequiredBySteps);
-
-        var (gatewayManifest, gatewayBicep) = await AzureManifestUtils.GetManifestWithBicep(model, gateway.Resource);
-        var triggerBicep = trigger.Resource.GetBicepTemplateString();
-
-        await Verify(gatewayManifest.ToString(), "json")
-            .AppendContentAsFile(gatewayBicep, "bicep")
-            .AppendContentAsFile(triggerBicep, "bicep");
-    }
-
-    [Fact]
-    public async Task ConnectorTriggerDoesNotCreateDeployStepInRunMode()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-
-        var gateway = builder.AddAzureConnectorGateway("gateway");
-        var connection = gateway.AddConnection("office365", "office365");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints();
-        var trigger = connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http"));
-
-        using var app = builder.Build();
-
-        Assert.Empty(await CreateStepsAsync(app, trigger.Resource, DistributedApplicationOperation.Run));
-        Assert.Empty(connection.Resource.AccessPolicies);
-        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
-
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var configuration = Assert.Single(trigger.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
-        await configuration.Callback(new PipelineConfigurationContext
-        {
-            Services = app.Services,
-            Steps = [],
-            Model = model
-        });
-    }
-
-    [Fact]
-    public void ConnectorTriggerEndpointNameMatchingIsCaseInsensitive()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var gateway = builder.AddAzureConnectorGateway("gateway");
-        var connection = gateway.AddConnection("office365", "office365");
-        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup);
-
-        connection.AddTriggerConfig(
-            "new-email",
-            "OnNewEmailV3",
-            new EndpointReference(listener.Resource, "HTTP"));
-
-        var authorization = Assert.Single(
-            listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
-        Assert.Equal("http", authorization.EndpointName);
-    }
-
-    [Fact]
-    public void ConnectorTriggerResourceCannotBypassSecuredBuilderPath()
-    {
-        Assert.Empty(typeof(AzureConnectorGatewayTriggerConfigResource).GetConstructors());
-    }
-
-    [Fact]
-    public void ConnectorTriggerRejectsAnonymousSandboxEndpoint()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var gateway = builder.AddAzureConnectorGateway("gateway");
-        var connection = gateway.AddConnection("office365", "office365");
-        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints()
-            .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
-            {
-                Endpoints =
-                [
-                    new AzureSandboxEndpointOptions
-                    {
-                        Name = "http",
-                        Anonymous = true
-                    }
-                ]
-            });
-        connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http"));
-
-        using var app = builder.Build();
-        var sandboxContainer = new AzureSandboxContainerResource(
-            "listener-sandbox-container",
-            listener.Resource,
-            sandboxGroup.Resource);
-
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(sandboxContainer));
-        Assert.Equal(
-            "Endpoint 'http' on resource 'listener' is a Connector Namespace trigger callback and cannot allow anonymous access.",
-            exception.Message);
-    }
-
-    [Fact]
     public void ManagedMcpServerRequiresExplicitOperationAllowList()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
         var connection = gateway.AddConnection("office365", "office365");
         var mcp = gateway.AddMcpServerConfig("outlook-mcp");
 
         var exception = Assert.Throws<ArgumentException>(() => mcp.WithConnector(
             "office365",
             connection,
-            new AzureConnectorGatewayMcpConnectorOptions()));
+            new AzureConnectorNamespaceMcpConnectorOptions()));
 
         Assert.Equal("At least one connector operation must be explicitly allow-listed. (Parameter 'options')", exception.Message);
-    }
-
-    [Fact]
-    public void ConnectorTriggerRequiresExternalEndpoint()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var connection = builder.AddAzureConnectorGateway("gateway")
-            .AddConnection("office365", "office365");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080);
-
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
-
-        Assert.Equal(
-            "Connector trigger callback endpoint 'http' on resource 'listener' must be external.",
-            exception.Message);
-    }
-
-    [Fact]
-    public void ConnectorTriggerRejectsDuplicateParameters()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var connection = builder.AddAzureConnectorGateway("gateway")
-            .AddConnection("office365", "office365");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints();
-
-        var exception = Assert.Throws<ArgumentException>(() => connection.AddTriggerConfig(
-            "new-email",
-            "OnNewEmailV3",
-            listener.GetEndpoint("http"),
-            new AzureConnectorGatewayTriggerOptions
-            {
-                Parameters =
-                [
-                    new AzureConnectorGatewayTriggerParameter { Name = "folderPath", Value = "Inbox" },
-                    new AzureConnectorGatewayTriggerParameter { Name = "folderPath", Value = "Archive" }
-                ]
-            }));
-
-        Assert.Equal(
-            "Trigger parameter 'folderPath' is configured more than once. (Parameter 'parameters')",
-            exception.Message);
-    }
-
-    [Fact]
-    public void ConnectorTriggerRequiresUniquePhysicalNameWithinNamespace()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var gateway = builder.AddAzureConnectorGateway("gateway");
-        var outlook = gateway.AddConnection("outlook", "office365");
-        var sharepoint = gateway.AddConnection("sharepoint", "sharepointonline");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints();
-        outlook.AddTriggerConfig(
-            "new-email",
-            "OnNewEmailV3",
-            listener.GetEndpoint("http"),
-            new AzureConnectorGatewayTriggerOptions { TriggerName = "shared-trigger" });
-
-        var exception = Assert.Throws<InvalidOperationException>(() => sharepoint.AddTriggerConfig(
-            "new-file",
-            "GetOnNewFileItems",
-            listener.GetEndpoint("http"),
-            new AzureConnectorGatewayTriggerOptions { TriggerName = "shared-trigger" }));
-
-        Assert.Equal(
-            "Trigger configuration 'shared-trigger' is already registered on Connector Namespace 'gateway'.",
-            exception.Message);
-        Assert.Equal("new-email", Assert.Single(gateway.Resource.TriggerConfigs).Name);
-        Assert.Empty(sharepoint.Resource.AccessPolicies);
-    }
-
-    [Fact]
-    public void ExistingConnectorConnectionRejectsImplicitTriggerAccessPolicy()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var connection = builder.AddAzureConnectorGateway("gateway")
-            .AddConnection("office365", "office365")
-            .AsExisting();
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints();
-
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
-
-        Assert.Equal(
-            "Existing connector connection 'office365' is read-only and cannot create a trigger because trigger provisioning requires a new connection access policy.",
-            exception.Message);
-        Assert.Empty(connection.Resource.AccessPolicies);
-        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
-        Assert.Empty(connection.Resource.Parent.TriggerConfigs);
-    }
-
-    [Fact]
-    public void ConnectorConnectionCannotBecomeExistingAfterTriggerRegistered()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var connection = builder.AddAzureConnectorGateway("gateway")
-            .AddConnection("office365", "office365");
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints();
-        connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http"));
-
-        var exception = Assert.Throws<InvalidOperationException>(connection.AsExisting);
-
-        Assert.Equal(
-            "Connector connection 'office365' configures access policies or triggers and cannot be marked as existing.",
-            exception.Message);
-        Assert.False(connection.Resource.IsExisting);
     }
 
     [Fact]
@@ -448,11 +169,11 @@ public class AzureSandboxesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var connection = builder.AddAzureConnectorGateway("gateway")
+        var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
             .WithAccessPolicy(
                 "reader",
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     ObjectId = "11111111-1111-1111-1111-111111111111",
                     TenantId = "22222222-2222-2222-2222-222222222222"
@@ -461,7 +182,7 @@ public class AzureSandboxesTests
         var exception = Assert.Throws<InvalidOperationException>(connection.AsExisting);
 
         Assert.Equal(
-            "Connector connection 'office365' configures access policies or triggers and cannot be marked as existing.",
+            "Connector connection 'office365' configures access policies and cannot be marked as existing.",
             exception.Message);
         Assert.False(connection.Resource.IsExisting);
     }
@@ -471,13 +192,13 @@ public class AzureSandboxesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var connection = builder.AddAzureConnectorGateway("gateway")
+        var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
             .AsExisting();
 
         var exception = Assert.Throws<InvalidOperationException>(() => connection.WithAccessPolicy(
             "reader",
-            new AzureConnectorGatewayAccessPolicyOptions
+            new AzureConnectorNamespaceAccessPolicyOptions
             {
                 ObjectId = "11111111-1111-1111-1111-111111111111",
                 TenantId = "22222222-2222-2222-2222-222222222222"
@@ -494,11 +215,11 @@ public class AzureSandboxesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var gateway = builder.AddAzureConnectorGateway("gateway");
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
         var office365 = gateway.AddConnection("office365", "office365")
             .WithAccessPolicy(
                 "reader",
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     ObjectId = "11111111-1111-1111-1111-111111111111",
                     TenantId = "22222222-2222-2222-2222-222222222222"
@@ -506,7 +227,7 @@ public class AzureSandboxesTests
         var sharepoint = gateway.AddConnection("sharepoint", "sharepointonline")
             .WithAccessPolicy(
                 "reader",
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     ObjectId = "33333333-3333-3333-3333-333333333333",
                     TenantId = "22222222-2222-2222-2222-222222222222"
@@ -514,7 +235,7 @@ public class AzureSandboxesTests
         var compoundParentName = gateway.AddConnection("ab-c", "office365")
             .WithAccessPolicy(
                 "de",
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     ObjectId = "44444444-4444-4444-4444-444444444444",
                     TenantId = "22222222-2222-2222-2222-222222222222"
@@ -522,7 +243,7 @@ public class AzureSandboxesTests
         var compoundPolicyName = gateway.AddConnection("ab", "sharepointonline")
             .WithAccessPolicy(
                 "c-de",
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     ObjectId = "55555555-5555-5555-5555-555555555555",
                     TenantId = "22222222-2222-2222-2222-222222222222"
@@ -547,11 +268,11 @@ public class AzureSandboxesTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var connection = builder.AddAzureConnectorGateway("gateway")
+        var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
             .WithAccessPolicy(
                 firstResourceName,
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     PolicyName = "first-policy",
                     ObjectId = "11111111-1111-1111-1111-111111111111",
@@ -565,7 +286,7 @@ public class AzureSandboxesTests
                 "second-policy"))
             : Assert.Throws<InvalidOperationException>(() => connection.WithAccessPolicy(
                 secondResourceName,
-                new AzureConnectorGatewayAccessPolicyOptions
+                new AzureConnectorNamespaceAccessPolicyOptions
                 {
                     PolicyName = "second-policy",
                     ObjectId = "33333333-3333-3333-3333-333333333333",
@@ -576,36 +297,6 @@ public class AzureSandboxesTests
             $"Access policy resource '{secondResourceName}' is already registered on connector connection 'office365'.",
             exception.Message);
         Assert.Single(connection.Resource.AccessPolicies);
-    }
-
-    [Fact]
-    public void ConnectorTriggerRejectsReservedAccessPolicyCollision()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var connection = builder.AddAzureConnectorGateway("gateway")
-            .AddConnection("office365", "office365")
-            .WithAccessPolicy(
-                "custom-access",
-                new AzureConnectorGatewayAccessPolicyOptions
-                {
-                    PolicyName = "gateway-acl",
-                    ObjectId = "11111111-1111-1111-1111-111111111111",
-                    TenantId = "22222222-2222-2222-2222-222222222222"
-                });
-        var listener = builder.AddContainer("listener", "image")
-            .WithHttpEndpoint(name: "http", targetPort: 8080)
-            .WithExternalHttpEndpoints();
-
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => connection.AddTriggerConfig("new-email", "OnNewEmailV3", listener.GetEndpoint("http")));
-
-        Assert.Equal(
-            "Access policy name 'gateway-acl' is reserved for connector triggers on connector connection 'office365'.",
-            exception.Message);
-        Assert.False(Assert.Single(connection.Resource.AccessPolicies).UsesGatewayManagedIdentity);
-        Assert.Empty(listener.Resource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>());
-        Assert.Empty(connection.Resource.Parent.TriggerConfigs);
     }
 
     [Fact]
@@ -1385,9 +1076,6 @@ public class AzureSandboxesTests
     public void SandboxSecurityChangesDisablePreviousGenerationRetention()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var gateway = builder.AddAzureConnectorGateway("gateway").Resource;
-        gateway.Outputs["principalId"] = "11111111-1111-1111-1111-111111111111";
-        gateway.Outputs["tenantId"] = "22222222-2222-2222-2222-222222222222";
         var endpoints = new[]
         {
             new AzureSandboxContainerDeployment.SandboxEndpoint(
@@ -1396,8 +1084,7 @@ public class AzureSandboxesTests
                 IsExternal: true,
                 IsHttp: true,
                 Protocol: "Http",
-                Anonymous: false,
-                AuthorizedConnectorGateways: [])
+                Anonymous: false)
         };
         const string imageReference = "example/image@sha256:first";
         var identitySettings = new[]
@@ -1462,28 +1149,6 @@ public class AzureSandboxesTests
         previousState.Data["HasRuntimeCommandConfiguration"] = true;
         Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
         previousState.Data["HasRuntimeCommandConfiguration"] = false;
-
-        var connectorAuthorizedFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
-            imageReference,
-        [
-            endpoints[0] with { AuthorizedConnectorGateways = [gateway] }
-        ],
-            identitySettings,
-            egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, connectorAuthorizedFingerprint, hasRuntimeEnvironmentConfiguration: false));
-        previousState.Data["EndpointSecurityFingerprint"] = connectorAuthorizedFingerprint;
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, fingerprint, hasRuntimeEnvironmentConfiguration: false));
-
-        gateway.Outputs["principalId"] = "33333333-3333-3333-3333-333333333333";
-        var updatedConnectorIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
-            imageReference,
-        [
-            endpoints[0] with { AuthorizedConnectorGateways = [gateway] }
-        ],
-            identitySettings,
-            egressPolicy);
-        Assert.True(AzureSandboxContainerDeployment.HasSecurityRelevantEndpointChange(previousState, updatedConnectorIdentityFingerprint, hasRuntimeEnvironmentConfiguration: false));
-        previousState.Data["EndpointSecurityFingerprint"] = fingerprint;
 
         var updatedIdentityFingerprint = AzureSandboxContainerDeployment.CreateDeploymentSecurityFingerprint(
             imageReference,

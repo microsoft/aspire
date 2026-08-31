@@ -12,14 +12,14 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 [AspireExport]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayResource : AzureProvisioningResource
+public sealed class AzureConnectorNamespaceResource : AzureProvisioningResource
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AzureConnectorGatewayResource"/> class.
+    /// Initializes a new instance of the <see cref="AzureConnectorNamespaceResource"/> class.
     /// </summary>
     /// <param name="name">The Aspire resource name.</param>
     /// <param name="configureInfrastructure">The callback that configures Azure provisioning infrastructure.</param>
-    public AzureConnectorGatewayResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+    public AzureConnectorNamespaceResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
     }
@@ -44,11 +44,9 @@ public sealed class AzureConnectorGatewayResource : AzureProvisioningResource
     /// </summary>
     public BicepOutputReference TenantId => new("tenantId", this);
 
-    internal List<AzureConnectorGatewayConnectionResource> Connections { get; } = [];
+    internal List<AzureConnectorNamespaceConnectionResource> Connections { get; } = [];
 
-    internal List<AzureConnectorGatewayMcpServerConfigResource> McpServerConfigs { get; } = [];
-
-    internal List<AzureConnectorGatewayTriggerConfigResource> TriggerConfigs { get; } = [];
+    internal List<AzureConnectorNamespaceMcpServerConfigResource> McpServerConfigs { get; } = [];
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)

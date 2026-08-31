@@ -11,16 +11,16 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 [AspireExport]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayMcpServerConfigResource : Resource, IResourceWithParent<AzureConnectorGatewayResource>, IResourceWithoutLifetime
+public sealed class AzureConnectorNamespaceMcpServerConfigResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>, IResourceWithoutLifetime
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AzureConnectorGatewayMcpServerConfigResource"/> class.
+    /// Initializes a new instance of the <see cref="AzureConnectorNamespaceMcpServerConfigResource"/> class.
     /// </summary>
     /// <param name="name">The Aspire resource name.</param>
     /// <param name="configName">The Azure MCP server config name.</param>
     /// <param name="description">The description shown to MCP clients.</param>
     /// <param name="parent">The parent connector namespace resource.</param>
-    public AzureConnectorGatewayMcpServerConfigResource(string name, string configName, string? description, AzureConnectorGatewayResource parent)
+    public AzureConnectorNamespaceMcpServerConfigResource(string name, string configName, string? description, AzureConnectorNamespaceResource parent)
         : base(name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configName);
@@ -41,9 +41,9 @@ public sealed class AzureConnectorGatewayMcpServerConfigResource : Resource, IRe
     public string? Description { get; }
 
     /// <inheritdoc/>
-    public AzureConnectorGatewayResource Parent { get; }
+    public AzureConnectorNamespaceResource Parent { get; }
 
-    internal List<AzureConnectorGatewayMcpConnectorDefinition> Connectors { get; } = [];
+    internal List<AzureConnectorNamespaceMcpConnectorDefinition> Connectors { get; } = [];
 
     internal bool IsExisting { get; set; }
 }

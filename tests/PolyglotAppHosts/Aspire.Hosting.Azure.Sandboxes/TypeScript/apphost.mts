@@ -9,7 +9,7 @@ import {
 
 const builder = await createBuilder();
 
-const connectorNamespace = await builder.addAzureConnectorGateway("connectors");
+const connectorNamespace = await builder.addAzureConnectorNamespace("connectors");
 const outlook = await connectorNamespace.addConnection("outlook", "office365", {
     connectionName: "office365-outlook",
     displayName: "Office 365 Outlook"
@@ -42,41 +42,26 @@ await sandboxes.withUserAssignedIdentity(sandboxIdentity);
 const pullIdentity = await builder.addAzureUserAssignedIdentity("sandbox-pull-identity");
 await sandboxes.withAcrPullIdentity(pullIdentity);
 
-const api = await builder
+const publishedApi = await builder
     .addContainer("api", "mcr.microsoft.com/dotnet/runtime-deps:10.0")
     .withHttpEndpoint({ name: "http", targetPort: 8080 })
-    .withExternalHttpEndpoints();
-
-const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
-    tier: AzureSandboxTier.Large,
-    autoSuspendEnabled: true,
-    autoSuspendInterval: 900_000,
-    autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
-    autoDeleteEnabled: true,
-    autoDeleteInterval: 3_600_000,
-    autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
-    publicEndpointReadyTimeout: 120_000,
-    endpoints: [
-        {
-            name: "http",
-            anonymous: false
-        }
-    ]
-});
-await publishedApi.withRemoteImageTag("validated-compute-handle");
-
-await outlook.addTriggerConfig(
-    "new-email",
-    "OnNewEmailV3",
-    await api.getEndpoint("http"),
-    {
-        callbackPath: "/webhook",
-        parameters: [
+    .withExternalHttpEndpoints()
+    .publishAsAzureSandbox(sandboxes, {
+        tier: AzureSandboxTier.Large,
+        autoSuspendEnabled: true,
+        autoSuspendInterval: 900_000,
+        autoSuspendMode: AzureSandboxAutoSuspendMode.Disk,
+        autoDeleteEnabled: true,
+        autoDeleteInterval: 3_600_000,
+        autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
+        publicEndpointReadyTimeout: 120_000,
+        endpoints: [
             {
-                name: "folderPath",
-                value: "Inbox"
+                name: "http",
+                anonymous: false
             }
         ]
     });
+await publishedApi.withRemoteImageTag("validated-compute-handle");
 
 await builder.build().run();

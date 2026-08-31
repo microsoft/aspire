@@ -99,17 +99,17 @@ To keep endpoint references usable during an ordinary redeploy of the same immut
 * `aspire destroy` removes the current and labeled retained sandbox generations and disk images before Azure resource-group cleanup. Stable ownership labels allow cleanup after deployment state is cleared when the same AppHost and Azure sandbox group scope are still configured.
 * Existing sandbox groups use the subscription, resource group, location, and name from the group's actual Azure outputs rather than the ambient deployment resource group.
 
-### Connector Namespace, MCP, and trigger example
+### Connector Namespace and MCP example
 
 Connector Namespace is the product name for the preview Azure resource whose ARM type remains `Microsoft.Web/connectorGateways`.
 
 ```csharp
-var connectorNamespace = builder.AddAzureConnectorGateway("connectors");
+var connectorNamespace = builder.AddAzureConnectorNamespace("connectors");
 
 var outlook = connectorNamespace.AddConnection(
     "outlook",
     "office365",
-    new AzureConnectorGatewayConnectionOptions
+    new AzureConnectorNamespaceConnectionOptions
     {
         ConnectionName = "office365-outlook",
         DisplayName = "Office 365 Outlook"
@@ -117,7 +117,7 @@ var outlook = connectorNamespace.AddConnection(
 
 var outlookMcp = connectorNamespace.AddMcpServerConfig(
     "outlook-mcp",
-    new AzureConnectorGatewayMcpServerConfigOptions
+    new AzureConnectorNamespaceMcpServerConfigOptions
     {
         Description = "Allow-listed Outlook tools."
     });
@@ -125,11 +125,11 @@ var outlookMcp = connectorNamespace.AddMcpServerConfig(
 outlookMcp.WithConnector(
     "office365",
     outlook,
-    new AzureConnectorGatewayMcpConnectorOptions
+    new AzureConnectorNamespaceMcpConnectorOptions
     {
         Operations =
         [
-            new AzureConnectorGatewayMcpOperationOptions
+            new AzureConnectorNamespaceMcpOperationOptions
             {
                 Name = "GetEmailsV3",
                 DisplayName = "Get emails"
@@ -137,34 +137,12 @@ outlookMcp.WithConnector(
         ]
     });
 
-var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
-var listener = builder.AddProject<Projects.Listener>("listener")
-    .WithHttpEndpoint(name: "http", targetPort: 8080)
-    .WithExternalHttpEndpoints()
-    .PublishAsAzureSandbox(sandboxGroup);
-
-outlook.AddTriggerConfig(
-    "new-email",
-    "OnNewEmailV3",
-    listener.GetEndpoint("http"),
-    new AzureConnectorGatewayTriggerOptions
-    {
-        CallbackPath = "/webhook",
-        Parameters =
-        [
-            new AzureConnectorGatewayTriggerParameter
-            {
-                Name = "folderPath",
-                Value = "Inbox"
-            }
-        ]
-    });
 ```
 
 The equivalent TypeScript AppHost shape is:
 
 ```typescript
-const connectorNamespace = await builder.addAzureConnectorGateway("connectors");
+const connectorNamespace = await builder.addAzureConnectorNamespace("connectors");
 
 const outlook = await connectorNamespace.addConnection(
     "outlook",
@@ -187,27 +165,6 @@ await outlookMcp.withConnector("office365", outlook, {
     ]
 });
 
-const sandboxGroup = await builder.addAzureSandboxGroup("sandboxes");
-const listener = await builder
-    .addContainer("listener", "example/listener:latest")
-    .withHttpEndpoint({ name: "http", targetPort: 8080 })
-    .withExternalHttpEndpoints();
-
-await listener.publishAsAzureSandbox(sandboxGroup);
-
-await outlook.addTriggerConfig(
-    "new-email",
-    "OnNewEmailV3",
-    await listener.getEndpoint("http"),
-    {
-        callbackPath: "/webhook",
-        parameters: [
-            {
-                name: "folderPath",
-                value: "Inbox"
-            }
-        ]
-    });
 ```
 
 After deployment, open `https://connectors.azure.com/<subscription-id>/<resource-group>/<connector-namespace-name>/overview` and authorize connections that require user consent. Aspire does not automate or store OAuth credentials.
@@ -215,13 +172,10 @@ After deployment, open `https://connectors.azure.com/<subscription-id>/<resource
 ## Security and access
 
 * MCP connector routes require an explicit operation allow-list. Expose only the operations the application needs, especially for user-delegated email, files, Teams, CRM, and other business data.
-* A sandbox trigger automatically creates a connection access policy for the Connector Namespace system-assigned identity.
-* The trigger callback port remains non-anonymous. The Connector Namespace principal and tenant IDs are added to the sandbox port's Microsoft Entra allow-list, the port uses on-demand activation, and trigger delivery uses the `https://auth.adcproxy.io/` token audience.
-* Port-trigger delivery does not require granting the Connector Namespace the broad SandboxGroup Data Owner role. That role is required for sandbox command/data-plane operations, which this trigger API does not expose.
 * `WithAccessPolicy` grants one explicitly identified Microsoft Entra principal access to a connection. `WithIdentityAccessPolicy` uses a user-assigned managed identity output without hard-coding its principal ID. Neither API completes downstream OAuth consent.
-* Do not put credentials, tokens, or other secrets in trigger parameters, MCP descriptions, or operation metadata.
+* Do not put credentials, tokens, or other secrets in MCP descriptions or operation metadata.
 
-Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting`/`AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references; adding an access policy or a new sibling child remains an explicit provisioning operation. `AddTriggerConfig` rejects an existing connection because trigger creation requires a new Connector Namespace identity access policy; manage that access policy and trigger outside Aspire when the connection must remain existing.
+Existing Connector Namespace resources can be referenced with the standard Azure `PublishAsExisting`/`AsExisting` APIs. Existing connection and MCP server configuration children can be marked with `AsExisting()`. Existing resources are emitted as read-only Bicep references; adding an access policy or a new sibling child remains an explicit provisioning operation.
 
 ## Preview limitations
 
@@ -233,12 +187,10 @@ The package and service are preview features. The current integration does not s
 * Runtime sandbox URLs as first-pass ARM/Bicep inputs.
 * Automating Connector Namespace OAuth or consent flows.
 * Supplying secret-valued connection parameter sets. Create those connections outside Aspire or reference an existing connection.
-* Structured trigger parameter values such as recurrence objects or request bodies.
+* Connector triggers and event subscriptions.
 * Hosted MCP servers or arbitrary MCP operation parameter schemas.
 
-Connector names, operation IDs, trigger parameters, and authentication requirements vary by connector and region. Verify them against the managed connector metadata before deployment. Connector connections can be provisioned before consent, but they are not usable until their authorization status is healthy.
-
-Live trigger deployment tests are gated because Connector Namespace preview enrollment and an interactive downstream OAuth consent cannot be represented safely as unattended CI credentials. The package retains buildable C#, Bicep snapshot, and TypeScript AppHost coverage for the deployment shape.
+Connector names, operation IDs, and authentication requirements vary by connector and region. Verify them against the managed connector metadata before deployment. Connector connections can be provisioned before consent, but they are not usable until their authorization status is healthy.
 
 ## Configure Azure Provisioning for local development
 

@@ -11,17 +11,17 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 [AspireExport]
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class AzureConnectorGatewayConnectionResource : Resource, IResourceWithParent<AzureConnectorGatewayResource>, IResourceWithoutLifetime
+public sealed class AzureConnectorNamespaceConnectionResource : Resource, IResourceWithParent<AzureConnectorNamespaceResource>, IResourceWithoutLifetime
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AzureConnectorGatewayConnectionResource"/> class.
+    /// Initializes a new instance of the <see cref="AzureConnectorNamespaceConnectionResource"/> class.
     /// </summary>
     /// <param name="name">The Aspire resource name.</param>
     /// <param name="connectionName">The Azure connector connection name.</param>
     /// <param name="connectorName">The connector catalog name.</param>
     /// <param name="displayName">The friendly display name shown for the connection.</param>
     /// <param name="parent">The parent connector namespace resource.</param>
-    public AzureConnectorGatewayConnectionResource(string name, string connectionName, string connectorName, string? displayName, AzureConnectorGatewayResource parent)
+    public AzureConnectorNamespaceConnectionResource(string name, string connectionName, string connectorName, string? displayName, AzureConnectorNamespaceResource parent)
         : base(name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionName);
@@ -49,9 +49,9 @@ public sealed class AzureConnectorGatewayConnectionResource : Resource, IResourc
     public string? DisplayName { get; }
 
     /// <inheritdoc/>
-    public AzureConnectorGatewayResource Parent { get; }
+    public AzureConnectorNamespaceResource Parent { get; }
 
-    internal List<AzureConnectorGatewayConnectionAccessPolicyResource> AccessPolicies { get; } = [];
+    internal List<AzureConnectorNamespaceConnectionAccessPolicyResource> AccessPolicies { get; } = [];
 
     internal bool IsExisting { get; set; }
 }

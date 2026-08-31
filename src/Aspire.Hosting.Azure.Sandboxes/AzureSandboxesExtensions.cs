@@ -41,15 +41,15 @@ public static class AzureSandboxesExtensions
     /// This example provisions a Connector Namespace with an Office 365 connection and exposes an
     /// allow-listed operation through a managed MCP server:
     /// <code>
-    /// var connectors = builder.AddAzureConnectorGateway("connectors");
+    /// var connectors = builder.AddAzureConnectorNamespace("connectors");
     /// var office365 = connectors.AddConnection("office365", "office365");
     ///
     /// connectors.AddMcpServerConfig("mcp")
-    ///     .WithConnector("mail", office365, new AzureConnectorGatewayMcpConnectorOptions
+    ///     .WithConnector("mail", office365, new AzureConnectorNamespaceMcpConnectorOptions
     ///     {
     ///         Operations =
     ///         [
-    ///             new AzureConnectorGatewayMcpOperationOptions { Name = "SendEmailV2" }
+    ///             new AzureConnectorNamespaceMcpOperationOptions { Name = "SendEmailV2" }
     ///         ]
     ///     });
     /// </code>
@@ -57,7 +57,7 @@ public static class AzureSandboxesExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayResource> AddAzureConnectorGateway(
+    public static IResourceBuilder<AzureConnectorNamespaceResource> AddAzureConnectorNamespace(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
     {
@@ -69,7 +69,7 @@ public static class AzureSandboxesExtensions
 
         static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
-            var gatewayResource = (AzureConnectorGatewayResource)infrastructure.AspireResource;
+            var gatewayResource = (AzureConnectorNamespaceResource)infrastructure.AspireResource;
             var gateway = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
                 infrastructure,
                 (identifier, name) =>
@@ -89,7 +89,7 @@ public static class AzureSandboxesExtensions
                     return newGateway;
                 });
 
-            var connectionMap = new Dictionary<AzureConnectorGatewayConnectionResource, ConnectorGatewayConnection>();
+            var connectionMap = new Dictionary<AzureConnectorNamespaceConnectionResource, ConnectorGatewayConnection>();
             foreach (var connectionResource in gatewayResource.Connections)
             {
                 var connection = connectionResource.IsExisting
@@ -123,14 +123,7 @@ public static class AzureSandboxesExtensions
                     };
 
                     accessPolicy.Principal.Type = "ActiveDirectory";
-                    if (accessPolicyResource.UsesGatewayManagedIdentity)
-                    {
-                        accessPolicy.Principal.Identity.ObjectId =
-                            (BicepValue<string>)new MemberExpression(gatewayIdentity, "principalId");
-                        accessPolicy.Principal.Identity.TenantId =
-                            (BicepValue<string>)new MemberExpression(gatewayIdentity, "tenantId");
-                    }
-                    else if (accessPolicyResource.IdentityResource is { } identityResource)
+                    if (accessPolicyResource.IdentityResource is { } identityResource)
                     {
                         accessPolicy.Principal.Identity.ObjectId = identityResource.PrincipalId.AsProvisioningParameter(infrastructure);
                         accessPolicy.Principal.Identity.TenantId = BicepFunction.GetTenant().TenantId;
@@ -223,7 +216,7 @@ public static class AzureSandboxesExtensions
             });
         }
 
-        return builder.AddResource(new AzureConnectorGatewayResource(name, ConfigureInfrastructure));
+        return builder.AddResource(new AzureConnectorNamespaceResource(name, ConfigureInfrastructure));
     }
 
     /// <summary>
@@ -241,11 +234,11 @@ public static class AzureSandboxesExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayConnectionResource> AddConnection(
-        this IResourceBuilder<AzureConnectorGatewayResource> builder,
+    public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> AddConnection(
+        this IResourceBuilder<AzureConnectorNamespaceResource> builder,
         [ResourceName] string name,
         string connectorName,
-        AzureConnectorGatewayConnectionOptions? options = null)
+        AzureConnectorNamespaceConnectionOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -260,7 +253,7 @@ public static class AzureSandboxesExtensions
                 $"Connector connection '{connectionName}' is already registered on Connector Namespace '{builder.Resource.Name}'.");
         }
 
-        var connection = new AzureConnectorGatewayConnectionResource(
+        var connection = new AzureConnectorNamespaceConnectionResource(
             name,
             connectionName,
             connectorName,
@@ -277,10 +270,10 @@ public static class AzureSandboxesExtensions
     /// <param name="builder">The connection resource builder.</param>
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
-    [AspireExport("asExistingConnectorGatewayConnection", MethodName = "asExisting")]
+    [AspireExport("asExistingConnectorNamespaceConnection", MethodName = "asExisting")]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayConnectionResource> AsExisting(
-        this IResourceBuilder<AzureConnectorGatewayConnectionResource> builder)
+    public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> AsExisting(
+        this IResourceBuilder<AzureConnectorNamespaceConnectionResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
         if (!string.IsNullOrWhiteSpace(builder.Resource.DisplayName))
@@ -288,11 +281,10 @@ public static class AzureSandboxesExtensions
             throw new InvalidOperationException(
                 $"Connector connection '{builder.Resource.Name}' configures a display name and cannot be marked as existing.");
         }
-        if (builder.Resource.AccessPolicies.Count > 0 ||
-            builder.Resource.Parent.TriggerConfigs.Any(trigger => ReferenceEquals(trigger.Parent, builder.Resource)))
+        if (builder.Resource.AccessPolicies.Count > 0)
         {
             throw new InvalidOperationException(
-                $"Connector connection '{builder.Resource.Name}' configures access policies or triggers and cannot be marked as existing.");
+                $"Connector connection '{builder.Resource.Name}' configures access policies and cannot be marked as existing.");
         }
 
         builder.Resource.IsExisting = true;
@@ -313,10 +305,10 @@ public static class AzureSandboxesExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayConnectionResource> WithAccessPolicy(
-        this IResourceBuilder<AzureConnectorGatewayConnectionResource> builder,
+    public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> WithAccessPolicy(
+        this IResourceBuilder<AzureConnectorNamespaceConnectionResource> builder,
         [ResourceName] string name,
-        AzureConnectorGatewayAccessPolicyOptions options)
+        AzureConnectorNamespaceAccessPolicyOptions options)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -333,7 +325,7 @@ public static class AzureSandboxesExtensions
         ValidateConnectorResourceName(policyName, nameof(options));
         var resourceName = GetValidatedAccessPolicyResourceName(builder.Resource, name, policyName);
 
-        builder.Resource.AccessPolicies.Add(new AzureConnectorGatewayConnectionAccessPolicyResource(
+        builder.Resource.AccessPolicies.Add(new AzureConnectorNamespaceConnectionAccessPolicyResource(
             resourceName,
             policyName,
             builder.Resource,
@@ -357,8 +349,8 @@ public static class AzureSandboxesExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayConnectionResource> WithIdentityAccessPolicy(
-        this IResourceBuilder<AzureConnectorGatewayConnectionResource> builder,
+    public static IResourceBuilder<AzureConnectorNamespaceConnectionResource> WithIdentityAccessPolicy(
+        this IResourceBuilder<AzureConnectorNamespaceConnectionResource> builder,
         [ResourceName] string name,
         IResourceBuilder<AzureUserAssignedIdentityResource> identity,
         string? policyName = null)
@@ -377,7 +369,7 @@ public static class AzureSandboxesExtensions
         var resourceName = GetValidatedAccessPolicyResourceName(builder.Resource, name, policyName);
 
         builder.Resource.AccessPolicies.Add(
-            AzureConnectorGatewayConnectionAccessPolicyResource.CreateUserAssignedIdentityPolicy(
+            AzureConnectorNamespaceConnectionAccessPolicyResource.CreateUserAssignedIdentityPolicy(
                 resourceName,
                 policyName,
                 builder.Resource,
@@ -395,10 +387,10 @@ public static class AzureSandboxesExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayMcpServerConfigResource> AddMcpServerConfig(
-        this IResourceBuilder<AzureConnectorGatewayResource> builder,
+    public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> AddMcpServerConfig(
+        this IResourceBuilder<AzureConnectorNamespaceResource> builder,
         [ResourceName] string name,
-        AzureConnectorGatewayMcpServerConfigOptions? options = null)
+        AzureConnectorNamespaceMcpServerConfigOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -412,7 +404,7 @@ public static class AzureSandboxesExtensions
                 $"MCP server configuration '{configName}' is already registered on Connector Namespace '{builder.Resource.Name}'.");
         }
 
-        var config = new AzureConnectorGatewayMcpServerConfigResource(
+        var config = new AzureConnectorNamespaceMcpServerConfigResource(
             name,
             configName,
             options?.Description,
@@ -428,10 +420,10 @@ public static class AzureSandboxesExtensions
     /// <param name="builder">The MCP server configuration resource builder.</param>
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
-    [AspireExport("asExistingConnectorGatewayMcpServerConfig", MethodName = "asExisting")]
+    [AspireExport("asExistingConnectorNamespaceMcpServerConfig", MethodName = "asExisting")]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayMcpServerConfigResource> AsExisting(
-        this IResourceBuilder<AzureConnectorGatewayMcpServerConfigResource> builder)
+    public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> AsExisting(
+        this IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
         if (builder.Resource.Connectors.Count > 0)
@@ -465,11 +457,11 @@ public static class AzureSandboxesExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayMcpServerConfigResource> WithConnector(
-        this IResourceBuilder<AzureConnectorGatewayMcpServerConfigResource> builder,
+    public static IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> WithConnector(
+        this IResourceBuilder<AzureConnectorNamespaceMcpServerConfigResource> builder,
         string connectorName,
-        IResourceBuilder<AzureConnectorGatewayConnectionResource> connection,
-        AzureConnectorGatewayMcpConnectorOptions options)
+        IResourceBuilder<AzureConnectorNamespaceConnectionResource> connection,
+        AzureConnectorNamespaceMcpConnectorOptions options)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectorName);
@@ -503,7 +495,7 @@ public static class AzureSandboxesExtensions
         }
 
         var operationNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var connectorDefinition = new AzureConnectorGatewayMcpConnectorDefinition(
+        var connectorDefinition = new AzureConnectorNamespaceMcpConnectorDefinition(
             connectorName,
             options.DisplayName,
             options.Description,
@@ -523,7 +515,7 @@ public static class AzureSandboxesExtensions
                     nameof(options));
             }
 
-            connectorDefinition.Operations.Add(new AzureConnectorGatewayMcpOperationDefinition(
+            connectorDefinition.Operations.Add(new AzureConnectorNamespaceMcpOperationDefinition(
                 operation.Name,
                 operation.DisplayName,
                 operation.Description));
@@ -531,116 +523,6 @@ public static class AzureSandboxesExtensions
 
         builder.Resource.Connectors.Add(connectorDefinition);
         return builder;
-    }
-
-    /// <summary>
-    /// Adds a Connector Namespace trigger that delivers connector events to an Azure sandbox endpoint.
-    /// </summary>
-    /// <param name="builder">The connector connection resource builder.</param>
-    /// <param name="name">The Aspire resource name.</param>
-    /// <param name="operationName">The connector trigger operation ID.</param>
-    /// <param name="callbackEndpoint">The external Azure sandbox endpoint that receives trigger notifications.</param>
-    /// <param name="options">The optional trigger configuration.</param>
-    /// <returns>A resource builder for the trigger configuration.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when the connection is existing, the callback endpoint is not external, the physical trigger name is already registered,
-    /// or the reserved trigger access policy name is already in use.
-    /// </exception>
-    /// <remarks>
-    /// The trigger is provisioned after the sandbox endpoint exists. The integration grants the
-    /// Connector Namespace managed identity access to the connection and adds that identity to the
-    /// sandbox port's Microsoft Entra allow-list. The callback remains non-anonymous. Existing
-    /// connections are rejected because adding a trigger would otherwise mutate the connection by
-    /// implicitly provisioning a new access policy.
-    /// </remarks>
-    /// <example>
-    /// This example sends new-email notifications to an external endpoint on a sandbox workload:
-    /// <code>
-    /// var sandboxes = builder.AddAzureSandboxGroup("sandboxes");
-    /// var listener = builder.AddProject&lt;Projects.Listener&gt;("listener")
-    ///     .WithExternalHttpEndpoints()
-    ///     .PublishAsAzureSandbox(sandboxes);
-    /// var connection = builder.AddAzureConnectorGateway("connectors")
-    ///     .AddConnection("office365", "office365");
-    ///
-    /// connection.AddTriggerConfig(
-    ///     "new-email",
-    ///     "OnNewEmailV3",
-    ///     listener.GetEndpoint("https"),
-    ///     new AzureConnectorGatewayTriggerOptions { CallbackPath = "/events/email" });
-    /// </code>
-    /// </example>
-    /// <ats-returns>The resource builder.</ats-returns>
-    [AspireExport]
-    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<AzureConnectorGatewayTriggerConfigResource> AddTriggerConfig(
-        this IResourceBuilder<AzureConnectorGatewayConnectionResource> builder,
-        [ResourceName] string name,
-        string operationName,
-        EndpointReference callbackEndpoint,
-        AzureConnectorGatewayTriggerOptions? options = null)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-        ArgumentNullException.ThrowIfNull(callbackEndpoint);
-
-        if (builder.Resource.IsExisting)
-        {
-            throw new InvalidOperationException(
-                $"Existing connector connection '{builder.Resource.Name}' is read-only and cannot create a trigger because trigger provisioning requires a new connection access policy.");
-        }
-
-        var triggerName = options?.TriggerName ?? name;
-        ValidateConnectorResourceName(triggerName, nameof(options));
-        ValidateTriggerParameters(options?.Parameters);
-        if (builder.Resource.Parent.TriggerConfigs.Any(trigger =>
-            string.Equals(trigger.TriggerName, triggerName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"Trigger configuration '{triggerName}' is already registered on Connector Namespace '{builder.Resource.Parent.Name}'.");
-        }
-
-        var callbackResource = callbackEndpoint.Resource;
-        var callbackEndpointAnnotation = callbackResource.Annotations
-            .OfType<EndpointAnnotation>()
-            .LastOrDefault(annotation => string.Equals(
-                annotation.Name,
-                callbackEndpoint.EndpointName,
-                StringComparison.OrdinalIgnoreCase));
-        if (callbackEndpointAnnotation?.IsExternal != true)
-        {
-            throw new InvalidOperationException(
-                $"Connector trigger callback endpoint '{callbackEndpoint.EndpointName}' on resource '{callbackResource.Name}' must be external.");
-        }
-
-        var trigger = new AzureConnectorGatewayTriggerConfigResource(
-            name,
-            triggerName,
-            operationName,
-            callbackEndpoint,
-            options?.CallbackPath,
-            options?.Description,
-            builder.Resource,
-            options?.Parameters ?? []);
-
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            EnsureGatewayAccessPolicy(builder.Resource);
-            if (!callbackResource.Annotations.OfType<AzureConnectorGatewayEndpointAuthorizationAnnotation>().Any(annotation =>
-                string.Equals(annotation.EndpointName, callbackEndpointAnnotation.Name, StringComparison.OrdinalIgnoreCase) &&
-                ReferenceEquals(annotation.ConnectorGateway, builder.Resource.Parent)))
-            {
-                callbackResource.Annotations.Add(new AzureConnectorGatewayEndpointAuthorizationAnnotation(
-                    callbackEndpointAnnotation.Name,
-                    builder.Resource.Parent));
-            }
-        }
-
-        var triggerBuilder = builder.ApplicationBuilder.AddResource(trigger)
-            .WithRelationship(callbackResource, "Callback");
-        builder.Resource.Parent.TriggerConfigs.Add(trigger);
-        return triggerBuilder;
     }
 
     /// <summary>
@@ -944,37 +826,11 @@ public static class AzureSandboxesExtensions
         };
     }
 
-    private static void EnsureGatewayAccessPolicy(AzureConnectorGatewayConnectionResource connection)
-    {
-        const string accessPolicyName = "gateway-acl";
-        var existingPolicy = connection.AccessPolicies.FirstOrDefault(policy =>
-            string.Equals(policy.PolicyName, accessPolicyName, StringComparison.OrdinalIgnoreCase));
-        if (existingPolicy?.UsesGatewayManagedIdentity == true)
-        {
-            return;
-        }
-
-        if (existingPolicy is not null)
-        {
-            throw new InvalidOperationException(
-                $"Access policy name '{accessPolicyName}' is reserved for connector triggers on connector connection '{connection.Name}'.");
-        }
-
-        // Connector event subscriptions run as the Connector Namespace system-assigned identity.
-        // The connection access policy is required even when the connection itself is OAuth-authorized.
-        // https://github.com/Azure/Connectors/blob/main/plugin/skills/aca-sandboxes/references/trigger-setup.md
-        connection.AccessPolicies.Add(
-            AzureConnectorGatewayConnectionAccessPolicyResource.CreateGatewayManagedIdentityPolicy(
-                $"{connection.Name.Length}-{connection.Name}-trigger-policy",
-                accessPolicyName,
-                connection));
-    }
-
-    private static string GetAccessPolicyResourceName(AzureConnectorGatewayConnectionResource connection, string name)
+    private static string GetAccessPolicyResourceName(AzureConnectorNamespaceConnectionResource connection, string name)
         => $"{connection.Name.Length}-{connection.Name}-policy-{name}";
 
     private static string GetValidatedAccessPolicyResourceName(
-        AzureConnectorGatewayConnectionResource connection,
+        AzureConnectorNamespaceConnectionResource connection,
         string name,
         string policyName)
     {
@@ -998,32 +854,6 @@ public static class AzureSandboxesExtensions
         }
 
         return resourceName;
-    }
-
-    private static void ValidateTriggerParameters(AzureConnectorGatewayTriggerParameter[]? parameters)
-    {
-        if (parameters is null)
-        {
-            return;
-        }
-
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var parameter in parameters)
-        {
-            if (parameter is null)
-            {
-                throw new ArgumentException("Trigger parameters cannot contain null values.", nameof(parameters));
-            }
-
-            ArgumentException.ThrowIfNullOrWhiteSpace(parameter.Name);
-            ArgumentNullException.ThrowIfNull(parameter.Value);
-            if (!names.Add(parameter.Name))
-            {
-                throw new ArgumentException(
-                    $"Trigger parameter '{parameter.Name}' is configured more than once.",
-                    nameof(parameters));
-            }
-        }
     }
 
     private static void ValidateConnectorResourceName(string name, string paramName)

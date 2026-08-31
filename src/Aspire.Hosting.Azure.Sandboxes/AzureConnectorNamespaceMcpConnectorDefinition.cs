@@ -5,11 +5,11 @@
 
 namespace Aspire.Hosting.Azure;
 
-internal sealed class AzureConnectorGatewayMcpConnectorDefinition(
+internal sealed class AzureConnectorNamespaceMcpConnectorDefinition(
     string name,
     string? displayName,
     string? description,
-    AzureConnectorGatewayConnectionResource connection)
+    AzureConnectorNamespaceConnectionResource connection)
 {
     public string Name { get; } = name;
 
@@ -17,7 +17,7 @@ internal sealed class AzureConnectorGatewayMcpConnectorDefinition(
 
     public string? Description { get; } = description;
 
-    public AzureConnectorGatewayConnectionResource Connection { get; } = connection;
+    public AzureConnectorNamespaceConnectionResource Connection { get; } = connection;
 
-    public List<AzureConnectorGatewayMcpOperationDefinition> Operations { get; } = [];
+    public List<AzureConnectorNamespaceMcpOperationDefinition> Operations { get; } = [];
 }

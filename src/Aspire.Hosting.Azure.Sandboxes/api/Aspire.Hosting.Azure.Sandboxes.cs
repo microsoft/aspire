@@ -13,7 +13,7 @@ namespace Aspire.Hosting
     {
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayResource> AddAzureConnectorGateway(this IDistributedApplicationBuilder builder, string name) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceResource> AddAzureConnectorNamespace(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -21,23 +21,19 @@ namespace Aspire.Hosting
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayResource> builder, string name, string connectorName, Azure.AzureConnectorGatewayConnectionOptions? options = null) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceResource> builder, string name, string connectorName, Azure.AzureConnectorNamespaceConnectionOptions? options = null) { throw null; }
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> AddMcpServerConfig(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayResource> builder, string name, Azure.AzureConnectorGatewayMcpServerConfigOptions? options = null) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceMcpServerConfigResource> AddMcpServerConfig(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceResource> builder, string name, Azure.AzureConnectorNamespaceMcpServerConfigOptions? options = null) { throw null; }
 
-        [AspireExport]
+        [AspireExport("asExistingConnectorNamespaceConnection", MethodName = "asExisting")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayTriggerConfigResource> AddTriggerConfig(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> builder, string name, string operationName, ApplicationModel.EndpointReference callbackEndpoint, Azure.AzureConnectorGatewayTriggerOptions? options = null) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> AsExisting(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> builder) { throw null; }
 
-        [AspireExport("asExistingConnectorGatewayConnection", MethodName = "asExisting")]
+        [AspireExport("asExistingConnectorNamespaceMcpServerConfig", MethodName = "asExisting")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> AsExisting(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> builder) { throw null; }
-
-        [AspireExport("asExistingConnectorGatewayMcpServerConfig", MethodName = "asExisting")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> AsExisting(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> builder) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceMcpServerConfigResource> AsExisting(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceMcpServerConfigResource> builder) { throw null; }
 
         [AspireExport("publishComputeResourceAsAzureSandbox", MethodName = "publishAsAzureSandbox")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -51,7 +47,7 @@ namespace Aspire.Hosting
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> WithAccessPolicy(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> builder, string name, Azure.AzureConnectorGatewayAccessPolicyOptions options) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> WithAccessPolicy(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> builder, string name, Azure.AzureConnectorNamespaceAccessPolicyOptions options) { throw null; }
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -59,11 +55,11 @@ namespace Aspire.Hosting
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> WithConnector(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayMcpServerConfigResource> builder, string connectorName, ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> connection, Azure.AzureConnectorGatewayMcpConnectorOptions options) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceMcpServerConfigResource> WithConnector(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceMcpServerConfigResource> builder, string connectorName, ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> connection, Azure.AzureConnectorNamespaceMcpConnectorOptions options) { throw null; }
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> WithIdentityAccessPolicy(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorGatewayConnectionResource> builder, string name, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity, string? policyName = null) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> WithIdentityAccessPolicy(this ApplicationModel.IResourceBuilder<Azure.AzureConnectorNamespaceConnectionResource> builder, string name, ApplicationModel.IResourceBuilder<Azure.AzureUserAssignedIdentityResource> identity, string? policyName = null) { throw null; }
 
         [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -83,7 +79,7 @@ namespace Aspire.Hosting.Azure
 {
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayAccessPolicyOptions
+    public sealed partial class AzureConnectorNamespaceAccessPolicyOptions
     {
         public required string ObjectId { get { throw null; } set { } }
 
@@ -94,7 +90,7 @@ namespace Aspire.Hosting.Azure
 
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayConnectionOptions
+    public sealed partial class AzureConnectorNamespaceConnectionOptions
     {
         public string? ConnectionName { get { throw null; } set { } }
 
@@ -103,9 +99,9 @@ namespace Aspire.Hosting.Azure
 
     [AspireExport]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayConnectionResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureConnectorGatewayResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithoutLifetime
+    public sealed partial class AzureConnectorNamespaceConnectionResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureConnectorNamespaceResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithoutLifetime
     {
-        public AzureConnectorGatewayConnectionResource(string name, string connectionName, string connectorName, string? displayName, AzureConnectorGatewayResource parent) : base(default!) { }
+        public AzureConnectorNamespaceConnectionResource(string name, string connectionName, string connectorName, string? displayName, AzureConnectorNamespaceResource parent) : base(default!) { }
 
         public string ConnectionName { get { throw null; } }
 
@@ -113,23 +109,23 @@ namespace Aspire.Hosting.Azure
 
         public string? DisplayName { get { throw null; } }
 
-        public AzureConnectorGatewayResource Parent { get { throw null; } }
+        public AzureConnectorNamespaceResource Parent { get { throw null; } }
     }
 
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayMcpConnectorOptions
+    public sealed partial class AzureConnectorNamespaceMcpConnectorOptions
     {
         public string? Description { get { throw null; } set { } }
 
         public string? DisplayName { get { throw null; } set { } }
 
-        public AzureConnectorGatewayMcpOperationOptions[] Operations { get { throw null; } set { } }
+        public AzureConnectorNamespaceMcpOperationOptions[] Operations { get { throw null; } set { } }
     }
 
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayMcpOperationOptions
+    public sealed partial class AzureConnectorNamespaceMcpOperationOptions
     {
         public string? Description { get { throw null; } set { } }
 
@@ -140,7 +136,7 @@ namespace Aspire.Hosting.Azure
 
     [AspireDto]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayMcpServerConfigOptions
+    public sealed partial class AzureConnectorNamespaceMcpServerConfigOptions
     {
         public string? ConfigName { get { throw null; } set { } }
 
@@ -149,22 +145,22 @@ namespace Aspire.Hosting.Azure
 
     [AspireExport]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayMcpServerConfigResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureConnectorGatewayResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithoutLifetime
+    public sealed partial class AzureConnectorNamespaceMcpServerConfigResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureConnectorNamespaceResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithoutLifetime
     {
-        public AzureConnectorGatewayMcpServerConfigResource(string name, string configName, string? description, AzureConnectorGatewayResource parent) : base(default!) { }
+        public AzureConnectorNamespaceMcpServerConfigResource(string name, string configName, string? description, AzureConnectorNamespaceResource parent) : base(default!) { }
 
         public string ConfigName { get { throw null; } }
 
         public string? Description { get { throw null; } }
 
-        public AzureConnectorGatewayResource Parent { get { throw null; } }
+        public AzureConnectorNamespaceResource Parent { get { throw null; } }
     }
 
     [AspireExport]
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayResource : AzureProvisioningResource
+    public sealed partial class AzureConnectorNamespaceResource : AzureProvisioningResource
     {
-        public AzureConnectorGatewayResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
+        public AzureConnectorNamespaceResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
         public BicepOutputReference Id { get { throw null; } }
 
@@ -175,51 +171,6 @@ namespace Aspire.Hosting.Azure
         public BicepOutputReference TenantId { get { throw null; } }
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
-    }
-
-    [AspireExport]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayTriggerConfigResource : AzureProvisioningResource, ApplicationModel.IResourceWithParent<AzureConnectorGatewayResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithoutLifetime
-    {
-        internal AzureConnectorGatewayTriggerConfigResource() : base(default!, default!) { }
-
-        public ApplicationModel.EndpointReference CallbackEndpoint { get { throw null; } }
-
-        public string? CallbackPath { get { throw null; } }
-
-        public AzureConnectorGatewayConnectionResource Connection { get { throw null; } }
-
-        public string? Description { get { throw null; } }
-
-        public string OperationName { get { throw null; } }
-
-        public AzureConnectorGatewayResource Parent { get { throw null; } }
-
-        public string TriggerName { get { throw null; } }
-
-        public System.Collections.Generic.IReadOnlyList<AzureConnectorGatewayTriggerParameter> TriggerParameters { get { throw null; } }
-    }
-
-    [AspireDto]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayTriggerOptions
-    {
-        public string? CallbackPath { get { throw null; } set { } }
-
-        public string? Description { get { throw null; } set { } }
-
-        public AzureConnectorGatewayTriggerParameter[] Parameters { get { throw null; } set { } }
-
-        public string? TriggerName { get { throw null; } set { } }
-    }
-
-    [AspireDto]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class AzureConnectorGatewayTriggerParameter
-    {
-        public required string Name { get { throw null; } set { } }
-
-        public required string Value { get { throw null; } set { } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
