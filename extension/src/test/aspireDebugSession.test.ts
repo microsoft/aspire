@@ -4347,8 +4347,8 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             {} as any,
             { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
             () => { });
-        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, onRestart) => {
-            restartHandler = onRestart;
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, options) => {
+            restartHandler = options?.onRestartRequested;
         });
         sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(appHostResourceSession);
         sinon.stub(aspireDebugSession, 'stopDebugging').resolves();
@@ -4439,6 +4439,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
     test('a service-owned non-Run restart reclaims its pending operation through the provider', async () => {
         let restartHandler: ((debugSessionId: string) => boolean) | undefined;
+        let appHostTrackerDebugSessionId: string | undefined;
         let terminateSessionCallback: ((session: vscode.DebugSession) => unknown) | undefined;
         const parentDebugSession = {
             id: 'aspire-session',
@@ -4488,13 +4489,15 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             {} as any,
             { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
             () => { });
-        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, onRestart) => {
-            restartHandler = onRestart;
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, appHostTracker) => {
+            appHostTrackerDebugSessionId = appHostTracker?.debugSessionId;
+            restartHandler = appHostTracker?.onRestartRequested;
         });
         sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(appHostResourceSession);
         sinon.stub(aspireDebugSession, 'stopDebugging').resolves();
 
         await aspireDebugSession.startAppHost('/workspace/AppHost.csproj', ['run'], [], true, { forceBuild: false });
+        assert.strictEqual(appHostTrackerDebugSessionId, aspireDebugSession.debugSessionId);
         assert.strictEqual(restartHandler?.(aspireDebugSession.debugSessionId), true);
         await terminateSessionCallback?.(appHostDebugSession as unknown as vscode.DebugSession);
 
@@ -4590,8 +4593,8 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
-        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, onRestart) => {
-            restartHandler = onRestart;
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore').callsFake((_debugAdapter, options) => {
+            restartHandler = options?.onRestartRequested;
         });
         sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(appHostResourceSession);
         const cliStop = sinon.stub().resolves();

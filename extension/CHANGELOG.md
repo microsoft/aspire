@@ -1,5 +1,25 @@
 # Aspire VS Code Extension Changelog
 
+## v1.21.0
+
+<!-- aspire-ext-changelog-done from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->
+
+### Fixes
+
+- Prevent the Aspire view from stealing sidebar focus and reappearing in the Activity Bar when the window is reloaded ([#19746](https://github.com/microsoft/aspire/issues/19746), [#19754](https://github.com/microsoft/aspire/pull/19754)).
+
+## v1.20.0
+
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->
+
+### Fixes
+
+- Prevent the Hot Reload advisory notification from repeatedly reappearing during a debug session ([#19672](https://github.com/microsoft/aspire/pull/19672)).
+
+### Documentation
+
+- Rewrite the extension README and walkthrough with clearer setup and getting-started guidance ([#19632](https://github.com/microsoft/aspire/pull/19632)).
+
 ## v1.19.0
 
 <!-- aspire-ext-changelog-done from=b5be9fc0742c7cdf5e02e4b6e2b7cb5c45e5c387 to=c1d2831ade34a050e8ea1111ac64aeda67c7321e base=1.18.0 -->

@@ -3758,6 +3758,7 @@ type CSharpAppResource interface {
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
 	WithUrls(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource
 	WithValidator(validator func(arg TestResourceContext) bool) CSharpAppResource
+	WithVolume(target string, name string, env string, options ...*ProjectResourceWithVolumeOptions) CSharpAppResource
 	WithoutHttpsCertificate() CSharpAppResource
 	Err() error
 }
@@ -5390,6 +5391,27 @@ func (s *cSharpAppResource) WithValidator(validator func(arg TestResourceContext
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithVolume adds a volume to a project resource.
+func (s *cSharpAppResource) WithVolume(target string, name string, env string, options ...*ProjectResourceWithVolumeOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["target"] = serializeValue(target)
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["env"] = serializeValue(env)
+	if len(options) > 0 {
+		merged := &ProjectResourceWithVolumeOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProjectVolume", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11306,6 +11328,7 @@ type DotnetToolResource interface {
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) DotnetToolResource
 	WithUrls(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource
 	WithValidator(validator func(arg TestResourceContext) bool) DotnetToolResource
+	WithVolume(target string, name string, env string, options ...*ExecutableResourceWithVolumeOptions) DotnetToolResource
 	WithWorkingDirectory(workingDirectory string) DotnetToolResource
 	WithoutHttpsCertificate() DotnetToolResource
 	Err() error
@@ -12967,6 +12990,27 @@ func (s *dotnetToolResource) WithValidator(validator func(arg TestResourceContex
 	return s
 }
 
+// WithVolume adds a volume to an executable resource.
+func (s *dotnetToolResource) WithVolume(target string, name string, env string, options ...*ExecutableResourceWithVolumeOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["target"] = serializeValue(target)
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["env"] = serializeValue(env)
+	if len(options) > 0 {
+		merged := &ExecutableResourceWithVolumeOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExecutableVolume", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithWorkingDirectory sets the working directory for the executable resource.
 func (s *dotnetToolResource) WithWorkingDirectory(workingDirectory string) DotnetToolResource {
 	if s.err != nil { return s }
@@ -14102,6 +14146,7 @@ type ExecutableResource interface {
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
 	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource
 	WithValidator(validator func(arg TestResourceContext) bool) ExecutableResource
+	WithVolume(target string, name string, env string, options ...*ExecutableResourceWithVolumeOptions) ExecutableResource
 	WithWorkingDirectory(workingDirectory string) ExecutableResource
 	WithoutHttpsCertificate() ExecutableResource
 	Err() error
@@ -15691,6 +15736,27 @@ func (s *executableResource) WithValidator(validator func(arg TestResourceContex
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithVolume adds a volume to an executable resource.
+func (s *executableResource) WithVolume(target string, name string, env string, options ...*ExecutableResourceWithVolumeOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["target"] = serializeValue(target)
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["env"] = serializeValue(env)
+	if len(options) > 0 {
+		merged := &ExecutableResourceWithVolumeOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExecutableVolume", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20504,6 +20570,7 @@ type ProjectResource interface {
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
 	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ProjectResource
 	WithValidator(validator func(arg TestResourceContext) bool) ProjectResource
+	WithVolume(target string, name string, env string, options ...*ProjectResourceWithVolumeOptions) ProjectResource
 	WithoutHttpsCertificate() ProjectResource
 	Err() error
 }
@@ -22136,6 +22203,27 @@ func (s *projectResource) WithValidator(validator func(arg TestResourceContext) 
 		reqArgs["validator"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithVolume adds a volume to a project resource.
+func (s *projectResource) WithVolume(target string, name string, env string, options ...*ProjectResourceWithVolumeOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["target"] = serializeValue(target)
+	reqArgs["name"] = serializeValue(name)
+	reqArgs["env"] = serializeValue(env)
+	if len(options) > 0 {
+		merged := &ProjectResourceWithVolumeOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProjectVolume", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29310,6 +29398,30 @@ func (o *WithVolumeOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Name != nil { m["name"] = serializeValue(o.Name) }
+	if o.IsReadOnly != nil { m["isReadOnly"] = serializeValue(o.IsReadOnly) }
+	return m
+}
+
+// ProjectResourceWithVolumeOptions carries optional parameters for WithVolume.
+type ProjectResourceWithVolumeOptions struct {
+	IsReadOnly *bool `json:"isReadOnly,omitempty"`
+}
+
+func (o *ProjectResourceWithVolumeOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.IsReadOnly != nil { m["isReadOnly"] = serializeValue(o.IsReadOnly) }
+	return m
+}
+
+// ExecutableResourceWithVolumeOptions carries optional parameters for WithVolume.
+type ExecutableResourceWithVolumeOptions struct {
+	IsReadOnly *bool `json:"isReadOnly,omitempty"`
+}
+
+func (o *ExecutableResourceWithVolumeOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
 	if o.IsReadOnly != nil { m["isReadOnly"] = serializeValue(o.IsReadOnly) }
 	return m
 }

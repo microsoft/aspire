@@ -76,6 +76,8 @@
   "aspire-vscode.strings.aspireCliVersion": "Aspire CLI Version: {0}.",
   "aspire-vscode.strings.requiredCapability": "Required capability: {0}.",
   "aspire-vscode.strings.aspireTerminalName": "Aspire terminal",
+  "aspire-vscode.strings.aspireTerminalClosedBeforeProcessStarted": "Aspire terminal closed before its process started.",
+  "aspire-vscode.strings.aspireTerminalProcessFailedToStart": "Aspire terminal process failed to start.",
   "aspire-vscode.strings.createWithAspirePlaceholder": "Choose how to set up Aspire",
   "aspire-vscode.strings.createNewAspireAppLabel": "Create a new Aspire app",
   "aspire-vscode.strings.createNewAspireAppDescription": "Start a greenfield application in a new directory using an Aspire template.",

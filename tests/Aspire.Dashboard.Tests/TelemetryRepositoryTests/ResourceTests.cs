@@ -188,12 +188,6 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     }
 }
 
-public sealed class InMemoryResourceTests : ResourceTests
-{
-    protected override bool UseSqlite => false;
-}
-
 public sealed class SqliteResourceTests : ResourceTests
 {
-    protected override bool UseSqlite => true;
 }

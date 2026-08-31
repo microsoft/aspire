@@ -116,6 +116,28 @@ Use the impact analysis to drive coverage review. A PR can have many tests and s
 
 When the impact analysis is useful to explain a test finding, present it concisely in the finding: identify the impacted code path, the regression risk, and the missing test shape. For example: "This changes `DcpExecutor.PrepareServices()` port allocation timing, but there is no regression test showing a dependent resource can resolve the endpoint before workload creation."
 
+### Conditional Test Selection Impact
+
+Apply the repository-wide Conditional Test Selection rules in `AGENTS.md`.
+Trace new test projects, CI jobs, workflows, scripts, and loose inputs to their
+actual consumers before deciding whether the map needs to change.
+
+Flag concrete selection gaps:
+
+- Treat files evaluated by the `Aspire.slnx` ProjectGraph as Layer 1-owned and
+  projects outside that graph as Layer 2 blind spots.
+- Route Layer 2 inputs to their precise consumer, to `ALL` for broad impact, or
+  explicitly outside the selector. Do not allow `ignore` or prefilter entries
+  to hide a real PR-CI consumer.
+- Require `run_*` wiring for gated `job:` targets, advisory classification for
+  targets outside the regular PR matrix or job gates, and routing from reusable
+  workflow implementations to the jobs they implement.
+
+Selector behavior changes must keep the action, workflow gates, tool, map,
+tests, and canonical documentation synchronized. Require real-map tests for
+curated routing changes and focused synthetic-map tests for engine or CLI
+behavior. See `docs/ci/test-trigger-map.md` for the complete contract.
+
 ### Test Coverage Review
 
 Every review must evaluate whether the PR has appropriate tests for the type of behavior being changed. Do not require tests for purely mechanical refactors, comments, or documentation-only changes, but do flag missing or insufficient coverage when production behavior changes and there is no explicit, convincing justification in the PR. Regression coverage is especially important: bug fixes and behavior changes should include tests that would have failed before the fix, not just broad happy-path coverage or regenerated snapshots.

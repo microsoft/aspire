@@ -14,6 +14,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
@@ -27,6 +28,7 @@ using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
@@ -190,16 +192,24 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _options = options;
 
-        var innerBuilderOptions = new HostApplicationBuilderSettings();
+        var innerBuilderOptions = new HostApplicationBuilderSettings
+        {
+            ContentRootPath = options.ContentRootPath
+        };
 
         // Args are set later in config with switch mappings. But specify them when creating the builder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
         innerBuilderOptions.Args = options.Args;
 
-        // Pre-seed the configuration with ASPIRE_-prefixed environment variables.
+        // Pre-seed fallback values before environment and host-default sources so every normal
+        // configuration provider can override them, then add ASPIRE_-prefixed environment variables.
         // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
         // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
         var configuration = new ConfigurationManager();
+        if (options.DefaultConfiguration is not null)
+        {
+            configuration.AddInMemoryCollection(options.DefaultConfiguration);
+        }
         configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
         innerBuilderOptions.Configuration = configuration;
 
@@ -286,10 +296,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _executionContextOptions = BuildExecutionContextOptions();
         ExecutionContext = new DistributedApplicationExecutionContext(_executionContextOptions);
 
-        // Compute both PathSha and ProjectNameSha to support different use cases:
-        // - PathSha: For disambiguating projects with the same name in different locations (deployment state)
+        // Compute path, deployment-state, and project-name identities for different use cases:
+        // - PathSha: Historical directory identity used by persistent run-mode resources.
+        // - DeploymentStatePathSha: Source-file-specific identity used by deployment state.
         // - ProjectNameSha: For stable naming across deployments regardless of path (Azure Functions, Azure environments)
         string appHostPathSha;
+        string deploymentStatePathSha;
+        string? legacyDeploymentStatePathSha = null;
         string appHostProjectNameSha;
         string appHostSha; // Legacy value, computed based on mode
 
@@ -299,14 +312,31 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // For backward compatibility with tests
             appHostPathSha = configuredAppHostSha;
+            deploymentStatePathSha = configuredAppHostSha;
             appHostProjectNameSha = configuredAppHostSha;
             appHostSha = configuredAppHostSha;
         }
         else
         {
-            // Normalize the casing of AppHostPath and compute PathSha
             var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
             appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
+
+            // Source-file and polyglot AppHosts can share a host process and project directory,
+            // so use the actual source file to keep their deployment state isolated.
+            var isSourceFileAppHost = !string.IsNullOrEmpty(appHostFilePath) &&
+                !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase);
+            var appHostIdentityPath = isSourceFileAppHost
+                ? PathNormalizer.ResolveToFilesystemPath(Path.GetFullPath(appHostFilePath!))
+                : AppHostPath;
+            var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
+                ? appHostIdentityPath
+                : appHostIdentityPath.ToLowerInvariant();
+            var deploymentStatePathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppHostIdentityPath));
+            deploymentStatePathSha = Convert.ToHexString(deploymentStatePathShaBytes);
+            if (!string.Equals(deploymentStatePathSha, appHostPathSha, StringComparison.Ordinal))
+            {
+                legacyDeploymentStatePathSha = appHostPathSha;
+            }
 
             // Compute ProjectNameSha
             var appHostProjectNameShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostName));
@@ -327,8 +357,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // PathSha for deployment state (path-based disambiguation)
+            // Historical path identity used by persistent run-mode resources.
             ["AppHost:PathSha256"] = appHostPathSha,
+            // Source-file-specific deployment identity and its migration fallback.
+            ["AppHost:DeploymentStatePathSha256"] = deploymentStatePathSha,
+            ["AppHost:LegacyDeploymentStatePathSha256"] = legacyDeploymentStatePathSha,
             // ProjectNameSha for Azure Functions and Azure environments (stable naming)
             ["AppHost:ProjectNameSha256"] = appHostProjectNameSha,
             // Legacy Sha256 for backward compatibility (mode-dependent)
@@ -339,7 +372,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // This must happen before command line args are added so they can override saved state
         if (ExecutionContext.IsPublishMode)
         {
-            LoadDeploymentState(appHostPathSha);
+            LoadDeploymentState(deploymentStatePathSha, legacyDeploymentStatePathSha);
         }
 
         // Core things
@@ -989,8 +1022,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// Loads deployment state from the filesystem based on the app host SHA and environment name.
     /// Only loads if ClearCache is false.
     /// </summary>
-    /// <param name="appHostSha">The SHA hash of the app host.</param>
-    private void LoadDeploymentState(string appHostSha)
+    /// <param name="appHostSha">The current SHA hash of the app host.</param>
+    /// <param name="legacyAppHostSha">The previous SHA hash used for source-file AppHosts.</param>
+    private void LoadDeploymentState(string appHostSha, string? legacyAppHostSha)
     {
         // Only load if ClearCache is false
         var clearCache = _innerBuilder.Configuration.GetValue<bool>("Pipeline:ClearCache");
@@ -1000,24 +1034,37 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
-            ".aspire",
-            "deployments",
-            appHostSha,
-            $"{environment}.json"
-        );
-
-        if (!File.Exists(deploymentStatePath))
-        {
-            return;
-        }
 
         try
         {
-            _innerBuilder.Configuration.AddJsonFile(deploymentStatePath, optional: true, reloadOnChange: false);
+            // GetStatePath validates the environment name and throws ArgumentException for names
+            // outside [a-zA-Z0-9_-]. Compute the paths inside the try so an unusual environment name
+            // degrades to skipping this best-effort load instead of failing builder construction.
+            var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
+                _innerBuilder.Configuration,
+                appHostSha,
+                environment)!;
+            var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
+                ? null
+                : FileDeploymentStateManager.GetStatePath(
+                    _innerBuilder.Configuration,
+                    legacyAppHostSha,
+                    environment);
+
+            var effectiveState = FileDeploymentStateManager.LoadEffectiveState(
+                deploymentStatePath,
+                legacyDeploymentStatePath);
+            if (effectiveState.Count > 0)
+            {
+                var flattenedState = JsonFlattener.FlattenJsonObject(effectiveState);
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(flattenedState.ToJsonString()));
+                _innerBuilder.Configuration.AddJsonStream(stream);
+            }
         }
-        catch { }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
+        {
+            Debug.WriteLine($"Failed to load deployment state for environment '{environment}': {ex}");
+        }
     }
 
     /// <summary>

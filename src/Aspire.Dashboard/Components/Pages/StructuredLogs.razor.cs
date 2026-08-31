@@ -271,10 +271,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
-        {
-            await ClearSelectedLogEntryAsync();
-        }
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
@@ -372,10 +369,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
         }
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
-        {
-            await ClearSelectedLogEntryAsync();
-        }
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
@@ -385,7 +379,25 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ViewModel.FilterText = _filter;
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
 
-        if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
+        await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
+    }
+
+    internal async Task ClearSelectedLogEntryIfExcludedAsync(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+    {
+        if (PageViewModel.SelectedLogEntry is null)
+        {
+            return;
+        }
+
+        // An older filter query could finish after a newer query and clear the selection using stale filters.
+        // The query is constrained to one log and filter changes are user-driven, so this is unlikely and not
+        // worth the additional state and coordination required to guard against it.
+        var isExcluded = await PageViewModel.IsSelectedLogEntryExcludedByFiltersAsync(
+            TelemetryRepository,
+            textFilter,
+            fieldFilters,
+            _cts.Token);
+        if (isExcluded)
         {
             await ClearSelectedLogEntryAsync();
         }
@@ -584,12 +596,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         public StructureLogsDetailsViewModel? SelectedLogEntry { get; set; }
 
         /// <summary>
-        /// Returns true when the selected log entry is excluded by any of the active filters
-        /// (log level, text filter, or field filters).
-        /// Delegates to <see cref="StructuredLogsViewModel.BuildFilters"/> to ensure consistent
-        /// behavior with the grid query.
+        /// Returns <see langword="true"/> when the selected log entry is excluded by the active filters.
         /// </summary>
-        public bool IsSelectedLogEntryExcludedByFilters(string textFilter, IReadOnlyList<FieldTelemetryFilter> fieldFilters)
+        public async Task<bool> IsSelectedLogEntryExcludedByFiltersAsync(
+            ITelemetryRepository telemetryRepository,
+            string textFilter,
+            IReadOnlyList<FieldTelemetryFilter> fieldFilters,
+            CancellationToken cancellationToken)
         {
             if (SelectedLogEntry is null)
             {
@@ -598,16 +611,15 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
             var entry = SelectedLogEntry.LogEntry;
             var filters = StructuredLogsViewModel.BuildFilters(fieldFilters, textFilter, SelectedLogLevel.Id);
-
-            foreach (var filter in filters.GetEnabledFilters())
+            var matchingLogs = await telemetryRepository.GetLogsAsync(new GetLogsContext
             {
-                if (!filter.Apply([entry]).Any())
-                {
-                    return true;
-                }
-            }
-
-            return false;
+                ResourceKeys = [],
+                StartIndex = 0,
+                Count = 1,
+                Filters = filters,
+                LogIds = [entry.InternalId]
+            }, cancellationToken).ConfigureAwait(false);
+            return matchingLogs.Items.Count == 0;
         }
     }
 

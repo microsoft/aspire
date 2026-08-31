@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as childProcess from 'child_process';
-import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandUnsafeLiteral } from '../loc/strings';
+import { aspireTerminalClosedBeforeProcessStarted, aspireTerminalName, aspireTerminalProcessFailedToStart, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandUnsafeLiteral } from '../loc/strings';
 import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
@@ -118,6 +118,7 @@ export function shellArg(value: string): ShellArg {
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId = new Map<string, AspireTerminal>();
     private _invalidatedSharedTerminals = new Set<vscode.Terminal>();
+    private readonly _terminalsWithAspireCommands = new WeakSet<vscode.Terminal>();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
     private _windowsPowerShellPath?: string;
@@ -246,12 +247,22 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
         if (executionMode === 'shellIntegration' && aspireTerminal.terminal.shellIntegration) {
             aspireTerminal.terminal.shellIntegration.executeCommand(command);
+            this._terminalsWithAspireCommands.add(aspireTerminal.terminal);
         }
         else {
-            // Without shell integration, VS Code can't tell whether the terminal is idle or
-            // a foreground process is running, so keep the previous safe interruption behavior.
-            aspireTerminal.terminal.sendText('\x03', false);
+            // createTerminal can return before the shell process accepts input. Waiting for processId
+            // prevents the first fallback command from being dropped. Observe terminal closure too,
+            // because processId can remain pending when the shell process fails to start.
+            await this.waitForTerminalProcess(aspireTerminal.terminal);
+
+            const hasReceivedAspireCommand = this._terminalsWithAspireCommands.has(aspireTerminal.terminal);
+            if (hasReceivedAspireCommand) {
+                // Without shell integration, VS Code can't tell whether the terminal is idle or
+                // a foreground process is running, so interrupt commands previously sent by Aspire.
+                aspireTerminal.terminal.sendText('\x03', false);
+            }
             aspireTerminal.terminal.sendText(command);
+            this._terminalsWithAspireCommands.add(aspireTerminal.terminal);
         }
 
     }
@@ -291,6 +302,29 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._terminalByDebugSessionId.set(terminalKey, aspireTerminal);
 
         return aspireTerminal;
+    }
+
+    private async waitForTerminalProcess(terminal: vscode.Terminal): Promise<void> {
+        let closeListener: vscode.Disposable | undefined;
+        try {
+            const processId = await Promise.race([
+                terminal.processId,
+                new Promise<never>((_, reject) => {
+                    closeListener = vscode.window.onDidCloseTerminal(closedTerminal => {
+                        if (closedTerminal === terminal) {
+                            reject(new Error(aspireTerminalClosedBeforeProcessStarted));
+                        }
+                    });
+                }),
+            ]);
+
+            if (processId === undefined) {
+                throw new Error(aspireTerminalProcessFailedToStart);
+            }
+        }
+        finally {
+            closeListener?.dispose();
+        }
     }
 
     invalidateSharedAspireTerminal(target?: CliPathResolutionTarget): void {

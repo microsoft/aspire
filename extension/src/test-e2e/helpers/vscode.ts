@@ -57,6 +57,23 @@ export async function openAspireView(): Promise<TreeSection> {
     }, 30000, `Timed out waiting for '${aspireAppHostsSectionTitle}' section. Visible sections: ${lastSectionTitles.join(', ') || '<none>'}.`);
 }
 
+export async function observeVisibleSideBarSectionTitles(durationMs = 2000): Promise<string[]> {
+    const observedTitles = new Set<string>();
+    const deadline = Date.now() + durationMs;
+
+    do {
+        const sections = await new SideBarView().getContent().getSections();
+        const titles = await Promise.all(sections.map(section => section.getTitle()));
+        for (const title of titles) {
+            observedTitles.add(title);
+        }
+
+        await delay(100);
+    } while (Date.now() < deadline);
+
+    return [...observedTitles];
+}
+
 export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
     return await VSBrowser.instance.driver.wait(async () => {
         try {

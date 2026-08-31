@@ -35,10 +35,13 @@ suite('Workspace target proof E2E', function () {
         assert.ok(runRoot, 'The E2E run root is required for sibling workspace folder fixtures.');
         const folderA = createFolderFixture(runRoot, 'folder-a', true);
         const folderB = createFolderFixture(runRoot, 'folder-b');
+        const folderC = createFolderFixture(runRoot, 'folder-c');
+        const workspaceFolderLabels = ['folder-a', 'folder-b', 'folder-c'] as const;
 
         await openAspireView();
         await addWorkspaceFolder(folderA.folderPath);
         await addWorkspaceFolder(folderB.folderPath);
+        await addWorkspaceFolder(folderC.folderPath);
         await setE2eCliPathForE2E(undefined);
 
         const folderAAppHostPath = path.join(folderA.folderPath, 'apphost.cs');
@@ -46,10 +49,10 @@ suite('Workspace target proof E2E', function () {
             ({ state }) => state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, folderAAppHostPath)),
             `folder-a AppHost candidate '${folderAAppHostPath}'`);
 
-        await invokeCreateWithAspireInitForFolder('folder-b', folderB, ['folder-a', 'folder-b']);
-        await invokeCreateWithAspireInitCancellation(['folder-a', 'folder-b']);
+        await invokeCreateWithAspireInitForFolder('folder-b', folderB, workspaceFolderLabels);
+        await invokeCreateWithAspireInitCancellation(workspaceFolderLabels);
         await invokeCreateWithAspireNewForFolder('folder-a', folderA);
-        await invokeNewForFolder('folder-b', folderB);
+        await invokeNewForFolder('folder-c', folderC);
 
         const beforeCanceledCreateInvocation = getCommandInvocationCount('aspire-vscode.createWithAspire');
         const beforeCanceledCreateTerminal = getTerminalCommandCount();
@@ -86,6 +89,7 @@ suite('Workspace target proof E2E', function () {
         assert.ok(!updateCommand.commandLine.includes(workspaceRoot), updateCommand.commandLine);
         assert.ok(!updateCommand.commandLine.includes(folderA.wrapperPath), updateCommand.commandLine);
         assert.ok(!updateCommand.commandLine.includes(folderB.wrapperPath), updateCommand.commandLine);
+        assert.ok(!updateCommand.commandLine.includes(folderC.wrapperPath), updateCommand.commandLine);
 
         await VSBrowser.instance.takeScreenshot('workspace-target-proof.png');
     });
