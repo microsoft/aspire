@@ -164,6 +164,9 @@ Other known limits of this path:
   transmission name backend resources a browser cannot reach.
 - Unicode placeholders, relative placement, animation, and the rarer deletion
   selectors are unsupported by the addon.
-- HMP1's `StateSync` snapshot carries ANSI cell state, not image payloads, so a
-  viewer that attaches after an image was drawn will not see it until the
-  workload repaints.
+
+Images now survive reattach. HMP1's `StateSync` snapshot originally carried ANSI
+cell state but not image payloads, so a viewer that attached after an image was
+drawn saw only the surrounding text until the workload repainted. Hex1b
+`0.166.0-beta.1416.1.1e1d57b` replays image state as well; reloading the
+dashboard tab restores the image without touching the workload.
