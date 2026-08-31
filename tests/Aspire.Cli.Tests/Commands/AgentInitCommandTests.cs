@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.CopilotApp;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -14,6 +15,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -904,12 +906,25 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var detectedClient = detectCopilotApp ? AgentClientKind.CopilotApp : AgentClientKind.CopilotCli;
         var expectedDisplayName = detectCopilotApp ? "GitHub Copilot App" : "GitHub Copilot CLI";
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
+        IAgentEnvironmentDetector agentEnvironmentDetector = detectCopilotApp
+            ? new AgentEnvironmentDetector(
+                [
+                    new CopilotAppAgentEnvironmentScanner(
+                        new CopilotAppInstallationDetector(
+                            TestEnvironment.CreateLinux(new Dictionary<string, string?>
+                            {
+                                ["AI_AGENT"] = "github_copilot_app_agent",
+                            }),
+                            executionContext),
+                        NullLogger<CopilotAppAgentEnvironmentScanner>.Instance),
+                ])
+            : new FakeDetectingDetector(AgentClientKind.CopilotCli);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(detectedClient);
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.AgentEnvironmentDetectorFactory = _ => agentEnvironmentDetector;
             options.InteractionServiceFactory = _ => interactionService;
         });
 
