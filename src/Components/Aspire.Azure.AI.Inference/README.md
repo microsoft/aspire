@@ -121,7 +121,7 @@ You can also pass the `Action<ChatCompletionsClientSettings> configureSettings` 
 builder.AddAzureChatCompletionsClient("connectionName", settings => settings.DisableHealthChecks = true);
 ```
 
-Health checks are enabled by default for Microsoft Foundry model inference endpoints and use the service's `/info` operation. The Azure AI Inference SDK does not support this operation for Azure OpenAI endpoints, so health checks are not registered when an Azure OpenAI endpoint is detected. Set `DisableHealthChecks` to `true` for any other endpoint that does not support `/info`.
+Health checks are enabled by default for Microsoft Foundry model inference endpoints and use the service's `/info` operation. The Azure AI Inference SDK does not support this operation for Azure OpenAI or Foundry Local endpoints, so health checks are not registered when an Azure OpenAI or loopback endpoint is detected. Set `DisableHealthChecks` to `true` for any other endpoint that does not support `/info`.
 
 You can also setup the [AzureAIInferenceClientOptions](https://learn.microsoft.com/dotnet/api/azure.ai.inference.AzureAIInferenceClientOptions) using the optional `Action<IAzureClientBuilder<ChatCompletionsClient, AzureAIInferenceClientOptions>> configureClientBuilder` parameter of the `AddAzureChatCompletionsClient` method. For example, to set the client ID for this client:
 
