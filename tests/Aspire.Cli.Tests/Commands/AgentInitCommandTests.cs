@@ -15,7 +15,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -925,25 +925,30 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var localAppData = workspace.CreateDirectory("local-app-data");
+        var appDirectory = Directory.CreateDirectory(
+            Path.Combine(localAppData.FullName, "Programs", "GitHub Copilot"));
+        await File.WriteAllTextAsync(
+            Path.Combine(appDirectory.FullName, "github.exe"),
+            string.Empty,
+            TestContext.Current.CancellationToken);
+        var environment = TestEnvironment.CreateWindows(new Dictionary<string, string?>
+        {
+            ["LOCALAPPDATA"] = localAppData.FullName,
+        });
         var interactionService = new TestInteractionService();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-        var agentEnvironmentDetector = new AgentEnvironmentDetector(
-            [
-                new CopilotAppAgentEnvironmentScanner(
-                    new CopilotAppInstallationDetector(
-                        TestEnvironment.CreateLinux(new Dictionary<string, string?>
-                        {
-                            ["AI_AGENT"] = "github_copilot_app_agent",
-                        }),
-                        executionContext),
-                    NullLogger<CopilotAppAgentEnvironmentScanner>.Instance),
-            ]);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => executionContext;
-            options.AgentEnvironmentDetectorFactory = _ => agentEnvironmentDetector;
             options.InteractionServiceFactory = _ => interactionService;
         });
+        services.RemoveAll<IEnvironment>();
+        services.RemoveAll<IAgentEnvironmentDetector>();
+        services.AddSingleton<IEnvironment>(environment);
+        services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAppAgentEnvironmentScanner>());
+        services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
