@@ -406,6 +406,9 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
         var serviceDir = Path.Combine(projectDir, serviceName);
         var propertiesDir = Directory.CreateDirectory(Path.Combine(serviceDir, "Properties"));
+        var appHostDirectives = string.Join(
+            Environment.NewLine,
+            File.ReadLines(appHostFilePath).Where(line => line.StartsWith("#:", StringComparison.Ordinal)));
 
         File.WriteAllText(Path.Combine(serviceDir, "Program.cs"), $$"""
             var builder = WebApplication.CreateBuilder(args);
@@ -432,6 +435,8 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             }
             """);
         File.WriteAllText(appHostFilePath, $$"""
+            {{appHostDirectives}}
+
             #pragma warning disable ASPIREAZURE001
 
             using Aspire.Hosting.Azure;
