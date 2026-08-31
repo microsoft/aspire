@@ -456,10 +456,7 @@ internal sealed class AppHostLauncher(
     {
         var environment = new Dictionary<string, string>
         {
-            [KnownConfigNames.CliRunDetached] = "true",
-            // The detached CLI no longer has an authenticated extension connection. Preserve the
-            // no-negative-cache sentinel without forwarding the account alias.
-            [EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable] = EnvironmentVsCodeMicrosoftAccountProvider.UnavailableState
+            [KnownConfigNames.CliRunDetached] = "true"
         };
 
         // Record the foreground launcher's identity (PID + start time) so the detached child can watch

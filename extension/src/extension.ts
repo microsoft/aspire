@@ -37,7 +37,6 @@ import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
-import { MicrosoftAccountProvider } from './utils/microsoftAccountProvider';
 import { initializeHotReloadAdvisory } from './debugger/hotReload';
 
 let aspireExtensionContext = new AspireExtensionContext();
@@ -55,17 +54,10 @@ export async function activate(context: vscode.ExtensionContext) {
     workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
   });
 
-  const microsoftAccountProvider = new MicrosoftAccountProvider();
-  context.subscriptions.push(microsoftAccountProvider);
   const terminalProvider = new AspireTerminalProvider(
     context.subscriptions,
     undefined,
-    cliPathResolver,
-    () => microsoftAccountProvider.getEnvironmentState());
-  // Account enumeration uses VS Code's local authentication API. Start it eagerly but do not block
-  // extension activation for this optional telemetry signal. A CLI launched while the initial query
-  // is pending receives refreshing and therefore cannot reuse or poison the detector cache.
-  void microsoftAccountProvider.initializeAsync();
+    cliPathResolver);
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
@@ -91,12 +83,7 @@ export async function activate(context: vscode.ExtensionContext) {
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
       const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId), context.globalState);
       return client;
-    },
-    () => {
-      const state = microsoftAccountProvider.getEnvironmentState();
-      return state.status === 'internal' ? [state.status, state.alias] : [state.status];
-    },
-  );
+    });
 
   // Declared up front so DCP-server hooks can reference it through a closure;
   // the actual instance is created after discovery service is available.

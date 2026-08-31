@@ -36,10 +36,9 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CorpMicrosoftDomainSuffix = ".corp.microsoft.com";
     private const string CacheSubdirectoryName = "internal-microsoft";
     private const string CacheFileName = "detector.json";
-    private const string VsCodeMicrosoftTenantProbeName = "VS Code Microsoft tenant";
     private const string VisualStudioMicrosoftTenantProbeName = "Visual Studio Microsoft tenant";
     private const string WslVisualStudioMicrosoftTenantProbeName = "WSL Visual Studio Microsoft tenant";
-    private const int CacheVersion = 5;
+    private const int CacheVersion = 6;
     private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
@@ -59,11 +58,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
-    private readonly IVsCodeMicrosoftAccountProvider _vsCodeMicrosoftAccountProvider;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? _probeStages;
     private readonly TimeSpan _probeStageTimeout;
 
-    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory, ICIEnvironmentDetector ciEnvironmentDetector, IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider)
+    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory, ICIEnvironmentDetector ciEnvironmentDetector)
         : this(
             executionContext,
             environment,
@@ -72,7 +70,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             logger,
             processExecutionFactory,
             ciEnvironmentDetector,
-            vsCodeMicrosoftAccountProvider,
             probeStages: null)
     {
     }
@@ -85,7 +82,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         ILogger<InternalMicrosoftDetector> logger,
         IProcessExecutionFactory processExecutionFactory,
         ICIEnvironmentDetector ciEnvironmentDetector,
-        IVsCodeMicrosoftAccountProvider vsCodeMicrosoftAccountProvider,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
         HttpMessageHandler? gitHubHttpMessageHandler = null,
         TimeSpan? gitHubCandidateTimeout = null,
@@ -102,7 +98,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         _timeProvider = timeProvider;
         _logger = logger;
         _ciEnvironmentDetector = ciEnvironmentDetector;
-        _vsCodeMicrosoftAccountProvider = vsCodeMicrosoftAccountProvider;
         _probeStageTimeout = probeStageTimeout ?? s_probeStageTimeout;
         _probeStages = probeStages;
     }
@@ -112,88 +107,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            var vsCodeMicrosoftAccount = VsCodeMicrosoftAccountState.Missing;
-            InternalMicrosoftProbeDiagnostic? vsCodeProbeDiagnostic = null;
-            var vsCodeQueryStopwatch = Stopwatch.StartNew();
-            using var vsCodeQueryTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            vsCodeQueryTimeout.CancelAfter(_probeStageTimeout);
-            try
-            {
-                var queryTask = _vsCodeMicrosoftAccountProvider.GetInternalMicrosoftAccountAsync(vsCodeQueryTimeout.Token);
-                vsCodeMicrosoftAccount = await queryTask.WaitAsync(_probeStageTimeout, cancellationToken).ConfigureAwait(false);
-                vsCodeQueryStopwatch.Stop();
-                vsCodeProbeDiagnostic = vsCodeMicrosoftAccount.Kind switch
-                {
-                    VsCodeMicrosoftAccountStateKind.Unavailable => new InternalMicrosoftProbeDiagnostic(
-                        VsCodeMicrosoftTenantProbeName,
-                        InternalMicrosoftProbeOutcome.Failed,
-                        vsCodeQueryStopwatch.Elapsed,
-                        HasAlias: false,
-                        HasDomain: false,
-                        Failure: new(
-                            InternalMicrosoftProbeFailureCode.RequestFailed,
-                            vsCodeMicrosoftAccount.Transport == VsCodeMicrosoftAccountTransport.Rpc
-                                ? InternalMicrosoftProbeFailureStage.ExtensionRpc
-                                : InternalMicrosoftProbeFailureStage.ExtensionEnvironment)),
-                    VsCodeMicrosoftAccountStateKind.Refreshing => new InternalMicrosoftProbeDiagnostic(
-                        VsCodeMicrosoftTenantProbeName,
-                        InternalMicrosoftProbeOutcome.Refreshing,
-                        vsCodeQueryStopwatch.Elapsed,
-                        HasAlias: false,
-                        HasDomain: false),
-                    VsCodeMicrosoftAccountStateKind.Suppressed => new InternalMicrosoftProbeDiagnostic(
-                        VsCodeMicrosoftTenantProbeName,
-                        InternalMicrosoftProbeOutcome.Suppressed,
-                        vsCodeQueryStopwatch.Elapsed,
-                        HasAlias: false,
-                        HasDomain: false),
-                    _ => null
-                };
-            }
-            catch (TimeoutException ex)
-            {
-                vsCodeQueryStopwatch.Stop();
-                _logger.LogDebug(ex, "Timed out querying the Aspire VS Code extension for a Microsoft account.");
-                vsCodeProbeDiagnostic = new(
-                    VsCodeMicrosoftTenantProbeName,
-                    InternalMicrosoftProbeOutcome.TimedOut,
-                    vsCodeQueryStopwatch.Elapsed,
-                    HasAlias: false,
-                    HasDomain: false,
-                    Failure: new(
-                        InternalMicrosoftProbeFailureCode.RequestFailed,
-                        InternalMicrosoftProbeFailureStage.ExtensionRpc,
-                        ExceptionType: InternalMicrosoftProbeExceptionType.TaskCanceled));
-            }
-            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                vsCodeQueryStopwatch.Stop();
-                _logger.LogDebug(ex, "Timed out querying the Aspire VS Code extension for a Microsoft account.");
-                vsCodeProbeDiagnostic = new(
-                    VsCodeMicrosoftTenantProbeName,
-                    InternalMicrosoftProbeOutcome.TimedOut,
-                    vsCodeQueryStopwatch.Elapsed,
-                    HasAlias: false,
-                    HasDomain: false,
-                    Failure: new(
-                        InternalMicrosoftProbeFailureCode.RequestFailed,
-                        InternalMicrosoftProbeFailureStage.ExtensionRpc,
-                        ExceptionType: InternalMicrosoftProbeExceptionType.TaskCanceled));
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                vsCodeQueryStopwatch.Stop();
-                _logger.LogDebug(ex, "Failed to query the Aspire VS Code extension for a Microsoft account.");
-                vsCodeProbeDiagnostic = new(
-                    VsCodeMicrosoftTenantProbeName,
-                    InternalMicrosoftProbeOutcome.Failed,
-                    vsCodeQueryStopwatch.Elapsed,
-                    HasAlias: false,
-                    HasDomain: false,
-                    Failure: CreateExceptionFailure(ex, InternalMicrosoftProbeFailureStage.ExtensionRpc));
-            }
-
-            var cached = await TryReadCacheAsync(vsCodeMicrosoftAccount, cancellationToken).ConfigureAwait(false);
+            var cached = await TryReadCacheAsync(cancellationToken).ConfigureAwait(false);
             if (cached.Entry is not null && cached.CacheStatus == InternalMicrosoftDetectorCacheStatus.Hit)
             {
                 stopwatch.Stop();
@@ -208,12 +122,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                     []);
             }
 
-            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, vsCodeMicrosoftAccount, vsCodeQueryStopwatch.Elapsed, vsCodeProbeDiagnostic, cancellationToken).ConfigureAwait(false);
-            if (result.Outcome == InternalMicrosoftDetectorOutcome.Detected ||
-                (result.Outcome == InternalMicrosoftDetectorOutcome.NotDetected &&
-                 !vsCodeMicrosoftAccount.PreventsNegativeCache))
+            var result = await RunProbeStagesAsync(cached.CacheStatus, stopwatch, cancellationToken).ConfigureAwait(false);
+            if (result.Outcome is InternalMicrosoftDetectorOutcome.Detected or InternalMicrosoftDetectorOutcome.NotDetected)
             {
-                await TryWriteCacheAsync(result, vsCodeMicrosoftAccount.Alias, cancellationToken).ConfigureAwait(false);
+                await TryWriteCacheAsync(result, cancellationToken).ConfigureAwait(false);
             }
 
             return result;
@@ -242,13 +154,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages(
-        VsCodeMicrosoftAccountState vsCodeMicrosoftAccount,
-        TimeSpan vsCodeProbeDuration)
+    private IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> CreateDefaultProbeStages()
     {
         // Probes are ordered by cost and signal quality. Local account stores and OS enrollment
         // state come from standard developer-machine tooling: Windows dsregcmd, Visual Studio
-        // IdentityService, the Aspire VS Code extension, macOS Platform SSO, gh/Copilot CLI auth, and
+        // IdentityService, macOS Platform SSO, gh/Copilot CLI auth, and
         // GitHub's organization membership API.
         // See:
         // - https://learn.microsoft.com/entra/identity/devices/troubleshoot-device-dsregcmd
@@ -257,16 +167,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         // Fastest/strongest signal probes
         var stage1 = new List<InternalMicrosoftProbe>();
-        if (vsCodeMicrosoftAccount.IsAvailable)
-        {
-            // The Aspire VS Code extension uses VS Code's supported authentication API and supplies
-            // only the normalized account snapshot, through the process environment for direct
-            // launches or the authenticated backchannel for interactive terminal launches.
-            stage1.Add(new(
-                VsCodeMicrosoftTenantProbeName,
-                cancellationToken => GetVsCodeMicrosoftAccountResultAsync(vsCodeMicrosoftAccount, cancellationToken),
-                DurationOverride: vsCodeProbeDuration));
-        }
         if (_environment.IsMacOS())
         {
             // Use the platform SSO service on MacOS as the strongest signal (indicates machine is enrolled in
@@ -334,16 +234,11 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private async Task<InternalMicrosoftDetectionResult> RunProbeStagesAsync(
         string cacheStatus,
         Stopwatch stopwatch,
-        VsCodeMicrosoftAccountState vsCodeMicrosoftAccount,
-        TimeSpan vsCodeProbeDuration,
-        InternalMicrosoftProbeDiagnostic? initialDiagnostic,
         CancellationToken cancellationToken)
     {
-        var diagnostics = initialDiagnostic is null
-            ? new List<InternalMicrosoftProbeDiagnostic>()
-            : new List<InternalMicrosoftProbeDiagnostic> { initialDiagnostic };
-        var timedOut = initialDiagnostic?.Outcome == InternalMicrosoftProbeOutcome.TimedOut;
-        var probeStages = _probeStages ?? CreateDefaultProbeStages(vsCodeMicrosoftAccount, vsCodeProbeDuration);
+        var diagnostics = new List<InternalMicrosoftProbeDiagnostic>();
+        var timedOut = false;
+        var probeStages = _probeStages ?? CreateDefaultProbeStages();
         foreach (var stage in probeStages)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -584,7 +479,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private async Task<InternalMicrosoftCacheReadResult> TryReadCacheAsync(VsCodeMicrosoftAccountState vsCodeMicrosoftAccount, CancellationToken cancellationToken)
+    private async Task<InternalMicrosoftCacheReadResult> TryReadCacheAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_cacheFilePath))
         {
@@ -614,29 +509,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             }
 
             entry = NormalizeCacheEntry(entry);
-            var normalizedVsCodeAlias = NormalizeAlias(vsCodeMicrosoftAccount.Alias);
-            var isVsCodeCacheEntry = entry.Source?.Equals(VsCodeMicrosoftTenantProbeName, StringComparison.Ordinal) == true;
-
-            // An account refresh can represent sign-out or account switching. Do not report the
-            // previously cached identity while VS Code is determining the new state.
-            if (vsCodeMicrosoftAccount.InvalidatesCache)
-            {
-                TryDeleteCache();
-                return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
-            }
-
-            // A connected extension gives us live account state. Invalidate the cache when its alias
-            // differs from the account observed during detection, even if another probe won, or when
-            // a VS Code-sourced result is now signed out. An unavailable provider is intentionally not
-            // stale so standalone CLI invocations can still use a cache created through VS Code.
-            if (vsCodeMicrosoftAccount.IsAvailable &&
-                (!string.Equals(entry.VsCodeAlias, normalizedVsCodeAlias, StringComparison.Ordinal) ||
-                 (isVsCodeCacheEntry && normalizedVsCodeAlias is null)))
-            {
-                TryDeleteCache();
-                return new InternalMicrosoftCacheReadResult(null, InternalMicrosoftDetectorCacheStatus.Stale);
-            }
-
             var hasRequiredSource = !entry.IsInternalMicrosoft || !string.IsNullOrEmpty(entry.Source);
             var isFresh = hasRequiredSource && _timeProvider.GetUtcNow() - entry.LastRunUtc < s_cacheRefreshInterval;
             return isFresh
@@ -653,36 +525,19 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         }
     }
 
-    private void TryDeleteCache()
-    {
-        try
-        {
-            File.Delete(_cacheFilePath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug(ex, "Failed to remove stale Microsoft internal detector cache from {CacheFilePath}.", _cacheFilePath);
-            }
-        }
-    }
-
     private static InternalMicrosoftDetectorCacheEntry NormalizeCacheEntry(InternalMicrosoftDetectorCacheEntry entry)
     {
         var alias = NormalizeAlias(entry.Alias);
-        var vsCodeAlias = NormalizeAlias(entry.VsCodeAlias);
         var domain = NormalizeAdDomainName(entry.Domain);
 
         return entry with
         {
             Alias = alias,
-            VsCodeAlias = vsCodeAlias,
             Domain = domain
         };
     }
 
-    private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, string? vsCodeAlias, CancellationToken cancellationToken)
+    private async Task TryWriteCacheAsync(InternalMicrosoftDetectionResult result, CancellationToken cancellationToken)
     {
         var directory = Path.GetDirectoryName(_cacheFilePath);
         if (string.IsNullOrEmpty(directory))
@@ -701,7 +556,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
                 IsInternalMicrosoft = result.IsInternalMicrosoft,
                 Source = result.Source,
                 Alias = result.Alias,
-                VsCodeAlias = NormalizeAlias(vsCodeAlias),
                 Domain = result.Domain,
                 IsCIEnvironment = IsCIEnvironment(),
                 LastRunUtc = _timeProvider.GetUtcNow()
@@ -845,20 +699,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             ExtractAliasFromAccountIdentifier(upn) is { } alias
                 ? Detected(alias, domain)
                 : InternalMicrosoftProbeResult.NotDetected;
-    }
-
-    internal async Task<InternalMicrosoftProbeResult> CheckVsCodeMicrosoftAccountAsync(CancellationToken cancellationToken)
-    {
-        var account = await _vsCodeMicrosoftAccountProvider.GetInternalMicrosoftAccountAsync(cancellationToken).ConfigureAwait(false);
-        return await GetVsCodeMicrosoftAccountResultAsync(account, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static Task<InternalMicrosoftProbeResult> GetVsCodeMicrosoftAccountResultAsync(VsCodeMicrosoftAccountState account, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(account is { IsAvailable: true, Alias: { } alias }
-            ? Detected(alias)
-            : InternalMicrosoftProbeResult.NotDetected);
     }
 
     internal async Task<InternalMicrosoftProbeResult> CheckWindowsWorkplaceJoinAsync(CancellationToken cancellationToken)
@@ -1879,8 +1719,6 @@ internal static class InternalMicrosoftProbeOutcome
     public const string Failed = "failed";
     public const string Cancelled = "cancelled";
     public const string TimedOut = "timed_out";
-    public const string Refreshing = "refreshing";
-    public const string Suppressed = "suppressed";
 }
 
 internal sealed record InternalMicrosoftProbeDiagnostic(string Source, string Outcome, TimeSpan Duration, bool HasAlias, bool HasDomain, InternalMicrosoftProbeFailure? Failure = null);
@@ -1917,8 +1755,6 @@ internal static class InternalMicrosoftProbeFailureStage
     public const string GitHubMembership = "github_membership";
     public const string GitHubPublicMembership = "github_public_membership";
     public const string GitHubUser = "github_user";
-    public const string ExtensionEnvironment = "extension_environment";
-    public const string ExtensionRpc = "extension_rpc";
     public const string IdTokenPayload = "id_token_payload";
     public const string IdTokenIssuer = "id_token_payload.iss";
     public const string IdTokenTenant = "id_token_payload.tid";
@@ -1970,7 +1806,6 @@ internal sealed record InternalMicrosoftDetectorCacheEntry
     public bool IsInternalMicrosoft { get; init; }
     public string? Source { get; init; }
     public string? Alias { get; init; }
-    public string? VsCodeAlias { get; init; }
     public string? Domain { get; init; }
     public bool IsCIEnvironment { get; init; }
     public DateTimeOffset LastRunUtc { get; init; }

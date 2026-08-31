@@ -22,7 +22,6 @@ import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils
 import { aspireDashboard, debugSessionStopTimedOut } from '../loc/strings';
 import { registerRunCleanup } from '../debugger/runCleanupRegistry';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
-import { microsoftAccountAliasEnvironmentVariable, microsoftAccountStateEnvironmentVariable } from '../utils/microsoftAccountProvider';
 
 interface RecordedEvent {
     name: string;
@@ -323,34 +322,6 @@ suite('AspireDebugSession tests', () => {
             { forceBuild: false });
 
         assert.strictEqual(createDebugSessionConfiguration.firstCall.args[2], undefined);
-    });
-
-    test('does not forward the CLI Microsoft account snapshot to the AppHost debugger', async () => {
-        const createDebugSessionConfiguration = sinon.stub(debuggerExtensionsModule, 'createDebugSessionConfiguration').resolves({
-            type: 'coreclr',
-            request: 'launch',
-            name: 'AppHost',
-            runId: '',
-            debugSessionId: 'aspire-session',
-        } as AspireResourceExtendedDebugConfiguration);
-        const aspireDebugSession = createSessionForSpawn();
-        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
-        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
-
-        await aspireDebugSession.startAppHost(
-            '/workspace/AppHost.csproj',
-            ['run'],
-            [
-                { name: microsoftAccountStateEnvironmentVariable, value: 'internal' },
-                { name: microsoftAccountAliasEnvironmentVariable, value: 'current.alias' },
-                { name: 'CONTROL_VALUE', value: 'preserved' },
-            ],
-            true,
-            { forceBuild: false });
-
-        assert.deepStrictEqual(createDebugSessionConfiguration.firstCall.args[3], [
-            { name: 'CONTROL_VALUE', value: 'preserved' },
-        ]);
     });
 
     test('forwards the typed launch profile to the AppHost project debugger', async () => {

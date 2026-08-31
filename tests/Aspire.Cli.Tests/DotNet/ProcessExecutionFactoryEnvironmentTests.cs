@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -23,11 +22,7 @@ public sealed class ProcessExecutionFactoryEnvironmentTests
     public void InvocationScopedEnvVarNames_ContainsExpectedVariables()
     {
         Assert.Equal(
-            [
-                KnownConfigNames.CliAppHostSelectionOrigin,
-                EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable,
-                EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable
-            ],
+            [KnownConfigNames.CliAppHostSelectionOrigin],
             ProcessExecutionFactory.InvocationScopedEnvVarNames);
     }
 
@@ -35,8 +30,6 @@ public sealed class ProcessExecutionFactoryEnvironmentTests
     public async Task CreateExecution_StripsAppHostSelectionOriginInheritedFromParentEnvironment()
     {
         using var selectionOrigin = new EnvVarOverride(KnownConfigNames.CliAppHostSelectionOrigin, SelectionOrigin);
-        using var accountState = new EnvVarOverride(EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable, EnvironmentVsCodeMicrosoftAccountProvider.InternalState);
-        using var accountAlias = new EnvVarOverride(EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable, "current.alias");
         using var control = new EnvVarOverride(ControlEnvVarName, "inherited");
 
         await using var execution = CreateFactory().CreateExecution(
@@ -47,8 +40,6 @@ public sealed class ProcessExecutionFactoryEnvironmentTests
             new ProcessInvocationOptions());
 
         Assert.False(execution.EnvironmentVariables.ContainsKey(KnownConfigNames.CliAppHostSelectionOrigin));
-        Assert.False(execution.EnvironmentVariables.ContainsKey(EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable));
-        Assert.False(execution.EnvironmentVariables.ContainsKey(EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable));
         Assert.Equal("inherited", execution.EnvironmentVariables[ControlEnvVarName]);
     }
 
@@ -60,15 +51,11 @@ public sealed class ProcessExecutionFactoryEnvironmentTests
             WorkingDirectory = WorkingDirectory.FullName
         };
         startInfo.Environment[KnownConfigNames.CliAppHostSelectionOrigin] = SelectionOrigin;
-        startInfo.Environment[EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable] = EnvironmentVsCodeMicrosoftAccountProvider.InternalState;
-        startInfo.Environment[EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable] = "current.alias";
         startInfo.Environment[ControlEnvVarName] = "inherited";
 
         await using var execution = CreateFactory().CreateExecution(startInfo, new ProcessInvocationOptions());
 
         Assert.False(execution.EnvironmentVariables.ContainsKey(KnownConfigNames.CliAppHostSelectionOrigin));
-        Assert.False(execution.EnvironmentVariables.ContainsKey(EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable));
-        Assert.False(execution.EnvironmentVariables.ContainsKey(EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable));
         Assert.Equal("inherited", execution.EnvironmentVariables[ControlEnvVarName]);
     }
 
@@ -91,10 +78,6 @@ public sealed class ProcessExecutionFactoryEnvironmentTests
 
         Assert.Equal(SelectionOrigin, execution.EnvironmentVariables[KnownConfigNames.CliAppHostSelectionOrigin]);
         Assert.Equal("true", execution.EnvironmentVariables[KnownConfigNames.CliRunDetached]);
-        Assert.Equal(
-            EnvironmentVsCodeMicrosoftAccountProvider.UnavailableState,
-            execution.EnvironmentVariables[EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable]);
-        Assert.False(execution.EnvironmentVariables.ContainsKey(EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable));
     }
 
     private static DirectoryInfo WorkingDirectory => new(AppContext.BaseDirectory);

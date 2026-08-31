@@ -4,7 +4,6 @@
 using Aspire.Cli.Processes;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,9 +18,7 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 {
     internal static IReadOnlyList<string> InvocationScopedEnvVarNames { get; } =
     [
-        KnownConfigNames.CliAppHostSelectionOrigin,
-        EnvironmentVsCodeMicrosoftAccountProvider.StateEnvironmentVariable,
-        EnvironmentVsCodeMicrosoftAccountProvider.AliasEnvironmentVariable
+        KnownConfigNames.CliAppHostSelectionOrigin
     ];
 
     private readonly IEnvironment _environment;

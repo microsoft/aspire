@@ -45,7 +45,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 5,
+              "version": 6,
               "isInternalMicrosoft": true,
               "isCIEnvironment": false,
               "source": "cached source",
@@ -80,316 +80,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_BypassesFreshNegativeCacheWhenVsCodeAliasAppears()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "version": 5,
-              "isInternalMicrosoft": false,
-              "isCIEnvironment": false,
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var probeRan = false;
-        var detector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("current VS Code account", _ =>
-            {
-                probeRan = true;
-                return Task.FromResult(new InternalMicrosoftProbeResult(true, "current.alias", null));
-            })]],
-            vsCodeMicrosoftAlias: "current.alias");
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(probeRan);
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
-        Assert.Equal("current.alias", result.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_BypassesFreshBooleanOnlyCacheWhenVsCodeAliasAppears()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "version": 5,
-              "isInternalMicrosoft": true,
-              "isCIEnvironment": false,
-              "source": "gh CLI GitHub org membership",
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var detector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("current VS Code account", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "current.alias", null)))]],
-            vsCodeMicrosoftAlias: "current.alias");
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
-        Assert.Equal("current.alias", result.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_CachesWinningAliasSeparatelyFromObservedVsCodeAlias()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        var firstDetector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("Windows identity", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "windows.alias", "REDMOND")))]],
-            vsCodeMicrosoftAlias: "vscode.alias");
-
-        var firstResult = await firstDetector.IsInternalMicrosoftMachineAsync();
-        Assert.Equal("windows.alias", firstResult.Alias);
-
-        var probeRan = false;
-        var secondDetector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("unexpected", _ =>
-            {
-                probeRan = true;
-                return Task.FromResult(InternalMicrosoftProbeResult.NotDetected);
-            })]],
-            vsCodeMicrosoftAlias: "vscode.alias");
-
-        var secondResult = await secondDetector.IsInternalMicrosoftMachineAsync();
-
-        Assert.False(probeRan);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, secondResult.CacheStatus);
-        Assert.Equal("windows.alias", secondResult.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_RejectsFreshCacheAfterVsCodeSignOutWhenAnotherProbeWon()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        var firstDetector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("Windows identity", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "windows.alias", "REDMOND")))]],
-            vsCodeMicrosoftAlias: "vscode.alias");
-
-        var firstResult = await firstDetector.IsInternalMicrosoftMachineAsync();
-        Assert.Equal("windows.alias", firstResult.Alias);
-
-        var probeRan = false;
-        var secondDetector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("current identity", _ =>
-            {
-                probeRan = true;
-                return Task.FromResult(InternalMicrosoftProbeResult.NotDetected);
-            })]],
-            vsCodeMicrosoftProviderAvailable: true);
-
-        var secondResult = await secondDetector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(probeRan);
-        Assert.False(secondResult.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, secondResult.CacheStatus);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_RemovesFreshCacheWhileVsCodeAccountIsRefreshing()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        var firstDetector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("Windows identity", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "windows.alias", "REDMOND")))]],
-            vsCodeMicrosoftAlias: "vscode.alias");
-        await firstDetector.IsInternalMicrosoftMachineAsync();
-
-        var secondDetector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
-            vsCodeMicrosoftAccountProvider: new TestVsCodeMicrosoftAccountProvider { IsRefreshing = true });
-
-        var result = await secondDetector.IsInternalMicrosoftMachineAsync();
-
-        Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, result.Outcome);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
-        Assert.False(File.Exists(cacheFilePath));
-        Assert.Contains(result.ProbeDiagnostics, diagnostic =>
-            diagnostic.Source == "VS Code Microsoft tenant" &&
-            diagnostic.Outcome == InternalMicrosoftProbeOutcome.Refreshing);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_RejectsFreshVsCodeCacheAfterSignOut()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "version": 5,
-              "isInternalMicrosoft": true,
-              "isCIEnvironment": false,
-              "source": "VS Code Microsoft tenant",
-              "alias": "old.alias",
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var detector = CreateDetector(
-            cacheFilePath,
-            now,
-            [],
-            vsCodeMicrosoftProviderAvailable: true);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenAccountSnapshotIsMissing()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "version": 5,
-              "isInternalMicrosoft": true,
-              "isCIEnvironment": false,
-              "source": "VS Code Microsoft tenant",
-              "alias": "cached.alias",
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var detector = CreateDetector(cacheFilePath, now, []);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, result.CacheStatus);
-        Assert.Equal("cached.alias", result.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_PreservesFreshVsCodeCacheWhenAccountStateIsUnavailable()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "version": 5,
-              "isInternalMicrosoft": true,
-              "isCIEnvironment": false,
-              "source": "VS Code Microsoft tenant",
-              "alias": "cached.alias",
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var provider = new TestVsCodeMicrosoftAccountProvider { IsUnavailable = true };
-        var detector = CreateDetector(
-            cacheFilePath,
-            now,
-            [],
-            vsCodeMicrosoftAccountProvider: provider);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Hit, result.CacheStatus);
-        Assert.Equal("cached.alias", result.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_ContinuesOtherProbesWhenVsCodeAccountIsUnavailable()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var provider = new TestVsCodeMicrosoftAccountProvider { IsUnavailable = true };
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            [[new InternalMicrosoftProbe("fallback", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "fallback.alias", null)))]],
-            vsCodeMicrosoftAccountProvider: provider);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("fallback.alias", result.Alias);
-        var failure = Assert.Single(result.ProbeDiagnostics, diagnostic => diagnostic.Source == "VS Code Microsoft tenant");
-        Assert.Equal(InternalMicrosoftProbeOutcome.Failed, failure.Outcome);
-        Assert.Equal(InternalMicrosoftProbeFailureStage.ExtensionEnvironment, failure.Failure?.Stage);
-        Assert.Null(failure.Failure?.ExceptionType);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_DoesNotCacheNegativeWhenVsCodeAccountIsUnavailable()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        var detector = CreateDetector(
-            cacheFilePath,
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
-            vsCodeMicrosoftAccountProvider: new TestVsCodeMicrosoftAccountProvider { IsUnavailable = true });
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, result.Outcome);
-        Assert.False(File.Exists(cacheFilePath));
-        Assert.Contains(result.ProbeDiagnostics, diagnostic =>
-            diagnostic.Source == "VS Code Microsoft tenant" &&
-            diagnostic.Outcome == InternalMicrosoftProbeOutcome.Failed);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_DoesNotCacheNegativeForSuppressedAccountSnapshot()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        var detector = CreateDetector(
-            cacheFilePath,
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            [[new InternalMicrosoftProbe("negative", _ => Task.FromResult(InternalMicrosoftProbeResult.NotDetected))]],
-            vsCodeMicrosoftAccountProvider: new TestVsCodeMicrosoftAccountProvider { IsSuppressed = true });
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, result.Outcome);
-        Assert.False(File.Exists(cacheFilePath));
-        Assert.Contains(result.ProbeDiagnostics, diagnostic =>
-            diagnostic.Source == "VS Code Microsoft tenant" &&
-            diagnostic.Outcome == InternalMicrosoftProbeOutcome.Suppressed);
-    }
-
-    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_PropagatesCallerCancellationWithoutWritingCache()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -415,37 +105,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_RefreshesFreshVsCodeCacheWhenAliasChanges()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "version": 5,
-              "isInternalMicrosoft": true,
-              "isCIEnvironment": false,
-              "source": "VS Code Microsoft tenant",
-              "alias": "old.alias",
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var detector = CreateDetector(
-            cacheFilePath,
-            now,
-            [[new InternalMicrosoftProbe("current VS Code account", _ =>
-                Task.FromResult(new InternalMicrosoftProbeResult(true, "new.alias", null)))]],
-            vsCodeMicrosoftAlias: "new.alias");
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
-        Assert.Equal("new.alias", result.Alias);
-    }
-
-    [Fact]
     public async Task IsInternalMicrosoftMachineAsync_UsesFreshNegativeCache()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -454,7 +113,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 5,
+              "version": 6,
               "isInternalMicrosoft": false,
               "isCIEnvironment": false,
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
@@ -498,7 +157,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
 
         var updatedCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 5", updatedCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 6", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isInternalMicrosoft\": true", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"isCIEnvironment\": false", updatedCache, StringComparison.Ordinal);
         Assert.Contains("\"source\": \"positive\"", updatedCache, StringComparison.Ordinal);
@@ -734,7 +393,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
         await File.WriteAllTextAsync(cacheFilePath, """
             {
-              "version": 5,
+              "version": 6,
               "isInternalMicrosoft": true,
               "isCIEnvironment": false,
               "source": "cached source",
@@ -874,7 +533,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         Assert.Equal(InternalMicrosoftDetectorOutcome.NotDetected, ciResult.Outcome);
         var ciCache = await File.ReadAllTextAsync(cacheFilePath);
-        Assert.Contains("\"version\": 5", ciCache, StringComparison.Ordinal);
+        Assert.Contains("\"version\": 6", ciCache, StringComparison.Ordinal);
         Assert.Contains("\"isCIEnvironment\": true", ciCache, StringComparison.Ordinal);
 
         var localProbeRan = false;
@@ -910,32 +569,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
               "source": "{{source}}",
               "alias": "Cached.Alias",
               "domain": "redmond.corp.microsoft.com",
-              "lastRunUtc": "2026-06-16T11:00:00+00:00"
-            }
-            """);
-        var detector = CreateDetector(cacheFilePath, now, []);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.False(result.IsInternalMicrosoft);
-        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Stale, result.CacheStatus);
-        Assert.Null(result.Alias);
-        Assert.Null(result.Domain);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_RejectsLegacyVsCodeCacheEntry()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
-        var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
-        await File.WriteAllTextAsync(cacheFilePath, """
-            {
-              "isInternalMicrosoft": true,
-              "source": "VS Code Microsoft tenant",
-              "alias": "ms-dotnettools.csdevkit-microsoftuser",
-              "domain": "REDMOND",
               "lastRunUtc": "2026-06-16T11:00:00+00:00"
             }
             """);
@@ -1339,96 +972,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task CheckVsCodeMicrosoftAccountAsync_UsesExtensionProvidedAlias()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: [],
-            vsCodeMicrosoftAlias: "current.alias");
-
-        var result = await detector.CheckVsCodeMicrosoftAccountAsync(CancellationToken.None);
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("current.alias", result.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_ReportsVsCodeProviderDuration()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var provider = new TestVsCodeMicrosoftAccountProvider
-        {
-            GetInternalMicrosoftAccountAsyncCallback = async cancellationToken =>
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(30), cancellationToken);
-                return VsCodeMicrosoftAccountState.Available("current.alias");
-            }
-        };
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: null,
-            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["CI"] = "true" }),
-            vsCodeMicrosoftAccountProvider: provider);
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        var diagnostic = Assert.Single(result.ProbeDiagnostics, diagnostic =>
-            diagnostic.Source == "VS Code Microsoft tenant");
-        Assert.True(diagnostic.Duration >= TimeSpan.FromMilliseconds(20), $"Actual duration was {diagnostic.Duration}.");
-    }
-
-    [Fact]
-    public async Task CheckVsCodeMicrosoftAccountAsync_ReturnsNotDetectedWithoutExtensionSignal()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: []);
-
-        var result = await detector.CheckVsCodeMicrosoftAccountAsync(CancellationToken.None);
-
-        Assert.False(result.IsInternalMicrosoft);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_DefaultProbesUseAvailableVsCodeAccount()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: null,
-            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["CI"] = "true" }),
-            vsCodeMicrosoftAlias: "current.alias");
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("VS Code Microsoft tenant", result.Source);
-        Assert.Equal("current.alias", result.Alias);
-    }
-
-    [Fact]
-    public async Task IsInternalMicrosoftMachineAsync_DefaultProbesOmitUnavailableVsCodeAccount()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = CreateDetector(
-            Path.Combine(workspace.Path, "cache", "detector.json"),
-            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
-            probeStages: null,
-            environment: TestEnvironment.CreateLinux(new Dictionary<string, string?> { ["CI"] = "true" }));
-
-        var result = await detector.IsInternalMicrosoftMachineAsync();
-
-        Assert.False(result.IsInternalMicrosoft);
-        Assert.Empty(result.ProbeDiagnostics);
-    }
-
-    [Fact]
     public void DetectVisualStudioMicrosoftTenantForTesting_PrefersPersonalizationAccount()
     {
         var store = CreateVisualStudioAccountStore(
@@ -1646,9 +1189,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         TimeSpan? probeStageTimeout = null,
         TestEnvironment? environment = null,
         DirectoryInfo? homeDirectory = null,
-        string? vsCodeMicrosoftAlias = null,
-        bool vsCodeMicrosoftProviderAvailable = false,
-        TestVsCodeMicrosoftAccountProvider? vsCodeMicrosoftAccountProvider = null,
         TimeProvider? timeProvider = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
@@ -1668,9 +1208,6 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             NullLogger<InternalMicrosoftDetector>.Instance,
             processFactory ?? new TestProcessExecutionFactory(),
             ciEnvironmentDetector,
-            vsCodeMicrosoftAccountProvider ?? new TestVsCodeMicrosoftAccountProvider(
-                isAvailable: vsCodeMicrosoftProviderAvailable || vsCodeMicrosoftAlias is not null,
-                alias: vsCodeMicrosoftAlias),
             probeStages,
             gitHubHttpMessageHandler,
             gitHubCandidateTimeout,

@@ -10,14 +10,7 @@ import { CliPathResolutionResult, CliPathResolver, resolveCliPath } from './cliP
 import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath, getForwardableResolvedAspireCliPath } from './cliPathEnvironment';
 import { CliPathResolutionTarget, getCliPathTargetKey, windowCliPathTarget } from './cliPathVariables';
 import path from 'path';
-import { statSync } from 'fs';
 import { assertNoTerminalControlCharacters } from './cmdShim';
-import {
-    microsoftAccountAliasEnvironmentVariable,
-    MicrosoftAccountEnvironmentState,
-    microsoftAccountStateEnvironmentVariable,
-    microsoftAccountRpcState,
-} from './microsoftAccountProvider';
 
 // Re-exported so existing importers keep a single implementation of the guard.
 export { assertNoTerminalControlCharacters };
@@ -71,8 +64,6 @@ const noExtensionVariablesScrubbedEnvironmentVariables = [
     'ASPIRE_EXTENSION_DEBUG_RUN_MODE',
     'ASPIRE_EXTENSION_DEBUG_SESSION_ID',
     'ASPIRE_EXTENSION_ENDPOINT',
-    microsoftAccountAliasEnvironmentVariable,
-    microsoftAccountStateEnvironmentVariable,
     'ASPIRE_EXTENSION_PROMPT_ENABLED',
     'ASPIRE_EXTENSION_TOKEN',
     'ASPIRE_NON_INTERACTIVE',
@@ -124,39 +115,9 @@ export function shellArg(value: string): ShellArg {
     return { quote: true, value };
 }
 
-function addMicrosoftAccountEnvironment(
-    env: Record<string, string | null | undefined>,
-    state: MicrosoftAccountEnvironmentState,
-    useNullToRemoveAlias: boolean): void {
-    deleteEnvironmentVariable(env, microsoftAccountStateEnvironmentVariable);
-    deleteEnvironmentVariable(env, microsoftAccountAliasEnvironmentVariable);
-    env[microsoftAccountStateEnvironmentVariable] = state.status;
-    if (state.status === 'internal') {
-        env[microsoftAccountAliasEnvironmentVariable] = state.alias;
-    }
-    else if (useNullToRemoveAlias) {
-        // TerminalOptions.env is merged with the extension host's environment. null explicitly
-        // removes an inherited value; omission would preserve a stale alias.
-        env[microsoftAccountAliasEnvironmentVariable] = null;
-    }
-}
-
-function addMicrosoftAccountEnvironmentWithoutAlias(
-    env: Record<string, string | null | undefined>,
-    state: MicrosoftAccountEnvironmentState | undefined): void {
-    // A negative assertion cannot impersonate an internal user, so helpers can use it to invalidate
-    // a signed-out account. Positive and unresolved states carry unavailable without the alias,
-    // preventing a cold helper invocation from caching a false negative.
-    addMicrosoftAccountEnvironment(
-        env,
-        state?.status === 'not_internal' ? state : { status: 'unavailable' },
-        false);
-}
-
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId = new Map<string, AspireTerminal>();
     private _invalidatedSharedTerminals = new Set<vscode.Terminal>();
-    private _microsoftAccountEnvironmentCliIdentities = new Map<string, string>();
     private readonly _terminalsWithAspireCommands = new WeakSet<vscode.Terminal>();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
@@ -169,7 +130,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
         subscriptions: vscode.Disposable[],
         private readonly _isPowerShell7Available = isPowerShell7Available,
         private readonly _cliPathResolver?: CliPathResolver,
-        private readonly _getMicrosoftAccountEnvironmentState: () => MicrosoftAccountEnvironmentState | undefined = () => undefined,
     ) {
         subscriptions.push(vscode.window.onDidCloseTerminal(closedTerminal => {
             this._invalidatedSharedTerminals.delete(closedTerminal);
@@ -204,30 +164,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     set dcpServerConnectionInfo(value: DcpServerConnectionInfo) {
         this._dcpServerConnectionInfo = value;
-    }
-
-    getCliExecutableIdentity(cliPath: string): string | undefined {
-        if (!path.isAbsolute(cliPath)) {
-            return undefined;
-        }
-
-        try {
-            const stat = statSync(cliPath);
-            return [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
-        }
-        catch {
-            return undefined;
-        }
-    }
-
-    setMicrosoftAccountEnvironmentSupport(cliPath: string, supported: boolean, expectedIdentity: string): void {
-        const key = getCliPathComparisonKey(cliPath);
-        if (supported && this.getCliExecutableIdentity(cliPath) === expectedIdentity) {
-            this._microsoftAccountEnvironmentCliIdentities.set(key, expectedIdentity);
-        }
-        else {
-            this._microsoftAccountEnvironmentCliIdentities.delete(key);
-        }
     }
 
     async sendAspireCommandToAspireTerminal(subcommand: AspireSubcommand, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
@@ -427,7 +363,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
     ): vscode.Terminal {
         const terminalOptions: vscode.TerminalOptions = {
             name: aspireTerminalName,
-            env: this.createEnvironment(undefined, undefined, undefined, resolvedCliPath, true),
+            env: this.createEnvironment(undefined, undefined, undefined, resolvedCliPath),
             location,
         };
         if (target.kind === 'workspaceFolder') {
@@ -447,7 +383,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         return `${debugSessionId ?? 'shared'}:${getCliPathTargetKey(target)}`;
     }
 
-    createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean, resolvedCliPath?: string, isTerminalEnvironment?: boolean): any {
+    createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean, resolvedCliPath?: string): any {
         if (noExtensionVariables) {
             const env: any = {
                 ...getEnvironmentForChildProcess(),
@@ -460,16 +396,12 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
             addForwardableAspireCliPath(env, resolvedCliPath);
             scrubNoExtensionVariablesEnvironment(env);
-            addMicrosoftAccountEnvironmentWithoutAlias(env, this._getMicrosoftAccountEnvironmentState());
             return env;
         }
 
         const env: any = {
             ...getEnvironmentForChildProcess(),
         };
-        deleteEnvironmentVariable(env, microsoftAccountStateEnvironmentVariable);
-        deleteEnvironmentVariable(env, microsoftAccountAliasEnvironmentVariable);
-
         addForwardableAspireCliPath(env, resolvedCliPath);
 
         Object.assign(env, {
@@ -487,28 +419,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
         });
-        const microsoftAccountState = this._getMicrosoftAccountEnvironmentState();
-        const supportedCliIdentity = resolvedCliPath
-            ? this._microsoftAccountEnvironmentCliIdentities.get(getCliPathComparisonKey(resolvedCliPath))
-            : undefined;
-        if (isTerminalEnvironment && microsoftAccountState) {
-            // Interactive terminals are long-lived. Explicitly remove any inherited snapshot so
-            // each CLI launched from the shell receives only the non-sensitive RPC marker.
-            env[microsoftAccountStateEnvironmentVariable] = microsoftAccountRpcState;
-            env[microsoftAccountAliasEnvironmentVariable] = null;
-        }
-        else if (microsoftAccountState &&
-            resolvedCliPath &&
-            supportedCliIdentity !== undefined &&
-            supportedCliIdentity === this.getCliExecutableIdentity(resolvedCliPath)) {
-            addMicrosoftAccountEnvironment(env, microsoftAccountState, false);
-        }
-        else if (microsoftAccountState) {
-            // Older or not-yet-probed CLIs ignore this marker, while a compatible CLI uses the
-            // authenticated RPC fallback without exposing the alias to its child environment.
-            env[microsoftAccountStateEnvironmentVariable] = microsoftAccountRpcState;
-        }
-
         if (debugSessionId) {
             this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
         }
@@ -531,9 +441,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
         delete env.ASPIRE_EXTENSION_ENDPOINT;
         delete env.ASPIRE_EXTENSION_TOKEN;
         delete env.ASPIRE_EXTENSION_CERT;
-        deleteEnvironmentVariable(env, microsoftAccountAliasEnvironmentVariable);
-        deleteEnvironmentVariable(env, microsoftAccountStateEnvironmentVariable);
-        addMicrosoftAccountEnvironmentWithoutAlias(env, this._getMicrosoftAccountEnvironmentState());
         this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
 
         return env;

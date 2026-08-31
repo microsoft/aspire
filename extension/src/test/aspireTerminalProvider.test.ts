@@ -11,23 +11,15 @@ import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
-import {
-    microsoftAccountAliasEnvironmentVariable,
-    MicrosoftAccountEnvironmentState,
-    microsoftAccountRpcState,
-    microsoftAccountStateEnvironmentVariable,
-} from '../utils/microsoftAccountProvider';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
     let resolveCliPathStub: sinon.SinonStub;
     let subscriptions: vscode.Disposable[];
-    let microsoftAccountState: MicrosoftAccountEnvironmentState | undefined;
 
     setup(() => {
         subscriptions = [];
-        microsoftAccountState = undefined;
-        terminalProvider = new AspireTerminalProvider(subscriptions, undefined, undefined, () => microsoftAccountState);
+        terminalProvider = new AspireTerminalProvider(subscriptions);
         resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath');
     });
 
@@ -1082,13 +1074,9 @@ suite('AspireTerminalProvider tests', () => {
             const previousEndpoint = process.env.ASPIRE_EXTENSION_ENDPOINT;
             const previousToken = process.env.ASPIRE_EXTENSION_TOKEN;
             const previousCert = process.env.ASPIRE_EXTENSION_CERT;
-            const previousMicrosoftAccountState = process.env[microsoftAccountStateEnvironmentVariable];
-            const previousMicrosoftAccountAlias = process.env[microsoftAccountAliasEnvironmentVariable];
             process.env.ASPIRE_EXTENSION_ENDPOINT = 'inherited-endpoint';
             process.env.ASPIRE_EXTENSION_TOKEN = 'inherited-token';
             process.env.ASPIRE_EXTENSION_CERT = 'inherited-cert';
-            process.env[microsoftAccountStateEnvironmentVariable] = 'internal';
-            process.env[microsoftAccountAliasEnvironmentVariable] = 'inherited.alias';
 
             let env: any;
             try {
@@ -1097,15 +1085,11 @@ suite('AspireTerminalProvider tests', () => {
                 restoreEnvironmentVariable('ASPIRE_EXTENSION_ENDPOINT', previousEndpoint);
                 restoreEnvironmentVariable('ASPIRE_EXTENSION_TOKEN', previousToken);
                 restoreEnvironmentVariable('ASPIRE_EXTENSION_CERT', previousCert);
-                restoreEnvironmentVariable(microsoftAccountStateEnvironmentVariable, previousMicrosoftAccountState);
-                restoreEnvironmentVariable(microsoftAccountAliasEnvironmentVariable, previousMicrosoftAccountAlias);
             }
 
             assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_TOKEN, undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_CERT, undefined);
-            assert.strictEqual(env[microsoftAccountStateEnvironmentVariable], 'unavailable');
-            assert.strictEqual(env[microsoftAccountAliasEnvironmentVariable], undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
             assert.strictEqual(env.DCP_INSTANCE_ID_PREFIX, 'debug-session-id-');
             assert.strictEqual(env.DEBUG_SESSION_RUN_MODE, 'Debug');
@@ -1126,68 +1110,6 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
-        });
-
-        test('adds the account snapshot to spawned CLIs but removes it from interactive terminals', () => {
-            microsoftAccountState = { status: 'internal', alias: 'current.alias' };
-            sinon.stub(terminalProvider, 'getCliExecutableIdentity').returns('cli-identity');
-            terminalProvider.setMicrosoftAccountEnvironmentSupport('aspire', true, 'cli-identity');
-
-            const processEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
-            const terminalEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire', true);
-            microsoftAccountState = { status: 'not_internal' };
-            const signedOutTerminalEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire', true);
-            const signedOutProcessEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'aspire');
-            const oldCliEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, 'old-aspire');
-
-            assert.strictEqual(processEnvironment[microsoftAccountStateEnvironmentVariable], 'internal');
-            assert.strictEqual(processEnvironment[microsoftAccountAliasEnvironmentVariable], 'current.alias');
-            assert.strictEqual(terminalEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
-            assert.strictEqual(terminalEnvironment[microsoftAccountAliasEnvironmentVariable], null);
-            assert.strictEqual(signedOutTerminalEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
-            assert.strictEqual(signedOutTerminalEnvironment[microsoftAccountAliasEnvironmentVariable], null);
-            assert.strictEqual(signedOutProcessEnvironment[microsoftAccountStateEnvironmentVariable], 'not_internal');
-            assert.strictEqual(signedOutProcessEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
-            assert.strictEqual(oldCliEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
-            assert.strictEqual(oldCliEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
-        });
-
-        test('falls back to RPC when a capable CLI is replaced in place', () => {
-            microsoftAccountState = { status: 'internal', alias: 'current.alias' };
-            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-account-capability-'));
-            const cliPath = path.join(directory, 'aspire');
-            fs.writeFileSync(cliPath, 'current');
-
-            try {
-                const identity = terminalProvider.getCliExecutableIdentity(cliPath);
-                assert.ok(identity);
-                terminalProvider.setMicrosoftAccountEnvironmentSupport(cliPath, true, identity);
-                const currentEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, cliPath);
-
-                fs.writeFileSync(cliPath, 'older-replacement');
-                const replacementEnvironment = terminalProvider.createEnvironment(undefined, undefined, undefined, cliPath);
-
-                assert.strictEqual(currentEnvironment[microsoftAccountStateEnvironmentVariable], 'internal');
-                assert.strictEqual(currentEnvironment[microsoftAccountAliasEnvironmentVariable], 'current.alias');
-                assert.strictEqual(replacementEnvironment[microsoftAccountStateEnvironmentVariable], microsoftAccountRpcState);
-                assert.strictEqual(replacementEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
-            }
-            finally {
-                fs.rmSync(directory, { recursive: true, force: true });
-            }
-        });
-
-        test('marks Microsoft account snapshot unavailable without extension backchannel variables', () => {
-            microsoftAccountState = { status: 'internal', alias: 'current.alias' };
-
-            const internalEnvironment = terminalProvider.createEnvironment(undefined, undefined, true);
-            microsoftAccountState = { status: 'not_internal' };
-            const signedOutEnvironment = terminalProvider.createEnvironment(undefined, undefined, true);
-
-            assert.strictEqual(internalEnvironment[microsoftAccountStateEnvironmentVariable], 'unavailable');
-            assert.strictEqual(internalEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
-            assert.strictEqual(signedOutEnvironment[microsoftAccountStateEnvironmentVariable], 'not_internal');
-            assert.strictEqual(signedOutEnvironment[microsoftAccountAliasEnvironmentVariable], undefined);
         });
 
         test('forwards an existing absolute aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution can pick it up', () => {
@@ -1257,8 +1179,6 @@ suite('AspireTerminalProvider tests', () => {
                 ASPIRE_EXTENSION_DEBUG_RUN_MODE: 'inherited-debug-run-mode',
                 ASPIRE_EXTENSION_DEBUG_SESSION_ID: 'inherited-debug-session-id',
                 ASPIRE_EXTENSION_ENDPOINT: 'inherited-endpoint',
-                ASPIRE_EXTENSION_MICROSOFT_ACCOUNT_ALIAS: 'inherited.alias',
-                ASPIRE_EXTENSION_MICROSOFT_ACCOUNT_STATE: 'internal',
                 ASPIRE_EXTENSION_PROMPT_ENABLED: 'inherited-prompt-enabled',
                 ASPIRE_EXTENSION_TOKEN: 'inherited-token',
                 ASPIRE_LOCALE_OVERRIDE: 'process-locale',
@@ -1291,10 +1211,8 @@ suite('AspireTerminalProvider tests', () => {
             }
 
             assert.strictEqual(env.ASPIRE_LOCALE_OVERRIDE, vscode.env.language);
-            assert.strictEqual(env[microsoftAccountStateEnvironmentVariable], 'unavailable');
             for (const key of Object.keys(inheritedVariables).filter(key =>
-                key !== 'ASPIRE_LOCALE_OVERRIDE' &&
-                key !== microsoftAccountStateEnvironmentVariable)) {
+                key !== 'ASPIRE_LOCALE_OVERRIDE')) {
                 assert.strictEqual(env[key], undefined, key);
             }
         });
@@ -1302,8 +1220,6 @@ suite('AspireTerminalProvider tests', () => {
         test('scrubs hidden CLI extension variables case-insensitively on Windows', () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const inheritedVariables: Record<string, string> = {
-                Aspire_Extension_Microsoft_Account_Alias: 'mixed-case-alias',
-                Aspire_Extension_Microsoft_Account_State: 'internal',
                 Aspire_Extension_Token: 'mixed-case-token',
                 debug_session_token: 'lowercase-debug-session-token',
                 aspire_terminal_host_path: 'lowercase-terminal-host-path',
