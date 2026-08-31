@@ -63,7 +63,15 @@ public sealed class BicepValueProxy
     {
         ArgumentNullException.ThrowIfNull(value);
 
-        return new(value, value.LiteralValue?.GetType() ?? typeof(object), forcedSecure: false);
+        return Create(value, value.LiteralValue?.GetType() ?? typeof(object));
+    }
+
+    internal static BicepValueProxy Create(IBicepValue value, Type valueType)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(valueType);
+
+        return new(value, valueType, forcedSecure: false);
     }
 
     /// <summary>

@@ -35,7 +35,7 @@ internal sealed class ProvisioningParameterProxy
     [AspireExport]
     internal BicepValueProxy Value
     {
-        get => BicepValueProxy.Create(Inner.Value);
+        get => BicepValueProxy.Create(Inner.Value, _valueType);
         set => value.AssignTo(Inner.Value, _valueType);
     }
 
@@ -63,7 +63,7 @@ internal sealed class ProvisioningOutputProxy
     [AspireExport]
     internal BicepValueProxy Value
     {
-        get => BicepValueProxy.Create(Inner.Value);
+        get => BicepValueProxy.Create(Inner.Value, _valueType);
         set => value.AssignTo(Inner.Value, _valueType);
     }
 }
@@ -84,7 +84,7 @@ internal sealed class ProvisioningVariableProxy
     [AspireExport]
     internal BicepValueProxy Value
     {
-        get => BicepValueProxy.Create(Inner.Value);
+        get => BicepValueProxy.Create(Inner.Value, _valueType);
         set => value.AssignTo(Inner.Value, _valueType);
     }
 }

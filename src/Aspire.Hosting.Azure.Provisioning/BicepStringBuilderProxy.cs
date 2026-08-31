@@ -18,6 +18,11 @@ internal sealed class BicepStringBuilderProxy
     {
     }
 
+    /// <summary>
+    /// Appends literal text to the interpolated Bicep string.
+    /// </summary>
+    /// <param name="value">The literal text to append.</param>
+    /// <returns>The string builder.</returns>
     [AspireExport]
     internal BicepStringBuilderProxy AppendLiteral(string value)
     {
@@ -27,6 +32,11 @@ internal sealed class BicepStringBuilderProxy
         return this;
     }
 
+    /// <summary>
+    /// Appends a provisioning value to the interpolated Bicep string.
+    /// </summary>
+    /// <param name="value">The provisioning value to append.</param>
+    /// <returns>The string builder.</returns>
     [AspireExport]
     internal BicepStringBuilderProxy AppendValue(BicepValueProxy value)
     {
@@ -37,6 +47,10 @@ internal sealed class BicepStringBuilderProxy
         return this;
     }
 
+    /// <summary>
+    /// Builds the interpolated Bicep string.
+    /// </summary>
+    /// <returns>The composed Bicep string value.</returns>
     [AspireExport]
     internal BicepValueProxy Build()
     {

@@ -164,6 +164,25 @@ public class BicepValueProxyTests
     }
 
     [Fact]
+    public void DeclarationProxiesPreserveConfiguredTypeWhenRead()
+    {
+        var infrastructure = CreateInfrastructure();
+        var parameter = infrastructure.AddBicepParameter("parameter", ProvisioningValueType.Integer);
+        var output = infrastructure.AddBicepOutput("output", ProvisioningValueType.Integer);
+        var variable = infrastructure.AddBicepVariable("variable", ProvisioningValueType.Integer);
+
+        AssertDeclarationTypeRoundTrips(
+            value => parameter.Value = value,
+            () => parameter.Value);
+        AssertDeclarationTypeRoundTrips(
+            value => output.Value = value,
+            () => output.Value);
+        AssertDeclarationTypeRoundTrips(
+            value => variable.Value = value,
+            () => variable.Value);
+    }
+
+    [Fact]
     public void InterpolatedValuePreservesExpressionAndSecurity()
     {
         var secureValue = BicepValueProxy.Create(
@@ -244,5 +263,31 @@ public class BicepValueProxyTests
             "A literal of type String cannot be assigned to a BicepValue<Int32>.",
             exception.Message);
         Assert.Equal(42, getAssignedValue().LiteralValue);
+    }
+
+    private static void AssertDeclarationTypeRoundTrips(
+        Action<BicepValueProxy> assign,
+        Func<BicepValueProxy> read)
+    {
+        assign(BicepValueProxy.Create(new BicepValue<int>(42)));
+
+        var literalTarget = new BicepValue<int>(0);
+        read().AssignTo(literalTarget);
+        Assert.Equal(42, literalTarget.Value);
+
+        assign(BicepValueProxy.Create(
+            new BicepValue<int>(new IdentifierExpression("integerValue"))));
+
+        var expressionTarget = new BicepValue<int>(0);
+        read().AssignTo(expressionTarget);
+        Assert.Equal(BicepValueKind.Expression, ((IBicepValue)expressionTarget).Kind);
+        Assert.Equal("integerValue", expressionTarget.ToBicepExpression().ToString());
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => read().AssignTo(new BicepValue<string>("initial")));
+
+        Assert.Equal(
+            "A value of type Int32 cannot be assigned to a BicepValue<String>.",
+            exception.Message);
     }
 }
