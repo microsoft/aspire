@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues - check completes too slowly under CI load",
   "test_name": "Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues",
-  "error_pattern": "Assert.Collection() Failure: Item comparison failure\nExpected: EnvironmentCheckResult { Message = \"Completed\", ... }\nActual:   EnvironmentCheckResult { Message = \"Environment check 'test-environment' timed out aft\"..., ... }\n   at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in ...\\EnvironmentCheckerTests.cs:line 55",
+  "error_pattern": "Assert.Collection() Failure: Item comparison failure\nExpected: EnvironmentCheckResult { Message = \"Completed\", ... }\nActual:   EnvironmentCheckResult { Message = \"Environment check 'test-environment' timed out aft\"..., ... }\n   at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Utils/EnvironmentCheckerTests.cs:line 55",
   "occurrences": [
     {
       "run_id": 31066050322,
@@ -11,6 +11,13 @@
       "job": "Tests / Cli / Cli (windows-latest)",
       "pr_number": 18986,
       "observed_at": "2026-08-06T03:28:52Z"
+    },
+    {
+      "run_id": 33434427094,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33434427094",
+      "job": "Tests / Cli / Cli (macos-latest)",
+      "pr_number": 19727,
+      "observed_at": "2026-08-31T21:00:50Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19039"

@@ -1,0 +1,38 @@
+{
+  "run_id": 33434427094,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33434427094",
+  "analyzed_at": "2026-08-31T21:00:50Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 19727,
+    "title": "Fix self-update channel persistence test",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/fix-19708",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19727"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (macos-latest)",
+      "id": 99632731345,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33434427094/job/99632731345",
+      "classification": "flaky-test",
+      "reason": "Failure is caused by a known flaky test (EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues) unrelated to PR changes, which only modified SelfUpdateChannelPersistenceTests.cs and UpdateCommandTests.cs.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues",
+      "job": "Tests / Cli / Cli (macos-latest)",
+      "error": "Assert.Collection() Failure: Item comparison failure\nCollection: [EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"..., ... }, EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"..., ... }]\nError:      Assert.Same() Failure: Values are not the same instance\n            Expected: EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Completed\", ... }\n            Actual:   EnvironmentCheckResult { Category = \"environment\", Details = null, Fix = null, Link = null, Message = \"Environment check 'test-environment' timed out aft\"..., ... }",
+      "stack_trace": "at Aspire.Cli.Tests.Utils.EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Utils/EnvironmentCheckerTests.cs:line 55\n--- End of stack trace from previous location ---",
+      "classification": "flaky",
+      "reason": "Matches prior known cause 'cli-environmentchecker-timedout-flaky': a timing-sensitive test where a timeout check completes too slowly under CI load, causing a race between expected 'Completed' and actual timeout message. The PR only touched SelfUpdateChannelPersistenceTests.cs and UpdateCommandTests.cs, not EnvironmentCheckerTests.cs or its production code."
+    }
+  ],
+  "causes": ["cli-environmentchecker-timedout-flaky"]
+}
