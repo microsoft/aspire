@@ -22,14 +22,14 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    internal class CopilotCliAgentEnvironmentScannerStrings {
+    internal class CopilotAgentEnvironmentScannerStrings {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
         private static global::System.Globalization.CultureInfo resourceCulture;
         
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal CopilotCliAgentEnvironmentScannerStrings() {
+        internal CopilotAgentEnvironmentScannerStrings() {
         }
         
         /// <summary>
@@ -39,7 +39,7 @@ namespace Aspire.Cli.Resources {
         internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.CopilotCliAgentEnvironmentScannerStrings", typeof(CopilotCliAgentEnvironmentScannerStrings).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.CopilotAgentEnvironmentScannerStrings", typeof(CopilotAgentEnvironmentScannerStrings).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Configure GitHub Copilot CLI to use the Aspire MCP server.
+        ///   Looks up a localized string similar to Configure GitHub Copilot to use the Aspire MCP server.
         /// </summary>
         internal static string ApplicatorDescription {
             get {

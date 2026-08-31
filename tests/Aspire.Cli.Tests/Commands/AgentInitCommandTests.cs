@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
-using Aspire.Cli.Agents.CopilotApp;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -15,7 +15,6 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -943,10 +942,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => executionContext;
             options.InteractionServiceFactory = _ => interactionService;
         });
-        services.RemoveAll<IEnvironment>();
-        services.RemoveAll<IAgentEnvironmentDetector>();
         services.AddSingleton<IEnvironment>(environment);
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAppAgentEnvironmentScanner>());
+        services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
+        services.AddSingleton<ICopilotCliRunner>(new FakeCopilotCliRunner(null));
+        services.AddSingleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>();
         services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
 
         using var provider = services.BuildServiceProvider();

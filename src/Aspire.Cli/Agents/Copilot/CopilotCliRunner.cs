@@ -5,7 +5,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Semver;
 
-namespace Aspire.Cli.Agents.CopilotCli;
+namespace Aspire.Cli.Agents.Copilot;
 
 /// <summary>
 /// Runs GitHub Copilot CLI commands.

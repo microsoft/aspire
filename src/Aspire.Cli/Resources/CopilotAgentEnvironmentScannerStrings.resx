@@ -60,7 +60,8 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <!-- Shared by the GitHub Copilot App and CLI environment scanner. -->
   <data name="ApplicatorDescription" xml:space="preserve">
-    <value>Configure GitHub Copilot CLI to use the Aspire MCP server</value>
+    <value>Configure GitHub Copilot to use the Aspire MCP server</value>
   </data>
 </root>

@@ -1,14 +1,28 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Logging;
-
-namespace Aspire.Cli.Agents.CopilotApp;
+namespace Aspire.Cli.Agents.Copilot;
 
 /// <summary>
-/// Scans for GitHub Copilot App installations from platform and runtime markers.
+/// Detects a GitHub Copilot App installation.
 /// </summary>
-internal sealed class CopilotAppAgentEnvironmentScanner : IAgentEnvironmentScanner
+internal interface ICopilotAppInstallationDetector
+{
+    /// <summary>
+    /// Gets the marker that established the App is installed, or <see langword="null"/> when it is not installed.
+    /// </summary>
+    string? GetInstallationMarker();
+}
+
+/// <summary>
+/// Detects GitHub Copilot App installations from platform installation markers.
+/// </summary>
+/// <remarks>
+/// The supported installers are published at https://github.com/github/app#install.
+/// </remarks>
+internal sealed class CopilotAppInstallationDetector(
+    IEnvironment environment,
+    CliExecutionContext executionContext) : ICopilotAppInstallationDetector
 {
     internal const string AgentEnvironmentVariable = "AI_AGENT";
     internal const string AgentEnvironmentValue = "github_copilot_app_agent";
@@ -17,83 +31,47 @@ internal sealed class CopilotAppAgentEnvironmentScanner : IAgentEnvironmentScann
     private const string MacOSAppBundleName = "GitHub Copilot.app";
     private const string LinuxApplicationsDirectoryName = "applications";
 
-    private readonly CliExecutionContext _executionContext;
-    private readonly IEnvironment _environment;
-    private readonly ILogger<CopilotAppAgentEnvironmentScanner> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of <see cref="CopilotAppAgentEnvironmentScanner"/>.
-    /// </summary>
-    /// <param name="executionContext">The CLI execution context for locating user installation markers.</param>
-    /// <param name="environment">The environment abstraction for reading variables and detecting the host platform.</param>
-    /// <param name="logger">The logger for diagnostic output.</param>
-    public CopilotAppAgentEnvironmentScanner(
-        CliExecutionContext executionContext,
-        IEnvironment environment,
-        ILogger<CopilotAppAgentEnvironmentScanner> logger)
-    {
-        ArgumentNullException.ThrowIfNull(executionContext);
-        ArgumentNullException.ThrowIfNull(environment);
-        ArgumentNullException.ThrowIfNull(logger);
-        _executionContext = executionContext;
-        _environment = environment;
-        _logger = logger;
-    }
-
     /// <inheritdoc />
-    public Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (GetInstallationMarker() is { } installationMarker)
-        {
-            _logger.LogDebug("Detected GitHub Copilot App using installation marker {Marker}", installationMarker);
-            context.AddDetectedClient(AgentClientKind.CopilotApp);
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private string? GetInstallationMarker()
+    public string? GetInstallationMarker()
     {
         // Unlike Copilot CLI, the App executable is a single-instance GUI application and a
         // `--version` launch does not exit. Use install markers instead; the runtime marker also
         // covers portable/development App builds outside the standard platform directories.
         if (string.Equals(
-            _environment.GetEnvironmentVariable(AgentEnvironmentVariable),
+            environment.GetEnvironmentVariable(AgentEnvironmentVariable),
             AgentEnvironmentValue,
             StringComparison.Ordinal))
         {
             return AgentEnvironmentVariable;
         }
 
-        if (_environment.IsWindows())
+        if (environment.IsWindows())
         {
             var candidatePaths = new List<string>();
-            AddWindowsCandidate(candidatePaths, _environment.GetEnvironmentVariable("LOCALAPPDATA"), includeProgramsDirectory: true);
+            AddWindowsCandidate(candidatePaths, environment.GetEnvironmentVariable("LOCALAPPDATA"), includeProgramsDirectory: true);
             AddWindowsCandidate(
                 candidatePaths,
-                Path.Combine(_executionContext.HomeDirectory.FullName, "AppData", "Local"),
+                Path.Combine(executionContext.HomeDirectory.FullName, "AppData", "Local"),
                 includeProgramsDirectory: true);
-            AddWindowsCandidate(candidatePaths, _environment.GetEnvironmentVariable("ProgramFiles"), includeProgramsDirectory: false);
-            AddWindowsCandidate(candidatePaths, _environment.GetEnvironmentVariable("ProgramFiles(x86)"), includeProgramsDirectory: false);
+            AddWindowsCandidate(candidatePaths, environment.GetEnvironmentVariable("ProgramFiles"), includeProgramsDirectory: false);
+            AddWindowsCandidate(candidatePaths, environment.GetEnvironmentVariable("ProgramFiles(x86)"), includeProgramsDirectory: false);
 
             return candidatePaths
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault(File.Exists);
         }
 
-        if (_environment.IsMacOS())
+        if (environment.IsMacOS())
         {
             return new[]
             {
+                Path.Combine(executionContext.HomeDirectory.FullName, "Applications", MacOSAppBundleName),
                 Path.Combine(Path.DirectorySeparatorChar.ToString(), "Applications", MacOSAppBundleName),
-                Path.Combine(_executionContext.HomeDirectory.FullName, "Applications", MacOSAppBundleName),
             }
             .FirstOrDefault(Directory.Exists);
         }
 
-        if (_environment.IsLinux())
+        if (environment.IsLinux())
         {
             foreach (var applicationsDirectory in GetLinuxApplicationDirectories())
             {
@@ -116,13 +94,13 @@ internal sealed class CopilotAppAgentEnvironmentScanner : IAgentEnvironmentScann
         // root. Relative XDG values are invalid and ignored by the freedesktop base-directory spec.
         // https://specifications.freedesktop.org/basedir/latest/
         var applicationsDirectories = new List<string>();
-        var configuredDataHome = _environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        var configuredDataHome = environment.GetEnvironmentVariable("XDG_DATA_HOME");
         var dataHome = !string.IsNullOrEmpty(configuredDataHome) && Path.IsPathFullyQualified(configuredDataHome)
             ? configuredDataHome
-            : Path.Combine(_executionContext.HomeDirectory.FullName, ".local", "share");
+            : Path.Combine(executionContext.HomeDirectory.FullName, ".local", "share");
         applicationsDirectories.Add(Path.Combine(dataHome, LinuxApplicationsDirectoryName));
 
-        var configuredDataDirectories = _environment.GetEnvironmentVariable("XDG_DATA_DIRS");
+        var configuredDataDirectories = environment.GetEnvironmentVariable("XDG_DATA_DIRS");
         if (string.IsNullOrEmpty(configuredDataDirectories))
         {
             var rootDirectory = Path.DirectorySeparatorChar.ToString();

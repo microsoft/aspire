@@ -7,12 +7,12 @@ using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Cli.Agents.CopilotCli;
+namespace Aspire.Cli.Agents.Copilot;
 
 /// <summary>
-/// Scans for GitHub Copilot CLI environments and provides an applicator to configure the Aspire MCP server.
+/// Scans for GitHub Copilot App and CLI environments and provides their shared configuration applicators.
 /// </summary>
-internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScanner
+internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
     private const string CopilotFolderName = ".copilot";
     private const string McpConfigFileName = "mcp-config.json";
@@ -20,27 +20,37 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
 
     private readonly ICopilotCliRunner _copilotCliRunner;
+    private readonly ICopilotAppInstallationDetector _copilotAppInstallationDetector;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
-    private readonly ILogger<CopilotCliAgentEnvironmentScanner> _logger;
+    private readonly ILogger<CopilotAgentEnvironmentScanner> _logger;
 
     /// <summary>
-    /// Initializes a new instance of <see cref="CopilotCliAgentEnvironmentScanner"/>.
+    /// Initializes a new instance of <see cref="CopilotAgentEnvironmentScanner"/>.
     /// </summary>
     /// <param name="copilotCliRunner">The Copilot CLI runner for checking if Copilot CLI is installed.</param>
+    /// <param name="copilotAppInstallationDetector">The detector for checking if the Copilot App is installed.</param>
     /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
     /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public CopilotCliAgentEnvironmentScanner(ICopilotCliRunner copilotCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, IEnvironment environment, ILogger<CopilotCliAgentEnvironmentScanner> logger)
+    public CopilotAgentEnvironmentScanner(
+        ICopilotCliRunner copilotCliRunner,
+        ICopilotAppInstallationDetector copilotAppInstallationDetector,
+        PlaywrightCliInstaller playwrightCliInstaller,
+        CliExecutionContext executionContext,
+        IEnvironment environment,
+        ILogger<CopilotAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(copilotCliRunner);
+        ArgumentNullException.ThrowIfNull(copilotAppInstallationDetector);
         ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         _copilotCliRunner = copilotCliRunner;
+        _copilotAppInstallationDetector = copilotAppInstallationDetector;
         _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _environment = environment;
@@ -50,72 +60,69 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     /// <inheritdoc />
     public async Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting GitHub Copilot CLI environment scan");
+        cancellationToken.ThrowIfCancellationRequested();
+        _logger.LogDebug("Starting GitHub Copilot environment scan");
 
         var homeDirectory = _executionContext.HomeDirectory;
+        var copilotAppDetected = false;
+        if (_copilotAppInstallationDetector.GetInstallationMarker() is { } installationMarker)
+        {
+            _logger.LogDebug("Detected GitHub Copilot App using installation marker {Marker}", installationMarker);
+            context.AddDetectedClient(AgentClientKind.CopilotApp);
+            copilotAppDetected = true;
+        }
 
-        // Check if we're running in a VSCode terminal
+        var copilotCliDetected = false;
+
+        // Check if we're running in a VSCode terminal.
         var isVSCode = _environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
-
         if (isVSCode)
         {
             _logger.LogDebug("Detected VSCode terminal environment. Assuming GitHub Copilot CLI is available to avoid potential hangs from interactive installation prompts.");
-
             context.AddDetectedClient(AgentClientKind.CopilotCli);
-
-            // Check if the aspire server is already configured in the global config
-            _logger.LogDebug("Checking if Aspire MCP server is already configured in Copilot CLI global config...");
-            if (!HasAspireServerConfigured(homeDirectory))
+            copilotCliDetected = true;
+        }
+        else
+        {
+            _logger.LogDebug("Checking for GitHub Copilot CLI installation...");
+            var copilotVersion = await _copilotCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+            if (copilotVersion is not null)
             {
-                // In VSCode, assume Copilot CLI is available and offer to configure
-                // The user will be prompted to install it when they try to use it if not already installed
-                _logger.LogDebug("Adding Copilot CLI applicator for global MCP configuration");
-                context.AddApplicator(CreateApplicator(homeDirectory));
+                _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", copilotVersion);
+                context.AddDetectedClient(AgentClientKind.CopilotCli);
+                copilotCliDetected = true;
             }
             else
             {
-                _logger.LogDebug("Aspire MCP server is already configured in Copilot CLI");
+                _logger.LogDebug("GitHub Copilot CLI is not installed");
             }
-
-            // Register Playwright CLI installation applicator
-            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-            return;
         }
 
-        // Check if Copilot CLI is installed
-        _logger.LogDebug("Checking for GitHub Copilot CLI installation...");
-        var copilotVersion = await _copilotCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
-
-        if (copilotVersion is null)
+        if (!copilotAppDetected && !copilotCliDetected)
         {
-            _logger.LogDebug("GitHub Copilot CLI is not installed - skipping");
-            // Copilot CLI is not installed, no need to offer configuration
+            _logger.LogDebug("No GitHub Copilot environments are installed - skipping");
             return;
         }
 
-        _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", copilotVersion);
-
-        context.AddDetectedClient(AgentClientKind.CopilotCli);
-
-        // Check if the aspire server is already configured in the global config
-        _logger.LogDebug("Checking if Aspire MCP server is already configured in Copilot CLI global config...");
+        // The Copilot App automatically loads MCP servers and skills configured for Copilot CLI.
+        // See https://docs.github.com/en/copilot/how-tos/github-copilot-app/customize-github-copilot-app.
+        // Configure the shared Copilot locations once when either client is present.
+        _logger.LogDebug("Checking if Aspire MCP server is already configured in GitHub Copilot");
         if (!HasAspireServerConfigured(homeDirectory))
         {
-            // Copilot CLI is installed and aspire is not configured - offer to configure
-            _logger.LogDebug("Adding Copilot CLI applicator for global MCP configuration");
+            _logger.LogDebug("Adding GitHub Copilot applicator for global MCP configuration");
             context.AddApplicator(CreateApplicator(homeDirectory));
         }
         else
         {
-            _logger.LogDebug("Aspire MCP server is already configured in Copilot CLI");
+            _logger.LogDebug("Aspire MCP server is already configured in GitHub Copilot");
         }
 
-        // Register Playwright CLI installation applicator
         CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
     }
 
     /// <summary>
-    /// Gets the path to the Copilot CLI global configuration directory.
+    /// Gets the path to the GitHub Copilot global configuration directory.
     /// </summary>
     /// <param name="homeDirectory">The user's home directory.</param>
     private static string GetCopilotConfigDirectory(DirectoryInfo homeDirectory)
@@ -124,7 +131,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     }
 
     /// <summary>
-    /// Gets the path to the Copilot CLI MCP configuration file.
+    /// Gets the path to the GitHub Copilot MCP configuration file.
     /// </summary>
     /// <param name="homeDirectory">The user's home directory.</param>
     private static string GetMcpConfigFilePath(DirectoryInfo homeDirectory)
@@ -133,7 +140,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     }
 
     /// <summary>
-    /// Checks if the Copilot CLI global configuration has an "aspire" MCP server configured.
+    /// Checks if the GitHub Copilot global configuration has an "aspire" MCP server configured.
     /// </summary>
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <returns>True if the aspire server is already configured, false otherwise.</returns>
@@ -171,20 +178,20 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     }
 
     /// <summary>
-    /// Creates an applicator for configuring the MCP server in the Copilot CLI global configuration.
+    /// Creates an applicator for configuring the MCP server in the GitHub Copilot global configuration.
     /// </summary>
     /// <param name="homeDirectory">The user's home directory.</param>
     private static AgentEnvironmentApplicator CreateApplicator(DirectoryInfo homeDirectory)
     {
         return new AgentEnvironmentApplicator(
-            CopilotCliAgentEnvironmentScannerStrings.ApplicatorDescription,
+            CopilotAgentEnvironmentScannerStrings.ApplicatorDescription,
             ct => ApplyMcpConfigurationAsync(
                 homeDirectory,
                 ct));
     }
 
     /// <summary>
-    /// Creates or updates the mcp-config.json file in the Copilot CLI global configuration directory.
+    /// Creates or updates the mcp-config.json file in the GitHub Copilot global configuration directory.
     /// </summary>
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <param name="cancellationToken">A cancellation token.</param>

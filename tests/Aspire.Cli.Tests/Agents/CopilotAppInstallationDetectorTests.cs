@@ -1,17 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.CopilotApp;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Tests.Utils;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
+public class CopilotAppInstallationDetectorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task ScanAsync_WhenWindowsAppExecutableExists_DetectsCopilotApp()
+    public async Task GetInstallationMarker_WhenWindowsAppExecutableExists_ReturnsPath()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var localAppData = workspace.CreateDirectory("local-app-data");
@@ -25,53 +23,38 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         {
             ["LOCALAPPDATA"] = localAppData.FullName,
         });
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var executablePath = Path.Combine(appDirectory.FullName, "github.exe");
 
-        await CreateScanner(environment, workspace).ScanAsync(
-            context,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal([AgentClientKind.CopilotApp], context.DetectedClients);
-        Assert.Empty(context.Applicators);
+        Assert.Equal(executablePath, CreateDetector(environment, workspace).GetInstallationMarker());
     }
 
     [Fact]
-    public async Task ScanAsync_WhenUserMacOSAppBundleExists_DetectsCopilotApp()
+    public void GetInstallationMarker_WhenUserMacOSAppBundleExists_ReturnsPath()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        Directory.CreateDirectory(
-            Path.Combine(workspace.WorkspaceRoot.FullName, "Applications", "GitHub Copilot.app"));
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var appBundlePath = Path.Combine(workspace.WorkspaceRoot.FullName, "Applications", "GitHub Copilot.app");
+        Directory.CreateDirectory(appBundlePath);
 
-        await CreateScanner(TestEnvironment.CreateMacOS(), workspace).ScanAsync(
-            context,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal([AgentClientKind.CopilotApp], context.DetectedClients);
-        Assert.Empty(context.Applicators);
+        Assert.Equal(appBundlePath, CreateDetector(TestEnvironment.CreateMacOS(), workspace).GetInstallationMarker());
     }
 
     [Fact]
-    public async Task ScanAsync_WhenRuntimeMarkerIsPresent_DetectsPortableCopilotApp()
+    public void GetInstallationMarker_WhenRuntimeMarkerIsPresent_ReturnsEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
         {
-            [CopilotAppAgentEnvironmentScanner.AgentEnvironmentVariable] =
-                CopilotAppAgentEnvironmentScanner.AgentEnvironmentValue,
+            [CopilotAppInstallationDetector.AgentEnvironmentVariable] =
+                CopilotAppInstallationDetector.AgentEnvironmentValue,
         });
-        var context = CreateScanContext(workspace.WorkspaceRoot);
 
-        await CreateScanner(environment, workspace).ScanAsync(
-            context,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal([AgentClientKind.CopilotApp], context.DetectedClients);
-        Assert.Empty(context.Applicators);
+        Assert.Equal(
+            CopilotAppInstallationDetector.AgentEnvironmentVariable,
+            CreateDetector(environment, workspace).GetInstallationMarker());
     }
 
     [Fact]
-    public async Task ScanAsync_WhenLinuxDesktopEntryExists_DetectsCopilotApp()
+    public async Task GetInstallationMarker_WhenLinuxDesktopEntryExists_ReturnsPath()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var applicationsDirectory = workspace.CreateDirectory(
@@ -84,21 +67,18 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
             Exec=/opt/github-copilot/github
             """,
             TestContext.Current.CancellationToken);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var desktopEntryPath = Path.Combine(applicationsDirectory.FullName, "github-copilot.desktop");
 
-        await CreateScanner(TestEnvironment.CreateLinux(), workspace).ScanAsync(
-            context,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal([AgentClientKind.CopilotApp], context.DetectedClients);
-        Assert.Empty(context.Applicators);
+        Assert.Equal(
+            desktopEntryPath,
+            CreateDetector(TestEnvironment.CreateLinux(), workspace).GetInstallationMarker());
     }
 
     [Fact]
     public void GetLinuxApplicationDirectories_WithoutXdgOverrides_UsesFreedesktopDefaults()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var scanner = CreateScanner(TestEnvironment.CreateLinux(), workspace);
+        var detector = CreateDetector(TestEnvironment.CreateLinux(), workspace);
         var rootDirectory = Path.DirectorySeparatorChar.ToString();
 
         Assert.Equal(
@@ -107,7 +87,7 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 Path.Combine(rootDirectory, "usr", "local", "share", "applications"),
                 Path.Combine(rootDirectory, "usr", "share", "applications"),
             ],
-            scanner.GetLinuxApplicationDirectories());
+            detector.GetLinuxApplicationDirectories());
     }
 
     [Fact]
@@ -126,7 +106,7 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 "relative-directory",
                 secondDataDirectory.FullName),
         });
-        var scanner = CreateScanner(environment, workspace);
+        var detector = CreateDetector(environment, workspace);
 
         Assert.Equal(
             [
@@ -134,11 +114,11 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 Path.Combine(firstDataDirectory.FullName, "applications"),
                 Path.Combine(secondDataDirectory.FullName, "applications"),
             ],
-            scanner.GetLinuxApplicationDirectories());
+            detector.GetLinuxApplicationDirectories());
     }
 
     [Fact]
-    public async Task ScanAsync_WithoutInstallationOrRuntimeMarker_DoesNotDetectCopilotApp()
+    public void GetInstallationMarker_WithoutInstallationOrRuntimeMarker_ReturnsNull()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dataHome = workspace.CreateDirectory("xdg-data-home");
@@ -148,34 +128,17 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
             ["XDG_DATA_HOME"] = dataHome.FullName,
             ["XDG_DATA_DIRS"] = dataDirectory.FullName,
         });
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await CreateScanner(environment, workspace).ScanAsync(
-            context,
-            TestContext.Current.CancellationToken);
-
-        Assert.Empty(context.DetectedClients);
-        Assert.Empty(context.Applicators);
+        Assert.Null(CreateDetector(environment, workspace).GetInstallationMarker());
     }
 
-    private static CopilotAppAgentEnvironmentScanner CreateScanner(
+    private static CopilotAppInstallationDetector CreateDetector(
         IEnvironment environment,
         TemporaryWorkspace workspace)
     {
         return new(
+            environment,
             TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot,
-                homeDirectory: workspace.WorkspaceRoot),
-            environment,
-            NullLogger<CopilotAppAgentEnvironmentScanner>.Instance);
-    }
-
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory)
-    {
-        return new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = workingDirectory,
-            RepositoryRoot = workingDirectory,
-        };
+                homeDirectory: workspace.WorkspaceRoot));
     }
 }
