@@ -183,6 +183,47 @@ const session = await joinSession({
           },
         },
         {
+          name: "sla_report",
+          description: "Return the aspire-1p review SLA report (breached and approaching non-team PRs) plus the list of open external PRs, without opening the canvas. Intended for the hourly Teams notifier workflow.",
+          handler: async () => {
+            const { dashboard } = await getDashboard(false);
+            if (!dashboard.authenticated) {
+              return { authenticated: false, message: dashboard.message, sla: null, externalOpenPrs: [] };
+            }
+            const sla = dashboard.sla ?? null;
+            // Flatten SLA cards to lean rows so the notifier gets stable, small payloads
+            // (the full card carries signals/avatars the workflow does not need).
+            const leanCard = (c) => ({
+              repo: c.pr.repository,
+              number: c.pr.number,
+              title: c.pr.title,
+              url: c.pr.url,
+              author: c.pr.author,
+              state: c.sla?.state ?? null,
+              firstQualifiedAt: c.sla?.firstQualifiedAt ?? null,
+              warnAt: c.sla?.warnAt ?? null,
+              deadlineAt: c.sla?.deadlineAt ?? null,
+            });
+            return {
+              authenticated: true,
+              viewer: dashboard.viewer,
+              sla: sla
+                ? {
+                    repos: sla.repos,
+                    budgetHours: sla.budgetHours,
+                    warnHours: sla.warnHours,
+                    tz: sla.tz,
+                    total: sla.total,
+                    okCount: sla.okCount,
+                    breached: (sla.breached ?? []).map(leanCard),
+                    approaching: (sla.approaching ?? []).map(leanCard),
+                  }
+                : null,
+              externalOpenPrs: dashboard.externalOpenPrs ?? [],
+            };
+          },
+        },
+        {
           name: "accounts",
           description: "List every detected GitHub credential, whether it is active, and whether it can read its watched repos. Re-probes all accounts.",
           handler: async () => {

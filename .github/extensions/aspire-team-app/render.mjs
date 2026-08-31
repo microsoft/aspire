@@ -482,6 +482,12 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .pill.info    { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
 .pill.muted   { background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
 
+/* Live SLA countdown note under a card's pills. Colored by state; the "due in Xh" /
+   "overdue" text is recomputed client-side against the browser clock. */
+.sla-note { margin-top: 6px; font-size: 11px; font-weight: 600; line-height: 1.3; letter-spacing: 0.01em; }
+.sla-note.approaching { color: color-mix(in srgb, var(--warning), var(--fg) 20%); }
+.sla-note.breached { color: color-mix(in srgb, var(--danger), var(--fg) 12%); }
+
 /* Repository and delivery health */
 .health-shell {
   min-height: calc(100dvh - 106px); padding: 18px 20px 32px;
@@ -2325,6 +2331,9 @@ function prCard(item, actions) {
     "</div>" +
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
+    ((item.sla && item.sla.state && item.sla.state !== "ok")
+      ? '<div class="sla-note ' + (item.sla.state === "breached" ? "breached" : "approaching") + '">' + esc(slaNoteText(item.sla)) + "</div>"
+      : "") +
   "</a>";
   const acts = (actions && actions.length)
     ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
@@ -2461,6 +2470,68 @@ function collapsibleSect(opts) {
 
 // A clean, always-expanded primary queue (For you / Needs attention / Your PRs
 // outside). Masonry cards with a title, count metric, and descriptive subtitle.
+// ---- Review SLA (client-side live rendering) ----
+//
+// The server stores only STABLE anchors (deadlineAt is a fixed wall-clock instant that
+// already accounts for business hours). The live "due in Xh" / "overdue" text is computed
+// here against the browser clock, so it ticks without re-fetching and never churns the
+// broadcast payload. deadlineAt is the true moment the SLA expires in real time.
+
+function fmtDur(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return m + "m";
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  if (h < 24) return rm ? h + "h " + rm + "m" : h + "h";
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return rh ? d + "d " + rh + "h" : d + "d";
+}
+
+// One-line SLA status note shown under a card's pills.
+function slaNoteText(sla) {
+  if (!sla) return "";
+  if (sla.state === "breached") {
+    return "\u23f0 Out of SLA \u00b7 was due " + timeAgo(sla.deadlineAt);
+  }
+  if (sla.state === "approaching") {
+    const left = new Date(sla.deadlineAt).getTime() - Date.now();
+    return left > 0
+      ? "\u23f0 Review within SLA \u00b7 due in " + fmtDur(left)
+      : "\u23f0 Out of SLA \u00b7 due now";
+  }
+  return "";
+}
+
+// The pinned SLA panel: breached PRs first, then approaching. Renders nothing when
+// nothing is at risk. Reuses the standard focus card actions so a reviewer can act inline.
+function slaPanelHtml() {
+  const s = state.sla;
+  if (!s) return "";
+  const breached = s.breached || [];
+  const approaching = s.approaching || [];
+  const items = breached.concat(approaching);
+  if (!items.length) return "";
+  const tone = breached.length ? "danger" : "warning";
+  const repoLabel = (s.repos && s.repos.length) ? s.repos.map(shortRepo).join(", ") : "aspire-1p";
+  const parts = [];
+  if (breached.length) parts.push(breached.length + " out of SLA");
+  if (approaching.length) parts.push(approaching.length + " approaching");
+  const subtitle = "Non-team PRs in " + repoLabel + " on the " + s.budgetHours +
+    " business-hour review SLA \u00b7 " + parts.join(" \u00b7 ") + ". Review these first.";
+  return queuePanel({
+    id: "review-sla",
+    title: "Review SLA",
+    tone,
+    icon: ICONS.alertSm,
+    subtitle,
+    items,
+    exactCount: true,
+    cardActions: focusCardActions,
+    emptyText: "Nothing at risk right now.",
+  });
+}
+
 function queuePanel(opts) {
   const items = opts.items || [];
   const n = items.length;
@@ -2493,6 +2564,11 @@ function reviewBoardHtml() {
   const att = state.attention;
   seedReviewCollapse(att);
   let html = "";
+
+  // 0. Review SLA — pinned above everything. First-party aspire-1p PRs from outside the
+  //    team that are on the 1 business-day review SLA and in danger (approaching) or past
+  //    it (breached). Rendered first so at-risk reviews are impossible to miss.
+  html += slaPanelHtml();
 
   // 1. For you — personalized headline of your highest-leverage actions.
   if (att.forMe && att.forMe.length) {
@@ -2921,6 +2997,7 @@ function filtersView() {
         '<div class="policy-row">' + ICONS.pr + "<span><b>Drafts, merge conflicts, and needs-author-action</b> PRs are routed out of the shared lists, so reviewers only see PRs that are genuinely ready.</span></div>" +
         '<div class="policy-row">' + ICONS.xcircle + "<span><b>CI-failing</b> PRs are held out of Needs attention. A failure driven only by informational <b>aspire-1p checks</b> (proof of presence) is not counted as red.</span></div>" +
         '<div class="policy-row">' + ICONS.usersSm + "<span>PRs you authored <b>as yourself or via Copilot</b> both count as yours, so delegated work still lands in your lanes and developer totals.</span></div>" +
+        '<div class="policy-row">' + ICONS.clock + "<span><b>Review SLA:</b> non-team PRs in <b>aspire-1p</b> that reach Needs attention and have <b>no human review yet</b> carry a <b>1 business-day</b> (8 business-hour, Mon\u2013Fri 9\u20135 Pacific) review SLA. They are pinned to a <b>Review SLA</b> panel at the top, flagged <b>Review SLA</b> when approaching (6h) and <b>Out of SLA</b> once breached (8h). The clock stops the moment any human reviews.</span></div>" +
       "</div>" +
     "</div>" +
 

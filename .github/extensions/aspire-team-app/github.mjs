@@ -17,11 +17,13 @@ import {
   computeFocusExclusionItems,
   computeCommunityItems,
   isChecksFailing,
+  isCoreTeamAuthor,
   isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
+import { annotateDashboardSla, isSlaCandidatePr, isSlaRepo } from "./sla.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -823,9 +825,31 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
         developerCounts: createDeveloperPullRequestCounts(allPrs),
       };
+      // SLA candidates = the full (uncapped) focused "Needs attention" queue, narrowed to
+      // PRs the review SLA applies to: on an SLA repo, authored outside the core team, and
+      // not yet reviewed by a human. annotateDashboardSla() consumes this scratch field to
+      // stamp anchors/state and then removes it from the broadcast payload.
+      attention.slaCandidates = focusAll
+        .map((f) => card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone }))
+        .filter((c) => isSlaCandidatePr(c.pr));
     }
 
     const notifications = buildNotifications(allPrs, prefs ?? {}, dismissed ?? []);
+
+    // Lean list of every open, non-team PR on an SLA repo (drafts included). The hourly
+    // notifier uses this to detect brand-new external PRs; it is intentionally independent
+    // of the capped focus queue so a new PR is announced even before it surfaces there.
+    const externalOpenPrs = allPrs
+      .filter((p) => isSlaRepo(p.repository) && p.state === "open" && !isCoreTeamAuthor(p.author))
+      .map((p) => ({
+        repo: p.repository,
+        number: p.number,
+        title: p.title,
+        url: p.url,
+        author: p.author,
+        draft: !!p.draft,
+        createdAt: p.createdAt,
+      }));
 
     const counts = {
       prs: visiblePrs.length,
@@ -852,6 +876,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       showDrafts,
       reviewLimit,
       errors,
+      externalOpenPrs,
       fetchedAt: new Date().toISOString(),
     };
   }
@@ -859,5 +884,11 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   await Promise.all(jobs);
   // Final, authoritative progress tick so the deterministic bar completes with the snapshot.
   if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
-  return snapshot();
+  const snap = snapshot();
+  // Stamp SLA anchors/state and attach dashboard.sla (review mode only). This also
+  // reconciles + persists the durable firstQualifiedAt tracking store.
+  if (snap.mode === "review") {
+    await annotateDashboardSla(snap, { now: Date.now() });
+  }
+  return snap;
 }

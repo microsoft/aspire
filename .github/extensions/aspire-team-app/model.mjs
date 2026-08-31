@@ -84,7 +84,7 @@ function isBotAuthor(author, authorType) {
   if (knownBotAuthors.has(n)) return true;
   return n.endsWith("[bot]") || n.includes("bot") || n === "copilot" || n === "github-actions";
 }
-function isCoreTeamAuthor(author) {
+export function isCoreTeamAuthor(author) {
   return coreTeamOwnershipActor(author) !== null;
 }
 // Resolves the core-team actor that "owns" a PR by an author, honoring alias

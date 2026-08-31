@@ -43,6 +43,38 @@ export const nonBlockingCheckFailureRules = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Review SLA (first-party aspire-1p repo).
+// ---------------------------------------------------------------------------
+//
+// The private first-party mirror carries a 1-business-day review SLA: a PR that
+// is genuinely ready (i.e. it qualifies for the "Needs attention" focused queue),
+// was authored by someone outside the core team, and has not yet had a single
+// human review must not sit unreviewed past the budget. The clock is measured in
+// *business time* (Mon-Fri, 09:00-17:00 Pacific) so overnight and weekend hours do
+// not burn the budget. See sla.mjs for the business-hours math and tracking store.
+
+// Repos the SLA applies to. Matched case-insensitively against pr.repository.
+export const SLA_REPOS = ["devdiv-microsoft/aspire-1p"];
+
+// Total business-time budget before a ready, un-reviewed external PR is "out of SLA".
+export const SLA_BUDGET_HOURS = 8;
+
+// Business-time elapsed at which a PR is flagged "approaching" (early warning) so the
+// team can prioritize it before it breaches. Must be < SLA_BUDGET_HOURS.
+export const SLA_WARN_HOURS = 6;
+
+// IANA timezone the business-hours window is expressed in. Intl handles DST, so the
+// 09:00-17:00 window tracks Pacific daylight/standard transitions automatically.
+export const SLA_TIMEZONE = "America/Los_Angeles";
+
+// Business-day window [start, end) in whole local hours. 9 => 09:00, 17 => 17:00.
+export const SLA_WORK_START_HOUR = 9;
+export const SLA_WORK_END_HOUR = 17;
+
+// Weekdays counted as business days (0 = Sunday .. 6 = Saturday). Mon-Fri.
+export const SLA_WORK_DAYS = [1, 2, 3, 4, 5];
+
 // Markers for the Issues focus buckets (ported from pr-dashboard models.ts). These
 // are matched case-insensitively via substring (title/label) or login equality.
 export const ctiTeamTitleMarker = "[aspiree2e]";
