@@ -137,6 +137,11 @@
         <target state="new">Console logs capture paused at {0}</target>
         <note>{0} is a time</note>
       </trans-unit>
+      <trans-unit id="TerminalFocusControlsHint">
+        <source>F6: Focus terminal controls</source>
+        <target state="new">F6: Focus terminal controls</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
         <target state="new">Decrease font size</target>

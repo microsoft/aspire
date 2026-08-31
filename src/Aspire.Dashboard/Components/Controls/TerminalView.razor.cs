@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Controls;
@@ -59,6 +60,33 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public int ReplicaIndex { get; set; }
 
     /// <summary>
+    /// Gets or sets the accessible label for decreasing the font size.
+    /// </summary>
+    /// <remarks>
+    /// The label parameters all default to the shared <c>ConsoleLogs</c> resources so the four hosts that render a
+    /// terminal (resource page, dock, detached window, interaction dialog) don't each have to thread the same five
+    /// strings through. Set them only to override.
+    /// </remarks>
+    [Parameter]
+    public string? DecreaseFontSizeLabel { get; set; }
+
+    /// <summary>Gets or sets the accessible label for increasing the font size.</summary>
+    [Parameter]
+    public string? IncreaseFontSizeLabel { get; set; }
+
+    /// <summary>Gets or sets the accessible label for the terminal dimensions selector.</summary>
+    [Parameter]
+    public string? TerminalDimensionsLabel { get; set; }
+
+    /// <summary>Gets or sets the label for fitting the terminal to the available space.</summary>
+    [Parameter]
+    public string? FitLabel { get; set; }
+
+    /// <summary>Gets or sets the hint describing how to move focus from the terminal to its controls.</summary>
+    [Parameter]
+    public string? FocusControlsHintLabel { get; set; }
+
+    /// <summary>
     /// Gets or sets an explicit endpoint (path and query) to connect to, overriding
     /// <see cref="ResourceName"/> and <see cref="ReplicaIndex"/>.
     /// </summary>
@@ -82,17 +110,17 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public bool Chromeless { get; set; }
 
     /// <summary>
-    /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
-    /// dims, font size, etc.). The host page subscribes so the chrome that
-    /// used to live inside the terminal frame — status badge, "Take control"
-    /// button, font controls, size dropdown, dims readout — can be rendered
-    /// in the page's existing toolbar instead.
+    /// Raised when the JS side pushes a fresh terminal state snapshot (role,
+    /// dimensions, font size, etc.) for hosts that need to observe it.
     /// </summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> Loc { get; init; }
 
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
@@ -213,11 +241,22 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/Components/Controls/TerminalView.razor.js");
 
-            _selfRef ??= DotNetObjectReference.Create(this);
+            if (OnToolbarStateChanged.HasDelegate)
+            {
+                _selfRef ??= DotNetObjectReference.Create(this);
+            }
 
             _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef, new TerminalViewOptions(Chromeless));
+                "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef, new TerminalViewOptions
+                {
+                    Chromeless = Chromeless,
+                    DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
+                    IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
+                    TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
+                    Fit = FitLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)],
+                    FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalFocusControlsHint)],
+                });
         }
         catch (JSDisconnectedException)
         {
@@ -284,8 +323,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Invoked by the JS terminal whenever its role/size/font state changes.
     /// Forwards the snapshot to the host page via <see cref="OnToolbarStateChanged"/>.
-    /// JS remains the source of truth for terminal state — the toolbar
-    /// renders whatever the most recent snapshot says.
+    /// JS remains the source of truth for terminal state.
     /// </summary>
     [JSInvokable]
     public Task OnTerminalStateChanged(TerminalToolbarState state)
@@ -459,12 +497,29 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 /// Options passed to the JS <c>initTerminal</c> entry point. Serialized with camelCase property names by the default
 /// JS interop options, so <c>Chromeless</c> arrives as <c>options.chromeless</c>.
 /// </summary>
-/// <param name="Chromeless">Whether to render without the card border, titlebar and internal padding.</param>
-public sealed record TerminalViewOptions(bool Chromeless);
+public sealed record TerminalViewOptions
+{
+    /// <summary>Whether to render without the card border, titlebar and internal padding.</summary>
+    public bool Chromeless { get; init; }
+
+    /// <summary>Accessible label for the footer's decrease-font-size button.</summary>
+    public required string DecreaseFontSize { get; init; }
+
+    /// <summary>Accessible label for the footer's increase-font-size button.</summary>
+    public required string IncreaseFontSize { get; init; }
+
+    /// <summary>Accessible label for the footer's dimensions selector.</summary>
+    public required string TerminalDimensions { get; init; }
+
+    /// <summary>Label for the option that fits the grid to the available space.</summary>
+    public required string Fit { get; init; }
+
+    /// <summary>Hint describing how to move focus from the terminal to its controls.</summary>
+    public required string FocusControlsHint { get; init; }
+}
 
 /// <summary>
-/// Snapshot of the JS terminal's current role, sizing, and dims, pushed up
-/// to the host page so the toolbar can render the right state.
+/// Snapshot of the JS terminal's current role, sizing, and dimensions.
 /// </summary>
 public sealed record TerminalToolbarState
 {

@@ -214,6 +214,9 @@
   <data name="TerminalToolbarOpenInWindowBlocked" xml:space="preserve">
     <value>The browser blocked the terminal window. Allow pop-ups for this site and try again.</value>
   </data>
+  <data name="TerminalFocusControlsHint" xml:space="preserve">
+    <value>F6: Focus terminal controls</value>
+  </data>
   <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
     <value>Console logs</value>
     <comment>Option in the View dropdown that shows the resource's console logs.</comment>

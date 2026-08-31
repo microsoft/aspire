@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
@@ -127,6 +128,7 @@ public partial class ConsoleLogsTests
         // the live resource defaults to Terminal, so only the Terminal item is
         // checked.
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Equal(2, instance.LogsMenuItemsForTest.Count);
         Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[0].Role);
         Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[1].Role);
         Assert.False(instance.LogsMenuItemsForTest[0].Checked);
@@ -592,12 +594,22 @@ public partial class ConsoleLogsTests
         {
             builder.Add(p => p.ResourceName, "first-resource");
             builder.Add(p => p.ReplicaIndex, 0);
+            builder.Add(p => p.DecreaseFontSizeLabel, "Decrease font size");
+            builder.Add(p => p.IncreaseFontSizeLabel, "Increase font size");
+            builder.Add(p => p.TerminalDimensionsLabel, "Terminal dimensions");
+            builder.Add(p => p.FitLabel, "Fit");
+            builder.Add(p => p.FocusControlsHintLabel, "F6: Focus terminal controls");
         });
 
         cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.ResourceName, "second-resource");
             builder.Add(p => p.ReplicaIndex, 1);
+            builder.Add(p => p.DecreaseFontSizeLabel, "Decrease font size");
+            builder.Add(p => p.IncreaseFontSizeLabel, "Increase font size");
+            builder.Add(p => p.TerminalDimensionsLabel, "Terminal dimensions");
+            builder.Add(p => p.FitLabel, "Fit");
+            builder.Add(p => p.FocusControlsHintLabel, "F6: Focus terminal controls");
         });
 
         initTerminal.SetResult(1);
@@ -608,9 +620,15 @@ public partial class ConsoleLogsTests
             var reconnect = Assert.Single(reconnectTerminal.Invocations);
             var initUrl = Assert.IsType<string>(init.Arguments[1]);
             var reconnectUrl = Assert.IsType<string>(reconnect.Arguments[1]);
+            var labels = JsonSerializer.SerializeToElement(init.Arguments[3], JsonSerializerOptions.Web);
 
             Assert.Contains("resource=first-resource", initUrl);
             Assert.Contains("replica=0", initUrl);
+            Assert.Equal("Decrease font size", labels.GetProperty("decreaseFontSize").GetString());
+            Assert.Equal("Increase font size", labels.GetProperty("increaseFontSize").GetString());
+            Assert.Equal("Terminal dimensions", labels.GetProperty("terminalDimensions").GetString());
+            Assert.Equal("Fit", labels.GetProperty("fit").GetString());
+            Assert.Equal("F6: Focus terminal controls", labels.GetProperty("focusControlsHint").GetString());
             Assert.Equal(1, reconnect.Arguments[0]);
             Assert.Contains("resource=second-resource", reconnectUrl);
             Assert.Contains("replica=1", reconnectUrl);
@@ -668,8 +686,6 @@ public partial class ConsoleLogsTests
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
         module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
-        module.SetupVoid("refreshToolbarState", _ => true).SetVoidResult();
-        module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult([]);
     }
 
     private static ResourceViewModel CreateTerminalResource(string resourceName, int replicaIndex, int replicaCount, KnownResourceState state = KnownResourceState.Running)

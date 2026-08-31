@@ -43,8 +43,8 @@ public class WithTerminalTests : IAsyncLifetime
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
-        Assert.Equal(120, annotation.Options.Columns);
-        Assert.Equal(30, annotation.Options.Rows);
+        Assert.Equal(132, annotation.Options.Columns);
+        Assert.Equal(50, annotation.Options.Rows);
 
         // Until BeforeStartEvent fires the per-replica hosts are not yet materialized:
         // TerminalHosts is empty and IsInitialized is false. This deferral is what
