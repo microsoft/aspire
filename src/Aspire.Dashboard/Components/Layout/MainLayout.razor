@@ -28,8 +28,6 @@
             {
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
-                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
-                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
             <FluentAnchor Class="header-button"
@@ -103,8 +101,6 @@
             {
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
-                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
-                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
             <UserProfile/>

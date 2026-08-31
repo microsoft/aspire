@@ -59,6 +59,7 @@ internal static class FluentUISetupHelpers
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
         module.SetupVoid("goToNextFocusableElement", _ => true);
         module.SetupVoid("initializeKeyboardNavigation", _ => true);
+        module.SetupVoid("disposeKeyboardNavigation", _ => true);
         module.SetupVoid("removeKeyboardNavigation", _ => true);
     }
 
@@ -268,6 +269,7 @@ internal static class FluentUISetupHelpers
         public int GetRunsCallCount { get; private set; }
 
         public Action<DashboardRunDescriptor, bool>? OnSetRunPinned { get; set; }
+        public Action<DashboardRunDescriptor, string?>? OnSetRunNote { get; set; }
 
         public IReadOnlyList<DashboardRunDescriptor> GetRuns()
         {
@@ -284,6 +286,14 @@ internal static class FluentUISetupHelpers
         {
             OnSetRunPinned?.Invoke(run, isPinned);
             _runs.Single(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal)).IsPinned = isPinned;
+        }
+
+        public void SetRunNote(DashboardRunDescriptor run, string? note)
+        {
+            OnSetRunNote?.Invoke(run, note);
+            var storedRun = _runs.Single(candidate => string.Equals(candidate.RunId, run.RunId, StringComparison.Ordinal));
+            storedRun.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            storedRun.IsPinned |= storedRun.Note is not null;
         }
 
         public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;

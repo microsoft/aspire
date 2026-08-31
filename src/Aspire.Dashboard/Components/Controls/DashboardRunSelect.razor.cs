@@ -5,32 +5,28 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Components.Controls;
 
-public partial class DashboardRunSelect : ComponentBase
+public partial class DashboardRunSelect : ComponentBase, IDisposable
 {
-    private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
-    private static readonly Icon s_pinIcon = new Icons.Regular.Size16.Pin();
-    private static readonly Icon s_pinnedIcon = new Icons.Filled.Size16.Pin();
+    private static readonly TimeSpan s_bubbleShowDelay = TimeSpan.FromSeconds(1);
 
-    private string RunSelectTitle => Loc[nameof(LayoutResources.DashboardRunSelectTitle)];
-    private string RunSelectAccessibleLabel => Loc[nameof(LayoutResources.DashboardRunSelectAccessibleLabel), SelectedRunText];
-    private string SelectedRunText => SelectedRunIsCurrent
-        ? Loc[nameof(LayoutResources.DashboardRunSelectCurrent)]
-        : FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, SelectedRunStartedAtUtc.UtcDateTime);
+    private DashboardRunDescriptor? _activeRun;
+    private bool _bubbleOpen;
+    private string? _note;
+    private CancellationTokenSource? _showBubbleCancellation;
+
+    private string TimelineTitle => Loc[nameof(LayoutResources.DashboardRunTimelineTitle)];
+    private IReadOnlyList<DashboardRunDescriptor> Runs => RunStore.GetRuns()
+        .Where(run => !run.IsPruned)
+        .OrderByDescending(run => run.IsCurrent)
+        .ThenByDescending(run => run.StartedAtUtc)
+        .ToArray();
 
     [Parameter, EditorRequired]
     public required string SelectedRunId { get; set; }
-
-    [Parameter]
-    public bool SelectedRunIsCurrent { get; set; }
-
-    [Parameter]
-    public DateTimeOffset SelectedRunStartedAtUtc { get; set; }
 
     [Parameter]
     public EventCallback<string?> SelectedRunIdChanged { get; set; }
@@ -47,65 +43,106 @@ public partial class DashboardRunSelect : ComponentBase
     [Inject]
     public required ILogger<DashboardRunSelect> Logger { get; init; }
 
-    private IList<MenuButtonItem> LoadRuns()
-    {
-        var runs = RunStore.GetRuns()
-            .Where(run => !run.IsPruned)
-            .OrderByDescending(run => run.IsCurrent)
-            .ThenByDescending(run => run.IsPinned)
-            .ThenByDescending(run => run.StartedAtUtc)
-            .ToArray();
-        var menuItems = new List<MenuButtonItem>();
-        foreach (var run in runs)
-        {
-            var menuItem = new MenuButtonItem
-            {
-                Text = FormatRunOption(run),
-                Role = MenuItemRole.MenuItemRadio,
-                Checked = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal),
-                Icon = s_checkmarkIcon,
-                SecondaryActionIcon = run.IsPinned ? s_pinnedIcon : s_pinIcon,
-                SecondaryActionAriaLabel = Loc[run.IsPinned
-                    ? nameof(LayoutResources.DashboardRunSelectUnpin)
-                    : nameof(LayoutResources.DashboardRunSelectPin)],
-                IsSecondaryActionSelected = run.IsPinned,
-                OnSecondaryActionClick = () =>
-                {
-                    SetRunPinned(run, !run.IsPinned);
-                    return Task.CompletedTask;
-                },
-                OnClick = () => SelectedRunIdChanged.InvokeAsync(run.IsCurrent ? null : run.RunId)
-            };
-            menuItems.Add(menuItem);
+    private Task SelectRunAsync(DashboardRunDescriptor run)
+        => SelectedRunIdChanged.InvokeAsync(run.IsCurrent ? null : run.RunId);
 
-            if (run.IsCurrent && runs.Any(candidate => !candidate.IsCurrent))
-            {
-                menuItems.Add(new MenuButtonItem { IsDivider = true });
-            }
+    private async Task ShowBubbleAfterDelayAsync(DashboardRunDescriptor run)
+    {
+        if (_bubbleOpen && ReferenceEquals(_activeRun, run))
+        {
+            return;
         }
 
-        return menuItems;
-    }
-
-    private void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
-    {
+        CancelAndDispose(ref _showBubbleCancellation);
+        var cancellation = _showBubbleCancellation = new();
         try
         {
-            RunStore.SetRunPinned(run, isPinned);
+            await Task.Delay(s_bubbleShowDelay, cancellation.Token);
+            _activeRun = run;
+            _note = run.Note;
+            _bubbleOpen = true;
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void CancelPendingBubble() => CancelAndDispose(ref _showBubbleCancellation);
+
+    private void SaveNote(string? note)
+    {
+        if (_activeRun is null)
+        {
+            return;
+        }
+
+        _note = note;
+        try
+        {
+            RunStore.SetRunNote(_activeRun, _note);
+            _note = _activeRun.Note;
         }
         catch (Exception exception)
         {
-            Logger.LogError(exception, "Failed to update the pinned state of dashboard run '{RunId}'.", run.RunId);
+            Logger.LogError(exception, "Failed to save the note for dashboard run '{RunId}'.", _activeRun.RunId);
         }
     }
 
-    private string FormatRunOption(DashboardRunDescriptor run)
+    private void TogglePinned()
     {
-        if (run.IsCurrent)
+        if (_activeRun is null)
         {
-            return Loc[nameof(LayoutResources.DashboardRunSelectCurrent)];
+            return;
         }
 
-        return FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, run.StartedAtUtc.UtcDateTime);
+        try
+        {
+            RunStore.SetRunPinned(_activeRun, !_activeRun.IsPinned);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Failed to update the pinned state of dashboard run '{RunId}'.", _activeRun.RunId);
+        }
+    }
+
+    private string FormatRun(DashboardRunDescriptor run) => run.IsCurrent
+        ? Loc[nameof(LayoutResources.DashboardRunSelectCurrent)]
+        : FormatRunTimestamp(run);
+
+    private string FormatRunTimestamp(DashboardRunDescriptor run)
+        => FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, run.StartedAtUtc.UtcDateTime);
+
+    private static string GetNodeId(DashboardRunDescriptor run) => $"dashboard-run-{run.RunId}";
+
+    private static string GetNodeClass(DashboardRunDescriptor run, bool isSelected)
+    {
+        var classes = "application-run-node";
+        if (run.IsCurrent)
+        {
+            classes += " current";
+        }
+        if (isSelected)
+        {
+            classes += " selected";
+        }
+        if (run.Note is not null)
+        {
+            classes += " annotated";
+        }
+
+        return classes;
+    }
+
+    private static void CancelAndDispose(ref CancellationTokenSource? cancellation)
+    {
+        cancellation?.Cancel();
+        cancellation?.Dispose();
+        cancellation = null;
+    }
+
+    public void Dispose()
+    {
+        CancelAndDispose(ref _showBubbleCancellation);
+        GC.SuppressFinalize(this);
     }
 }

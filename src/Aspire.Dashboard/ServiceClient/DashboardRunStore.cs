@@ -48,6 +48,13 @@ public interface IDashboardRunStore
     void SetRunPinned(DashboardRunDescriptor run, bool isPinned);
 
     /// <summary>
+    /// Sets the investigation note for the specified dashboard run.
+    /// </summary>
+    /// <param name="run">The dashboard run to update.</param>
+    /// <param name="note">The note to save, or an empty value to clear it.</param>
+    void SetRunNote(DashboardRunDescriptor run, string? note);
+
+    /// <summary>
     /// Attempts to acquire a lease that keeps the specified dashboard run available while it is selected.
     /// </summary>
     /// <param name="run">The dashboard run to lease.</param>
@@ -72,6 +79,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     internal const string DatabaseFileName = "dashboard.db";
     internal const int MaxApplicationDirectoryNameLength = 80;
     internal const int MaxRuns = 10;
+    internal const int MaxNoteLength = 2000;
     internal const int SchemaVersion = DashboardSqliteDatabase.SchemaVersion;
 
     private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
@@ -243,6 +251,38 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
     {
+        UpdateRunMetadata(run, metadata =>
+        {
+            if (!isPinned && !string.IsNullOrEmpty(metadata.Note))
+            {
+                throw new InvalidOperationException($"Dashboard run '{run.RunId}' cannot be unpinned while it has a note.");
+            }
+
+            return metadata with { IsPinned = isPinned };
+        });
+    }
+
+    public void SetRunNote(DashboardRunDescriptor run, string? note)
+    {
+        var normalizedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (normalizedNote?.Length > MaxNoteLength)
+        {
+            throw new ArgumentException($"Dashboard run notes cannot exceed {MaxNoteLength} characters.", nameof(note));
+        }
+
+        UpdateRunMetadata(
+            run,
+            metadata => metadata with
+            {
+                Note = normalizedNote,
+                IsPinned = normalizedNote is not null || metadata.IsPinned
+            });
+    }
+
+    private void UpdateRunMetadata(
+        DashboardRunDescriptor run,
+        Func<DashboardRunMetadata, DashboardRunMetadata> update)
+    {
         var storedRun = GetRunById(run.RunId);
         if (storedRun is null)
         {
@@ -258,28 +298,24 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 ? null
                 : TryOpenRunLock(runDirectory)
                     ?? throw new InvalidOperationException($"Dashboard run '{storedRun.RunId}' is no longer available.");
-            UpdatePinnedState(storedRun, runDirectory, isPinned);
-        }
-    }
+            var metadataPath = Path.Combine(runDirectory, "run.json");
+            var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+            if (metadata is not { SchemaVersion: SchemaVersion } ||
+                !string.Equals(metadata.RunId, storedRun.RunId, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException($"Dashboard run metadata for '{storedRun.RunId}' is invalid.");
+            }
 
-    private void UpdatePinnedState(DashboardRunDescriptor run, string runDirectory, bool isPinned)
-    {
-        var metadataPath = Path.Combine(runDirectory, "run.json");
-        var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-        if (metadata is not { SchemaVersion: SchemaVersion } ||
-            !string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
-        {
-            throw new InvalidDataException($"Dashboard run metadata for '{run.RunId}' is invalid.");
-        }
+            var updatedMetadata = update(metadata);
+            WriteMetadata(updatedMetadata, metadataPath);
+            if (string.Equals(storedRun.RunId, RunId, StringComparison.Ordinal))
+            {
+                _metadata = updatedMetadata;
+            }
 
-        var updatedMetadata = metadata with { IsPinned = isPinned };
-        WriteMetadata(updatedMetadata, metadataPath);
-        if (string.Equals(run.RunId, RunId, StringComparison.Ordinal))
-        {
-            _metadata = updatedMetadata;
+            storedRun.IsPinned = updatedMetadata.IsPinned;
+            storedRun.Note = updatedMetadata.Note;
         }
-
-        run.IsPinned = isPinned;
     }
 
     public void PublishRun()
@@ -531,7 +567,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             Path.Combine(runDirectory, metadata.DatabaseFileName),
             isCurrent)
         {
-            IsPinned = metadata.IsPinned
+            IsPinned = metadata.IsPinned,
+            Note = metadata.Note
         };
     }
 
@@ -620,6 +657,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         public string? ApplicationName { get; init; }
         public required string DatabaseFileName { get; init; }
         public bool IsPinned { get; init; }
+        public string? Note { get; init; }
     }
 }
 
@@ -655,6 +693,11 @@ public sealed record DashboardRunDescriptor(
     /// Gets a value indicating whether the dashboard run is pinned.
     /// </summary>
     public bool IsPinned { get; internal set; }
+
+    /// <summary>
+    /// Gets the investigation note associated with the dashboard run.
+    /// </summary>
+    public string? Note { get; internal set; }
 
     internal bool IsLeased { get; set; }
 }

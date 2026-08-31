@@ -1,13 +1,81 @@
-<div class="application-run-select">
-    <AspireMenuButton Text="@SelectedRunText"
-                      Title="@RunSelectTitle"
-                      aria-label="@RunSelectAccessibleLabel"
-                      IconStart="@(new Icons.Filled.Size12.Circle())"
-                      IconStartClass="application-run-status"
-                      IconStartColor="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
-                      ItemsProvider="@LoadRuns"
-                      ButtonAppearance="Appearance.Stealth"
-                      ButtonClass="application-run-select-button"
-                      HideIcon="true"
-                      RestoreFocusOnItemClick="true" />
+@using LayoutResources = Aspire.Dashboard.Resources.Layout
+
+<div class="application-run-timeline" role="group" aria-label="@TimelineTitle">
+    <div class="application-run-timeline-track">
+        @foreach (var run in Runs)
+        {
+            var runText = FormatRun(run);
+            var isSelected = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal);
+            <div class="application-run-node-container"
+                 @onmouseenter="@(() => ShowBubbleAfterDelayAsync(run))"
+                 @onmouseleave="@CancelPendingBubble">
+                <button id="@GetNodeId(run)"
+                        class="@GetNodeClass(run, isSelected)"
+                        type="button"
+                        aria-label="@Loc[nameof(LayoutResources.DashboardRunTimelineSelect), runText]"
+                        aria-pressed="@(isSelected ? "true" : "false")"
+                        @onclick="@(() => SelectRunAsync(run))">
+                    <span class="application-run-node-dot">
+                        @if (run.IsPinned)
+                        {
+                            <FluentIcon Value="@(new Icons.Filled.Size12.Pin())"
+                                        Class="application-run-node-pin"
+                                        Color="Color.Custom"
+                                        CustomColor="@(isSelected
+                                            ? "#ffffff"
+                                            : "var(--accent-fill-rest)")"
+                                        aria-label="@Loc[nameof(LayoutResources.DashboardRunSelectUnpin)]" />
+                        }
+                    </span>
+                </button>
+                @if (run.Note is not null)
+                {
+                    <span class="application-run-node-note"
+                          role="img"
+                          aria-label="@Loc[nameof(LayoutResources.DashboardRunTimelineNoteLabel)]"></span>
+                }
+            </div>
+        }
+    </div>
+
+    @if (_activeRun is not null)
+    {
+        <FluentPopover AnchorId="@GetNodeId(_activeRun)"
+                       @bind-Open="_bubbleOpen"
+                       AutoFocus="false"
+                       FixedPlacement="true"
+                       Class="application-run-bubble">
+            <Body>
+                <div class="application-run-bubble-content">
+                    <div class="application-run-bubble-header">
+                        <div class="application-run-bubble-time">@FormatRunTimestamp(_activeRun)</div>
+                        <button class="application-run-bubble-pin"
+                                type="button"
+                                title="@Loc[_activeRun.IsPinned
+                                    ? nameof(LayoutResources.DashboardRunSelectUnpin)
+                                    : nameof(LayoutResources.DashboardRunSelectPin)]"
+                                aria-label="@Loc[_activeRun.IsPinned
+                                    ? nameof(LayoutResources.DashboardRunSelectUnpin)
+                                    : nameof(LayoutResources.DashboardRunSelectPin)]"
+                                disabled="@(_activeRun.Note is not null)"
+                                @onclick="@TogglePinned">
+                            <FluentIcon Value="@(_activeRun.IsPinned
+                                ? new Icons.Filled.Size16.Pin()
+                                : (Icon)new Icons.Regular.Size16.Pin())"
+                                        Color="Color.Custom"
+                                        CustomColor="var(--accent-fill-rest)" />
+                        </button>
+                    </div>
+                    <FluentTextArea Value="@_note"
+                                    ValueChanged="@SaveNote"
+                                    Placeholder="@Loc[nameof(LayoutResources.DashboardRunTimelineNotePlaceholder)]"
+                                    aria-label="@Loc[nameof(LayoutResources.DashboardRunTimelineNoteLabel)]"
+                                    Rows="3"
+                                    Immediate="true"
+                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                    Maxlength="@DashboardRunStore.MaxNoteLength" />
+                </div>
+            </Body>
+        </FluentPopover>
+    }
 </div>
