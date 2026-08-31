@@ -27,7 +27,7 @@ internal sealed class AspireSkillsBundle
     /// <summary>
     /// Gets installable files for the specified skill.
     /// </summary>
-    public Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<AgentAssetFile>> GetSkillFilesAsync(AgentAssetDefinition skill, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(skill);
         cancellationToken.ThrowIfCancellationRequested();
@@ -38,7 +38,7 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle does not contain skill '{0}'.", skill.Name));
         }
 
-        List<SkillAssetFile> files = [];
+        List<AgentAssetFile> files = [];
         foreach (var bundledFile in bundledSkill.Files.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
         {
             var relativePath = bundledFile.RelativePath;
@@ -51,13 +51,13 @@ internal sealed class AspireSkillsBundle
             files.Add(bundledFile);
         }
 
-        return Task.FromResult<IReadOnlyList<SkillAssetFile>>(files);
+        return Task.FromResult<IReadOnlyList<AgentAssetFile>>(files);
     }
 
     /// <summary>
     /// Gets the installable skill definitions declared by the bundle manifest.
     /// </summary>
-    public IReadOnlyList<SkillDefinition> GetSkillDefinitions()
+    public IReadOnlyList<AgentAssetDefinition> GetSkillDefinitions()
     {
         return _skills
             .Select(static skill => skill.Definition)
@@ -66,5 +66,5 @@ internal sealed class AspireSkillsBundle
 }
 
 internal sealed record ValidatedAspireSkill(
-    SkillDefinition Definition,
-    IReadOnlyList<SkillAssetFile> Files);
+    AgentAssetDefinition Definition,
+    IReadOnlyList<AgentAssetFile> Files);

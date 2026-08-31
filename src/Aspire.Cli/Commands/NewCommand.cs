@@ -600,7 +600,7 @@ internal sealed class NewCommand : BaseCommand
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // The template already produced the AppHost, so don't pre-select the one-time aspireify
         // wiring skill — users can still opt into it from the prompt.
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, AgentInitCommand.ExcludeOneTimeSetupAssetsFromDefaults, cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {

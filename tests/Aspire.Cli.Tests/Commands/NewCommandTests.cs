@@ -2441,6 +2441,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
                 return runner;
             };
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3256,6 +3257,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3284,6 +3286,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
+            options.AgentEnvironmentDetectorFactory = _ => new FakeAgentEnvironmentDetector(AgentClient.CopilotCli);
         });
         using var provider = services.BuildServiceProvider();
 

@@ -29,9 +29,8 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        // Scanner adds applicators for: Aspire MCP, Playwright CLI, and agent instructions
-        Assert.NotEmpty(context.Applicators);
-        Assert.Contains(context.Applicators, a => a.Description.Contains("GitHub Copilot"));
+        var mcpApplicator = Assert.Single(context.Applicators, static applicator => applicator.AssetKind is AgentAssetKind.Mcp);
+        Assert.Equal(CopilotAgentEnvironmentScannerStrings.ApplicatorDescription, mcpApplicator.Description);
     }
 
     [Fact]

@@ -147,9 +147,19 @@
         <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_NoCompatibleClientForAssetKind">
+        <source>No detected agent environment supports {0} assets. Skipping their default installation.</source>
+        <target state="new">No detected agent environment supports {0} assets. Skipping their default installation.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectMcpServers">
+        <source>Which MCP servers should be installed?</source>
+        <target state="new">Which MCP servers should be installed?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">

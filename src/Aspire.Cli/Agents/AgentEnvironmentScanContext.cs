@@ -9,8 +9,9 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
+    private readonly HashSet<string> _applicatorTargets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<AgentClientKind> _detectedClients = [];
+    private readonly HashSet<AgentClient> _detectedClients = [];
 
     /// <summary>
     /// Gets the working directory being scanned.
@@ -37,6 +38,13 @@ internal sealed class AgentEnvironmentScanContext
     public void AddApplicator(AgentEnvironmentApplicator applicator)
     {
         ArgumentNullException.ThrowIfNull(applicator);
+
+        if (applicator.TargetId is not null &&
+            !_applicatorTargets.Add($"{applicator.AssetKind}:{applicator.TargetId}"))
+        {
+            return;
+        }
+
         _applicators.Add(applicator);
     }
 
@@ -66,7 +74,7 @@ internal sealed class AgentEnvironmentScanContext
     /// Aspire MCP server still needs configuring.
     /// </summary>
     /// <param name="client">The detected agent client.</param>
-    public void AddDetectedClient(AgentClientKind client)
+    public void AddDetectedClient(AgentClient client)
     {
         _detectedClients.Add(client);
     }
@@ -74,5 +82,11 @@ internal sealed class AgentEnvironmentScanContext
     /// <summary>
     /// Gets the set of agent clients detected as present in the environment.
     /// </summary>
-    public IReadOnlyCollection<AgentClientKind> DetectedClients => _detectedClients;
+    public IReadOnlyCollection<AgentClient> DetectedClients => _detectedClients;
+
+    /// <summary>
+    /// Gets the detected client kinds for existing client-specific configuration paths.
+    /// </summary>
+    public IReadOnlyCollection<AgentClientKind> DetectedClientKinds =>
+        _detectedClients.Select(static client => client.Kind).ToList();
 }

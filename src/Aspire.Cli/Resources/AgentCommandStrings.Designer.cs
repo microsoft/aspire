@@ -187,6 +187,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Which MCP servers should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectMcpServers {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectMcpServers", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
         internal static string InitCommand_InstalledPlaywrightCli {
@@ -246,6 +255,15 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_ConfiguresDetectedAgentEnvironments {
             get {
                 return ResourceManager.GetString("InitCommand_ConfiguresDetectedAgentEnvironments", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No detected agent environment supports {0} assets. Skipping their default installation..
+        /// </summary>
+        internal static string InitCommand_NoCompatibleClientForAssetKind {
+            get {
+                return ResourceManager.GetString("InitCommand_NoCompatibleClientForAssetKind", resourceCulture);
             }
         }
 

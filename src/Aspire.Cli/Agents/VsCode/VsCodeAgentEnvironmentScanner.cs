@@ -60,7 +60,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         {
             _logger.LogDebug("Found .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
 
-            context.AddDetectedClient(AgentClientKind.VsCode);
+            context.AddDetectedClient(AgentClient.VsCode);
 
             // Check if the aspire server is already configured
             if (!HasAspireServerConfigured(vsCodeFolder))
@@ -81,7 +81,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         {
             _logger.LogDebug("No .vscode folder found, but VS Code is available on the system");
 
-            context.AddDetectedClient(AgentClientKind.VsCode);
+            context.AddDetectedClient(AgentClient.VsCode);
 
             // No .vscode folder found, but VS Code is available
             // Use workspace root for new .vscode folder
@@ -229,7 +229,9 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     {
         return new AgentEnvironmentApplicator(
             VsCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
-            async cancellationToken => await ApplyAspireMcpConfigurationAsync(vsCodeFolder, cancellationToken));
+            async cancellationToken => await ApplyAspireMcpConfigurationAsync(vsCodeFolder, cancellationToken),
+            assetKind: AgentAssetKind.Mcp,
+            targetId: $"vscode:{vsCodeFolder.FullName}");
     }
 
     /// <summary>

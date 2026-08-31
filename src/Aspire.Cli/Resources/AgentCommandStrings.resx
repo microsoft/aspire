@@ -96,6 +96,9 @@
   <data name="InitCommand_ConfigureMcpServer" xml:space="preserve">
     <value>Install Aspire MCP server</value>
   </data>
+  <data name="InitCommand_SelectMcpServers" xml:space="preserve">
+    <value>Which MCP servers should be installed?</value>
+  </data>
   <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
     <value>Where should skill files be installed?</value>
   </data>
@@ -122,6 +125,9 @@
   </data>
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>
+  </data>
+  <data name="InitCommand_NoCompatibleClientForAssetKind" xml:space="preserve">
+    <value>No detected agent environment supports {0} assets. Skipping their default installation.</value>
   </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
     <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>

@@ -215,16 +215,16 @@ internal sealed class InitCommand : BaseCommand
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
+    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<AgentAssetLocation> selectedLocations)
     {
         var commands = new List<string>();
 
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
+        if (selectedLocations.Contains(AgentAssetLocation.ClaudeCode))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
+        if (selectedLocations.Contains(AgentAssetLocation.OpenCode))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
