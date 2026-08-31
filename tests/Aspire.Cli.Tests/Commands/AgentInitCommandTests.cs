@@ -898,29 +898,46 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient(bool detectCopilotApp)
+    [Fact]
+    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_ForDetectedClient()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
+            options.AgentEnvironmentDetectorFactory = _ => new FakeDetectingDetector(AgentClientKind.CopilotCli);
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations none --skills none");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var hookFile = Path.Combine(homeDirectory.FullName, ".copilot", "hooks", "aspire-telemetry.json");
+        Assert.True(File.Exists(hookFile), $"Expected telemetry hook at {hookFile}");
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_DefaultOn_InstallsTelemetryHook_WhenCopilotAppIsDetected()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var expectedDisplayName = detectCopilotApp ? "GitHub Copilot App" : "GitHub Copilot CLI";
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-        IAgentEnvironmentDetector agentEnvironmentDetector = detectCopilotApp
-            ? new AgentEnvironmentDetector(
-                [
-                    new CopilotAppAgentEnvironmentScanner(
-                        new CopilotAppInstallationDetector(
-                            TestEnvironment.CreateLinux(new Dictionary<string, string?>
-                            {
-                                ["AI_AGENT"] = "github_copilot_app_agent",
-                            }),
-                            executionContext),
-                        NullLogger<CopilotAppAgentEnvironmentScanner>.Instance),
-                ])
-            : new FakeDetectingDetector(AgentClientKind.CopilotCli);
+        var agentEnvironmentDetector = new AgentEnvironmentDetector(
+            [
+                new CopilotAppAgentEnvironmentScanner(
+                    new CopilotAppInstallationDetector(
+                        TestEnvironment.CreateLinux(new Dictionary<string, string?>
+                        {
+                            ["AI_AGENT"] = "github_copilot_app_agent",
+                        }),
+                        executionContext),
+                    NullLogger<CopilotAppAgentEnvironmentScanner>.Instance),
+            ]);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => executionContext;
@@ -939,7 +956,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(hookFile), $"Expected telemetry hook at {hookFile}");
         Assert.Contains(
             interactionService.DisplayedMessages,
-            message => message.Message.Contains(expectedDisplayName, StringComparison.Ordinal));
+            message => message.Message.Contains("GitHub Copilot App", StringComparison.Ordinal));
     }
 
     [Fact]
