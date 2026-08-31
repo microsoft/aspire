@@ -6,8 +6,8 @@ Policy is `script-src 'self'` and the dashboard must work offline.
 
 | File | Source | Version |
 |------|--------|---------|
-| `xterm.min.js` | [`@xterm/xterm`](https://www.npmjs.com/package/@xterm/xterm) via jsDelivr | `6.1.0-beta.301` |
-| `xterm.min.css` | `@xterm/xterm` via jsDelivr | `6.1.0-beta.301` |
+| `xterm.min.js` | [`@xterm/xterm`](https://www.npmjs.com/package/@xterm/xterm) via jsDelivr | `6.1.0-beta.304` |
+| `xterm.min.css` | `@xterm/xterm` via jsDelivr | `6.1.0-beta.304` |
 | `addon-fit.min.js` | [`@xterm/addon-fit`](https://www.npmjs.com/package/@xterm/addon-fit) via jsDelivr | `0.12.0-beta.299` |
 | `addon-image.min.js` | Local production build of `@xterm/addon-image` from [xterm.js PR #6098](https://github.com/xtermjs/xterm.js/pull/6098) | `0.9.0` |
 
@@ -16,17 +16,35 @@ adds the provenance header at the top of each file and reports that the JS was
 already minified upstream. They can be refreshed with:
 
 ```bash
-curl -o xterm.min.js  "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.301/lib/xterm.min.js"
-curl -o xterm.min.css "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.301/css/xterm.min.css"
+curl -o xterm.min.js  "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.304/lib/xterm.min.js"
+curl -o xterm.min.css "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.304/css/xterm.min.css"
 curl -o addon-fit.min.js "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.12.0-beta.299/lib/addon-fit.min.js"
+```
+
+## Core and addon versions are coupled — bump them together
+
+`addon-image` uses core APIs that are still evolving, so the core version is not
+freely chosen: it must be new enough for the addon build.
+
+The current addon build requires `IBufferLine.getExtended()` and
+`IExtendedAttrs.payload`, which arrived in core via
+[xterm.js PR #5879](https://github.com/xtermjs/xterm.js/pull/5879) and first
+appear in npm `@xterm/xterm@6.1.0-beta.304`. Pairing this addon with
+`6.1.0-beta.303` or earlier fails at runtime — `line.getExtended` is `undefined`.
+
+Before re-vendoring the addon, diff the core internals it references and check
+they all exist in the pinned core:
+
+```bash
+grep -oE '_core\.[_A-Za-z][\w.]*|\.getExtended\(|\.payload\b|\.getBg\(|register\w*Handler' \
+  addon-image.min.js | sort -u
 ```
 
 ## Why the prerelease xterm.js
 
-`@xterm/addon-image` reaches into xterm.js internals (`term._core`), so the addon
-build below only composes with the 6.x core. The 6.1.0 beta line is the version
-the Hex1b `WebMuxerDemo` sample validates the Kitty graphics path against, so the
-dashboard tracks the same pair. Move both to stable releases together.
+`@xterm/addon-image` reaches into xterm.js internals, so the addon build below
+only composes with the 6.x core, and specifically with a core new enough to
+satisfy the coupling described above. Move both to stable releases together.
 
 ## Why `addon-image.min.js` is not from npm
 
@@ -37,10 +55,10 @@ example while a window is dragged or resized) leaks placements and renders
 stale copies. The build committed here comes from the PR that adds them:
 
 - PR: <https://github.com/xtermjs/xterm.js/pull/6098>
-- Commit: `5b65c03690770673f407931c767f72ec908dce2c`
-- PR base (upstream master): `d3e32b344dfe7dd6015cff6a9aeaaeaeccdc2789`
+- Commit: `17d763b5bc54b363ed17a0dee614a852dda19aab`
+- PR base (upstream master): `c58ea3637f3968e0e6e79cd92cf9aace7ef89ee2`
 - Package version: `0.9.0`
-- Bundle SHA-256: `94fb5ca7413520807bb1efd9639f06c869ad8e913620393d4d7a02dba2ac5093`
+- Bundle SHA-256: `26fe1287e2f0aa00e7ce7d92a2b7ae6cc37da1e45ad47feb511af310b2c2961e`
 - License: MIT (`addon-image.LICENSE.txt`)
 
 Replace this with the upstream npm package once PR #6098 ships.
@@ -50,41 +68,37 @@ The hex1b sample vendors its own copy of this bundle at
 on the same PR. That copy predates the fixes described below, so the two are no
 longer byte-identical; this one is newer.
 
-Note that the PR is periodically rebased, so its commit SHAs change. Match the
-bundle by its SHA-256 rather than assuming the commit above is still reachable.
+Note that the PR is periodically rebased and re-merged with upstream master, so
+its commit SHAs change. Match the bundle by its SHA-256 rather than assuming the
+commit above is still reachable.
 
-The core `xterm.min.js` is deliberately *not* rebuilt from this PR — the PR only
-touches `addons/addon-image/**`, and the addon's use of core internals (`_core.*`,
-`_extendedAttrs`, `_data`, `getBg`, the parser `register*Handler` hooks) is
-unchanged by it, so the npm core build below stays compatible.
+The core `xterm.min.js` is taken from npm, not rebuilt from this PR — the PR only
+touches `addons/addon-image/**`. It must still be new enough to satisfy the
+coupling described above, so re-check that whenever the addon is re-vendored.
 
-### Placement index vs. `HAS_EXTENDED`
+### How image cells are tracked
 
-Worth knowing when reading this addon, because it is subtle and was a live bug.
+Worth knowing when reading this addon, because the design changed and older notes
+about it are misleading.
 
-xterm.js flags cells carrying extended attributes with `HAS_EXTENDED` (`1 << 28`)
-and stores the data in the line's `_extendedAttrs` sparse array. Overwriting a
-cell with plain text clears the flag but does **not** prune `_extendedAttrs`.
-`ImageStorage.render()` relies on that deliberately: it treats a leftover
-`_extendedAttrs.imageId` as live so an image keeps drawing over text written on
-top of it (Kitty `C=1` semantics).
+Image tiles are recorded on the buffer cell's extended attributes. The addon used
+to reach directly into `line._extendedAttrs` and gate on the `HAS_EXTENDED`
+background flag (`1 << 28`). That was fragile: writing text over a cell clears the
+flag but does **not** prune `_extendedAttrs`, so the renderer and the deletion
+paths disagreed about which cells were still image cells. The visible symptom was
+grey checkerboard rectangles left wherever a Hex1b window had previously been —
+`a=d,d=a` ("delete all visible placements") skipped cells the renderer still drew,
+so after the image was freed those cells referenced nothing.
 
-The placement index this PR adds originally treated the flag as authoritative, so
-`a=d,d=a` ("delete all visible placements") skipped exactly the cells the renderer
-still drew. Hex1b moves a window by issuing `a=d,d=a`, freeing the old image with
-`a=d,d=I`, then transmitting under a new image id — so those skipped cells were
-left referencing a deleted image and rendered as grey checkerboard placeholders at
-every previous window position.
+Upstream [PR #5879](https://github.com/xtermjs/xterm.js/pull/5879) replaced that
+with a first-class core API: `IBufferLine.getExtended(col)` and a generic
+`IExtendedAttrs.payload`. The addon now stores an `ImageTileInfo` in `payload` and
+no longer touches `_extendedAttrs`, `_data`, or `getBg` at all, which removes the
+flag-vs-attrs asymmetry at the root.
 
-The PR fixes this by aligning the index and deletion paths with the renderer
-(`getVisibleImageStorageIds`, `_clearImageCells`, `_rebuildImageCellIndex`,
-`_untrackCell`, `_writeToCell`) rather than making the renderer strict. If a future
-re-vendor reintroduces grey rectangles after moving a window, this is the first
-place to look.
-
-Upstream is actively working the same area — `xtermjs/xterm.js#6131` ("Restore text
-overwrite of image tiles") landed on master and is included here — so this
-interaction is worth re-checking on every re-vendor.
+If a future re-vendor reintroduces grey rectangles after moving a window, start
+with the payload lifecycle in `ImageStorage` (`_writeToCell`, the index rebuild,
+and the `a=d` handlers).
 
 ## Rebuilding `addon-image.min.js` from source
 
