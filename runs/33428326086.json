@@ -1,0 +1,29 @@
+{
+  "run_id": 33428326086,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/33428326086",
+  "analyzed_at": "2026-08-31T20:00:00Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 19719,
+    "title": "Load polyglot AppHost settings from project root",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/ts-apphost-configuration",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/19719"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "id": 99619123776,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/33428326086/job/99619123776",
+      "classification": "transient-infra",
+      "reason": "Job failed during 'Set up job' step before any PR code executed. The GitHub Actions runner failed to parse the actions/checkout action.yml manifest, reporting a corrupted/empty YAML download (System.ArgumentException: Unexpected type '' encountered while reading 'action manifest root'). This is a known recurring GitHub-hosted runner infrastructure issue unrelated to PR content.",
+      "failed_steps": ["Set up job"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["macos-checkout-action-manifest-corrupt"]
+}

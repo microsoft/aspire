@@ -2,7 +2,7 @@
   "id": "macos-checkout-action-manifest-corrupt",
   "type": "infra-failure",
   "title": "GitHub Actions runner fails to parse actions/checkout's action.yml manifest (corrupted download)",
-  "error_pattern": "##[error]actions/checkout/de0fac2e4500dabe0009e67214ff5f5447ce83dd/action.yml: (Line: 1, Col: 1, Idx: 0) - (Line: 1, Col: 2, Idx: 1): While scanning for the next token, find character that cannot start any token.\n##[error]System.ArgumentException: Unexpected type '' encountered while reading 'action manifest root'. The type 'MappingToken' was expected.\nFailed to load actions/checkout/de0fac2e4500dabe0009e67214ff5f5447ce83dd/action.yml",
+  "error_pattern": "##[error]actions/checkout/de0fac2e4500dabe0009e67214ff5f5447ce83dd/action.yml: (Line: 1, Col: 1, Idx: 0) - (Line: 1, Col: 2, Idx: 1): While scanning for the next token, find character that cannot start any token.\n##[error]System.ArgumentException: Unexpected type '' encountered while reading 'action manifest root'. The type 'MappingToken' was expected.\n   at GitHub.Runner.Worker.ActionManifestManagerLegacy.Load(IExecutionContext executionContext, String manifestFile)\n##[error]Failed to load actions/checkout/de0fac2e4500dabe0009e67214ff5f5447ce83dd/action.yml",
   "occurrences": [
     {
       "run_id": 33046510101,
@@ -10,6 +10,13 @@
       "job": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
       "pr_number": 19709,
       "observed_at": "2026-08-27T07:10:53Z"
+    },
+    {
+      "run_id": 33428326086,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/33428326086",
+      "job": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 19719,
+      "observed_at": "2026-08-31T20:00:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19737"
