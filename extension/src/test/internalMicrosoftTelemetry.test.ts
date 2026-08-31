@@ -95,6 +95,40 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
         }
     });
 
+    test('waits for the Microsoft provider to publish cold-start accounts', async () => {
+        const sessionChanges = new vscode.EventEmitter<vscode.AuthenticationSessionsChangeEvent>();
+        let accounts: readonly vscode.AuthenticationSessionAccountInformation[] = [];
+        const published: CommonTelemetryProperties[] = [];
+        const provider = new InternalMicrosoftTelemetryProvider(
+            {
+                getAccounts: async () => accounts,
+                onDidChangeSessions: sessionChanges.event,
+            },
+            properties => published.push({ ...properties }),
+            () => { },
+            100);
+
+        try {
+            const initialization = provider.initializeAsync();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            accounts = [{ id: `current.${microsoftTenantId}`, label: 'current.user@microsoft.com' }];
+            sessionChanges.fire({
+                provider: { id: 'microsoft', label: 'Microsoft' },
+            });
+            await initialization;
+
+            assert.deepStrictEqual(published.at(-1), {
+                is_microsoft_internal: 'true',
+                microsoft_internal_alias: 'current.user',
+                microsoft_internal_domain: 'microsoft.com',
+            });
+        }
+        finally {
+            provider.dispose();
+            sessionChanges.dispose();
+        }
+    });
+
     test('publishes a safe negative result when account enumeration fails', async () => {
         const warnings: string[] = [];
         const published: CommonTelemetryProperties[] = [];
@@ -106,7 +140,8 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
                 onDidChangeSessions: () => ({ dispose() { } }),
             },
             properties => published.push({ ...properties }),
-            message => warnings.push(message));
+            message => warnings.push(message),
+            10);
 
         try {
             await provider.initializeAsync();
@@ -123,30 +158,6 @@ suite('InternalMicrosoftTelemetryProvider tests', () => {
         }
     });
 
-    test('does not block extension activation when account enumeration stalls', async () => {
-        const published: CommonTelemetryProperties[] = [];
-        const provider = new InternalMicrosoftTelemetryProvider(
-            {
-                getAccounts: () => new Promise(() => { }),
-                onDidChangeSessions: () => ({ dispose() { } }),
-            },
-            properties => published.push({ ...properties }),
-            () => { },
-            10);
-
-        try {
-            await provider.initializeAsync();
-
-            assert.deepStrictEqual(published.at(-1), {
-                is_microsoft_internal: 'false',
-                microsoft_internal_alias: undefined,
-                microsoft_internal_domain: undefined,
-            });
-        }
-        finally {
-            provider.dispose();
-        }
-    });
 });
 
 async function waitFor(predicate: () => boolean): Promise<void> {

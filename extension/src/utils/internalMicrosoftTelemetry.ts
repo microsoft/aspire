@@ -5,7 +5,7 @@ import { CommonTelemetryProperties, setCommonTelemetryProperties } from './telem
 const microsoftAuthenticationProviderId = 'microsoft';
 const microsoftTenantId = '72f988bf-86f1-41af-91ab-2d7cd011db47';
 const validAliasPattern = /^[A-Za-z0-9._-]+$/;
-const initialRefreshTimeoutMs = 1_000;
+const initialAccountLoadGraceMs = 2_000;
 
 type AuthenticationApi = Pick<typeof vscode.authentication, 'getAccounts' | 'onDidChangeSessions'>;
 type CommonPropertiesSetter = (properties: CommonTelemetryProperties) => void;
@@ -19,13 +19,14 @@ export interface InternalMicrosoftTelemetryIdentity {
 export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
     private _authenticationChangeRegistration: vscode.Disposable | undefined;
     private _refreshGeneration = 0;
+    private _identity: InternalMicrosoftTelemetryIdentity = { isInternal: false };
     private _disposed = false;
 
     constructor(
         private readonly _authentication: AuthenticationApi = vscode.authentication,
         private readonly _setCommonProperties: CommonPropertiesSetter = setCommonTelemetryProperties,
         private readonly _logWarning: (message: string) => void = message => extensionLogOutputChannel.warn(message),
-        private readonly _initialRefreshTimeoutMs = initialRefreshTimeoutMs,
+        private readonly _initialAccountLoadGraceMs = initialAccountLoadGraceMs,
     ) {
         this.publish({ isInternal: false });
     }
@@ -39,20 +40,9 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
             });
         }
 
-        const refreshTask = this.refreshAsync();
-        let timeout: NodeJS.Timeout | undefined;
-        try {
-            await Promise.race([
-                refreshTask,
-                new Promise<void>(resolve => {
-                    timeout = setTimeout(resolve, this._initialRefreshTimeoutMs);
-                }),
-            ]);
-        }
-        finally {
-            if (timeout) {
-                clearTimeout(timeout);
-            }
+        await this.refreshAsync();
+        if (!this._identity.isInternal) {
+            await waitFor(() => this._identity.isInternal, this._initialAccountLoadGraceMs);
         }
     }
 
@@ -62,7 +52,7 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
         this._authenticationChangeRegistration?.dispose();
     }
 
-    private async refreshAsync(): Promise<void> {
+    private async refreshAsync(): Promise<InternalMicrosoftTelemetryIdentity | undefined> {
         const generation = ++this._refreshGeneration;
 
         // Do not emit a stale identity while VS Code is resolving a sign-in, sign-out, or account switch.
@@ -76,20 +66,36 @@ export class InternalMicrosoftTelemetryProvider implements vscode.Disposable {
             if (!this._disposed && generation === this._refreshGeneration) {
                 this._logWarning('Unable to query VS Code Microsoft accounts for telemetry enrichment.');
             }
-            return;
+            return undefined;
         }
 
+        const identity = getInternalMicrosoftTelemetryIdentity(accounts);
         if (!this._disposed && generation === this._refreshGeneration) {
-            this.publish(getInternalMicrosoftTelemetryIdentity(accounts));
+            this.publish(identity);
         }
+
+        return identity;
     }
 
     private publish(identity: InternalMicrosoftTelemetryIdentity): void {
+        this._identity = identity;
         this._setCommonProperties({
             is_microsoft_internal: identity.isInternal ? 'true' : 'false',
             microsoft_internal_alias: identity.alias,
             microsoft_internal_domain: identity.domain,
         });
+    }
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate()) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+            return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, Math.min(remaining, 25)));
     }
 }
 
