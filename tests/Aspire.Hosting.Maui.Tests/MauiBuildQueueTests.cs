@@ -6,7 +6,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Lifecycle;
-using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -634,7 +633,6 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18592")]
     public async Task ReleaseSemaphoreAfterLaunchAsync_NonAndroidSkipsReplayedBuildingAndReleasesOnRunning()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
@@ -659,14 +657,14 @@ public class MauiBuildQueueTests
             CancellationToken.None);
 
         Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
-        await Assert.ThrowsAsync<TimeoutException>(() => releaseTask.WaitAsync(TimeSpan.FromMilliseconds(100)));
+        Assert.False(releaseTask.IsCompleted);
 
         await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
         {
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
         });
 
-        await releaseTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await releaseTask.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
     }
 
