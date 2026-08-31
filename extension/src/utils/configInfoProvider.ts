@@ -132,6 +132,7 @@ export class ConfigInfoProvider {
         if (!cliPath || options?.cancellationToken?.isCancellationRequested) {
             return null;
         }
+
         // `aspire config info` reports the local settings file it discovers from its working
         // directory, so the answer is per-folder, not per-CLI. Keying the caches by CLI path alone
         // let one folder's result be served for another in a multi-root workspace - and callers such

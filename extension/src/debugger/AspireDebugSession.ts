@@ -1240,7 +1240,6 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   async startAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean, options: StartAppHostOptions): Promise<void> {
     try {
       this._appHostLogOutput.reset();
-
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
       const isDotNetAppHost = AspireDebugSession._dotnetAppHostExtensions.includes(fileExtension);

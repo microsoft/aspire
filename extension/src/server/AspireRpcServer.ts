@@ -90,9 +90,7 @@ export default class AspireRpcServer {
         return true;
     }
 
-    static async create(
-        rpcClientFactory: (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => ICliRpcClient,
-    ): Promise<AspireRpcServer> {
+    static async create(rpcClientFactory: (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => ICliRpcClient): Promise<AspireRpcServer> {
         const token = generateToken();
         const { key, cert } = await createSelfSignedCertAsync();
 

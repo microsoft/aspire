@@ -1211,8 +1211,7 @@ suite('AspireTerminalProvider tests', () => {
             }
 
             assert.strictEqual(env.ASPIRE_LOCALE_OVERRIDE, vscode.env.language);
-            for (const key of Object.keys(inheritedVariables).filter(key =>
-                key !== 'ASPIRE_LOCALE_OVERRIDE')) {
+            for (const key of Object.keys(inheritedVariables).filter(key => key !== 'ASPIRE_LOCALE_OVERRIDE')) {
                 assert.strictEqual(env[key], undefined, key);
             }
         });

@@ -54,10 +54,7 @@ export async function activate(context: vscode.ExtensionContext) {
     workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
   });
 
-  const terminalProvider = new AspireTerminalProvider(
-    context.subscriptions,
-    undefined,
-    cliPathResolver);
+  const terminalProvider = new AspireTerminalProvider(context.subscriptions, undefined, cliPathResolver);
   const testRunSessionManager = new TestRunSessionManager();
 
   // Keep VS Code's contributed terminal/task environment in sync with the
@@ -83,7 +80,8 @@ export async function activate(context: vscode.ExtensionContext) {
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
       const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId), context.globalState);
       return client;
-    });
+    }
+  );
 
   // Declared up front so DCP-server hooks can reference it through a closure;
   // the actual instance is created after discovery service is available.

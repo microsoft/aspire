@@ -396,12 +396,14 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
             addForwardableAspireCliPath(env, resolvedCliPath);
             scrubNoExtensionVariablesEnvironment(env);
+
             return env;
         }
 
         const env: any = {
             ...getEnvironmentForChildProcess(),
         };
+
         addForwardableAspireCliPath(env, resolvedCliPath);
 
         Object.assign(env, {
@@ -419,6 +421,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
         });
+
         if (debugSessionId) {
             this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
         }
@@ -441,6 +444,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         delete env.ASPIRE_EXTENSION_ENDPOINT;
         delete env.ASPIRE_EXTENSION_TOKEN;
         delete env.ASPIRE_EXTENSION_CERT;
+
         this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
 
         return env;
@@ -628,7 +632,7 @@ function scrubNoExtensionVariablesEnvironment(env: Record<string, string | undef
     }
 }
 
-function deleteEnvironmentVariable(env: Record<string, string | null | undefined>, name: string): void {
+function deleteEnvironmentVariable(env: Record<string, string | undefined>, name: string): void {
     if (process.platform === 'win32') {
         // Windows environment variable names are case-insensitive; compare uppercased so callers
         // can pass a mixed-case canonical name (e.g. `AspireCliPath`) as well as already-uppercase
