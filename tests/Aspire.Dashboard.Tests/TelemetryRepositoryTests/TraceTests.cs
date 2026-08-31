@@ -33,7 +33,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [InlineData(OtlpSpanKind.Unspecified, (Span.Types.SpanKind)1000)]
     public void ConvertSpanKind(OtlpSpanKind expected, Span.Types.SpanKind value)
     {
-        var result = InMemoryTelemetryRepository.ConvertSpanKind(value);
+        var result = OtlpHelpers.ConvertSpanKind(value);
         Assert.Equal(expected, result);
     }
 
@@ -2165,11 +2165,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Spans have different views
         var views = resource.GetViews().OrderBy(v => v.Properties.Length).ToList();
-        Assert.Equal(UseSqlite ? 3 : 2, views.Count);
-        if (UseSqlite)
-        {
-            Assert.Empty(views[0].Properties);
-        }
+        Assert.Equal(3, views.Count);
+        Assert.Empty(views[0].Properties);
         Assert.Collection(views.Where(v => v.Properties.Length > 0),
             v =>
             {
@@ -3222,6 +3219,42 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetSpans_FilterBySpanType_ReturnsMatchingSpans()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddSeconds(1), attributes: [KeyValuePair.Create("db.system.name", "postgresql")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(2))
+                        }
+                    }
+                }
+            }
+        });
+
+        var result = await repositoryContext.Repository.GetSpansAsync(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [new SpanHasAttributeTelemetryFilter(["db.system.name", "db.system"])]
+        }, CancellationToken.None);
+
+        var span = Assert.Single(result.PagedResult.Items);
+        AssertId("1-1", span.SpanId);
+    }
+
+    [Fact]
     public async Task GetSpans_FilterByHasError_ReturnsErrorSpansOnly()
     {
         // Arrange
@@ -3413,6 +3446,63 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         AssertId("1-1", result.PagedResult.Items[0].SpanId);
     }
 
+    [Theory]
+    [InlineData(FilterCondition.NotEqual, "TestService", 0)]
+    [InlineData(FilterCondition.NotEqual, "TestPeer", 0)]
+    [InlineData(FilterCondition.NotEqual, "other", 1)]
+    [InlineData(FilterCondition.NotContains, "Service", 0)]
+    [InlineData(FilterCondition.NotContains, "Peer", 0)]
+    [InlineData(FilterCondition.NotContains, "other", 1)]
+    public async Task GetSpans_NegativeServiceNameFilter_AppliesToSourceAndPeer(FilterCondition condition, string value, int expectedCount)
+    {
+        var outgoingPeerResolver = new TestOutgoingPeerResolver();
+        using var repositoryContext = await CreateRepositoryAsync(outgoingPeerResolvers: [outgoingPeerResolver]);
+
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1),
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "peer")],
+                                kind: Span.Types.SpanKind.Client)
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var result = await repositoryContext.Repository.GetSpansAsync(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownResourceFields.ServiceNameField,
+                    Condition = condition,
+                    Value = value
+                }
+            ]
+        }, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(expectedCount, result.PagedResult.TotalItemCount);
+        Assert.Equal(expectedCount, result.PagedResult.Items.Count);
+    }
+
     [Fact]
     public async Task GetSpans_FilterByDuration_ReturnsMatchingSpans()
     {
@@ -3502,6 +3592,95 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(1, result.PagedResult.TotalItemCount);
         AssertId("1-1", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public async Task GetSpans_FilterByTextFragments_MatchesDisplaySummaries()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("http.request.method", "GET"),
+                                    KeyValuePair.Create("http.response.status_code", "200")
+                                ],
+                                kind: Span.Types.SpanKind.Client),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2),
+                                attributes: [KeyValuePair.Create("db.system", "postgresql")],
+                                kind: Span.Types.SpanKind.Client),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-3",
+                                startTime: s_testTime.AddMinutes(2),
+                                endTime: s_testTime.AddMinutes(3),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("rpc.system", "grpc"),
+                                    KeyValuePair.Create("rpc.service", "Greeter"),
+                                    KeyValuePair.Create("rpc.method", "SayHello"),
+                                    KeyValuePair.Create("rpc.grpc.status_code", "0")
+                                ],
+                                kind: Span.Types.SpanKind.Client),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-4",
+                                startTime: s_testTime.AddMinutes(3),
+                                endTime: s_testTime.AddMinutes(4),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("messaging.system", "kafka"),
+                                    KeyValuePair.Create("messaging.operation", "publish"),
+                                    KeyValuePair.Create("messaging.destination.name", "orders")
+                                ],
+                                kind: Span.Types.SpanKind.Producer)
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var expectedMatches = new[]
+        {
+            (Text: "HTTP GET 200", SpanId: "1-1"),
+            (Text: "DATA postgresql Test span. Id: 1-2", SpanId: "1-2"),
+            (Text: "RPC Greeter/SayHello OK", SpanId: "1-3"),
+            (Text: "MSG kafka publish orders", SpanId: "1-4")
+        };
+        foreach (var expectedMatch in expectedMatches)
+        {
+            var result = await repositoryContext.Repository.GetSpansAsync(new GetSpansRequest
+            {
+                ResourceKeys = [],
+                StartIndex = 0,
+                Count = int.MaxValue,
+                Filters = [],
+                TextFragments = [expectedMatch.Text]
+            }, cancellationToken: CancellationToken.None);
+
+            Assert.Equal(1, result.PagedResult.TotalItemCount);
+            AssertId(expectedMatch.SpanId, Assert.Single(result.PagedResult.Items).SpanId);
+        }
     }
 
     [Theory]
@@ -4297,15 +4476,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 }
 
-public sealed class InMemoryTraceTests : TraceTests
-{
-    protected override bool UseSqlite => false;
-}
-
 public sealed class SqliteTraceTests : TraceTests
 {
-    protected override bool UseSqlite => true;
-
     [Fact]
     public async Task GetTraceSummaries_MultipleRootResourcesInPayload_OrdersByReceipt()
     {

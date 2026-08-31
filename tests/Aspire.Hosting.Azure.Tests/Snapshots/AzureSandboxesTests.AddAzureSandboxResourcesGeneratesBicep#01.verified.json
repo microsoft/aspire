@@ -1,0 +1,8 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "workergroup.module.bicep",
+  "params": {
+    "workergroup_acr_outputs_name": "{workergroup-acr.outputs.name}",
+    "principalId": ""
+  }
+}

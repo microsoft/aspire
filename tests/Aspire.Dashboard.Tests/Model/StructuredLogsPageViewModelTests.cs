@@ -4,11 +4,11 @@
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 using static Aspire.Dashboard.Components.Pages.StructuredLogs;
@@ -18,114 +18,124 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class StructuredLogsPageViewModelTests
 {
     [Fact]
-    public void NoSelectedEntry_ReturnsNotExcluded()
+    public async Task NoSelectedEntry_ReturnsNotExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
         vm.SelectedLogEntry = null;
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void EntryMatchesAllFilters_ReturnsNotExcluded()
+    public async Task EntryMatchesAllFilters_ReturnsNotExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: LogLevel.Information);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Warning, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Warning, "Hello world");
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("Hello", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "Hello", [], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void EntryBelowLogLevel_ReturnsExcluded()
+    public async Task EntryBelowLogLevel_ReturnsExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: LogLevel.Warning);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "Hello world");
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [], CancellationToken.None);
 
         Assert.True(result);
     }
 
     [Fact]
-    public void EntryAtExactLogLevel_ReturnsNotExcluded()
+    public async Task EntryAtExactLogLevel_ReturnsNotExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: LogLevel.Warning);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Warning, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Warning, "Hello world");
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void LogLevelFilterIsAll_ReturnsNotExcluded()
+    public async Task LogLevelFilterIsAll_ReturnsNotExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         // LogLevel null means "All" is selected
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Trace, "any message");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Trace, "any message");
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void TextFilterDoesNotMatch_ReturnsExcluded()
+    public async Task TextFilterDoesNotMatch_ReturnsExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "Hello world");
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("xyz-not-present", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "xyz-not-present", [], CancellationToken.None);
 
         Assert.True(result);
     }
 
     [Fact]
-    public void TextFilterMatchesCaseInsensitive_ReturnsNotExcluded()
+    public async Task TextFilterMatchesCaseInsensitive_ReturnsNotExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "Hello World");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "Hello World");
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("hello", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "hello", [], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void TextFilterMatchesResourceName_ReturnsExcluded()
+    public async Task TextFilterMatchesResourceName_ReturnsExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "some message");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "some message");
 
         // The text filter only checks the Message field (matching StructuredLogsViewModel.GetFilters() behavior).
         // A resource name match is not sufficient to keep the entry visible.
-        var result = vm.IsSelectedLogEntryExcludedByFilters("app1", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "app1", [], CancellationToken.None);
 
         Assert.True(result);
     }
 
     [Fact]
-    public void TextFilterMatchesSeverity_ReturnsExcluded()
+    public async Task TextFilterMatchesSeverity_ReturnsExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "some message");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "some message");
 
         // The text filter only checks the Message field (matching StructuredLogsViewModel.GetFilters() behavior).
         // Matching the severity text is not sufficient to keep the entry visible.
-        var result = vm.IsSelectedLogEntryExcludedByFilters("Information", []);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "Information", [], CancellationToken.None);
 
         Assert.True(result);
     }
 
     [Fact]
-    public void FieldFilterExcludesEntry_ReturnsExcluded()
+    public async Task FieldFilterExcludesEntry_ReturnsExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "Hello world");
 
         var fieldFilter = new FieldTelemetryFilter
         {
@@ -135,16 +145,17 @@ public sealed class StructuredLogsPageViewModelTests
             Enabled = true
         };
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", [fieldFilter]);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [fieldFilter], CancellationToken.None);
 
         Assert.True(result);
     }
 
     [Fact]
-    public void FieldFilterMatchesEntry_ReturnsNotExcluded()
+    public async Task FieldFilterMatchesEntry_ReturnsNotExcluded()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "Hello world");
 
         var fieldFilter = new FieldTelemetryFilter
         {
@@ -154,16 +165,17 @@ public sealed class StructuredLogsPageViewModelTests
             Enabled = true
         };
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", [fieldFilter]);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [fieldFilter], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void DisabledFieldFilter_IsIgnored()
+    public async Task DisabledFieldFilter_IsIgnored()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: null);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Information, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Information, "Hello world");
 
         var fieldFilter = new FieldTelemetryFilter
         {
@@ -173,16 +185,17 @@ public sealed class StructuredLogsPageViewModelTests
             Enabled = false
         };
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("", [fieldFilter]);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "", [fieldFilter], CancellationToken.None);
 
         Assert.False(result);
     }
 
     [Fact]
-    public void MultipleFiltersAllMustPass()
+    public async Task MultipleFiltersAllMustPass()
     {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
         var vm = CreateViewModel(selectedLogLevel: LogLevel.Warning);
-        vm.SelectedLogEntry = CreateLogDetailsViewModel(LogLevel.Warning, "Hello world");
+        vm.SelectedLogEntry = await CreateLogDetailsViewModelAsync(repositoryContext.Repository, LogLevel.Warning, "Hello world");
 
         // Text filter matches, field filter does NOT match
         var fieldFilter = new FieldTelemetryFilter
@@ -193,7 +206,7 @@ public sealed class StructuredLogsPageViewModelTests
             Enabled = true
         };
 
-        var result = vm.IsSelectedLogEntryExcludedByFilters("Hello", [fieldFilter]);
+        var result = await vm.IsSelectedLogEntryExcludedByFiltersAsync(repositoryContext.Repository, "Hello", [fieldFilter], CancellationToken.None);
 
         Assert.True(result);
     }
@@ -207,13 +220,8 @@ public sealed class StructuredLogsPageViewModelTests
         };
     }
 
-    private static StructureLogsDetailsViewModel CreateLogDetailsViewModel(LogLevel severity, string message)
+    private static async Task<StructureLogsDetailsViewModel> CreateLogDetailsViewModelAsync(SqliteTelemetryRepository repository, LogLevel severity, string message)
     {
-        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
-        var resource = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
-        var resourceView = new OtlpResourceView(resource, new RepeatedField<KeyValue>());
-        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
-
         var severityNumber = severity switch
         {
             LogLevel.Trace => SeverityNumber.Trace,
@@ -225,9 +233,28 @@ public sealed class StructuredLogsPageViewModelTests
             _ => SeverityNumber.Unspecified
         };
 
-        var logRecord = TelemetryTestHelpers.CreateLogRecord(message: message, severity: severityNumber);
-        var logEntry = TelemetryTestHelpers.CreateOtlpLogEntry(logRecord, resourceView, scope, context);
-
-        return new StructureLogsDetailsViewModel { LogEntry = logEntry };
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = TelemetryTestHelpers.CreateResource("app1", "instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope(),
+                        LogRecords = { TelemetryTestHelpers.CreateLogRecord(message: message, severity: severityNumber) }
+                    }
+                }
+            }
+        });
+        var logs = await repository.GetLogsAsync(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 1,
+            Filters = []
+        }, CancellationToken.None);
+        return new StructureLogsDetailsViewModel { LogEntry = Assert.Single(logs.Items) };
     }
 }
