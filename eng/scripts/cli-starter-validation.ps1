@@ -14,7 +14,7 @@ param(
     [ValidateRange(1, [int]::MaxValue)]
     [int]$ResourceReadyTimeoutSeconds = 120,
 
-    [Parameter(HelpMessage = "Directory used to store starter validation projects and diagnostics")]
+    [Parameter(HelpMessage = "Parent directory used to store the dedicated starter validation directory")]
     [string]$ValidationRoot = ""
 )
 

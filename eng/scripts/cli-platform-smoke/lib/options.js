@@ -2,13 +2,22 @@
 
 const os = require('os');
 const path = require('path');
+const validationDirectoryName = 'aspire-cli-starter-validation';
 
 function defaultValidationRoot() {
   if (process.env.RUNNER_TEMP && process.env.RUNNER_TEMP.trim().length > 0) {
-    return path.join(process.env.RUNNER_TEMP, 'aspire-cli-starter-validation');
+    return path.join(process.env.RUNNER_TEMP, validationDirectoryName);
   }
 
-  return path.join(os.tmpdir(), 'aspire-cli-starter-validation');
+  return path.join(os.tmpdir(), validationDirectoryName);
+}
+
+function resolveValidationRoot(validationRoot) {
+  if (validationRoot) {
+    return path.resolve(validationRoot, validationDirectoryName);
+  }
+
+  return path.resolve(defaultValidationRoot());
 }
 
 function parseArgs(argv) {
@@ -80,5 +89,6 @@ function parseRequiredValue(value, argumentName) {
 
 module.exports = {
   defaultValidationRoot,
-  parseArgs
+  parseArgs,
+  resolveValidationRoot
 };

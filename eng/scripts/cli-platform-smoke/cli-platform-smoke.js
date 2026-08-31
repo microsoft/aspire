@@ -2,17 +2,16 @@
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
 
 const { createScenarioContext } = require('./lib/scenario-context');
-const { defaultValidationRoot, parseArgs } = require('./lib/options');
+const { parseArgs, resolveValidationRoot } = require('./lib/options');
 const { runScenario } = require('./lib/run-scenario');
 const { createDotnetStarterScenario } = require('./scenarios/dotnet-starter');
 const { createTypeScriptStarterScenario } = require('./scenarios/typescript-starter');
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const validationRoot = path.resolve(options.validationRoot || defaultValidationRoot());
+  const validationRoot = resolveValidationRoot(options.validationRoot);
   const channel = options.channel || `pr-${options.prNumber}`;
   const aspireCommand = options.aspireCommand || process.env.ASPIRE_SMOKE_ASPIRE_COMMAND || 'aspire';
   const baseContext = {
