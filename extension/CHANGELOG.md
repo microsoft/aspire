@@ -2,8 +2,11 @@
 
 ## v1.21.0
 
-<!-- aspire-ext-changelog from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->
+
+### Fixes
+
+- Prevent the Aspire view from stealing sidebar focus and reappearing in the Activity Bar when the window is reloaded ([#19746](https://github.com/microsoft/aspire/issues/19746), [#19754](https://github.com/microsoft/aspire/pull/19754)).
 
 ## v1.20.0
 
