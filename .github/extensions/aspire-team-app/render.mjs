@@ -1329,6 +1329,18 @@ function updateRefreshControls() {
   }
 }
 
+// Recompute every pinned/inline SLA note's countdown text against the browser clock. Only the
+// textContent changes; the server-stamped state class (color) still flips on the next poll.
+// Cheap enough to run each second because there are only ever a handful of tracked cards.
+function tickSlaNotes() {
+  const notes = document.querySelectorAll(".sla-note[data-sla-deadline]");
+  for (const el of notes) {
+    const deadlineAt = el.dataset.slaDeadline;
+    if (!deadlineAt) continue;
+    el.textContent = slaNoteText({ state: el.dataset.slaState, deadlineAt });
+  }
+}
+
 /* ---- deterministic progress bar ----
    Driven by SSE 'progress' events ({ done, total }). beginProgress shows a small sliver
    for instant feedback; setProgress advances the fill; endProgress completes to 100% then
@@ -1445,7 +1457,7 @@ function onPollSchedule(payload) {
   if (!Number.isFinite(value) || value <= 0) return;
   nextPollAt = value;
   if (!pollCountdownTimer) {
-    pollCountdownTimer = setInterval(updateRefreshControls, 1000);
+    pollCountdownTimer = setInterval(() => { updateRefreshControls(); tickSlaNotes(); }, 1000);
   }
   updateRefreshControls();
 }
@@ -2333,7 +2345,13 @@ function prCard(item, actions) {
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
     ((item.sla && item.sla.state)
-      ? '<div class="sla-note ' + item.sla.state + '">' + esc(slaNoteText(item.sla)) + "</div>"
+      // data-sla-* anchors let tickSlaNotes() recompute the "due in"/"overdue" text every
+      // second against the browser clock without a full re-render. deadlineAt is a fixed
+      // instant, so the countdown stays live between the ~90s server polls.
+      ? '<div class="sla-note ' + item.sla.state +
+          '" data-sla-state="' + esc(item.sla.state) +
+          '" data-sla-deadline="' + esc(item.sla.deadlineAt || "") + '">' +
+          esc(slaNoteText(item.sla)) + "</div>"
       : "") +
   "</a>";
   const acts = (actions && actions.length)

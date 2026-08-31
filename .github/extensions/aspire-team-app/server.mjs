@@ -918,6 +918,47 @@ export async function forceRefresh() {
   return getDashboard(true);
 }
 
+// Compute an SLA snapshot for the headless notifier / agent action WITHOUT mutating the
+// user's persisted canvas mode or the shared dashboard cache. dashboard.sla is only produced
+// on the review-mode code path (see loadDashboard), so reading whatever mode the user last
+// viewed — the previous behavior — silently emitted no SLA data whenever they were on Issues,
+// Ship, or Health. Forcing a private review-mode load here keeps the hourly notifier correct
+// regardless of what the canvas currently shows.
+export async function computeSlaReport() {
+  const prefs = await loadPrefs();
+  const auth = await resolveAuth(prefs);
+  const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
+  const accountsForLoad = active
+    .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
+    .filter((a) => a.token && a.login);
+  if (accountsForLoad.length === 0) {
+    const anyDetected = auth.accounts.length > 0;
+    return {
+      authenticated: false,
+      message: !anyDetected
+        ? "No GitHub credentials detected. Run `gh auth login` so the SLA report can read the review queue."
+        : "The active GitHub account can't read its watched repositories.",
+      sla: null,
+      externalOpenPrs: [],
+    };
+  }
+  const dashboard = await loadDashboard({
+    accounts: accountsForLoad,
+    mode: "review",
+    release: prefs.release,
+    prefs: prefs.notifications,
+    dismissed: prefs.dismissedNotifications,
+    showDrafts: prefs.showDrafts,
+  });
+  return {
+    authenticated: true,
+    viewer: dashboard.viewer,
+    sla: dashboard.sla ?? null,
+    externalOpenPrs: dashboard.externalOpenPrs ?? [],
+    fetchedAt: dashboard.fetchedAt,
+  };
+}
+
 export async function refreshInBackground() {
   return startCompute({ progress: false, background: true });
 }

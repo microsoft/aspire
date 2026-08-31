@@ -894,7 +894,16 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   // Stamp SLA anchors/state and attach dashboard.sla (review mode only). This also
   // reconciles + persists the durable firstQualifiedAt tracking store.
   if (snap.mode === "review") {
-    await annotateDashboardSla(snap, { now: Date.now() });
+    // Tell the SLA reconciler which SLA repos actually fetched OK this run so a transient
+    // failure can't prune tracked PRs and reset their breach clock (#5). okRepos holds
+    // hostRepoKey(graphql, repo) = `${graphql??""}\n${repo}`, so the repo slug is the text
+    // after the newline; keep only the ones under SLA, lowercased to match slaCandidateKey.
+    const authoritativeRepos = new Set();
+    for (const entry of okRepos) {
+      const repo = entry.slice(entry.indexOf("\n") + 1).toLowerCase();
+      if (isSlaRepo(repo)) authoritativeRepos.add(repo);
+    }
+    await annotateDashboardSla(snap, { now: Date.now(), authoritativeRepos });
   }
   return snap;
 }

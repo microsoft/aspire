@@ -250,7 +250,14 @@ async function saveTracking(tracking) {
 // Add newly-qualifying keys (stamping firstQualifiedAt=nowIso) and prune keys that
 // no longer qualify. Returns whether anything changed so callers can skip the write
 // on the common no-op poll. Pure over its inputs (mutates the passed tracking).
-export function reconcileTracking(tracking, candidateKeys, nowIso) {
+//
+// authoritativeRepos (optional): a Set of lowercased repo slugs whose PR list was fetched
+// SUCCESSFULLY this run. When provided, a tracked key is pruned only if its repo is in the
+// set — i.e. we actually have a trustworthy candidate list for it. This prevents a transient
+// fetch failure (which yields zero candidateKeys for that repo) from deleting still-open
+// tracked PRs and thereby resetting their firstQualifiedAt / breach clock on the next success.
+// When omitted (tests / back-compat) every absent key is pruned as before.
+export function reconcileTracking(tracking, candidateKeys, nowIso, authoritativeRepos) {
   const prs = tracking.prs || (tracking.prs = {});
   const want = new Set(candidateKeys);
   let changed = false;
@@ -261,22 +268,29 @@ export function reconcileTracking(tracking, candidateKeys, nowIso) {
     }
   }
   for (const key of Object.keys(prs)) {
-    if (!want.has(key)) {
-      delete prs[key];
-      changed = true;
+    if (want.has(key)) continue;
+    // Only prune when we have an authoritative candidate list for this key's repo. The key
+    // format is "repo#number" (see slaCandidateKey), so the repo is everything before the
+    // last '#'. Guard against absurd keys by keeping them if the repo can't be parsed.
+    if (authoritativeRepos) {
+      const hash = key.lastIndexOf("#");
+      const repo = hash === -1 ? "" : key.slice(0, hash);
+      if (!repo || !authoritativeRepos.has(repo)) continue;
     }
+    delete prs[key];
+    changed = true;
   }
   return changed;
 }
 
 // Serialized load -> reconcile -> (persist if changed). Returns a snapshot of the
 // per-key firstQualifiedAt map for the current candidates.
-function reconcileAndPersist(candidateKeys, nowIso) {
+function reconcileAndPersist(candidateKeys, nowIso, authoritativeRepos) {
   const run = trackingUpdate
     .catch(() => {})
     .then(async () => {
       const tracking = await loadTracking();
-      const changed = reconcileTracking(tracking, candidateKeys, nowIso);
+      const changed = reconcileTracking(tracking, candidateKeys, nowIso, authoritativeRepos);
       if (changed) await saveTracking(tracking);
       return tracking.prs;
     });
@@ -346,7 +360,14 @@ function statusFor(pr, firstQualifiedAt, nowMs, opts) {
 // `attention.slaCandidates` (full cards for qualifying PRs); this removes that
 // scratch field afterward to keep the broadcast JSON lean.
 //
-// opts: { now?: epoch ms, persist?: bool (default true) }.
+// opts: { now?: epoch ms, persist?: bool (default true), authoritativeRepos?: Set<string>,
+//         seedTracking?: { [key]: { firstQualifiedAt } } }.
+// authoritativeRepos (lowercased repo slugs that fetched successfully this run) is forwarded
+// to reconcileTracking so a failed SLA-repo fetch never prunes still-tracked PRs (#5).
+// seedTracking is a test-only seam: with persist:false the tracking store is in-memory and
+// would otherwise stamp firstQualifiedAt=now for every key (always "ok"). Seeding lets a test
+// start the clock in the past to exercise the approaching/breached panel arrays without
+// touching the durable on-disk store. It is ignored when persist is true (the real path).
 export async function annotateDashboardSla(dashboard, opts = {}) {
   const attention = dashboard && dashboard.attention;
   const candidates = (attention && attention.slaCandidates) || [];
@@ -365,10 +386,12 @@ export async function annotateDashboardSla(dashboard, opts = {}) {
 
   const persist = opts.persist !== false;
   const trackedPrs = persist
-    ? await reconcileAndPersist(keys, nowIso)
+    ? await reconcileAndPersist(keys, nowIso, opts.authoritativeRepos)
     : (() => {
-        const tracking = { prs: {} };
-        reconcileTracking(tracking, keys, nowIso);
+        // reconcileTracking preserves existing keys' firstQualifiedAt, so a seeded past
+        // stamp survives here and drives approaching/breached states.
+        const tracking = { prs: { ...(opts.seedTracking || {}) } };
+        reconcileTracking(tracking, keys, nowIso, opts.authoritativeRepos);
         return tracking.prs;
       })();
 

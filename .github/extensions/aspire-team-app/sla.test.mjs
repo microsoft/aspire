@@ -154,6 +154,85 @@ test("reconcileTracking: adds new keys, preserves firstQualifiedAt, prunes gone 
   assert.equal(tracking.prs["r#1"].firstQualifiedAt, now1);
 });
 
+test("reconcileTracking: does not prune keys whose repo was not authoritatively fetched", () => {
+  const tracking = { prs: {} };
+  const now1 = "2025-01-06T17:00:00.000Z";
+  // Two SLA PRs on the same repo start the clock.
+  reconcileTracking(tracking, ["devdiv-microsoft/aspire-1p#1", "devdiv-microsoft/aspire-1p#2"], now1);
+  const now2 = "2025-01-06T18:00:00.000Z";
+
+  // Simulate a failed fetch this run: candidateKeys is empty and the repo is NOT authoritative.
+  // Nothing should be pruned, so the breach clocks survive the transient outage.
+  const auth = new Set(); // no repo fetched successfully
+  assert.equal(reconcileTracking(tracking, [], now2, auth), false);
+  assert.equal(tracking.prs["devdiv-microsoft/aspire-1p#1"].firstQualifiedAt, now1);
+  assert.equal(tracking.prs["devdiv-microsoft/aspire-1p#2"].firstQualifiedAt, now1);
+
+  // Now the repo fetched OK and only #1 still qualifies (#2 got reviewed) => #2 is pruned,
+  // #1 keeps its original stamp.
+  const authOk = new Set(["devdiv-microsoft/aspire-1p"]);
+  assert.equal(reconcileTracking(tracking, ["devdiv-microsoft/aspire-1p#1"], now2, authOk), true);
+  assert.equal("devdiv-microsoft/aspire-1p#2" in tracking.prs, false);
+  assert.equal(tracking.prs["devdiv-microsoft/aspire-1p#1"].firstQualifiedAt, now1);
+});
+
+test("annotateDashboardSla: seeded past clocks populate the breached and approaching panels", async () => {
+  const repo = SLA_REPOS[0];
+  const mk = (number, author) => ({
+    pr: {
+      repository: repo,
+      number,
+      author,
+      title: `PR ${number}`,
+      url: `https://example/${number}`,
+      review: { reviewerCount: 0 },
+    },
+  });
+  // Three external PRs, each qualified at a different past time so they land in distinct states
+  // at the evaluation instant. Budget is 8h business, warn at 6h (see constants).
+  const breachedKey = slaCandidateKey(mk(10).pr);
+  const approachingKey = slaCandidateKey(mk(11).pr);
+  const okKey = slaCandidateKey(mk(12).pr);
+  // Evaluate Tue 2025-01-07 11:00 PT.
+  const now = pt(2025, 1, 7, 11);
+  const seedTracking = {
+    // Qualified Mon 09:00 => deadline Mon 17:00, already past => breached.
+    [breachedKey]: { firstQualifiedAt: new Date(pt(2025, 1, 6, 9)).toISOString() },
+    // Qualified Mon 12:00 => by Tue 11:00 that is 5h Mon + 2h Tue = 7h business elapsed,
+    // past the 6h warn but short of the 8h deadline => approaching.
+    [approachingKey]: { firstQualifiedAt: new Date(pt(2025, 1, 6, 12)).toISOString() },
+    // Qualified Tue 10:30 => only 30m in => ok.
+    [okKey]: { firstQualifiedAt: new Date(pt(2025, 1, 7, 10, 30)).toISOString() },
+  };
+
+  const focusBreached = mk(10, "external-a");
+  const dashboard = {
+    attention: {
+      focus: [focusBreached],
+      slaCandidates: [mk(10, "external-a"), mk(11, "external-b"), mk(12, "external-c")],
+    },
+  };
+  await annotateDashboardSla(dashboard, { now, persist: false, seedTracking });
+
+  const s = dashboard.sla;
+  assert.equal(s.total, 3);
+  assert.equal(s.breached.length, 1);
+  assert.equal(s.breached[0].pr.number, 10);
+  assert.equal(s.breached[0].sla.state, "breached");
+  assert.equal(s.approaching.length, 1);
+  assert.equal(s.approaching[0].pr.number, 11);
+  assert.equal(s.approaching[0].sla.state, "approaching");
+  assert.equal(s.ok.length, 1);
+  assert.equal(s.ok[0].pr.number, 12);
+  assert.equal(s.okCount, 1);
+  // The breached PR's focus card (a distinct reference) is decorated with the SLA pill too.
+  assert.ok(focusBreached.sla);
+  assert.equal(focusBreached.sla.state, "breached");
+  const pill = (focusBreached.signals ?? []).find((sig) => sig.kind === "sla");
+  assert.ok(pill);
+  assert.equal(pill.label, "Out of SLA");
+});
+
 test("annotateDashboardSla: freshly-qualified candidates populate the ok panel list", async () => {
   const repo = SLA_REPOS[0];
   const mk = (number, author) => ({

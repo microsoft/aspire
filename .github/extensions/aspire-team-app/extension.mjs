@@ -9,6 +9,7 @@
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 import {
   addAzurePipelineSource,
+  computeSlaReport,
   forceRefresh,
   getDashboard,
   removeAzurePipelineSource,
@@ -186,17 +187,26 @@ const session = await joinSession({
           name: "sla_report",
           description: "Return the aspire-1p review SLA report (breached and approaching non-team PRs) plus the list of open external PRs, without opening the canvas. Intended for the hourly Teams notifier workflow.",
           handler: async () => {
-            const { dashboard } = await getDashboard(false);
-            if (!dashboard.authenticated) {
-              return { authenticated: false, message: dashboard.message, sla: null, externalOpenPrs: [] };
+            // Force a private review-mode SLA compute (see computeSlaReport): dashboard.sla is
+            // only produced in review mode, so reading the user's last-viewed mode would return
+            // no SLA data whenever the canvas was on Issues/Ship/Health.
+            const report = await computeSlaReport();
+            if (!report.authenticated) {
+              return { authenticated: false, message: report.message, sla: null, externalOpenPrs: [] };
             }
-            const sla = dashboard.sla ?? null;
+            const sla = report.sla ?? null;
             // Flatten SLA cards to lean rows so the notifier gets stable, small payloads
             // (the full card carries signals/avatars the workflow does not need).
+            //
+            // SECURITY: this result is agent-facing (the notifier LLM reads it), so it must NOT
+            // carry provider-controlled free text. A PR `title` is attacker-influenced and could
+            // smuggle instructions into the agent's context, so it is dropped here — the notifier
+            // references PRs by url/number instead. The headless sla-cli.mjs, whose output is not
+            // fed back into an agent, may keep the title for display. Same rationale as the
+            // provider-text stripping in health.mjs.
             const leanCard = (c) => ({
               repo: c.pr.repository,
               number: c.pr.number,
-              title: c.pr.title,
               url: c.pr.url,
               author: c.pr.author,
               state: c.sla?.state ?? null,
@@ -204,9 +214,17 @@ const session = await joinSession({
               warnAt: c.sla?.warnAt ?? null,
               deadlineAt: c.sla?.deadlineAt ?? null,
             });
+            const leanExternal = (p) => ({
+              repo: p.repo,
+              number: p.number,
+              url: p.url,
+              author: p.author,
+              draft: !!p.draft,
+              createdAt: p.createdAt,
+            });
             return {
               authenticated: true,
-              viewer: dashboard.viewer,
+              viewer: report.viewer,
               sla: sla
                 ? {
                     repos: sla.repos,
@@ -219,7 +237,7 @@ const session = await joinSession({
                     approaching: (sla.approaching ?? []).map(leanCard),
                   }
                 : null,
-              externalOpenPrs: dashboard.externalOpenPrs ?? [],
+              externalOpenPrs: (report.externalOpenPrs ?? []).map(leanExternal),
             };
           },
         },
