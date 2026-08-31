@@ -946,7 +946,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         services.RemoveAll<IEnvironment>();
         services.RemoveAll<IAgentEnvironmentDetector>();
         services.AddSingleton<IEnvironment>(environment);
-        services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAppAgentEnvironmentScanner>());
         services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
 

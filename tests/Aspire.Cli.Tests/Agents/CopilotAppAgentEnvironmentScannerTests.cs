@@ -57,8 +57,8 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
         {
-            [CopilotAppInstallationDetector.AgentEnvironmentVariable] =
-                CopilotAppInstallationDetector.AgentEnvironmentValue,
+            [CopilotAppAgentEnvironmentScanner.AgentEnvironmentVariable] =
+                CopilotAppAgentEnvironmentScanner.AgentEnvironmentValue,
         });
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
@@ -98,7 +98,7 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     public void GetLinuxApplicationDirectories_WithoutXdgOverrides_UsesFreedesktopDefaults()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var detector = CreateInstallationDetector(TestEnvironment.CreateLinux(), workspace);
+        var scanner = CreateScanner(TestEnvironment.CreateLinux(), workspace);
         var rootDirectory = Path.DirectorySeparatorChar.ToString();
 
         Assert.Equal(
@@ -107,7 +107,7 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 Path.Combine(rootDirectory, "usr", "local", "share", "applications"),
                 Path.Combine(rootDirectory, "usr", "share", "applications"),
             ],
-            detector.GetLinuxApplicationDirectories());
+            scanner.GetLinuxApplicationDirectories());
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 "relative-directory",
                 secondDataDirectory.FullName),
         });
-        var detector = CreateInstallationDetector(environment, workspace);
+        var scanner = CreateScanner(environment, workspace);
 
         Assert.Equal(
             [
@@ -134,7 +134,7 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
                 Path.Combine(firstDataDirectory.FullName, "applications"),
                 Path.Combine(secondDataDirectory.FullName, "applications"),
             ],
-            detector.GetLinuxApplicationDirectories());
+            scanner.GetLinuxApplicationDirectories());
     }
 
     [Fact]
@@ -163,19 +163,11 @@ public class CopilotAppAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         TemporaryWorkspace workspace)
     {
         return new(
-            CreateInstallationDetector(environment, workspace),
-            NullLogger<CopilotAppAgentEnvironmentScanner>.Instance);
-    }
-
-    private static CopilotAppInstallationDetector CreateInstallationDetector(
-        IEnvironment environment,
-        TemporaryWorkspace workspace)
-    {
-        return new(
-            environment,
             TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot,
-                homeDirectory: workspace.WorkspaceRoot));
+                homeDirectory: workspace.WorkspaceRoot),
+            environment,
+            NullLogger<CopilotAppAgentEnvironmentScanner>.Instance);
     }
 
     private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory)
