@@ -38,6 +38,7 @@ import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
 import { initializeHotReloadAdvisory } from './debugger/hotReload';
+import { InternalMicrosoftTelemetryProvider } from './utils/internalMicrosoftTelemetry';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -46,6 +47,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
+  const internalMicrosoftTelemetryProvider = new InternalMicrosoftTelemetryProvider();
+  context.subscriptions.push(internalMicrosoftTelemetryProvider);
+  await internalMicrosoftTelemetryProvider.initializeAsync();
   initializeTelemetry(context);
   sendTelemetryEvent('aspire/vscode/extension/activated', {
     workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',

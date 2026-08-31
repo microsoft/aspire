@@ -161,6 +161,11 @@ suite('telemetry utilities', () => {
     });
 
     test('usage and dashboard events keep their registry wire names', () => {
+        setCommonTelemetryProperties({
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+        });
         sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.prefixed' });
         sendTelemetryEvent('aspire/dashboard/operation', {
             dashboard_event_name: 'aspire/dashboard/command',
@@ -171,6 +176,10 @@ suite('telemetry utilities', () => {
             'aspire/vscode/command/invoked',
             'aspire/dashboard/operation',
         ]);
+        assert.ok(fake.events.every(event =>
+            event.properties?.is_microsoft_internal === 'true' &&
+            event.properties.microsoft_internal_alias === 'test.user' &&
+            event.properties.microsoft_internal_domain === 'microsoft.com'));
         assert.ok(fake.events.every(event => event.isDangerous === true));
     });
 

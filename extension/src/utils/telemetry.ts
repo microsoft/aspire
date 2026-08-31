@@ -143,8 +143,8 @@ export function isExtensionTelemetryEnabled(): boolean {
 
 /**
  * Replace the current set of common properties. Passing `undefined` for a
- * property removes it. Values should already be bounded, non-PII summaries
- * (e.g. `csharp;typescript`, not project paths).
+ * property removes it. Values must conform to the telemetry registry's data-classification
+ * contract and should be normalized before they reach this shared property bag.
  */
 export function setCommonTelemetryProperties(properties: CommonTelemetryProperties): void {
     for (const [key, value] of Object.entries(properties) as [CommonTelemetryProperty, string | undefined][]) {
