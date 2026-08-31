@@ -3004,6 +3004,24 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    public CSharpAppResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to a project resource. */
+    public CSharpAppResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withProjectVolume", reqArgs);
+        return this;
+    }
+
     /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -9780,6 +9798,24 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    public DotnetToolResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to an executable resource. */
+    public DotnetToolResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableVolume", reqArgs);
+        return this;
+    }
+
     /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12099,6 +12135,24 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to an executable resource. */
+    public ExecutableResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableVolume", reqArgs);
         return this;
     }
 
@@ -20176,6 +20230,24 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withPipelineConfiguration", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withVolume(String target, String name, String env) {
+        return withVolume(target, name, env, null);
+    }
+
+    /** Adds a volume to a project resource. */
+    public ProjectResource withVolume(String target, String name, String env, Boolean isReadOnly) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("target", AspireClient.serializeValue(target));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("env", AspireClient.serializeValue(env));
+        if (isReadOnly != null) {
+            reqArgs.put("isReadOnly", AspireClient.serializeValue(isReadOnly));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withProjectVolume", reqArgs);
         return this;
     }
 

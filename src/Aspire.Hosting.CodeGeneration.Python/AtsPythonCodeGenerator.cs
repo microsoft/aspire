@@ -117,6 +117,8 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         List<AtsParameterInfo> OptionalParameters,
         string? Experimental);
 
+    private sealed record ParameterMappingSignature(string[] RequiredParameters, string[] OptionalParameters);
+
     /// <summary>
     /// Tracks the alternate capability ID for merged capabilities.
     /// Key: the merged capability ID (the "short" one without the extra param).
@@ -130,6 +132,8 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
 
     private PythonModuleBuilder _moduleBuilder = null!;
+
+    private readonly Dictionary<string, ParameterMappingSignature> _parameterMappingSignatures = new(StringComparer.Ordinal);
 
     // Mapping of typeId -> wrapper class name for all generated wrapper types
     // Used to resolve parameter types to wrapper classes instead of handle types
@@ -696,12 +700,31 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
         return methodName + "Parameters";
     }
+
+    /// <summary>
+    /// Extracts the trailing segment of a capability ID, for example "withDataVolume" from
+    /// "Aspire.Hosting.Azure.Storage/withDataVolume".
+    /// </summary>
+    /// <remarks>
+    /// This only needs to be a better-than-nothing disambiguator, not a uniquely correct name. It is
+    /// one rung of the widening ladder in <see cref="ResolveParameterMappingName"/>, which starts at the
+    /// projected method name and ends at a namespace-qualified name plus a numeric suffix, so a
+    /// collision here simply falls through to the next rung.
+    /// </remarks>
+    private static string GetCapabilityName(string capabilityId)
+    {
+        var slashIndex = capabilityId.LastIndexOf('/');
+
+        return slashIndex >= 0 ? capabilityId[(slashIndex + 1)..] : capabilityId;
+    }
+
     /// <summary>
     /// Generates the aspire.py SDK file with capability-based API.
     /// </summary>
     private string GenerateAspireSdk(AtsContext context)
     {
         _moduleBuilder = new PythonModuleBuilder();
+        _parameterMappingSignatures.Clear();
 
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
@@ -2370,7 +2393,6 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         var requiredParamsTypes = string.Join(", ", requiredParameters.Select(MapParameterToPython));
         var optionalParamsTypes = string.Join(", ", optionalParameters.Select(MapParameterToPython));
-        var parameterMappingName = GetMethodParametersName(capability.MethodName);
         string? experimental = null; // TODO: get experimental tag
         var variations = new List<OptionVariation>();
         
@@ -2399,7 +2421,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             }
             else
             {
-                AddParameterMapping(parameterMappingName, requiredParameters, optionalParameters);
+                var parameterMappingName = AddParameterMapping(capability, requiredParameters, optionalParameters);
                 variations.Add(new OptionVariation(requiredParamsTypes, requiredParameters, optionalParameters, experimental));
                 variations.Add(new OptionVariation(parameterMappingName, requiredParameters, optionalParameters, experimental));
             }
@@ -2408,7 +2430,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             if (optionalParameters.Count > 0)
             {
-                AddParameterMapping(parameterMappingName, requiredParameters, optionalParameters);
+                var parameterMappingName = AddParameterMapping(capability, requiredParameters, optionalParameters);
                 variations.Add(new OptionVariation("(" + requiredParamsTypes + ")", requiredParameters, optionalParameters, experimental));
                 variations.Add(new OptionVariation(parameterMappingName, requiredParameters, optionalParameters, experimental));
             }
@@ -2419,7 +2441,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
         else
         {
-            AddParameterMapping(parameterMappingName, requiredParameters, optionalParameters);
+            var parameterMappingName = AddParameterMapping(capability, requiredParameters, optionalParameters);
             if (requiredParameters.Count == 0)
             {
                 variations.Add(new OptionVariation(parameterMappingName, requiredParameters, optionalParameters, experimental));
@@ -2434,12 +2456,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return variations;
     }
 
-    private void AddParameterMapping(string methodName, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
+    private string AddParameterMapping(AtsCapabilityInfo capability, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
     {
+        var methodName = ResolveParameterMappingName(capability, requiredParameters, optionalParameters);
         if (_moduleBuilder.MethodParameters.ContainsKey(methodName))
         {
-            return;
+            return methodName;
         }
+
         var parameters = new System.Text.StringBuilder();
         parameters.AppendLine();
         parameters.AppendLine(CultureInfo.InvariantCulture, $"class {methodName}(typing.TypedDict, total=False):");
@@ -2452,6 +2476,90 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             parameters.AppendLine(CultureInfo.InvariantCulture, $"    {ToSnakeCase(optionalParam.Name!)}: {MapParameterToPython(optionalParam)}");
         }
         _moduleBuilder.MethodParameters[methodName] = parameters;
+        _parameterMappingSignatures[methodName] = CreateParameterMappingSignature(requiredParameters, optionalParameters);
+
+        return methodName;
+    }
+
+    private string ResolveParameterMappingName(AtsCapabilityInfo capability, List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
+    {
+        var signature = CreateParameterMappingSignature(requiredParameters, optionalParameters);
+
+        // Capabilities can share a projected method name while accepting different parameter shapes.
+        // Reusing one TypedDict in that case makes one capability type-check against another
+        // capability's required/optional keys, so try progressively more specific names and take
+        // the first that is either free or already holds an identical shape.
+        var methodName = GetMethodParametersName(capability.MethodName);
+        if (IsParameterMappingNameAvailable(methodName, signature))
+        {
+            return methodName;
+        }
+
+        var capabilityName = GetMethodParametersName(GetCapabilityName(capability.CapabilityId));
+        if (IsParameterMappingNameAvailable(capabilityName, signature))
+        {
+            return capabilityName;
+        }
+
+        // A capability declared with a bare [AspireExport] gets a capability ID whose trailing
+        // segment is its method name, so the capability-ID candidate above degenerates to the
+        // method-name candidate that just failed. The declaring namespace is then the only
+        // remaining information that distinguishes it. This is not exotic: withDataVolume is
+        // bare-exported by many integration packages with differing optional parameters, so any
+        // AppHost referencing two such packages reaches this point.
+        var namespaceQualifiedName = GetNamespaceQualifiedParameterMappingName(capability);
+        if (IsParameterMappingNameAvailable(namespaceQualifiedName, signature))
+        {
+            return namespaceQualifiedName;
+        }
+
+        // Two capabilities can share both a namespace and a method name only when one of them
+        // renames the other's method, so this is a last resort rather than a normal outcome.
+        // Generation must still produce a usable SDK, so keep widening instead of failing.
+        for (var disambiguator = 2; ; disambiguator++)
+        {
+            var candidate = FormattableString.Invariant($"{namespaceQualifiedName}{disambiguator}");
+            if (IsParameterMappingNameAvailable(candidate, signature))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    private bool IsParameterMappingNameAvailable(string name, ParameterMappingSignature signature)
+    {
+        return !_parameterMappingSignatures.TryGetValue(name, out var existingSignature)
+            || AreParameterMappingSignaturesEqual(existingSignature, signature);
+    }
+
+    private static string GetNamespaceQualifiedParameterMappingName(AtsCapabilityInfo capability)
+    {
+        // Capability IDs are "<declaring namespace>/<capability name>", for example
+        // "Aspire.Hosting.Azure.Storage/withDataVolume". Dots are stripped because the result is a
+        // Python identifier: that yields AspireHostingAzureStorageDataVolumeParameters.
+        var capabilityId = capability.CapabilityId;
+        var separatorIndex = capabilityId.LastIndexOf('/');
+        var declaringNamespace = separatorIndex >= 0 ? capabilityId[..separatorIndex] : string.Empty;
+
+        return declaringNamespace.Replace(".", string.Empty, StringComparison.Ordinal)
+            + GetMethodParametersName(GetCapabilityName(capabilityId));
+    }
+
+    private static bool AreParameterMappingSignaturesEqual(ParameterMappingSignature left, ParameterMappingSignature right)
+    {
+        return left.RequiredParameters.SequenceEqual(right.RequiredParameters, StringComparer.Ordinal)
+            && left.OptionalParameters.SequenceEqual(right.OptionalParameters, StringComparer.Ordinal);
+    }
+
+    private ParameterMappingSignature CreateParameterMappingSignature(List<AtsParameterInfo> requiredParameters, List<AtsParameterInfo> optionalParameters)
+    {
+        return new ParameterMappingSignature(
+            [.. requiredParameters
+                .OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => $"{ToSnakeCase(p.Name!)}:{MapParameterToPython(p)}")],
+            [.. optionalParameters
+                .OrderBy(p => p.Name, StringComparer.Ordinal)
+                .Select(p => $"{ToSnakeCase(p.Name!)}:{MapParameterToPython(p)}")]);
     }
 
     /// <summary>

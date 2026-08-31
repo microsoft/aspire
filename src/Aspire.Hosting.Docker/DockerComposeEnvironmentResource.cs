@@ -26,7 +26,7 @@ namespace Aspire.Hosting.Docker;
 /// Initializes a new instance of the <see cref="DockerComposeEnvironmentResource"/> class.
 /// </remarks>
 [AspireExport(ExposeProperties = true, ExposeMethods = true)]
-public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
+public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
 {
     private const string DockerComposeUpTag = "docker-compose-up";
 

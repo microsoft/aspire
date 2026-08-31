@@ -700,6 +700,50 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_ProjectAndExecutableVolumesUseDefaultStorageAndEnvironmentPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/project/config.yaml",
+            "templates/project/deployment.yaml",
+            "templates/executable/config.yaml",
+            "templates/executable/deployment.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task KubernetesTreatsZeroPublicPortAsUnspecified()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1663,6 +1707,105 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_EnvironmentUsesDeploymentMountPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var volume = kubernetes.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("100Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(volume, "/srv/media", env: "MEDIA_PATH");
+
+        var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var localPath = KubernetesPersistentVolumeLocalStorage.GetPath(store, volume.Resource);
+
+        app.Run();
+
+        Assert.False(Directory.Exists(localPath));
+
+        var expectedFiles = new[]
+        {
+            "templates/api/config.yaml",
+            "templates/api/statefulset.yaml",
+            "templates/media/media.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithPersistentVolumeEnvironment_OnContainerAndExecutable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var kubernetes = builder.AddKubernetesEnvironment("env");
+        var containerVolume = kubernetes.AddPersistentVolume("container-data")
+            .WithCapacity("1Gi");
+        var executableVolume = kubernetes.AddPersistentVolume("executable-data")
+            .WithCapacity("1Gi");
+
+        builder.AddContainer("container", "nginx")
+            .WithPersistentVolume(containerVolume, "/srv/container", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithPersistentVolume(executableVolume, "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/container/config.yaml",
+            "templates/container/statefulset.yaml",
+            "templates/container-data/container-data.yaml",
+            "templates/executable/config.yaml",
+            "templates/executable/statefulset.yaml",
+            "templates/executable-data/executable-data.yaml",
+            "values.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(workspace.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_FallsThroughForUnboundVolumes()
     {
         // A workload may declare both a bound and an unbound volume. The bound one
@@ -1723,7 +1866,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithPersistentVolume(data);
 
         var app = builder.Build();
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
         Assert.Contains("service", ex.Message);
         Assert.Contains("envA", ex.Message);
         Assert.Contains("envB", ex.Message);

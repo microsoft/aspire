@@ -1751,6 +1751,20 @@ class VolumeParameters(typing.TypedDict, total=False):
     is_read_only: bool
 
 
+class ProjectVolumeParameters(typing.TypedDict, total=False):
+    target: typing.Required[str]
+    name: typing.Required[str]
+    env: typing.Required[str]
+    is_read_only: bool
+
+
+class ExecutableVolumeParameters(typing.TypedDict, total=False):
+    target: typing.Required[str]
+    name: typing.Required[str]
+    env: typing.Required[str]
+    is_read_only: bool
+
+
 class DataVolumeParameters(typing.TypedDict, total=False):
     name: str
     is_read_only: bool
@@ -10375,6 +10389,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    volume: tuple[str, str, str] | ProjectVolumeParameters
     endpoints_in_env: typing.Iterable[str]
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
@@ -10874,6 +10889,21 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_volume(self, target: str, name: str, env: str, *, is_read_only: bool = False) -> typing.Self:
+        """Adds a volume to a project resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['target'] = target
+        rpc_args['name'] = name
+        rpc_args['env'] = env
+        if is_read_only is not None:
+            rpc_args['isReadOnly'] = is_read_only
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withProjectVolume',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoints_in_env(self, endpoint_names: typing.Iterable[str]) -> typing.Self:
         """Includes only the specified project endpoint names in environment-variable injection."""
         rpc_args: dict[str, typing.Any] = {'resource': self._handle}
@@ -11270,6 +11300,22 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
+        if _volume := kwargs.pop("volume", None):
+            if _validate_tuple_types(_volume, (str, str, str)):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(tuple[str, str, str], _volume)[0]
+                rpc_args["name"] = typing.cast(tuple[str, str, str], _volume)[1]
+                rpc_args["env"] = typing.cast(tuple[str, str, str], _volume)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProjectVolume', rpc_args))
+            elif _validate_dict_types(_volume, ProjectVolumeParameters):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(ProjectVolumeParameters, _volume)["target"]
+                rpc_args["name"] = typing.cast(ProjectVolumeParameters, _volume)["name"]
+                rpc_args["env"] = typing.cast(ProjectVolumeParameters, _volume)["env"]
+                rpc_args["isReadOnly"] = typing.cast(ProjectVolumeParameters, _volume).get("is_read_only")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProjectVolume', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'volume'. Expected: (str, str, str) or ProjectVolumeParameters")
         if _endpoints_in_env := kwargs.pop("endpoints_in_env", None):
             if _validate_type(_endpoints_in_env, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"resource": handle}
@@ -11353,6 +11399,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    volume: tuple[str, str, str] | ExecutableVolumeParameters
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
@@ -11839,6 +11886,21 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_volume(self, target: str, name: str, env: str, *, is_read_only: bool = False) -> typing.Self:
+        """Adds a volume to an executable resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['target'] = target
+        rpc_args['name'] = name
+        rpc_args['env'] = env
+        if is_read_only is not None:
+            rpc_args['isReadOnly'] = is_read_only
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withExecutableVolume',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12214,6 +12276,22 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
+        if _volume := kwargs.pop("volume", None):
+            if _validate_tuple_types(_volume, (str, str, str)):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(tuple[str, str, str], _volume)[0]
+                rpc_args["name"] = typing.cast(tuple[str, str, str], _volume)[1]
+                rpc_args["env"] = typing.cast(tuple[str, str, str], _volume)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableVolume', rpc_args))
+            elif _validate_dict_types(_volume, ExecutableVolumeParameters):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(ExecutableVolumeParameters, _volume)["target"]
+                rpc_args["name"] = typing.cast(ExecutableVolumeParameters, _volume)["name"]
+                rpc_args["env"] = typing.cast(ExecutableVolumeParameters, _volume)["env"]
+                rpc_args["isReadOnly"] = typing.cast(ExecutableVolumeParameters, _volume).get("is_read_only")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableVolume', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'volume'. Expected: (str, str, str) or ExecutableVolumeParameters")
         if _on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None):
             if _validate_type(_on_resource_endpoints_allocated, typing.Callable[[ResourceEndpointsAllocatedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

@@ -192,16 +192,24 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _options = options;
 
-        var innerBuilderOptions = new HostApplicationBuilderSettings();
+        var innerBuilderOptions = new HostApplicationBuilderSettings
+        {
+            ContentRootPath = options.ContentRootPath
+        };
 
         // Args are set later in config with switch mappings. But specify them when creating the builder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
         innerBuilderOptions.Args = options.Args;
 
-        // Pre-seed the configuration with ASPIRE_-prefixed environment variables.
+        // Pre-seed fallback values before environment and host-default sources so every normal
+        // configuration provider can override them, then add ASPIRE_-prefixed environment variables.
         // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
         // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
         var configuration = new ConfigurationManager();
+        if (options.DefaultConfiguration is not null)
+        {
+            configuration.AddInMemoryCollection(options.DefaultConfiguration);
+        }
         configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
         innerBuilderOptions.Configuration = configuration;
 
