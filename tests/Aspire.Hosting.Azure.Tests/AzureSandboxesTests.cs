@@ -1794,6 +1794,46 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzureDevComputeClientAddsEntraAuthenticatedPort()
+    {
+        var handler = new RecordingHandler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+
+            var body = await request.Content!.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(body);
+            var auth = document.RootElement.GetProperty("auth");
+            Assert.False(auth.TryGetProperty("anonymous", out _));
+            Assert.True(auth.GetProperty("entraId").GetProperty("enabled").GetBoolean());
+
+            return JsonResponse(
+                """
+                {
+                  "ports": [
+                    { "port": 8080, "url": "https://sandbox.example.test" }
+                  ]
+                }
+                """);
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var ports = await client.AddPortAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "sandbox-1",
+            new AzureDevComputeAddPortRequest
+            {
+                Port = 8080,
+                Auth = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false),
+                Protocol = "Http"
+            },
+            CancellationToken.None);
+
+        var port = Assert.Single(ports);
+        Assert.Equal(8080, port.Port);
+        Assert.Equal("https://sandbox.example.test/", port.Url.ToString());
+    }
+
+    [Fact]
     public async Task SandboxContainerOptionsMapToRuntimeRequestShapes()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

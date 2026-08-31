@@ -926,13 +926,26 @@ internal static class AzureSandboxContainerDeployment
             {
                 Name = endpoint.Name,
                 Port = endpoint.TargetPort,
-                Auth = endpoint.IsExternal ? new AzureDevComputePortAuthConfig { Anonymous = endpoint.Anonymous ?? false } : null,
+                Auth = endpoint.IsExternal ? CreatePortAuthConfig(endpoint.Anonymous == true) : null,
                 Protocol = endpoint.Protocol
             },
             context.CancellationToken).ConfigureAwait(false);
 
         return ports.FirstOrDefault(port => port.Port == endpoint.TargetPort)
             ?? throw new InvalidOperationException($"The ADC port add response did not contain port '{endpoint.TargetPort}' for sandbox '{sandboxId}'.");
+    }
+
+    internal static AzureDevComputePortAuthConfig CreatePortAuthConfig(bool anonymous)
+    {
+        // ADC requires at least one authentication provider to be enabled. Sending
+        // `anonymous: false` alone is invalid, so the secure default enables Entra ID.
+        // https://management.azuredevcompute.io/openapi/v1.json
+        return anonymous
+            ? new AzureDevComputePortAuthConfig { Anonymous = true }
+            : new AzureDevComputePortAuthConfig
+            {
+                EntraId = new AzureDevComputePortEntraIdAuthConfig { Enabled = true }
+            };
     }
 
     private static async Task<string> ResolveContainerImageAsync(PipelineStepContext context, AzureSandboxContainerResource resource)

@@ -672,7 +672,14 @@ internal sealed class AzureDevComputeRemovePortRequest
 
 internal sealed class AzureDevComputePortAuthConfig
 {
-    public bool Anonymous { get; init; }
+    public bool? Anonymous { get; init; }
+
+    public AzureDevComputePortEntraIdAuthConfig? EntraId { get; init; }
+}
+
+internal sealed class AzureDevComputePortEntraIdAuthConfig
+{
+    public bool Enabled { get; init; }
 }
 
 internal sealed class AzureDevComputePortsList

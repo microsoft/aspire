@@ -85,14 +85,9 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 
             output.WriteLine("Step 4: Creating the .NET web service...");
             await auto.RunCommandAsync($"dotnet new web -n {serviceName} --no-restore", counter, TimeSpan.FromMinutes(2));
-            await auto.RunCommandAsync(
-                $"dotnet add {projectName}.AppHost/{projectName}.AppHost.csproj reference {serviceName}/{serviceName}.csproj",
-                counter,
-                TimeSpan.FromMinutes(2));
             WriteDotNetSandboxAppHost(workspace, projectName, serviceName);
 
             await auto.RunCommandAsync($"touch {BashQuote(stateMarkerFile)}", counter);
-            await auto.RunCommandAsync($"cd {projectName}.AppHost", counter);
             await auto.RunCommandAsync(
                 $"unset ASPIRE_PLAYGROUND && " +
                 $"export AZURE__LOCATION=westus3 && " +
@@ -401,7 +396,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
     private static void WriteDotNetSandboxAppHost(TemporaryWorkspace workspace, string projectName, string serviceName)
     {
         var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var appHostFilePath = Path.Combine(projectDir, $"{projectName}.AppHost", "AppHost.cs");
+        var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
         var serviceDir = Path.Combine(projectDir, serviceName);
         var propertiesDir = Directory.CreateDirectory(Path.Combine(serviceDir, "Properties"));
 
@@ -438,18 +433,8 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 
             builder.AddAzureSandboxGroup("env");
 
-            builder.AddProject<Projects.{{serviceName}}>("frontend")
-                .PublishAsAzureSandbox(new AzureSandboxOptions
-                {
-                    Endpoints =
-                    [
-                        new AzureSandboxEndpointOptions
-                        {
-                            Name = "http",
-                            Anonymous = true
-                        }
-                    ]
-                });
+            builder.AddProject("frontend", "{{serviceName}}/{{serviceName}}.csproj")
+                .WithExternalHttpEndpoints();
 
             builder.Build().Run();
             """);
@@ -478,9 +463,11 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             "if [ \"$PORT_URL_COUNT\" -ne 1 ]; then echo \"Expected one shared sandbox port, found $PORT_URL_COUNT\"; cat \"$STATE_FILE\"; exit 1; fi && " +
             $"grep -Eq '\"{statePrefix}:0:Port\"[[:space:]]*:[[:space:]]*8080' \"$STATE_FILE\" || {{ echo \"Expected sandbox target port 8080\"; cat \"$STATE_FILE\"; exit 1; }} && " +
             $"grep -Eq '\"{statePrefix}:0:Protocol\"[[:space:]]*:[[:space:]]*\"Http\"' \"$STATE_FILE\" || {{ echo \"Expected HTTP protocol behind sandbox TLS termination\"; cat \"$STATE_FILE\"; exit 1; }} && " +
+            $"grep -Eq '\"{statePrefix}:0:Anonymous\"[[:space:]]*:[[:space:]]*false' \"$STATE_FILE\" || {{ echo \"Expected authenticated sandbox endpoint\"; cat \"$STATE_FILE\"; exit 1; }} && " +
             "success=0 && " +
             "for i in $(seq 1 18); do " +
-            $"BODY=$(curl -fsS \"$URL\" --max-time 10 2>/tmp/aspire-sandbox-dotnet-curl.err) && echo \"$BODY\" | grep -Fq {BashQuote(ExpectedDotNetResponseText)} && {{ echo \"  OK (attempt $i)\"; success=1; break; }}; " +
+            "STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \"$URL\" --max-time 10 2>/tmp/aspire-sandbox-dotnet-curl.err) && " +
+            "case \"$STATUS\" in 2??|3??|401|403) echo \"  Authenticated endpoint responded with HTTP $STATUS (attempt $i)\"; success=1; break;; esac; " +
             "echo \"  Attempt $i failed; retrying in 10s...\"; sleep 10; " +
             "done; " +
             "if [ \"$success\" -ne 1 ]; then echo \"Sandbox URL check failed for $URL\"; cat /tmp/aspire-sandbox-dotnet-curl.err 2>/dev/null || true; exit 1; fi";
