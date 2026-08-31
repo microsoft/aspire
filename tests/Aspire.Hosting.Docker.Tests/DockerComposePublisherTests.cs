@@ -907,7 +907,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         // Add a container with both bind mounts and volumes
         builder.AddContainer("my-service", "my-image")
-            .WithVolume("my-volume", "/container/volume-data")
+            .WithVolume("my-volume", "/container/volume-data", env: "DATA_PATH")
             .WithBindMount("/host/path/data", "/container/bind-data")
             .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock");
 
@@ -921,6 +921,31 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(File.ReadAllText(composePath), "yaml")
             .AppendContentAsFile(File.ReadAllText(envPath), "env");
+    }
+
+    [Fact]
+    public async Task PublishAsync_ProjectAndExecutableVolumesIncludeEnvironmentPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false);
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
     }
 
     [Fact]
