@@ -521,6 +521,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             "SUMMARY=$(printf '%s' \"$NORMALIZED\" | sed 's/^.*Pipeline succeeded//') && " +
             $"case \"$SUMMARY\" in *\"{resourceName}\"*) ;; *) echo \"Resource name '{resourceName}' was not reported in the deployment summary\"; exit 1;; esac && " +
             "case \"$SUMMARY\" in *\"$URL\"*) ;; *) echo \"Sandbox URL was not reported in the deployment summary\"; exit 1;; esac && " +
+            "case \"$SUMMARY\" in *\"https://sandboxes.azure.com/sandbox-groups/\"*) ;; *) echo \"Sandbox dashboard was not reported in the deployment summary\"; exit 1;; esac && " +
             "echo \"Deployment summary reported $URL for " + resourceName + "\"";
     }
 

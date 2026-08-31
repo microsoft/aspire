@@ -39,6 +39,72 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzureSandboxGroupsAddDashboardLinksToDeploymentSummary()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var firstGroup = builder.AddAzureSandboxGroup("first");
+        firstGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/example-rg/providers/Microsoft.App/sandboxGroups/first-group";
+        firstGroup.Resource.Outputs["location"] = "westus3";
+        var secondGroup = builder.AddAzureSandboxGroup("second");
+        secondGroup.Resource.Outputs["id"] = "/subscriptions/22222222-2222-2222-2222-222222222222/resourceGroups/other-rg/providers/Microsoft.App/sandboxGroups/second-group";
+        secondGroup.Resource.Outputs["location"] = "eastus2";
+
+        using var app = builder.Build();
+        var firstSteps = await CreateStepsAsync(app, firstGroup.Resource);
+        var firstSummaryStep = Assert.Single(firstSteps, step => step.Name == "print-azure-sandboxes-dashboard-first");
+        Assert.Contains(AzureEnvironmentResource.ProvisionInfrastructureStepName, firstSummaryStep.DependsOnSteps);
+        Assert.Contains(WellKnownPipelineSteps.Deploy, firstSummaryStep.RequiredBySteps);
+        Assert.Contains("print-summary", firstSummaryStep.Tags);
+
+        var secondSteps = await CreateStepsAsync(app, secondGroup.Resource);
+        var secondSummaryStep = Assert.Single(secondSteps, step => step.Name == "print-azure-sandboxes-dashboard-second");
+
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        await using var firstReportingStep = await new NullPublishingActivityReporter().CreateStepAsync("first");
+        await firstSummaryStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = firstReportingStep
+        });
+        await using var secondReportingStep = await new NullPublishingActivityReporter().CreateStepAsync("second");
+        await secondSummaryStep.Action(new PipelineStepContext
+        {
+            PipelineContext = pipelineContext,
+            ReportingStep = secondReportingStep
+        });
+
+        Assert.Collection(
+            pipelineContext.Summary.Items,
+            item =>
+            {
+                const string expectedUrl = "https://sandboxes.azure.com/sandbox-groups/11111111-1111-1111-1111-111111111111/example-rg/first-group";
+                Assert.Equal("first sandbox dashboard", item.Key);
+                Assert.Equal($"[{expectedUrl}]({expectedUrl})", item.Value);
+                Assert.True(item.EnableMarkdown);
+            },
+            item =>
+            {
+                const string expectedUrl = "https://sandboxes.azure.com/sandbox-groups/22222222-2222-2222-2222-222222222222/other-rg/second-group";
+                Assert.Equal("second sandbox dashboard", item.Key);
+                Assert.Equal($"[{expectedUrl}]({expectedUrl})", item.Value);
+                Assert.True(item.EnableMarkdown);
+            });
+    }
+
+    [Fact]
+    public void AzureSandboxDashboardUrlEscapesRouteSegments()
+    {
+        Assert.Equal(
+            "https://sandboxes.azure.com/sandbox-groups/subscription%20id/resource%20group/sandbox%2Fgroup",
+            AzureSandboxGroupResource.GetDashboardUrl("subscription id", "resource group", "sandbox/group"));
+    }
+
+    [Fact]
     public void ExistingSandboxDataPlaneScopeUsesActualResourceOutputs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

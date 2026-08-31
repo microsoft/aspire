@@ -99,7 +99,7 @@ To keep endpoint references usable during an ordinary redeploy of the same immut
 ## Publish, deploy, and destroy behavior
 
 * `aspire publish` emits reviewable Bicep for the sandbox group, registry, managed identities, and role assignments. Sandbox instances, disk images, ports, and data-plane URLs are deploy-time resources and are not created by publish.
-* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, creates the ADC disk image and sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs are shown in the deployment summary.
+* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, creates the ADC disk image and sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs and a direct link to each sandbox group's dashboard are shown in the deployment summary.
 * `aspire destroy` removes the current and labeled retained sandbox generations and disk images before Azure resource-group cleanup. Stable ownership labels allow cleanup after deployment state is cleared when the same AppHost and Azure sandbox group scope are still configured.
 * Existing sandbox groups use the subscription, resource group, location, and name from the group's actual Azure outputs rather than the ambient deployment resource group.
 
