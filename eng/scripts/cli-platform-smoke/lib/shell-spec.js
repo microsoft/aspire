@@ -8,6 +8,14 @@ function getShellSpec() {
       args: ['-NoLogo', '-NoProfile'],
       enterKey: '\r',
       quote: quotePowerShell,
+      findPrompt(slice) {
+        return /(?:^|[\r\n])PS [^\r\n]*>\s*$/.exec(slice)?.[0] || null;
+      },
+      wrapInterruptCompletion(sentinel) {
+        // PowerShell aborts the rest of the submitted command line when CTRL+C is pressed.
+        // Emit the completion marker as a new command after the default -NoProfile prompt returns.
+        return `Write-Output ('${sentinel}:' + 0)`;
+      },
       wrapCommand(command, sentinel) {
         // Cmdlets such as the shell readiness probe don't set $LASTEXITCODE, while native
         // commands do. Normalize both paths so every command emits a numeric completion marker.

@@ -8,6 +8,10 @@ const operation = process.argv[2];
 const diagnosticsDir = process.argv[3];
 const ptys = [];
 
+if (operation === 'windows-interrupt') {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+}
+
 if (operation === 'startup-disposal') {
     const originalSetTimeout = global.setTimeout;
     global.setTimeout = (callback, delay, ...args) =>
@@ -45,6 +49,11 @@ class FakePty {
     }
 
     write(data) {
+        if (data === '\u0003' && operation === 'windows-interrupt') {
+            queueMicrotask(() => this.dataCallback('\r\nPS C:\\repo> '));
+            return;
+        }
+
         if (data !== '\r') {
             this.command = data;
             return;
@@ -60,6 +69,15 @@ class FakePty {
             }
 
             queueMicrotask(() => this.dataCallback(`__ASPIRE_SMOKE_READY__\n${sentinel}:0\n`));
+        } else if (operation === 'windows-interrupt' && this.commandCount === 2) {
+            queueMicrotask(() => this.dataCallback('run ready\r\n'));
+        } else if (operation === 'windows-interrupt' && this.commandCount === 3) {
+            const sentinel = /__ASPIRE_SMOKE_DONE_\d+_[0-9a-f]+__/.exec(this.command)?.[0];
+            if (!sentinel) {
+                throw new Error(`Could not find the interrupt completion sentinel in '${this.command}'.`);
+            }
+
+            queueMicrotask(() => this.dataCallback(`${sentinel}:0\r\n`));
         }
     }
 
@@ -83,6 +101,11 @@ async function main() {
             await controller.runAspireCommand(['version'], {
                 timeoutMs: operation === 'command-timeout' ? 20 : 1_000
             });
+
+            if (operation === 'windows-interrupt') {
+                await controller.waitFor('run ready', 'waiting for fake command readiness', 1_000);
+                await controller.ctrlC();
+            }
 
             if (operation === 'callback-settlement') {
                 try {

@@ -66,6 +66,18 @@ public sealed class CliPlatformSmokeLifecycleTests : IDisposable
         Assert.Equal(1, result.KillCount);
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task CompletesPowerShellCommandAfterControlCInterrupt()
+    {
+        HarnessResult result = await RunHarnessAsync("windows-interrupt");
+
+        Assert.Null(result.ErrorMessage);
+        Assert.Equal(1, result.KillCount);
+        Assert.True(result.LogExists);
+        Assert.True(result.CastExists);
+    }
+
     private async Task<HarnessResult> RunHarnessAsync(string operation)
     {
         using NodeCommand command = new(_output, operation);
@@ -82,7 +94,7 @@ public sealed class CliPlatformSmokeLifecycleTests : IDisposable
     {
         public bool CallbackSettled { get; init; }
         public bool CastExists { get; init; }
-        public string ErrorMessage { get; init; } = string.Empty;
+        public string? ErrorMessage { get; init; }
         public int KillCount { get; init; }
         public bool LogExists { get; init; }
     }

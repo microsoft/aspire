@@ -216,7 +216,19 @@ class ShellCommandRun {
   }
 
   async ctrlC() {
+    const interruptIndex = this.session.cleanOutput.length;
     this.session.ptyProcess.write('\u0003');
+
+    if (this.session.shell.wrapInterruptCompletion) {
+      await this.session.waitForSlice(
+        interruptIndex,
+        slice => this.session.shell.findPrompt(slice),
+        30_000,
+        'waiting for the shell prompt after CTRL+C');
+      this.session.ptyProcess.write(this.session.shell.wrapInterruptCompletion(this.sentinel));
+      this.session.ptyProcess.write(this.session.shell.enterKey);
+    }
+
     await delay(10);
   }
 
