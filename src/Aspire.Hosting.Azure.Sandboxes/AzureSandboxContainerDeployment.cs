@@ -484,11 +484,11 @@ internal static class AzureSandboxContainerDeployment
                 var retainedUrl = securityConfigurationChanged || ownerChanged
                     ? null
                     : GetFirstStateUrl(previousStateSection);
-                context.Summary.Add(resource.Name, new MarkdownString(CreateSandboxUrlSummary(publicUrl, retainedUrl)));
+                context.Summary.Add(resource.TargetResource.Name, new MarkdownString(CreateSandboxUrlSummary(publicUrl, retainedUrl)));
             }
             else
             {
-                context.Summary.Add(resource.Name, new MarkdownString($"Sandbox `{sandboxId}`"));
+                context.Summary.Add(resource.TargetResource.Name, new MarkdownString($"Sandbox `{sandboxId}`"));
             }
         }
         catch

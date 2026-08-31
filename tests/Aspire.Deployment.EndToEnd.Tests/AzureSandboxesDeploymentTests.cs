@@ -50,6 +50,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("sandbox-dotnet");
         var deploymentUrls = new Dictionary<string, string>();
         var urlFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-url.txt");
+        var deployOutputFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-deploy-output.txt");
         var stateMarkerFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-state-marker");
 
         output.WriteLine($"Test: {nameof(DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandbox)}");
@@ -100,7 +101,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             appHostReady = true;
 
             output.WriteLine("Step 5: Deploying the .NET service to Azure Sandbox...");
-            await auto.TypeAsync("aspire deploy");
+            await auto.TypeAsync($"aspire deploy 2>&1 | tee {BashQuote(deployOutputFile)}");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
@@ -110,7 +111,13 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromSeconds(30));
 
-            output.WriteLine("Step 6: Verifying TLS termination and the shared HTTP container port...");
+            output.WriteLine("Step 6: Verifying the deployment summary...");
+            await auto.RunCommandAsync(
+                VerifySandboxUrlSummaryCommand(urlFile, deployOutputFile, "frontend"),
+                counter,
+                TimeSpan.FromSeconds(30));
+
+            output.WriteLine("Step 7: Verifying Entra authentication, TLS termination, and the shared HTTP container port...");
             await auto.RunCommandAsync(
                 VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, urlFile),
                 counter,
@@ -118,7 +125,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 
             deploymentUrls["frontend"] = File.ReadAllText(urlFile).Trim();
 
-            output.WriteLine("Step 7: Destroying the Azure sandbox deployment...");
+            output.WriteLine("Step 8: Destroying the Azure sandbox deployment...");
             await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(10));
             destroyCompleted = true;
 
@@ -496,7 +503,20 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             $"NORMALIZED=$(tr -d '\\r' < {BashQuote(secondDeployOutputFile)} | tr '\\n' ' ' | sed -E 's/[[:space:]]+/ /g') && " +
             "case \"$NORMALIZED\" in *\"retained for references configured before sandbox deployment\"*) ;; *) echo \"Retained URL summary text not found\"; exit 1;; esac && " +
             "case \"$NORMALIZED\" in *\"$FIRST_URL\"*) ;; *) echo \"First URL was not reported as retained\"; exit 1;; esac && " +
+            "case \"$NORMALIZED\" in *\"$SECOND_URL\"*) ;; *) echo \"Current URL was not reported in the deployment summary\"; exit 1;; esac && " +
             "echo \"Redeploy changed URL from $FIRST_URL to $SECOND_URL and reported the retained URL\"";
+    }
+
+    private static string VerifySandboxUrlSummaryCommand(string urlFile, string deployOutputFile, string resourceName)
+    {
+        return
+            $"URL=$(cat {BashQuote(urlFile)}) && " +
+            $"NORMALIZED=$(tr -d '\\r' < {BashQuote(deployOutputFile)} | tr '\\n' ' ' | sed -E 's/[[:space:]]+/ /g') && " +
+            "case \"$NORMALIZED\" in *\"Pipeline succeeded\"*) ;; *) echo \"Successful deployment summary was not reported\"; exit 1;; esac && " +
+            "SUMMARY=$(printf '%s' \"$NORMALIZED\" | sed 's/^.*Pipeline succeeded//') && " +
+            $"case \"$SUMMARY\" in *\"{resourceName}\"*) ;; *) echo \"Resource name '{resourceName}' was not reported in the deployment summary\"; exit 1;; esac && " +
+            "case \"$SUMMARY\" in *\"$URL\"*) ;; *) echo \"Sandbox URL was not reported in the deployment summary\"; exit 1;; esac && " +
+            "echo \"Deployment summary reported $URL for " + resourceName + "\"";
     }
 
     private static async Task ExitTerminalAsync(Hex1bTerminalAutomator auto, Task pendingRun)
