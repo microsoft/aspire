@@ -68,4 +68,54 @@ public class AgentEnvironmentApplicatorTests
         Assert.Equal(McpInitPromptGroup.AdditionalOptions, applicator.PromptGroup);
         Assert.Equal(5, applicator.Priority);
     }
+
+    [Fact]
+    public void ForAsset_AssociatesActionAssetAndTarget()
+    {
+        var applicator = AgentEnvironmentApplicator.ForAsset(
+            AgentAssetDefinition.AspireMcpServer,
+            "vscode",
+            "VS Code MCP",
+            _ => Task.CompletedTask);
+
+        Assert.Same(AgentAssetDefinition.AspireMcpServer, applicator.Asset);
+        Assert.Equal(AgentAssetKind.Mcp, applicator.AssetKind);
+        Assert.Equal("vscode", applicator.TargetId);
+    }
+
+    [Fact]
+    public void ForAsset_RejectsFileBackedAsset()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            AgentEnvironmentApplicator.ForAsset(
+                AgentAssetDefinition.DotnetInspect,
+                "vscode",
+                "VS Code",
+                _ => Task.CompletedTask));
+    }
+
+    [Fact]
+    public void ScanContext_DeduplicatesApplicatorsByAssetAndTarget()
+    {
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = new DirectoryInfo("."),
+            RepositoryRoot = new DirectoryInfo("."),
+        };
+        var first = AgentEnvironmentApplicator.ForAsset(
+            AgentAssetDefinition.AspireMcpServer,
+            "copilot",
+            "Copilot CLI MCP",
+            _ => Task.CompletedTask);
+        var duplicate = AgentEnvironmentApplicator.ForAsset(
+            AgentAssetDefinition.AspireMcpServer,
+            "copilot",
+            "Copilot App MCP",
+            _ => Task.CompletedTask);
+
+        context.AddApplicator(first);
+        context.AddApplicator(duplicate);
+
+        Assert.Same(first, Assert.Single(context.Applicators));
+    }
 }

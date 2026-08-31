@@ -188,11 +188,11 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     /// </summary>
     private static AgentEnvironmentApplicator CreateAspireApplicator(DirectoryInfo repoRoot)
     {
-        return new AgentEnvironmentApplicator(
+        return AgentEnvironmentApplicator.ForAsset(
+            AgentAssetDefinition.AspireMcpServer,
+            $"claude-code:{repoRoot.FullName}",
             ClaudeCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
-            async cancellationToken => await ApplyAspireMcpConfigurationAsync(repoRoot, cancellationToken),
-            assetKind: AgentAssetKind.Mcp,
-            targetId: $"claude-code:{repoRoot.FullName}");
+            async cancellationToken => await ApplyAspireMcpConfigurationAsync(repoRoot, cancellationToken));
     }
 
     /// <summary>

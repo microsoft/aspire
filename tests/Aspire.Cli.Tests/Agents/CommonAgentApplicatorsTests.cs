@@ -34,18 +34,16 @@ public class CommonAgentApplicatorsTests
     {
         Assert.True(AgentAssetLocation.Standard.IsDefault);
         Assert.True(AgentAssetLocation.Standard.IncludeUserLevel);
-        Assert.True(AgentAssetLocation.Standard.IsFileLocation);
         Assert.Equal(Path.Combine(".agents", "skills"), AgentAssetLocation.Standard.RelativeAssetDirectory);
     }
 
     [Fact]
-    public void AgentAssetLocation_DetectedEnvironments_IsLogicalMcpTarget()
+    public void AgentAssetLocation_McpHasNoFileLocations()
     {
-        var target = Assert.Single(AgentAssetLocation.GetLocations(AgentAssetKind.Mcp));
-
-        Assert.Same(AgentAssetLocation.DetectedAgentEnvironments, target);
-        Assert.False(target.IsFileLocation);
-        Assert.Null(target.RelativeAssetDirectory);
+        Assert.Empty(AgentAssetLocation.GetLocations(AgentAssetKind.Mcp));
+        Assert.All(
+            AgentAssetLocation.All,
+            static location => Assert.False(string.IsNullOrWhiteSpace(location.RelativeAssetDirectory)));
     }
 
     [Fact]
@@ -171,8 +169,13 @@ public class CommonAgentApplicatorsTests
         Assert.Same(AgentAssetDefinition.AspireMcpServer, mcpAsset);
         Assert.Equal(AgentAssetSourceKind.Action, mcpAsset.SourceKind);
         Assert.Empty(mcpAsset.Files);
+        Assert.Empty(mcpAsset.InstallExcludedRelativePaths);
+        Assert.Empty(mcpAsset.ApplicableLanguages);
         Assert.False(mcpAsset.HasInstallableFiles);
         Assert.False(mcpAsset.IsDefault);
+        Assert.All(
+            AgentAssetDefinition.GetCliDefined(AgentAssetKind.Skill),
+            static skill => Assert.NotEqual(AgentAssetSourceKind.Action, skill.SourceKind));
     }
 
     [Fact]

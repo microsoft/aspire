@@ -177,7 +177,7 @@ internal sealed class InitCommand : BaseCommand
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
+            var commands = GetAspireifyCommands(agentInitResult.SelectedSkillLocations);
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();

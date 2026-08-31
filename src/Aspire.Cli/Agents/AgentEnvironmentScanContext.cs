@@ -39,8 +39,9 @@ internal sealed class AgentEnvironmentScanContext
     {
         ArgumentNullException.ThrowIfNull(applicator);
 
-        if (applicator.TargetId is not null &&
-            !_applicatorTargets.Add($"{applicator.AssetKind}:{applicator.TargetId}"))
+        if (applicator.Asset is { } asset &&
+            applicator.TargetId is { } targetId &&
+            !_applicatorTargets.Add($"{asset.AssetKind}:{asset.Name}:{targetId}"))
         {
             return;
         }

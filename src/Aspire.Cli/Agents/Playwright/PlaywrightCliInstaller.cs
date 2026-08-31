@@ -309,8 +309,7 @@ internal sealed class PlaywrightCliInstaller(
         var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var location in AgentAssetLocation.GetLocations(AgentAssetKind.Skill))
         {
-            var relativeSkillDirectory = location.RelativeAssetDirectory
-                ?? throw new InvalidOperationException($"Skill location '{location.Id}' does not define a file-system directory.");
+            var relativeSkillDirectory = location.RelativeAssetDirectory;
             var dir = Path.Combine(repoRoot, relativeSkillDirectory, PlaywrightCliSkillName);
             if (Directory.Exists(dir))
             {
@@ -361,8 +360,7 @@ internal sealed class PlaywrightCliInstaller(
         // didn't exist before install — pre-existing content is never touched.
         foreach (var location in AgentAssetLocation.GetLocations(AgentAssetKind.Skill))
         {
-            var relativeSkillDirectory = location.RelativeAssetDirectory
-                ?? throw new InvalidOperationException($"Skill location '{location.Id}' does not define a file-system directory.");
+            var relativeSkillDirectory = location.RelativeAssetDirectory;
             if (selectedSkillDirectories.Contains(relativeSkillDirectory))
             {
                 continue; // User selected this location — keep it

@@ -7,7 +7,7 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Represents a file location or action target for an agent asset.
+/// Represents a file-system location where agent asset files can be installed.
 /// </summary>
 [DebuggerDisplay("AssetKind = {AssetKind}, Id = {Id}, DisplayName = {DisplayName}, Description = {Description}, IsDefault = {IsDefault}")]
 internal sealed class AgentAssetLocation
@@ -60,24 +60,12 @@ internal sealed class AgentAssetLocation
         isDefault: false,
         includeUserLevel: false);
 
-    /// <summary>
-    /// The logical target representing every compatible detected agent environment.
-    /// </summary>
-    public static readonly AgentAssetLocation DetectedAgentEnvironments = new(
-        AgentAssetKind.Mcp,
-        "detected-agent-environments",
-        AgentCommandStrings.InitCommand_ConfigureMcpServer,
-        AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments,
-        relativeAssetDirectory: null,
-        isDefault: true,
-        includeUserLevel: false);
-
     private AgentAssetLocation(
         AgentAssetKind assetKind,
         string id,
         string displayName,
         string description,
-        string? relativeAssetDirectory,
+        string relativeAssetDirectory,
         bool isDefault,
         bool includeUserLevel)
     {
@@ -96,12 +84,12 @@ internal sealed class AgentAssetLocation
     public AgentAssetKind AssetKind { get; }
 
     /// <summary>
-    /// Gets the non-localized identifier for this location or target.
+    /// Gets the non-localized identifier for this location.
     /// </summary>
     public string Id { get; }
 
     /// <summary>
-    /// Gets the display name for this location or target.
+    /// Gets the display name for this location.
     /// </summary>
     public string DisplayName { get; }
 
@@ -111,14 +99,9 @@ internal sealed class AgentAssetLocation
     public string Description { get; }
 
     /// <summary>
-    /// Gets the relative asset directory, or <see langword="null"/> for an action target.
+    /// Gets the relative asset directory.
     /// </summary>
-    public string? RelativeAssetDirectory { get; }
-
-    /// <summary>
-    /// Gets whether this location is backed by a file-system directory.
-    /// </summary>
-    public bool IsFileLocation => RelativeAssetDirectory is not null;
+    public string RelativeAssetDirectory { get; }
 
     /// <summary>
     /// Gets whether this location should be selected by default.
@@ -131,13 +114,13 @@ internal sealed class AgentAssetLocation
     public bool IncludeUserLevel { get; }
 
     /// <summary>
-    /// Gets all available agent asset locations and action targets.
+    /// Gets all available file-system locations.
     /// </summary>
     public static IReadOnlyList<AgentAssetLocation> All { get; } =
-        [Standard, ClaudeCode, GitHubSkills, OpenCode, DetectedAgentEnvironments];
+        [Standard, ClaudeCode, GitHubSkills, OpenCode];
 
     /// <summary>
-    /// Gets the locations or targets available for the specified asset kind.
+    /// Gets the file-system locations available for the specified asset kind.
     /// </summary>
     public static IReadOnlyList<AgentAssetLocation> GetLocations(AgentAssetKind assetKind)
         => All.Where(location => location.AssetKind == assetKind).ToList();

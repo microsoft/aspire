@@ -41,14 +41,9 @@ internal sealed class AgentAssetDefinition
     /// <summary>
     /// The Aspire MCP server configuration applied to detected agent environments.
     /// </summary>
-    public static readonly AgentAssetDefinition AspireMcpServer = new(
-        AgentAssetKind.Mcp,
+    public static readonly AgentAssetDefinition AspireMcpServer = CreateActionAsset(
         "aspire-mcp-server",
-        AgentCommandStrings.InitCommand_ConfigureMcpServer,
-        AgentAssetSourceKind.Action,
-        files: [],
-        installExcludedRelativePaths: [],
-        isDefault: false);
+        AgentCommandStrings.InitCommand_ConfigureMcpServer);
 
     private AgentAssetDefinition(
         AgentAssetKind assetKind,
@@ -61,6 +56,20 @@ internal sealed class AgentAssetDefinition
         bool hasInstallableFiles = false,
         IReadOnlyList<string>? applicableLanguages = null)
     {
+        if (sourceKind is AgentAssetSourceKind.Action &&
+            (files.Count > 0 ||
+             installExcludedRelativePaths.Count > 0 ||
+             hasInstallableFiles ||
+             applicableLanguages is { Count: > 0 }))
+        {
+            throw new ArgumentException("Action-backed agent assets cannot define file installation metadata.");
+        }
+
+        if ((assetKind is AgentAssetKind.Mcp) != (sourceKind is AgentAssetSourceKind.Action))
+        {
+            throw new ArgumentException("MCP agent assets must be action-backed, and action-backed assets must be MCP assets.");
+        }
+
         AssetKind = assetKind;
         Name = name;
         Description = description;
@@ -128,6 +137,20 @@ internal sealed class AgentAssetDefinition
     /// </summary>
     public static IReadOnlyList<AgentAssetDefinition> GetCliDefined(AgentAssetKind assetKind)
         => CliDefined.Where(asset => asset.AssetKind == assetKind).ToList();
+
+    private static AgentAssetDefinition CreateActionAsset(
+        string name,
+        string description)
+    {
+        return new(
+            AgentAssetKind.Mcp,
+            name,
+            description,
+            AgentAssetSourceKind.Action,
+            files: [],
+            installExcludedRelativePaths: [],
+            isDefault: false);
+    }
 
     /// <summary>
     /// Creates a skill asset sourced from the Aspire skills bundle.

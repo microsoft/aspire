@@ -17,19 +17,32 @@ internal sealed class AgentEnvironmentApplicator
     /// <param name="applyCallback">The callback to apply the configuration.</param>
     /// <param name="promptGroup">The prompt group this applicator belongs to. Defaults to AgentEnvironments.</param>
     /// <param name="priority">The priority within the prompt group (lower numbers first). Defaults to 0.</param>
-    /// <param name="assetKind">The agent asset kind that owns this action, if any.</param>
-    /// <param name="targetId">The stable identifier used to de-duplicate equivalent action targets.</param>
     public AgentEnvironmentApplicator(
         string description,
         Func<CancellationToken, Task> applyCallback,
         McpInitPromptGroup? promptGroup = null,
-        int priority = 0,
-        AgentAssetKind? assetKind = null,
-        string? targetId = null)
+        int priority = 0)
+        : this(
+            description,
+            applyCallback,
+            promptGroup,
+            priority,
+            asset: null,
+            targetId: null)
+    {
+    }
+
+    private AgentEnvironmentApplicator(
+        string description,
+        Func<CancellationToken, Task> applyCallback,
+        McpInitPromptGroup? promptGroup,
+        int priority,
+        AgentAssetDefinition? asset,
+        string? targetId)
     {
         ArgumentNullException.ThrowIfNull(description);
         ArgumentNullException.ThrowIfNull(applyCallback);
-        if (assetKind is not null)
+        if (asset is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(targetId);
         }
@@ -38,8 +51,32 @@ internal sealed class AgentEnvironmentApplicator
         _applyCallback = applyCallback;
         PromptGroup = promptGroup ?? McpInitPromptGroup.AgentEnvironments;
         Priority = priority;
-        AssetKind = assetKind;
+        Asset = asset;
         TargetId = targetId;
+    }
+
+    /// <summary>
+    /// Creates an applicator for an action-backed agent asset at a detected target.
+    /// </summary>
+    public static AgentEnvironmentApplicator ForAsset(
+        AgentAssetDefinition asset,
+        string targetId,
+        string description,
+        Func<CancellationToken, Task> applyCallback)
+    {
+        ArgumentNullException.ThrowIfNull(asset);
+        if (asset.SourceKind is not AgentAssetSourceKind.Action)
+        {
+            throw new ArgumentException($"Agent asset '{asset.Name}' is not action-backed.", nameof(asset));
+        }
+
+        return new(
+            description,
+            applyCallback,
+            promptGroup: McpInitPromptGroup.AgentEnvironments,
+            priority: 0,
+            asset: asset,
+            targetId: targetId);
     }
 
     /// <summary>
@@ -58,9 +95,14 @@ internal sealed class AgentEnvironmentApplicator
     public int Priority { get; }
 
     /// <summary>
-    /// Gets the agent asset kind that owns this action, if any.
+    /// Gets the action-backed agent asset that owns this applicator, if any.
     /// </summary>
-    public AgentAssetKind? AssetKind { get; }
+    public AgentAssetDefinition? Asset { get; }
+
+    /// <summary>
+    /// Gets the agent asset kind that owns this applicator, if any.
+    /// </summary>
+    public AgentAssetKind? AssetKind => Asset?.AssetKind;
 
     /// <summary>
     /// Gets the stable identifier for the action target, if any.

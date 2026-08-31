@@ -313,12 +313,11 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         }
 
-        // MCP is a separate action-backed asset kind. Its one logical target represents all
-        // compatible detected environments; the individual scanner actions are not user choices.
+        // MCP is a separate action-backed asset kind. Scanner-discovered configuration actions
+        // are the real targets and are not exposed as individual user choices.
         var mcpApplicators = userChoices
-            .Where(static applicator => applicator.AssetKind is AgentAssetKind.Mcp)
+            .Where(static applicator => applicator.Asset?.AssetKind is AgentAssetKind.Mcp)
             .ToList();
-        IReadOnlyList<AgentAssetLocation> selectedMcpTargets = [];
         IReadOnlyList<AgentAssetDefinition> selectedMcpAssets = [];
         if (!HasCompatibleClient(context, AgentAssetKind.Mcp))
         {
@@ -326,8 +325,9 @@ internal sealed class AgentInitCommand : BaseCommand
         }
         else if (mcpApplicators.Count > 0)
         {
-            selectedMcpTargets = [AgentAssetLocation.DetectedAgentEnvironments];
-            var mcpAssets = AgentAssetDefinition.GetCliDefined(AgentAssetKind.Mcp);
+            var mcpAssets = AgentAssetDefinition.GetCliDefined(AgentAssetKind.Mcp)
+                .Where(asset => mcpApplicators.Any(applicator => ReferenceEquals(applicator.Asset, asset)))
+                .ToList();
             selectedMcpAssets = await InteractionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectMcpServers,
                 mcpAssets,
@@ -339,25 +339,17 @@ internal sealed class AgentInitCommand : BaseCommand
                 cancellationToken: cancellationToken);
         }
 
-        var hasErrors = false;
-        foreach (var assetKind in Enum.GetValues<AgentAssetKind>())
-        {
-            hasErrors |= assetKind switch
-            {
-                AgentAssetKind.Skill => await ApplySkillAssetsAsync(
-                    workspaceRoot,
-                    context,
-                    selectedSkillLocations,
-                    selectedSkills,
-                    aspireSkillsBundle,
-                    cancellationToken),
-                AgentAssetKind.Mcp => await ApplyMcpAssetsAsync(
-                    selectedMcpAssets,
-                    mcpApplicators,
-                    cancellationToken),
-                _ => throw new UnreachableException($"Unexpected AgentAssetKind: {assetKind}"),
-            };
-        }
+        var hasErrors = await ApplySkillAssetsAsync(
+            workspaceRoot,
+            context,
+            selectedSkillLocations,
+            selectedSkills,
+            aspireSkillsBundle,
+            cancellationToken);
+        hasErrors |= await ApplyMcpAssetsAsync(
+            selectedMcpAssets,
+            mcpApplicators,
+            cancellationToken);
 
         // Install agent telemetry hooks (default-on, parity with azure-skills).
         // Hooks are installed for every detected, supported client. Whether telemetry is actually
@@ -378,7 +370,6 @@ internal sealed class AgentInitCommand : BaseCommand
             hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             selectedSkillLocations,
             selectedSkills,
-            selectedMcpTargets,
             selectedMcpAssets);
     }
 
@@ -409,8 +400,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // Each skill file write is fast, so sequential execution keeps error reporting deterministic.
         foreach (var location in selectedLocations)
         {
-            var relativeSkillDirectory = location.RelativeAssetDirectory
-                ?? throw new InvalidOperationException($"Skill location '{location.Id}' does not define a file-system directory.");
+            var relativeSkillDirectory = location.RelativeAssetDirectory;
             context.AddSkillBaseDirectory(relativeSkillDirectory);
 
             foreach (var skill in selectedSkills)
@@ -460,8 +450,7 @@ internal sealed class AgentInitCommand : BaseCommand
         DisplayInstalledSkillsSummary(installedSkills);
 
         var selectedSkillDirectories = selectedLocations
-            .Select(location => location.RelativeAssetDirectory
-                ?? throw new InvalidOperationException($"Skill location '{location.Id}' does not define a file-system directory."))
+            .Select(static location => location.RelativeAssetDirectory)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (selectedSkills.Contains(AgentAssetDefinition.PlaywrightCli) && selectedLocations.Count > 0)
         {
@@ -505,30 +494,28 @@ internal sealed class AgentInitCommand : BaseCommand
         IReadOnlyList<AgentEnvironmentApplicator> applicators,
         CancellationToken cancellationToken)
     {
-        if (!selectedAssets.Contains(AgentAssetDefinition.AspireMcpServer))
-        {
-            return false;
-        }
-
         var hasErrors = false;
-        foreach (var applicator in applicators)
+        foreach (var selectedAsset in selectedAssets)
         {
-            try
+            foreach (var applicator in applicators.Where(applicator => ReferenceEquals(applicator.Asset, selectedAsset)))
             {
-                await applicator.ApplyAsync(cancellationToken);
-                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, applicator.Description);
-            }
-            // Apply each target independently so one malformed or unwritable client configuration
-            // does not prevent the remaining compatible clients from being configured.
-            catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
-            {
-                InteractionService.DisplayError(ex.Message);
-                if (ex.InnerException is JsonException)
+                try
                 {
-                    InteractionService.DisplaySubtleMessage(
-                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, applicator.Description));
+                    await applicator.ApplyAsync(cancellationToken);
+                    InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, applicator.Description);
                 }
-                hasErrors = true;
+                // Apply each target independently so one malformed or unwritable client configuration
+                // does not prevent the remaining compatible clients from being configured.
+                catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+                {
+                    InteractionService.DisplayError(ex.Message);
+                    if (ex.InnerException is JsonException)
+                    {
+                        InteractionService.DisplaySubtleMessage(
+                            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, applicator.Description));
+                    }
+                    hasErrors = true;
+                }
             }
         }
 
@@ -883,26 +870,9 @@ internal sealed class AgentInitCommand : BaseCommand
 
 internal readonly record struct AgentInitExecutionResult(
     int ExitCode,
-    IReadOnlyList<AgentAssetLocation> SelectedLocations,
+    IReadOnlyList<AgentAssetLocation> SelectedSkillLocations,
     IReadOnlyList<AgentAssetDefinition> SelectedSkills,
-    IReadOnlyList<AgentAssetLocation> SelectedMcpTargets,
     IReadOnlyList<AgentAssetDefinition> SelectedMcpAssets)
 {
-    public static AgentInitExecutionResult Empty(int exitCode) => new(exitCode, [], [], [], []);
-
-    public IReadOnlyList<AgentAssetLocation> GetLocations(AgentAssetKind assetKind)
-        => assetKind switch
-        {
-            AgentAssetKind.Skill => SelectedLocations,
-            AgentAssetKind.Mcp => SelectedMcpTargets,
-            _ => throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, null),
-        };
-
-    public IReadOnlyList<AgentAssetDefinition> GetAssets(AgentAssetKind assetKind)
-        => assetKind switch
-        {
-            AgentAssetKind.Skill => SelectedSkills,
-            AgentAssetKind.Mcp => SelectedMcpAssets,
-            _ => throw new ArgumentOutOfRangeException(nameof(assetKind), assetKind, null),
-        };
+    public static AgentInitExecutionResult Empty(int exitCode) => new(exitCode, [], [], []);
 }

@@ -47,10 +47,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Empty(result.SelectedSkillLocations);
+        Assert.Empty(result.SelectedSkills);
+        Assert.Empty(result.SelectedMcpAssets);
         foreach (var assetKind in Enum.GetValues<AgentAssetKind>())
         {
-            Assert.Empty(result.GetLocations(assetKind));
-            Assert.Empty(result.GetAssets(assetKind));
             Assert.Single(
                 interactionService.DisplayedMessages,
                 message => message.Emoji.Equals(KnownEmojis.Warning) &&
@@ -98,15 +99,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var applyCounts = new int[5];
         AgentEnvironmentApplicator CreateApplicator(string description, string targetId, int index)
-            => new(
+            => AgentEnvironmentApplicator.ForAsset(
+                AgentAssetDefinition.AspireMcpServer,
+                targetId,
                 description,
                 _ =>
                 {
                     applyCounts[index]++;
                     return Task.CompletedTask;
-                },
-                assetKind: AgentAssetKind.Mcp,
-                targetId: targetId);
+                });
 
         var interactionService = new TestInteractionService();
         interactionService.PromptForSelectionsCallback = (prompt, choices, _, _) =>
@@ -159,8 +160,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal([1, 0, 1, 1, 1], applyCounts);
-        Assert.Equal([AgentAssetLocation.DetectedAgentEnvironments], result.GetLocations(AgentAssetKind.Mcp));
-        Assert.Equal([AgentAssetDefinition.AspireMcpServer], result.GetAssets(AgentAssetKind.Mcp));
+        Assert.Equal([AgentAssetDefinition.AspireMcpServer], result.SelectedMcpAssets);
     }
 
     [Fact]
@@ -182,20 +182,20 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Applicators =
             [
-                new AgentEnvironmentApplicator(
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetDefinition.AspireMcpServer,
+                    "vscode",
                     "Unwritable VS Code MCP",
-                    _ => throw new IOException("Configuration is read-only."),
-                    assetKind: AgentAssetKind.Mcp,
-                    targetId: "vscode"),
-                new AgentEnvironmentApplicator(
+                    _ => throw new IOException("Configuration is read-only.")),
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetDefinition.AspireMcpServer,
+                    "opencode",
                     "OpenCode MCP",
                     _ =>
                     {
                         successfulApplyCount++;
                         return Task.CompletedTask;
-                    },
-                    assetKind: AgentAssetKind.Mcp,
-                    targetId: "opencode"),
+                    }),
             ]
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -996,15 +996,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Applicators =
             [
-                new AgentEnvironmentApplicator(
+                AgentEnvironmentApplicator.ForAsset(
+                    AgentAssetDefinition.AspireMcpServer,
+                    "vscode",
                     "VS Code MCP",
                     _ =>
                     {
                         applyCount++;
                         return Task.CompletedTask;
-                    },
-                    assetKind: AgentAssetKind.Mcp,
-                    targetId: "vscode")
+                    })
             ]
         };
         var interactionService = new TestInteractionService();
