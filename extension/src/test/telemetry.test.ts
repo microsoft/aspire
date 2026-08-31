@@ -16,6 +16,7 @@ import {
     sendTelemetryEvent,
     setCommandInvocationListener,
     setCommonTelemetryProperties,
+    setTelemetryEnrichmentTask,
     withCommandTelemetry,
 } from '../utils/telemetry';
 
@@ -157,6 +158,33 @@ suite('telemetry utilities', () => {
         assert.deepStrictEqual(fake.events[0].properties, {
             apphost_present: 'keep',
             command: 'cmd.y',
+        });
+    });
+
+    test('queues events until common telemetry enrichment completes', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.enriched' });
+        assert.strictEqual(fake.events.length, 0);
+
+        setCommonTelemetryProperties({
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+        });
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.deepStrictEqual(fake.events[0].properties, {
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+            command: 'cmd.enriched',
         });
     });
 

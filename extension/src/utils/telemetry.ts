@@ -36,6 +36,7 @@ let reporter: TelemetryReporter | undefined;
 let telemetryLogger: vscode.TelemetryLogger | undefined;
 let telemetryReporterFactory: TelemetryReporterFactory = defaultTelemetryReporterFactory;
 let telemetryLoggerFactory: TelemetryLoggerFactory = defaultTelemetryLoggerFactory;
+let telemetryEnrichmentTask: Promise<void> | undefined;
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
 let commandInvocationListener: (() => void) | undefined;
 const telemetryClientVersion = (require('@vscode/extension-telemetry/package.json') as { version: string }).version;
@@ -161,6 +162,16 @@ export function getCommonTelemetryProperties(): Readonly<Partial<Record<CommonTe
     return commonProperties;
 }
 
+export function setTelemetryEnrichmentTask(task: Promise<void>): void {
+    const readyTask = task.catch(() => { });
+    telemetryEnrichmentTask = readyTask;
+    void readyTask.finally(() => {
+        if (telemetryEnrichmentTask === readyTask) {
+            telemetryEnrichmentTask = undefined;
+        }
+    });
+}
+
 function mergeProperties<E extends KnownTelemetryEventName>(
     eventProperties?: EventProperties<E>
 ): Record<string, TelemetryPropertyValue> {
@@ -181,9 +192,11 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    telemetryLogger?.logUsage(eventName, {
-        properties: mergeProperties(properties),
-        measurements,
+    emitWhenEnriched(() => {
+        telemetryLogger?.logUsage(eventName, {
+            properties: mergeProperties(properties),
+            measurements,
+        });
     });
 }
 
@@ -196,10 +209,22 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    telemetryLogger?.logError(eventName, {
-        properties: mergeProperties(properties),
-        measurements,
+    emitWhenEnriched(() => {
+        telemetryLogger?.logError(eventName, {
+            properties: mergeProperties(properties),
+            measurements,
+        });
     });
+}
+
+function emitWhenEnriched(emit: () => void): void {
+    const enrichmentTask = telemetryEnrichmentTask;
+    if (enrichmentTask) {
+        void enrichmentTask.then(emit);
+        return;
+    }
+
+    emit();
 }
 
 /**
@@ -518,6 +543,7 @@ export function __resetTelemetryLoggerFactoryForTests(): void {
 
 /** Test seam: clear common properties so tests don't bleed into each other. */
 export function __resetCommonPropertiesForTests(): void {
+    telemetryEnrichmentTask = undefined;
     for (const key of Object.keys(commonProperties) as CommonTelemetryProperty[]) {
         delete commonProperties[key];
     }

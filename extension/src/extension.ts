@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { RpcClient } from './server/rpcClient';
 import { extensionLogOutputChannel } from './utils/logging';
-import { initializeTelemetry, sendTelemetryEvent } from './utils/telemetry';
+import { initializeTelemetry, sendTelemetryEvent, setTelemetryEnrichmentTask } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';
@@ -49,7 +49,7 @@ export async function activate(context: vscode.ExtensionContext) {
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   const internalMicrosoftTelemetryProvider = new InternalMicrosoftTelemetryProvider();
   context.subscriptions.push(internalMicrosoftTelemetryProvider);
-  await internalMicrosoftTelemetryProvider.initializeAsync();
+  setTelemetryEnrichmentTask(internalMicrosoftTelemetryProvider.initializeAsync());
   initializeTelemetry(context);
   sendTelemetryEvent('aspire/vscode/extension/activated', {
     workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
