@@ -716,7 +716,6 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         return EvaluateWindowsWorkplaceJoin(
             result.Stdout,
-            _environment.GetEnvironmentVariable("USERNAME"),
             _environment.GetEnvironmentVariable("USERDNSDOMAIN"));
     }
 
@@ -733,7 +732,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return processFailure;
         }
 
-        return EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackAlias: null, fallbackDomain: null);
+        return EvaluateWindowsWorkplaceJoin(result.Stdout, fallbackDomain: null);
     }
 
     private async Task<InternalMicrosoftProbeResult> CheckGhCliAsync(CancellationToken cancellationToken)
@@ -1128,7 +1127,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             : null;
     }
 
-    private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackAlias, string? fallbackDomain)
+    private static InternalMicrosoftProbeResult EvaluateWindowsWorkplaceJoin(string output, string? fallbackDomain)
     {
         if (string.IsNullOrWhiteSpace(output))
         {
@@ -1139,8 +1138,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         var tenantId = values.GetValueOrDefault("TenantId");
         var azureAdJoined = IsYes(values.GetValueOrDefault("AzureAdJoined"));
         var workplaceJoined = IsYes(values.GetValueOrDefault("WorkplaceJoined"));
-        var alias = ExtractAliasFromAccountIdentifier(GetFirstValue(values, "UserEmail", "User Email", "UserPrincipalName", "User Principal Name", "UPN")) ??
-            NormalizeAlias(fallbackAlias);
+        var alias = ExtractAliasFromAccountIdentifier(GetFirstValue(values, "UserEmail", "User Email", "UserPrincipalName", "User Principal Name", "UPN"));
         var domain = ExtractAdDomainNameFromDsReg(values) ?? ExtractAdDomainNameFromCorpDnsName(fallbackDomain);
 
         return (azureAdJoined || workplaceJoined) && tenantId?.Equals(MicrosoftTenantId, StringComparison.OrdinalIgnoreCase) == true

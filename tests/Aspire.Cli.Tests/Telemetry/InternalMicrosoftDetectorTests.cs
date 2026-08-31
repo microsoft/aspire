@@ -625,7 +625,45 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task CheckWindowsWorkplaceJoinAsync_UsesExecutionContextEnvironmentAndProcessFactory()
+    public async Task CheckWindowsWorkplaceJoinAsync_UsesTenantBoundAliasAndProcessFactory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd.EXE"), string.Empty);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) => (0, """
+                AzureAdJoined : YES
+                WorkplaceJoined : NO
+                TenantId : 72f988bf-86f1-41af-91ab-2d7cd011db47
+                User Email : Bound.Alias@microsoft.com
+                """)
+        };
+        var detector = CreateDetector(
+            Path.Combine(workspace.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            processFactory: processFactory,
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["PATH"] = workspace.Path,
+                ["PATHEXT"] = ".EXE",
+                ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
+                ["USERNAME"] = "unrelated.local"
+            });
+
+        var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal("bound.alias", result.Alias);
+        Assert.Equal("REDMOND", result.Domain);
+        Assert.Equal("dsregcmd", processFactory.LastFileName);
+        var arguments = Assert.IsType<string[]>(processFactory.LastArguments);
+        Assert.Equal(["/status"], arguments);
+    }
+
+    [Fact]
+    public async Task CheckWindowsWorkplaceJoinAsync_DoesNotUseAmbientUserNameAsAlias()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
@@ -648,17 +686,14 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
                 ["PATH"] = workspace.Path,
                 ["PATHEXT"] = ".EXE",
                 ["USERDNSDOMAIN"] = "redmond.corp.microsoft.com",
-                ["USERNAME"] = "test.alias"
+                ["USERNAME"] = "unrelated.local"
             });
 
         var result = await detector.CheckWindowsWorkplaceJoinAsync(CancellationToken.None);
 
         Assert.True(result.IsInternalMicrosoft);
-        Assert.Equal("test.alias", result.Alias);
+        Assert.Null(result.Alias);
         Assert.Equal("REDMOND", result.Domain);
-        Assert.Equal("dsregcmd", processFactory.LastFileName);
-        var arguments = Assert.IsType<string[]>(processFactory.LastArguments);
-        Assert.Equal(["/status"], arguments);
     }
 
     [Fact]

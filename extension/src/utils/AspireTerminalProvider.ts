@@ -561,12 +561,6 @@ function areResolvedCliPathsEqual(left: string | undefined, right: string): bool
         : left === right;
 }
 
-function getCliPathComparisonKey(cliPath: string): string {
-    return process.platform === 'win32'
-        ? path.win32.normalize(cliPath).toLowerCase()
-        : cliPath;
-}
-
 function isPowerShell7Available(): boolean {
     const result = childProcess.spawnSync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.Major'], {
         stdio: 'ignore',
