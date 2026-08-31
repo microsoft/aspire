@@ -10402,7 +10402,7 @@ const DistributedApplicationBuilderPromiseImpl = createFluentPromiseClass<Distri
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
     ["pipeline"]: [() => DistributedApplicationPipelinePromiseImpl, false] as const,
     ["userSecretsManager"]: [() => UserSecretsManagerPromiseImpl, false] as const,
-    ["build"]: () => DistributedApplicationPromiseImpl,
+    ["build"]: [() => DistributedApplicationPromiseImpl, false, false] as const,
     ["addContainerRegistry"]: () => ContainerRegistryResourcePromiseImpl,
     ["addContainer"]: () => ContainerResourcePromiseImpl,
     ["addDockerfile"]: () => ContainerResourcePromiseImpl,
@@ -10830,7 +10830,7 @@ class ExecutionConfigurationBuilderImpl implements ExecutionConfigurationBuilder
 
 /** @internal */
 const ExecutionConfigurationBuilderPromiseImpl = createFluentPromiseClass<ExecutionConfigurationBuilder, ExecutionConfigurationBuilderPromise>((): FluentPromiseTransitions => ({
-    ["build"]: () => ExecutionConfigurationResultPromiseImpl,
+    ["build"]: [() => ExecutionConfigurationResultPromiseImpl, false, false] as const,
     ["withHttpsCertificateConfig"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withArgumentsConfig"]: () => ExecutionConfigurationBuilderPromiseImpl,
     ["withEnvironmentVariablesConfig"]: () => ExecutionConfigurationBuilderPromiseImpl,

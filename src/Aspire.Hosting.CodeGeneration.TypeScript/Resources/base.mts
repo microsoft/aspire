@@ -555,7 +555,11 @@ export type FluentPromiseConstructorProvider = () => FluentPromiseConstructor;
 export type FluentPromiseTransition =
     | null
     | FluentPromiseConstructorProvider
-    | readonly [FluentPromiseConstructorProvider, track: boolean];
+    | readonly [
+        FluentPromiseConstructorProvider,
+        track: boolean,
+        trackTransitions?: boolean
+    ];
 
 /** @internal */
 export type FluentPromiseTransitions = Readonly<Record<string, FluentPromiseTransition>>;
@@ -573,7 +577,8 @@ export class FluentPromise<T> implements PromiseLike<T> {
     constructor(
         private readonly _promise: Promise<T>,
         private readonly _client: AspireClientRpc,
-        track = true
+        track = true,
+        private readonly _trackTransitions = true
     ) {
         if (track) {
             _client.trackPromise(_promise);
@@ -615,11 +620,15 @@ export class FluentPromise<T> implements PromiseLike<T> {
                         return promise;
                     }
 
-                    const [getConstructor, shouldTrack] = Array.isArray(transition)
+                    const [getConstructor, shouldTrack, shouldTrackTransitions = true] = Array.isArray(transition)
                         ? transition
-                        : [transition, true] as const;
+                        : [transition, true, true] as const;
                     const PromiseConstructor = getConstructor();
-                    return new PromiseConstructor(promise, target._client, shouldTrack);
+                    return new PromiseConstructor(
+                        promise,
+                        target._client,
+                        target._trackTransitions && shouldTrack,
+                        target._trackTransitions && shouldTrackTransitions);
                 };
             }
         });
@@ -641,7 +650,8 @@ export class FluentPromise<T> implements PromiseLike<T> {
 export type FluentPromiseClass<T, TPromise extends PromiseLike<T>> = new (
     promise: Promise<T>,
     client: AspireClientRpc,
-    track?: boolean
+    track?: boolean,
+    trackTransitions?: boolean
 ) => TPromise;
 
 /**

@@ -1562,17 +1562,17 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         var promiseClass = $"{builder.BuilderClassName}Promise";
         var promiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(builder.BuilderClassName);
-        var transitions = new Dictionary<string, (string? PromiseImplementationClass, bool Track)>(StringComparer.Ordinal);
+        var transitions = new Dictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)>(StringComparer.Ordinal);
 
         foreach (var prop in getterOnlyProperties)
         {
             if (_projector.TryGetPromiseWrapperType(prop.Getter!.ReturnType, out _, out var promiseImplementationClassName))
             {
-                transitions[prop.PropertyName] = (promiseImplementationClassName, Track: false);
+                transitions[prop.PropertyName] = (promiseImplementationClassName, Track: false, TrackTransitions: true);
             }
             else
             {
-                transitions[prop.PropertyName] = (PromiseImplementationClass: null, Track: false);
+                transitions[prop.PropertyName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
             }
         }
 
@@ -1580,16 +1580,20 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             var signature = _projector.ResolveMethodSignature(builder, capability);
             var methodName = signature.MethodName;
+            // build() flushes tracked promises. Its wrapper and any synchronously chained
+            // transitions must stay untracked because they depend on that flush completing.
+            var isBuild = string.Equals(methodName, "build", StringComparison.OrdinalIgnoreCase);
+            var trackTransition = !isBuild;
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
             if (hasNonBuilderReturn)
             {
                 if (_projector.TryGetPromiseWrapperType(capability.ReturnType, out _, out var returnPromiseImplementationClassName))
                 {
-                    transitions[methodName] = (returnPromiseImplementationClassName, Track: true);
+                    transitions[methodName] = (returnPromiseImplementationClassName, Track: trackTransition, TrackTransitions: !isBuild);
                 }
                 else
                 {
-                    transitions[methodName] = (PromiseImplementationClass: null, Track: false);
+                    transitions[methodName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
                 }
                 continue;
             }
@@ -1604,7 +1608,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 methodPromiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(returnClass);
             }
 
-            transitions[methodName] = (methodPromiseImplementationClass, Track: true);
+            transitions[methodName] = (methodPromiseImplementationClass, Track: trackTransition, TrackTransitions: !isBuild);
         }
 
         GenerateFluentPromiseImplementation(builder.BuilderClassName, promiseClass, promiseImplementationClass, transitions);
@@ -1614,7 +1618,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         string className,
         string promiseClass,
         string promiseImplementationClass,
-        IReadOnlyDictionary<string, (string? PromiseImplementationClass, bool Track)> transitions)
+        IReadOnlyDictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)> transitions)
     {
         WriteLine("/** @internal */");
         WriteLine($"const {promiseImplementationClass} = createFluentPromiseClass<{className}, {promiseClass}>((): FluentPromiseTransitions => ({{");
@@ -1628,9 +1632,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
 
             var constructorProvider = $"() => {transition.PromiseImplementationClass}";
-            var transitionExpression = transition.Track
-                ? constructorProvider
-                : $"[{constructorProvider}, false] as const";
+            var transitionExpression = (transition.Track, transition.TrackTransitions) switch
+            {
+                (true, true) => constructorProvider,
+                (true, false) => $"[{constructorProvider}, true, false] as const",
+                (false, true) => $"[{constructorProvider}, false] as const",
+                (false, false) => $"[{constructorProvider}, false, false] as const"
+            };
             WriteLine($"    [{methodNameLiteral}]: {transitionExpression},");
         }
         WriteLine("}));");
@@ -3026,7 +3034,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var className = TypeScriptApiProjector.DeriveClassName(model.TypeId);
         var promiseClass = $"{className}Promise";
         var promiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(className);
-        var transitions = new Dictionary<string, (string? PromiseImplementationClass, bool Track)>(StringComparer.Ordinal);
+        var transitions = new Dictionary<string, (string? PromiseImplementationClass, bool Track, bool TrackTransitions)>(StringComparer.Ordinal);
 
         var getters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
         var setters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
@@ -3038,11 +3046,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             if (_projector.TryGetPromiseWrapperType(prop.Getter!.ReturnType, out _, out var propertyPromiseImplementationClassName))
             {
-                transitions[prop.PropertyName] = (propertyPromiseImplementationClassName, Track: false);
+                transitions[prop.PropertyName] = (propertyPromiseImplementationClassName, Track: false, TrackTransitions: true);
             }
             else
             {
-                transitions[prop.PropertyName] = (PromiseImplementationClass: null, Track: false);
+                transitions[prop.PropertyName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
             }
         }
 
@@ -3051,21 +3059,24 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var signature = _projector.ResolveMethodSignature(model, capability);
             var returnPromiseWrapper = _projector.GetPromiseWrapperForReturnType(capability.ReturnType);
             var methodName = signature.MethodName;
+            // Keep forwarded build transitions and their derived chains out of build()'s flush.
+            var isBuild = string.Equals(methodName, "build", StringComparison.OrdinalIgnoreCase);
+            var trackTransition = !isBuild;
             var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
             if (returnPromiseWrapper != null)
             {
                 var returnPromiseImplementationClass = TypeScriptApiProjector.GetImplementationPromiseClassName(
                     _projector.WrapperClassNames.GetValueOrDefault(capability.ReturnType!.TypeId)
                         ?? TypeScriptApiProjector.DeriveClassName(capability.ReturnType.TypeId));
-                transitions[methodName] = (returnPromiseImplementationClass, Track: true);
+                transitions[methodName] = (returnPromiseImplementationClass, Track: trackTransition, TrackTransitions: !isBuild);
             }
             else if (isVoid)
             {
-                transitions[methodName] = (promiseImplementationClass, Track: true);
+                transitions[methodName] = (promiseImplementationClass, Track: trackTransition, TrackTransitions: !isBuild);
             }
             else
             {
-                transitions[methodName] = (PromiseImplementationClass: null, Track: false);
+                transitions[methodName] = (PromiseImplementationClass: null, Track: false, TrackTransitions: true);
             }
         }
 

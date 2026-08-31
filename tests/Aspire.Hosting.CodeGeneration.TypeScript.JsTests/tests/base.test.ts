@@ -130,6 +130,66 @@ describe('FluentPromise', () => {
 
         expect(client.trackPromise).not.toHaveBeenCalled();
     });
+
+    it('suppresses tracking for chains derived from a flushing transition', async () => {
+        interface TestApplication {
+            run(): TestApplicationPromise;
+        }
+
+        interface TestApplicationPromise extends PromiseLike<TestApplication> {
+            run(): TestApplicationPromise;
+        }
+
+        interface TestBuilder {
+            build(): TestApplicationPromise;
+        }
+
+        interface TestBuilderPromise extends PromiseLike<TestBuilder> {
+            build(): TestApplicationPromise;
+        }
+
+        const pendingPromises = new Set<Promise<unknown>>();
+        const client = {
+            trackPromise(promise: Promise<unknown>): void {
+                pendingPromises.add(promise);
+                promise.then(
+                    () => pendingPromises.delete(promise),
+                    () => pendingPromises.delete(promise));
+            },
+            async flushPendingPromises(): Promise<void> {
+                await Promise.allSettled([...pendingPromises]);
+            },
+        } as AspireClient;
+        const TestApplicationPromiseImpl = createFluentPromiseClass<TestApplication, TestApplicationPromise>(() => ({
+            run: () => TestApplicationPromiseImpl,
+        }));
+        const TestBuilderPromiseImpl = createFluentPromiseClass<TestBuilder, TestBuilderPromise>(() => ({
+            build: [() => TestApplicationPromiseImpl, false, false] as const,
+        }));
+        const application: TestApplication = {
+            run(): TestApplicationPromise {
+                return new TestApplicationPromiseImpl(Promise.resolve(this), client);
+            },
+        };
+        const builder: TestBuilder = {
+            build(): TestApplicationPromise {
+                const flushAndBuild = async () => {
+                    await client.flushPendingPromises();
+                    return application;
+                };
+                return new TestApplicationPromiseImpl(flushAndBuild(), client, false);
+            },
+        };
+        let resolveBuilder!: (builder: TestBuilder) => void;
+        const builderSource = new Promise<TestBuilder>(resolve => resolveBuilder = resolve);
+        const builderPromise = new TestBuilderPromiseImpl(builderSource, client);
+
+        const runPromise = builderPromise.build().run();
+        resolveBuilder(builder);
+
+        await expect(runPromise).resolves.toBe(application);
+        expect(pendingPromises.size).toBe(0);
+    });
 });
 
 // ============================================================================
