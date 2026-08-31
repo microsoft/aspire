@@ -64,11 +64,22 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         var skipped = new List<TelemetryHookSkip>();
 
         // VS Code and OpenCode hook schemas are not yet verified, so they are intentionally not
-        // configured here even though they are detected/marked. Only configure once per client kind.
-        var supported = detectedClients
-            .Where(static c => c is AgentClientKind.CopilotCli or AgentClientKind.ClaudeCode)
-            .Distinct()
-            .ToList();
+        // configured here even though they are detected/marked. The Copilot App and CLI share the
+        // same ~/.copilot hook location, so prefer the App identity when both are detected.
+        var supported = new List<AgentClientKind>();
+        if (detectedClients.Contains(AgentClientKind.CopilotApp))
+        {
+            supported.Add(AgentClientKind.CopilotApp);
+        }
+        else if (detectedClients.Contains(AgentClientKind.CopilotCli))
+        {
+            supported.Add(AgentClientKind.CopilotCli);
+        }
+
+        if (detectedClients.Contains(AgentClientKind.ClaudeCode))
+        {
+            supported.Add(AgentClientKind.ClaudeCode);
+        }
 
         if (supported.Count == 0)
         {
@@ -82,6 +93,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         {
             switch (client)
             {
+                case AgentClientKind.CopilotApp:
                 case AgentClientKind.CopilotCli:
                     if (await TryConfigureCopilotAsync(scripts, cancellationToken))
                     {

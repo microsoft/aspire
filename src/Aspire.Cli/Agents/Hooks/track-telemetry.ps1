@@ -88,7 +88,9 @@ if ($data.PSObject -and $data.PSObject.Properties) { $propertyNames = $data.PSOb
 $hasHookEventName = $propertyNames -contains 'hook_event_name'
 $hasToolArgs = $propertyNames -contains 'toolArgs'
 
-if ($env:COPILOT_CLI -eq '1') {
+if ($env:AI_AGENT -eq 'github_copilot_app_agent') {
+    $clientName = 'copilot-app'
+} elseif ($env:COPILOT_CLI -eq '1') {
     $clientName = 'copilot-cli'
 } elseif ($hasHookEventName) {
     $toolUseId = [string]$data.tool_use_id
