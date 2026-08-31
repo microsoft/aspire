@@ -56,12 +56,29 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public int ReplicaIndex { get; set; }
 
+    /// <summary>Gets or sets the accessible label for decreasing the font size.</summary>
+    [Parameter, EditorRequired]
+    public required string DecreaseFontSizeLabel { get; set; }
+
+    /// <summary>Gets or sets the accessible label for increasing the font size.</summary>
+    [Parameter, EditorRequired]
+    public required string IncreaseFontSizeLabel { get; set; }
+
+    /// <summary>Gets or sets the accessible label for the terminal dimensions selector.</summary>
+    [Parameter, EditorRequired]
+    public required string TerminalDimensionsLabel { get; set; }
+
+    /// <summary>Gets or sets the label for fitting the terminal to the available space.</summary>
+    [Parameter, EditorRequired]
+    public required string FitLabel { get; set; }
+
+    /// <summary>Gets or sets the hint describing how to move focus from the terminal to its controls.</summary>
+    [Parameter, EditorRequired]
+    public required string FocusControlsHintLabel { get; set; }
+
     /// <summary>
-    /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
-    /// dims, font size, etc.). The host page subscribes so the chrome that
-    /// used to live inside the terminal frame — status badge, "Take control"
-    /// button, font controls, size dropdown, dims readout — can be rendered
-    /// in the page's existing toolbar instead.
+    /// Raised when the JS side pushes a fresh terminal state snapshot (role,
+    /// dimensions, font size, etc.) for hosts that need to observe it.
     /// </summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
@@ -183,11 +200,25 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/Components/Controls/TerminalView.razor.js");
 
-            _selfRef ??= DotNetObjectReference.Create(this);
+            if (OnToolbarStateChanged.HasDelegate)
+            {
+                _selfRef ??= DotNetObjectReference.Create(this);
+            }
 
             _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef);
+                "initTerminal",
+                _terminalElement,
+                BuildWebSocketUrl(resourceName, replicaIndex),
+                _selfRef,
+                new
+                {
+                    DecreaseFontSize = DecreaseFontSizeLabel,
+                    IncreaseFontSize = IncreaseFontSizeLabel,
+                    TerminalDimensions = TerminalDimensionsLabel,
+                    Fit = FitLabel,
+                    FocusControlsHint = FocusControlsHintLabel,
+                });
         }
         catch (JSDisconnectedException)
         {
@@ -259,8 +290,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Invoked by the JS terminal whenever its role/size/font state changes.
     /// Forwards the snapshot to the host page via <see cref="OnToolbarStateChanged"/>.
-    /// JS remains the source of truth for terminal state — the toolbar
-    /// renders whatever the most recent snapshot says.
+    /// JS remains the source of truth for terminal state.
     /// </summary>
     [JSInvokable]
     public Task OnTerminalStateChanged(TerminalToolbarState state)
@@ -431,8 +461,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 }
 
 /// <summary>
-/// Snapshot of the JS terminal's current role, sizing, and dims, pushed up
-/// to the host page so the toolbar can render the right state.
+/// Snapshot of the JS terminal's current role, sizing, and dimensions.
 /// </summary>
 public sealed record TerminalToolbarState
 {

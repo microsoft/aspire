@@ -132,7 +132,7 @@ function cancelPendingReconnect(state) {
 // In primary mode we drive the producer's PTY dims, so we expose a footer
 // with two mutually-exclusive sizing modes:
 //
-//   "font"   (Auto)  : user controls font size with +/- buttons; FitAddon
+//   "font"   (Fit)   : user controls font size with +/- buttons; FitAddon
 //                      picks cols×rows to fill the available stage at that
 //                      font. Window resize → fit → new cols×rows broadcast.
 //
@@ -141,33 +141,35 @@ function cancelPendingReconnect(state) {
 //                      fill the stage and lock cols×rows. Window resize →
 //                      recompute font, cols×rows stay fixed (no broadcast).
 //
-// In secondary mode (someone else is primary), both control groups hide
-// (.read-only) and we lock our xterm grid to the producer's cols×rows,
-// then pick the largest integer font size whose rendered grid fits the
-// viewport (letterboxing on whichever axis has spare room). This mirrors
-// primary fixed-mode; we deliberately avoid CSS transform: scale() here
-// because xterm.js computes mouse-to-cell coordinates from
-// getBoundingClientRect (which returns transformed dims) divided by its
-// internally-measured cell width (which is untransformed), so any
-// scale ≠ 1 offsets text selection by roughly the scale factor.
+// In secondary mode (someone else is primary), changing either control
+// promotes this peer to primary. Until then we lock our xterm grid to the
+// producer's cols×rows, then pick the largest integer font size whose
+// rendered grid fits the viewport (letterboxing on whichever axis has spare
+// room). This mirrors primary fixed-mode; we deliberately avoid CSS
+// transform: scale() here because xterm.js computes mouse-to-cell coordinates
+// from getBoundingClientRect (which returns transformed dims) divided by its
+// internally-measured cell width (which is untransformed), so any scale != 1
+// offsets text selection by roughly the scale factor.
 const MIN_FONT_PX = 4;
 const MAX_FONT_PX = 72;
 const DEFAULT_FONT_PX = 13;
+const DEFAULT_TERMINAL_COLS = 132;
+const DEFAULT_TERMINAL_ROWS = 50;
 const SIZE_PRESETS = [
-    // NOTE: The "Auto" label is overridden on the .NET side in
-    // ConsoleLogs.razor.cs (OnTerminalToolbarStateChangedAsync) using the
-    // dashboard's localized resource (ConsoleLogs.resx →
-    // TerminalToolbarGridSizeAuto). The English string here is only a
-    // fallback for the rare case where someone consumes the SIZE_PRESETS
-    // list directly from JS without going through GetSizePresetsAsync —
-    // we never bind it to the UI as-is.
-    { value: "auto",   label: "Auto",   cols: 0,   rows: 0  },
+    { value: "auto",   label: "Fit",    cols: 0,   rows: 0  },
     { value: "80x24",  label: "80×24",  cols: 80,  rows: 24 },
     { value: "80x30",  label: "80×30",  cols: 80,  rows: 30 },
     { value: "100x30", label: "100×30", cols: 100, rows: 30 },
     { value: "132x30", label: "132×30", cols: 132, rows: 30 },
     { value: "132x50", label: "132×50", cols: 132, rows: 50 },
 ];
+const DEFAULT_CONTROL_LABELS = {
+    decreaseFontSize: "Decrease font size",
+    increaseFontSize: "Increase font size",
+    terminalDimensions: "Terminal dimensions",
+    fit: "Fit",
+    focusControlsHint: "F6: Focus terminal controls",
+};
 
 // Inject the WebMuxerDemo terminal-frame styles into <head> exactly once
 // per page load. Lifted near-verbatim from samples/WebMuxerDemo/wwwroot/
@@ -318,19 +320,28 @@ function ensureTerminalStyles() {
   letter-spacing: 0.2px;
 }
 
-/*
- * Live cols × rows readout on the right side of the titlebar. Kept in
- * sync from term.onResize so it always shows the grid the PTY sees.
- */
+/* Live grid size and preset selector in the terminal footer. */
 .aspire-terminal-host #terminal-dims {
   flex: 0 0 auto;
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid #30363d;
-  color: var(--aspire-term-fg-muted);
+  margin-left: 6px;
+  padding: 2px 22px 2px 8px;
+  background: #21262d;
+  border: 1px solid var(--aspire-term-border);
+  border-radius: 3px;
+  color: var(--aspire-term-fg);
+  font: inherit;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
   white-space: nowrap;
+  cursor: pointer;
+}
+.aspire-terminal-host #terminal-dims:hover:not(:disabled) {
+  background: #30363d;
+  border-color: #484f58;
+}
+.aspire-terminal-host #terminal-dims:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .aspire-terminal-host #terminal-body {
@@ -348,6 +359,59 @@ function ensureTerminalStyles() {
    * natural rendered dims so the frame keeps hugging the grid.
    */
   padding: 6px;
+}
+
+.aspire-terminal-host #terminal-footer {
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
+  border-top: 1px solid #30363d;
+  color: var(--aspire-term-fg-muted);
+  font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  user-select: none;
+}
+.aspire-terminal-host #terminal-focus-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aspire-terminal-host #terminal-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.aspire-terminal-host #terminal-footer button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: #21262d;
+  border: 1px solid var(--aspire-term-border);
+  border-radius: 3px;
+  color: var(--aspire-term-fg);
+  font: 14px/1 ui-monospace, monospace;
+  cursor: pointer;
+}
+.aspire-terminal-host #terminal-footer button:hover:not(:disabled) {
+  background: #30363d;
+  border-color: #484f58;
+}
+.aspire-terminal-host #terminal-footer button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.aspire-terminal-host #font-display {
+  min-width: 34px;
+  color: var(--aspire-term-fg);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .aspire-terminal-host .xterm:focus,
@@ -403,13 +467,11 @@ function ensureTerminalStyles() {
 //         #terminal-frame           (the bordered/shadowed card)
 //           #terminal-titlebar      (title text from OSC 0/2)
 //           #terminal-body          (xterm host; sized by layout)
+//           #terminal-footer        (font size + dimensions controls)
 //
-// The status badge, "Take control" button, font controls, size dropdown
-// and live dims readout that used to sit inside the chrome have been
-// hoisted into the page's toolbar — see ConsoleLogs.razor for the host.
-// State snapshots flow up to .NET via `state.dotNetRef` (registered at
-// init time) and commands flow back in via the exported wrappers
-// `takePrimary`, `setFontSize`, `setSizeModeAuto`, `setSizeModeFixed`.
+// State snapshots can still flow up to .NET via `state.dotNetRef` when a
+// host subscribes, but the frequently used sizing controls stay beside the
+// terminal so they remain accessible without opening the page options menu.
 //
 // All lookup roots are scoped to state.host so the layout helpers can
 // run in pages that might (in the future) host multiple terminals.
@@ -456,15 +518,14 @@ function buildChrome(state) {
     const titleText = document.createElement('span');
     titleText.id = 'terminal-title';
     titleText.textContent = 'terminal';
-    const dimsText = document.createElement('span');
-    dimsText.id = 'terminal-dims';
-    dimsText.textContent = '';
-    titlebar.append(titleText, dimsText);
+    titlebar.appendChild(titleText);
 
     const body = document.createElement('div');
     body.id = 'terminal-body';
 
-    frame.append(titlebar, body);
+    const footer = buildFooter(state);
+
+    frame.append(titlebar, body, footer);
     terminalContainer.appendChild(frame);
     host.append(pane);
 
@@ -473,8 +534,133 @@ function buildChrome(state) {
     state.terminalFrame = frame;
     state.terminalTitlebar = titlebar;
     state.titleText = titleText;
-    state.dimsText = dimsText;
     state.terminalBody = body;
+    state.terminalFooter = footer;
+}
+
+function buildFooter(state) {
+    const footer = document.createElement('div');
+    footer.id = 'terminal-footer';
+    footer.tabIndex = -1;
+
+    const focusHint = document.createElement('span');
+    focusHint.id = 'terminal-focus-hint';
+    focusHint.textContent = state.labels.focusControlsHint;
+
+    const fontMinus = document.createElement('button');
+    fontMinus.id = 'font-minus';
+    fontMinus.type = 'button';
+    fontMinus.textContent = '-';
+    fontMinus.title = state.labels.decreaseFontSize;
+    fontMinus.setAttribute('aria-label', state.labels.decreaseFontSize);
+    fontMinus.disabled = true;
+    fontMinus.addEventListener('click', () => {
+        if (fontMinus.disabled) return;
+        setFontSize(state, state.currentFontPx - 1);
+        maybeAutoPromote(state);
+    });
+
+    const fontDisplay = document.createElement('span');
+    fontDisplay.id = 'font-display';
+    fontDisplay.textContent = `${state.currentFontPx}px`;
+
+    const fontPlus = document.createElement('button');
+    fontPlus.id = 'font-plus';
+    fontPlus.type = 'button';
+    fontPlus.textContent = '+';
+    fontPlus.title = state.labels.increaseFontSize;
+    fontPlus.setAttribute('aria-label', state.labels.increaseFontSize);
+    fontPlus.disabled = true;
+    fontPlus.addEventListener('click', () => {
+        if (fontPlus.disabled) return;
+        setFontSize(state, state.currentFontPx + 1);
+        maybeAutoPromote(state);
+    });
+
+    const sizeSelect = document.createElement('select');
+    sizeSelect.id = 'terminal-dims';
+    sizeSelect.title = state.labels.terminalDimensions;
+    sizeSelect.setAttribute('aria-label', state.labels.terminalDimensions);
+    for (const preset of SIZE_PRESETS) {
+        const option = document.createElement('option');
+        option.value = preset.value;
+        option.textContent = preset.value === 'auto' ? state.labels.fit : preset.label;
+        sizeSelect.appendChild(option);
+    }
+    sizeSelect.disabled = true;
+    sizeSelect.addEventListener('change', () => {
+        if (sizeSelect.disabled) return;
+        const selected = SIZE_PRESETS.find((preset) => preset.value === sizeSelect.value);
+        if (!selected) return;
+
+        if (selected.value === 'auto') {
+            setSizeMode(state, 'font', null);
+        } else {
+            setSizeMode(state, 'fixed', { cols: selected.cols, rows: selected.rows });
+        }
+        maybeAutoPromote(state);
+    });
+
+    const controls = document.createElement('div');
+    controls.id = 'terminal-controls';
+    controls.append(fontMinus, fontDisplay, fontPlus, sizeSelect);
+    footer.append(focusHint, controls);
+    state.terminalFocusHint = focusHint;
+    state.fontMinusBtn = fontMinus;
+    state.fontDisplay = fontDisplay;
+    state.fontPlusBtn = fontPlus;
+    state.sizeSelect = sizeSelect;
+
+    return footer;
+}
+
+const FOCUSABLE_ELEMENT_SELECTOR = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function moveFocusFromTerminal(state, reverse) {
+    if (!reverse) {
+        const firstControl = [state.fontMinusBtn, state.fontPlusBtn, state.sizeSelect]
+            .find((element) => element && !element.disabled);
+        (firstControl || state.terminalFooter)?.focus();
+        return true;
+    }
+
+    const focusableElements = Array.from(document.querySelectorAll(FOCUSABLE_ELEMENT_SELECTOR))
+        .filter((element) => element.getClientRects().length > 0);
+    const activeIndex = focusableElements.indexOf(document.activeElement);
+    for (let index = activeIndex - 1; index >= 0; index--) {
+        const candidate = focusableElements[index];
+        if (!state.host?.contains(candidate)) {
+            candidate.focus();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function attachTerminalFocusNavigation(state, term) {
+    term.attachCustomKeyEventHandler((event) => {
+        if (event.key !== 'F6') {
+            return true;
+        }
+
+        if (event.type === 'keydown' && moveFocusFromTerminal(state, event.shiftKey)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        // Returning false prevents xterm from forwarding F6 to the PTY. When
+        // there is no previous dashboard control, leaving the event's default
+        // action intact lets the browser apply its own Shift+F6 navigation.
+        return false;
+    });
 }
 
 function safeFit(state) {
@@ -495,13 +681,43 @@ function safeFit(state) {
     }
 }
 
-function updateDimsReadout(state) {
-    if (!state.dimsText || !state.term) return;
-    const cols = state.term.cols | 0;
-    const rows = state.term.rows | 0;
-    // xterm briefly reports 0x0 during teardown; suppress that instead of
-    // flashing a zero-sized readout at the user.
-    state.dimsText.textContent = cols > 0 && rows > 0 ? `${cols} × ${rows}` : '';
+function updateTerminalControls(state) {
+    const snapshot = buildToolbarSnapshot(state);
+
+    if (state.fontDisplay) {
+        state.fontDisplay.textContent = `${state.currentFontPx}px`;
+    }
+    if (state.fontMinusBtn) {
+        state.fontMinusBtn.disabled = !snapshot.fontControlsEnabled || state.currentFontPx <= MIN_FONT_PX;
+    }
+    if (state.fontPlusBtn) {
+        state.fontPlusBtn.disabled = !snapshot.fontControlsEnabled || state.currentFontPx >= MAX_FONT_PX;
+    }
+
+    if (!state.sizeSelect) return;
+
+    const cols = state.term?.cols | 0;
+    const rows = state.term?.rows | 0;
+    const previousCurrentOption = state.sizeSelect.querySelector('option[data-current-dimensions]');
+    if (previousCurrentOption) {
+        previousCurrentOption.remove();
+    }
+    if (snapshot.sizeKey !== 'auto' &&
+        !state.sizeSelect.querySelector(`option[value="${snapshot.sizeKey}"]`)) {
+        const currentOption = document.createElement('option');
+        currentOption.value = snapshot.sizeKey;
+        currentOption.textContent = `${state.fixedDims.cols}×${state.fixedDims.rows}`;
+        currentOption.dataset.currentDimensions = '';
+        state.sizeSelect.appendChild(currentOption);
+    }
+    const fitOption = state.sizeSelect.querySelector('option[value="auto"]');
+    if (fitOption) {
+        fitOption.textContent = cols > 0 && rows > 0 && snapshot.sizeKey === 'auto'
+            ? `${state.labels.fit} (${cols} × ${rows})`
+            : state.labels.fit;
+    }
+    state.sizeSelect.value = snapshot.sizeKey;
+    state.sizeSelect.disabled = !snapshot.sizeSelectEnabled;
 }
 
 const FRAME_BORDER_PX = 2;
@@ -516,14 +732,29 @@ const FRAME_BORDER_PX = 2;
 const TERMINAL_BODY_PADDING_PX = 6;
 function getAvailableBodySpace(state) {
     const titlebarH = state.terminalTitlebar ? state.terminalTitlebar.offsetHeight : 0;
+    const footerH = state.terminalFooter ? state.terminalFooter.offsetHeight : 0;
     const stageW = state.terminalContainer ? state.terminalContainer.clientWidth : 0;
     const stageH = state.terminalContainer ? state.terminalContainer.clientHeight : 0;
     const outerW = Math.max(0, stageW - FRAME_BORDER_PX * 2);
-    const outerH = Math.max(0, stageH - titlebarH - FRAME_BORDER_PX * 2);
+    const outerH = Math.max(0, stageH - titlebarH - footerH - FRAME_BORDER_PX * 2);
     return {
         width: Math.max(0, outerW - TERMINAL_BODY_PADDING_PX * 2),
         height: Math.max(0, outerH - TERMINAL_BODY_PADDING_PX * 2),
     };
+}
+
+// A secondary peer displays the producer's grid rather than choosing its own.
+// Record that grid as fixed sizing state so a later keyboard-driven promotion
+// keeps the existing resolution. Only an explicit footer action switches back
+// to Fit or selects another preset.
+function adoptProducerDimensions(state) {
+    const client = state.client;
+    if (!client || client.isPrimary || client.width <= 0 || client.height <= 0) {
+        return;
+    }
+
+    state.sizeMode = 'fixed';
+    state.fixedDims = { cols: client.width, rows: client.height };
 }
 
 // Sizes the xterm display based on the current role and (in primary
@@ -585,6 +816,13 @@ function applyRoleAwareLayout(state) {
             root.style.transformOrigin = '';
             root.style.width = '';
             root.style.height = '';
+        }
+
+        if (state.sizeMode === 'font') {
+            // Secondary layout temporarily replaces currentFontPx with the
+            // font that fits the producer grid. Restore the user's Fit-mode
+            // font when an explicit sizing action promotes this peer.
+            state.currentFontPx = state.fitFontPx;
         }
 
         if (state.sizeMode === 'fixed' && state.fixedDims) {
@@ -840,15 +1078,11 @@ function setSizeMode(state, mode, dims) {
     }
 }
 
-// Computes the current toolbar state snapshot and (when changed) pushes
-// it up to the Blazor host so the page-level toolbar can render the
-// status badge, "Take control" button, font controls, size dropdown and
-// dims readout. RAF-coalesced because callers include term.onResize,
-// applyRoleAwareLayout's RAF callbacks and ResizeObserver — they can
-// fire in rapid bursts during window/sidebar resize. Change-detected
-// so a no-op call (e.g. layout pass that produced identical dims) does
-// not round-trip to .NET.
+// Updates the in-frame controls and, when a host observer is registered,
+// pushes a state snapshot to .NET. Observer notifications are RAF-coalesced
+// and change-detected because layout callbacks can fire in rapid bursts.
 function notifyToolbar(state) {
+    updateTerminalControls(state);
     if (state._toolbarFlushPending) return;
     state._toolbarFlushPending = true;
     requestAnimationFrame(() => {
@@ -912,14 +1146,10 @@ function buildToolbarSnapshot(state) {
         sizeMode: state.sizeMode,
         sizeKey,
         fontPx: state.currentFontPx,
-        // Font/size controls are enabled whenever this tab is primary or
-        // could become primary on demand. If we're not primary yet, the
-        // setFontSizeFromHost / setSizeModeFromHost entry points will
-        // auto-promote before applying the change so the user doesn't have
-        // to click "Take control" first — this is especially important
-        // after a WS reconnect, which silently drops primary status.
-        // Connecting state still gates these off via canTakeControl=false.
-        fontControlsEnabled: (isPrimary && state.sizeMode === 'font') || canTakeControl,
+        // Sizing controls are enabled whenever this tab is primary or could
+        // become primary on demand. A font action explicitly switches fixed
+        // sizing to Fit mode before applying the requested font size.
+        fontControlsEnabled: isPrimary || canTakeControl,
         sizeSelectEnabled: isPrimary || canTakeControl,
         cols: term && term.cols ? term.cols : 0,
         rows: term && term.rows ? term.rows : 0,
@@ -953,7 +1183,7 @@ function takePrimary(state) {
     }
 }
 
-export async function initTerminal(element, wsUrl, dotNetRef) {
+export async function initTerminal(element, wsUrl, dotNetRef, labels) {
     await ensureXtermLoaded();
 
     const id = nextId++;
@@ -964,11 +1194,9 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         fitAddon: null,
         element,
         wsUrl,
-        // Blazor host (TerminalView) — the JS side pushes state snapshots
-        // into [JSInvokable] OnTerminalStateChanged so the page-level
-        // toolbar can render the status badge / take-control button /
-        // font ± / size dropdown / dims readout. May be null if the
-        // host opted not to receive notifications.
+        labels: { ...DEFAULT_CONTROL_LABELS, ...(labels || {}) },
+        // Optional Blazor host observer for consumers that need terminal
+        // state beyond the controls rendered directly in the frame.
         dotNetRef: dotNetRef || null,
         utf8Decoder: new TextDecoder('utf-8', { fatal: false }),
         reconnect: {
@@ -978,8 +1206,8 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
             generation: 0,
         },
         // Layout / sizing state (per-instance — we never use globals).
-        sizeMode: 'font',
-        fixedDims: null,
+        sizeMode: 'fixed',
+        fixedDims: { cols: DEFAULT_TERMINAL_COLS, rows: DEFAULT_TERMINAL_ROWS },
         currentFontPx: DEFAULT_FONT_PX,
         // Font size that "Fit" mode uses, tracked separately from
         // currentFontPx because fixed-preset layout overwrites the latter
@@ -1001,8 +1229,13 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         terminalFrame: null,
         terminalTitlebar: null,
         titleText: null,
-        dimsText: null,
+        sizeSelect: null,
         terminalBody: null,
+        terminalFooter: null,
+        terminalFocusHint: null,
+        fontMinusBtn: null,
+        fontDisplay: null,
+        fontPlusBtn: null,
     };
 
     // Build the chrome BEFORE creating the xterm — term.open(body)
@@ -1053,6 +1286,13 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
 
     state.term = term;
     state.fitAddon = fitAddon;
+    attachTerminalFocusNavigation(state, term);
+
+    const helperTextArea = state.terminalBody.querySelector('.xterm-helper-textarea');
+    if (helperTextArea && state.terminalFocusHint) {
+        helperTextArea.setAttribute('aria-keyshortcuts', 'F6 Shift+F6');
+        helperTextArea.setAttribute('aria-describedby', state.terminalFocusHint.id);
+    }
 
     // Defense in depth: if Cascadia hadn't entered the FontFace cache
     // by the time we constructed Terminal (preload above failed/timed
@@ -1082,7 +1322,7 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     requestAnimationFrame(() => {
         calibrateRatios(state);
         applyRoleAwareLayout(state);
-        updateDimsReadout(state);
+        updateTerminalControls(state);
     });
 
     // OSC 0 / OSC 2 / OSC 1 — terminal apps push window/icon titles via
@@ -1097,18 +1337,18 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     // term.onResize fires whenever fitAddon.fit() OR a manual term.resize()
     // changes the xterm grid. Forward to the producer via sendResize, but
     // Hmp1Client.sendResize() silently no-ops when we're not primary, so
-    // viewers' fit() calls don't disturb the producer. Push fresh dims to
-    // the toolbar and recalibrate ratios so future fixed-mode font calcs
-    // stay accurate.
+    // viewers' fit() calls don't disturb the producer. Refresh the live
+    // dimensions selector and recalibrate ratios so future fixed-mode font
+    // calculations stay accurate.
     //
     // Recalibration is deferred one RAF because xterm dispatches onResize
     // *before* it re-renders .xterm-screen; measuring offsetWidth here
     // would divide the old rendered width by the new cols count and yield
-    // a cellWRatio ~half of the true value. That in turn made the toolbar's
-    // Fit preview report roughly double the real cols×rows.
+    // a cellWRatio ~half of the true value. That in turn made the Fit
+    // dimensions report roughly double the real cols×rows.
     term.onResize(({ cols, rows }) => {
         if (state.client) state.client.sendResize(cols, rows);
-        updateDimsReadout(state);
+        updateTerminalControls(state);
         requestAnimationFrame(() => {
             if (state.term !== term) return;
             calibrateRatios(state);
@@ -1116,12 +1356,11 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         });
     });
 
-    // User input auto-promotes to primary. Consolidating the toolbar
-    // into the ⋯ menu removed the explicit "Take control" button, so we
-    // rely on the same auto-promote path as font/size changes: if the
-    // viewer types (or pastes, or hits Enter), they take primary before
-    // the input goes out. Server drops non-primary input, so promoting
-    // first ensures the keystroke lands. No-ops when we're already
+    // User input auto-promotes to primary. There is no explicit "Take
+    // control" button, so we rely on the same auto-promote path as font/size
+    // changes: if the viewer types (or pastes, or hits Enter), they take
+    // primary before the input goes out. Server drops non-primary input, so
+    // promoting first ensures the keystroke lands. No-ops when we're already
     // primary or the client isn't connected yet.
     term.onData((data) => {
         if (!state.client) return;
@@ -1236,6 +1475,7 @@ function connectClient(state, wsUrl) {
     client.onHello = (payload) => {
         if (myGeneration !== state.reconnect.generation) return;
         dbg(state, 'client.onHello', payload);
+        adoptProducerDimensions(state);
         notifyToolbar(state);
         // Now that we know producer dims + role, apply layout (fits the
         // role-aware path: secondary locks-and-scales to producer dims;
@@ -1246,6 +1486,7 @@ function connectClient(state, wsUrl) {
     client.onRoleChange = (payload) => {
         if (myGeneration !== state.reconnect.generation) return;
         dbg(state, 'client.onRoleChange', payload);
+        adoptProducerDimensions(state);
         notifyToolbar(state);
         // Run layout FIRST so fixed-mode (if active) can resize the grid
         // to fixedDims; the resulting term.onResize will sendResize the
@@ -1271,6 +1512,7 @@ function connectClient(state, wsUrl) {
     client.onResize = (cols, rows) => {
         if (myGeneration !== state.reconnect.generation) return;
         dbg(state, 'client.onResize', { cols, rows });
+        adoptProducerDimensions(state);
         // Producer's grid changed (only happens via primary's Resize).
         // For secondaries this is the trigger to re-fit the frame to
         // the new producer dims.
@@ -1391,15 +1633,11 @@ export function disposeTerminal(id) {
     terminals.delete(id);
 }
 
-// --- Toolbar commands ----------------------------------------------------
+// --- Host commands -------------------------------------------------------
 //
-// These wrappers let the page-level toolbar (ConsoleLogs.razor) drive the
-// same actions that used to live inside the terminal's own chrome. Each
-// is idempotent and silently no-ops if the terminal id is unknown or the
-// underlying client/term isn't ready — JS remains authoritative, so a
-// stale toolbar click can't put us into a bad state. Mode/role guards
-// match the disabled-state logic in flushToolbarState; we still re-check
-// here in case the .NET disabled flag hasn't reached the user's click yet.
+// These wrappers let a .NET host drive the same actions as the terminal's
+// in-frame controls. Each is idempotent and silently no-ops if the terminal
+// id is unknown or the underlying client/term isn't ready.
 
 export function getSizePresets() {
     // Return a copy so .NET-side callers can't accidentally mutate the

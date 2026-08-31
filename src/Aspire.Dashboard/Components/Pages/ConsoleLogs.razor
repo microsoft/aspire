@@ -161,7 +161,11 @@
                         @ref="_terminalViewRef"
                         ResourceName="@_terminalResourceName"
                         ReplicaIndex="@_terminalReplicaIndex"
-                        OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync" />
+                        DecreaseFontSizeLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)]"
+                        IncreaseFontSizeLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)]"
+                        TerminalDimensionsLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]"
+                        FitLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)]"
+                        FocusControlsHintLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalFocusControlsHint)]" />
                 </div>
             }
             else

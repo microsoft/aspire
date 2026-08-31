@@ -138,6 +138,17 @@ rendered inside the toolbar's options (⋯) `AspireMenuButton`:
   visible` transition the page calls `refreshLayout` on the JS terminal
   to guarantee xterm rebinds to the new available space.
 
+The terminal frame keeps font decrease/increase buttons, the current font
+size, and the live columns-by-rows selector together in its bottom-right
+footer. The selector offers Fit mode and predefined terminal dimensions,
+keeping both sizing operations available without opening the page options
+menu. A terminal starts at 132×50. A viewer adopts the producer's current
+dimensions, and taking control by typing preserves those dimensions; only an
+explicit footer sizing action or a resize from another controlling peer changes
+the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which moves
+keyboard focus from terminal input to the footer controls; <kbd>Shift+F6</kbd>
+moves focus to the preceding dashboard control.
+
 The console log stream is now subscribed to for terminal-enabled
 resources too (previously it was suppressed), which is what makes the
 Console view non-empty for a `WithTerminal()` resource.
@@ -161,8 +172,8 @@ when the executable (or container) spec carries a populated `terminal` block:
   "terminal": {
     "udsPath":    "/run/user/1000/aspire/trmnl/<run-id>/<resource>-<idx>/producer.sock",
     "socketMode": "connect",
-    "cols":       120,
-    "rows":       30
+    "cols":       132,
+    "rows":       50
   }
 }
 ```

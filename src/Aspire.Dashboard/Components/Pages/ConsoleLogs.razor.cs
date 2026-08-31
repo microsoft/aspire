@@ -158,8 +158,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _selectedResourceHasTerminal;
     private string? _terminalResourceName;
     private int _terminalReplicaIndex;
-    private Controls.TerminalToolbarState? _terminalToolbarState;
-    private IReadOnlyList<Controls.TerminalSizePreset> _terminalSizePresets = Array.Empty<Controls.TerminalSizePreset>();
 
     // View toggle for terminal resources. The page surfaces both LogViewer
     // and TerminalView in MainSection (both stay mounted so flipping does
@@ -460,21 +458,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // After a layout transition (e.g. mobile→desktop viewport flip moves
-        // the toolbar back inline from the mobile filter dialog) the toolbar
-        // RenderFragment re-evaluates against the page's current state. If
-        // _terminalToolbarState was cleared during the transition but the
-        // JS terminal is still alive in MainSection, the toolbar would not
-        // re-render until the JS side happens to push a new snapshot — and
-        // JS suppresses no-op pushes via change detection. Ask JS to re-push
-        // so the toolbar controls reappear.
-        if (_selectedResourceHasTerminal &&
-            _terminalViewRef is { } terminalView &&
-            _terminalToolbarState is null)
-        {
-            await terminalView.RefreshToolbarStateAsync();
-        }
-
         // Detect a view-flip TO Terminal and prod xterm to relayout. The
         // wrapper element transitions from display:none to visible on this
         // render and ResizeObserver is not guaranteed to fire for that
@@ -499,10 +482,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _selectedResourceHasTerminal = false;
         _terminalResourceName = null;
         _terminalReplicaIndex = 0;
-        // Drop any prior terminal's toolbar state so we don't briefly render
-        // the wrong badge/dims/dropdown for the new resource while the JS
-        // terminal is initializing and pushing its first snapshot.
-        _terminalToolbarState = null;
 
         // Only (re)default the view on an actual resource-selection change.
         // SubscribeAsync also runs on filter changes (clearing the console logs
@@ -659,64 +638,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 Checked = _activeView == ConsoleLogsView.Terminal,
             });
 
-            _logsMenuItems.Add(new()
+            if (_activeView == ConsoleLogsView.Console)
             {
-                IsDivider = true
-            });
-        }
-
-        if (_activeView == ConsoleLogsView.Terminal)
-        {
-            // Terminal-only items: font +/- and a nested Terminal dimensions
-            // submenu carrying the same presets the old inline toolbar used.
-            // We render these unconditionally so the menu structure is stable
-            // even before the first toolbar-state snapshot arrives; enabled
-            // state and current font readout come from _terminalToolbarState
-            // when present.
-            var terminalState = _terminalToolbarState;
-            var fontPx = terminalState?.FontPx ?? 0;
-            var fontControlsEnabled = terminalState?.FontControlsEnabled ?? false;
-            var sizeSelectEnabled = terminalState?.SizeSelectEnabled ?? false;
-
-            _logsMenuItems.Add(new()
-            {
-                OnClick = TerminalFontMinusAsync,
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
-                Icon = new Icons.Regular.Size16.Subtract(),
-                IsDisabled = !fontControlsEnabled || fontPx <= TerminalFontMin,
-            });
-
-            _logsMenuItems.Add(new()
-            {
-                OnClick = TerminalFontPlusAsync,
-                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
-                Icon = new Icons.Regular.Size16.Add(),
-                IsDisabled = !fontControlsEnabled || fontPx >= TerminalFontMax,
-            });
-
-            if (_terminalSizePresets.Count > 0)
-            {
-                var nested = new List<MenuButtonItem>();
-                foreach (var preset in _terminalSizePresets)
-                {
-                    var value = preset.Value;
-                    nested.Add(new()
-                    {
-                        OnClick = () => TerminalSizeChangedAsync(value),
-                        Text = preset.Label,
-                        IsDisabled = !sizeSelectEnabled,
-                    });
-                }
-
                 _logsMenuItems.Add(new()
                 {
-                    Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
-                    Icon = new Icons.Regular.Size16.ArrowExpand(),
-                    NestedMenuItems = nested,
+                    IsDivider = true
                 });
             }
         }
-        else
+
+        if (_activeView == ConsoleLogsView.Console)
         {
             // Console-view items: preserved from the original menu.
             _logsMenuItems.Add(new()
@@ -1366,47 +1297,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         return new ConsoleLogsPageState(selectedResourceName);
     }
 
-    // --- Terminal toolbar wiring -----------------------------------------
-    //
-    // The TerminalView component pushes a TerminalToolbarState snapshot up
-    // here whenever the underlying xterm/HMP1 state changes (role flips,
-    // resize, font change). Those snapshots drive the page-level toolbar
-    // that replaces the in-frame chrome the terminal used to render itself.
-    // JS remains the source of truth for terminal state; this layer just
-    // mirrors the latest snapshot and routes user actions back to JS via
-    // the TerminalView public methods.
-    private const int TerminalFontStep = 1;
-    private const int TerminalFontMin = 4;
-    private const int TerminalFontMax = 72;
-
-    private async Task OnTerminalToolbarStateChangedAsync(Controls.TerminalToolbarState state)
-    {
-        _terminalToolbarState = state;
-
-        // First snapshot after init — fetch the size preset list once so
-        // the dropdown stays in sync with whatever JS knows how to handle.
-        if (_terminalSizePresets.Count == 0 && _terminalViewRef is not null)
-        {
-            // The JS side ships labels as English string literals (it has no
-            // localization stack of its own). Numeric labels like "80×24" are
-            // language-neutral and pass through unchanged, but "Auto" is an
-            // English word and must come from the dashboard's .resx so it
-            // matches the rest of the terminal toolbar in every supported
-            // culture. Apply the localized label here, where we still have
-            // access to IStringLocalizer<Resources.ConsoleLogs>, before
-            // handing the list to FluentSelect.
-            var presets = await _terminalViewRef.GetSizePresetsAsync();
-            _terminalSizePresets = presets
-                .Select(p => p.Value == "auto"
-                    ? p with { Label = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)] }
-                    : p)
-                .ToList();
-        }
-
-        UpdateMenuButtons();
-        StateHasChanged();
-    }
-
     private Task HandleViewChangedAsync(string? newView)
     {
         if (newView is null)
@@ -1460,33 +1350,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // because the update hasn't been processed yet.
     internal ResourceViewModel? GetResourceSnapshotForTest(string resourceName) =>
         _resourceByName.TryGetValue(resourceName, out var resource) ? resource : null;
-
-    private Task TerminalFontMinusAsync()
-    {
-        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
-        {
-            return Task.CompletedTask;
-        }
-        return _terminalViewRef.SetFontSizeAsync(Math.Max(TerminalFontMin, s.FontPx - TerminalFontStep));
-    }
-
-    private Task TerminalFontPlusAsync()
-    {
-        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
-        {
-            return Task.CompletedTask;
-        }
-        return _terminalViewRef.SetFontSizeAsync(Math.Min(TerminalFontMax, s.FontPx + TerminalFontStep));
-    }
-
-    private Task TerminalSizeChangedAsync(string? newKey)
-    {
-        if (newKey is null || _terminalViewRef is null)
-        {
-            return Task.CompletedTask;
-        }
-        return _terminalViewRef.SetSizeModeAsync(newKey);
-    }
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);
