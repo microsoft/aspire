@@ -164,6 +164,108 @@ public class AzureSandboxesTests
         Assert.Equal("At least one connector operation must be explicitly allow-listed. (Parameter 'options')", exception.Message);
     }
 
+    [Theory]
+    [InlineData("mail", "mail")]
+    [InlineData("mail-conn", "mail_conn")]
+    public void ConnectorConnectionsRequireUniqueBicepIdentifier(string firstName, string secondName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        gateway.AddConnection(firstName, "office365");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => gateway.AddConnection(secondName, "sharepointonline"));
+
+        Assert.Equal(
+            $"Connector connection resource '{secondName}' conflicts with an existing resource on Connector Namespace " +
+            "'gateway' after Bicep identifier normalization.",
+            exception.Message);
+        Assert.Single(gateway.Resource.Connections);
+    }
+
+    [Theory]
+    [InlineData("mail", "mail")]
+    [InlineData("mail-mcp", "mail_mcp")]
+    public void ConnectorMcpServerConfigsRequireUniqueBicepIdentifier(string firstName, string secondName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        gateway.AddMcpServerConfig(firstName);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => gateway.AddMcpServerConfig(secondName));
+
+        Assert.Equal(
+            $"MCP server configuration resource '{secondName}' conflicts with an existing resource on Connector Namespace " +
+            "'gateway' after Bicep identifier normalization.",
+            exception.Message);
+        Assert.Single(gateway.Resource.McpServerConfigs);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConnectorNamespaceChildrenRequireUniqueBicepIdentifiersAcrossResourceTypes(bool addConnectionFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        if (addConnectionFirst)
+        {
+            gateway.AddConnection("mail-conn", "office365");
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => gateway.AddMcpServerConfig("mail_conn"));
+
+            Assert.Equal(
+                "MCP server configuration resource 'mail_conn' conflicts with an existing resource on Connector Namespace " +
+                "'gateway' after Bicep identifier normalization.",
+                exception.Message);
+        }
+        else
+        {
+            gateway.AddMcpServerConfig("mail-conn");
+
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => gateway.AddConnection("mail_conn", "office365"));
+
+            Assert.Equal(
+                "Connector connection resource 'mail_conn' conflicts with an existing resource on Connector Namespace " +
+                "'gateway' after Bicep identifier normalization.",
+                exception.Message);
+        }
+
+        Assert.Equal(1, gateway.Resource.Connections.Count + gateway.Resource.McpServerConfigs.Count);
+    }
+
+    [Fact]
+    public void ManagedMcpServerSupportsOnlyOneConnector()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var gateway = builder.AddAzureConnectorNamespace("gateway");
+        var office365 = gateway.AddConnection("office365", "office365");
+        var sharepoint = gateway.AddConnection("sharepoint", "sharepointonline");
+        var mcp = gateway.AddMcpServerConfig("mcp");
+        var options = new AzureConnectorNamespaceMcpConnectorOptions
+        {
+            Operations = [new AzureConnectorNamespaceMcpOperationOptions { Name = "GetItem" }]
+        };
+
+        mcp.WithConnector("mail", office365, options);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => mcp.WithConnector("files", sharepoint, options));
+
+        Assert.Equal(
+            "MCP server configuration 'mcp' already has a connector. " +
+            "The current Connector Namespace preview supports one connector per MCP server configuration.",
+            exception.Message);
+        Assert.Single(mcp.Resource.Connectors);
+    }
+
     [Fact]
     public void ConnectorConnectionCannotBecomeExistingAfterAccessPolicyRegistered()
     {

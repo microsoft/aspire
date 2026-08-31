@@ -246,6 +246,11 @@ public static class AzureSandboxesExtensions
 
         var connectionName = options?.ConnectionName ?? name;
         ValidateConnectorResourceName(connectionName, nameof(options));
+        ValidateUniqueBicepIdentifier(
+            GetConnectorNamespaceChildren(builder.Resource),
+            name,
+            "Connector connection",
+            builder.Resource.Name);
         if (builder.Resource.Connections.Any(connection =>
             string.Equals(connection.ConnectionName, connectionName, StringComparison.OrdinalIgnoreCase)))
         {
@@ -397,6 +402,11 @@ public static class AzureSandboxesExtensions
 
         var configName = options?.ConfigName ?? name;
         ValidateConnectorResourceName(configName, nameof(options));
+        ValidateUniqueBicepIdentifier(
+            GetConnectorNamespaceChildren(builder.Resource),
+            name,
+            "MCP server configuration",
+            builder.Resource.Name);
         if (builder.Resource.McpServerConfigs.Any(config =>
             string.Equals(config.ConfigName, configName, StringComparison.OrdinalIgnoreCase)))
         {
@@ -480,18 +490,18 @@ public static class AzureSandboxesExtensions
                 $"Connector connection '{connection.Resource.Name}' belongs to a different Connector Namespace.");
         }
 
+        if (builder.Resource.Connectors.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"MCP server configuration '{builder.Resource.Name}' already has a connector. " +
+                "The current Connector Namespace preview supports one connector per MCP server configuration.");
+        }
+
         if (options.Operations is null || options.Operations.Length == 0)
         {
             throw new ArgumentException(
                 "At least one connector operation must be explicitly allow-listed.",
                 nameof(options));
-        }
-
-        if (builder.Resource.Connectors.Any(connector =>
-            string.Equals(connector.Name, connectorName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"Connector route '{connectorName}' is already registered on MCP server configuration '{builder.Resource.Name}'.");
         }
 
         var operationNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -828,6 +838,28 @@ public static class AzureSandboxesExtensions
 
     private static string GetAccessPolicyResourceName(AzureConnectorNamespaceConnectionResource connection, string name)
         => $"{connection.Name.Length}-{connection.Name}-policy-{name}";
+
+    private static IEnumerable<IResource> GetConnectorNamespaceChildren(AzureConnectorNamespaceResource connectorNamespace)
+        => connectorNamespace.Connections.Concat<IResource>(connectorNamespace.McpServerConfigs);
+
+    private static void ValidateUniqueBicepIdentifier(
+        IEnumerable<IResource> resources,
+        string name,
+        string resourceType,
+        string connectorNamespaceName)
+    {
+        var bicepIdentifier = Infrastructure.NormalizeBicepIdentifier(name);
+        if (resources.Any(resource =>
+            string.Equals(
+                Infrastructure.NormalizeBicepIdentifier(resource.Name),
+                bicepIdentifier,
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"{resourceType} resource '{name}' conflicts with an existing resource on Connector Namespace " +
+                $"'{connectorNamespaceName}' after Bicep identifier normalization.");
+        }
+    }
 
     private static string GetValidatedAccessPolicyResourceName(
         AzureConnectorNamespaceConnectionResource connection,
