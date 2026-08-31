@@ -24,10 +24,17 @@ internal class CliDownloader(
     IInteractionService interactionService,
     IPackagingService packagingService) : ICliDownloader
 {
+    internal const string StagingDownloadBaseUrlEnvVar = "ASPIRE_CLI_STAGING_DOWNLOAD_BASE_URL";
+
     private const int ArchiveDownloadTimeoutSeconds = 600;
     private const int ChecksumDownloadTimeoutSeconds = 120;
 
     private static readonly HttpClient s_httpClient = new();
+    private static readonly HttpClient s_loopbackHttpClient = new(new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        UseProxy = false
+    });
 
     public async Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken)
     {
@@ -45,7 +52,9 @@ internal class CliDownloader(
             throw new InvalidOperationException($"Channel '{channelName}' does not support CLI downloads.");
         }
 
-        var baseUrl = channel.CliDownloadBaseUrl.TrimEnd('/');
+        var baseUrl = ResolveDownloadBaseUrl(channel.Name, channel.CliDownloadBaseUrl, environment);
+        var requireLoopback = string.Equals(channel.Name, PackageChannelNames.Staging, StringComparisons.ChannelName) &&
+            environment.GetEnvironmentVariable(StagingDownloadBaseUrlEnvVar) is { Length: > 0 };
 
         var (os, arch) = DetectPlatform();
         var runtimeIdentifier = $"{os}-{arch}";
@@ -67,10 +76,10 @@ internal class CliDownloader(
             _ = await interactionService.ShowStatusAsync($"Downloading {archiveDescriptor}", async () =>
             {
                 logger.LogDebug("Downloading archive from {Url} to {Path}", archiveUrl, archivePath);
-                await DownloadFileAsync(archiveUrl, archivePath, ArchiveDownloadTimeoutSeconds, cancellationToken);
+                await DownloadFileAsync(archiveUrl, archivePath, ArchiveDownloadTimeoutSeconds, cancellationToken, requireLoopback);
 
                 logger.LogDebug("Downloading checksum from {Url} to {Path}", checksumUrl, checksumPath);
-                await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
+                await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken, requireLoopback);
 
                 return 0; // Return dummy value for ShowStatusAsync
             });
@@ -120,6 +129,33 @@ internal class CliDownloader(
         }
 
         return $"{fileName} from {source}";
+    }
+
+    internal static string ResolveDownloadBaseUrl(string channelName, string defaultBaseUrl, IEnvironment environment)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(channelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(defaultBaseUrl);
+        ArgumentNullException.ThrowIfNull(environment);
+
+        if (!string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName) ||
+            environment.GetEnvironmentVariable(StagingDownloadBaseUrlEnvVar) is not { Length: > 0 } overrideUrl)
+        {
+            return defaultBaseUrl.TrimEnd('/');
+        }
+
+        // This hook exists only for hermetic self-update tests. Restricting it to loopback prevents
+        // repository or ambient machine configuration from redirecting executable replacement to a
+        // remote host. Both the archive and checksum are served by this URL, so remote overrides
+        // would otherwise allow arbitrary native-code execution.
+        if (!Uri.TryCreate(overrideUrl, UriKind.Absolute, out var uri) ||
+            !uri.IsLoopback ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException(
+                $"{StagingDownloadBaseUrlEnvVar} must be an absolute loopback HTTP(S) URL.");
+        }
+
+        return overrideUrl.TrimEnd('/');
     }
 
     private (string os, string arch) DetectPlatform()
@@ -191,13 +227,27 @@ internal class CliDownloader(
         };
     }
 
-    private static async Task DownloadFileAsync(string url, string outputPath, int timeoutSeconds, CancellationToken cancellationToken)
+    internal static async Task DownloadFileAsync(
+        string url,
+        string outputPath,
+        int timeoutSeconds,
+        CancellationToken cancellationToken,
+        bool requireLoopback = false)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
-        using var response = await s_httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        var httpClient = requireLoopback ? s_loopbackHttpClient : s_httpClient;
+        using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
         response.EnsureSuccessStatusCode();
+
+        if (requireLoopback &&
+            (response.RequestMessage?.RequestUri is not { IsLoopback: true } responseUri ||
+             (responseUri.Scheme != Uri.UriSchemeHttp && responseUri.Scheme != Uri.UriSchemeHttps)))
+        {
+            throw new InvalidOperationException(
+                $"{StagingDownloadBaseUrlEnvVar} downloads must remain on an absolute loopback HTTP(S) URL.");
+        }
 
         await using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
         await response.Content.CopyToAsync(fileStream, cts.Token);

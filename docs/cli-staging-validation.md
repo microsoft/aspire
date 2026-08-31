@@ -37,6 +37,10 @@ package-directory lookups):
 When either override is set, the CLI emits a one-time warning so an overridden
 identity/feed can't silently resolve packages on a normal invocation.
 
+`ASPIRE_CLI_STAGING_DOWNLOAD_BASE_URL` is a self-update test hook. When set to an
+absolute loopback HTTP(S) URL, the staging channel downloads its CLI archive and
+checksum from that base URL without changing identity or package-feed routing.
+
 ## Recipe
 
 1. Build the CLI locally:
