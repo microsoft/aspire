@@ -18,7 +18,7 @@ const api = await builder
     .withHttpEndpoint({ name: "http", targetPort: 8080 })
     .withExternalHttpEndpoints();
 
-const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
+const publishedApi = await api.publishAsAzureSandbox({
     tier: AzureSandboxTier.Large,
     autoSuspendEnabled: true,
     autoSuspendInterval: 900_000,

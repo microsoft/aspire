@@ -139,30 +139,27 @@ public static class AzureSandboxesExtensions
     }
 
     /// <summary>
-    /// Publishes the specified compute resource as an Azure sandbox container.
+    /// Configures the specified compute resource when it is published as an Azure sandbox container.
     /// </summary>
     /// <typeparam name="T">The compute resource type.</typeparam>
     /// <param name="builder">The compute resource builder.</param>
-    /// <param name="sandboxGroup">The Azure sandbox group that hosts the resource.</param>
     /// <param name="options">The sandbox runtime options.</param>
     /// <returns>The resource builder.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="sandboxGroup"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when a configured option is invalid.</exception>
     /// <remarks>
-    /// This method assigns the compute resource to <paramref name="sandboxGroup"/> and configures all sandbox-specific
-    /// runtime options in one call.
+    /// When the application model contains a single compute environment, Aspire assigns the resource to that environment
+    /// automatically. When multiple compute environments exist, call <c>WithComputeEnvironment</c> before this method.
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("publishComputeResourceAsAzureSandbox", MethodName = "publishAsAzureSandbox")]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureSandbox<T>(
         this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
         AzureSandboxOptions? options = null)
         where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(sandboxGroup);
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -174,31 +171,28 @@ public static class AzureSandboxesExtensions
 
         var copiedOptions = CopyAzureSandboxOptions(sandboxOptions);
 
-        return builder
-            .WithComputeEnvironment(sandboxGroup)
-            .WithAnnotation(new AzureSandboxContainerOptionsAnnotation(copiedOptions), ResourceAnnotationMutationBehavior.Replace);
+        return builder.WithAnnotation(
+            new AzureSandboxContainerOptionsAnnotation(copiedOptions),
+            ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
-    /// Publishes the specified compute resource as an Azure sandbox container.
+    /// Configures the specified compute resource when it is published as an Azure sandbox container.
     /// </summary>
     /// <typeparam name="T">The compute resource type.</typeparam>
     /// <param name="builder">The compute resource builder.</param>
-    /// <param name="sandboxGroup">The Azure sandbox group that hosts the resource.</param>
     /// <param name="configure">The callback that configures sandbox runtime options.</param>
     /// <returns>The resource builder.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/>, <paramref name="sandboxGroup"/>, or <paramref name="configure"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="configure"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when a configured option is invalid.</exception>
     [AspireExportIgnore(Reason = "Use the AzureSandboxOptions overload from ATS.")]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureSandbox<T>(
         this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
         Action<AzureSandboxOptions> configure)
         where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(sandboxGroup);
         ArgumentNullException.ThrowIfNull(configure);
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -209,7 +203,7 @@ public static class AzureSandboxesExtensions
         var options = new AzureSandboxOptions();
         configure(options);
 
-        return builder.PublishAsAzureSandbox(sandboxGroup, options);
+        return builder.PublishAsAzureSandbox(options);
     }
 
     /// <summary>

@@ -26,12 +26,6 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
 
-        var endpoint = endpointReferenceExpression.Endpoint.EndpointAnnotation;
-        if (!endpoint.IsExternal)
-        {
-            throw new InvalidOperationException($"Endpoint '{endpoint.Name}' on resource '{resource.TargetResource.Name}' is not external. Azure sandbox endpoint references are only supported for external HTTP endpoints because ADC only assigns public URLs to exposed ports.");
-        }
-
         _resource = resource;
         _endpointReferenceExpression = endpointReferenceExpression;
         _sandboxEndpoint = ResolveSandboxEndpoint(resource, endpointReferenceExpression.Endpoint);
@@ -181,10 +175,9 @@ internal sealed class AzureSandboxEndpointPropertyValueProvider : IValueProvider
     {
         foreach (var resolvedEndpoint in resource.TargetResource.ResolveEndpoints())
         {
-            if (string.Equals(resolvedEndpoint.Endpoint.Name, endpointName, StringComparison.Ordinal) &&
-                resolvedEndpoint.TargetPort.Value is int targetPort)
+            if (string.Equals(resolvedEndpoint.Endpoint.Name, endpointName, StringComparison.Ordinal))
             {
-                return targetPort;
+                return AzureSandboxContainerDeployment.ResolveSandboxTargetPort(resource.TargetResource, resolvedEndpoint);
             }
         }
 

@@ -15,8 +15,8 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 {
     private const string EnableSandboxesEnvironmentVariable = "ASPIRE_DEPLOYMENT_TEST_ENABLE_SANDBOXES";
-    private const string SandboxStateUrlKey = "\"Azure:Sandboxes:site-sandbox-container:Ports:0:Url\"";
     private const string ExpectedResponseText = "Sandbox TS AppHost service is running.";
+    private const string ExpectedDotNetResponseText = "Sandbox .NET service is running.";
 
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(90);
 
@@ -30,29 +30,159 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         await RedeployProjectToAzureSandboxRetainsPreviousPublicUrlCore(linkedCts.Token);
     }
 
-    private async Task RedeployProjectToAzureSandboxRetainsPreviousPublicUrlCore(CancellationToken cancellationToken)
+    [Fact]
+    public async Task DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandbox()
     {
-        if (DeploymentE2ETestHelpers.IsRunningInCI &&
-            !string.Equals(Environment.GetEnvironmentVariable(EnableSandboxesEnvironmentVariable), "true", StringComparison.OrdinalIgnoreCase))
-        {
-            Assert.Skip($"Azure sandboxes deployment tests require preview enrollment and are disabled for this deployment environment. Set {EnableSandboxesEnvironmentVariable}=true only after the environment has the required sandbox preview access and role assignments.");
-        }
+        using var cts = new CancellationTokenSource(s_testTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token, TestContext.Current.CancellationToken);
 
-        var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
-        if (string.IsNullOrEmpty(subscriptionId))
-        {
-            Assert.Skip("Azure subscription not configured. Set ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION.");
-        }
+        await DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandboxCore(linkedCts.Token);
+    }
 
-        if (!AzureAuthenticationHelpers.IsAzureAuthAvailable())
+    private async Task DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandboxCore(CancellationToken cancellationToken)
+    {
+        var subscriptionId = GetSandboxDeploymentSubscriptionId();
+        const string projectName = "SandboxDotNet";
+        const string serviceName = "SandboxWeb";
+        using var workspace = TemporaryWorkspace.Create(output);
+        var startTime = DateTime.UtcNow;
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("sandbox-dotnet");
+        var deploymentUrls = new Dictionary<string, string>();
+        var urlFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-url.txt");
+        var stateMarkerFile = Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet-state-marker");
+
+        output.WriteLine($"Test: {nameof(DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandbox)}");
+        output.WriteLine($"Resource Group: {resourceGroupName}");
+        output.WriteLine($"Subscription: {subscriptionId[..8]}...");
+        output.WriteLine($"Workspace: {workspace.WorkspaceRoot.FullName}");
+
+        Hex1bTerminal? terminal = null;
+        Task? pendingRun = null;
+        Hex1bTerminalAutomator? auto = null;
+        SequenceCounter? counter = null;
+        var appHostReady = false;
+        var destroyCompleted = false;
+        var terminalExited = false;
+
+        try
         {
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            terminal = DeploymentE2ETestHelpers.CreateTestTerminal(width: 320, height: 60);
+            pendingRun = terminal.RunAsync(cancellationToken);
+            counter = new SequenceCounter();
+            auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+            output.WriteLine("Step 1: Preparing environment...");
+            await auto.PrepareEnvironmentAsync(workspace, counter);
+            await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
+
+            output.WriteLine("Step 2: Creating an empty .NET AppHost...");
+            await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
+            await auto.RunCommandAsync($"cd {projectName}", counter);
+
+            output.WriteLine("Step 3: Adding the Azure sandboxes hosting package...");
+            await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.Sandboxes");
+
+            output.WriteLine("Step 4: Creating the .NET web service...");
+            await auto.RunCommandAsync($"dotnet new web -n {serviceName} --no-restore", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync(
+                $"dotnet add {projectName}.AppHost/{projectName}.AppHost.csproj reference {serviceName}/{serviceName}.csproj",
+                counter,
+                TimeSpan.FromMinutes(2));
+            WriteDotNetSandboxAppHost(workspace, projectName, serviceName);
+
+            await auto.RunCommandAsync($"touch {BashQuote(stateMarkerFile)}", counter);
+            await auto.RunCommandAsync($"cd {projectName}.AppHost", counter);
+            await auto.RunCommandAsync(
+                $"unset ASPIRE_PLAYGROUND && " +
+                $"export AZURE__LOCATION=westus3 && " +
+                $"export Azure__Location=westus3 && " +
+                $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
+                $"export Azure__ResourceGroup={resourceGroupName} && " +
+                "export COLUMNS=320",
+                counter);
+
+            appHostReady = true;
+
+            output.WriteLine("Step 5: Deploying the .NET service to Azure Sandbox...");
+            await auto.TypeAsync("aspire deploy");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.RunCommandAsync(
+                CaptureSandboxUrlFromStateCommand(stateMarkerFile, urlFile, "frontend"),
+                counter,
+                TimeSpan.FromSeconds(30));
+
+            output.WriteLine("Step 6: Verifying TLS termination and the shared HTTP container port...");
+            await auto.RunCommandAsync(
+                VerifyDotNetSandboxDeploymentCommand(stateMarkerFile, urlFile),
+                counter,
+                TimeSpan.FromMinutes(4));
+
+            deploymentUrls["frontend"] = File.ReadAllText(urlFile).Trim();
+
+            output.WriteLine("Step 7: Destroying the Azure sandbox deployment...");
+            await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(10));
+            destroyCompleted = true;
+
+            await ExitTerminalAsync(auto, pendingRun);
+            terminalExited = true;
+
+            DeploymentReporter.ReportDeploymentSuccess(
+                nameof(DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandbox),
+                resourceGroupName,
+                deploymentUrls,
+                DateTime.UtcNow - startTime);
+        }
+        catch (Exception ex)
+        {
+            DeploymentReporter.ReportDeploymentFailure(
+                nameof(DeployDotNetProjectWithHttpAndHttpsEndpointsToAzureSandbox),
+                resourceGroupName,
+                ex.Message,
+                ex.StackTrace);
+            throw;
+        }
+        finally
+        {
+            if (!destroyCompleted && appHostReady && auto is not null && counter is not null && !terminalExited)
             {
-                Assert.Fail("Azure authentication not available in CI. Check OIDC configuration.");
+                try
+                {
+                    output.WriteLine("Attempting best-effort aspire destroy after failure...");
+                    await auto.AspireDestroyAsync(counter, TimeSpan.FromMinutes(10));
+                }
+                catch (Exception ex)
+                {
+                    output.WriteLine($"Best-effort aspire destroy failed: {ex.Message}");
+                }
             }
 
-            Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+            if (!terminalExited && auto is not null && pendingRun is not null)
+            {
+                try
+                {
+                    await ExitTerminalAsync(auto, pendingRun);
+                }
+                catch (Exception ex)
+                {
+                    output.WriteLine($"Failed to exit terminal cleanly: {ex.Message}");
+                }
+            }
+
+            terminal?.Dispose();
+
+            output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
+            var (cleanupSucceeded, cleanupMessage) = await CleanupResourceGroupAsync(resourceGroupName, subscriptionId);
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, cleanupSucceeded, cleanupMessage);
         }
+    }
+
+    private async Task RedeployProjectToAzureSandboxRetainsPreviousPublicUrlCore(CancellationToken cancellationToken)
+    {
+        var subscriptionId = GetSandboxDeploymentSubscriptionId();
 
         var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
@@ -122,7 +252,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            await auto.TypeAsync(CaptureSandboxUrlFromStateCommand(stateMarkerFile, firstUrlFile));
+            await auto.TypeAsync(CaptureSandboxUrlFromStateCommand(stateMarkerFile, firstUrlFile, "site"));
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -137,7 +267,7 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            await auto.TypeAsync(CaptureSandboxUrlFromStateCommand(stateMarkerFile, secondUrlFile));
+            await auto.TypeAsync(CaptureSandboxUrlFromStateCommand(stateMarkerFile, secondUrlFile, "site"));
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -249,12 +379,12 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
 
             const builder = await createBuilder();
 
-            const sandboxGroup = await builder.addAzureSandboxGroup('sandboxes');
+            await builder.addAzureSandboxGroup('sandboxes');
 
             await builder.addDockerfile('site', './site')
                 .withHttpEndpoint({ name: 'http', targetPort: 80 })
                 .withExternalHttpEndpoints()
-                .publishAsAzureSandbox(sandboxGroup, {
+                .publishAsAzureSandbox({
                     tier: AzureSandboxTier.Medium,
                     endpoints: [
                         {
@@ -268,15 +398,92 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
             """);
     }
 
-    private static string CaptureSandboxUrlFromStateCommand(string stateMarkerFile, string outputFile)
+    private static void WriteDotNetSandboxAppHost(TemporaryWorkspace workspace, string projectName, string serviceName)
     {
+        var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var appHostFilePath = Path.Combine(projectDir, $"{projectName}.AppHost", "AppHost.cs");
+        var serviceDir = Path.Combine(projectDir, serviceName);
+        var propertiesDir = Directory.CreateDirectory(Path.Combine(serviceDir, "Properties"));
+
+        File.WriteAllText(Path.Combine(serviceDir, "Program.cs"), $$"""
+            var builder = WebApplication.CreateBuilder(args);
+            var app = builder.Build();
+
+            app.MapGet("/", () => "{{ExpectedDotNetResponseText}}");
+
+            app.Run();
+            """);
+        File.WriteAllText(Path.Combine(propertiesDir.FullName, "launchSettings.json"), """
+            {
+              "$schema": "http://json.schemastore.org/launchsettings.json",
+              "profiles": {
+                "https": {
+                  "commandName": "Project",
+                  "dotnetRunMessages": true,
+                  "launchBrowser": false,
+                  "applicationUrl": "https://localhost:7001;http://localhost:5001",
+                  "environmentVariables": {
+                    "ASPNETCORE_ENVIRONMENT": "Development"
+                  }
+                }
+              }
+            }
+            """);
+        File.WriteAllText(appHostFilePath, $$"""
+            #pragma warning disable ASPIREAZURE001
+
+            using Aspire.Hosting.Azure;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.AddAzureSandboxGroup("env");
+
+            builder.AddProject<Projects.{{serviceName}}>("frontend")
+                .PublishAsAzureSandbox(new AzureSandboxOptions
+                {
+                    Endpoints =
+                    [
+                        new AzureSandboxEndpointOptions
+                        {
+                            Name = "http",
+                            Anonymous = true
+                        }
+                    ]
+                });
+
+            builder.Build().Run();
+            """);
+    }
+
+    private static string CaptureSandboxUrlFromStateCommand(string stateMarkerFile, string outputFile, string resourceName)
+    {
+        var sandboxStateUrlKey = $"\"Azure:Sandboxes:{resourceName}-sandbox-container:Ports:0:Url\"";
         return
-            $"STATE_FILE=$(find \"$HOME/.aspire/deployments\" -name '*.json' -newer {BashQuote(stateMarkerFile)} -exec grep -l '{SandboxStateUrlKey}' {{}} + | head -n 1) && " +
+            $"STATE_FILE=$(find \"$HOME/.aspire/deployments\" -name '*.json' -newer {BashQuote(stateMarkerFile)} -exec grep -l '{sandboxStateUrlKey}' {{}} + | head -n 1) && " +
             "if [ -z \"$STATE_FILE\" ]; then echo \"Sandbox deployment state file not found\"; find \"$HOME/.aspire/deployments\" -name '*.json' -newer " + BashQuote(stateMarkerFile) + " -print; exit 1; fi && " +
-            "URL=$(grep -Eo '\"Azure:Sandboxes:site-sandbox-container:Ports:0:Url\"[[:space:]]*:[[:space:]]*\"[^\"]+\"' \"$STATE_FILE\" | head -n 1 | sed -E 's/^.*\"([^\"]+)\".*$/\\1/') && " +
+            $"URL=$(grep -Eo '\"Azure:Sandboxes:{resourceName}-sandbox-container:Ports:0:Url\"[[:space:]]*:[[:space:]]*\"[^\"]+\"' \"$STATE_FILE\" | head -n 1 | sed -E 's/^.*\"([^\"]+)\".*$/\\1/') && " +
             "if [ -z \"$URL\" ]; then echo \"Sandbox URL not found in $STATE_FILE\"; cat \"$STATE_FILE\"; exit 1; fi && " +
             $"printf '%s\\n' \"$URL\" > {BashQuote(outputFile)} && " +
             "echo \"Sandbox URL from state: $URL\"";
+    }
+
+    private static string VerifyDotNetSandboxDeploymentCommand(string stateMarkerFile, string urlFile)
+    {
+        const string statePrefix = "Azure:Sandboxes:frontend-sandbox-container:Ports";
+        return
+            $"STATE_FILE=$(find \"$HOME/.aspire/deployments\" -name '*.json' -newer {BashQuote(stateMarkerFile)} -exec grep -l '\"{statePrefix}:0:Url\"' {{}} + | head -n 1) && " +
+            $"URL=$(cat {BashQuote(urlFile)}) && " +
+            "case \"$URL\" in https://*) ;; *) echo \"Expected TLS-terminated HTTPS sandbox URL, got $URL\"; exit 1;; esac && " +
+            $"PORT_URL_COUNT=$(grep -Ec '\"{statePrefix}:[0-9]+:Url\"' \"$STATE_FILE\") && " +
+            "if [ \"$PORT_URL_COUNT\" -ne 1 ]; then echo \"Expected one shared sandbox port, found $PORT_URL_COUNT\"; cat \"$STATE_FILE\"; exit 1; fi && " +
+            $"grep -Eq '\"{statePrefix}:0:Port\"[[:space:]]*:[[:space:]]*8080' \"$STATE_FILE\" || {{ echo \"Expected sandbox target port 8080\"; cat \"$STATE_FILE\"; exit 1; }} && " +
+            $"grep -Eq '\"{statePrefix}:0:Protocol\"[[:space:]]*:[[:space:]]*\"Http\"' \"$STATE_FILE\" || {{ echo \"Expected HTTP protocol behind sandbox TLS termination\"; cat \"$STATE_FILE\"; exit 1; }} && " +
+            "success=0 && " +
+            "for i in $(seq 1 18); do " +
+            $"BODY=$(curl -fsS \"$URL\" --max-time 10 2>/tmp/aspire-sandbox-dotnet-curl.err) && echo \"$BODY\" | grep -Fq {BashQuote(ExpectedDotNetResponseText)} && {{ echo \"  OK (attempt $i)\"; success=1; break; }}; " +
+            "echo \"  Attempt $i failed; retrying in 10s...\"; sleep 10; " +
+            "done; " +
+            "if [ \"$success\" -ne 1 ]; then echo \"Sandbox URL check failed for $URL\"; cat /tmp/aspire-sandbox-dotnet-curl.err 2>/dev/null || true; exit 1; fi";
     }
 
     private static string VerifySandboxUrlCommand(string urlFile)
@@ -310,6 +517,33 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
         await pendingRun;
+    }
+
+    private static string GetSandboxDeploymentSubscriptionId()
+    {
+        if (DeploymentE2ETestHelpers.IsRunningInCI &&
+            !string.Equals(Environment.GetEnvironmentVariable(EnableSandboxesEnvironmentVariable), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Skip($"Azure sandboxes deployment tests require preview enrollment and are disabled for this deployment environment. Set {EnableSandboxesEnvironmentVariable}=true only after the environment has the required sandbox preview access and role assignments.");
+        }
+
+        var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
+        if (string.IsNullOrEmpty(subscriptionId))
+        {
+            Assert.Skip("Azure subscription not configured. Set ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION.");
+        }
+
+        if (!AzureAuthenticationHelpers.IsAzureAuthAvailable())
+        {
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            {
+                Assert.Fail("Azure authentication not available in CI. Check OIDC configuration.");
+            }
+
+            Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+        }
+
+        return subscriptionId;
     }
 
     private async Task<(bool Success, string Message)> CleanupResourceGroupAsync(

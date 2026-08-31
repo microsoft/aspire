@@ -22,17 +22,20 @@ aspire add Aspire.Hosting.Azure.Sandboxes
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an Azure sandbox group and publish a compute resource to it using the following methods:
+Then, in the AppHost, add an Azure sandbox group. When it is the only compute environment, Aspire automatically deploys compute resources to it:
 
 ```csharp
 #pragma warning disable ASPIREAZURE001 // Azure Container Apps Sandboxes APIs are experimental.
 
-var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+builder.AddAzureSandboxGroup("sandboxes");
+builder.AddProject<Projects.ApiService>("api");
+```
 
+Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
+
+```csharp
 builder.AddProject<Projects.ApiService>("api")
-    .WithHttpEndpoint(name: "http", targetPort: 8080)
-    .WithExternalHttpEndpoints()
-    .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+    .PublishAsAzureSandbox(new AzureSandboxOptions
     {
         Tier = AzureSandboxTier.Medium,
         AutoSuspendEnabled = true,
@@ -59,14 +62,14 @@ import {
 } from "./.aspire/modules/aspire.mjs";
 
 const builder = await createBuilder();
-const sandboxGroup = await builder.addAzureSandboxGroup("sandboxes");
+await builder.addAzureSandboxGroup("sandboxes");
 
 const api = await builder
     .addContainer("api", "nginx", "alpine")
     .withHttpEndpoint({ name: "http", targetPort: 80 })
     .withExternalHttpEndpoints();
 
-await api.publishAsAzureSandbox(sandboxGroup, {
+await api.publishAsAzureSandbox({
     tier: AzureSandboxTier.Medium,
     autoSuspendEnabled: true,
     autoSuspendInterval: 900_000,
@@ -77,7 +80,9 @@ await api.publishAsAzureSandbox(sandboxGroup, {
 await builder.build().run();
 ```
 
-Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
+.NET projects automatically expose their first HTTP endpoint through an authenticated sandbox port and use the standard container target port when none is configured. When the app model has the usual paired HTTP and HTTPS endpoints on that target port, Aspire exposes one sandbox HTTP port: the sandbox proxy terminates TLS, forwards HTTP to the container on port `8080`, and resolves references to either app-model endpoint to the same HTTPS URL. Endpoint access options apply to the shared target port, and conflicting policies are rejected. Other endpoints must be marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
+
+When an AppHost contains multiple compute environments, assign each compute resource explicitly with `WithComputeEnvironment`. `PublishAsAzureSandbox` uses that assignment and does not select an environment.
 
 Images are resolved to immutable Linux/amd64 digests before import. Images hosted by the configured Azure Container Registry are imported with a dedicated user-assigned identity that has `AcrPull`; public registry images are imported without that ACR identity. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
 

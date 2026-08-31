@@ -30,6 +30,7 @@ namespace Aspire.Hosting.Azure;
 
 internal static class AzureSandboxContainerDeployment
 {
+    private const int DefaultContainerPort = 8080;
     private const string SandboxStateParentSection = "Azure:Sandboxes";
     internal const string SandboxStateSectionPrefix = $"{SandboxStateParentSection}:";
     private const int DiskImageReadyTimeoutSeconds = 600;
@@ -1437,15 +1438,26 @@ internal static class AzureSandboxContainerDeployment
             static endpoint => endpoint.Name!,
             StringComparer.OrdinalIgnoreCase);
         var unmatchedEndpointOptions = endpointOptions is null ? null : new HashSet<string>(endpointOptions.Keys, StringComparer.OrdinalIgnoreCase);
+        var resolvedEndpoints = resource.TargetResource.ResolveEndpoints();
+        var defaultProjectEndpoint = resource.TargetResource is ProjectResource &&
+            !resolvedEndpoints.Any(static endpoint => endpoint.Endpoint.IsExternal)
+                ? resolvedEndpoints.FirstOrDefault(static endpoint => endpoint.Endpoint.Transport is "http" or "http2")
+                : null;
         var endpoints = new Dictionary<int, SandboxEndpoint>();
-        foreach (var resolvedEndpoint in resource.TargetResource.ResolveEndpoints())
+        foreach (var resolvedEndpoint in resolvedEndpoints)
         {
-            if (!resolvedEndpoint.Endpoint.IsExternal)
+            var isExternal = resolvedEndpoint.Endpoint.IsExternal ||
+                (defaultProjectEndpoint is not null &&
+                 resolvedEndpoint.Endpoint.Transport is "http" or "http2" &&
+                 resolvedEndpoint.TargetPort.Value == defaultProjectEndpoint.TargetPort.Value);
+            if (!isExternal)
             {
                 continue;
             }
 
-            if (resolvedEndpoint.TargetPort.Value is not int targetPort)
+            var targetPort = ResolveSandboxTargetPort(resource.TargetResource, resolvedEndpoint);
+
+            if (targetPort is not int resolvedTargetPort)
             {
                 throw new InvalidOperationException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' does not have a target port. Configure a target port before deploying it to an Azure sandbox.");
             }
@@ -1456,33 +1468,36 @@ internal static class AzureSandboxContainerDeployment
             unmatchedEndpointOptions?.Remove(resolvedEndpoint.Endpoint.Name);
             var endpoint = new SandboxEndpoint(
                 resolvedEndpoint.Endpoint.Name,
-                targetPort,
-                resolvedEndpoint.Endpoint.IsExternal,
+                resolvedTargetPort,
+                isExternal,
                 IsHttp: true,
                 protocol,
-                resolvedEndpointOptions?.Anonymous ?? false);
+                resolvedEndpointOptions?.Anonymous);
 
-            if (endpoints.TryGetValue(targetPort, out var existingEndpoint))
+            if (endpoints.TryGetValue(resolvedTargetPort, out var existingEndpoint))
             {
                 if (!string.Equals(existingEndpoint.Protocol, endpoint.Protocol, StringComparison.Ordinal))
                 {
-                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {targetPort} with endpoint '{existingEndpoint.Name}' but uses a different transport. Azure sandbox ports support a single HTTP protocol per target port.");
+                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {resolvedTargetPort} with endpoint '{existingEndpoint.Name}' but uses a different transport. Azure sandbox ports support a single HTTP protocol per target port.");
                 }
 
-                if (existingEndpoint.Anonymous != endpoint.Anonymous)
+                if (existingEndpoint.Anonymous is not null &&
+                    endpoint.Anonymous is not null &&
+                    existingEndpoint.Anonymous != endpoint.Anonymous)
                 {
-                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {targetPort} with endpoint '{existingEndpoint.Name}' but configures a different anonymous-access policy. Azure sandbox ports support a single access policy per target port.");
+                    throw new NotSupportedException($"Endpoint '{resolvedEndpoint.Endpoint.Name}' on resource '{resource.TargetResource.Name}' shares target port {resolvedTargetPort} with endpoint '{existingEndpoint.Name}' but configures a different anonymous-access policy. Azure sandbox ports support a single access policy per target port.");
                 }
 
-                endpoints[targetPort] = existingEndpoint with
+                endpoints[resolvedTargetPort] = existingEndpoint with
                 {
                     IsExternal = existingEndpoint.IsExternal || endpoint.IsExternal,
-                    IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp
+                    IsHttp = existingEndpoint.IsHttp || endpoint.IsHttp,
+                    Anonymous = existingEndpoint.Anonymous ?? endpoint.Anonymous
                 };
             }
             else
             {
-                endpoints.Add(targetPort, endpoint);
+                endpoints.Add(resolvedTargetPort, endpoint);
             }
         }
 
@@ -1491,7 +1506,27 @@ internal static class AzureSandboxContainerDeployment
             throw new InvalidOperationException($"Resource '{resource.TargetResource.Name}' has Azure sandbox endpoint options for endpoint(s) that are not exposed by EndpointAnnotation: {string.Join(", ", unmatchedEndpointOptions)}.");
         }
 
-        return [.. endpoints.Values.OrderBy(static endpoint => endpoint.TargetPort)];
+        return
+        [
+            .. endpoints.Values
+                .OrderBy(static endpoint => endpoint.TargetPort)
+                .Select(static endpoint => endpoint with { Anonymous = endpoint.Anonymous ?? false })
+        ];
+    }
+
+    internal static int? ResolveSandboxTargetPort(IResource resource, ResolvedEndpoint endpoint)
+    {
+        if (endpoint.TargetPort.Value is int targetPort)
+        {
+            return targetPort;
+        }
+
+        // .NET project publishing uses ContainerPortReference for the shared HTTP/HTTPS
+        // destination when no target port is specified. Sandbox ingress terminates TLS,
+        // so both app-model endpoints route to the framework's HTTP container port.
+        return resource is ProjectResource && endpoint.Endpoint.Transport is "http" or "http2"
+            ? DefaultContainerPort
+            : null;
     }
 
     private static string ResolveSandboxPortProtocol(IResource resource, EndpointAnnotation endpoint)
